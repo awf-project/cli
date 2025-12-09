@@ -34,12 +34,8 @@ Examples:
 func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	ctx := context.Background()
 
-	// Create formatter
-	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
-		Verbose: cfg.Verbose,
-		Quiet:   cfg.Quiet,
-		NoColor: cfg.NoColor,
-	})
+	// Create output writer
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
 
 	// Initialize repository
 	repo := NewWorkflowRepository()
@@ -50,16 +46,50 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	// Load workflow first to check existence
 	wf, err := svc.GetWorkflow(ctx, workflowName)
 	if err != nil {
+		if writer.IsJSONFormat() {
+			return writer.WriteError(err, ExitUser)
+		}
 		return fmt.Errorf("failed to load workflow: %w", err)
 	}
 	if wf == nil {
-		return fmt.Errorf("workflow not found: %s", workflowName)
+		err := fmt.Errorf("workflow not found: %s", workflowName)
+		if writer.IsJSONFormat() {
+			return writer.WriteError(err, ExitUser)
+		}
+		return err
 	}
 
 	// Validate
-	if err := svc.ValidateWorkflow(ctx, workflowName); err != nil {
-		formatter.Error(fmt.Sprintf("Validation failed: %s", err))
-		return &exitError{code: ExitWorkflow, err: err}
+	validationErr := svc.ValidateWorkflow(ctx, workflowName)
+
+	// JSON/quiet format
+	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+		result := ui.ValidationResult{
+			Valid:    validationErr == nil,
+			Workflow: workflowName,
+		}
+		if validationErr != nil {
+			result.Errors = []string{validationErr.Error()}
+		}
+		if err := writer.WriteValidation(result); err != nil {
+			return err
+		}
+		if validationErr != nil {
+			return &exitError{code: ExitWorkflow, err: validationErr}
+		}
+		return nil
+	}
+
+	// Text/table format
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	if validationErr != nil {
+		formatter.Error(fmt.Sprintf("Validation failed: %s", validationErr))
+		return &exitError{code: ExitWorkflow, err: validationErr}
 	}
 
 	// Show success

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/interfaces/cli"
+	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -65,6 +66,52 @@ func TestParseOutputMode(t *testing.T) {
 			got, err := cli.ParseOutputMode(tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestOutputFormat_String(t *testing.T) {
+	tests := []struct {
+		format ui.OutputFormat
+		want   string
+	}{
+		{ui.FormatText, "text"},
+		{ui.FormatJSON, "json"},
+		{ui.FormatTable, "table"},
+		{ui.FormatQuiet, "quiet"},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.format.String())
+	}
+}
+
+func TestParseOutputFormat(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    ui.OutputFormat
+		wantErr bool
+	}{
+		{"text", ui.FormatText, false},
+		{"json", ui.FormatJSON, false},
+		{"table", ui.FormatTable, false},
+		{"quiet", ui.FormatQuiet, false},
+		{"", ui.FormatText, false}, // default to text
+		{"yaml", ui.FormatText, true},
+		{"XML", ui.FormatText, true},
+		{"invalid", ui.FormatText, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ui.ParseOutputFormat(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid output format")
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.want, got)

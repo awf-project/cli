@@ -88,9 +88,29 @@ Workflow ID: abc123-def456
 --verbose, -v     Enable verbose output
 --quiet, -q       Suppress non-error output
 --no-color        Disable colored output
+--format, -f      Output format (text, json, table, quiet) - default: text
 --config          Path to config file
 --storage         Path to storage directory
 --log-level       Log level (debug, info, warn, error)
+```
+
+### Output Formats
+
+| Format | Description | Use case |
+|--------|-------------|----------|
+| `text` | Human-readable with colors (default) | Interactive terminal |
+| `json` | Structured JSON | Scripting, pipes, CI/CD |
+| `table` | Aligned columns with headers | Lists, reports |
+| `quiet` | Minimal output (IDs, exit codes only) | Silent scripts |
+
+```bash
+# JSON output for scripting
+awf list -f json
+awf status abc123 -f json
+
+# Quiet mode for pipelines
+WORKFLOW_ID=$(awf run deploy -f quiet)
+awf status $WORKFLOW_ID -f quiet
 ```
 
 ### Run Command Flags
@@ -285,6 +305,7 @@ make fmt            # Format code
 - [x] Pre/post hooks
 - [x] Output streaming (--output flag)
 - [x] XDG workflow discovery
+- [x] Output formats (--format flag)
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions

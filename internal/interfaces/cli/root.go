@@ -66,6 +66,23 @@ Examples:
 	pf.StringVar(&cfg.ConfigPath, "config", "", "Path to config file")
 	pf.StringVar(&cfg.StoragePath, "storage", cfg.StoragePath, "Path to storage directory")
 
+	var formatStr string
+	pf.StringVarP(&formatStr, "format", "f", "text", "Output format (text, json, table, quiet)")
+
+	// Parse format flag before each command
+	originalPreRun := cmd.PersistentPreRun
+	cmd.PersistentPreRun = func(c *cobra.Command, args []string) {
+		if format, err := ui.ParseOutputFormat(formatStr); err != nil {
+			c.PrintErrf("Error: %s\n", err)
+			os.Exit(1)
+		} else {
+			cfg.OutputFormat = format
+		}
+		if originalPreRun != nil {
+			originalPreRun(c, args)
+		}
+	}
+
 	// Subcommands
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newInitCommand(cfg))

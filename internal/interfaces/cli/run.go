@@ -65,16 +65,19 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("invalid input: %w", err)
 	}
 
-	// Create formatter
+	// Create output writer for JSON/quiet formats
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+
+	// Create formatter for text output
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
 
-	// Setup output writers based on mode
+	// Setup output writers based on mode (only for non-JSON formats)
 	var stdoutWriter, stderrWriter *ui.PrefixedWriter
-	if !cfg.Quiet && cfg.OutputMode == OutputStreaming {
+	if !cfg.Quiet && cfg.OutputMode == OutputStreaming && !writer.IsJSONFormat() {
 		colorizer := ui.NewColorizer(!cfg.NoColor)
 		stdoutWriter = ui.NewPrefixedWriter(cmd.OutOrStdout(), ui.PrefixStdout, "", colorizer)
 		stderrWriter = ui.NewPrefixedWriter(cmd.ErrOrStderr(), ui.PrefixStderr, "", colorizer)
@@ -88,7 +91,9 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		formatter.Warning("\nReceived interrupt signal, cancelling...")
+		if !writer.IsJSONFormat() {
+			formatter.Warning("\nReceived interrupt signal, cancelling...")
+		}
 		cancel()
 	}()
 
@@ -96,7 +101,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
-	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose}
+	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose && !writer.IsJSONFormat()}
 	resolver := interpolation.NewTemplateResolver()
 
 	// Create services
@@ -108,12 +113,14 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)
 	}
 
-	// Show start message
-	formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
+	// Show start message (text format only)
+	if !writer.IsJSONFormat() && cfg.OutputFormat != ui.FormatQuiet {
+		formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
+	}
 	startTime := time.Now()
 
 	// Execute workflow
-	execCtx, err := execSvc.Run(ctx, workflowName, inputs)
+	execCtx, execErr := execSvc.Run(ctx, workflowName, inputs)
 
 	// Flush any remaining output from streaming writers
 	if stdoutWriter != nil {
@@ -123,11 +130,37 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		stderrWriter.Flush()
 	}
 
-	// Show result
+	// Calculate duration
+	durationMs := time.Since(startTime).Milliseconds()
+
+	// JSON/quiet format: output result
+	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+		result := ui.RunResult{
+			Status:     "completed",
+			DurationMs: durationMs,
+		}
+		if execCtx != nil {
+			result.WorkflowID = execCtx.WorkflowID
+			result.Status = string(execCtx.Status)
+		}
+		if execErr != nil {
+			result.Status = "failed"
+			result.Error = execErr.Error()
+		}
+		if err := writer.WriteRunResult(result); err != nil {
+			return err
+		}
+		if execErr != nil {
+			return &exitError{code: categorizeError(execErr), err: execErr}
+		}
+		return nil
+	}
+
+	// Text/table format
 	duration := time.Since(startTime).Round(time.Millisecond)
 
-	if err != nil {
-		formatter.Error(fmt.Sprintf("Workflow failed: %s", err))
+	if execErr != nil {
+		formatter.Error(fmt.Sprintf("Workflow failed: %s", execErr))
 		if execCtx != nil {
 			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
 		}
@@ -135,7 +168,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		if cfg.OutputMode == OutputBuffered && execCtx != nil {
 			showStepOutputs(formatter, execCtx)
 		}
-		return &exitError{code: categorizeError(err), err: err}
+		return &exitError{code: categorizeError(execErr), err: execErr}
 	}
 
 	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
