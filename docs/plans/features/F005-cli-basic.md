@@ -1,7 +1,7 @@
 # F005: CLI Basique (run, list, status)
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: high
@@ -13,13 +13,13 @@ Implement core CLI commands using Cobra: `run` to execute workflows, `list` to s
 
 ## Critères d'Acceptance
 
-- [ ] `awf run <workflow> --input=value` executes workflow
-- [ ] `awf list` shows available workflows
-- [ ] `awf status <workflow-id>` shows execution status
-- [ ] `awf version` shows version info
-- [ ] `awf help` shows usage
-- [ ] Global flags: --verbose, --quiet, --config, --storage
-- [ ] Clear error messages with exit codes
+- [x] `awf run <workflow> --input=value` executes workflow
+- [x] `awf list` shows available workflows
+- [x] `awf status <workflow-id>` shows execution status
+- [x] `awf version` shows version info
+- [x] `awf help` shows usage
+- [x] Global flags: --verbose, --quiet, --config, --storage, --no-color, --log-level
+- [x] Clear error messages with exit codes (0-4)
 
 ## Dépendances
 
@@ -30,40 +30,46 @@ Implement core CLI commands using Cobra: `run` to execute workflows, `list` to s
 
 ```
 cmd/awf/main.go
-internal/interfaces/cli/app.go
-internal/interfaces/cli/commands/run.go
-internal/interfaces/cli/commands/list.go
-internal/interfaces/cli/commands/status.go
-internal/interfaces/cli/commands/version.go
+internal/interfaces/cli/root.go
+internal/interfaces/cli/config.go
+internal/interfaces/cli/exitcodes.go
+internal/interfaces/cli/run.go
+internal/interfaces/cli/list.go
+internal/interfaces/cli/status.go
+internal/interfaces/cli/validate.go
 internal/interfaces/cli/ui/formatter.go
 internal/interfaces/cli/ui/colors.go
+tests/integration/cli_test.go
 ```
 
 ## Tâches Techniques
 
-- [ ] Set up Cobra root command
-  - [ ] Global flags (verbose, quiet, config, storage, no-color, log-level)
-  - [ ] Version command
-  - [ ] Help customization
-- [ ] Implement `run` command
-  - [ ] Parse workflow name argument
-  - [ ] Parse input flags dynamically
-  - [ ] Call WorkflowService.Run()
-  - [ ] Display progress output
-  - [ ] Return appropriate exit code
-- [ ] Implement `list` command
-  - [ ] List workflows from repository
-  - [ ] Show name, description, version
-  - [ ] Table formatting
-- [ ] Implement `status` command
-  - [ ] Load state from store
-  - [ ] Display current state, progress, duration
-  - [ ] Show completed/pending steps
-- [ ] Implement output formatter
-  - [ ] Color support (fatih/color)
-  - [ ] Respect --no-color flag
-  - [ ] Verbose vs quiet modes
-- [ ] Write integration tests
+- [x] Set up Cobra root command
+  - [x] Global flags (verbose, quiet, config, storage, no-color, log-level)
+  - [x] Version command
+  - [x] Help customization
+- [x] Implement `run` command
+  - [x] Parse workflow name argument
+  - [x] Parse input flags dynamically
+  - [x] Call ExecutionService.Run()
+  - [x] Display progress output
+  - [x] Return appropriate exit code
+- [x] Implement `list` command
+  - [x] List workflows from repository
+  - [x] Show name, description, version
+  - [x] Table formatting
+- [x] Implement `status` command
+  - [x] Load state from store
+  - [x] Display current state, progress, duration
+  - [x] Show completed/pending steps
+- [x] Implement `validate` command
+  - [x] Validate workflow without executing
+  - [x] Display validation errors
+- [x] Implement output formatter
+  - [x] Color support (fatih/color)
+  - [x] Respect --no-color flag
+  - [x] Verbose vs quiet modes
+- [x] Write integration tests
 
 ## Notes
 
