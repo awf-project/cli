@@ -49,6 +49,12 @@ Examples:
   awf status abc123`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Show migration notice if legacy directory exists
+			if !cfg.Quiet {
+				CheckMigration(cmd.ErrOrStderr())
+			}
+		},
 	}
 
 	// Global flags
@@ -62,6 +68,7 @@ Examples:
 
 	// Subcommands
 	cmd.AddCommand(newVersionCommand())
+	cmd.AddCommand(newInitCommand(cfg))
 	cmd.AddCommand(newListCommand(cfg))
 	cmd.AddCommand(newRunCommand(cfg))
 	cmd.AddCommand(newStatusCommand(cfg))

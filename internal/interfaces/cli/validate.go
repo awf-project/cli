@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -43,8 +42,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	})
 
 	// Initialize repository
-	workflowsPath := getWorkflowsPath(cfg)
-	repo := repository.NewYAMLRepository(workflowsPath)
+	repo := NewWorkflowRepository()
 
 	// Create service
 	svc := application.NewWorkflowService(repo, nil, nil, nil)

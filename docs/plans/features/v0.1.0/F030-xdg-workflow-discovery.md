@@ -1,7 +1,7 @@
 # F030: XDG Workflow Discovery
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: medium
@@ -19,21 +19,19 @@ Implement XDG Base Directory Specification for workflow and configuration storag
 **New behavior with search order (priority high to low):**
 1. `AWF_WORKFLOWS_PATH` environment variable (unchanged)
 2. Local project: `./.awf/workflows/*.yaml`
-3. Legacy local: `./configs/workflows/*.yaml` (backward compat)
-4. XDG global: `$XDG_CONFIG_HOME/awf/workflows/*.yaml` (default: `~/.config/awf/workflows/`)
+3. XDG global: `$XDG_CONFIG_HOME/awf/workflows/*.yaml` (default: `~/.config/awf/workflows/`)
 
 Workflows found in multiple locations are merged. Local workflows take precedence over global ones with the same name.
 
 ## Critères d'Acceptance
 
-- [ ] Workflows in `./.awf/workflows/` are discovered
-- [ ] `~/.config/awf/workflows/` is the new default global location
-- [ ] `$XDG_CONFIG_HOME` is respected if set
-- [ ] Local workflows override global ones with same name
-- [ ] `awf list` shows workflow source (local/global)
-- [ ] `awf init` creates `./.awf/workflows/` directory
-- [ ] Backward compatibility: `./configs/workflows/` still works
-- [ ] `~/.awf/` migration notice if old directory exists
+- [x] Workflows in `./.awf/workflows/` are discovered
+- [x] `~/.config/awf/workflows/` is the new default global location
+- [x] `$XDG_CONFIG_HOME` is respected if set
+- [x] Local workflows override global ones with same name
+- [x] `awf list` shows workflow source (local/global)
+- [x] `awf init` creates `./.awf/workflows/` directory
+- [x] `~/.awf/` migration notice if old directory exists
 
 ## Dépendances
 
@@ -54,34 +52,32 @@ internal/infrastructure/repository/composite_repository.go  # New: merge repos
 
 ## Tâches Techniques
 
-- [ ] Add XDG path resolution
-  - [ ] Create `xdg.go` helper with `ConfigHome()`, `DataHome()` functions
-  - [ ] Respect `$XDG_CONFIG_HOME` or default to `~/.config`
-  - [ ] Respect `$XDG_DATA_HOME` or default to `~/.local/share`
-- [ ] Update workflow discovery order
-  - [ ] 1. `AWF_WORKFLOWS_PATH` env var
-  - [ ] 2. `./.awf/workflows/` (local project)
-  - [ ] 3. `./configs/workflows/` (legacy, backward compat)
-  - [ ] 4. `$XDG_CONFIG_HOME/awf/workflows/` (global)
-- [ ] Create CompositeRepository
-  - [ ] Aggregate multiple YAMLRepository instances
-  - [ ] Local repos take precedence over global
-  - [ ] Track source for each workflow
-- [ ] Update `awf list` output
-  - [ ] Add "Source" column showing local/global
-  - [ ] Sort by source then name
-- [ ] Add `awf init` command
-  - [ ] Create `./.awf/workflows/` directory
-  - [ ] Create example workflow file
-- [ ] Migration handling
-  - [ ] Detect `~/.awf/` directory
-  - [ ] Print one-time migration notice with instructions
-- [ ] Update storage paths
-  - [ ] States: `$XDG_DATA_HOME/awf/states/`
-  - [ ] Logs: `$XDG_DATA_HOME/awf/logs/`
-  - [ ] History DB: `$XDG_DATA_HOME/awf/history.db`
-- [ ] Write unit tests
-- [ ] Update CLI help documentation
+- [x] Add XDG path resolution
+  - [x] Create `xdg.go` helper with `ConfigHome()`, `DataHome()` functions
+  - [x] Respect `$XDG_CONFIG_HOME` or default to `~/.config`
+  - [x] Respect `$XDG_DATA_HOME` or default to `~/.local/share`
+- [x] Update workflow discovery order
+  - [x] 1. `AWF_WORKFLOWS_PATH` env var
+  - [x] 2. `./.awf/workflows/` (local project)
+  - [x] 3. `$XDG_CONFIG_HOME/awf/workflows/` (global)
+- [x] Create CompositeRepository
+  - [x] Aggregate multiple YAMLRepository instances
+  - [x] Local repos take precedence over global
+  - [x] Track source for each workflow
+- [x] Update `awf list` output
+  - [x] Add "Source" column showing local/global
+  - [x] Sort by source then name
+- [x] Add `awf init` command
+  - [x] Create `./.awf/workflows/` directory
+  - [x] Create example workflow file
+- [x] Migration handling
+  - [x] Detect `~/.awf/` directory
+  - [x] Print one-time migration notice with instructions
+- [x] Update storage paths
+  - [x] States: `$XDG_DATA_HOME/awf/states/`
+  - [x] Logs: `$XDG_DATA_HOME/awf/logs/`
+- [x] Write unit tests
+- [x] Update CLI help documentation
 
 ## Notes
 

@@ -24,8 +24,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("expected LogLevel 'info', got '%s'", cfg.LogLevel)
 	}
-	if !strings.Contains(cfg.StoragePath, ".awf") {
-		t.Errorf("expected StoragePath to contain '.awf', got '%s'", cfg.StoragePath)
+	if !strings.Contains(cfg.StoragePath, "awf") {
+		t.Errorf("expected StoragePath to contain 'awf', got '%s'", cfg.StoragePath)
 	}
 	if cfg.OutputMode != cli.OutputSilent {
 		t.Errorf("expected OutputMode to be silent by default, got %v", cfg.OutputMode)
