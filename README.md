@@ -52,7 +52,7 @@ states:
   initial: greet
   greet:
     type: step
-    command: echo "Hello, {{inputs.name}}!"
+    command: echo "Hello, {{.inputs.name}}!"
     on_success: done
   done:
     type: terminal
@@ -169,7 +169,7 @@ states:
   step1:
     type: step
     command: |
-      echo "Processing {{inputs.file_path}}"
+      echo "Processing {{.inputs.file_path}}"
     timeout: 30
     on_success: step2
     on_failure: error
@@ -177,7 +177,7 @@ states:
   step2:
     type: step
     command: |
-      claude -c "Analyze: {{states.step1.output}}"
+      claude -c "Analyze: {{.states.step1.output}}"
     on_success: done
     on_failure: error
 
@@ -198,21 +198,21 @@ states:
 
 ### Variable Interpolation
 
-AWF uses `{{var}}` syntax (Go template style):
+AWF uses `{{.var}}` syntax (Go template style with dot prefix):
 
 ```yaml
 # Inputs
-{{inputs.variable_name}}
+{{.inputs.variable_name}}
 
 # Previous step outputs
-{{states.step_name.output}}
+{{.states.step_name.output}}
 
 # Workflow metadata
-{{workflow.id}}
-{{workflow.name}}
+{{.workflow.id}}
+{{.workflow.name}}
 
 # Environment variables
-{{env.VARIABLE_NAME}}
+{{.env.VARIABLE_NAME}}
 ```
 
 ## Architecture
@@ -341,7 +341,7 @@ states:
 
   read_file:
     type: step
-    command: cat "{{inputs.file}}"
+    command: cat "{{.inputs.file}}"
     on_success: analyze
     on_failure: error
 
@@ -350,7 +350,7 @@ states:
     command: |
       claude -c "Review this code and suggest improvements:
 
-      {{states.read_file.output}}"
+      {{.states.read_file.output}}"
     timeout: 120
     on_success: done
     on_failure: error

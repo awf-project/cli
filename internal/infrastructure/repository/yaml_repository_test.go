@@ -35,6 +35,11 @@ func TestYAMLRepository_Load_ValidSimple(t *testing.T) {
 		t.Errorf("Steps count = %d, want 3", len(wf.Steps))
 	}
 
+	// Check inputs (added for interpolation testing)
+	if len(wf.Inputs) != 2 {
+		t.Errorf("Inputs count = %d, want 2", len(wf.Inputs))
+	}
+
 	// Check start step
 	start, ok := wf.GetStep("start")
 	if !ok {
@@ -43,8 +48,9 @@ func TestYAMLRepository_Load_ValidSimple(t *testing.T) {
 	if start.Type != workflow.StepTypeCommand {
 		t.Errorf("start.Type = %v, want %v", start.Type, workflow.StepTypeCommand)
 	}
-	if start.Command != `echo "hello"` {
-		t.Errorf("start.Command = %q, want %q", start.Command, `echo "hello"`)
+	expectedCmd := `echo "hello world"`
+	if start.Command != expectedCmd {
+		t.Errorf("start.Command = %q, want %q", start.Command, expectedCmd)
 	}
 	if start.OnSuccess != "done" {
 		t.Errorf("start.OnSuccess = %q, want %q", start.OnSuccess, "done")

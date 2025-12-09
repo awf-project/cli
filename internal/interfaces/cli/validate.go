@@ -80,7 +80,54 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 		return nil
 	}
 
-	// Text/table format
+	// Table format: use structured output with inputs and steps
+	if cfg.OutputFormat == ui.FormatTable {
+		result := ui.ValidationResultTable{
+			Valid:    validationErr == nil,
+			Workflow: workflowName,
+		}
+		if validationErr != nil {
+			result.Errors = []string{validationErr.Error()}
+		}
+		// Build inputs info
+		for _, inp := range wf.Inputs {
+			defaultVal := ""
+			if inp.Default != nil {
+				defaultVal = fmt.Sprintf("%v", inp.Default)
+			}
+			result.Inputs = append(result.Inputs, ui.InputInfo{
+				Name:     inp.Name,
+				Type:     inp.Type,
+				Required: inp.Required,
+				Default:  defaultVal,
+			})
+		}
+		// Build steps info
+		for _, step := range wf.Steps {
+			next := step.OnSuccess
+			if next == "" {
+				if step.Type == "terminal" {
+					next = "(terminal)"
+				} else {
+					next = "-"
+				}
+			}
+			result.Steps = append(result.Steps, ui.StepSummary{
+				Name: step.Name,
+				Type: string(step.Type),
+				Next: next,
+			})
+		}
+		if err := writer.WriteValidationTable(result); err != nil {
+			return err
+		}
+		if validationErr != nil {
+			return &exitError{code: ExitWorkflow, err: validationErr}
+		}
+		return nil
+	}
+
+	// Text format
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,

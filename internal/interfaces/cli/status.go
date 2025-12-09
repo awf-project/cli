@@ -53,12 +53,12 @@ func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 		return err
 	}
 
-	// JSON/quiet format: use OutputWriter
-	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+	// JSON/quiet/table format: use OutputWriter
+	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet || cfg.OutputFormat == ui.FormatTable {
 		return writer.WriteExecution(toExecutionInfo(execCtx))
 	}
 
-	// Text/table format: use formatter
+	// Text format: use formatter
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
