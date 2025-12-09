@@ -1,0 +1,76 @@
+package workflow
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Input defines an input parameter for a workflow.
+type Input struct {
+	Name        string
+	Type        string // string, integer, boolean
+	Description string
+	Required    bool
+	Default     any
+}
+
+// Workflow represents a complete workflow definition.
+type Workflow struct {
+	Name        string
+	Description string
+	Version     string
+	Author      string
+	Tags        []string
+	Inputs      []Input
+	Initial     string           // initial state name
+	Steps       map[string]*Step // state name -> step
+}
+
+// GetStep retrieves a step by name.
+func (w *Workflow) GetStep(name string) (*Step, bool) {
+	step, ok := w.Steps[name]
+	return step, ok
+}
+
+// Validate checks if the workflow configuration is valid.
+func (w *Workflow) Validate() error {
+	if w.Name == "" {
+		return errors.New("workflow name is required")
+	}
+	if w.Initial == "" {
+		return errors.New("initial state is required")
+	}
+
+	// Check initial state exists
+	if _, ok := w.Steps[w.Initial]; !ok {
+		return fmt.Errorf("initial state '%s' not found in steps", w.Initial)
+	}
+
+	// Check at least one terminal state exists
+	hasTerminal := false
+	for _, step := range w.Steps {
+		if step.Type == StepTypeTerminal {
+			hasTerminal = true
+			break
+		}
+	}
+	if !hasTerminal {
+		return errors.New("at least one terminal state is required")
+	}
+
+	// Validate each step
+	for name, step := range w.Steps {
+		if err := step.Validate(); err != nil {
+			return fmt.Errorf("step '%s': %w", name, err)
+		}
+
+		// Non-terminal steps must have transitions
+		if step.Type == StepTypeCommand {
+			if step.OnSuccess == "" && step.OnFailure == "" {
+				return fmt.Errorf("step '%s': command step must have OnSuccess or OnFailure", name)
+			}
+		}
+	}
+
+	return nil
+}
