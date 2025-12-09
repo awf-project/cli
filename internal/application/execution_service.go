@@ -72,6 +72,7 @@ func (s *ExecutionService) Run(
 		if step.Type == workflow.StepTypeTerminal {
 			execCtx.Status = workflow.StatusCompleted
 			execCtx.CompletedAt = time.Now()
+			s.checkpoint(ctx, execCtx)
 			s.logger.Info("workflow completed", "step", currentStep)
 			break
 		}
@@ -82,8 +83,12 @@ func (s *ExecutionService) Run(
 		if err != nil {
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
+			s.checkpoint(ctx, execCtx)
 			return execCtx, err
 		}
+
+		// checkpoint after each step
+		s.checkpoint(ctx, execCtx)
 
 		currentStep = nextStep
 	}
@@ -154,4 +159,12 @@ func (s *ExecutionService) executeStep(
 	state.Status = workflow.StatusCompleted
 	execCtx.SetStepState(step.Name, state)
 	return step.OnSuccess, nil
+}
+
+// checkpoint saves the current execution state.
+// Failures are logged but not fatal - execution continues.
+func (s *ExecutionService) checkpoint(ctx context.Context, execCtx *workflow.ExecutionContext) {
+	if err := s.store.Save(ctx, execCtx); err != nil {
+		s.logger.Warn("checkpoint failed", "workflow_id", execCtx.WorkflowID, "error", err)
+	}
 }
