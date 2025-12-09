@@ -97,6 +97,46 @@ func TestStepValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "parallel step with valid strategy all_succeed",
+			step: workflow.Step{
+				Name:     "parallel",
+				Type:     workflow.StepTypeParallel,
+				Branches: []string{"step1", "step2"},
+				Strategy: "all_succeed",
+			},
+			wantErr: false,
+		},
+		{
+			name: "parallel step with valid strategy any_succeed",
+			step: workflow.Step{
+				Name:     "parallel",
+				Type:     workflow.StepTypeParallel,
+				Branches: []string{"step1", "step2"},
+				Strategy: "any_succeed",
+			},
+			wantErr: false,
+		},
+		{
+			name: "parallel step with valid strategy best_effort",
+			step: workflow.Step{
+				Name:     "parallel",
+				Type:     workflow.StepTypeParallel,
+				Branches: []string{"step1", "step2"},
+				Strategy: "best_effort",
+			},
+			wantErr: false,
+		},
+		{
+			name: "parallel step with invalid strategy",
+			step: workflow.Step{
+				Name:     "parallel",
+				Type:     workflow.StepTypeParallel,
+				Branches: []string{"step1", "step2"},
+				Strategy: "invalid_strategy",
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

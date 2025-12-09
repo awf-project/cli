@@ -2,6 +2,58 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Serena MCP Integration
+
+**IMPORTANT:** This project uses Serena MCP for persistent memory across sessions.
+
+### At Session Start
+1. Activate project: `mcp__plugin_common_serena__activate_project` with path `/home/pocky/Sites/vanoix/gustave`
+2. Check onboarding: `mcp__plugin_common_serena__check_onboarding_performed`
+3. List and read relevant memories: `mcp__plugin_common_serena__list_memories`
+4. Attach repomix output: `mcp__plugin_common_repomix__attach_packed_output` with path `.repomix`
+
+### Available Memories
+- `project_overview` - Purpose, tech stack, architecture
+- `architecture_details` - Hexagonal layers, ports/adapters
+- `code_style_conventions` - Go style, rules
+- `suggested_commands` - Build, test, CLI commands
+- `task_completion_checklist` - Pre-commit checklist
+- `development_history` - Git evolution, commits
+- `feature_roadmap` - v0.1→v1.0 features status
+- `next_features_detail` - F010, F013, F032 specs
+
+### At Session End (After Significant Work)
+Update memories if:
+- New patterns or conventions established
+- Architecture changes made
+- New features implemented
+- Important decisions documented
+
+Use `mcp__plugin_common_serena__write_memory` or `mcp__plugin_common_serena__edit_memory`.
+
+## Repomix MCP Integration
+
+**IMPORTANT:** This project uses Repomix MCP for codebase analysis.
+
+### Storage Location
+- Output directory: `.repomix/`
+- Output file: `.repomix/repomix-output.xml`
+- Ignored in `.gitignore`
+
+### At Session Start
+Attach existing pack: `mcp__plugin_common_repomix__attach_packed_output` with path `.repomix`
+
+### After Significant Code Changes
+Update the pack:
+1. `mcp__plugin_common_repomix__pack_codebase` with:
+   - `directory`: `/home/pocky/Sites/vanoix/gustave`
+   - `ignorePatterns`: `.git/**,storage/**,bin/**,coverage.*,*.db,*.log`
+2. Copy output to `.repomix/`: `cp /tmp/repomix/mcp-outputs/*/repomix-output.xml .repomix/`
+
+### Usage
+- `grep_repomix_output` - Search patterns in packed codebase
+- `read_repomix_output` - Read content with line ranges
+
 ## Project Overview
 
 **ai-workflow-cli** (`awf`) - A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.
@@ -114,9 +166,10 @@ Uses `golang.org/x/sync/errgroup` with semaphore for controlled concurrency.
 Context propagation for graceful cancellation. Process groups for clean termination.
 
 ### Security
-- Command injection prevention: prefer argument arrays over shell strings
-- Automatic escaping of interpolated values
+- Shell commands use `/bin/sh -c` by design (supports pipes, redirects)
+- `ShellEscape()` in `pkg/interpolation` for user-provided values
 - Secret masking in logs (vars starting with `SECRET_`, `API_KEY`, `PASSWORD`)
+- Atomic file writes prevent corruption (unique temp files with PID+timestamp)
 
 ## Dependencies
 
@@ -136,3 +189,17 @@ func TestWorkflowValidation(t *testing.T) {
 
 // Integration tests use fixtures from tests/fixtures/
 ```
+
+## Recent Changes (December 2025)
+
+See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
+
+### Breaking Changes
+- `Args` field removed from `ports.Command` struct (was unused)
+
+### Bug Fixes
+- YAML parsing now reports all errors (was silently skipping malformed steps)
+- Race condition in JSONStore fixed (concurrent Save used same temp file)
+
+### New Validations
+- `ParallelStrategy` validated: `all_succeed`, `any_succeed`, `best_effort`, or empty

@@ -6,9 +6,11 @@ import (
 )
 
 // Command represents a command to be executed.
+// Note: Program is passed to /bin/sh -c as a shell command string,
+// allowing shell features like pipes and redirects. Use ShellEscape()
+// from pkg/interpolation for user-provided values.
 type Command struct {
 	Program string
-	Args    []string
 	Dir     string
 	Env     map[string]string
 	Timeout int       // seconds, 0 means default

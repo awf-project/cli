@@ -270,3 +270,236 @@ func TestCLI_ExitCodes_Integration(t *testing.T) {
 		})
 	}
 }
+
+// TestCLI_Run_FailingCommand_Integration tests workflow with a failing command
+func TestCLI_Run_FailingCommand_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create a workflow with a failing command
+	wfYAML := `name: failing-test
+version: "1.0.0"
+states:
+  initial: fail
+  fail:
+    type: step
+    command: exit 1
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+`
+	wfDir := filepath.Join(tmpDir, "workflows")
+	os.MkdirAll(wfDir, 0755)
+	os.WriteFile(filepath.Join(wfDir, "failing-test.yaml"), []byte(wfYAML), 0644)
+
+	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "failing-test", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	// Workflow should complete (reached terminal state) even though command failed
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "error") // Should end in error state
+}
+
+// TestCLI_Validate_InvalidStrategy_Integration tests validation of invalid parallel strategy
+func TestCLI_Validate_InvalidStrategy_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create a workflow with invalid parallel strategy
+	// Note: YAML uses "parallel" field, not "branches"
+	wfYAML := `name: invalid-strategy
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - step1
+      - step2
+    strategy: invalid_strategy_value
+    on_success: done
+  step1:
+    type: step
+    command: echo step1
+    on_success: done
+  step2:
+    type: step
+    command: echo step2
+    on_success: done
+  done:
+    type: terminal
+`
+	wfDir := filepath.Join(tmpDir, "workflows")
+	os.MkdirAll(wfDir, 0755)
+	os.WriteFile(filepath.Join(wfDir, "invalid-strategy.yaml"), []byte(wfYAML), 0644)
+
+	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"validate", "invalid-strategy"})
+
+	err := cmd.Execute()
+	assert.Error(t, err, "should fail validation with invalid strategy")
+	assert.Contains(t, err.Error(), "invalid parallel strategy")
+}
+
+// TestCLI_Run_OutputModes_Integration tests different output modes
+func TestCLI_Run_OutputModes_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create a simple workflow
+	wfYAML := `name: output-test
+version: "1.0.0"
+states:
+  initial: echo
+  echo:
+    type: step
+    command: echo "test output"
+    on_success: done
+  done:
+    type: terminal
+`
+	wfDir := filepath.Join(tmpDir, "workflows")
+	os.MkdirAll(wfDir, 0755)
+	os.WriteFile(filepath.Join(wfDir, "output-test.yaml"), []byte(wfYAML), 0644)
+
+	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+
+	tests := []struct {
+		name          string
+		args          []string
+		expectOutput  string
+		expectMissing string
+	}{
+		{
+			name:         "default output",
+			args:         []string{"run", "output-test", "--storage", tmpDir},
+			expectOutput: "completed",
+		},
+		{
+			name:          "quiet mode",
+			args:          []string{"run", "output-test", "--storage", tmpDir, "--quiet"},
+			expectMissing: "Step:",
+		},
+		{
+			name:         "verbose mode",
+			args:         []string{"run", "output-test", "--storage", tmpDir, "--verbose"},
+			expectOutput: "completed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use unique storage per test to avoid conflicts
+			testDir := filepath.Join(tmpDir, tt.name)
+			os.MkdirAll(testDir, 0755)
+
+			cmd := cli.NewRootCommand()
+			buf := new(bytes.Buffer)
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+
+			// Replace storage path in args
+			args := make([]string, len(tt.args))
+			copy(args, tt.args)
+			for i, arg := range args {
+				if arg == tmpDir {
+					args[i] = testDir
+				}
+			}
+			cmd.SetArgs(args)
+
+			err := cmd.Execute()
+			require.NoError(t, err)
+
+			output := buf.String()
+			if tt.expectOutput != "" {
+				assert.Contains(t, output, tt.expectOutput)
+			}
+			if tt.expectMissing != "" {
+				assert.NotContains(t, output, tt.expectMissing)
+			}
+		})
+	}
+}
+
+// TestCLI_Run_MultiStep_Integration tests a workflow with multiple steps
+func TestCLI_Run_MultiStep_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create a multi-step workflow
+	wfYAML := `name: multi-step
+version: "1.0.0"
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "step 1"
+    on_success: step2
+    on_failure: error
+  step2:
+    type: step
+    command: echo "step 2"
+    on_success: step3
+    on_failure: error
+  step3:
+    type: step
+    command: echo "step 3"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+`
+	wfDir := filepath.Join(tmpDir, "workflows")
+	os.MkdirAll(wfDir, 0755)
+	os.WriteFile(filepath.Join(wfDir, "multi-step.yaml"), []byte(wfYAML), 0644)
+
+	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "multi-step", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "completed")
+	assert.Contains(t, output, "done") // Should reach 'done' terminal state
+}

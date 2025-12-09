@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,6 +127,7 @@ func (r *YAMLRepository) parseStates(data []byte, wf *yamlWorkflow) error {
 	}
 
 	wf.States.Steps = make(map[string]yamlStep)
+	var parseErrors []error
 
 	for key, value := range statesRaw {
 		if key == "initial" {
@@ -134,21 +137,28 @@ func (r *YAMLRepository) parseStates(data []byte, wf *yamlWorkflow) error {
 		// Convert step value to yamlStep
 		stepMap, ok := value.(map[string]any)
 		if !ok {
+			parseErrors = append(parseErrors, fmt.Errorf("state %q: expected map, got %T", key, value))
 			continue
 		}
 
 		// Marshal back to YAML and unmarshal to yamlStep
 		stepYAML, err := yaml.Marshal(stepMap)
 		if err != nil {
+			parseErrors = append(parseErrors, fmt.Errorf("state %q: marshal error: %w", key, err))
 			continue
 		}
 
 		var step yamlStep
 		if err := yaml.Unmarshal(stepYAML, &step); err != nil {
+			parseErrors = append(parseErrors, fmt.Errorf("state %q: %w", key, err))
 			continue
 		}
 
 		wf.States.Steps[key] = step
+	}
+
+	if len(parseErrors) > 0 {
+		return errors.Join(parseErrors...)
 	}
 
 	return nil

@@ -3,10 +3,12 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
@@ -22,13 +24,15 @@ func NewJSONStore(basePath string) *JSONStore {
 }
 
 // Save persists execution state to a JSON file with atomic write.
+// Uses unique temp file names to prevent concurrent write corruption.
 func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) error {
 	if err := os.MkdirAll(s.basePath, 0755); err != nil {
 		return err
 	}
 
 	finalPath := s.filePath(state.WorkflowID)
-	tmpPath := finalPath + ".tmp"
+	// Use unique temp file to prevent concurrent Save corruption
+	tmpPath := fmt.Sprintf("%s.%d.%d.tmp", finalPath, os.Getpid(), time.Now().UnixNano())
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {

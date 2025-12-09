@@ -124,10 +124,10 @@ func TestJSONStore_Save_AtomicWrite(t *testing.T) {
 	err := s.Save(ctx, execCtx)
 	require.NoError(t, err)
 
-	// Temp file should not exist after successful save
-	tmpPath := filepath.Join(tmpDir, "atomic-test.json.tmp")
-	_, err = os.Stat(tmpPath)
-	assert.True(t, os.IsNotExist(err), "temp file should be removed after save")
+	// No temp files should exist after successful save
+	tmpFiles, err := filepath.Glob(filepath.Join(tmpDir, "*.tmp"))
+	require.NoError(t, err)
+	assert.Empty(t, tmpFiles, "temp files should be removed after save")
 
 	// Final file should exist
 	finalPath := filepath.Join(tmpDir, "atomic-test.json")
@@ -293,4 +293,144 @@ func TestJSONStore_ConcurrentDifferentIDs(t *testing.T) {
 	ids, err := s.List(ctx)
 	require.NoError(t, err)
 	assert.Len(t, ids, goroutines)
+}
+
+// Race condition tests - run with: go test -race ./internal/infrastructure/store/...
+
+// TestJSONStore_RaceSaveLoad tests concurrent Save and Load on the same workflow ID.
+// This catches race conditions between writers and readers.
+func TestJSONStore_RaceSaveLoad(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	const iterations = 50
+	const workflowID = "race-save-load"
+
+	// Seed initial state
+	initial := workflow.NewExecutionContext(workflowID, "test")
+	require.NoError(t, s.Save(ctx, initial))
+
+	var wg sync.WaitGroup
+
+	// Writers
+	wg.Add(iterations)
+	for i := 0; i < iterations; i++ {
+		go func(n int) {
+			defer wg.Done()
+			execCtx := workflow.NewExecutionContext(workflowID, "test")
+			execCtx.CurrentStep = fmt.Sprintf("step-%d", n)
+			execCtx.Status = workflow.StatusRunning
+			_ = s.Save(ctx, execCtx)
+		}(i)
+	}
+
+	// Readers
+	wg.Add(iterations)
+	for i := 0; i < iterations; i++ {
+		go func() {
+			defer wg.Done()
+			loaded, err := s.Load(ctx, workflowID)
+			// Should never get corrupted JSON
+			if err != nil {
+				t.Errorf("Load returned error: %v", err)
+			}
+			if loaded == nil {
+				t.Error("Load returned nil unexpectedly")
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Final state should be valid
+	final, err := s.Load(ctx, workflowID)
+	require.NoError(t, err)
+	require.NotNil(t, final)
+	assert.Equal(t, workflowID, final.WorkflowID)
+}
+
+// TestJSONStore_RaceSaveDelete tests concurrent Save and Delete operations.
+// This catches race conditions between writers and deleters.
+func TestJSONStore_RaceSaveDelete(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	const iterations = 30
+	const workflowID = "race-save-delete"
+
+	var wg sync.WaitGroup
+
+	// Writers and deleters interleaved
+	wg.Add(iterations * 2)
+	for i := 0; i < iterations; i++ {
+		go func(n int) {
+			defer wg.Done()
+			execCtx := workflow.NewExecutionContext(workflowID, "test")
+			execCtx.CurrentStep = fmt.Sprintf("step-%d", n)
+			_ = s.Save(ctx, execCtx)
+		}(i)
+
+		go func() {
+			defer wg.Done()
+			_ = s.Delete(ctx, workflowID)
+		}()
+	}
+
+	wg.Wait()
+
+	// State should be either present and valid, or absent
+	loaded, err := s.Load(ctx, workflowID)
+	assert.NoError(t, err, "Load should not error even after race")
+	// loaded can be nil (deleted) or valid (saved last)
+	if loaded != nil {
+		assert.Equal(t, workflowID, loaded.WorkflowID)
+	}
+}
+
+// TestJSONStore_RaceListSave tests concurrent List and Save operations.
+func TestJSONStore_RaceListSave(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	const iterations = 20
+
+	var wg sync.WaitGroup
+	wg.Add(iterations * 2)
+
+	// Savers
+	for i := 0; i < iterations; i++ {
+		go func(n int) {
+			defer wg.Done()
+			id := fmt.Sprintf("list-race-%d", n)
+			execCtx := workflow.NewExecutionContext(id, "test")
+			_ = s.Save(ctx, execCtx)
+		}(i)
+	}
+
+	// Listers
+	for i := 0; i < iterations; i++ {
+		go func() {
+			defer wg.Done()
+			ids, err := s.List(ctx)
+			assert.NoError(t, err, "List should not error during race")
+			// ids length will vary depending on timing, but shouldn't panic
+			_ = ids
+		}()
+	}
+
+	wg.Wait()
+
+	// Final list should have all saved items
+	ids, err := s.List(ctx)
+	require.NoError(t, err)
+	assert.Len(t, ids, iterations)
 }

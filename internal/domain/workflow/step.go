@@ -1,6 +1,9 @@
 package workflow
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // StepType defines the type of workflow step.
 type StepType string
@@ -10,6 +13,14 @@ const (
 	StepTypeParallel StepType = "parallel"
 	StepTypeTerminal StepType = "terminal"
 )
+
+// Valid parallel execution strategies.
+var validParallelStrategies = map[string]bool{
+	"":            true, // default
+	"all_succeed": true,
+	"any_succeed": true,
+	"best_effort": true,
+}
 
 func (s StepType) String() string {
 	return string(s)
@@ -67,6 +78,9 @@ func (s *Step) Validate() error {
 	case StepTypeParallel:
 		if len(s.Branches) == 0 {
 			return errors.New("branches are required for parallel-type steps")
+		}
+		if !validParallelStrategies[s.Strategy] {
+			return fmt.Errorf("invalid parallel strategy %q: must be one of all_succeed, any_succeed, best_effort", s.Strategy)
 		}
 	case StepTypeTerminal:
 		// terminal steps don't need additional validation
