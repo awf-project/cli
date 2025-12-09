@@ -1,28 +1,28 @@
 # F00X: Feature Title
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 [Describe what this feature does and why it's needed]
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Criterion 3
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: _none_
-- **Débloque**: F00Y, F00Z
+- **Blocked by**: _none_
+- **Unblocks**: F00Y, F00Z
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/...
@@ -30,7 +30,7 @@ internal/application/...
 internal/infrastructure/...
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Task 1
   - [ ] Subtask 1.1
