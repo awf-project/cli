@@ -3,7 +3,6 @@
 ## Backlog
 
 ### Phase 1 - MVP (v0.1.0)
-- [F006](features/F006-json-logging.md) Logging JSON structuré
 - [F007](features/F007-variable-interpolation.md) Interpolation de variables
 - [F008](features/F008-hooks.md) Hooks pre/post
 
@@ -63,6 +62,7 @@ _No features in review_
 - [F003](features/F003-linear-execution.md) Exécution linéaire de steps
 - [F004](features/F004-json-state-persistence.md) Persistance d'état JSON
 - [F005](features/F005-cli-basic.md) CLI basique (run, list, status, validate)
+- [F006](features/F006-json-logging.md) Logging JSON structuré
 
 ---
 
@@ -70,9 +70,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 8 | 3 | 0 | 0 | 0 | 5 |
+| 1 - MVP | 8 | 2 | 0 | 0 | 0 | 6 |
 | 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
 | 4 - Extensibility | 4 | 4 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **28** | **23** | **0** | **0** | **0** | **5** |
+| **Total** | **28** | **22** | **0** | **0** | **0** | **6** |

@@ -248,7 +248,7 @@ make fmt            # Format code
 - [x] Linear step execution
 - [x] JSON state persistence
 - [x] CLI (run, list, status, validate)
-- [ ] JSON structured logging
+- [x] JSON structured logging
 - [ ] Variable interpolation
 - [ ] Pre/post hooks
 

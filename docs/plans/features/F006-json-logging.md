@@ -1,7 +1,7 @@
 # F006: Logging JSON Structuré
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: high
@@ -13,13 +13,13 @@ Implement structured JSON logging for workflow execution. Log all significant ev
 
 ## Critères d'Acceptance
 
-- [ ] Log events in JSON format
-- [ ] Include timestamp, level, message, workflow context
-- [ ] Log to file (storage/logs/)
-- [ ] Optional console output
-- [ ] Configurable log level
-- [ ] Mask sensitive values (API keys, passwords)
-- [ ] Implements Logger port interface
+- [x] Log events in JSON format
+- [x] Include timestamp, level, message, workflow context
+- [x] Log to file (storage/logs/)
+- [x] Optional console output
+- [x] Configurable log level
+- [x] Mask sensitive values (API keys, passwords)
+- [x] Implements Logger port interface
 
 ## Dépendances
 
@@ -29,33 +29,39 @@ Implement structured JSON logging for workflow execution. Log all significant ev
 ## Fichiers Impactés
 
 ```
+internal/domain/ports/logger.go              # Existing - Logger interface
 internal/infrastructure/logger/json_logger.go
+internal/infrastructure/logger/json_logger_test.go
 internal/infrastructure/logger/console_logger.go
-internal/domain/ports/logger.go
+internal/infrastructure/logger/console_logger_test.go
+internal/infrastructure/logger/multi_logger.go
+internal/infrastructure/logger/multi_logger_test.go
+internal/infrastructure/logger/masker.go
+internal/infrastructure/logger/masker_test.go
 storage/logs/
 ```
 
 ## Tâches Techniques
 
-- [ ] Define Logger port interface
-  - [ ] Info(msg, fields)
-  - [ ] Error(msg, error, fields)
-  - [ ] Debug(msg, fields)
-  - [ ] Warn(msg, fields)
-  - [ ] WithContext(ctx) for workflow context
-- [ ] Implement JSONLogger
-  - [ ] Use zap for structured logging
-  - [ ] Write to file
-  - [ ] Include standard fields (timestamp, level, workflow_id, step)
-- [ ] Implement ConsoleLogger
-  - [ ] Human-readable output
-  - [ ] Color support
-  - [ ] Respect log level
-- [ ] Implement secret masking
-  - [ ] Detect keys matching SECRET_*, API_KEY*, PASSWORD*
-  - [ ] Replace values with ***
-- [ ] Log file naming: `{workflow-name}-{workflow-id}.log`
-- [ ] Write unit tests
+- [x] Define Logger port interface
+  - [x] Info(msg, fields)
+  - [x] Error(msg, error, fields)
+  - [x] Debug(msg, fields)
+  - [x] Warn(msg, fields)
+  - [x] WithContext(ctx) for workflow context
+- [x] Implement JSONLogger
+  - [x] Use zap for structured logging
+  - [x] Write to file
+  - [x] Include standard fields (timestamp, level, workflow_id, step)
+- [x] Implement ConsoleLogger
+  - [x] Human-readable output
+  - [x] Color support
+  - [x] Respect log level
+- [x] Implement secret masking
+  - [x] Detect keys matching SECRET_*, API_KEY*, PASSWORD*
+  - [x] Replace values with ***
+- [x] Log file naming: `{workflow-name}-{workflow-id}.log`
+- [x] Write unit tests
 
 ## Notes
 
