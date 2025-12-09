@@ -1,0 +1,35 @@
+# Build artifacts
+bin/
+dist/
+
+# Test artifacts
+coverage.out
+coverage.html
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies (if vendored)
+# vendor/
+
+# Environment
+.env
+.env.local
+*.env
+
+# Storage (runtime data)
+storage/states/
+storage/logs/
+storage/history.db
+
+# Temporary files
+*.tmp
+*.bak
