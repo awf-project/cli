@@ -23,18 +23,14 @@ func TestCommandExecutorInterface(t *testing.T) {
 
 func TestCommandStruct(t *testing.T) {
 	cmd := ports.Command{
-		Program: "echo",
-		Args:    []string{"hello", "world"},
+		Program: "echo hello world",
 		Dir:     "/tmp",
 		Env:     map[string]string{"FOO": "bar"},
 		Timeout: 30,
 	}
 
-	if cmd.Program != "echo" {
-		t.Errorf("expected Program 'echo', got '%s'", cmd.Program)
-	}
-	if len(cmd.Args) != 2 {
-		t.Errorf("expected 2 Args, got %d", len(cmd.Args))
+	if cmd.Program != "echo hello world" {
+		t.Errorf("expected Program 'echo hello world', got '%s'", cmd.Program)
 	}
 	if cmd.Env["FOO"] != "bar" {
 		t.Errorf("expected Env FOO='bar', got '%s'", cmd.Env["FOO"])
