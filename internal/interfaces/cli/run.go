@@ -1,0 +1,239 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/executor"
+	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/internal/infrastructure/store"
+	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+)
+
+func newRunCommand(cfg *Config) *cobra.Command {
+	var inputFlags []string
+
+	cmd := &cobra.Command{
+		Use:   "run <workflow>",
+		Short: "Execute a workflow",
+		Long: `Execute a workflow by name with optional input parameters.
+
+Input parameters are passed as key=value pairs via the --input flag.
+
+Examples:
+  awf run analyze-code --input file=main.go
+  awf run build-project --input target=linux --input version=1.0.0`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWorkflow(cmd, cfg, args[0], inputFlags)
+		},
+	}
+
+	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Input parameter (key=value)")
+
+	return cmd
+}
+
+func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string) error {
+	// Parse inputs
+	inputs, err := parseInputFlags(inputFlags)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Create formatter
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	// Setup context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		formatter.Warning("\nReceived interrupt signal, cancelling...")
+		cancel()
+	}()
+
+	// Initialize dependencies
+	workflowsPath := getWorkflowsPath(cfg)
+	repo := repository.NewYAMLRepository(workflowsPath)
+	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
+	shellExecutor := executor.NewShellExecutor()
+	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose}
+
+	// Create services
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger)
+
+	// Show start message
+	formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
+	startTime := time.Now()
+
+	// Execute workflow
+	execCtx, err := execSvc.Run(ctx, workflowName, inputs)
+
+	// Show result
+	duration := time.Since(startTime).Round(time.Millisecond)
+
+	if err != nil {
+		formatter.Error(fmt.Sprintf("Workflow failed: %s", err))
+		if execCtx != nil {
+			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
+		}
+		return &exitError{code: categorizeError(err), err: err}
+	}
+
+	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
+	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
+
+	if cfg.Verbose && execCtx != nil {
+		showExecutionDetails(formatter, execCtx)
+	}
+
+	return nil
+}
+
+func parseInputFlags(flags []string) (map[string]any, error) {
+	inputs := make(map[string]any)
+
+	for _, flag := range flags {
+		parts := strings.SplitN(flag, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid input format '%s', expected key=value", flag)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, errors.New("input key cannot be empty")
+		}
+		inputs[key] = value
+	}
+
+	return inputs, nil
+}
+
+func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
+	formatter.Printf("\n--- Execution Details ---\n")
+	formatter.Printf("Status: %s\n", execCtx.Status)
+	formatter.Printf("Steps executed:\n")
+
+	for name, state := range execCtx.States {
+		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
+		formatter.StatusLine("  "+name, string(state.Status), fmt.Sprintf("(%s)", duration))
+	}
+}
+
+func categorizeError(err error) int {
+	errStr := err.Error()
+
+	switch {
+	case strings.Contains(errStr, "not found"):
+		return ExitUser
+	case strings.Contains(errStr, "invalid"):
+		return ExitWorkflow
+	case strings.Contains(errStr, "timeout"):
+		return ExitExecution
+	case strings.Contains(errStr, "exit code"):
+		return ExitExecution
+	case strings.Contains(errStr, "permission"):
+		return ExitSystem
+	default:
+		return ExitExecution
+	}
+}
+
+// exitError wraps an error with an exit code.
+type exitError struct {
+	code int
+	err  error
+}
+
+func (e *exitError) Error() string {
+	return e.err.Error()
+}
+
+func (e *exitError) ExitCode() int {
+	return e.code
+}
+
+// cliLogger implements ports.Logger for CLI output.
+type cliLogger struct {
+	formatter *ui.Formatter
+	verbose   bool
+	context   map[string]any
+}
+
+func (l *cliLogger) Debug(msg string, keysAndValues ...any) {
+	if l.verbose {
+		l.formatter.Debug(formatLog(msg, l.mergeContext(keysAndValues)...))
+	}
+}
+
+func (l *cliLogger) Info(msg string, keysAndValues ...any) {
+	l.formatter.Info(formatLog(msg, l.mergeContext(keysAndValues)...))
+}
+
+func (l *cliLogger) Warn(msg string, keysAndValues ...any) {
+	l.formatter.Warning(formatLog(msg, l.mergeContext(keysAndValues)...))
+}
+
+func (l *cliLogger) Error(msg string, keysAndValues ...any) {
+	l.formatter.Error(formatLog(msg, l.mergeContext(keysAndValues)...))
+}
+
+func (l *cliLogger) WithContext(ctx map[string]any) ports.Logger {
+	merged := make(map[string]any)
+	for k, v := range l.context {
+		merged[k] = v
+	}
+	for k, v := range ctx {
+		merged[k] = v
+	}
+	return &cliLogger{
+		formatter: l.formatter,
+		verbose:   l.verbose,
+		context:   merged,
+	}
+}
+
+func (l *cliLogger) mergeContext(keysAndValues []any) []any {
+	if len(l.context) == 0 {
+		return keysAndValues
+	}
+	result := make([]any, 0, len(keysAndValues)+len(l.context)*2)
+	for k, v := range l.context {
+		result = append(result, k, v)
+	}
+	result = append(result, keysAndValues...)
+	return result
+}
+
+func formatLog(msg string, keysAndValues ...any) string {
+	if len(keysAndValues) == 0 {
+		return msg
+	}
+
+	parts := []string{msg}
+	for i := 0; i < len(keysAndValues); i += 2 {
+		if i+1 < len(keysAndValues) {
+			parts = append(parts, fmt.Sprintf("%v=%v", keysAndValues[i], keysAndValues[i+1]))
+		}
+	}
+	return strings.Join(parts, " ")
+}

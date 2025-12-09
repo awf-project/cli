@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
+	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // Version information (set at build time via ldflags)
@@ -11,8 +14,28 @@ var (
 	BuildDate = "unknown"
 )
 
+// App holds CLI dependencies and configuration.
+type App struct {
+	Config    *Config
+	Formatter *ui.Formatter
+}
+
+// NewApp creates a new CLI app with the given config.
+func NewApp(cfg *Config) *App {
+	return &App{
+		Config: cfg,
+		Formatter: ui.NewFormatter(os.Stdout, ui.FormatOptions{
+			Verbose: cfg.Verbose,
+			Quiet:   cfg.Quiet,
+			NoColor: cfg.NoColor,
+		}),
+	}
+}
+
 // NewRootCommand creates the root CLI command.
 func NewRootCommand() *cobra.Command {
+	cfg := DefaultConfig()
+
 	cmd := &cobra.Command{
 		Use:   "awf",
 		Short: "AI Workflow CLI - Orchestrate AI agents through YAML workflows",
@@ -28,8 +51,21 @@ Examples:
 		SilenceErrors: true,
 	}
 
-	// Add subcommands
+	// Global flags
+	pf := cmd.PersistentFlags()
+	pf.BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output")
+	pf.BoolVarP(&cfg.Quiet, "quiet", "q", false, "Suppress non-error output")
+	pf.BoolVar(&cfg.NoColor, "no-color", false, "Disable colored output")
+	pf.StringVar(&cfg.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	pf.StringVar(&cfg.ConfigPath, "config", "", "Path to config file")
+	pf.StringVar(&cfg.StoragePath, "storage", cfg.StoragePath, "Path to storage directory")
+
+	// Subcommands
 	cmd.AddCommand(newVersionCommand())
+	cmd.AddCommand(newListCommand(cfg))
+	cmd.AddCommand(newRunCommand(cfg))
+	cmd.AddCommand(newStatusCommand(cfg))
+	cmd.AddCommand(newValidateCommand(cfg))
 
 	return cmd
 }
