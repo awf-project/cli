@@ -1,6 +1,7 @@
 package ports_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -37,6 +38,22 @@ func TestCommandStruct(t *testing.T) {
 	}
 	if cmd.Env["FOO"] != "bar" {
 		t.Errorf("expected Env FOO='bar', got '%s'", cmd.Env["FOO"])
+	}
+}
+
+func TestCommandStructWithWriters(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	cmd := ports.Command{
+		Program: "echo",
+		Stdout:  &stdout,
+		Stderr:  &stderr,
+	}
+
+	if cmd.Stdout == nil {
+		t.Error("expected Stdout writer to be set")
+	}
+	if cmd.Stderr == nil {
+		t.Error("expected Stderr writer to be set")
 	}
 }
 

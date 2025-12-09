@@ -86,3 +86,36 @@ func TestRunCommand_Help(t *testing.T) {
 		t.Errorf("expected help text, got: %s", output)
 	}
 }
+
+func TestRunCommand_HasOutputFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("output")
+			if flag == nil {
+				t.Error("expected 'run' command to have --output flag")
+			}
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
+func TestRunCommand_InvalidOutputMode(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "test-workflow", "--output=invalid"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for invalid output mode")
+	}
+	if !strings.Contains(err.Error(), "invalid output mode") {
+		t.Errorf("expected 'invalid output mode' error, got: %v", err)
+	}
+}
