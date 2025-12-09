@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -228,4 +229,65 @@ func TestShellExecutor_Execute_Environment(t *testing.T) {
 
 func TestShellExecutor_ImplementsInterface(t *testing.T) {
 	var _ ports.CommandExecutor = (*ShellExecutor)(nil)
+}
+
+func TestShellExecutor_Execute_StreamsStdout(t *testing.T) {
+	executor := NewShellExecutor()
+
+	var streamBuf bytes.Buffer
+	cmd := ports.Command{
+		Program: "echo hello",
+		Stdout:  &streamBuf,
+	}
+
+	result, err := executor.Execute(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.Equal(t, "hello\n", result.Stdout, "captured stdout")
+	assert.Equal(t, "hello\n", streamBuf.String(), "streamed stdout")
+}
+
+func TestShellExecutor_Execute_StreamsStderr(t *testing.T) {
+	executor := NewShellExecutor()
+
+	var streamBuf bytes.Buffer
+	cmd := ports.Command{
+		Program: "echo error >&2",
+		Stderr:  &streamBuf,
+	}
+
+	result, err := executor.Execute(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.Equal(t, "error\n", result.Stderr, "captured stderr")
+	assert.Equal(t, "error\n", streamBuf.String(), "streamed stderr")
+}
+
+func TestShellExecutor_Execute_StreamsBoth(t *testing.T) {
+	executor := NewShellExecutor()
+
+	var outBuf, errBuf bytes.Buffer
+	cmd := ports.Command{
+		Program: "echo out; echo err >&2",
+		Stdout:  &outBuf,
+		Stderr:  &errBuf,
+	}
+
+	result, err := executor.Execute(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.Equal(t, "out\n", result.Stdout)
+	assert.Equal(t, "err\n", result.Stderr)
+	assert.Equal(t, "out\n", outBuf.String())
+	assert.Equal(t, "err\n", errBuf.String())
+}
+
+func TestShellExecutor_Execute_NilWriters_BackwardCompatible(t *testing.T) {
+	executor := NewShellExecutor()
+	cmd := ports.Command{Program: "echo hello"}
+
+	result, err := executor.Execute(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.Equal(t, "hello\n", result.Stdout)
 }

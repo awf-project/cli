@@ -92,6 +92,16 @@ Workflow ID: abc123-def456
 --log-level       Log level (debug, info, warn, error)
 ```
 
+### Run Command Flags
+
+```
+--input, -i       Input parameter (key=value), can be repeated
+--output, -o      Output mode: silent (default), streaming, buffered
+                  - silent: No command output displayed
+                  - streaming: Real-time output with [OUT]/[ERR] prefixes
+                  - buffered: Show output after each step completes
+```
+
 ## Workflow Syntax
 
 ### Basic Structure
@@ -251,6 +261,7 @@ make fmt            # Format code
 - [x] JSON structured logging
 - [x] Variable interpolation
 - [x] Pre/post hooks
+- [x] Output streaming (--output flag)
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions

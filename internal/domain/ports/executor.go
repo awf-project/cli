@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // Command represents a command to be executed.
 type Command struct {
@@ -8,7 +11,9 @@ type Command struct {
 	Args    []string
 	Dir     string
 	Env     map[string]string
-	Timeout int // seconds, 0 means default
+	Timeout int       // seconds, 0 means default
+	Stdout  io.Writer // optional: streaming output for stdout
+	Stderr  io.Writer // optional: streaming output for stderr
 }
 
 // CommandResult holds the output of an executed command.

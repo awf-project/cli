@@ -3,6 +3,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -47,10 +48,22 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 		}
 	}
 
-	// capture output
+	// capture output (always needed for result)
 	var stdout, stderr bytes.Buffer
-	execCmd.Stdout = &stdout
-	execCmd.Stderr = &stderr
+
+	// setup stdout writer with optional streaming
+	if cmd.Stdout != nil {
+		execCmd.Stdout = io.MultiWriter(&stdout, cmd.Stdout)
+	} else {
+		execCmd.Stdout = &stdout
+	}
+
+	// setup stderr writer with optional streaming
+	if cmd.Stderr != nil {
+		execCmd.Stderr = io.MultiWriter(&stderr, cmd.Stderr)
+	} else {
+		execCmd.Stderr = &stderr
+	}
 
 	// execute
 	err := execCmd.Run()

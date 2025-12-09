@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -22,6 +23,14 @@ type ExecutionService struct {
 	logger       ports.Logger
 	resolver     interpolation.Resolver
 	hookExecutor *HookExecutor
+	stdoutWriter io.Writer
+	stderrWriter io.Writer
+}
+
+// SetOutputWriters configures streaming output writers.
+func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
+	s.stdoutWriter = stdout
+	s.stderrWriter = stderr
 }
 
 // NewExecutionService creates a new execution service.
@@ -170,6 +179,8 @@ func (s *ExecutionService) executeStep(
 	cmd := ports.Command{
 		Program: resolvedCmd,
 		Timeout: step.Timeout,
+		Stdout:  s.stdoutWriter,
+		Stderr:  s.stderrWriter,
 	}
 
 	// execute

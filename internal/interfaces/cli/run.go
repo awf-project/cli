@@ -23,6 +23,7 @@ import (
 
 func newRunCommand(cfg *Config) *cobra.Command {
 	var inputFlags []string
+	var outputMode string
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -30,17 +31,30 @@ func newRunCommand(cfg *Config) *cobra.Command {
 		Long: `Execute a workflow by name with optional input parameters.
 
 Input parameters are passed as key=value pairs via the --input flag.
+Output modes control how command output is displayed:
+  - silent (default): No streaming, only final result
+  - streaming: Real-time output with [OUT]/[ERR] prefixes
+  - buffered: Show output after each step completes
 
 Examples:
   awf run analyze-code --input file=main.go
-  awf run build-project --input target=linux --input version=1.0.0`,
+  awf run build-project --input target=linux --output=streaming`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if outputMode != "" {
+				mode, err := ParseOutputMode(outputMode)
+				if err != nil {
+					return err
+				}
+				cfg.OutputMode = mode
+			}
 			return runWorkflow(cmd, cfg, args[0], inputFlags)
 		},
 	}
 
 	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Input parameter (key=value)")
+	cmd.Flags().StringVarP(&outputMode, "output", "o", "silent",
+		"Output mode: silent (default), streaming, buffered")
 
 	return cmd
 }
@@ -58,6 +72,14 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
+
+	// Setup output writers based on mode
+	var stdoutWriter, stderrWriter *ui.PrefixedWriter
+	if !cfg.Quiet && cfg.OutputMode == OutputStreaming {
+		colorizer := ui.NewColorizer(!cfg.NoColor)
+		stdoutWriter = ui.NewPrefixedWriter(cmd.OutOrStdout(), ui.PrefixStdout, "", colorizer)
+		stderrWriter = ui.NewPrefixedWriter(cmd.ErrOrStderr(), ui.PrefixStderr, "", colorizer)
+	}
 
 	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
@@ -83,12 +105,25 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger, resolver)
 
+	// Pass writers to execution service for streaming mode
+	if stdoutWriter != nil {
+		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)
+	}
+
 	// Show start message
 	formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
 	startTime := time.Now()
 
 	// Execute workflow
 	execCtx, err := execSvc.Run(ctx, workflowName, inputs)
+
+	// Flush any remaining output from streaming writers
+	if stdoutWriter != nil {
+		stdoutWriter.Flush()
+	}
+	if stderrWriter != nil {
+		stderrWriter.Flush()
+	}
 
 	// Show result
 	duration := time.Since(startTime).Round(time.Millisecond)
@@ -98,11 +133,20 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		if execCtx != nil {
 			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
 		}
+		// Show buffered output on error
+		if cfg.OutputMode == OutputBuffered && execCtx != nil {
+			showStepOutputs(formatter, execCtx)
+		}
 		return &exitError{code: categorizeError(err), err: err}
 	}
 
 	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
 	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
+
+	// Show buffered output after successful completion
+	if cfg.OutputMode == OutputBuffered && execCtx != nil {
+		showStepOutputs(formatter, execCtx)
+	}
 
 	if cfg.Verbose && execCtx != nil {
 		showExecutionDetails(formatter, execCtx)
@@ -138,6 +182,19 @@ func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionCo
 	for name, state := range execCtx.States {
 		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
 		formatter.StatusLine("  "+name, string(state.Status), fmt.Sprintf("(%s)", duration))
+	}
+}
+
+func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
+	for name, state := range execCtx.States {
+		if state.Output != "" {
+			formatter.Printf("\n--- [%s] stdout ---\n", name)
+			formatter.Printf("%s", state.Output)
+		}
+		if state.Stderr != "" {
+			formatter.Printf("\n--- [%s] stderr ---\n", name)
+			formatter.Printf("%s", state.Stderr)
+		}
 	}
 }
 
