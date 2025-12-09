@@ -33,27 +33,83 @@ Examples:
 func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 	ctx := context.Background()
 
-	// Create formatter
-	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
-		Verbose: cfg.Verbose,
-		Quiet:   cfg.Quiet,
-		NoColor: cfg.NoColor,
-	})
+	// Create output writer
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
 
 	// Load state
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	execCtx, err := stateStore.Load(ctx, workflowID)
 	if err != nil {
+		if writer.IsJSONFormat() {
+			return writer.WriteError(err, ExitUser)
+		}
 		return fmt.Errorf("failed to load state: %w", err)
 	}
 	if execCtx == nil {
-		return fmt.Errorf("workflow execution not found: %s", workflowID)
+		err := fmt.Errorf("workflow execution not found: %s", workflowID)
+		if writer.IsJSONFormat() {
+			return writer.WriteError(err, ExitUser)
+		}
+		return err
 	}
 
-	// Display status
-	displayStatus(formatter, execCtx, cfg.Verbose)
+	// JSON/quiet format: use OutputWriter
+	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+		return writer.WriteExecution(toExecutionInfo(execCtx))
+	}
 
+	// Text/table format: use formatter
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+	displayStatus(formatter, execCtx, cfg.Verbose)
 	return nil
+}
+
+func toExecutionInfo(execCtx *workflow.ExecutionContext) ui.ExecutionInfo {
+	var durationMs int64
+	if execCtx.CompletedAt.IsZero() {
+		durationMs = time.Since(execCtx.StartedAt).Milliseconds()
+	} else {
+		durationMs = execCtx.CompletedAt.Sub(execCtx.StartedAt).Milliseconds()
+	}
+
+	steps := make([]ui.StepInfo, 0, len(execCtx.States))
+	for name, state := range execCtx.States {
+		step := ui.StepInfo{
+			Name:     name,
+			Status:   string(state.Status),
+			Output:   state.Output,
+			Stderr:   state.Stderr,
+			ExitCode: state.ExitCode,
+			Error:    state.Error,
+		}
+		if !state.StartedAt.IsZero() {
+			step.StartedAt = state.StartedAt.Format(time.RFC3339)
+		}
+		if !state.CompletedAt.IsZero() {
+			step.CompletedAt = state.CompletedAt.Format(time.RFC3339)
+		}
+		steps = append(steps, step)
+	}
+
+	info := ui.ExecutionInfo{
+		WorkflowID:   execCtx.WorkflowID,
+		WorkflowName: execCtx.WorkflowName,
+		Status:       string(execCtx.Status),
+		CurrentStep:  execCtx.CurrentStep,
+		DurationMs:   durationMs,
+		Steps:        steps,
+	}
+	if !execCtx.StartedAt.IsZero() {
+		info.StartedAt = execCtx.StartedAt.Format(time.RFC3339)
+	}
+	if !execCtx.CompletedAt.IsZero() {
+		info.CompletedAt = execCtx.CompletedAt.Format(time.RFC3339)
+	}
+	return info
 }
 
 func displayStatus(formatter *ui.Formatter, execCtx *workflow.ExecutionContext, verbose bool) {

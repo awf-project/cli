@@ -6,6 +6,7 @@ import (
 
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
+	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // OutputMode defines how command output is displayed.
@@ -46,25 +47,27 @@ func ParseOutputMode(s string) (OutputMode, error) {
 
 // Config holds CLI configuration.
 type Config struct {
-	Verbose     bool
-	Quiet       bool
-	NoColor     bool
-	OutputMode  OutputMode
-	LogLevel    string
-	ConfigPath  string
-	StoragePath string
+	Verbose      bool
+	Quiet        bool
+	NoColor      bool
+	OutputMode   OutputMode
+	OutputFormat ui.OutputFormat
+	LogLevel     string
+	ConfigPath   string
+	StoragePath  string
 }
 
 // DefaultConfig returns default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		Verbose:     false,
-		Quiet:       false,
-		NoColor:     false,
-		OutputMode:  OutputSilent,
-		LogLevel:    "info",
-		ConfigPath:  "",
-		StoragePath: xdg.AWFDataDir(),
+		Verbose:      false,
+		Quiet:        false,
+		NoColor:      false,
+		OutputMode:   OutputSilent,
+		OutputFormat: ui.FormatText,
+		LogLevel:     "info",
+		ConfigPath:   "",
+		StoragePath:  xdg.AWFDataDir(),
 	}
 }
 

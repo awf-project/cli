@@ -1,7 +1,7 @@
 # F031: Output Formats
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: medium

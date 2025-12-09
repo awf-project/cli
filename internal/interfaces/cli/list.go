@@ -24,23 +24,32 @@ func newListCommand(cfg *Config) *cobra.Command {
 func runList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
 
+	// Create output writer
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+
 	// Create composite repository with XDG paths
 	repo := NewWorkflowRepository()
 
 	// List workflows with source info
 	infos, err := repo.ListWithSource(ctx)
 	if err != nil {
+		if writer.IsJSONFormat() {
+			return writer.WriteError(err, ExitUser)
+		}
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
 
-	// Create formatter
-	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
-		Verbose: cfg.Verbose,
-		Quiet:   cfg.Quiet,
-		NoColor: cfg.NoColor,
-	})
-
 	if len(infos) == 0 {
+		// For JSON/quiet, output empty result
+		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+			return writer.WriteWorkflows([]ui.WorkflowInfo{})
+		}
+		// For text/table, show helpful message
+		formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+			Verbose: cfg.Verbose,
+			Quiet:   cfg.Quiet,
+			NoColor: cfg.NoColor,
+		})
 		formatter.Info("No workflows found")
 		formatter.Info("Search paths:")
 		for _, sp := range BuildWorkflowPaths() {
@@ -57,36 +66,34 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		return infos[i].Name < infos[j].Name
 	})
 
-	// Load workflow details for table
-	headers := []string{"NAME", "SOURCE", "VERSION", "DESCRIPTION"}
-	rows := make([][]string, 0, len(infos))
-
+	// Build workflow list
+	workflows := make([]ui.WorkflowInfo, 0, len(infos))
 	for _, info := range infos {
-		wf, err := repo.Load(ctx, info.Name)
-		if err != nil || wf == nil {
-			rows = append(rows, []string{info.Name, info.Source.String(), "-", "(error loading)"})
-			continue
+		wf, loadErr := repo.Load(ctx, info.Name)
+
+		wfInfo := ui.WorkflowInfo{
+			Name:   info.Name,
+			Source: info.Source.String(),
 		}
 
-		version := wf.Version
-		if version == "" {
-			version = "-"
+		if loadErr == nil && wf != nil {
+			wfInfo.Version = wf.Version
+			wfInfo.Description = wf.Description
 		}
 
-		desc := wf.Description
-		if len(desc) > 40 {
-			desc = desc[:37] + "..."
-		}
-		if desc == "" {
-			desc = "-"
-		}
-
-		rows = append(rows, []string{info.Name, info.Source.String(), version, desc})
+		workflows = append(workflows, wfInfo)
 	}
 
-	formatter.Table(headers, rows)
+	if err := writer.WriteWorkflows(workflows); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 
-	if cfg.Verbose {
+	if cfg.Verbose && !writer.IsJSONFormat() {
+		formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+			Verbose: cfg.Verbose,
+			Quiet:   cfg.Quiet,
+			NoColor: cfg.NoColor,
+		})
 		formatter.Debug(fmt.Sprintf("\nFound %d workflow(s)", len(infos)))
 	}
 
