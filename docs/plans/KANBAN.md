@@ -2,33 +2,39 @@
 
 ## Backlog
 
+### Phase 1 - MVP (v0.1.0)
+- [F035](features/v0.1.0/F035-step-working-directory.md) Step working directory
+
 ### Phase 2 - Core Features (v0.2.0)
-- [F009](features/F009-state-machine.md) State machine avec transitions
-- [F010](features/F010-parallel-execution.md) Exécution parallèle (errgroup)
-- [F011](features/F011-retry-backoff.md) Retry avec backoff exponentiel
-- [F012](features/F012-input-validation.md) Validation des inputs
-- [F013](features/F013-workflow-resume.md) Commande resume
-- [F014](features/F014-sqlite-history.md) Historique SQLite
+- [F009](features/v0.2.0/F009-state-machine.md) State machine with transitions
+- [F010](features/v0.2.0/F010-parallel-execution.md) Parallel execution (errgroup)
+- [F011](features/v0.2.0/F011-retry-backoff.md) Retry with exponential backoff
+- [F012](features/v0.2.0/F012-input-validation.md) Input validation
+- [F013](features/v0.2.0/F013-workflow-resume.md) Resume command
+- [F014](features/v0.2.0/F014-sqlite-history.md) SQLite history
 
 ### Phase 3 - Advanced Features (v0.3.0)
-- [F015](features/F015-conditions.md) Conditions complexes (if/else)
-- [F016](features/F016-loops.md) Boucles (for/while)
-- [F017](features/F017-workflow-templates.md) Templates de workflows
-- [F018](features/F018-encrypted-env.md) Variables d'environnement chiffrées
-- [F019](features/F019-dry-run.md) Dry-run mode
-- [F020](features/F020-interactive-mode.md) Interactive mode
+- [F015](features/v0.3.0/F015-conditions.md) Complex conditions (if/else)
+- [F016](features/v0.3.0/F016-loops.md) Loops (for/while)
+- [F017](features/v0.3.0/F017-workflow-templates.md) Workflow templates
+- [F018](features/v0.3.0/F018-encrypted-env.md) Encrypted environment variables
+- [F019](features/v0.3.0/F019-dry-run.md) Dry-run mode
+- [F020](features/v0.3.0/F020-interactive-mode.md) Interactive mode
 
-### Phase 4 - Extensibilité (v0.4.0)
-- [F021](features/F021-plugin-system.md) Plugin system
-- [F022](features/F022-custom-operations.md) Custom operations
-- [F023](features/F023-workflow-composition.md) Workflow composition (sous-workflows)
-- [F024](features/F024-remote-workflows.md) Remote workflows (HTTP)
+### Phase 4 - Extensibility & AI (v0.4.0)
+- [F021](features/v0.4.0/F021-plugin-system.md) Plugin system
+- [F022](features/v0.4.0/F022-custom-operations.md) Custom operations
+- [F023](features/v0.4.0/F023-workflow-composition.md) Workflow composition (sub-workflows)
+- [F024](features/v0.4.0/F024-remote-workflows.md) Remote workflows (HTTP)
+- [F032](features/v0.4.0/F032-agent-step-type.md) Agent step type
+- [F033](features/v0.4.0/F033-agent-conversations.md) Agent conversations
+- [F034](features/v0.4.0/F034-agent-tools.md) Agent tools
 
 ### Phase 5 - Interfaces (v1.0.0)
-- [F025](features/F025-rest-api.md) API REST
-- [F026](features/F026-webui.md) WebUI
-- [F027](features/F027-message-queue.md) Message Queue support
-- [F028](features/F028-webhooks.md) Webhooks
+- [F025](features/v1.0.0/F025-rest-api.md) REST API
+- [F026](features/v1.0.0/F026-webui.md) WebUI
+- [F027](features/v1.0.0/F027-message-queue.md) Message Queue support
+- [F028](features/v1.0.0/F028-webhooks.md) Webhooks
 
 ---
 
@@ -53,14 +59,14 @@ _No features in review_
 ## Done
 
 ### Phase 1 - MVP (v0.1.0)
-- [F001](features/F001-hexagonal-architecture.md) Architecture hexagonale de base
-- [F002](features/F002-yaml-parser.md) Parsing YAML des workflows
-- [F003](features/F003-linear-execution.md) Exécution linéaire de steps
-- [F004](features/F004-json-state-persistence.md) Persistance d'état JSON
-- [F005](features/F005-cli-basic.md) CLI basique (run, list, status, validate)
-- [F006](features/F006-json-logging.md) Logging JSON structuré
-- [F007](features/F007-variable-interpolation.md) Interpolation de variables
-- [F008](features/F008-hooks.md) Hooks pre/post
+- [F001](features/v0.1.0/F001-hexagonal-architecture.md) Hexagonal architecture
+- [F002](features/v0.1.0/F002-yaml-parser.md) YAML workflow parsing
+- [F003](features/v0.1.0/F003-linear-execution.md) Linear step execution
+- [F004](features/v0.1.0/F004-json-state-persistence.md) JSON state persistence
+- [F005](features/v0.1.0/F005-cli-basic.md) Basic CLI (run, list, status, validate)
+- [F006](features/v0.1.0/F006-json-logging.md) Structured JSON logging
+- [F007](features/v0.1.0/F007-variable-interpolation.md) Variable interpolation
+- [F008](features/v0.1.0/F008-hooks.md) Pre/post hooks
 - [F029](features/v0.1.0/F029-output-streaming.md) Output streaming (--output flag)
 - [F030](features/v0.1.0/F030-xdg-workflow-discovery.md) XDG workflow discovery
 - [F031](features/v0.1.0/F031-output-formats.md) Output formats (--format flag)
@@ -71,9 +77,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 11 | 0 | 0 | 0 | 0 | 11 |
+| 1 - MVP | 12 | 1 | 0 | 0 | 0 | 11 |
 | 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
-| 4 - Extensibility | 4 | 4 | 0 | 0 | 0 | 0 |
+| 4 - Extensibility & AI | 7 | 7 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **31** | **20** | **0** | **0** | **0** | **11** |
+| **Total** | **35** | **24** | **0** | **0** | **0** | **11** |
