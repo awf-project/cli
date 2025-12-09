@@ -7,6 +7,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Mock implementations
@@ -94,6 +95,17 @@ func (m *mockLogger) Warn(msg string, fields ...any)  {}
 func (m *mockLogger) Error(msg string, fields ...any) {}
 func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
+}
+
+// mockResolver passes commands through unchanged (no interpolation)
+type mockResolver struct{}
+
+func newMockResolver() *mockResolver {
+	return &mockResolver{}
+}
+
+func (m *mockResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	return template, nil
 }
 
 func TestNewWorkflowService(t *testing.T) {

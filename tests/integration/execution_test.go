@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // mockStateStore for integration tests
@@ -95,8 +96,10 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 
+	resolver := interpolation.NewTemplateResolver()
+
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
 
 	// execute
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -152,9 +155,10 @@ states:
 	store := newMockStateStore()
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -209,9 +213,10 @@ states:
 	store := newMockStateStore()
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -244,15 +249,254 @@ func TestLinearExecution_WithValidFixture_Integration(t *testing.T) {
 	store := newMockStateStore()
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "valid-simple", nil)
 
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+}
+
+func TestHooks_WorkflowAndStepHooks_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// workflow with hooks that write to a log file for verification
+	logFile := filepath.Join(tmpDir, "hooks.log")
+	wfYAML := `name: hooks-test
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "WORKFLOW_START" >> ` + logFile + `
+  workflow_end:
+    - command: echo "WORKFLOW_END" >> ` + logFile + `
+
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "MAIN" >> ` + logFile + `
+    hooks:
+      pre:
+        - command: echo "PRE_STEP1" >> ` + logFile + `
+      post:
+        - command: echo "POST_STEP1" >> ` + logFile + `
+    on_success: done
+  done:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "hooks.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "hooks", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// verify hook execution order
+	logData, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := "WORKFLOW_START\nPRE_STEP1\nMAIN\nPOST_STEP1\nWORKFLOW_END\n"
+	assert.Equal(t, expected, string(logData))
+}
+
+func TestHooks_WorkflowErrorHook_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "error_hooks.log")
+
+	wfYAML := `name: error-hooks-test
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "START" >> ` + logFile + `
+  workflow_error:
+    - command: echo "ERROR_HOOK" >> ` + logFile + `
+  workflow_end:
+    - command: echo "END" >> ` + logFile + `
+
+states:
+  initial: failing_step
+  failing_step:
+    type: step
+    command: exit 1
+    on_success: done
+  done:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "error_hooks.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "error_hooks", nil)
+
+	// workflow should fail
+	require.Error(t, err)
+	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
+
+	// verify error hook was executed (not end hook)
+	logData, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := "START\nERROR_HOOK\n"
+	assert.Equal(t, expected, string(logData))
+}
+
+func TestHooks_MultipleSteps_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "multi_step_hooks.log")
+
+	wfYAML := `name: multi-step-hooks
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "WORKFLOW_START" >> ` + logFile + `
+  workflow_end:
+    - command: echo "WORKFLOW_END" >> ` + logFile + `
+
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "STEP1" >> ` + logFile + `
+    hooks:
+      pre:
+        - command: echo "PRE1" >> ` + logFile + `
+      post:
+        - command: echo "POST1" >> ` + logFile + `
+    on_success: step2
+  step2:
+    type: step
+    command: echo "STEP2" >> ` + logFile + `
+    hooks:
+      pre:
+        - command: echo "PRE2" >> ` + logFile + `
+      post:
+        - command: echo "POST2" >> ` + logFile + `
+    on_success: done
+  done:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "multi_hooks.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "multi_hooks", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// verify execution order
+	logData, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := "WORKFLOW_START\nPRE1\nSTEP1\nPOST1\nPRE2\nSTEP2\nPOST2\nWORKFLOW_END\n"
+	assert.Equal(t, expected, string(logData))
+}
+
+func TestHooks_LogAction_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// workflow using log hooks (not command hooks)
+	wfYAML := `name: log-hooks-test
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - log: "Starting workflow..."
+  workflow_end:
+    - log: "Workflow completed!"
+
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "hello"
+    hooks:
+      pre:
+        - log: "Before step1"
+      post:
+        - log: "After step1"
+    on_success: done
+  done:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "log_hooks.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{} // logs go to mock (no-op)
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "log_hooks", nil)
+
+	// should complete successfully even though log hooks don't write to file
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 }

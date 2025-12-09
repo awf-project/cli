@@ -36,7 +36,7 @@ func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
 	executor.results["echo hello"] = &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
@@ -68,7 +68,7 @@ func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
 	executor := newMockExecutor() // default returns ExitCode: 0
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "multi", nil)
 
@@ -107,7 +107,7 @@ func TestExecutionService_Run_FailureTransition(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "failed"}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "fail-test", nil)
 
@@ -142,7 +142,7 @@ func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "fail-no-transition", nil)
 
@@ -175,7 +175,7 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
 
@@ -185,7 +185,7 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 
 func TestExecutionService_Run_WorkflowNotFound(t *testing.T) {
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.Run(context.Background(), "nonexistent", nil)
 
@@ -205,7 +205,7 @@ func TestExecutionService_Run_WithInputs(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	inputs := map[string]any{"name": "test", "count": 42}
 	ctx, err := execSvc.Run(context.Background(), "input-test", inputs)
@@ -237,7 +237,7 @@ func TestExecutionService_Run_StepNotFound(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.Run(context.Background(), "bad-ref", nil)
 
@@ -256,7 +256,7 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "immediate", nil)
 
@@ -267,7 +267,7 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 
 func TestNewExecutionService(t *testing.T) {
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	assert.NotNil(t, execSvc)
 }
@@ -317,7 +317,7 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 	executor := &errorMockExecutor{err: errors.New("command not found")}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
 
@@ -342,7 +342,7 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 	executor := newMockExecutor()
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, store, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, store, &mockLogger{}, newMockResolver())
 
 	execCtx, err := execSvc.Run(context.Background(), "checkpoint-test", nil)
 	require.NoError(t, err)

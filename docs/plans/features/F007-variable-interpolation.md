@@ -1,7 +1,7 @@
 # F007: Interpolation de Variables
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: high

@@ -18,6 +18,7 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 func newRunCommand(cfg *Config) *cobra.Command {
@@ -76,10 +77,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose}
+	resolver := interpolation.NewTemplateResolver()
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger, resolver)
 
 	// Show start message
 	formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
