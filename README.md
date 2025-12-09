@@ -242,15 +242,15 @@ make fmt            # Format code
 
 ## Roadmap
 
-### Phase 1 - MVP (v0.1.0) - In Progress
+### Phase 1 - MVP (v0.1.0) - Complete
 - [x] Hexagonal architecture
 - [x] YAML workflow parsing
 - [x] Linear step execution
 - [x] JSON state persistence
 - [x] CLI (run, list, status, validate)
 - [x] JSON structured logging
-- [ ] Variable interpolation
-- [ ] Pre/post hooks
+- [x] Variable interpolation
+- [x] Pre/post hooks
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions

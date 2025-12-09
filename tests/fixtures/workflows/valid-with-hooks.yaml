@@ -1,0 +1,28 @@
+name: workflow-with-hooks
+description: A workflow with pre/post and workflow hooks
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "WORKFLOW_START"
+  workflow_end:
+    - command: echo "WORKFLOW_END"
+  workflow_error:
+    - command: echo "WORKFLOW_ERROR"
+
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "main command"
+    hooks:
+      pre:
+        - command: echo "PRE_STEP1"
+      post:
+        - command: echo "POST_STEP1"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal

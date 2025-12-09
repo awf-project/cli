@@ -1,7 +1,7 @@
 # F008: Hooks Pre/Post
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: medium
@@ -13,14 +13,14 @@ Implement hook execution at step and workflow levels. Execute pre-hooks before s
 
 ## Critères d'Acceptance
 
-- [ ] Execute step pre-hooks before step command
-- [ ] Execute step post-hooks after step command
-- [ ] Execute workflow_start hook at beginning
-- [ ] Execute workflow_end hook on success
-- [ ] Execute workflow_error hook on failure
-- [ ] Execute workflow_cancel hook on SIGINT/SIGTERM
-- [ ] Hooks support `log:` and `command:` actions
-- [ ] Hook failures don't stop workflow (unless configured)
+- [x] Execute step pre-hooks before step command
+- [x] Execute step post-hooks after step command
+- [x] Execute workflow_start hook at beginning
+- [x] Execute workflow_end hook on success
+- [x] Execute workflow_error hook on failure
+- [x] Execute workflow_cancel hook on SIGINT/SIGTERM
+- [x] Hooks support `log:` and `command:` actions
+- [x] Hook failures don't stop workflow (unless configured)
 
 ## Dépendances
 
@@ -30,39 +30,40 @@ Implement hook execution at step and workflow levels. Execute pre-hooks before s
 ## Fichiers Impactés
 
 ```
-internal/domain/workflow/hooks.go
-internal/application/hook_executor.go
-internal/domain/workflow/step.go
-internal/domain/workflow/workflow.go
+internal/domain/workflow/hooks.go          # Hook domain models
+internal/application/hook_executor.go      # HookExecutor service
+internal/application/execution_service.go  # Integration into workflow execution
+internal/domain/workflow/step.go           # Step.Hooks field
+internal/domain/workflow/workflow.go       # Workflow.Hooks field
 ```
 
 ## Tâches Techniques
 
-- [ ] Define Hook struct
-  - [ ] Type (log, command)
-  - [ ] Value (message or command string)
-- [ ] Define HookSet struct
-  - [ ] Pre hooks list
-  - [ ] Post hooks list
-- [ ] Define WorkflowHooks struct
-  - [ ] workflow_start
-  - [ ] workflow_end
-  - [ ] workflow_error
-  - [ ] workflow_cancel
-- [ ] Implement HookExecutor
-  - [ ] ExecuteHooks(hooks []Hook, context) error
-  - [ ] Handle log action (write to logger)
-  - [ ] Handle command action (shell exec)
-  - [ ] Variable interpolation in hooks
-- [ ] Integrate hooks into execution flow
-  - [ ] Before step execution
-  - [ ] After step execution
-  - [ ] At workflow lifecycle events
-- [ ] Handle hook failures
-  - [ ] Log warning but continue by default
-  - [ ] Option to fail on hook error
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Define Hook struct
+  - [x] Type (log, command)
+  - [x] Value (message or command string)
+- [x] Define HookSet struct
+  - [x] Pre hooks list
+  - [x] Post hooks list
+- [x] Define WorkflowHooks struct
+  - [x] workflow_start
+  - [x] workflow_end
+  - [x] workflow_error
+  - [x] workflow_cancel
+- [x] Implement HookExecutor
+  - [x] ExecuteHooks(hooks []Hook, context) error
+  - [x] Handle log action (write to logger)
+  - [x] Handle command action (shell exec)
+  - [x] Variable interpolation in hooks
+- [x] Integrate hooks into execution flow
+  - [x] Before step execution
+  - [x] After step execution
+  - [x] At workflow lifecycle events
+- [x] Handle hook failures
+  - [x] Log warning but continue by default
+  - [x] Option to fail on hook error
+- [x] Write unit tests
+- [x] Write integration tests
 
 ## Notes
 
