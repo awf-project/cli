@@ -91,7 +91,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		if !writer.IsJSONFormat() {
+		if cfg.OutputFormat != ui.FormatJSON && cfg.OutputFormat != ui.FormatTable {
 			formatter.Warning("\nReceived interrupt signal, cancelling...")
 		}
 		cancel()
@@ -101,7 +101,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
-	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose && !writer.IsJSONFormat()}
+	// Table and JSON formats should be silent (structured output only)
+	silentOutput := cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable
+	logger := &cliLogger{
+		formatter: formatter,
+		verbose:   cfg.Verbose && !silentOutput,
+		silent:    silentOutput,
+	}
 	resolver := interpolation.NewTemplateResolver()
 
 	// Create services
@@ -114,7 +120,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Show start message (text format only)
-	if !writer.IsJSONFormat() && cfg.OutputFormat != ui.FormatQuiet {
+	if !silentOutput && cfg.OutputFormat != ui.FormatQuiet {
 		formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
 	}
 	startTime := time.Now()
@@ -142,6 +148,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		if execCtx != nil {
 			result.WorkflowID = execCtx.WorkflowID
 			result.Status = string(execCtx.Status)
+			// Include step outputs in buffered mode
+			if cfg.OutputMode == OutputBuffered {
+				result.Steps = buildStepInfos(execCtx)
+			}
 		}
 		if execErr != nil {
 			result.Status = "failed"
@@ -156,7 +166,31 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return nil
 	}
 
-	// Text/table format
+	// Table format: use structured output
+	if cfg.OutputFormat == ui.FormatTable {
+		result := ui.RunResult{
+			Status:     "completed",
+			DurationMs: durationMs,
+		}
+		if execCtx != nil {
+			result.WorkflowID = execCtx.WorkflowID
+			result.Status = string(execCtx.Status)
+			result.Steps = buildStepInfos(execCtx)
+		}
+		if execErr != nil {
+			result.Status = "failed"
+			result.Error = execErr.Error()
+		}
+		if err := writer.WriteRunResult(result); err != nil {
+			return err
+		}
+		if execErr != nil {
+			return &exitError{code: categorizeError(execErr), err: execErr}
+		}
+		return nil
+	}
+
+	// Text format
 	duration := time.Since(startTime).Round(time.Millisecond)
 
 	if execErr != nil {
@@ -229,6 +263,23 @@ func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext
 	}
 }
 
+func buildStepInfos(execCtx *workflow.ExecutionContext) []ui.StepInfo {
+	var steps []ui.StepInfo
+	for name, state := range execCtx.States {
+		steps = append(steps, ui.StepInfo{
+			Name:        name,
+			Status:      string(state.Status),
+			Output:      state.Output,
+			Stderr:      state.Stderr,
+			ExitCode:    state.ExitCode,
+			StartedAt:   state.StartedAt.Format(time.RFC3339),
+			CompletedAt: state.CompletedAt.Format(time.RFC3339),
+			Error:       state.Error,
+		})
+	}
+	return steps
+}
+
 func categorizeError(err error) int {
 	errStr := err.Error()
 
@@ -266,24 +317,37 @@ func (e *exitError) ExitCode() int {
 type cliLogger struct {
 	formatter *ui.Formatter
 	verbose   bool
+	silent    bool // Suppress all output (for JSON format)
 	context   map[string]any
 }
 
 func (l *cliLogger) Debug(msg string, keysAndValues ...any) {
+	if l.silent {
+		return
+	}
 	if l.verbose {
 		l.formatter.Debug(formatLog(msg, l.mergeContext(keysAndValues)...))
 	}
 }
 
 func (l *cliLogger) Info(msg string, keysAndValues ...any) {
+	if l.silent {
+		return
+	}
 	l.formatter.Info(formatLog(msg, l.mergeContext(keysAndValues)...))
 }
 
 func (l *cliLogger) Warn(msg string, keysAndValues ...any) {
+	if l.silent {
+		return
+	}
 	l.formatter.Warning(formatLog(msg, l.mergeContext(keysAndValues)...))
 }
 
 func (l *cliLogger) Error(msg string, keysAndValues ...any) {
+	if l.silent {
+		return
+	}
 	l.formatter.Error(formatLog(msg, l.mergeContext(keysAndValues)...))
 }
 
@@ -298,6 +362,7 @@ func (l *cliLogger) WithContext(ctx map[string]any) ports.Logger {
 	return &cliLogger{
 		formatter: l.formatter,
 		verbose:   l.verbose,
+		silent:    l.silent,
 		context:   merged,
 	}
 }

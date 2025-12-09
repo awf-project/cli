@@ -124,11 +124,10 @@ make vet                # go vet
 
 ```bash
 awf run <workflow> --input=value    # Execute workflow
-awf resume <workflow-id>            # Resume interrupted workflow
 awf validate <workflow>             # Static validation
 awf list                            # List available workflows
 awf status <workflow-id>            # Check running workflow
-awf history                         # Execution history
+awf init                            # Initialize AWF in current directory
 ```
 
 ## Error Taxonomy

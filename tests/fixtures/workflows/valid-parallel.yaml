@@ -1,0 +1,81 @@
+name: parallel-workflow
+description: A workflow testing parallel execution, depends_on, and continue_on_error
+version: "1.0.0"
+author: test
+tags:
+  - parallel
+  - advanced
+
+inputs:
+  - name: task_count
+    type: integer
+    required: false
+    default: 3
+
+states:
+  initial: setup
+
+  setup:
+    type: step
+    description: Setup step before parallel execution
+    command: echo "Setting up..."
+    on_success: parallel_tasks
+    on_failure: error
+
+  parallel_tasks:
+    type: parallel
+    description: Execute multiple tasks concurrently
+    parallel:
+      - task_a
+      - task_b
+      - task_c
+    strategy: best_effort
+    max_concurrent: 2
+    on_success: aggregate
+    on_failure: error
+
+  task_a:
+    type: step
+    command: echo "Task A complete"
+    continue_on_error: true
+    on_success: aggregate
+    on_failure: error
+
+  task_b:
+    type: step
+    command: echo "Task B complete"
+    depends_on:
+      - setup
+    on_success: aggregate
+    on_failure: error
+
+  task_c:
+    type: step
+    command: echo "Task C complete"
+    depends_on:
+      - setup
+      - task_a
+    continue_on_error: false
+    on_success: aggregate
+    on_failure: error
+
+  aggregate:
+    type: step
+    description: Aggregate results from parallel tasks
+    command: echo "All tasks completed"
+    depends_on:
+      - task_a
+      - task_b
+      - task_c
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+    message: "Parallel workflow completed successfully"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

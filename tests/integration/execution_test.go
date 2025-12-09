@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -499,4 +500,91 @@ states:
 	// should complete successfully even though log hooks don't write to file
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+}
+
+func TestStreamingOutput_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	wfYAML := `name: streaming-test
+version: "1.0.0"
+states:
+  initial: output_step
+  output_step:
+    type: step
+    command: |
+      echo "stdout line 1"
+      echo "stderr line 1" >&2
+      echo "stdout line 2"
+    on_success: done
+  done:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "streaming.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+
+	// Capture streaming output
+	var stdoutBuf, stderrBuf bytes.Buffer
+	execSvc.SetOutputWriters(&stdoutBuf, &stderrBuf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "streaming", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify streaming output captured
+	assert.Contains(t, stdoutBuf.String(), "stdout line 1")
+	assert.Contains(t, stdoutBuf.String(), "stdout line 2")
+	assert.Contains(t, stderrBuf.String(), "stderr line 1")
+}
+
+func TestValidFixtures_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// test that all valid fixtures can be loaded and validated
+	fixturesPath := "../fixtures/workflows"
+
+	repo := repository.NewYAMLRepository(fixturesPath)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+
+	ctx := context.Background()
+
+	fixtures := []string{
+		"valid-simple",
+		"valid-full",
+		"valid-with-hooks",
+		"valid-parallel",
+	}
+
+	for _, name := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			wf, err := wfSvc.GetWorkflow(ctx, name)
+			require.NoError(t, err, "should load fixture %s", name)
+			require.NotNil(t, wf, "workflow should not be nil for %s", name)
+
+			err = wfSvc.ValidateWorkflow(ctx, name)
+			require.NoError(t, err, "should validate fixture %s", name)
+		})
+	}
 }

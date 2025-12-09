@@ -1,13 +1,28 @@
 name: simple-workflow
-description: A simple test workflow
+description: A simple test workflow with inputs
 version: "1.0.0"
 author: test
+
+inputs:
+  - name: greeting
+    type: string
+    required: false
+    default: "hello"
+  - name: verbose
+    type: boolean
+    required: false
+    default: false
+
+env:
+  - USER
 
 states:
   initial: start
   start:
     type: step
-    command: echo "hello"
+    # Command without interpolation for basic execution tests
+    # Interpolation is tested separately in valid-full.yaml
+    command: echo "hello world"
     on_success: done
     on_failure: error
   done:

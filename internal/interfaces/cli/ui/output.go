@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 // OutputFormat defines the output format for CLI commands.
@@ -88,10 +90,11 @@ type ExecutionInfo struct {
 
 // RunResult is the JSON structure for run command.
 type RunResult struct {
-	WorkflowID string `json:"workflow_id"`
-	Status     string `json:"status"`
-	DurationMs int64  `json:"duration_ms"`
-	Error      string `json:"error,omitempty"`
+	WorkflowID string     `json:"workflow_id"`
+	Status     string     `json:"status"`
+	DurationMs int64      `json:"duration_ms"`
+	Error      string     `json:"error,omitempty"`
+	Steps      []StepInfo `json:"steps,omitempty"`
 }
 
 // ValidationResult is the JSON structure for validate command.
@@ -99,6 +102,83 @@ type ValidationResult struct {
 	Valid    bool     `json:"valid"`
 	Workflow string   `json:"workflow"`
 	Errors   []string `json:"errors,omitempty"`
+}
+
+// InputInfo represents workflow input for table output.
+type InputInfo struct {
+	Name     string
+	Type     string
+	Required bool
+	Default  string
+}
+
+// StepSummary represents a workflow step summary for table output.
+type StepSummary struct {
+	Name string
+	Type string
+	Next string
+}
+
+// ValidationResultTable is the structure for validate command table output.
+type ValidationResultTable struct {
+	Valid    bool
+	Workflow string
+	Inputs   []InputInfo
+	Steps    []StepSummary
+	Errors   []string
+}
+
+// tableWriter renders ASCII-bordered tables.
+type tableWriter struct {
+	w       io.Writer
+	columns []int
+}
+
+func newTableWriter(w io.Writer, columns ...int) *tableWriter {
+	return &tableWriter{w: w, columns: columns}
+}
+
+func (t *tableWriter) separator() {
+	fmt.Fprint(t.w, "+")
+	for _, width := range t.columns {
+		fmt.Fprintf(t.w, "%s+", strings.Repeat("-", width+2))
+	}
+	fmt.Fprintln(t.w)
+}
+
+func (t *tableWriter) row(cells ...string) {
+	fmt.Fprint(t.w, "|")
+	for i, width := range t.columns {
+		cell := ""
+		if i < len(cells) {
+			cell = cells[i]
+		}
+		if len(cell) > width {
+			cell = cell[:width-3] + "..."
+		}
+		fmt.Fprintf(t.w, " %-*s |", width, cell)
+	}
+	fmt.Fprintln(t.w)
+}
+
+func (t *tableWriter) fullWidthSeparator() {
+	total := 1
+	for _, width := range t.columns {
+		total += width + 3
+	}
+	fmt.Fprintf(t.w, "+%s+\n", strings.Repeat("-", total-2))
+}
+
+func (t *tableWriter) fullWidthRow(content string) {
+	total := 1
+	for _, width := range t.columns {
+		total += width + 3
+	}
+	innerWidth := total - 4
+	if len(content) > innerWidth {
+		content = content[:innerWidth-3] + "..."
+	}
+	fmt.Fprintf(t.w, "| %-*s |\n", innerWidth, content)
 }
 
 // OutputWriter handles structured output for different formats.
@@ -132,7 +212,7 @@ func (w *OutputWriter) WriteWorkflows(workflows []WorkflowInfo) error {
 	case FormatJSON:
 		return w.writeJSON(workflows)
 	case FormatTable:
-		return w.writeWorkflowsTable(workflows)
+		return w.writeWorkflowsBorderedTable(workflows)
 	case FormatQuiet:
 		for _, wf := range workflows {
 			fmt.Fprintln(w.out, wf.Name)
@@ -148,10 +228,12 @@ func (w *OutputWriter) WriteExecution(exec ExecutionInfo) error {
 	switch w.format {
 	case FormatJSON:
 		return w.writeJSON(exec)
+	case FormatTable:
+		return w.writeExecutionTable(exec)
 	case FormatQuiet:
 		fmt.Fprintln(w.out, exec.Status)
 		return nil
-	default: // text, table
+	default: // text
 		return w.writeExecutionText(exec)
 	}
 }
@@ -161,10 +243,12 @@ func (w *OutputWriter) WriteRunResult(result RunResult) error {
 	switch w.format {
 	case FormatJSON:
 		return w.writeJSON(result)
+	case FormatTable:
+		return w.writeRunResultTable(result)
 	case FormatQuiet:
 		fmt.Fprintln(w.out, result.WorkflowID)
 		return nil
-	default: // text, table
+	default: // text
 		return w.writeRunResultText(result)
 	}
 }
@@ -174,6 +258,8 @@ func (w *OutputWriter) WriteValidation(result ValidationResult) error {
 	switch w.format {
 	case FormatJSON:
 		return w.writeJSON(result)
+	case FormatTable:
+		return w.writeValidationTable(result)
 	case FormatQuiet:
 		if result.Valid {
 			fmt.Fprintln(w.out, "valid")
@@ -181,9 +267,25 @@ func (w *OutputWriter) WriteValidation(result ValidationResult) error {
 			fmt.Fprintln(w.out, "invalid")
 		}
 		return nil
-	default: // text, table
+	default: // text
 		return w.writeValidationText(result)
 	}
+}
+
+// WriteValidationTable outputs validation result with detailed table.
+func (w *OutputWriter) WriteValidationTable(result ValidationResultTable) error {
+	if w.format == FormatJSON {
+		return w.writeJSON(result)
+	}
+	if w.format == FormatQuiet {
+		if result.Valid {
+			fmt.Fprintln(w.out, "valid")
+		} else {
+			fmt.Fprintln(w.out, "invalid")
+		}
+		return nil
+	}
+	return w.writeValidationResultTable(result)
 }
 
 // WriteError outputs an error in the appropriate format.
@@ -221,6 +323,25 @@ func (w *OutputWriter) writeWorkflowsTable(workflows []WorkflowInfo) error {
 	}
 
 	return tw.Flush()
+}
+
+func (w *OutputWriter) writeWorkflowsBorderedTable(workflows []WorkflowInfo) error {
+	table := newTableWriter(w.out, 20, 10, 10, 40)
+
+	table.separator()
+	table.row("NAME", "SOURCE", "VERSION", "DESCRIPTION")
+	table.separator()
+
+	for _, wf := range workflows {
+		desc := wf.Description
+		if len(desc) > 40 {
+			desc = desc[:37] + "..."
+		}
+		table.row(wf.Name, wf.Source, wf.Version, desc)
+	}
+	table.separator()
+
+	return nil
 }
 
 func (w *OutputWriter) writeExecutionText(exec ExecutionInfo) error {
@@ -271,4 +392,184 @@ func (w *OutputWriter) writeValidationText(result ValidationResult) error {
 		}
 	}
 	return nil
+}
+
+func (w *OutputWriter) writeExecutionTable(exec ExecutionInfo) error {
+	tw := newTableWriter(w.out, 12, 10, 10, 30)
+
+	// Header section
+	tw.fullWidthSeparator()
+	tw.fullWidthRow(fmt.Sprintf("Workflow: %-20s ID: %s", exec.WorkflowName, truncateID(exec.WorkflowID)))
+	tw.fullWidthRow(fmt.Sprintf("Status: %-22s Duration: %dms", exec.Status, exec.DurationMs))
+
+	// Steps table
+	if len(exec.Steps) > 0 {
+		tw.separator()
+		tw.row("STEP", "STATUS", "DURATION", "ERROR")
+		tw.separator()
+		for _, step := range exec.Steps {
+			duration := "-"
+			if step.StartedAt != "" && step.CompletedAt != "" {
+				duration = calculateDuration(step.StartedAt, step.CompletedAt)
+			}
+			errMsg := "-"
+			if step.Error != "" {
+				errMsg = step.Error
+			}
+			tw.row(step.Name, step.Status, duration, errMsg)
+		}
+	}
+	tw.separator()
+
+	return nil
+}
+
+func (w *OutputWriter) writeRunResultTable(result RunResult) error {
+	tw := newTableWriter(w.out, 12, 10, 10, 30)
+
+	// Header section
+	tw.fullWidthSeparator()
+	tw.fullWidthRow(fmt.Sprintf("Workflow ID: %s", result.WorkflowID))
+
+	// Steps table
+	if len(result.Steps) > 0 {
+		tw.separator()
+		tw.row("STEP", "STATUS", "DURATION", "OUTPUT")
+		tw.separator()
+		for _, step := range result.Steps {
+			duration := "-"
+			if step.StartedAt != "" && step.CompletedAt != "" {
+				duration = calculateDuration(step.StartedAt, step.CompletedAt)
+			}
+			output := "-"
+			if step.Output != "" {
+				output = strings.TrimSpace(step.Output)
+				if idx := strings.Index(output, "\n"); idx > 0 {
+					output = output[:idx] + "..."
+				}
+			}
+			tw.row(step.Name, step.Status, duration, output)
+		}
+	}
+
+	// Footer
+	tw.separator()
+	stepCount := len(result.Steps)
+	statusText := w.colorizer.Status(result.Status, result.Status)
+	tw.fullWidthRow(fmt.Sprintf("Total: %d steps | Duration: %dms | Status: %s", stepCount, result.DurationMs, statusText))
+	tw.fullWidthSeparator()
+
+	if result.Error != "" {
+		fmt.Fprintf(w.out, "Error: %s\n", result.Error)
+	}
+
+	return nil
+}
+
+func (w *OutputWriter) writeValidationTable(result ValidationResult) error {
+	tw := newTableWriter(w.out, 20, 40)
+
+	// Header section
+	tw.fullWidthSeparator()
+	status := "valid"
+	if !result.Valid {
+		status = "invalid"
+	}
+	tw.fullWidthRow(fmt.Sprintf("Workflow: %-25s Status: %s", result.Workflow, status))
+	tw.fullWidthSeparator()
+
+	// Errors
+	if len(result.Errors) > 0 {
+		for _, e := range result.Errors {
+			tw.fullWidthRow(fmt.Sprintf("ERROR: %s", e))
+		}
+		tw.fullWidthSeparator()
+	}
+
+	return nil
+}
+
+func (w *OutputWriter) writeValidationResultTable(result ValidationResultTable) error {
+	// Inputs table
+	if len(result.Inputs) > 0 {
+		tw := newTableWriter(w.out, 15, 10, 10, 20)
+		tw.fullWidthSeparator()
+		status := "valid"
+		if !result.Valid {
+			status = "invalid"
+		}
+		tw.fullWidthRow(fmt.Sprintf("Workflow: %-25s Status: %s", result.Workflow, status))
+		tw.separator()
+		tw.row("INPUT", "TYPE", "REQUIRED", "DEFAULT")
+		tw.separator()
+		for _, inp := range result.Inputs {
+			required := "no"
+			if inp.Required {
+				required = "yes"
+			}
+			defaultVal := inp.Default
+			if defaultVal == "" {
+				defaultVal = "-"
+			}
+			tw.row(inp.Name, inp.Type, required, defaultVal)
+		}
+		tw.separator()
+	}
+
+	// Steps table
+	if len(result.Steps) > 0 {
+		tw := newTableWriter(w.out, 15, 10, 20)
+		if len(result.Inputs) == 0 {
+			tw.fullWidthSeparator()
+			status := "valid"
+			if !result.Valid {
+				status = "invalid"
+			}
+			tw.fullWidthRow(fmt.Sprintf("Workflow: %-25s Status: %s", result.Workflow, status))
+		}
+		tw.separator()
+		tw.row("STEP", "TYPE", "NEXT")
+		tw.separator()
+		for _, step := range result.Steps {
+			next := step.Next
+			if next == "" {
+				next = "(terminal)"
+			}
+			tw.row(step.Name, step.Type, next)
+		}
+		tw.separator()
+	}
+
+	// Errors
+	if len(result.Errors) > 0 {
+		fmt.Fprintln(w.out)
+		for _, e := range result.Errors {
+			fmt.Fprintf(w.out, "ERROR: %s\n", e)
+		}
+	}
+
+	return nil
+}
+
+func truncateID(id string) string {
+	if len(id) > 12 {
+		return id[:12] + "..."
+	}
+	return id
+}
+
+func calculateDuration(startAt, completedAt string) string {
+	start, err := time.Parse(time.RFC3339, startAt)
+	if err != nil {
+		return "-"
+	}
+	end, err := time.Parse(time.RFC3339, completedAt)
+	if err != nil {
+		return "-"
+	}
+	d := end.Sub(start)
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return d.Round(time.Millisecond).String()
 }

@@ -1,5 +1,5 @@
 name: workflow-with-hooks
-description: A workflow with pre/post and workflow hooks
+description: A workflow with all hook types and capture
 version: "1.0.0"
 
 hooks:
@@ -9,12 +9,18 @@ hooks:
     - command: echo "WORKFLOW_END"
   workflow_error:
     - command: echo "WORKFLOW_ERROR"
+  workflow_cancel:
+    - command: echo "WORKFLOW_CANCELLED"
+    - log: "Workflow was cancelled by user"
 
 states:
   initial: step1
   step1:
     type: step
-    command: echo "main command"
+    command: echo "main command output"
+    capture:
+      stdout: step1_output
+      max_size: 1MB
     hooks:
       pre:
         - command: echo "PRE_STEP1"

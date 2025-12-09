@@ -30,6 +30,7 @@ states:
   validate:
     type: step
     description: Validate input
+    operation: shell  # explicit operation type (shell is default)
     command: test -f "{{inputs.file_path}}"
     timeout: 5s
     on_success: extract
