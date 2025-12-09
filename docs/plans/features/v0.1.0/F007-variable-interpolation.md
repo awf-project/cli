@@ -13,13 +13,13 @@ Implement `{{variable}}` interpolation in workflow commands and strings. Resolve
 
 ## Critères d'Acceptance
 
-- [ ] Interpolate `{{inputs.name}}` from workflow inputs
-- [ ] Interpolate `{{states.step.output}}` from previous steps
-- [ ] Interpolate `{{workflow.id}}`, `{{workflow.name}}`, etc.
-- [ ] Interpolate `{{env.VAR}}` from environment
-- [ ] Interpolate `{{error.message}}` in error hooks
-- [ ] Support escaping: `\{\{` for literal braces
-- [ ] Clear errors for undefined variables
+- [x] Interpolate `{{inputs.name}}` from workflow inputs
+- [x] Interpolate `{{states.step.output}}` from previous steps
+- [x] Interpolate `{{workflow.id}}`, `{{workflow.name}}`, etc.
+- [x] Interpolate `{{env.VAR}}` from environment
+- [x] Interpolate `{{error.message}}` in error hooks
+- [x] Support escaping: `\{\{` for literal braces
+- [x] Clear errors for undefined variables
 
 ## Dépendances
 
