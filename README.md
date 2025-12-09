@@ -75,6 +75,7 @@ Workflow ID: abc123-def456
 
 | Command | Description |
 |---------|-------------|
+| `awf init` | Initialize AWF in current directory |
 | `awf run <workflow>` | Execute a workflow |
 | `awf list` | List available workflows |
 | `awf status <id>` | Show execution status |
@@ -100,6 +101,29 @@ Workflow ID: abc123-def456
                   - silent: No command output displayed
                   - streaming: Real-time output with [OUT]/[ERR] prefixes
                   - buffered: Show output after each step completes
+```
+
+## Workflow Discovery
+
+AWF discovers workflows from multiple locations (priority high to low):
+
+1. `AWF_WORKFLOWS_PATH` environment variable
+2. `./.awf/workflows/` (local project)
+3. `$XDG_CONFIG_HOME/awf/workflows/` (global, default: `~/.config/awf/workflows/`)
+
+Local workflows override global ones with the same name. Use `awf list` to see all workflows with their source.
+
+### XDG Base Directory
+
+AWF follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html):
+
+```
+~/.config/awf/              # Config ($XDG_CONFIG_HOME/awf)
+└── workflows/              # Global workflows
+
+~/.local/share/awf/         # Data ($XDG_DATA_HOME/awf)
+├── states/                 # Execution states
+└── logs/                   # Log files
 ```
 
 ## Workflow Syntax
@@ -207,10 +231,8 @@ awf/
 │   │   ├── workflow/            # Entities: Workflow, Step, Context
 │   │   └── ports/               # Interfaces: Repository, Store, Executor
 │   ├── application/             # Services: WorkflowService, ExecutionService
-│   ├── infrastructure/          # Adapters: YAML, JSON, Shell
+│   ├── infrastructure/          # Adapters: YAML, JSON, Shell, XDG
 │   └── interfaces/cli/          # CLI commands and UI
-├── configs/workflows/           # Workflow definitions
-├── storage/                     # Runtime: states/, logs/
 └── tests/                       # Integration tests
 ```
 
@@ -257,11 +279,12 @@ make fmt            # Format code
 - [x] YAML workflow parsing
 - [x] Linear step execution
 - [x] JSON state persistence
-- [x] CLI (run, list, status, validate)
+- [x] CLI (run, list, status, validate, init)
 - [x] JSON structured logging
 - [x] Variable interpolation
 - [x] Pre/post hooks
 - [x] Output streaming (--output flag)
+- [x] XDG workflow discovery
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions

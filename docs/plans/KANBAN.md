@@ -62,6 +62,7 @@ _No features in review_
 - [F007](features/F007-variable-interpolation.md) Interpolation de variables
 - [F008](features/F008-hooks.md) Hooks pre/post
 - [F029](features/v0.1.0/F029-output-streaming.md) Output streaming (--output flag)
+- [F030](features/v0.1.0/F030-xdg-workflow-discovery.md) XDG workflow discovery
 
 ---
 
@@ -69,9 +70,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 9 | 0 | 0 | 0 | 0 | 9 |
+| 1 - MVP | 10 | 0 | 0 | 0 | 0 | 10 |
 | 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
 | 4 - Extensibility | 4 | 4 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **29** | **20** | **0** | **0** | **0** | **9** |
+| **Total** | **30** | **20** | **0** | **0** | **0** | **10** |

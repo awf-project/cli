@@ -3,13 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -28,17 +24,11 @@ func newListCommand(cfg *Config) *cobra.Command {
 func runList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
 
-	// Determine workflows directory
-	workflowsPath := getWorkflowsPath(cfg)
+	// Create composite repository with XDG paths
+	repo := NewWorkflowRepository()
 
-	// Create repository
-	repo := repository.NewYAMLRepository(workflowsPath)
-
-	// Create service (minimal, just for listing)
-	svc := application.NewWorkflowService(repo, nil, nil, nil)
-
-	// List workflows
-	names, err := svc.ListWorkflows(ctx)
+	// List workflows with source info
+	infos, err := repo.ListWithSource(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -50,22 +40,31 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		NoColor: cfg.NoColor,
 	})
 
-	if len(names) == 0 {
-		formatter.Info("No workflows found in " + workflowsPath)
+	if len(infos) == 0 {
+		formatter.Info("No workflows found")
+		formatter.Info("Search paths:")
+		for _, sp := range BuildWorkflowPaths() {
+			formatter.Info(fmt.Sprintf("  - %s (%s)", sp.Path, sp.Source))
+		}
 		return nil
 	}
 
-	// Sort names
-	sort.Strings(names)
+	// Sort by source then name
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].Source != infos[j].Source {
+			return infos[i].Source < infos[j].Source
+		}
+		return infos[i].Name < infos[j].Name
+	})
 
 	// Load workflow details for table
-	headers := []string{"NAME", "VERSION", "DESCRIPTION"}
-	rows := make([][]string, 0, len(names))
+	headers := []string{"NAME", "SOURCE", "VERSION", "DESCRIPTION"}
+	rows := make([][]string, 0, len(infos))
 
-	for _, name := range names {
-		wf, err := repo.Load(ctx, name)
+	for _, info := range infos {
+		wf, err := repo.Load(ctx, info.Name)
 		if err != nil || wf == nil {
-			rows = append(rows, []string{name, "-", "(error loading)"})
+			rows = append(rows, []string{info.Name, info.Source.String(), "-", "(error loading)"})
 			continue
 		}
 
@@ -75,36 +74,21 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		}
 
 		desc := wf.Description
-		if len(desc) > 50 {
-			desc = desc[:47] + "..."
+		if len(desc) > 40 {
+			desc = desc[:37] + "..."
 		}
 		if desc == "" {
 			desc = "-"
 		}
 
-		rows = append(rows, []string{name, version, desc})
+		rows = append(rows, []string{info.Name, info.Source.String(), version, desc})
 	}
 
 	formatter.Table(headers, rows)
 
 	if cfg.Verbose {
-		formatter.Debug(fmt.Sprintf("\nFound %d workflow(s) in %s", len(names), workflowsPath))
+		formatter.Debug(fmt.Sprintf("\nFound %d workflow(s)", len(infos)))
 	}
 
 	return nil
-}
-
-func getWorkflowsPath(cfg *Config) string {
-	// Check environment variable first
-	if envPath := os.Getenv("AWF_WORKFLOWS_PATH"); envPath != "" {
-		return envPath
-	}
-
-	// Check if ./configs/workflows exists (local project)
-	if _, err := os.Stat("configs/workflows"); err == nil {
-		return "configs/workflows"
-	}
-
-	// Default to storage path
-	return filepath.Join(cfg.StoragePath, "workflows")
 }

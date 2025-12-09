@@ -15,7 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -94,8 +93,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}()
 
 	// Initialize dependencies
-	workflowsPath := getWorkflowsPath(cfg)
-	repo := repository.NewYAMLRepository(workflowsPath)
+	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	logger := &cliLogger{formatter: formatter, verbose: cfg.Verbose}

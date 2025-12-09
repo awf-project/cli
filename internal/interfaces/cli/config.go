@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/internal/infrastructure/xdg"
 )
 
 // OutputMode defines how command output is displayed.
@@ -55,9 +57,6 @@ type Config struct {
 
 // DefaultConfig returns default configuration.
 func DefaultConfig() *Config {
-	home, _ := os.UserHomeDir()
-	defaultStorage := filepath.Join(home, ".awf", "storage")
-
 	return &Config{
 		Verbose:     false,
 		Quiet:       false,
@@ -65,6 +64,41 @@ func DefaultConfig() *Config {
 		OutputMode:  OutputSilent,
 		LogLevel:    "info",
 		ConfigPath:  "",
-		StoragePath: defaultStorage,
+		StoragePath: xdg.AWFDataDir(),
 	}
+}
+
+// BuildWorkflowPaths returns the workflow paths in priority order:
+// 1. AWF_WORKFLOWS_PATH env var
+// 2. ./.awf/workflows/ (local project)
+// 3. $XDG_CONFIG_HOME/awf/workflows/ (global)
+func BuildWorkflowPaths() []repository.SourcedPath {
+	var paths []repository.SourcedPath
+
+	// 1. Environment variable (highest priority)
+	if envPath := os.Getenv("AWF_WORKFLOWS_PATH"); envPath != "" {
+		paths = append(paths, repository.SourcedPath{
+			Path:   envPath,
+			Source: repository.SourceEnv,
+		})
+	}
+
+	// 2. Local project directory
+	paths = append(paths, repository.SourcedPath{
+		Path:   xdg.LocalWorkflowsDir(),
+		Source: repository.SourceLocal,
+	})
+
+	// 3. Global XDG directory (lowest priority)
+	paths = append(paths, repository.SourcedPath{
+		Path:   xdg.AWFWorkflowsDir(),
+		Source: repository.SourceGlobal,
+	})
+
+	return paths
+}
+
+// NewWorkflowRepository creates a CompositeRepository with standard paths
+func NewWorkflowRepository() *repository.CompositeRepository {
+	return repository.NewCompositeRepository(BuildWorkflowPaths())
 }
