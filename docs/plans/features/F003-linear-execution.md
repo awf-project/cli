@@ -1,7 +1,7 @@
 # F003: Exécution Linéaire de Steps
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: critical
@@ -13,14 +13,14 @@ Implement basic sequential workflow execution. Execute steps one at a time, foll
 
 ## Critères d'Acceptance
 
-- [ ] Execute shell commands via `/bin/sh -c`
-- [ ] Follow on_success transitions between states
-- [ ] Stop at terminal states
-- [ ] Capture stdout to state output
-- [ ] Capture stderr separately
-- [ ] Track exit code per step
-- [ ] Respect step timeout
-- [ ] Implements CommandExecutor port interface
+- [x] Execute shell commands via `/bin/sh -c`
+- [x] Follow on_success transitions between states
+- [x] Stop at terminal states
+- [x] Capture stdout to state output
+- [x] Capture stderr separately
+- [x] Track exit code per step
+- [x] Respect step timeout
+- [x] Implements CommandExecutor port interface
 
 ## Dépendances
 
@@ -30,39 +30,39 @@ Implement basic sequential workflow execution. Execute steps one at a time, foll
 ## Fichiers Impactés
 
 ```
-internal/infrastructure/executor/shell_executor.go
-internal/application/executor.go
-internal/domain/workflow/state.go
-internal/domain/workflow/context.go
-internal/domain/operation/result.go
-internal/domain/ports/executor.go
+internal/infrastructure/executor/shell_executor.go      # NEW
+internal/infrastructure/executor/shell_executor_test.go # NEW
+internal/application/execution_service.go               # NEW
+internal/application/execution_service_test.go          # NEW
+tests/integration/execution_test.go                     # NEW
+internal/domain/ports/executor.go                       # EXISTING (interface)
+internal/domain/workflow/context.go                     # EXISTING (entities)
 ```
 
 ## Tâches Techniques
 
-- [ ] Implement ShellExecutor
-  - [ ] Execute command with context
-  - [ ] Capture stdout/stderr
-  - [ ] Return exit code
-  - [ ] Handle timeout via context.WithTimeout
-- [ ] Implement ExecutionService
-  - [ ] Run workflow from initial state
-  - [ ] Execute current state
-  - [ ] Determine next state from transitions
-  - [ ] Loop until terminal state
-- [ ] Define OperationResult
-  - [ ] Output (stdout)
-  - [ ] Errors (stderr)
-  - [ ] ExitCode
-  - [ ] Duration
-- [ ] Define ExecutionContext
-  - [ ] Current state
-  - [ ] State outputs map
-  - [ ] Inputs
-  - [ ] Metadata
-- [ ] Handle process groups for clean termination
-- [ ] Write unit tests with mock executor
-- [ ] Write integration tests with real shell
+- [x] Implement ShellExecutor
+  - [x] Execute command with context
+  - [x] Capture stdout/stderr
+  - [x] Return exit code
+  - [x] Handle timeout via context.WithTimeout
+- [x] Implement ExecutionService
+  - [x] Run workflow from initial state
+  - [x] Execute current state
+  - [x] Determine next state from transitions
+  - [x] Loop until terminal state
+- [x] Reuse CommandResult from ports (no separate OperationResult needed)
+  - [x] Output (stdout)
+  - [x] Errors (stderr)
+  - [x] ExitCode
+- [x] Use existing ExecutionContext
+  - [x] Current state
+  - [x] State outputs map
+  - [x] Inputs
+  - [x] Metadata
+- [x] Handle process groups for clean termination
+- [x] Write unit tests with mock executor
+- [x] Write integration tests with real shell
 
 ## Notes
 

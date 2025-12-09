@@ -1,0 +1,9 @@
+name: bad-state-ref
+states:
+  initial: start
+  start:
+    type: step
+    command: echo "test"
+    on_success: nonexistent
+  done:
+    type: terminal

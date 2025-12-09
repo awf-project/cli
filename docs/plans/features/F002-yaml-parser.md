@@ -1,7 +1,7 @@
 # F002: Parsing YAML des Workflows
 
 ## Metadata
-- **Statut**: backlog
+- **Statut**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priorité**: critical
@@ -13,12 +13,12 @@ Implement YAML workflow file parsing. Load workflow definitions from `configs/wo
 
 ## Critères d'Acceptance
 
-- [ ] Parse valid YAML workflow files without error
-- [ ] Return clear errors for invalid YAML syntax
-- [ ] Return clear errors for missing required fields
-- [ ] Map YAML structure to domain Workflow entity
-- [ ] Support all workflow fields defined in projectBrief.md
-- [ ] Implements WorkflowRepository port interface
+- [x] Parse valid YAML workflow files without error
+- [x] Return clear errors for invalid YAML syntax
+- [x] Return clear errors for missing required fields
+- [x] Map YAML structure to domain Workflow entity
+- [x] Support all workflow fields defined in projectBrief.md
+- [x] Implements WorkflowRepository port interface
 
 ## Dépendances
 

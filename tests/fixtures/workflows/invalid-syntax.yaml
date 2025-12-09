@@ -1,0 +1,6 @@
+name: invalid
+states:
+  initial: start
+  start
+    type: step
+    command: echo

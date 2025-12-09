@@ -1,0 +1,74 @@
+# Example: Simple File Analysis Workflow
+# Demonstrates basic workflow structure with sequential steps
+
+name: analyze-file
+description: Analyze a file with validation and content extraction
+version: "1.0.0"
+author: awf
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to the file to analyze
+    required: true
+    validation:
+      file_exists: true
+
+  - name: verbose
+    type: boolean
+    description: Enable verbose output
+    required: false
+    default: false
+
+states:
+  initial: validate
+
+  validate:
+    type: step
+    description: Validate the input file exists
+    command: test -f "{{inputs.file_path}}"
+    timeout: 5s
+    on_success: extract
+    on_failure: error
+    hooks:
+      pre:
+        - log: "Validating file: {{inputs.file_path}}"
+
+  extract:
+    type: step
+    description: Extract file content
+    command: cat "{{inputs.file_path}}"
+    timeout: 30s
+    on_success: analyze
+    on_failure: error
+    capture:
+      stdout: file_content
+      max_size: 10MB
+
+  analyze:
+    type: step
+    description: Analyze the content
+    command: wc -l "{{inputs.file_path}}"
+    timeout: 10s
+    on_success: done
+    on_failure: error
+    capture:
+      stdout: line_count
+
+  done:
+    type: terminal
+    status: success
+    message: "Analysis complete"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Analysis failed"
+
+hooks:
+  workflow_start:
+    - log: "Starting workflow: {{workflow.name}}"
+  workflow_end:
+    - log: "Completed successfully"
+  workflow_error:
+    - log: "Error occurred: {{error.message}}"

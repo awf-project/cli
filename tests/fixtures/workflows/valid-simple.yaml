@@ -1,0 +1,16 @@
+name: simple-workflow
+description: A simple test workflow
+version: "1.0.0"
+author: test
+
+states:
+  initial: start
+  start:
+    type: step
+    command: echo "hello"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal

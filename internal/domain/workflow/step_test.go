@@ -108,3 +108,98 @@ func TestStepValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestRetryConfig(t *testing.T) {
+	t.Run("empty retry config", func(t *testing.T) {
+		retry := workflow.RetryConfig{}
+		if retry.MaxAttempts != 0 {
+			t.Errorf("expected MaxAttempts 0, got %d", retry.MaxAttempts)
+		}
+	})
+
+	t.Run("full retry config", func(t *testing.T) {
+		retry := workflow.RetryConfig{
+			MaxAttempts:        3,
+			InitialDelayMs:     1000,
+			MaxDelayMs:         30000,
+			Backoff:            "exponential",
+			Multiplier:         2.0,
+			Jitter:             0.1,
+			RetryableExitCodes: []int{1, 2, 3},
+		}
+		if retry.MaxAttempts != 3 {
+			t.Errorf("expected MaxAttempts 3, got %d", retry.MaxAttempts)
+		}
+		if retry.Backoff != "exponential" {
+			t.Errorf("expected Backoff exponential, got %s", retry.Backoff)
+		}
+		if len(retry.RetryableExitCodes) != 3 {
+			t.Errorf("expected 3 retryable codes, got %d", len(retry.RetryableExitCodes))
+		}
+	})
+}
+
+func TestCaptureConfig(t *testing.T) {
+	t.Run("empty capture config", func(t *testing.T) {
+		capture := workflow.CaptureConfig{}
+		if capture.Stdout != "" {
+			t.Errorf("expected empty Stdout, got %s", capture.Stdout)
+		}
+	})
+
+	t.Run("full capture config", func(t *testing.T) {
+		capture := workflow.CaptureConfig{
+			Stdout:   "output",
+			Stderr:   "errors",
+			MaxSize:  "10MB",
+			Encoding: "utf-8",
+		}
+		if capture.Stdout != "output" {
+			t.Errorf("expected Stdout output, got %s", capture.Stdout)
+		}
+		if capture.MaxSize != "10MB" {
+			t.Errorf("expected MaxSize 10MB, got %s", capture.MaxSize)
+		}
+	})
+}
+
+func TestStepWithNewFields(t *testing.T) {
+	step := workflow.Step{
+		Name:    "extract",
+		Type:    workflow.StepTypeCommand,
+		Command: "cat {{inputs.file_path}}",
+		Retry: &workflow.RetryConfig{
+			MaxAttempts:    3,
+			InitialDelayMs: 1000,
+			Backoff:        "exponential",
+		},
+		Capture: &workflow.CaptureConfig{
+			Stdout:  "file_content",
+			MaxSize: "10MB",
+		},
+		Hooks: workflow.StepHooks{
+			Pre:  workflow.Hook{{Log: "Starting extraction"}},
+			Post: workflow.Hook{{Log: "Extraction complete"}},
+		},
+		ContinueOnError: true,
+	}
+
+	if step.Retry == nil {
+		t.Fatal("expected Retry to be set")
+	}
+	if step.Retry.MaxAttempts != 3 {
+		t.Errorf("expected MaxAttempts 3, got %d", step.Retry.MaxAttempts)
+	}
+	if step.Capture == nil {
+		t.Fatal("expected Capture to be set")
+	}
+	if step.Capture.Stdout != "file_content" {
+		t.Errorf("expected Stdout file_content, got %s", step.Capture.Stdout)
+	}
+	if len(step.Hooks.Pre) != 1 {
+		t.Errorf("expected 1 pre hook, got %d", len(step.Hooks.Pre))
+	}
+	if !step.ContinueOnError {
+		t.Error("expected ContinueOnError to be true")
+	}
+}
