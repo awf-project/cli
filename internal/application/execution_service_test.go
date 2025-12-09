@@ -324,3 +324,33 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 	require.NoError(t, err) // workflow should complete via error path
 	assert.Equal(t, "error", ctx.CurrentStep)
 }
+
+func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["checkpoint-test"] = &workflow.Workflow{
+		Name:    "checkpoint-test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo 1", OnSuccess: "step2"},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand, Command: "echo 2", OnSuccess: "step3"},
+			"step3": {Name: "step3", Type: workflow.StepTypeCommand, Command: "echo 3", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	store := newMockStateStore()
+	executor := newMockExecutor()
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, store, &mockLogger{})
+
+	execCtx, err := execSvc.Run(context.Background(), "checkpoint-test", nil)
+	require.NoError(t, err)
+
+	// State should have been saved (checkpointed)
+	saved, err := store.Load(context.Background(), execCtx.WorkflowID)
+	require.NoError(t, err)
+	require.NotNil(t, saved, "state should be checkpointed after execution")
+	assert.Equal(t, workflow.StatusCompleted, saved.Status)
+	assert.Equal(t, "done", saved.CurrentStep)
+}
