@@ -143,7 +143,7 @@ func TestWorkflowValidation(t *testing.T) {
 				Name:    "test",
 				Initial: "start",
 				Steps: map[string]*workflow.Step{
-					"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "middle"},
+					"start":  {Name: "start", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "middle"},
 					"middle": {Name: "middle", Type: workflow.StepTypeCommand, Command: "echo"},
 					"end":    {Name: "end", Type: workflow.StepTypeTerminal},
 				},
@@ -203,5 +203,99 @@ func TestWorkflowWithInputs(t *testing.T) {
 	}
 	if wf.Inputs[1].Default != 10 {
 		t.Errorf("expected default 10, got %v", wf.Inputs[1].Default)
+	}
+}
+
+func TestWorkflowWithHooks(t *testing.T) {
+	wf := workflow.Workflow{
+		Name:    "test",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeTerminal},
+		},
+		Hooks: workflow.WorkflowHooks{
+			WorkflowStart: workflow.Hook{{Log: "Starting workflow"}},
+			WorkflowEnd:   workflow.Hook{{Log: "Completed"}},
+			WorkflowError: workflow.Hook{{Log: "Error: {{error.message}}"}},
+		},
+	}
+
+	if len(wf.Hooks.WorkflowStart) != 1 {
+		t.Errorf("expected 1 workflow_start hook, got %d", len(wf.Hooks.WorkflowStart))
+	}
+	if wf.Hooks.WorkflowStart[0].Log != "Starting workflow" {
+		t.Errorf("expected log message 'Starting workflow', got '%s'", wf.Hooks.WorkflowStart[0].Log)
+	}
+}
+
+func TestWorkflowWithEnv(t *testing.T) {
+	wf := workflow.Workflow{
+		Name:    "test",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeTerminal},
+		},
+		Env: []string{"API_KEY", "DATABASE_URL"},
+	}
+
+	if len(wf.Env) != 2 {
+		t.Errorf("expected 2 env vars, got %d", len(wf.Env))
+	}
+	if wf.Env[0] != "API_KEY" {
+		t.Errorf("expected first env 'API_KEY', got '%s'", wf.Env[0])
+	}
+}
+
+func TestInputWithValidation(t *testing.T) {
+	min := 1
+	max := 100
+	input := workflow.Input{
+		Name:     "count",
+		Type:     "integer",
+		Required: true,
+		Validation: &workflow.InputValidation{
+			Min: &min,
+			Max: &max,
+		},
+	}
+
+	if input.Validation == nil {
+		t.Fatal("expected Validation to be set")
+	}
+	if *input.Validation.Min != 1 {
+		t.Errorf("expected Min 1, got %d", *input.Validation.Min)
+	}
+	if *input.Validation.Max != 100 {
+		t.Errorf("expected Max 100, got %d", *input.Validation.Max)
+	}
+}
+
+func TestInputWithPatternValidation(t *testing.T) {
+	input := workflow.Input{
+		Name:     "email",
+		Type:     "string",
+		Required: true,
+		Validation: &workflow.InputValidation{
+			Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+		},
+	}
+
+	if input.Validation.Pattern == "" {
+		t.Error("expected Pattern to be set")
+	}
+}
+
+func TestInputWithEnumValidation(t *testing.T) {
+	input := workflow.Input{
+		Name:     "environment",
+		Type:     "string",
+		Required: true,
+		Validation: &workflow.InputValidation{
+			Enum: []string{"dev", "staging", "prod"},
+		},
+	}
+
+	if len(input.Validation.Enum) != 3 {
+		t.Errorf("expected 3 enum values, got %d", len(input.Validation.Enum))
 	}
 }

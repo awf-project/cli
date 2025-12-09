@@ -1,0 +1,85 @@
+name: full-workflow
+description: A workflow with all features
+version: "2.0.0"
+author: test
+tags:
+  - ai
+  - analysis
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to input file
+    required: true
+    validation:
+      file_exists: true
+  - name: count
+    type: integer
+    required: false
+    default: 10
+    validation:
+      min: 1
+      max: 100
+
+env:
+  - API_KEY
+  - DATABASE_URL
+
+states:
+  initial: validate
+  validate:
+    type: step
+    description: Validate input
+    command: test -f "{{inputs.file_path}}"
+    timeout: 5s
+    on_success: extract
+    on_failure: error
+    hooks:
+      pre:
+        - log: "Validating: {{inputs.file_path}}"
+  extract:
+    type: step
+    description: Extract content
+    command: cat "{{inputs.file_path}}"
+    timeout: 30s
+    on_success: process
+    on_failure: error
+    capture:
+      stdout: file_content
+      max_size: 10MB
+    retry:
+      max_attempts: 3
+      initial_delay: 1s
+      backoff: exponential
+      multiplier: 2.0
+  process:
+    type: parallel
+    parallel:
+      - analyze
+      - backup
+    strategy: all_succeed
+    max_concurrent: 2
+    on_success: done
+    on_failure: error
+  analyze:
+    type: step
+    command: echo "analyzing..."
+    on_success: done
+    on_failure: error
+  backup:
+    type: step
+    command: echo "backing up..."
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+
+hooks:
+  workflow_start:
+    - log: "Starting workflow: {{workflow.name}}"
+  workflow_end:
+    - log: "Completed in {{workflow.duration}}s"
+  workflow_error:
+    - log: "Error: {{error.message}}"

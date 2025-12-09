@@ -1,0 +1,11 @@
+description: Missing name field
+version: "1.0.0"
+
+states:
+  initial: start
+  start:
+    type: step
+    command: echo "test"
+    on_success: done
+  done:
+    type: terminal

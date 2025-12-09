@@ -12,6 +12,7 @@ type Input struct {
 	Description string
 	Required    bool
 	Default     any
+	Validation  *InputValidation // validation rules
 }
 
 // Workflow represents a complete workflow definition.
@@ -22,8 +23,10 @@ type Workflow struct {
 	Author      string
 	Tags        []string
 	Inputs      []Input
+	Env         []string         // required environment variables
 	Initial     string           // initial state name
 	Steps       map[string]*Step // state name -> step
+	Hooks       WorkflowHooks    // workflow-level hooks
 }
 
 // GetStep retrieves a step by name.
@@ -68,6 +71,18 @@ func (w *Workflow) Validate() error {
 		if step.Type == StepTypeCommand {
 			if step.OnSuccess == "" && step.OnFailure == "" {
 				return fmt.Errorf("step '%s': command step must have OnSuccess or OnFailure", name)
+			}
+		}
+
+		// Validate state references exist
+		if step.OnSuccess != "" {
+			if _, ok := w.Steps[step.OnSuccess]; !ok {
+				return fmt.Errorf("step '%s': on_success references unknown state '%s'", name, step.OnSuccess)
+			}
+		}
+		if step.OnFailure != "" {
+			if _, ok := w.Steps[step.OnFailure]; !ok {
+				return fmt.Errorf("step '%s': on_failure references unknown state '%s'", name, step.OnFailure)
 			}
 		}
 	}
