@@ -1,11 +1,12 @@
 # F037: Step Success Feedback
 
 ## Metadata
-- **Status**: backlog
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priority**: low
 - **Estimation**: XS
+- **Completed**: 2025-12-10
 
 ## Description
 
@@ -13,11 +14,11 @@ When a step completes successfully but produces no output, display a success mes
 
 ## Acceptance Criteria
 
-- [ ] Steps with empty stdout/stderr display "Step completed successfully" (or similar)
-- [ ] Steps with actual output display only the output (no extra message)
-- [ ] Success message respects `--quiet` flag (hidden when quiet)
-- [ ] Success message uses appropriate color (green) when colors enabled
-- [ ] Message includes step ID for clarity: `✓ step_id: completed successfully`
+- [x] Steps with empty stdout/stderr display "Step completed successfully" (or similar)
+- [x] Steps with actual output display only the output (no extra message)
+- [x] Success message respects `--quiet` flag (hidden when quiet)
+- [x] Success message uses appropriate color (green) when colors enabled
+- [x] Message includes step ID for clarity: `✓ step_id: completed successfully`
 
 ## Dependencies
 
@@ -27,39 +28,36 @@ When a step completes successfully but produces no output, display a success mes
 ## Impacted Files
 
 ```
-internal/application/execution_service.go
-internal/interfaces/cli/ui/formatter.go
-internal/interfaces/cli/run.go
-tests/integration/run_test.go
+internal/interfaces/cli/ui/formatter.go      # Added StepSuccess() method
+internal/interfaces/cli/run.go               # Added showEmptyStepFeedback(), updated showStepOutputs()
+internal/interfaces/cli/ui/formatter_test.go # Unit tests
+tests/integration/cli_test.go                # Integration tests
 ```
 
 ## Technical Tasks
 
-- [ ] Detect empty output after step execution
-- [ ] Add success message formatting in UI formatter
-- [ ] Integrate with existing output streaming (F029)
-- [ ] Respect quiet mode flag
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Detect empty output after step execution
+- [x] Add success message formatting in UI formatter
+- [x] Integrate with existing output streaming (F029)
+- [x] Respect quiet mode flag
+- [x] Write unit tests
+- [x] Write integration tests
 
-## Notes
+## Implementation Notes
 
-Example output:
+Added `StepSuccess(stepID string)` method to Formatter that:
+- Respects quiet mode (returns early if quiet)
+- Formats message as `  ✓ step_id: completed successfully`
+- Uses green color via `f.color.Success()`
+
+Flow for all output modes:
+- Silent/streaming: `showEmptyStepFeedback()` called after workflow completes
+- Buffered: `showStepOutputs()` shows success for steps with no output
+
+## Example Output
 
 ```
-Running workflow: deploy-app
-
-▶ build
-  Building application...
-  Build complete.
-
-▶ test
-  ✓ test: completed successfully
-
-▶ deploy
-  Deployed to production.
-
-✓ Workflow completed in 12.3s
+Running workflow: test-silent
+  ✓ silent: completed successfully
+Workflow completed successfully in 3ms
 ```
-
-The success feedback should be subtle - not overwhelming when many steps have no output.

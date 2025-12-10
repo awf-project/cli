@@ -11,9 +11,9 @@ import (
 
 func newListCommand(cfg *Config) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List available workflows",
-		Long:  "Display all available workflows from the configured workflows directory.",
+		Use:     "list",
+		Short:   "List available workflows",
+		Long:    "Display all available workflows from the configured workflows directory.",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(cmd, cfg)

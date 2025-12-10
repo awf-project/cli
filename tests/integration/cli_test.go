@@ -503,3 +503,106 @@ states:
 	assert.Contains(t, output, "completed")
 	assert.Contains(t, output, "done") // Should reach 'done' terminal state
 }
+
+// TestCLI_Run_StepSuccessFeedback_Integration tests F037 success feedback for silent steps
+func TestCLI_Run_StepSuccessFeedback_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create a workflow with a step that produces no output
+	wfYAML := `name: silent-step
+version: "1.0.0"
+states:
+  initial: silent
+  silent:
+    type: step
+    command: "true"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+`
+	wfDir := filepath.Join(tmpDir, "workflows")
+	os.MkdirAll(wfDir, 0755)
+	os.WriteFile(filepath.Join(wfDir, "silent-step.yaml"), []byte(wfYAML), 0644)
+
+	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+
+	t.Run("shows success message for silent step", func(t *testing.T) {
+		testDir := filepath.Join(tmpDir, "default")
+		os.MkdirAll(testDir, 0755)
+
+		cmd := cli.NewRootCommand()
+		buf := new(bytes.Buffer)
+		cmd.SetOut(buf)
+		cmd.SetErr(buf)
+		cmd.SetArgs([]string{"run", "silent-step", "--storage", testDir})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "silent: completed successfully", "should show success feedback for step with no output")
+		assert.Contains(t, output, "\u2713", "should contain checkmark")
+	})
+
+	t.Run("quiet mode hides success message", func(t *testing.T) {
+		testDir := filepath.Join(tmpDir, "quiet")
+		os.MkdirAll(testDir, 0755)
+
+		cmd := cli.NewRootCommand()
+		buf := new(bytes.Buffer)
+		cmd.SetOut(buf)
+		cmd.SetErr(buf)
+		cmd.SetArgs([]string{"run", "silent-step", "--storage", testDir, "--quiet"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := buf.String()
+		// Quiet mode should hide step success feedback, not the workflow completion message
+		assert.NotContains(t, output, "silent: completed successfully", "quiet mode should hide step success feedback")
+	})
+
+	t.Run("step with output does not show extra success message", func(t *testing.T) {
+		// Create a workflow with a step that has output
+		wfYAMLWithOutput := `name: output-step
+version: "1.0.0"
+states:
+  initial: echo
+  echo:
+    type: step
+    command: echo "hello"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+`
+		os.WriteFile(filepath.Join(wfDir, "output-step.yaml"), []byte(wfYAMLWithOutput), 0644)
+
+		testDir := filepath.Join(tmpDir, "output")
+		os.MkdirAll(testDir, 0755)
+
+		cmd := cli.NewRootCommand()
+		buf := new(bytes.Buffer)
+		cmd.SetOut(buf)
+		cmd.SetErr(buf)
+		// Use buffered mode to see step output
+		cmd.SetArgs([]string{"run", "output-step", "--storage", testDir, "--output", "buffered"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := buf.String()
+		// Should not show success feedback for step that had output
+		assert.NotContains(t, output, "echo: completed successfully", "step with output should not show extra success message")
+	})
+}

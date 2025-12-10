@@ -205,6 +205,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return &exitError{code: categorizeError(execErr), err: execErr}
 	}
 
+	// F037: Show success feedback for steps with no output (silent/streaming modes)
+	if cfg.OutputMode != OutputBuffered && execCtx != nil {
+		showEmptyStepFeedback(formatter, execCtx)
+	}
+
 	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
 	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
 
@@ -259,6 +264,22 @@ func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext
 		if state.Stderr != "" {
 			formatter.Printf("\n--- [%s] stderr ---\n", name)
 			formatter.Printf("%s", state.Stderr)
+		}
+		// F037: Success feedback for steps with no output
+		if state.Output == "" && state.Stderr == "" &&
+			state.Status == workflow.StatusCompleted {
+			formatter.StepSuccess(name)
+		}
+	}
+}
+
+// showEmptyStepFeedback displays success message for steps that had no output.
+// Used for silent/streaming modes where showStepOutputs is not called.
+func showEmptyStepFeedback(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
+	for name, state := range execCtx.States {
+		if state.Output == "" && state.Stderr == "" &&
+			state.Status == workflow.StatusCompleted {
+			formatter.StepSuccess(name)
 		}
 	}
 }
