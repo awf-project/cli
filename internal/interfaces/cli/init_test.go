@@ -15,8 +15,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("creates .awf/workflows directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -38,8 +38,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("creates example workflow", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -65,8 +65,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("creates .awf/storage directory with subdirs", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -98,8 +98,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("creates .awf.yaml config file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -126,8 +126,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("skips if .awf directory already exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		// Create .awf directory first
 		awfDir := filepath.Join(tmpDir, ".awf")
@@ -150,8 +150,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("--force overwrites existing configuration", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		// Create existing .awf directory with custom content
 		awfDir := filepath.Join(tmpDir, ".awf")
@@ -195,8 +195,8 @@ func TestInitCommand(t *testing.T) {
 	t.Run("displays next steps message", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -212,5 +212,67 @@ func TestInitCommand(t *testing.T) {
 		output := out.String()
 		assert.Contains(t, output, "awf list")
 		assert.Contains(t, output, "awf run example")
+	})
+
+	t.Run("creates .awf/prompts directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Verify prompts directory was created
+		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
+		info, err := os.Stat(promptsDir)
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("creates example prompt file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Verify example prompt was created
+		exampleFile := filepath.Join(tmpDir, ".awf", "prompts", "example.md")
+		_, err = os.Stat(exampleFile)
+		require.NoError(t, err)
+
+		// Verify content has meaningful example
+		content, err := os.ReadFile(exampleFile)
+		require.NoError(t, err)
+		assert.NotEmpty(t, content)
+		// Should contain markdown content
+		assert.Contains(t, string(content), "#")
+	})
+
+	t.Run("help text mentions prompts directory", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		initCmd, _, err := cmd.Find([]string{"init"})
+		require.NoError(t, err)
+
+		longDesc := initCmd.Long
+		assert.Contains(t, longDesc, "prompts")
+		assert.Contains(t, longDesc, ".awf/prompts/")
 	})
 }

@@ -1,0 +1,395 @@
+# Commit & Push Workflow
+# Claude analyzes changes and generates a conventional commit message.
+# Optionally creates a PR using gh CLI.
+#
+# Usage:
+#   awf run commit                                    # Auto-analyze and commit
+#   awf run commit --input context="F038 implementation"  # With context hint
+#   awf run commit --input push=false                 # Without push
+#   awf run commit --input pr=true                    # Commit + PR
+#   awf run commit --input pr=true --input pr_base=develop  # PR to develop
+#
+# Conventional Commits: https://www.conventionalcommits.org/en/v1.0.0/
+
+name: commit
+description: Claude generates conventional commit, pushes, and optionally creates PR
+version: "2.0.0"
+author: awf
+
+inputs:
+  - name: push
+    type: string
+    description: "Push after commit? (true/false)"
+    required: false
+    default: "false"
+
+  - name: pr
+    type: string
+    description: "Create PR after push? (true/false)"
+    required: false
+    default: "false"
+
+  - name: pr_base
+    type: string
+    description: "Base branch for PR (e.g., main, develop)"
+    required: false
+    default: "main"
+
+states:
+  initial: check_changes
+
+  #==========================================================================
+  # PHASE 1: GATHER CONTEXT
+  #==========================================================================
+
+  check_changes:
+    type: step
+    description: Check for changes and gather diff
+    command: |
+      # Check for any changes
+      STAGED=$(git diff --cached --name-only)
+      UNSTAGED=$(git diff --name-only)
+      UNTRACKED=$(git ls-files --others --exclude-standard)
+
+      if [ -z "$STAGED" ] && [ -z "$UNSTAGED" ] && [ -z "$UNTRACKED" ]; then
+        echo "ERROR: No changes to commit"
+        exit 1
+      fi
+
+      echo "=== FILES CHANGED ==="
+      git status --short
+
+      echo ""
+      echo "=== DIFF SUMMARY ==="
+      git diff --stat HEAD 2>/dev/null || git diff --stat --cached
+
+      echo ""
+      echo "=== DETAILED DIFF ==="
+      git diff HEAD 2>/dev/null || git diff --cached
+    timeout: 30s
+    capture:
+      stdout: changes_diff
+      max_size: 5MB
+    on_success: get_branch_info
+    on_failure: error_no_changes
+    hooks:
+      pre:
+        - log: "Checking for changes..."
+
+  get_branch_info:
+    type: step
+    description: Get current branch and extract feature info
+    command: |
+      BRANCH=$(git branch --show-current)
+      echo "BRANCH=$BRANCH"
+
+      # Extract feature_id from branch name (feature/F038-slug -> F038)
+      FEATURE_ID=$(echo "$BRANCH" | grep -oE 'F[0-9]{3}' || echo "")
+      echo "FEATURE_ID=$FEATURE_ID"
+
+      # Get spec title if feature found
+      if [ -n "$FEATURE_ID" ]; then
+        SPEC_FILE=$(find docs/plans/features -name "${FEATURE_ID}-*.md" -type f 2>/dev/null | head -1)
+        if [ -n "$SPEC_FILE" ]; then
+          SPEC_TITLE=$(head -1 "$SPEC_FILE" | sed 's/^# //')
+          echo "SPEC_TITLE=$SPEC_TITLE"
+        fi
+      fi
+    timeout: 10s
+    capture:
+      stdout: branch_info
+    on_success: get_recent_commits
+    on_failure: get_recent_commits
+
+  get_recent_commits:
+    type: step
+    description: Get recent commit history for style reference
+    command: |
+      echo "=== RECENT COMMITS ==="
+      git log --oneline -10 2>/dev/null || echo "No commits yet"
+    timeout: 10s
+    capture:
+      stdout: recent_commits
+    on_success: stage_changes
+    on_failure: stage_changes
+
+  stage_changes:
+    type: step
+    description: Stage all changes
+    command: git add -A
+    timeout: 30s
+    on_success: generate_commit
+    on_failure: error_stage
+    hooks:
+      pre:
+        - log: "Staging all changes..."
+
+  #==========================================================================
+  # PHASE 2: CLAUDE GENERATES COMMIT MESSAGE
+  #==========================================================================
+
+  generate_commit:
+    type: step
+    description: Claude analyzes changes and generates commit message
+    command: |
+      # Get git info directly (avoid interpolation issues with large diffs)
+      BRANCH=$(git branch --show-current)
+      RECENT=$(git log --oneline -5 2>/dev/null || echo "No commits")
+      FILES=$(git diff --cached --name-only | head -20)
+      SUMMARY=$(git diff --cached --stat | tail -5)
+
+      claude -p "Generate a conventional commit message for these changes.
+
+      Branch: $BRANCH
+
+      Recent commits:
+      $RECENT
+
+      Files changed:
+      $FILES
+
+      Summary:
+      $SUMMARY
+
+      Rules:
+      - Format: type(scope): description
+      - Types: feat, fix, docs, style, refactor, test, chore, perf
+      - Max 50 chars subject, imperative mood, no period
+
+      Output ONLY the commit message, nothing else:" \
+        --allowedTools "" \
+        --output-format text
+    timeout: 120s
+    capture:
+      stdout: commit_message
+      max_size: 10KB
+    on_success: create_commit
+    on_failure: error_generate
+    hooks:
+      pre:
+        - log: "Claude generating commit message..."
+
+  #==========================================================================
+  # PHASE 3: COMMIT & PUSH
+  #==========================================================================
+
+  create_commit:
+    type: step
+    description: Create the commit with generated message
+    command: |
+      git commit -m "$(cat << 'COMMITEOF'
+      {{.states.generate_commit.Output}}
+      COMMITEOF
+      )"
+    timeout: 30s
+    capture:
+      stdout: commit_output
+    on_success: do_push
+    on_failure: error_commit
+    hooks:
+      pre:
+        - log: "Creating commit..."
+      post:
+        - log: "Commit created"
+
+  do_push:
+    type: step
+    description: Push to remote if requested
+    command: |
+      if [ "{{.inputs.push}}" != "true" ]; then
+        echo "Push skipped by user"
+        exit 0
+      fi
+
+      BRANCH=$(git branch --show-current)
+      UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "")
+
+      if [ -z "$UPSTREAM" ]; then
+        echo "Setting upstream and pushing to origin/$BRANCH"
+        git push -u origin "$BRANCH"
+      else
+        echo "Pushing to $UPSTREAM"
+        git push
+      fi
+    timeout: 120s
+    capture:
+      stdout: push_output
+    on_success: generate_pr_body
+    on_failure: error_push
+    hooks:
+      pre:
+        - log: "Pushing to remote..."
+
+  #==========================================================================
+  # PHASE 4: PR CREATION (OPTIONAL)
+  #==========================================================================
+
+  generate_pr_body:
+    type: step
+    description: Claude generates detailed PR body (if pr=true)
+    command: |
+      if [ "{{.inputs.pr}}" != "true" ]; then
+        echo "PR_SKIPPED"
+        exit 0
+      fi
+
+      DIFF_CONTENT=$(cat << 'DIFFEOF'
+      {{.states.check_changes.Output}}
+      DIFFEOF
+      )
+
+      BRANCH_INFO=$(cat << 'BRANCHEOF'
+      {{.states.get_branch_info.Output}}
+      BRANCHEOF
+      )
+
+      COMMIT_MSG=$(cat << 'COMMITEOF'
+      {{.states.generate_commit.Output}}
+      COMMITEOF
+      )
+
+      claude -p "Generate a GitHub Pull Request body for these changes.
+
+      ## Branch Info
+      $BRANCH_INFO
+
+      ## Commit Message
+      $COMMIT_MSG
+
+      ## Changes
+      $DIFF_CONTENT
+
+      ## Output Format (markdown, no code fence wrapper)
+      ## Summary
+      - Bullet points of key changes (2-4 items)
+
+      ## Changes
+      Brief description of what was modified
+
+      ## Test Plan
+      - [ ] Checklist items for testing
+
+      Output ONLY the PR body markdown, no explanations or code fences." \
+        --allowedTools "" \
+        --output-format text
+    timeout: 120s
+    capture:
+      stdout: pr_body
+      max_size: 50KB
+    on_success: create_pr
+    on_failure: create_pr
+    hooks:
+      pre:
+        - log: "Claude generating PR body..."
+
+  create_pr:
+    type: step
+    description: Create PR using gh CLI (if pr=true)
+    command: |
+      if [ "{{.inputs.pr}}" != "true" ]; then
+        echo "PR_SKIPPED"
+        exit 0
+      fi
+
+      # Use commit subject as PR title
+      PR_TITLE=$(git log -1 --format='%s')
+
+      # Use Claude-generated body
+      PR_BODY=$(cat << 'BODYEOF'
+      {{.states.generate_pr_body.Output}}
+
+      ---
+      🤖 Generated with awf commit workflow
+      BODYEOF
+      )
+
+      gh pr create \
+        --title "$PR_TITLE" \
+        --body "$PR_BODY" \
+        --base "{{.inputs.pr_base}}"
+    timeout: 60s
+    capture:
+      stdout: pr_url
+    on_success: summary
+    on_failure: error_pr
+    hooks:
+      pre:
+        - log: "Creating PR with gh CLI..."
+
+  #==========================================================================
+  # PHASE 5: SUMMARY
+  #==========================================================================
+
+  summary:
+    type: step
+    description: Show summary
+    command: |
+      echo "╔════════════════════════════════════════════════════════════════╗"
+      echo "║                    COMMIT COMPLETE                             ║"
+      echo "╠════════════════════════════════════════════════════════════════╣"
+      COMMIT_HASH=$(git rev-parse --short HEAD)
+      COMMIT_SUBJECT=$(git log -1 --format='%s')
+      BRANCH=$(git branch --show-current)
+      echo "║ Commit: $COMMIT_HASH"
+      echo "║ Message: $COMMIT_SUBJECT"
+      echo "║ Branch: $BRANCH"
+      if [ "{{.inputs.push}}" = "true" ]; then
+        echo "║ Pushed: origin/$BRANCH"
+      else
+        echo "║ Pushed: no"
+      fi
+      PR_URL="{{.states.create_pr.Output}}"
+      if [ "$PR_URL" != "PR_SKIPPED" ] && [ -n "$PR_URL" ]; then
+        echo "║ PR: $PR_URL"
+      fi
+      echo "╚════════════════════════════════════════════════════════════════╝"
+    timeout: 5s
+    on_success: done
+    on_failure: done
+
+  #==========================================================================
+  # TERMINAL STATES
+  #==========================================================================
+
+  done:
+    type: terminal
+    status: success
+    message: "Commit created successfully"
+
+  error_no_changes:
+    type: terminal
+    status: failure
+    message: "No changes to commit"
+
+  error_stage:
+    type: terminal
+    status: failure
+    message: "Failed to stage changes"
+
+  error_generate:
+    type: terminal
+    status: failure
+    message: "Failed to generate commit message"
+
+  error_commit:
+    type: terminal
+    status: failure
+    message: "Failed to create commit"
+
+  error_push:
+    type: terminal
+    status: failure
+    message: "Failed to push to remote"
+
+  error_pr:
+    type: terminal
+    status: failure
+    message: "Failed to create PR - check gh auth status"
+
+hooks:
+  workflow_start:
+    - log: "=== Auto-commit workflow ==="
+  workflow_end:
+    - log: "=== Completed in {{.workflow.Duration}} ==="
+  workflow_error:
+    - log: "=== Failed: {{.error.Message}} ==="

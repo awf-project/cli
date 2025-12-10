@@ -92,7 +92,7 @@ func (l *ConsoleLogger) log(levelStr string, levelColor color.Attribute, msg str
 	}
 	line += "\n"
 
-	fmt.Fprint(l.writer, line)
+	_, _ = fmt.Fprint(l.writer, line)
 }
 
 func (l *ConsoleLogger) formatFields(fields []any) string {

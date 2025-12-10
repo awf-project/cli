@@ -51,7 +51,7 @@ func TestMockRepositoryLoad(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if wf == nil {
-		t.Error("expected workflow, got nil")
+		t.Fatal("expected workflow, got nil")
 	}
 	if wf.Name != "test" {
 		t.Errorf("expected name 'test', got '%s'", wf.Name)

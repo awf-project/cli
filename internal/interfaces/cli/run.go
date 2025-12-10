@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -238,10 +239,58 @@ func parseInputFlags(flags []string) (map[string]any, error) {
 		if key == "" {
 			return nil, errors.New("input key cannot be empty")
 		}
-		inputs[key] = value
+
+		// Resolve @prompts/ prefix to file content
+		resolved, err := resolvePromptInput(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve prompt for '%s': %w", key, err)
+		}
+		inputs[key] = resolved
 	}
 
 	return inputs, nil
+}
+
+// promptPrefix is the prefix for referencing prompt files.
+const promptPrefix = "@prompts/"
+
+// resolvePromptInput resolves a value that may reference a prompt file.
+// If the value starts with @prompts/, the file content is loaded from .awf/prompts/.
+// Otherwise, the value is returned as-is.
+func resolvePromptInput(value string) (string, error) {
+	if !strings.HasPrefix(value, promptPrefix) {
+		return value, nil
+	}
+
+	// Extract relative path after @prompts/
+	relativePath := strings.TrimPrefix(value, promptPrefix)
+
+	// Security: block path traversal and absolute paths
+	if strings.Contains(relativePath, "..") || filepath.IsAbs(relativePath) || strings.HasPrefix(relativePath, "/") {
+		return "", fmt.Errorf("invalid prompt path: path traversal not allowed")
+	}
+
+	// Build full path to prompt file
+	promptsDir := ".awf/prompts"
+	fullPath := filepath.Join(promptsDir, relativePath)
+
+	// Security: verify resolved path is still within prompts directory
+	cleanPath := filepath.Clean(fullPath)
+	if !strings.HasPrefix(cleanPath, filepath.Clean(promptsDir)) {
+		return "", fmt.Errorf("invalid prompt path: path traversal not allowed")
+	}
+
+	// Read file content
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("prompt file not found: %s", relativePath)
+		}
+		return "", fmt.Errorf("failed to read prompt file: %w", err)
+	}
+
+	// Trim leading/trailing whitespace
+	return strings.TrimSpace(string(content)), nil
 }
 
 func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {

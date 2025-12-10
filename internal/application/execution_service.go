@@ -69,6 +69,14 @@ func (s *ExecutionService) Run(
 	// initialize execution context
 	execCtx := workflow.NewExecutionContext(uuid.New().String(), wf.Name)
 	execCtx.Status = workflow.StatusRunning
+
+	// Apply default values for inputs not provided
+	for _, inp := range wf.Inputs {
+		if _, provided := inputs[inp.Name]; !provided && inp.Default != nil {
+			execCtx.SetInput(inp.Name, inp.Default)
+		}
+	}
+	// Then apply user-provided inputs (overriding defaults)
 	for k, v := range inputs {
 		execCtx.SetInput(k, v)
 	}
@@ -77,7 +85,9 @@ func (s *ExecutionService) Run(
 
 	// execute workflow_start hooks
 	intCtx := s.buildInterpolationContext(execCtx)
-	s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx)
+	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
+		s.logger.Warn("workflow_start hook failed", "error", err)
+	}
 
 	// execution loop
 	var execErr error
@@ -128,7 +138,9 @@ func (s *ExecutionService) Run(
 		if errors.Is(execErr, context.Canceled) || ctx.Err() == context.Canceled {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
-			s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx)
+			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
+				s.logger.Warn("workflow_cancel hook failed", "error", err)
+			}
 			return execCtx, execErr
 		}
 
@@ -137,12 +149,16 @@ func (s *ExecutionService) Run(
 			Message: execErr.Error(),
 			State:   execCtx.CurrentStep,
 		}
-		s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx)
+		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx); err != nil {
+			s.logger.Warn("workflow_error hook failed", "error", err)
+		}
 		return execCtx, execErr
 	}
 
 	// workflow completed successfully
-	s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx)
+	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx); err != nil {
+		s.logger.Warn("workflow_end hook failed", "error", err)
+	}
 	return execCtx, nil
 }
 
@@ -167,7 +183,9 @@ func (s *ExecutionService) executeStep(
 	intCtx := s.buildInterpolationContext(execCtx)
 
 	// execute pre-hooks
-	s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
 
 	// resolve command variables
 	resolvedCmd, err := s.resolver.Resolve(step.Command, intCtx)
@@ -217,7 +235,9 @@ func (s *ExecutionService) executeStep(
 
 		// execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx)
+		if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+		}
 
 		if step.OnFailure != "" {
 			return step.OnFailure, nil
@@ -231,7 +251,9 @@ func (s *ExecutionService) executeStep(
 
 		// execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx)
+		if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+		}
 
 		if step.OnFailure != "" {
 			return step.OnFailure, nil
@@ -244,7 +266,9 @@ func (s *ExecutionService) executeStep(
 
 	// execute post-hooks on success
 	intCtx = s.buildInterpolationContext(execCtx)
-	s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
 
 	return step.OnSuccess, nil
 }

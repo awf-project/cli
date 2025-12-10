@@ -22,10 +22,10 @@ func TestJSONLogger_WritesToFile(t *testing.T) {
 
 	logger, err := NewJSONLogger(logPath, LevelDebug)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	logger.Info("test message", "key", "value")
-	logger.Sync()
+	_ = logger.Sync()
 
 	content, err := os.ReadFile(logPath)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestJSONLogger_LogLevels(t *testing.T) {
 			logPath := filepath.Join(tmpDir, name+".log")
 			logger, err := NewJSONLogger(logPath, tt.level)
 			require.NoError(t, err)
-			defer logger.Close()
+			defer func() { _ = logger.Close() }()
 
 			switch tt.logMethod {
 			case "debug":
@@ -84,7 +84,7 @@ func TestJSONLogger_LogLevels(t *testing.T) {
 			case "error":
 				logger.Error("test")
 			}
-			logger.Sync()
+			_ = logger.Sync()
 
 			content, _ := os.ReadFile(logPath)
 			hasContent := len(strings.TrimSpace(string(content))) > 0
@@ -100,7 +100,7 @@ func TestJSONLogger_WithContext(t *testing.T) {
 
 	logger, err := NewJSONLogger(logPath, LevelInfo)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	ctx := map[string]any{
 		"workflow_id":   "test-123",
@@ -109,7 +109,7 @@ func TestJSONLogger_WithContext(t *testing.T) {
 
 	ctxLogger := logger.WithContext(ctx)
 	ctxLogger.Info("with context")
-	logger.Sync()
+	_ = logger.Sync()
 
 	content, err := os.ReadFile(logPath)
 	require.NoError(t, err)
@@ -128,10 +128,10 @@ func TestJSONLogger_MasksSecrets(t *testing.T) {
 
 	logger, err := NewJSONLogger(logPath, LevelInfo)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	logger.Info("secret test", "API_KEY", "sk-12345", "user", "john")
-	logger.Sync()
+	_ = logger.Sync()
 
 	content, err := os.ReadFile(logPath)
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestJSONLogger_FieldTypes(t *testing.T) {
 
 	logger, err := NewJSONLogger(logPath, LevelInfo)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	logger.Info("types test",
 		"string", "hello",
@@ -158,7 +158,7 @@ func TestJSONLogger_FieldTypes(t *testing.T) {
 		"float", 3.14,
 		"bool", true,
 	)
-	logger.Sync()
+	_ = logger.Sync()
 
 	content, err := os.ReadFile(logPath)
 	require.NoError(t, err)
@@ -179,10 +179,10 @@ func TestJSONLogger_CreatesDirectory(t *testing.T) {
 
 	logger, err := NewJSONLogger(logPath, LevelInfo)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	logger.Info("test")
-	logger.Sync()
+	_ = logger.Sync()
 
 	_, err = os.Stat(logPath)
 	assert.NoError(t, err)

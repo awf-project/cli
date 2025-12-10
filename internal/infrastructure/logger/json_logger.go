@@ -141,7 +141,7 @@ func (l *JSONLogger) Sync() error {
 
 // Close closes the log file.
 func (l *JSONLogger) Close() error {
-	l.logger.Sync()
+	_ = l.logger.Sync()
 	if l.file != nil {
 		return l.file.Close()
 	}

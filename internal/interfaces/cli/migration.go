@@ -28,15 +28,15 @@ func CheckMigration(w io.Writer) {
 
 	migrationNoticeShown = true
 
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "NOTICE: Legacy ~/.awf directory detected")
-	fmt.Fprintln(w, "AWF now uses XDG Base Directory Specification:")
-	fmt.Fprintf(w, "  Config:    %s\n", xdg.AWFConfigDir())
-	fmt.Fprintf(w, "  Data:      %s\n", xdg.AWFDataDir())
-	fmt.Fprintf(w, "  Workflows: %s\n", xdg.AWFWorkflowsDir())
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "To migrate, move your files:")
-	fmt.Fprintf(w, "  mv ~/.awf/workflows/* %s/\n", xdg.AWFWorkflowsDir())
-	fmt.Fprintf(w, "  mv ~/.awf/storage/states/* %s/\n", xdg.AWFStatesDir())
-	fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "NOTICE: Legacy ~/.awf directory detected")
+	_, _ = fmt.Fprintln(w, "AWF now uses XDG Base Directory Specification:")
+	_, _ = fmt.Fprintf(w, "  Config:    %s\n", xdg.AWFConfigDir())
+	_, _ = fmt.Fprintf(w, "  Data:      %s\n", xdg.AWFDataDir())
+	_, _ = fmt.Fprintf(w, "  Workflows: %s\n", xdg.AWFWorkflowsDir())
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "To migrate, move your files:")
+	_, _ = fmt.Fprintf(w, "  mv ~/.awf/workflows/* %s/\n", xdg.AWFWorkflowsDir())
+	_, _ = fmt.Fprintf(w, "  mv ~/.awf/storage/states/* %s/\n", xdg.AWFStatesDir())
+	_, _ = fmt.Fprintln(w, "")
 }

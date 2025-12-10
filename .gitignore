@@ -33,6 +33,3 @@ storage/history.db
 # Temporary files
 *.tmp
 *.bak
-
-# Repomix output
-.repomix/

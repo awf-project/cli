@@ -1,0 +1,454 @@
+# Feature Implementation Workflow
+# Implements a feature following its plan using TDD (Strict TIDY approach).
+# No commit - user decides when to commit after review.
+#
+# Usage: awf run implement --input feature_id=F038
+# With agents: awf run implement --input feature_id=F038 --input agents="go:golang-expert"
+
+name: implement
+description: Implement a feature using TDD approach with optional agents/skills
+version: "1.0.0"
+author: awf
+
+inputs:
+  - name: feature_id
+    type: string
+    description: Feature ID (e.g., F038)
+    required: true
+    validation:
+      pattern: "^F[0-9]{3}$"
+
+  - name: agents
+    type: string
+    description: Comma-separated agents to use (e.g., go:golang-expert,web:test-automator)
+    required: false
+    default: ""
+
+  - name: skills
+    type: string
+    description: Comma-separated skills to use (e.g., go:go-testing,js:vitest)
+    required: false
+    default: ""
+
+states:
+  initial: create_branch
+
+  #==========================================================================
+  # PHASE 0: GIT BRANCH SETUP
+  #==========================================================================
+
+  create_branch:
+    type: step
+    description: Create or switch to feature branch
+    command: |
+      # Find spec file to extract slug
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -z "$SPEC_FILE" ]; then
+        echo "ERROR: Spec not found for {{.inputs.feature_id}}"
+        exit 1
+      fi
+
+      # Extract slug from filename (F038-prompt-storage.md -> prompt-storage)
+      SLUG=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//')
+      BRANCH="feature/{{.inputs.feature_id}}-${SLUG}"
+
+      # Check if already on this branch
+      CURRENT=$(git branch --show-current)
+      if [ "$CURRENT" = "$BRANCH" ]; then
+        echo "$BRANCH"
+        exit 0
+      fi
+
+      # Check if branch exists locally
+      if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+        git checkout "$BRANCH"
+      else
+        git checkout -b "$BRANCH"
+      fi
+
+      echo "$BRANCH"
+    timeout: 30s
+    capture:
+      stdout: branch_name
+    on_success: load_spec
+    on_failure: error_branch
+    hooks:
+      pre:
+        - log: "Creating/switching to feature branch..."
+      post:
+        - log: "On branch {{.states.create_branch.Output}}"
+
+  #==========================================================================
+  # PHASE 1: VALIDATION BASELINE
+  #==========================================================================
+
+  load_spec:
+    type: step
+    description: Find and read feature spec
+    command: |
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -z "$SPEC_FILE" ]; then
+        echo "ERROR: Spec not found for {{.inputs.feature_id}}"
+        exit 1
+      fi
+      cat "$SPEC_FILE"
+    timeout: 10s
+    capture:
+      stdout: spec_content
+      max_size: 1MB
+    on_success: load_plan
+    on_failure: error_baseline
+    hooks:
+      pre:
+        - log: "Loading spec for {{.inputs.feature_id}}..."
+
+  load_plan:
+    type: step
+    description: Read implementation plan
+    command: |
+      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      if [ ! -f "$PLAN_FILE" ]; then
+        echo "ERROR: Plan not found at $PLAN_FILE"
+        exit 1
+      fi
+      cat "$PLAN_FILE"
+    timeout: 10s
+    capture:
+      stdout: plan_content
+      max_size: 1MB
+    on_success: run_lint_before
+    on_failure: error_baseline
+    hooks:
+      pre:
+        - log: "Loading implementation plan..."
+
+  run_lint_before:
+    type: step
+    description: Lint baseline - must pass
+    command: make lint
+    timeout: 120s
+    capture:
+      stdout: lint_before_output
+    on_success: run_tests_before
+    on_failure: error_baseline
+    hooks:
+      pre:
+        - log: "Running lint baseline..."
+
+  run_tests_before:
+    type: step
+    description: Tests baseline - must pass
+    command: make test-unit
+    timeout: 300s
+    capture:
+      stdout: tests_before_output
+    on_success: write_interfaces
+    on_failure: error_baseline
+    hooks:
+      pre:
+        - log: "Running tests baseline..."
+      post:
+        - log: "Baseline OK - proceeding with TDD"
+
+  #==========================================================================
+  # PHASE 2: TDD RED - Write interfaces then tests
+  #==========================================================================
+
+  write_interfaces:
+    type: step
+    description: Claude writes interfaces/types/stubs (code compiles but does nothing)
+    command: |
+      SPEC_CONTENT=$(cat << 'SPECEOF'
+      {{.states.load_spec.Output}}
+      SPECEOF
+      )
+      PLAN_CONTENT=$(cat << 'PLANEOF'
+      {{.states.load_plan.Output}}
+      PLANEOF
+      )
+      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
+
+      ## PHASE: Write Interfaces/Types/Stubs (RED phase - step 1)
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Your Task
+      Create ONLY the interfaces, types, and stub implementations needed for the tests to compile.
+      The stubs should:
+      - Return zero values or panic(\"not implemented\")
+      - Allow tests to compile but fail when run
+      - Follow the plan's file structure
+
+      DO NOT implement the actual logic yet - just the skeleton.
+
+      ## Available Agents
+      {{.inputs.agents}}
+
+      ## Available Skills
+      {{.inputs.skills}}
+
+      If agents/skills are specified, use them via Task/Skill tools when appropriate." \
+        --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 600s
+    capture:
+      stdout: interfaces_output
+      max_size: 5MB
+    on_success: write_tests
+    on_failure: write_tests
+    hooks:
+      pre:
+        - log: "Claude writing interfaces/stubs..."
+
+  write_tests:
+    type: step
+    description: Claude writes tests using the interfaces
+    command: |
+      SPEC_CONTENT=$(cat << 'SPECEOF'
+      {{.states.load_spec.Output}}
+      SPECEOF
+      )
+      PLAN_CONTENT=$(cat << 'PLANEOF'
+      {{.states.load_plan.Output}}
+      PLANEOF
+      )
+      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
+
+      ## PHASE: Write Tests (RED phase - step 2)
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Your Task
+      Write comprehensive tests based on the Test Plan section:
+      - Unit tests for each component
+      - Integration tests if specified
+      - Tests should use the interfaces/stubs created in the previous step
+      - Tests MUST compile (use existing interfaces)
+      - Tests SHOULD fail when run (stubs don't implement logic)
+
+      Follow the project's testing conventions (table-driven tests, testify).
+
+      ## Available Agents
+      {{.inputs.agents}}
+
+      ## Available Skills
+      {{.inputs.skills}}
+
+      If agents/skills are specified, use them via Task/Skill tools when appropriate." \
+        --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 600s
+    capture:
+      stdout: tests_output
+      max_size: 5MB
+    on_success: run_tests_red
+    on_failure: run_tests_red
+    hooks:
+      pre:
+        - log: "Claude writing tests..."
+
+  run_tests_red:
+    type: step
+    description: Run tests - should fail (RED phase)
+    command: |
+      make test-unit 2>&1
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 0 ]; then
+        echo "WARNING: Tests passed but should have failed (RED phase)"
+        echo "RED_PHASE_WARNING"
+      else
+        echo "RED phase OK - tests fail as expected"
+        echo "RED_PHASE_OK"
+      fi
+      exit 0
+    timeout: 300s
+    capture:
+      stdout: tests_red_output
+    on_success: implement_feature
+    on_failure: implement_feature
+    hooks:
+      pre:
+        - log: "Running tests (expecting failure - RED phase)..."
+
+  #==========================================================================
+  # PHASE 3: TDD GREEN - Implementation
+  #==========================================================================
+
+  implement_feature:
+    type: step
+    description: Claude implements the feature (GREEN phase)
+    command: |
+      SPEC_CONTENT=$(cat << 'SPECEOF'
+      {{.states.load_spec.Output}}
+      SPECEOF
+      )
+      PLAN_CONTENT=$(cat << 'PLANEOF'
+      {{.states.load_plan.Output}}
+      PLANEOF
+      )
+      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
+
+      ## PHASE: Implementation (GREEN phase)
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Your Task
+      Implement the actual logic to make all tests pass:
+      - Replace stub implementations with real code
+      - Follow the implementation steps from the plan
+      - Ensure code compiles and passes lint
+      - Make tests pass (GREEN)
+
+      ## Available Agents
+      {{.inputs.agents}}
+
+      ## Available Skills
+      {{.inputs.skills}}
+
+      If agents/skills are specified, use them via Task/Skill tools when appropriate.
+      For example, use go:golang-expert for complex Go patterns." \
+        --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 900s
+    capture:
+      stdout: implement_output
+      max_size: 10MB
+    on_success: run_lint_after
+    on_failure: run_lint_after
+    hooks:
+      pre:
+        - log: "Claude implementing feature..."
+
+  #==========================================================================
+  # PHASE 4: VALIDATION
+  #==========================================================================
+
+  run_lint_after:
+    type: step
+    description: Lint after implementation
+    command: make lint 2>&1 || echo "LINT_WARNING"
+    timeout: 120s
+    capture:
+      stdout: lint_after_output
+    on_success: run_tests_green
+    on_failure: run_tests_green
+    hooks:
+      pre:
+        - log: "Running lint after implementation..."
+
+  run_tests_green:
+    type: step
+    description: Run tests - should pass (GREEN phase)
+    command: |
+      make test-unit 2>&1
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 0 ]; then
+        echo "GREEN_PHASE_OK"
+      else
+        echo "GREEN_PHASE_WARNING: Tests still failing"
+      fi
+      exit 0
+    timeout: 300s
+    capture:
+      stdout: tests_green_output
+    on_success: update_spec_status
+    on_failure: update_spec_status
+    hooks:
+      pre:
+        - log: "Running tests (expecting pass - GREEN phase)..."
+
+  #==========================================================================
+  # PHASE 5: SUMMARY
+  #==========================================================================
+
+  update_spec_status:
+    type: step
+    description: Update spec status to implemented
+    command: |
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -n "$SPEC_FILE" ]; then
+        sed -i 's/Status\*\*: planned/Status**: implemented/g' "$SPEC_FILE"
+        echo "Updated status in $SPEC_FILE"
+      else
+        echo "SPEC_UPDATE_SKIPPED"
+      fi
+    timeout: 10s
+    capture:
+      stdout: status_update_output
+    on_success: summary
+    on_failure: summary
+
+  summary:
+    type: step
+    description: Generate implementation summary
+    command: |
+      echo "╔════════════════════════════════════════════════════════════════╗"
+      echo "║           FEATURE IMPLEMENTATION COMPLETE                      ║"
+      echo "╠════════════════════════════════════════════════════════════════╣"
+      echo "║ Feature: {{.inputs.feature_id}}"
+      echo "║ Agents: {{.inputs.agents}}"
+      echo "║ Skills: {{.inputs.skills}}"
+      echo "╠════════════════════════════════════════════════════════════════╣"
+      echo "║ TDD Results:"
+      LINT_BEFORE=$(echo '{{.states.run_lint_before.Output}}' | tail -1)
+      TESTS_BEFORE=$(echo '{{.states.run_tests_before.Output}}' | tail -1)
+      RED_RESULT=$(echo '{{.states.run_tests_red.Output}}' | grep -o 'RED_PHASE_[A-Z]*' | tail -1)
+      GREEN_RESULT=$(echo '{{.states.run_tests_green.Output}}' | grep -o 'GREEN_PHASE_[A-Z]*' | tail -1)
+      LINT_AFTER=$(echo '{{.states.run_lint_after.Output}}' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS')
+      echo "║   Baseline Lint: PASS"
+      echo "║   Baseline Tests: PASS"
+      echo "║   RED Phase: $RED_RESULT"
+      echo "║   GREEN Phase: $GREEN_RESULT"
+      echo "║   Final Lint: $LINT_AFTER"
+      echo "╠════════════════════════════════════════════════════════════════╣"
+      echo "║ Status: {{.states.update_spec_status.Output}}"
+      echo "╠════════════════════════════════════════════════════════════════╣"
+      echo "║ NO COMMIT - Review changes and commit manually                 ║"
+      echo "╚════════════════════════════════════════════════════════════════╝"
+    timeout: 10s
+    capture:
+      stdout: summary_output
+    on_success: done
+    on_failure: done
+
+  #==========================================================================
+  # TERMINAL STATES
+  #==========================================================================
+
+  done:
+    type: terminal
+    status: success
+    message: "Feature {{.inputs.feature_id}} implementation complete - review and commit manually"
+
+  error_baseline:
+    type: terminal
+    status: failure
+    message: "Baseline validation failed - fix lint/tests before implementing"
+
+  error_branch:
+    type: terminal
+    status: failure
+    message: "Failed to create feature branch - check spec file exists"
+
+hooks:
+  workflow_start:
+    - log: "=== Implementing {{.inputs.feature_id}} with TDD ==="
+  workflow_end:
+    - log: "=== Implementation completed in {{.workflow.Duration}} ==="
+  workflow_error:
+    - log: "=== Implementation failed: {{.error.Message}} ==="
