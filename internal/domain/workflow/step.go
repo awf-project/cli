@@ -51,6 +51,7 @@ type Step struct {
 	Type            StepType
 	Description     string
 	Command         string         // for command type
+	Dir             string         // working directory for command execution
 	Branches        []string       // for parallel type
 	Strategy        string         // for parallel: all_succeed, any_succeed, best_effort
 	MaxConcurrent   int            // for parallel: max concurrent branches

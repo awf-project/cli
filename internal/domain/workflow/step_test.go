@@ -203,11 +203,58 @@ func TestCaptureConfig(t *testing.T) {
 	})
 }
 
+func TestStepWithDir(t *testing.T) {
+	tests := []struct {
+		name string
+		step workflow.Step
+		want string
+	}{
+		{
+			name: "step with absolute dir",
+			step: workflow.Step{
+				Name:    "build",
+				Type:    workflow.StepTypeCommand,
+				Command: "make build",
+				Dir:     "/tmp/project",
+			},
+			want: "/tmp/project",
+		},
+		{
+			name: "step with interpolated dir",
+			step: workflow.Step{
+				Name:    "test",
+				Type:    workflow.StepTypeCommand,
+				Command: "go test ./...",
+				Dir:     "{{inputs.project_path}}",
+			},
+			want: "{{inputs.project_path}}",
+		},
+		{
+			name: "step without dir",
+			step: workflow.Step{
+				Name:    "echo",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo hello",
+			},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.step.Dir != tt.want {
+				t.Errorf("Step.Dir = %q, want %q", tt.step.Dir, tt.want)
+			}
+		})
+	}
+}
+
 func TestStepWithNewFields(t *testing.T) {
 	step := workflow.Step{
 		Name:    "extract",
 		Type:    workflow.StepTypeCommand,
 		Command: "cat {{inputs.file_path}}",
+		Dir:     "/tmp/workdir",
 		Retry: &workflow.RetryConfig{
 			MaxAttempts:    3,
 			InitialDelayMs: 1000,
@@ -241,5 +288,8 @@ func TestStepWithNewFields(t *testing.T) {
 	}
 	if !step.ContinueOnError {
 		t.Error("expected ContinueOnError to be true")
+	}
+	if step.Dir != "/tmp/workdir" {
+		t.Errorf("expected Dir /tmp/workdir, got %s", step.Dir)
 	}
 }

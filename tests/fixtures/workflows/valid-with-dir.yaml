@@ -1,0 +1,26 @@
+name: workflow-with-dir
+version: "1.0.0"
+description: Test workflow with working directory
+
+inputs:
+  - name: project_path
+    type: string
+    required: true
+
+states:
+  initial: build
+
+  build:
+    type: step
+    command: "make build"
+    dir: "/tmp/project"
+    on_success: test
+
+  test:
+    type: step
+    command: "go test ./..."
+    dir: "{{inputs.project_path}}"
+    on_success: done
+
+  done:
+    type: terminal

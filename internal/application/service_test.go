@@ -87,6 +87,24 @@ func (m *mockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.C
 	return &ports.CommandResult{ExitCode: 0, Stdout: "ok"}, nil
 }
 
+// capturingMockExecutor captures the last command for inspection
+type capturingMockExecutor struct {
+	lastCmd *ports.Command
+	results map[string]*ports.CommandResult
+}
+
+func newCapturingMockExecutor() *capturingMockExecutor {
+	return &capturingMockExecutor{results: make(map[string]*ports.CommandResult)}
+}
+
+func (m *capturingMockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+	m.lastCmd = &cmd
+	if result, ok := m.results[cmd.Program]; ok {
+		return result, nil
+	}
+	return &ports.CommandResult{ExitCode: 0, Stdout: "ok"}, nil
+}
+
 type mockLogger struct{}
 
 func (m *mockLogger) Debug(msg string, fields ...any) {}

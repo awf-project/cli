@@ -3,7 +3,6 @@
 ## Backlog
 
 ### Phase 1 - MVP (v0.1.0)
-- [F035](features/v0.1.0/F035-step-working-directory.md) Step working directory
 - [F036](features/v0.1.0/F036-cli-init.md) CLI init command
 - [F037](features/v0.1.0/F037-step-success-feedback.md) Step success feedback
 
@@ -72,6 +71,7 @@ _No features in review_
 - [F029](features/v0.1.0/F029-output-streaming.md) Output streaming (--output flag)
 - [F030](features/v0.1.0/F030-xdg-workflow-discovery.md) XDG workflow discovery
 - [F031](features/v0.1.0/F031-output-formats.md) Output formats (--format flag)
+- [F035](features/v0.1.0/F035-step-working-directory.md) Step working directory
 
 ---
 
@@ -79,9 +79,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 14 | 3 | 0 | 0 | 0 | 11 |
+| 1 - MVP | 14 | 2 | 0 | 0 | 0 | 12 |
 | 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
 | 4 - Extensibility & AI | 7 | 7 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **37** | **26** | **0** | **0** | **0** | **11** |
+| **Total** | **37** | **25** | **0** | **0** | **0** | **12** |

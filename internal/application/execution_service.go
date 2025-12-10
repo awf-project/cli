@@ -175,9 +175,19 @@ func (s *ExecutionService) executeStep(
 		return "", fmt.Errorf("interpolate command: %w", err)
 	}
 
+	// resolve dir if specified
+	resolvedDir := ""
+	if step.Dir != "" {
+		resolvedDir, err = s.resolver.Resolve(step.Dir, intCtx)
+		if err != nil {
+			return "", fmt.Errorf("interpolate dir: %w", err)
+		}
+	}
+
 	// build command
 	cmd := ports.Command{
 		Program: resolvedCmd,
+		Dir:     resolvedDir,
 		Timeout: step.Timeout,
 		Stdout:  s.stdoutWriter,
 		Stderr:  s.stderrWriter,

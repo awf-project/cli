@@ -325,6 +325,63 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 	assert.Equal(t, "error", ctx.CurrentStep)
 }
 
+func TestExecutionService_Run_WithDir(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["dir-test"] = &workflow.Workflow{
+		Name:    "dir-test",
+		Initial: "build",
+		Steps: map[string]*workflow.Step{
+			"build": {
+				Name:      "build",
+				Type:      workflow.StepTypeCommand,
+				Command:   "make build",
+				Dir:       "/tmp/project",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newCapturingMockExecutor()
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Run(context.Background(), "dir-test", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, executor.lastCmd, "executor should have received a command")
+	assert.Equal(t, "/tmp/project", executor.lastCmd.Dir, "Dir should be passed to executor")
+}
+
+func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["no-dir-test"] = &workflow.Workflow{
+		Name:    "no-dir-test",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo hello",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newCapturingMockExecutor()
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Run(context.Background(), "no-dir-test", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, executor.lastCmd, "executor should have received a command")
+	assert.Equal(t, "", executor.lastCmd.Dir, "Dir should be empty when not specified")
+}
+
 func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 	repo := newMockRepository()
 	repo.workflows["checkpoint-test"] = &workflow.Workflow{
