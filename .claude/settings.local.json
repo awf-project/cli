@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(common:claude-architect)",
+      "mcp__plugin_common_context7__resolve-library-id",
+      "mcp__plugin_common_context7__get-library-docs",
+      "mcp__plugin_common_serena__list_dir",
+      "Bash(tree:*)",
+      "mcp__plugin_common_serena__initial_instructions",
+      "Bash(find:*)",
+      "mcp__plugin_common_serena__list_memories",
+      "Skill(go:go-testing)",
+      "Bash(go test:*)",
+      "Bash(go list:*)",
+      "mcp__plugin_common_serena__activate_project",
+      "mcp__plugin_common_serena__check_onboarding_performed",
+      "mcp__plugin_common_serena__get_symbols_overview",
+      "Bash(go vet:*)",
+      "Bash(wc:*)",
+      "mcp__plugin_common_serena__find_file",
+      "mcp__plugin_common_serena__search_for_pattern",
+      "Skill(go:go-hexagonal)",
+      "Bash(make test-unit:*)",
+      "Bash(make lint:*)",
+      "Bash(go get:*)",
+      "Bash(go build:*)",
+      "Bash(go mod tidy:*)",
+      "mcp__plugin_common_serena__think_about_collected_information",
+      "mcp__plugin_common_serena__find_symbol",
+      "mcp__plugin_common_repomix__grep_repomix_output",
+      "mcp__plugin_common_repomix__read_repomix_output",
+      "mcp__plugin_common_serena__get_current_config",
+      "mcp__plugin_common_serena__onboarding",
+      "mcp__plugin_common_serena__write_memory",
+      "mcp__plugin_common_repomix__file_system_read_directory",
+      "mcp__plugin_common_repomix__pack_codebase",
+      "mcp__plugin_common_repomix__attach_packed_output",
+      "mcp__plugin_common_serena__read_memory",
+      "mcp__plugin_common_serena__edit_memory"
+    ]
+  }
+}
