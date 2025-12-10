@@ -221,9 +221,11 @@ states:
 
   done:
     type: terminal
+    status: success
 
   error:
     type: terminal
+    status: failure
 ```
 
 ### State Types
@@ -231,7 +233,7 @@ states:
 | Type | Description |
 |------|-------------|
 | `step` | Execute a command |
-| `terminal` | End state (success or failure) |
+| `terminal` | End state with `status: success` or `status: failure` |
 | `parallel` | Execute multiple steps concurrently (future) |
 
 ### Step Options
@@ -241,8 +243,15 @@ states:
 | `command` | Shell command to execute |
 | `dir` | Working directory (supports interpolation, e.g., `{{.inputs.path}}`) |
 | `timeout` | Execution timeout in seconds |
-| `on_success` | Next state on success |
-| `on_failure` | Next state on failure |
+| `on_success` | Next state on success (exit code 0) |
+| `on_failure` | Next state on failure (exit code ≠ 0) |
+| `continue_on_error` | Always follow `on_success` regardless of exit code |
+
+### Terminal Options
+
+| Option | Description |
+|--------|-------------|
+| `status` | Terminal status: `success` or `failure` |
 
 ### Variable Interpolation
 
@@ -375,7 +384,7 @@ make fmt            # Format code
 - [x] Run single step (--step flag)
 
 ### Phase 2 - Core Features (v0.2.0)
-- [ ] State machine with transitions
+- [x] State machine with transitions (cycle detection, unreachable states, terminal status)
 - [ ] Parallel execution
 - [ ] Retry with exponential backoff
 - [ ] Input validation

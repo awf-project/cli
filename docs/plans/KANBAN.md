@@ -4,7 +4,6 @@
 
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
-- [F009](features/v0.2.0/F009-state-machine.md) State machine with transitions
 - [F010](features/v0.2.0/F010-parallel-execution.md) Parallel execution (errgroup)
 - [F011](features/v0.2.0/F011-retry-backoff.md) Retry with exponential backoff
 - [F012](features/v0.2.0/F012-input-validation.md) Input validation
@@ -56,6 +55,9 @@ _No features in review_
 
 ## Done
 
+### Phase 2 - Core Features (v0.2.0)
+- [F009](features/v0.2.0/F009-state-machine.md) State machine with conditional transitions
+
 ### Phase 1 - MVP (v0.1.0)
 - [F001](features/v0.1.0/F001-hexagonal-architecture.md) Hexagonal architecture
 - [F002](features/v0.1.0/F002-yaml-parser.md) YAML workflow parsing
@@ -78,9 +80,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 14 | 0 | 0 | 0 | 0 | 14 |
-| 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
+| 1 - MVP | 16 | 0 | 0 | 0 | 0 | 16 |
+| 2 - Core | 6 | 5 | 0 | 0 | 0 | 1 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
 | 4 - Extensibility & AI | 7 | 7 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **37** | **23** | **0** | **0** | **0** | **14** |
+| **Total** | **39** | **22** | **0** | **0** | **0** | **17** |

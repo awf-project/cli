@@ -31,15 +31,15 @@ inputs:
     default: ""
 
 states:
-  initial: create_branch
+  initial: find_spec
 
   #==========================================================================
   # PHASE 0: GIT BRANCH SETUP
   #==========================================================================
 
-  create_branch:
+  find_spec:
     type: step
-    description: Create or switch to feature branch
+    description: Find specification
     command: |
       # Find spec file to extract slug
       SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
@@ -47,9 +47,25 @@ states:
         echo "ERROR: Spec not found for {{.inputs.feature_id}}"
         exit 1
       fi
+      
+      echo "$SPEC_FILE"
+    timeout: 30s
+    capture:
+      stdout: spec_file
+    on_success: create_branch
+    on_failure: error_find_spec
+    hooks:
+      pre:
+        - log: "Find spec..."
+      post:
+        - log: "Found spec {{.inputs.feature_id}}"
 
+  create_branch:
+    type: step
+    description: Create or switch to feature branch
+    command: |
       # Extract slug from filename (F038-prompt-storage.md -> prompt-storage)
-      SLUG=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//')
+      SLUG=$(basename "{{.states.find_spec.Output}}" .md | sed 's/^F[0-9]*-//')
       BRANCH="feature/{{.inputs.feature_id}}-${SLUG}"
 
       # Check if already on this branch
@@ -70,7 +86,7 @@ states:
     timeout: 30s
     capture:
       stdout: branch_name
-    on_success: load_spec
+    on_success: explore_codebase
     on_failure: error_branch
     hooks:
       pre:
@@ -79,7 +95,168 @@ states:
         - log: "On branch {{.states.create_branch.Output}}"
 
   #==========================================================================
-  # PHASE 1: VALIDATION BASELINE
+  # PHASE 1: PLANNING
+  #==========================================================================
+
+  explore_codebase:
+    type: step
+    description: Claude explores codebase for implementation context
+    command: |
+      SPEC_CONTENT=$(cat "{{.states.find_spec.Output}}")
+      claude -p "You are exploring the awf (AI Workflow CLI) codebase to understand how to implement a new feature.
+
+      ## Feature to implement
+      $SPEC_CONTENT
+
+      ## Your Task
+      1. Explore the codebase architecture (hexagonal: domain/application/infrastructure/interfaces)
+      2. Find similar features already implemented as reference
+      3. Identify key interfaces and types that will be affected
+      4. List 3-5 critical files that must be modified or created
+
+      Output a structured exploration report:
+      - Architecture layer(s) involved
+      - Critical files with reasons
+      - Pattern files to follow
+      - Dependencies and risks" \
+        --allowedTools "Read,Grep,Glob" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 300s
+    capture:
+      stdout: exploration_raw
+      max_size: 5MB
+    on_success: parse_exploration
+    on_failure: error_exploration
+    hooks:
+      pre:
+        - log: "Claude exploring codebase..."
+      post:
+        - log: "Exploration complete"
+
+  parse_exploration:
+    type: step
+    description: Extract exploration result and session ID
+    command: |
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
+      {{.states.explore_codebase.Output}}
+      JSONEOF
+      )
+
+      # Try to parse as JSON, fallback to empty object
+      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
+        echo "$CLAUDE_OUTPUT" | jq -c '{session_id: (.session_id // null), result: (.result // "No exploration result")}'
+      else
+        echo '{"session_id": null, "result": "Failed to parse exploration output"}'
+      fi
+    timeout: 10s
+    capture:
+      stdout: exploration_parsed
+    on_success: create_plan
+    on_failure: create_plan
+
+  create_plan:
+    type: step
+    description: Claude creates implementation plan
+    command: |
+      SESSION_ID=$(cat << 'JSONEOF' | jq -r '.session_id // empty'
+      {{.states.parse_exploration.Output}}
+      JSONEOF
+      )
+      RESUME_FLAG=""
+      if [ -n "$SESSION_ID" ]; then
+        RESUME_FLAG="--resume $SESSION_ID"
+      fi
+      claude $RESUME_FLAG -p "Based on your exploration, create a detailed implementation plan for {{.inputs.feature_id}}.
+
+      ## Output Format (Markdown)
+      # Implementation Plan: {{.inputs.feature_id}}
+
+      ## Summary
+      (2-3 sentences describing the approach)
+
+      ## Implementation Steps
+      1. Step description
+         - File: path/to/file.go
+         - Action: CREATE/MODIFY
+         - Changes: specific changes needed
+
+      ## Test Plan
+      - Unit tests needed
+      - Integration tests needed
+
+      ## Files to Modify
+      | File | Action | Complexity |
+      |------|--------|------------|
+      | path | CREATE/MODIFY | S/M/L |
+
+      ## Risks
+      - Risk and mitigation
+
+      Be specific and actionable." \
+        --allowedTools "Read,Grep,Glob" \
+        --output-format json
+    timeout: 300s
+    capture:
+      stdout: plan_raw
+      max_size: 5MB
+    on_success: extract_plan
+    on_failure: error_planning
+    hooks:
+      pre:
+        - log: "Claude creating implementation plan..."
+
+  extract_plan:
+    type: step
+    description: Extract plan content
+    command: |
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
+      {{.states.create_plan.Output}}
+      JSONEOF
+      )
+
+      # Try to parse as JSON and extract result
+      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
+        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
+        if [ -n "$RESULT" ]; then
+          echo "$RESULT"
+        else
+          echo "# No plan generated"
+          echo ""
+          echo "Claude did not return a result field."
+        fi
+      else
+        echo "# Plan extraction failed"
+        echo ""
+        echo "Raw output was not valid JSON."
+      fi
+    timeout: 10s
+    capture:
+      stdout: plan_content
+    on_success: save_plan
+    on_failure: save_plan
+
+  save_plan:
+    type: step
+    description: Save implementation plan
+    command: |
+      mkdir -p docs/plans/implementation
+      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      cat > "$PLAN_FILE" << 'AWF_PLAN_CONTENT_EOF'
+      {{.states.extract_plan.Output}}
+      AWF_PLAN_CONTENT_EOF
+      echo "$PLAN_FILE"
+    timeout: 10s
+    capture:
+      stdout: plan_file_path
+    on_success: load_spec
+    on_failure: load_spec
+    hooks:
+      post:
+        - log: "Plan saved to {{.states.save_plan.Output}}"
+
+  #==========================================================================
+  # PHASE 2: VALIDATION BASELINE
   #==========================================================================
 
   load_spec:
@@ -151,7 +328,7 @@ states:
         - log: "Baseline OK - proceeding with TDD"
 
   #==========================================================================
-  # PHASE 2: TDD RED - Write interfaces then tests
+  # PHASE 3: TDD RED - Write interfaces then tests
   #==========================================================================
 
   write_interfaces:
@@ -281,7 +458,7 @@ states:
         - log: "Running tests (expecting failure - RED phase)..."
 
   #==========================================================================
-  # PHASE 3: TDD GREEN - Implementation
+  # PHASE 4: TDD GREEN - Implementation
   #==========================================================================
 
   implement_feature:
@@ -335,7 +512,7 @@ states:
         - log: "Claude implementing feature..."
 
   #==========================================================================
-  # PHASE 4: VALIDATION
+  # PHASE 5: VALIDATION
   #==========================================================================
 
   run_lint_after:
@@ -373,7 +550,7 @@ states:
         - log: "Running tests (expecting pass - GREEN phase)..."
 
   #==========================================================================
-  # PHASE 5: SUMMARY
+  # PHASE 6: SUMMARY
   #==========================================================================
 
   update_spec_status:
@@ -418,28 +595,51 @@ states:
       # Remove from current location (Backlog section)
       sed -i "/$FEATURE_PATTERN/d" "$KANBAN_FILE"
 
-      # Find the Done section for the appropriate phase and add the feature
-      # First, find which phase this feature belongs to by checking the path
+      # Find which phase this feature belongs to
       SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -n "$SPEC_FILE" ]; then
-        # Extract version from path (e.g., v0.1.0)
-        VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+')
+      if [ -z "$SPEC_FILE" ]; then
+        echo "KANBAN_SPEC_NOT_FOUND"
+        exit 0
+      fi
 
-        # Add to Done section - append after the "### Phase X" line in Done
-        # Find the correct phase in Done section and append
-        if [ -n "$VERSION" ]; then
-          # Use awk to insert the feature line in the Done section
-          awk -v feat="$FEATURE_LINE" -v ver="$VERSION" '
-            /^## Done/ { in_done=1 }
-            in_done && /^### Phase/ && $0 ~ ver {
-              print; getline;
-              while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
-              print feat
-              next
-            }
-            { print }
-          ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
-        fi
+      # Extract version and map to phase
+      VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+')
+      case "$VERSION" in
+        v0.1.0) PHASE_HEADER="### Phase 1 - MVP (v0.1.0)" ;;
+        v0.2.0) PHASE_HEADER="### Phase 2 - Core Features (v0.2.0)" ;;
+        v0.3.0) PHASE_HEADER="### Phase 3 - Advanced Features (v0.3.0)" ;;
+        v0.4.0) PHASE_HEADER="### Phase 4 - Extensibility & AI (v0.4.0)" ;;
+        v1.0.0) PHASE_HEADER="### Phase 5 - Interfaces (v1.0.0)" ;;
+        *) PHASE_HEADER="### Phase 2 - Core Features (v0.2.0)" ;;
+      esac
+
+      # Check if phase section exists in Done
+      if grep -q "^$PHASE_HEADER" "$KANBAN_FILE"; then
+        # Phase exists - insert feature after header
+        awk -v feat="$FEATURE_LINE" -v phase="$PHASE_HEADER" '
+          /^## Done/ { in_done=1 }
+          /^## Summary/ { in_done=0 }
+          in_done && $0 == phase {
+            print
+            getline
+            while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
+            print feat
+            next
+          }
+          { print }
+        ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
+      else
+        # Phase doesn't exist in Done - create it after ## Done
+        awk -v feat="$FEATURE_LINE" -v phase="$PHASE_HEADER" '
+          /^## Done/ {
+            print
+            print ""
+            print phase
+            print feat
+            next
+          }
+          { print }
+        ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
       fi
 
       echo "KANBAN_UPDATED"
@@ -556,11 +756,43 @@ states:
     timeout: 15s
     capture:
       stdout: changelog_result
+    on_success: update_memories
+    on_failure: update_memories
+    hooks:
+      pre:
+        - log: "Updating CHANGELOG.md..."
+
+  update_memories:
+    type: step
+    description: Update project memories via Claude
+    command: |
+      # Extract version from spec file path
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+      TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" 2>/dev/null | sed 's/^# {{.inputs.feature_id}}: //' || echo "Feature {{.inputs.feature_id}}")
+
+      claude -p "Update the project memories to reflect the implemented feature {{.inputs.feature_id}}.
+
+      Use mcp__plugin_common_serena__edit_memory to update feature_roadmap:
+      - Mark {{.inputs.feature_id}} as IMPLEMENTED in the $VERSION section
+
+      Feature details:
+      - ID: {{.inputs.feature_id}}
+      - Version: $VERSION
+      - Title: $TITLE
+
+      Confirm what was updated." \
+        --allowedTools "mcp__plugin_common_serena__edit_memory,mcp__plugin_common_serena__read_memory" \
+        --dangerously-skip-permissions \
+        --output-format json 2>&1 || echo "MEMORY_UPDATE_SKIPPED"
+    timeout: 120s
+    capture:
+      stdout: memory_result
     on_success: summary
     on_failure: summary
     hooks:
       pre:
-        - log: "Updating CHANGELOG.md..."
+        - log: "Updating project memories..."
 
   summary:
     type: step
@@ -585,9 +817,11 @@ states:
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Documentation Updates:"
       echo "║   Spec Status: {{.states.update_spec_status.Output}}"
+      echo "║   Plan: {{.states.save_plan.Output}}"
       echo "║   KANBAN: {{.states.update_kanban.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
       echo "║   CHANGELOG: {{.states.update_changelog.Output}}"
+      echo "║   Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ NO COMMIT - Review changes and commit manually                 ║"
       echo "╚════════════════════════════════════════════════════════════════╝"
@@ -605,6 +839,21 @@ states:
     type: terminal
     status: success
     message: "Feature {{.inputs.feature_id}} implementation complete - review and commit manually"
+
+  error_find_spec:
+    type: terminal
+    status: failure
+    message: "Unable to find spec {{.inputs.feature_id}}"
+
+  error_exploration:
+    type: terminal
+    status: failure
+    message: "Claude exploration failed - check claude CLI is installed and authenticated"
+
+  error_planning:
+    type: terminal
+    status: failure
+    message: "Claude planning failed"
 
   error_baseline:
     type: terminal

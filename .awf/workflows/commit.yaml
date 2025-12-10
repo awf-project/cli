@@ -283,8 +283,9 @@ states:
     capture:
       stdout: pr_body
       max_size: 50KB
+    continue_on_error: true
     on_success: create_pr
-    on_failure: create_pr
+    on_failure: error_generate_pr_body
     hooks:
       pre:
         - log: "Claude generating PR body..."
@@ -392,6 +393,11 @@ states:
     type: terminal
     status: failure
     message: "Failed to create PR - check gh auth status"
+
+  error_generate_pr_body:
+    type: terminal
+    status: failure
+    message: "Failed to generate PR body"
 
 hooks:
   workflow_start:

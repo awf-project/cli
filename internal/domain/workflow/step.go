@@ -14,6 +14,20 @@ const (
 	StepTypeTerminal StepType = "terminal"
 )
 
+// TerminalStatus defines the outcome of a terminal state.
+type TerminalStatus string
+
+const (
+	TerminalSuccess TerminalStatus = "success"
+	TerminalFailure TerminalStatus = "failure"
+)
+
+// validTerminalStatuses defines allowed terminal status values.
+var validTerminalStatuses = map[TerminalStatus]bool{
+	TerminalSuccess: true,
+	TerminalFailure: true,
+}
+
 // Valid parallel execution strategies.
 var validParallelStrategies = map[string]bool{
 	"":            true, // default
@@ -63,6 +77,7 @@ type Step struct {
 	Capture         *CaptureConfig // output capture configuration
 	Hooks           StepHooks      // pre/post hooks
 	ContinueOnError bool           // don't fail workflow on error
+	Status          TerminalStatus // for terminal type: success or failure
 }
 
 // Validate checks if the step configuration is valid.
@@ -84,7 +99,9 @@ func (s *Step) Validate() error {
 			return fmt.Errorf("invalid parallel strategy %q: must be one of all_succeed, any_succeed, best_effort", s.Strategy)
 		}
 	case StepTypeTerminal:
-		// terminal steps don't need additional validation
+		if s.Status != "" && !validTerminalStatuses[s.Status] {
+			return fmt.Errorf("invalid terminal status %q: must be 'success' or 'failure'", s.Status)
+		}
 	default:
 		return errors.New("unknown step type")
 	}

@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-
+- **F009**: State machine with conditional transitions
+  - Follow `on_success` transition on exit code 0, `on_failure` on non-zero
+  - Terminal states (`type: terminal`) with `status: success|failure`
+  - State graph validation: detect cycles, unreachable states, missing terminals
+  - `continue_on_error` flag to always follow `on_success` path
 - **F039**: Single step execution with `--step` flag for debugging and testing individual workflow steps
   - Execute specific steps: `awf run workflow.yaml --step=step_name`
   - Mock state dependencies: `--mock states.prev_step.output="value"`
