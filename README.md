@@ -40,11 +40,40 @@ go install github.com/vanoix/awf/cmd/awf@latest
 
 ## Quick Start
 
-### 1. Create a workflow
+### 1. Initialize AWF
+
+```bash
+awf init
+```
+
+This creates:
+```
+.awf.yaml              # Configuration file
+.awf/
+├── workflows/
+│   └── example.yaml   # Sample workflow
+└── storage/
+    ├── states/        # State persistence
+    └── logs/          # Log files
+```
+
+### 2. Run the example workflow
+
+```bash
+awf run example
+```
+
+Output:
+```
+Hello from AWF!
+Workflow completed successfully
+```
+
+### 3. Create your own workflow
 
 ```yaml
-# configs/workflows/hello.yaml
-name: hello-world
+# .awf/workflows/hello.yaml
+name: hello
 version: "1.0.0"
 description: A simple hello world workflow
 
@@ -58,17 +87,8 @@ states:
     type: terminal
 ```
 
-### 2. Run the workflow
-
 ```bash
 awf run hello --input name=World
-```
-
-Output:
-```
-Running workflow: hello-world
-Workflow completed successfully in 2ms
-Workflow ID: abc123-def456
 ```
 
 ## Commands
@@ -81,6 +101,20 @@ Workflow ID: abc123-def456
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf version` | Show version info |
+
+### Init Command Flags
+
+```
+--force    Overwrite existing configuration files
+```
+
+```bash
+# Initialize a new project
+awf init
+
+# Reinitialize (recreate config and example workflow)
+awf init --force
+```
 
 ### Global Flags
 
@@ -317,6 +351,8 @@ make fmt            # Format code
 - [x] Output streaming (--output flag)
 - [x] XDG workflow discovery
 - [x] Output formats (--format flag)
+- [x] Step working directory (dir field)
+- [x] CLI init command (--force flag)
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions
