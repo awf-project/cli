@@ -164,182 +164,13 @@ states:
     timeout: 10s
     capture:
       stdout: spec_file_path
-    on_success: explore_codebase
+    on_success: add_to_kanban
     on_failure: error_save
     hooks:
       pre:
         - log: "Saving spec file..."
       post:
         - log: "Spec saved to {{.states.save_spec.Output}}"
-
-  #==========================================================================
-  # PHASE 2: EXPLORATION
-  #==========================================================================
-
-  explore_codebase:
-    type: step
-    description: Claude explores codebase for implementation context
-    command: |
-      SPEC_CONTENT=$(cat "{{.states.save_spec.Output}}")
-      claude -p "You are exploring the awf (AI Workflow CLI) codebase to understand how to implement a new feature.
-
-      ## Feature to implement
-      $SPEC_CONTENT
-
-      ## Your Task
-      1. Explore the codebase architecture (hexagonal: domain/application/infrastructure/interfaces)
-      2. Find similar features already implemented as reference
-      3. Identify key interfaces and types that will be affected
-      4. List 3-5 critical files that must be modified or created
-
-      Output a structured exploration report:
-      - Architecture layer(s) involved
-      - Critical files with reasons
-      - Pattern files to follow
-      - Dependencies and risks" \
-        --allowedTools "Read,Grep,Glob" \
-        --dangerously-skip-permissions \
-        --output-format json
-    timeout: 300s
-    capture:
-      stdout: exploration_raw
-      max_size: 5MB
-    on_success: parse_exploration
-    on_failure: error_exploration
-    hooks:
-      pre:
-        - log: "Claude exploring codebase..."
-      post:
-        - log: "Exploration complete"
-
-  parse_exploration:
-    type: step
-    description: Extract exploration result and session ID
-    command: |
-      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
-      {{.states.explore_codebase.Output}}
-      JSONEOF
-      )
-
-      # Try to parse as JSON, fallback to empty object
-      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
-        echo "$CLAUDE_OUTPUT" | jq -c '{session_id: (.session_id // null), result: (.result // "No exploration result")}'
-      else
-        echo '{"session_id": null, "result": "Failed to parse exploration output"}'
-      fi
-    timeout: 10s
-    capture:
-      stdout: exploration_parsed
-    on_success: create_plan
-    on_failure: create_plan
-
-  #==========================================================================
-  # PHASE 3: PLANNING
-  #==========================================================================
-
-  create_plan:
-    type: step
-    description: Claude creates implementation plan
-    command: |
-      SESSION_ID=$(cat << 'JSONEOF' | jq -r '.session_id // empty'
-      {{.states.parse_exploration.Output}}
-      JSONEOF
-      )
-      RESUME_FLAG=""
-      if [ -n "$SESSION_ID" ]; then
-        RESUME_FLAG="--resume $SESSION_ID"
-      fi
-      claude $RESUME_FLAG -p "Based on your exploration, create a detailed implementation plan for {{.inputs.feature_id}}.
-
-      ## Output Format (Markdown)
-      # Implementation Plan: {{.inputs.feature_id}}
-
-      ## Summary
-      (2-3 sentences describing the approach)
-
-      ## Implementation Steps
-      1. Step description
-         - File: path/to/file.go
-         - Action: CREATE/MODIFY
-         - Changes: specific changes needed
-
-      ## Test Plan
-      - Unit tests needed
-      - Integration tests needed
-
-      ## Files to Modify
-      | File | Action | Complexity |
-      |------|--------|------------|
-      | path | CREATE/MODIFY | S/M/L |
-
-      ## Risks
-      - Risk and mitigation
-
-      Be specific and actionable." \
-        --allowedTools "Read,Grep,Glob" \
-        --output-format json
-    timeout: 300s
-    capture:
-      stdout: plan_raw
-      max_size: 5MB
-    on_success: extract_plan
-    on_failure: error_planning
-    hooks:
-      pre:
-        - log: "Claude creating implementation plan..."
-
-  extract_plan:
-    type: step
-    description: Extract plan content
-    command: |
-      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
-      {{.states.create_plan.Output}}
-      JSONEOF
-      )
-
-      # Try to parse as JSON and extract result
-      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
-        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
-        if [ -n "$RESULT" ]; then
-          echo "$RESULT"
-        else
-          echo "# No plan generated"
-          echo ""
-          echo "Claude did not return a result field."
-        fi
-      else
-        echo "# Plan extraction failed"
-        echo ""
-        echo "Raw output was not valid JSON."
-      fi
-    timeout: 10s
-    capture:
-      stdout: plan_content
-    on_success: save_plan
-    on_failure: save_plan
-
-  save_plan:
-    type: step
-    description: Save implementation plan
-    command: |
-      mkdir -p docs/plans/implementation
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
-      cat > "$PLAN_FILE" << 'AWF_PLAN_CONTENT_EOF'
-      {{.states.extract_plan.Output}}
-      AWF_PLAN_CONTENT_EOF
-      echo "$PLAN_FILE"
-    timeout: 10s
-    capture:
-      stdout: plan_file_path
-    on_success: add_to_kanban
-    on_failure: add_to_kanban
-    hooks:
-      post:
-        - log: "Plan saved to {{.states.save_plan.Output}}"
-
-  #==========================================================================
-  # PHASE 4: VALIDATION & DOCUMENTATION
-  #==========================================================================
 
   add_to_kanban:
     type: step
@@ -399,48 +230,8 @@ states:
     timeout: 15s
     capture:
       stdout: kanban_result
-    on_success: run_tests
-    on_failure: run_tests
-
-  run_tests:
-    type: step
-    description: Run test suite to ensure clean baseline
-    command: make test-unit 2>&1 || echo "TEST_WARNING"
-    timeout: 300s
-    capture:
-      stdout: test_output
-    on_success: update_memories
-    on_failure: update_memories
-    hooks:
-      pre:
-        - log: "Running tests..."
-
-  update_memories:
-    type: step
-    description: Update project memories via Claude
-    command: |
-      claude -p "Update the project memories to add the new feature {{.inputs.feature_id}}.
-
-      Use mcp__plugin_common_serena__edit_memory to update feature_roadmap:
-      - Add {{.inputs.feature_id}} to the {{.inputs.version}} section with status PLANNED
-
-      Feature details:
-      - ID: {{.inputs.feature_id}}
-      - Version: {{.inputs.version}}
-      - Description: {{.inputs.description}}
-
-      Confirm what was updated." \
-        --allowedTools "mcp__plugin_common_serena__edit_memory,mcp__plugin_common_serena__read_memory" \
-        --dangerously-skip-permissions \
-        --output-format json 2>&1 || echo "MEMORY_UPDATE_SKIPPED"
-    timeout: 120s
-    capture:
-      stdout: memory_result
     on_success: summary
     on_failure: summary
-    hooks:
-      pre:
-        - log: "Updating project memories..."
 
   summary:
     type: step
@@ -455,12 +246,9 @@ states:
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Files created:"
       echo "║   Spec: {{.states.save_spec.Output}}"
-      echo "║   Plan: {{.states.save_plan.Output}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Documentation:"
       echo "║   KANBAN: {{.states.add_to_kanban.Output}}"
-      echo "║   Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
-      echo "║ Tests: $(echo '{{.states.run_tests.Output}}' | grep -q 'TEST_WARNING' && echo 'WARNINGS' || echo 'PASS')"
       echo "╚════════════════════════════════════════════════════════════════╝"
     timeout: 5s
     capture:
@@ -491,16 +279,6 @@ states:
     type: terminal
     status: failure
     message: "Failed to save feature spec file"
-
-  error_exploration:
-    type: terminal
-    status: failure
-    message: "Claude exploration failed - check claude CLI is installed and authenticated"
-
-  error_planning:
-    type: terminal
-    status: failure
-    message: "Claude planning failed"
 
 hooks:
   workflow_start:

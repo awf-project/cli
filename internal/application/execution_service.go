@@ -239,6 +239,11 @@ func (s *ExecutionService) executeStep(
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 		}
 
+		// If continue_on_error is true, follow on_success path
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+
 		if step.OnFailure != "" {
 			return step.OnFailure, nil
 		}
@@ -253,6 +258,11 @@ func (s *ExecutionService) executeStep(
 		intCtx = s.buildInterpolationContext(execCtx)
 		if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+		}
+
+		// If continue_on_error is true, follow on_success path
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
 		}
 
 		if step.OnFailure != "" {

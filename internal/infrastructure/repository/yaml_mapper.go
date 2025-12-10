@@ -89,6 +89,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Retry:           mapRetry(y.Retry),
 		Capture:         mapCapture(y.Capture),
 		Hooks:           mapStepHooks(y.Hooks),
+		Status:          workflow.TerminalStatus(y.Status),
 	}
 
 	// Parse timeout

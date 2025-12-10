@@ -293,3 +293,120 @@ func TestStepWithNewFields(t *testing.T) {
 		t.Errorf("expected Dir /tmp/workdir, got %s", step.Dir)
 	}
 }
+
+// =============================================================================
+// TerminalStatus Tests (F009)
+// =============================================================================
+
+func TestTerminalStatusValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		step    workflow.Step
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "terminal with success status",
+			step: workflow.Step{
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+			wantErr: false,
+		},
+		{
+			name: "terminal with failure status",
+			step: workflow.Step{
+				Name:   "error",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalFailure,
+			},
+			wantErr: false,
+		},
+		{
+			name: "terminal with empty status (allowed)",
+			step: workflow.Step{
+				Name: "end",
+				Type: workflow.StepTypeTerminal,
+			},
+			wantErr: false,
+		},
+		{
+			name: "terminal with invalid status",
+			step: workflow.Step{
+				Name:   "bad",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalStatus("invalid"),
+			},
+			wantErr: true,
+			errMsg:  "invalid terminal status",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.step.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.errMsg, err.Error())
+				}
+			}
+		})
+	}
+}
+
+func TestTerminalStatusConstants(t *testing.T) {
+	// Verify constants are defined correctly
+	if workflow.TerminalSuccess != "success" {
+		t.Errorf("TerminalSuccess should be 'success', got '%s'", workflow.TerminalSuccess)
+	}
+	if workflow.TerminalFailure != "failure" {
+		t.Errorf("TerminalFailure should be 'failure', got '%s'", workflow.TerminalFailure)
+	}
+}
+
+func TestTerminalStepWithStatus(t *testing.T) {
+	successStep := workflow.Step{
+		Name:   "success_end",
+		Type:   workflow.StepTypeTerminal,
+		Status: workflow.TerminalSuccess,
+	}
+
+	failureStep := workflow.Step{
+		Name:   "failure_end",
+		Type:   workflow.StepTypeTerminal,
+		Status: workflow.TerminalFailure,
+	}
+
+	if successStep.Status != workflow.TerminalSuccess {
+		t.Errorf("expected TerminalSuccess, got '%s'", successStep.Status)
+	}
+	if failureStep.Status != workflow.TerminalFailure {
+		t.Errorf("expected TerminalFailure, got '%s'", failureStep.Status)
+	}
+
+	// Both should validate successfully
+	if err := successStep.Validate(); err != nil {
+		t.Errorf("success terminal step should be valid: %v", err)
+	}
+	if err := failureStep.Validate(); err != nil {
+		t.Errorf("failure terminal step should be valid: %v", err)
+	}
+}
+
+// Helper function for string containment check
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
+}
+
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
