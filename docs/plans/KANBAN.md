@@ -3,7 +3,7 @@
 ## Backlog
 
 ### Phase 1 - MVP (v0.1.0)
-- [F037](features/v0.1.0/F037-step-success-feedback.md) Step success feedback
+_All features completed_
 
 ### Phase 2 - Core Features (v0.2.0)
 - [F009](features/v0.2.0/F009-state-machine.md) State machine with transitions
@@ -72,6 +72,7 @@ _No features in review_
 - [F031](features/v0.1.0/F031-output-formats.md) Output formats (--format flag)
 - [F035](features/v0.1.0/F035-step-working-directory.md) Step working directory
 - [F036](features/v0.1.0/F036-cli-init.md) CLI init command
+- [F037](features/v0.1.0/F037-step-success-feedback.md) Step success feedback
 
 ---
 
@@ -79,9 +80,9 @@ _No features in review_
 
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
-| 1 - MVP | 14 | 1 | 0 | 0 | 0 | 13 |
+| 1 - MVP | 14 | 0 | 0 | 0 | 0 | 14 |
 | 2 - Core | 6 | 6 | 0 | 0 | 0 | 0 |
 | 3 - Advanced | 6 | 6 | 0 | 0 | 0 | 0 |
 | 4 - Extensibility & AI | 7 | 7 | 0 | 0 | 0 | 0 |
 | 5 - Interfaces | 4 | 4 | 0 | 0 | 0 | 0 |
-| **Total** | **37** | **24** | **0** | **0** | **0** | **13** |
+| **Total** | **37** | **23** | **0** | **0** | **0** | **14** |

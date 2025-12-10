@@ -74,6 +74,16 @@ func (f *Formatter) Warning(msg string) {
 	fmt.Fprintln(f.out, f.color.Warning(msg))
 }
 
+// StepSuccess displays success feedback for steps with no output.
+// Hidden in quiet mode.
+func (f *Formatter) StepSuccess(stepID string) {
+	if f.opts.Quiet {
+		return
+	}
+	msg := fmt.Sprintf("  ✓ %s: completed successfully", stepID)
+	fmt.Fprintln(f.out, f.color.Success(msg))
+}
+
 // Table renders data as a formatted table.
 func (f *Formatter) Table(headers []string, rows [][]string) {
 	w := tabwriter.NewWriter(f.out, 0, 0, 2, ' ', 0)

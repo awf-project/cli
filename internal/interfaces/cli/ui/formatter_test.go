@@ -113,3 +113,55 @@ func TestFormatter_Printf(t *testing.T) {
 		t.Errorf("expected formatted output, got: %s", output)
 	}
 }
+
+func TestFormatter_StepSuccess(t *testing.T) {
+	tests := []struct {
+		name      string
+		quiet     bool
+		stepID    string
+		wantEmpty bool
+		wantMsg   string
+	}{
+		{
+			name:    "shows success message with checkmark",
+			quiet:   false,
+			stepID:  "build",
+			wantMsg: "  \u2713 build: completed successfully\n",
+		},
+		{
+			name:      "hidden when quiet mode enabled",
+			quiet:     true,
+			stepID:    "build",
+			wantEmpty: true,
+		},
+		{
+			name:    "handles step name with special characters",
+			quiet:   false,
+			stepID:  "step-1",
+			wantMsg: "  \u2713 step-1: completed successfully\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			f := ui.NewFormatter(buf, ui.FormatOptions{
+				Quiet:   tt.quiet,
+				NoColor: true,
+			})
+
+			f.StepSuccess(tt.stepID)
+
+			output := buf.String()
+			if tt.wantEmpty {
+				if output != "" {
+					t.Errorf("expected empty output in quiet mode, got: %s", output)
+				}
+			} else {
+				if output != tt.wantMsg {
+					t.Errorf("expected %q, got %q", tt.wantMsg, output)
+				}
+			}
+		})
+	}
+}
