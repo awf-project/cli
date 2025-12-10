@@ -34,12 +34,12 @@ func TestConfigHome(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore env
 			orig := os.Getenv("XDG_CONFIG_HOME")
-			defer os.Setenv("XDG_CONFIG_HOME", orig)
+			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
 
 			if tt.envValue != "" {
-				os.Setenv("XDG_CONFIG_HOME", tt.envValue)
+				_ = os.Setenv("XDG_CONFIG_HOME", tt.envValue)
 			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
+				_ = os.Unsetenv("XDG_CONFIG_HOME")
 			}
 
 			got := ConfigHome()
@@ -72,12 +72,12 @@ func TestDataHome(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			orig := os.Getenv("XDG_DATA_HOME")
-			defer os.Setenv("XDG_DATA_HOME", orig)
+			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
 
 			if tt.envValue != "" {
-				os.Setenv("XDG_DATA_HOME", tt.envValue)
+				_ = os.Setenv("XDG_DATA_HOME", tt.envValue)
 			} else {
-				os.Unsetenv("XDG_DATA_HOME")
+				_ = os.Unsetenv("XDG_DATA_HOME")
 			}
 
 			got := DataHome()
@@ -91,9 +91,9 @@ func TestAWFConfigDir(t *testing.T) {
 	require.NoError(t, err)
 
 	orig := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", orig)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
 
-	os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 	got := AWFConfigDir()
 	assert.Equal(t, filepath.Join(home, ".config", "awf"), got)
 }
@@ -103,9 +103,9 @@ func TestAWFDataDir(t *testing.T) {
 	require.NoError(t, err)
 
 	orig := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", orig)
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
 
-	os.Unsetenv("XDG_DATA_HOME")
+	_ = os.Unsetenv("XDG_DATA_HOME")
 	got := AWFDataDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf"), got)
 }
@@ -115,9 +115,9 @@ func TestAWFWorkflowsDir(t *testing.T) {
 	require.NoError(t, err)
 
 	orig := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", orig)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
 
-	os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 	got := AWFWorkflowsDir()
 	assert.Equal(t, filepath.Join(home, ".config", "awf", "workflows"), got)
 }
@@ -127,9 +127,9 @@ func TestAWFStatesDir(t *testing.T) {
 	require.NoError(t, err)
 
 	orig := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", orig)
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
 
-	os.Unsetenv("XDG_DATA_HOME")
+	_ = os.Unsetenv("XDG_DATA_HOME")
 	got := AWFStatesDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf", "states"), got)
 }
@@ -139,9 +139,9 @@ func TestAWFLogsDir(t *testing.T) {
 	require.NoError(t, err)
 
 	orig := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", orig)
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
 
-	os.Unsetenv("XDG_DATA_HOME")
+	_ = os.Unsetenv("XDG_DATA_HOME")
 	got := AWFLogsDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf", "logs"), got)
 }
@@ -160,4 +160,14 @@ func TestLegacyDirExists(t *testing.T) {
 	} else {
 		assert.False(t, exists, "should return false when ~/.awf doesn't exist")
 	}
+}
+
+func TestLocalWorkflowsDir(t *testing.T) {
+	got := LocalWorkflowsDir()
+	assert.Equal(t, ".awf/workflows", got)
+}
+
+func TestLocalPromptsDir(t *testing.T) {
+	got := LocalPromptsDir()
+	assert.Equal(t, ".awf/prompts", got)
 }

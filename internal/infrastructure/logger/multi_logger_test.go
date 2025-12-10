@@ -23,13 +23,13 @@ func TestMultiLogger_DelegatesToAll(t *testing.T) {
 
 	jsonLogger, err := NewJSONLogger(logPath, LevelInfo)
 	require.NoError(t, err)
-	defer jsonLogger.Close()
+	defer func() { _ = jsonLogger.Close() }()
 
 	consoleLogger := NewConsoleLogger(&consoleBuf, LevelInfo, false)
 
 	multi := NewMultiLogger(jsonLogger, consoleLogger)
 	multi.Info("test message", "key", "value")
-	jsonLogger.Sync()
+	_ = jsonLogger.Sync()
 
 	// Check JSON file
 	content, err := os.ReadFile(logPath)

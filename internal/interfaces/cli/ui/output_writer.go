@@ -73,8 +73,8 @@ func (w *PrefixedWriter) Flush() {
 
 func (w *PrefixedWriter) writePrefixedLine(line []byte) {
 	prefix := w.buildPrefix()
-	w.out.Write([]byte(prefix))
-	w.out.Write(line)
+	_, _ = w.out.Write([]byte(prefix))
+	_, _ = w.out.Write(line)
 }
 
 func (w *PrefixedWriter) buildPrefix() string {

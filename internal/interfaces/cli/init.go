@@ -10,13 +10,15 @@ import (
 )
 
 const (
-	awfDir         = ".awf"
-	workflowsDir   = "workflows"
-	storageDir     = "storage"
-	statesDir      = "states"
-	logsDir        = "logs"
-	configFileName = ".awf.yaml"
-	exampleFile    = "example.yaml"
+	awfDir            = ".awf"
+	workflowsDir      = "workflows"
+	promptsDir        = "prompts"
+	storageDir        = "storage"
+	statesDir         = "states"
+	logsDir           = "logs"
+	configFileName    = ".awf.yaml"
+	exampleFile       = "example.yaml"
+	examplePromptFile = "example.md"
 )
 
 func newInitCommand(cfg *Config) *cobra.Command {
@@ -28,11 +30,13 @@ func newInitCommand(cfg *Config) *cobra.Command {
 		Long: `Initialize AWF in the current directory by creating the local configuration.
 
 This creates:
-  .awf.yaml                  Configuration file
-  .awf/workflows/            Local workflows directory
+  .awf.yaml                    Configuration file
+  .awf/workflows/              Local workflows directory
   .awf/workflows/example.yaml  Example workflow file
-  .awf/storage/states/       State persistence directory
-  .awf/storage/logs/         Log files directory
+  .awf/prompts/                Prompt templates directory
+  .awf/prompts/example.md      Example prompt file
+  .awf/storage/states/         State persistence directory
+  .awf/storage/logs/           Log files directory
 
 Examples:
   awf init
@@ -70,6 +74,7 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	// Create .awf directory structure
 	dirs := []string{
 		filepath.Join(awfPath, workflowsDir),
+		filepath.Join(awfPath, promptsDir),
 		filepath.Join(awfPath, storageDir, statesDir),
 		filepath.Join(awfPath, storageDir, logsDir),
 	}
@@ -94,6 +99,13 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 		return err
 	}
 	formatter.Success(fmt.Sprintf("Created %s", examplePath))
+
+	// Create example prompt
+	promptPath := filepath.Join(awfPath, promptsDir, examplePromptFile)
+	if err := createExamplePrompt(promptPath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", promptPath))
 
 	// Next steps
 	formatter.Info("\nNext steps:")
@@ -146,6 +158,40 @@ states:
 
   done:
     type: terminal
+`
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func createExamplePrompt(path string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return nil // File exists, skip
+		}
+	}
+
+	content := `# Example Prompt
+
+This is an example prompt file created by AWF.
+
+## Usage
+
+Reference this prompt in workflow inputs using the @prompts/ prefix:
+
+` + "```" + `bash
+awf run my-workflow --input prompt=@prompts/example.md
+` + "```" + `
+
+## Template Variables
+
+You can use template variables in your workflow commands:
+
+- ` + "`{{inputs.prompt}}`" + ` - The content of this file
+
+## Tips
+
+- Store reusable AI prompts here (system prompts, task templates)
+- Use .md for markdown or .txt for plain text
+- Organize complex prompts in subdirectories (e.g., ai/agents/)
 `
 	return os.WriteFile(path, []byte(content), 0644)
 }

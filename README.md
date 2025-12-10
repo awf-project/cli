@@ -315,8 +315,24 @@ awf/
 
 ### Prerequisites
 
+**Required:**
 - Go 1.21+
 - Make
+- GCC (for CGO/SQLite)
+
+**For development:**
+- [golangci-lint](https://golangci-lint.run/welcome/install/) - Linter
+
+```bash
+# Arch Linux
+paru -S golangci-lint
+
+# macOS
+brew install golangci-lint
+
+# Other (via Go)
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+```
 
 ### Build & Test
 

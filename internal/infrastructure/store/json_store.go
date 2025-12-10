@@ -45,27 +45,27 @@ func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) 
 	}
 
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
 
 	if _, err := f.Write(data); err != nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
-		os.Remove(tmpPath)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
 
 	if err := f.Sync(); err != nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
-		os.Remove(tmpPath)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
 
-	syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	f.Close()
+	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = f.Close()
 
 	return os.Rename(tmpPath, finalPath)
 }

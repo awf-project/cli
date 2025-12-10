@@ -60,3 +60,8 @@ func LegacyDirExists() bool {
 func LocalWorkflowsDir() string {
 	return ".awf/workflows"
 }
+
+// LocalPromptsDir returns the local project prompts directory
+func LocalPromptsDir() string {
+	return ".awf/prompts"
+}

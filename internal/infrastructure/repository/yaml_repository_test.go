@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/vanoix/awf/internal/domain/workflow"
@@ -377,13 +376,5 @@ func TestParseDuration(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	// Ensure fixtures directory exists
-	if _, err := os.Stat(fixturesPath); os.IsNotExist(err) {
-		// Try to find fixtures from different working directories
-		altPath := filepath.Join("tests", "fixtures", "workflows")
-		if _, err := os.Stat(altPath); err == nil {
-			// Running from project root
-		}
-	}
 	os.Exit(m.Run())
 }

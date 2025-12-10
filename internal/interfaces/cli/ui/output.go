@@ -128,6 +128,14 @@ type ValidationResultTable struct {
 	Errors   []string
 }
 
+// PromptInfo represents a prompt file for list prompts command.
+type PromptInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"mod_time,omitempty"`
+}
+
 // tableWriter renders ASCII-bordered tables.
 type tableWriter struct {
 	w       io.Writer
@@ -139,15 +147,15 @@ func newTableWriter(w io.Writer, columns ...int) *tableWriter {
 }
 
 func (t *tableWriter) separator() {
-	fmt.Fprint(t.w, "+")
+	_, _ = fmt.Fprint(t.w, "+")
 	for _, width := range t.columns {
-		fmt.Fprintf(t.w, "%s+", strings.Repeat("-", width+2))
+		_, _ = fmt.Fprintf(t.w, "%s+", strings.Repeat("-", width+2))
 	}
-	fmt.Fprintln(t.w)
+	_, _ = fmt.Fprintln(t.w)
 }
 
 func (t *tableWriter) row(cells ...string) {
-	fmt.Fprint(t.w, "|")
+	_, _ = fmt.Fprint(t.w, "|")
 	for i, width := range t.columns {
 		cell := ""
 		if i < len(cells) {
@@ -156,9 +164,9 @@ func (t *tableWriter) row(cells ...string) {
 		if len(cell) > width {
 			cell = cell[:width-3] + "..."
 		}
-		fmt.Fprintf(t.w, " %-*s |", width, cell)
+		_, _ = fmt.Fprintf(t.w, " %-*s |", width, cell)
 	}
-	fmt.Fprintln(t.w)
+	_, _ = fmt.Fprintln(t.w)
 }
 
 func (t *tableWriter) fullWidthSeparator() {
@@ -166,7 +174,7 @@ func (t *tableWriter) fullWidthSeparator() {
 	for _, width := range t.columns {
 		total += width + 3
 	}
-	fmt.Fprintf(t.w, "+%s+\n", strings.Repeat("-", total-2))
+	_, _ = fmt.Fprintf(t.w, "+%s+\n", strings.Repeat("-", total-2))
 }
 
 func (t *tableWriter) fullWidthRow(content string) {
@@ -178,7 +186,7 @@ func (t *tableWriter) fullWidthRow(content string) {
 	if len(content) > innerWidth {
 		content = content[:innerWidth-3] + "..."
 	}
-	fmt.Fprintf(t.w, "| %-*s |\n", innerWidth, content)
+	_, _ = fmt.Fprintf(t.w, "| %-*s |\n", innerWidth, content)
 }
 
 // OutputWriter handles structured output for different formats.
@@ -215,7 +223,7 @@ func (w *OutputWriter) WriteWorkflows(workflows []WorkflowInfo) error {
 		return w.writeWorkflowsBorderedTable(workflows)
 	case FormatQuiet:
 		for _, wf := range workflows {
-			fmt.Fprintln(w.out, wf.Name)
+			_, _ = fmt.Fprintln(w.out, wf.Name)
 		}
 		return nil
 	default: // text
@@ -231,7 +239,7 @@ func (w *OutputWriter) WriteExecution(exec ExecutionInfo) error {
 	case FormatTable:
 		return w.writeExecutionTable(exec)
 	case FormatQuiet:
-		fmt.Fprintln(w.out, exec.Status)
+		_, _ = fmt.Fprintln(w.out, exec.Status)
 		return nil
 	default: // text
 		return w.writeExecutionText(exec)
@@ -246,7 +254,7 @@ func (w *OutputWriter) WriteRunResult(result RunResult) error {
 	case FormatTable:
 		return w.writeRunResultTable(result)
 	case FormatQuiet:
-		fmt.Fprintln(w.out, result.WorkflowID)
+		_, _ = fmt.Fprintln(w.out, result.WorkflowID)
 		return nil
 	default: // text
 		return w.writeRunResultText(result)
@@ -262,9 +270,9 @@ func (w *OutputWriter) WriteValidation(result ValidationResult) error {
 		return w.writeValidationTable(result)
 	case FormatQuiet:
 		if result.Valid {
-			fmt.Fprintln(w.out, "valid")
+			_, _ = fmt.Fprintln(w.out, "valid")
 		} else {
-			fmt.Fprintln(w.out, "invalid")
+			_, _ = fmt.Fprintln(w.out, "invalid")
 		}
 		return nil
 	default: // text
@@ -279,9 +287,9 @@ func (w *OutputWriter) WriteValidationTable(result ValidationResultTable) error 
 	}
 	if w.format == FormatQuiet {
 		if result.Valid {
-			fmt.Fprintln(w.out, "valid")
+			_, _ = fmt.Fprintln(w.out, "valid")
 		} else {
-			fmt.Fprintln(w.out, "invalid")
+			_, _ = fmt.Fprintln(w.out, "invalid")
 		}
 		return nil
 	}
@@ -298,7 +306,52 @@ func (w *OutputWriter) WriteError(err error, code int) error {
 	}
 
 	// Text format: write to errOut
-	fmt.Fprintf(w.errOut, "Error: %s\n", err.Error())
+	_, _ = fmt.Fprintf(w.errOut, "Error: %s\n", err.Error())
+	return nil
+}
+
+// WritePrompts outputs prompt file list.
+func (w *OutputWriter) WritePrompts(prompts []PromptInfo) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(prompts)
+	case FormatTable:
+		return w.writePromptsBorderedTable(prompts)
+	case FormatQuiet:
+		for _, p := range prompts {
+			_, _ = fmt.Fprintln(w.out, p.Name)
+		}
+		return nil
+	default: // text
+		return w.writePromptsTable(prompts)
+	}
+}
+
+func (w *OutputWriter) writePromptsTable(prompts []PromptInfo) error {
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+
+	// Header
+	_, _ = fmt.Fprintln(tw, "NAME\tSIZE\tMODIFIED")
+
+	for _, p := range prompts {
+		_, _ = fmt.Fprintf(tw, "%s\t%d B\t%s\n", p.Name, p.Size, p.ModTime)
+	}
+
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writePromptsBorderedTable(prompts []PromptInfo) error {
+	table := newTableWriter(w.out, 30, 10, 16)
+
+	table.separator()
+	table.row("NAME", "SIZE", "MODIFIED")
+	table.separator()
+
+	for _, p := range prompts {
+		table.row(p.Name, fmt.Sprintf("%d B", p.Size), p.ModTime)
+	}
+	table.separator()
+
 	return nil
 }
 
@@ -312,14 +365,14 @@ func (w *OutputWriter) writeWorkflowsTable(workflows []WorkflowInfo) error {
 	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
 
 	// Header
-	fmt.Fprintln(tw, "NAME\tSOURCE\tVERSION\tDESCRIPTION")
+	_, _ = fmt.Fprintln(tw, "NAME\tSOURCE\tVERSION\tDESCRIPTION")
 
 	for _, wf := range workflows {
 		desc := wf.Description
 		if len(desc) > 40 {
 			desc = desc[:37] + "..."
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", wf.Name, wf.Source, wf.Version, desc)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", wf.Name, wf.Source, wf.Version, desc)
 	}
 
 	return tw.Flush()
@@ -345,24 +398,24 @@ func (w *OutputWriter) writeWorkflowsBorderedTable(workflows []WorkflowInfo) err
 }
 
 func (w *OutputWriter) writeExecutionText(exec ExecutionInfo) error {
-	fmt.Fprintf(w.out, "Workflow: %s\n", exec.WorkflowName)
-	fmt.Fprintf(w.out, "ID: %s\n", exec.WorkflowID)
-	fmt.Fprintf(w.out, "Status: %s\n", w.colorizer.Status(exec.Status, exec.Status))
+	_, _ = fmt.Fprintf(w.out, "Workflow: %s\n", exec.WorkflowName)
+	_, _ = fmt.Fprintf(w.out, "ID: %s\n", exec.WorkflowID)
+	_, _ = fmt.Fprintf(w.out, "Status: %s\n", w.colorizer.Status(exec.Status, exec.Status))
 
 	if exec.CurrentStep != "" {
-		fmt.Fprintf(w.out, "Current Step: %s\n", exec.CurrentStep)
+		_, _ = fmt.Fprintf(w.out, "Current Step: %s\n", exec.CurrentStep)
 	}
 	if exec.DurationMs > 0 {
-		fmt.Fprintf(w.out, "Duration: %dms\n", exec.DurationMs)
+		_, _ = fmt.Fprintf(w.out, "Duration: %dms\n", exec.DurationMs)
 	}
 
 	if len(exec.Steps) > 0 {
-		fmt.Fprintln(w.out, "\nSteps:")
+		_, _ = fmt.Fprintln(w.out, "\nSteps:")
 		for _, step := range exec.Steps {
 			status := w.colorizer.Status(step.Status, step.Status)
-			fmt.Fprintf(w.out, "  - %s: %s\n", step.Name, status)
+			_, _ = fmt.Fprintf(w.out, "  - %s: %s\n", step.Name, status)
 			if step.Error != "" {
-				fmt.Fprintf(w.out, "    Error: %s\n", step.Error)
+				_, _ = fmt.Fprintf(w.out, "    Error: %s\n", step.Error)
 			}
 		}
 	}
@@ -372,11 +425,11 @@ func (w *OutputWriter) writeExecutionText(exec ExecutionInfo) error {
 
 func (w *OutputWriter) writeRunResultText(result RunResult) error {
 	status := w.colorizer.Status(result.Status, result.Status)
-	fmt.Fprintf(w.out, "Workflow %s in %dms\n", status, result.DurationMs)
-	fmt.Fprintf(w.out, "Workflow ID: %s\n", result.WorkflowID)
+	_, _ = fmt.Fprintf(w.out, "Workflow %s in %dms\n", status, result.DurationMs)
+	_, _ = fmt.Fprintf(w.out, "Workflow ID: %s\n", result.WorkflowID)
 
 	if result.Error != "" {
-		fmt.Fprintf(w.out, "Error: %s\n", result.Error)
+		_, _ = fmt.Fprintf(w.out, "Error: %s\n", result.Error)
 	}
 
 	return nil
@@ -384,11 +437,11 @@ func (w *OutputWriter) writeRunResultText(result RunResult) error {
 
 func (w *OutputWriter) writeValidationText(result ValidationResult) error {
 	if result.Valid {
-		fmt.Fprintf(w.out, "%s Workflow '%s' is valid\n", w.colorizer.Success("✓"), result.Workflow)
+		_, _ = fmt.Fprintf(w.out, "%s Workflow '%s' is valid\n", w.colorizer.Success("✓"), result.Workflow)
 	} else {
-		fmt.Fprintf(w.out, "%s Workflow '%s' is invalid\n", w.colorizer.Error("✗"), result.Workflow)
+		_, _ = fmt.Fprintf(w.out, "%s Workflow '%s' is invalid\n", w.colorizer.Error("✗"), result.Workflow)
 		for _, e := range result.Errors {
-			fmt.Fprintf(w.out, "  - %s\n", e)
+			_, _ = fmt.Fprintf(w.out, "  - %s\n", e)
 		}
 	}
 	return nil
@@ -460,7 +513,7 @@ func (w *OutputWriter) writeRunResultTable(result RunResult) error {
 	tw.fullWidthSeparator()
 
 	if result.Error != "" {
-		fmt.Fprintf(w.out, "Error: %s\n", result.Error)
+		_, _ = fmt.Fprintf(w.out, "Error: %s\n", result.Error)
 	}
 
 	return nil
@@ -542,9 +595,9 @@ func (w *OutputWriter) writeValidationResultTable(result ValidationResultTable) 
 
 	// Errors
 	if len(result.Errors) > 0 {
-		fmt.Fprintln(w.out)
+		_, _ = fmt.Fprintln(w.out)
 		for _, e := range result.Errors {
-			fmt.Fprintf(w.out, "ERROR: %s\n", e)
+			_, _ = fmt.Fprintf(w.out, "ERROR: %s\n", e)
 		}
 	}
 
