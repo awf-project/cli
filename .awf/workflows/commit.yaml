@@ -138,25 +138,32 @@ states:
       FILES=$(git diff --cached --name-only | head -20)
       SUMMARY=$(git diff --cached --stat | tail -5)
 
-      claude -p "Generate a conventional commit message for these changes.
+      claude -p "You are a commit message generator. Output EXACTLY one line in Conventional Commits format, nothing else.
 
+      FORMAT: type(scope): description
+
+      VALID TYPES: feat | fix | docs | style | refactor | test | chore | perf
+
+      RULES:
+      - One line only, no explanations, no markdown, no quotes
+      - Max 50 characters total
+      - Imperative mood (add, fix, update - not added, fixed, updated)
+      - No period at end
+      - Scope is optional but recommended
+
+      EXAMPLES OF CORRECT OUTPUT:
+      feat(cli): add workflow status command
+      fix(parser): handle empty YAML files
+      test(runner): add parallel execution tests
+      refactor(domain): extract validation logic
+
+      CONTEXT:
       Branch: $BRANCH
+      Recent commits: $RECENT
+      Files: $FILES
+      Stats: $SUMMARY
 
-      Recent commits:
-      $RECENT
-
-      Files changed:
-      $FILES
-
-      Summary:
-      $SUMMARY
-
-      Rules:
-      - Format: type(scope): description
-      - Types: feat, fix, docs, style, refactor, test, chore, perf
-      - Max 50 chars subject, imperative mood, no period
-
-      Output ONLY the commit message, nothing else:" \
+      Output the commit message now:" \
         --allowedTools "" \
         --output-format text
     timeout: 120s
@@ -248,28 +255,28 @@ states:
       COMMITEOF
       )
 
-      claude -p "Generate a GitHub Pull Request body for these changes.
+      claude -p "You are a PR body generator. Output ONLY the markdown content below, no explanations, no code fences, no preamble.
 
-      ## Branch Info
-      $BRANCH_INFO
+      START YOUR OUTPUT DIRECTLY WITH '## Summary' - nothing before it.
 
-      ## Commit Message
-      $COMMIT_MSG
-
-      ## Changes
-      $DIFF_CONTENT
-
-      ## Output Format (markdown, no code fence wrapper)
+      REQUIRED FORMAT:
       ## Summary
-      - Bullet points of key changes (2-4 items)
+      - Key change 1
+      - Key change 2 (2-4 bullets max)
 
       ## Changes
-      Brief description of what was modified
+      Brief description of modifications
 
       ## Test Plan
-      - [ ] Checklist items for testing
+      - [ ] Test item 1
+      - [ ] Test item 2
 
-      Output ONLY the PR body markdown, no explanations or code fences." \
+      CONTEXT:
+      Branch: $BRANCH_INFO
+      Commit: $COMMIT_MSG
+      Diff: $DIFF_CONTENT
+
+      Output the PR body now, starting with '## Summary':" \
         --allowedTools "" \
         --output-format text
     timeout: 120s

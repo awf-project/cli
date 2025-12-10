@@ -503,8 +503,64 @@ states:
     capture:
       stdout: readme_update_output
       max_size: 1MB
+    on_success: update_changelog
+    on_failure: update_changelog
+
+  update_changelog:
+    type: step
+    description: Add or update feature in CHANGELOG.md under Unreleased
+    command: |
+      CHANGELOG_FILE="CHANGELOG.md"
+      if [ ! -f "$CHANGELOG_FILE" ]; then
+        echo "CHANGELOG_NOT_FOUND"
+        exit 0
+      fi
+
+      # Get feature description from spec file
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -z "$SPEC_FILE" ]; then
+        echo "SPEC_NOT_FOUND"
+        exit 0
+      fi
+
+      # Extract title from spec (first H1 line after the feature ID)
+      TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" | sed 's/^# {{.inputs.feature_id}}: //')
+      if [ -z "$TITLE" ]; then
+        # Fallback: use slug from filename
+        TITLE=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//' | tr '-' ' ')
+      fi
+
+      # Check if feature already exists in CHANGELOG
+      if grep -q "\*\*{{.inputs.feature_id}}\*\*" "$CHANGELOG_FILE"; then
+        echo "FEATURE_ALREADY_IN_CHANGELOG"
+        exit 0
+      fi
+
+      # Build the changelog entry
+      ENTRY="- **{{.inputs.feature_id}}**: $TITLE"
+
+      # Insert after "### Added" under "[Unreleased]"
+      awk -v entry="$ENTRY" '
+        /^## \[Unreleased\]/ { in_unreleased=1 }
+        /^## \[/ && !/\[Unreleased\]/ { in_unreleased=0 }
+        in_unreleased && /^### Added/ {
+          print
+          getline
+          print entry
+          next
+        }
+        { print }
+      ' "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.tmp" && mv "${CHANGELOG_FILE}.tmp" "$CHANGELOG_FILE"
+
+      echo "CHANGELOG_UPDATED"
+    timeout: 15s
+    capture:
+      stdout: changelog_result
     on_success: summary
     on_failure: summary
+    hooks:
+      pre:
+        - log: "Updating CHANGELOG.md..."
 
   summary:
     type: step
@@ -531,6 +587,7 @@ states:
       echo "║   Spec Status: {{.states.update_spec_status.Output}}"
       echo "║   KANBAN: {{.states.update_kanban.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
+      echo "║   CHANGELOG: {{.states.update_changelog.Output}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ NO COMMIT - Review changes and commit manually                 ║"
       echo "╚════════════════════════════════════════════════════════════════╝"

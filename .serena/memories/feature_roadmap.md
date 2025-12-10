@@ -29,7 +29,8 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F036 | CLI Init Command | ✅ Done |
 | F037 | Step Success Feedback | ✅ Done |
 | F038 | Prompt Storage & Init | 📋 PLANNED |
-| F039 | Run Single Step | 📋 PLANNED |
+| F039 | Run Single Step | ✅ Done |
+| F040 | Audit-Based Refactoring | 📋 PLANNED |
 
 ## v0.2.0 - Core Features (PLANNED)
 

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **F039**: Single step execution with `--step` flag for debugging and testing individual workflow steps
+  - Execute specific steps: `awf run workflow.yaml --step=step_name`
+  - Mock state dependencies: `--mock states.prev_step.output="value"`
+  - Step hooks (pre/post) execute normally
+- **F037**: Step success feedback for steps with no output in silent/streaming modes
+  - Shows `✓ step_name completed successfully` for empty-output steps
+- **F036**: CLI init command (`awf init`) to initialize AWF in current directory
+  - Creates `.awf/workflows/` and `.awf/prompts/` directories
+  - Creates example workflow file
 - ParallelStrategy validation: Invalid strategies now fail at validation time
   - Valid values: `all_succeed`, `any_succeed`, `best_effort`, or empty (default)
   - Invalid strategies return clear error message

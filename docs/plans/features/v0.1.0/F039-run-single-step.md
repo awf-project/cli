@@ -16,12 +16,12 @@ Add the ability to execute only a specific step from a workflow using a `--step`
 
 ## Acceptance Criteria
 
-- [ ] `awf run workflow.yaml --step=step_name` executes only that step
-- [ ] Step inputs can be provided via `--input` flags
-- [ ] Step dependencies (previous state outputs) can be mocked via `--mock` or `--state` flags
-- [ ] Clear error message if step doesn't exist
-- [ ] Step hooks (pre/post) are executed
-- [ ] Output is captured and displayed normally
+- [x] `awf run workflow.yaml --step=step_name` executes only that step
+- [x] Step inputs can be provided via `--input` flags
+- [x] Step dependencies (previous state outputs) can be mocked via `--mock` or `--state` flags
+- [x] Clear error message if step doesn't exist
+- [x] Step hooks (pre/post) are executed
+- [x] Output is captured and displayed normally
 
 ## Dependencies
 

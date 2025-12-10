@@ -99,10 +99,35 @@ states:
     type: step
     description: Extract spec JSON from Claude response
     command: |
-      cat << 'JSONEOF' | jq -r '.result // "Error: no result"'
+      # Extract .result from Claude JSON output, then parse embedded JSON
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
       {{.states.generate_spec.Output}}
       JSONEOF
-    timeout: 5s
+      )
+
+      # Try to extract .result and parse it as JSON
+      RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
+
+      if [ -z "$RESULT" ]; then
+        echo "ERROR: No result in Claude output" >&2
+        exit 1
+      fi
+
+      # Check if result is valid JSON with required fields
+      if echo "$RESULT" | jq -e '.slug and .content' > /dev/null 2>&1; then
+        echo "$RESULT"
+      else
+        # Claude may have returned text instead of JSON - try to extract JSON from text
+        JSON_MATCH=$(echo "$RESULT" | grep -oP '\{[^{}]*"slug"[^{}]*"content"[^{}]*\}' | head -1)
+        if [ -n "$JSON_MATCH" ] && echo "$JSON_MATCH" | jq -e '.slug and .content' > /dev/null 2>&1; then
+          echo "$JSON_MATCH"
+        else
+          echo "ERROR: Invalid JSON format - missing slug or content" >&2
+          echo "Raw result: $RESULT" >&2
+          exit 1
+        fi
+      fi
+    timeout: 10s
     capture:
       stdout: spec_json
     on_success: save_spec
@@ -116,8 +141,21 @@ states:
       {{.states.extract_spec.Output}}
       JSONEOF
       )
-      SLUG=$(echo "$SPEC_JSON" | jq -r '.slug // "feature"')
-      CONTENT=$(echo "$SPEC_JSON" | jq -r '.content // .slug // "No content"')
+
+      # Extract slug with proper empty/null handling
+      SLUG=$(echo "$SPEC_JSON" | jq -r 'if .slug == "" or .slug == null then "feature" else .slug end')
+
+      # Sanitize slug: lowercase, replace spaces with dashes, remove invalid chars
+      SLUG=$(echo "$SLUG" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+
+      # Final fallback if slug is still empty
+      if [ -z "$SLUG" ]; then
+        SLUG="feature"
+      fi
+
+      # Extract content
+      CONTENT=$(echo "$SPEC_JSON" | jq -r 'if .content == "" or .content == null then "# No content generated" else .content end')
+
       SPEC_DIR="docs/plans/features/{{.inputs.version}}"
       mkdir -p "$SPEC_DIR"
       SPEC_FILE="$SPEC_DIR/{{.inputs.feature_id}}-${SLUG}.md"
@@ -129,6 +167,8 @@ states:
     on_success: explore_codebase
     on_failure: error_save
     hooks:
+      pre:
+        - log: "Saving spec file..."
       post:
         - log: "Spec saved to {{.states.save_spec.Output}}"
 
@@ -176,10 +216,18 @@ states:
     type: step
     description: Extract exploration result and session ID
     command: |
-      cat << 'JSONEOF' | jq -c '{session_id: .session_id, result: .result}'
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
       {{.states.explore_codebase.Output}}
       JSONEOF
-    timeout: 5s
+      )
+
+      # Try to parse as JSON, fallback to empty object
+      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
+        echo "$CLAUDE_OUTPUT" | jq -c '{session_id: (.session_id // null), result: (.result // "No exploration result")}'
+      else
+        echo '{"session_id": null, "result": "Failed to parse exploration output"}'
+      fi
+    timeout: 10s
     capture:
       stdout: exploration_parsed
     on_success: create_plan
@@ -244,10 +292,27 @@ states:
     type: step
     description: Extract plan content
     command: |
-      cat << 'JSONEOF' | jq -r '.result // "No plan generated"'
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
       {{.states.create_plan.Output}}
       JSONEOF
-    timeout: 5s
+      )
+
+      # Try to parse as JSON and extract result
+      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
+        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
+        if [ -n "$RESULT" ]; then
+          echo "$RESULT"
+        else
+          echo "# No plan generated"
+          echo ""
+          echo "Claude did not return a result field."
+        fi
+      else
+        echo "# Plan extraction failed"
+        echo ""
+        echo "Raw output was not valid JSON."
+      fi
+    timeout: 10s
     capture:
       stdout: plan_content
     on_success: save_plan
