@@ -113,12 +113,15 @@ states:
         exit 1
       fi
 
+      # Strip markdown code fences if present (```json ... ```)
+      RESULT=$(echo "$RESULT" | sed 's/^```json//; s/^```//; s/```$//' | sed '/^$/d')
+
       # Check if result is valid JSON with required fields
       if echo "$RESULT" | jq -e '.slug and .content' > /dev/null 2>&1; then
         echo "$RESULT"
       else
-        # Claude may have returned text instead of JSON - try to extract JSON from text
-        JSON_MATCH=$(echo "$RESULT" | grep -oP '\{[^{}]*"slug"[^{}]*"content"[^{}]*\}' | head -1)
+        # Try to extract JSON object from text (handles extra whitespace/text around JSON)
+        JSON_MATCH=$(echo "$RESULT" | grep -oP '\{.*"slug".*"content".*\}' | head -1)
         if [ -n "$JSON_MATCH" ] && echo "$JSON_MATCH" | jq -e '.slug and .content' > /dev/null 2>&1; then
           echo "$JSON_MATCH"
         else

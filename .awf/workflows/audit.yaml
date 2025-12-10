@@ -80,12 +80,25 @@ states:
       fi
     capture:
       stdout: mod_output
-    on_success: collect_metrics
+    on_success: parallel_collect
     on_failure: error_build
 
   # ==========================================================================
-  # PHASE 2: COLLECT RAW METRICS
+  # PHASE 2: COLLECT RAW METRICS (PARALLEL)
   # ==========================================================================
+
+  parallel_collect:
+    type: parallel
+    description: Collect all metrics in parallel
+    parallel:
+      - collect_metrics
+      - run_tests
+      - collect_code_inventory
+      - collect_docs_inventory
+    strategy: best_effort
+    max_concurrent: 4
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
 
   collect_metrics:
     type: step
@@ -117,8 +130,8 @@ states:
     capture:
       stdout: metrics_output
     continue_on_error: true
-    on_success: run_tests
-    on_failure: run_tests
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
 
   run_tests:
     type: step
@@ -160,8 +173,8 @@ states:
     capture:
       stdout: test_output
     continue_on_error: true
-    on_success: collect_code_inventory
-    on_failure: collect_code_inventory
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
 
   collect_code_inventory:
     type: step
@@ -200,8 +213,8 @@ states:
       echo "STATUS:INVENTORIED"
     capture:
       stdout: inventory_output
-    on_success: collect_docs_inventory
-    on_failure: collect_docs_inventory
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
 
   collect_docs_inventory:
     type: step
@@ -242,12 +255,24 @@ states:
       echo "STATUS:DOCS_INVENTORIED"
     capture:
       stdout: docs_output
-    on_success: agent_code_test_analysis
-    on_failure: agent_code_test_analysis
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
 
   # ==========================================================================
-  # PHASE 3: GO EXPERT AGENT ANALYSIS
+  # PHASE 3: GO EXPERT AGENT ANALYSIS (PARALLEL)
   # ==========================================================================
+
+  parallel_analysis:
+    type: parallel
+    description: Run all agent analyses in parallel
+    parallel:
+      - agent_code_test_analysis
+      - agent_code_docs_analysis
+      - agent_architecture_analysis
+    strategy: best_effort
+    max_concurrent: 3
+    on_success: agent_final_synthesis
+    on_failure: agent_final_synthesis
 
   agent_code_test_analysis:
     type: step
@@ -322,8 +347,8 @@ states:
     capture:
       stdout: code_test_analysis
     continue_on_error: true
-    on_success: agent_code_docs_analysis
-    on_failure: agent_code_docs_analysis
+    on_success: agent_final_synthesis
+    on_failure: agent_final_synthesis
 
   agent_code_docs_analysis:
     type: step
@@ -388,8 +413,8 @@ states:
     capture:
       stdout: code_docs_analysis
     continue_on_error: true
-    on_success: agent_architecture_analysis
-    on_failure: agent_architecture_analysis
+    on_success: agent_final_synthesis
+    on_failure: agent_final_synthesis
 
   agent_architecture_analysis:
     type: step
