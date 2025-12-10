@@ -124,6 +124,349 @@ func TestRunCommand_InvalidOutputMode(t *testing.T) {
 	}
 }
 
+func TestRunCommand_HasStepFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("step")
+			require.NotNil(t, flag, "expected 'run' command to have --step flag")
+			assert.Equal(t, "s", flag.Shorthand, "step flag should have -s shorthand")
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
+func TestRunCommand_HasMockFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("mock")
+			require.NotNil(t, flag, "expected 'run' command to have --mock flag")
+			assert.Equal(t, "m", flag.Shorthand, "mock flag should have -m shorthand")
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
+func TestRunCommand_StepFlagInHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "--help"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "--step")
+	assert.Contains(t, output, "Execute only this step")
+}
+
+func TestRunCommand_MockFlagInHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "--help"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "--mock")
+	assert.Contains(t, output, "Mock state value")
+}
+
+func TestParseMockFlags(t *testing.T) {
+	tests := []struct {
+		name        string
+		flags       []string
+		want        map[string]string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:  "empty flags returns empty map",
+			flags: []string{},
+			want:  map[string]string{},
+		},
+		{
+			name:  "single mock flag",
+			flags: []string{"states.fetch.output=hello"},
+			want:  map[string]string{"states.fetch.output": "hello"},
+		},
+		{
+			name:  "multiple mock flags",
+			flags: []string{"states.fetch.output=data", "states.process.output=result"},
+			want: map[string]string{
+				"states.fetch.output":   "data",
+				"states.process.output": "result",
+			},
+		},
+		{
+			name:  "mock flag with value containing equals sign",
+			flags: []string{"states.step.output=key=value"},
+			want:  map[string]string{"states.step.output": "key=value"},
+		},
+		{
+			name:  "mock flag with empty value",
+			flags: []string{"states.step.output="},
+			want:  map[string]string{"states.step.output": ""},
+		},
+		{
+			name:  "mock flag with json value",
+			flags: []string{`states.api.output={"key":"value"}`},
+			want:  map[string]string{"states.api.output": `{"key":"value"}`},
+		},
+		{
+			name:        "invalid format without equals",
+			flags:       []string{"states.step.output"},
+			wantErr:     true,
+			errContains: "invalid mock format",
+		},
+		{
+			name:        "empty key",
+			flags:       []string{"=value"},
+			wantErr:     true,
+			errContains: "mock key cannot be empty",
+		},
+		{
+			name:  "whitespace trimmed from key and value",
+			flags: []string{"  states.step.output  =  value  "},
+			want:  map[string]string{"states.step.output": "value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := cli.ParseMockFlags(tt.flags)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create .awf directory but no workflow
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"run", "nonexistent", "--step=mystep"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestRunCommand_SingleStep_StepNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create a workflow without the requested step
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+	workflowContent := `name: test
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+`
+	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0644)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"run", "test", "--step=nonexistent"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestRunCommand_SingleStep_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create storage directory
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+
+	// Create a simple workflow
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+	workflowContent := `name: test
+version: "1.0.0"
+states:
+  initial: greet
+  greet:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+`
+	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0644)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"run", "test", "--step=greet"})
+
+	err := cmd.Execute()
+	// Should succeed (once implemented)
+	require.NoError(t, err)
+}
+
+func TestRunCommand_SingleStep_WithInputs(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create storage directory
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+
+	// Create a workflow with inputs
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+	workflowContent := `name: input-test
+version: "1.0.0"
+inputs:
+  - name: message
+    type: string
+states:
+  initial: show
+  show:
+    type: step
+    command: echo "{{.inputs.message}}"
+    on_success: done
+  done:
+    type: terminal
+`
+	_ = os.WriteFile(filepath.Join(workflowsDir, "input-test.yaml"), []byte(workflowContent), 0644)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"run", "input-test", "--step=show", "--input=message=test-value"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+}
+
+func TestRunCommand_SingleStep_WithMocks(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create storage directory
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+
+	// Create a workflow where process depends on fetch output
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+	workflowContent := `name: mock-test
+version: "1.0.0"
+states:
+  initial: fetch
+  fetch:
+    type: step
+    command: curl http://api
+    on_success: process
+  process:
+    type: step
+    command: echo "{{.states.fetch.Output}}"
+    on_success: done
+  done:
+    type: terminal
+`
+	_ = os.WriteFile(filepath.Join(workflowsDir, "mock-test.yaml"), []byte(workflowContent), 0644)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	// Execute the process step with mocked fetch output
+	cmd.SetArgs([]string{
+		"run", "mock-test",
+		"--step=process",
+		"--mock=states.fetch.output=mocked-data",
+	})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+}
+
+func TestRunCommand_SingleStep_TerminalStepError(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create storage directory
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+
+	// Create a workflow with a terminal step
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	_ = os.MkdirAll(workflowsDir, 0755)
+	workflowContent := `name: terminal-test
+version: "1.0.0"
+states:
+  initial: done
+  done:
+    type: terminal
+`
+	_ = os.WriteFile(filepath.Join(workflowsDir, "terminal-test.yaml"), []byte(workflowContent), 0644)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	// Try to execute a terminal step (should error)
+	cmd.SetArgs([]string{"run", "terminal-test", "--step=done"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "terminal")
+}
+
 func TestRunCommand_PromptResolution(t *testing.T) {
 	tests := []struct {
 		name        string

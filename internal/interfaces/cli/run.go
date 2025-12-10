@@ -24,6 +24,8 @@ import (
 func newRunCommand(cfg *Config) *cobra.Command {
 	var inputFlags []string
 	var outputMode string
+	var stepFlag string
+	var mockFlags []string
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -36,9 +38,15 @@ Output modes control how command output is displayed:
   - streaming: Real-time output with [OUT]/[ERR] prefixes
   - buffered: Show output after each step completes
 
+Single step execution:
+  Use --step to execute only a specific step from the workflow.
+  Use --mock to inject state values for step dependencies.
+
 Examples:
   awf run analyze-code --input file=main.go
-  awf run build-project --input target=linux --output=streaming`,
+  awf run build-project --input target=linux --output=streaming
+  awf run my-workflow --step=process --input data=test
+  awf run my-workflow --step=analyze --mock states.fetch.output="cached data"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if outputMode != "" {
@@ -48,6 +56,9 @@ Examples:
 				}
 				cfg.OutputMode = mode
 			}
+			if stepFlag != "" {
+				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags)
+			}
 			return runWorkflow(cmd, cfg, args[0], inputFlags)
 		},
 	}
@@ -55,6 +66,9 @@ Examples:
 	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Input parameter (key=value)")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "silent",
 		"Output mode: silent (default), streaming, buffered")
+	cmd.Flags().StringVarP(&stepFlag, "step", "s", "", "Execute only this step (skips state machine)")
+	cmd.Flags().StringArrayVarP(&mockFlags, "mock", "m", nil,
+		"Mock state value for single step execution (states.step.output=value)")
 
 	return cmd
 }
@@ -461,4 +475,116 @@ func formatLog(msg string, keysAndValues ...any) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// runSingleStep executes a single step from a workflow.
+func runSingleStep(
+	cmd *cobra.Command,
+	cfg *Config,
+	workflowName string,
+	stepName string,
+	inputFlags []string,
+	mockFlags []string,
+) error {
+	// Parse inputs
+	inputs, err := parseInputFlags(inputFlags)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Parse mocks
+	mocks, err := ParseMockFlags(mockFlags)
+	if err != nil {
+		return fmt.Errorf("invalid mock: %w", err)
+	}
+
+	// Create formatter for text output
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	// Setup context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		formatter.Warning("\nReceived interrupt signal, cancelling...")
+		cancel()
+	}()
+
+	// Initialize dependencies
+	repo := NewWorkflowRepository()
+	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
+	shellExecutor := executor.NewShellExecutor()
+	logger := &cliLogger{
+		formatter: formatter,
+		verbose:   cfg.Verbose,
+		silent:    cfg.Quiet,
+	}
+	resolver := interpolation.NewTemplateResolver()
+
+	// Create services
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger, resolver)
+
+	// Show start message
+	if !cfg.Quiet {
+		formatter.Info(fmt.Sprintf("Running single step: %s from workflow: %s", stepName, workflowName))
+	}
+	startTime := time.Now()
+
+	// Execute single step
+	result, execErr := execSvc.ExecuteSingleStep(ctx, workflowName, stepName, inputs, mocks)
+
+	// Calculate duration
+	duration := time.Since(startTime).Round(time.Millisecond)
+
+	if execErr != nil {
+		formatter.Error(fmt.Sprintf("Step execution failed: %s", execErr))
+		return &exitError{code: categorizeError(execErr), err: execErr}
+	}
+
+	// Display result
+	if result.Output != "" && !cfg.Quiet {
+		formatter.Printf("\n--- [%s] stdout ---\n", result.StepName)
+		formatter.Printf("%s", result.Output)
+	}
+	if result.Stderr != "" && !cfg.Quiet {
+		formatter.Printf("\n--- [%s] stderr ---\n", result.StepName)
+		formatter.Printf("%s", result.Stderr)
+	}
+
+	if result.Status == workflow.StatusCompleted {
+		formatter.Success(fmt.Sprintf("Step '%s' completed successfully in %s", stepName, duration))
+	} else {
+		formatter.Error(fmt.Sprintf("Step '%s' failed (exit code: %d)", stepName, result.ExitCode))
+	}
+
+	return nil
+}
+
+// ParseMockFlags parses --mock flags into a map.
+// Format: states.step_name.output=value
+func ParseMockFlags(flags []string) (map[string]string, error) {
+	mocks := make(map[string]string)
+
+	for _, flag := range flags {
+		parts := strings.SplitN(flag, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid mock format '%s', expected key=value", flag)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, errors.New("mock key cannot be empty")
+		}
+		mocks[key] = value
+	}
+
+	return mocks, nil
 }

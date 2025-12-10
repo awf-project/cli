@@ -155,6 +155,9 @@ awf status $WORKFLOW_ID -f quiet
                   - silent: No command output displayed
                   - streaming: Real-time output with [OUT]/[ERR] prefixes
                   - buffered: Show output after each step completes
+--step, -s        Execute only a specific step from the workflow
+--mock, -m        Mock state values for single step execution (key=value)
+                  Example: --mock states.step1.output="mocked value"
 ```
 
 ## Workflow Discovery
@@ -369,6 +372,7 @@ make fmt            # Format code
 - [x] Output formats (--format flag)
 - [x] Step working directory (dir field)
 - [x] CLI init command (--force flag)
+- [x] Run single step (--step flag)
 
 ### Phase 2 - Core Features (v0.2.0)
 - [ ] State machine with transitions

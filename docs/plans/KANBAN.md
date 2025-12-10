@@ -3,7 +3,6 @@
 ## Backlog
 
 ### Phase 1 - MVP (v0.1.0)
-_All features completed_
 
 ### Phase 2 - Core Features (v0.2.0)
 - [F009](features/v0.2.0/F009-state-machine.md) State machine with transitions
@@ -73,7 +72,7 @@ _No features in review_
 - [F035](features/v0.1.0/F035-step-working-directory.md) Step working directory
 - [F036](features/v0.1.0/F036-cli-init.md) CLI init command
 - [F037](features/v0.1.0/F037-step-success-feedback.md) Step success feedback
-
+- [F039](features/v0.1.0/F039-run-single-step.md) Run single step
 ---
 
 ## Summary

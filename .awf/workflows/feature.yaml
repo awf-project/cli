@@ -266,8 +266,8 @@ states:
     timeout: 10s
     capture:
       stdout: plan_file_path
-    on_success: run_tests
-    on_failure: run_tests
+    on_success: add_to_kanban
+    on_failure: add_to_kanban
     hooks:
       post:
         - log: "Plan saved to {{.states.save_plan.Output}}"
@@ -275,6 +275,67 @@ states:
   #==========================================================================
   # PHASE 4: VALIDATION & DOCUMENTATION
   #==========================================================================
+
+  add_to_kanban:
+    type: step
+    description: Add feature to KANBAN.md Backlog
+    command: |
+      KANBAN_FILE="docs/plans/KANBAN.md"
+      if [ ! -f "$KANBAN_FILE" ]; then
+        echo "KANBAN_NOT_FOUND"
+        exit 0
+      fi
+
+      # Find spec file to extract slug (works even when running single step)
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -z "$SPEC_FILE" ]; then
+        echo "SPEC_NOT_FOUND"
+        exit 0
+      fi
+      SLUG=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//')
+
+      # Build the feature line
+      FEATURE_LINE="- [{{.inputs.feature_id}}](features/{{.inputs.version}}/{{.inputs.feature_id}}-${SLUG}.md) {{.inputs.description}}"
+
+      # Check if feature already exists
+      if grep -q "\[{{.inputs.feature_id}}\]" "$KANBAN_FILE"; then
+        echo "FEATURE_ALREADY_IN_KANBAN"
+        exit 0
+      fi
+
+      # Find the correct phase section in Backlog based on version
+      # Map version to phase name
+      case "{{.inputs.version}}" in
+        v0.1.0) PHASE_PATTERN="Phase 1 - MVP" ;;
+        v0.2.0) PHASE_PATTERN="Phase 2 - Core" ;;
+        v0.3.0) PHASE_PATTERN="Phase 3 - Advanced" ;;
+        v0.4.0) PHASE_PATTERN="Phase 4 - Extensibility" ;;
+        v1.0.0) PHASE_PATTERN="Phase 5 - Interfaces" ;;
+        *) PHASE_PATTERN="Phase 2 - Core" ;;
+      esac
+
+      # Insert feature into the correct Backlog phase section
+      awk -v feat="$FEATURE_LINE" -v phase="$PHASE_PATTERN" '
+        /^## Backlog/ { in_backlog=1 }
+        /^## Ready/ { in_backlog=0 }
+        in_backlog && /^### / && $0 ~ phase {
+          print
+          getline
+          # Skip existing features in this section
+          while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
+          # Insert new feature
+          print feat
+          next
+        }
+        { print }
+      ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
+
+      echo "KANBAN_UPDATED"
+    timeout: 15s
+    capture:
+      stdout: kanban_result
+    on_success: run_tests
+    on_failure: run_tests
 
   run_tests:
     type: step
@@ -331,8 +392,10 @@ states:
       echo "║   Spec: {{.states.save_spec.Output}}"
       echo "║   Plan: {{.states.save_plan.Output}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
+      echo "║ Documentation:"
+      echo "║   KANBAN: {{.states.add_to_kanban.Output}}"
+      echo "║   Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
       echo "║ Tests: $(echo '{{.states.run_tests.Output}}' | grep -q 'TEST_WARNING' && echo 'WARNINGS' || echo 'PASS')"
-      echo "║ Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
       echo "╚════════════════════════════════════════════════════════════════╝"
     timeout: 5s
     capture:
