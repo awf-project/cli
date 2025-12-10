@@ -32,16 +32,16 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F039 | Run Single Step | ✅ Done |
 | F040 | Audit-Based Refactoring | 📋 PLANNED |
 
-## v0.2.0 - Core Features (PLANNED)
+## v0.2.0 - Core Features (IN PROGRESS)
 
-| ID | Feature | Priority |
-|----|---------|----------|
-| F009 | State Machine Validation | High |
-| F010 | Parallel Execution (errgroup) | High |
-| F011 | Retry with Backoff | High |
-| F012 | Input Validation | Medium |
-| F013 | Workflow Resume | High |
-| F014 | SQLite History | Medium |
+| ID | Feature | Status |
+|----|---------|--------|
+| F009 | State Machine Validation | 📋 PLANNED |
+| F010 | Parallel Execution (errgroup) | ✅ IMPLEMENTED |
+| F011 | Retry with Backoff | 📋 PLANNED |
+| F012 | Input Validation | 📋 PLANNED |
+| F013 | Workflow Resume | 📋 PLANNED |
+| F014 | SQLite History | 📋 PLANNED |
 
 ## v0.3.0 - Advanced Features (PLANNED)
 

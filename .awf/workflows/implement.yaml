@@ -293,11 +293,26 @@ states:
     capture:
       stdout: plan_content
       max_size: 1MB
-    on_success: run_lint_before
+    on_success: parallel_baseline
     on_failure: error_baseline
     hooks:
       pre:
         - log: "Loading implementation plan..."
+
+  #==========================================================================
+  # PHASE 2.5: BASELINE VALIDATION (PARALLEL)
+  #==========================================================================
+
+  parallel_baseline:
+    type: parallel
+    description: Run lint and tests baseline in parallel
+    parallel:
+      - run_lint_before
+      - run_tests_before
+    strategy: all_succeed
+    max_concurrent: 2
+    on_success: write_interfaces
+    on_failure: error_baseline
 
   run_lint_before:
     type: step
@@ -306,7 +321,7 @@ states:
     timeout: 120s
     capture:
       stdout: lint_before_output
-    on_success: run_tests_before
+    on_success: write_interfaces
     on_failure: error_baseline
     hooks:
       pre:
@@ -505,15 +520,26 @@ states:
     capture:
       stdout: implement_output
       max_size: 10MB
-    on_success: run_lint_after
-    on_failure: run_lint_after
+    on_success: parallel_validation
+    on_failure: parallel_validation
     hooks:
       pre:
         - log: "Claude implementing feature..."
 
   #==========================================================================
-  # PHASE 5: VALIDATION
+  # PHASE 5: VALIDATION (PARALLEL)
   #==========================================================================
+
+  parallel_validation:
+    type: parallel
+    description: Run final lint and tests in parallel
+    parallel:
+      - run_lint_after
+      - run_tests_green
+    strategy: best_effort
+    max_concurrent: 2
+    on_success: update_spec_status
+    on_failure: update_spec_status
 
   run_lint_after:
     type: step
@@ -522,8 +548,8 @@ states:
     timeout: 120s
     capture:
       stdout: lint_after_output
-    on_success: run_tests_green
-    on_failure: run_tests_green
+    on_success: update_spec_status
+    on_failure: update_spec_status
     hooks:
       pre:
         - log: "Running lint after implementation..."
@@ -745,7 +771,6 @@ states:
         /^## \[/ && !/\[Unreleased\]/ { in_unreleased=0 }
         in_unreleased && /^### Added/ {
           print
-          getline
           print entry
           next
         }

@@ -234,7 +234,7 @@ states:
 |------|-------------|
 | `step` | Execute a command |
 | `terminal` | End state with `status: success` or `status: failure` |
-| `parallel` | Execute multiple steps concurrently (future) |
+| `parallel` | Execute multiple steps concurrently |
 
 ### Step Options
 
@@ -252,6 +252,40 @@ states:
 | Option | Description |
 |--------|-------------|
 | `status` | Terminal status: `success` or `failure` |
+
+### Parallel Options
+
+| Option | Description |
+|--------|-------------|
+| `steps` | List of steps to execute concurrently |
+| `strategy` | `all_succeed` (default), `any_succeed`, or `best_effort` |
+| `max_concurrent` | Maximum concurrent steps (default: unlimited) |
+| `on_success` | Next state on success |
+| `on_failure` | Next state on failure |
+
+**Strategies:**
+- `all_succeed`: All steps must succeed, cancel remaining on first failure
+- `any_succeed`: Succeed if at least one step succeeds
+- `best_effort`: Collect all results, never cancel early
+
+**Example:**
+```yaml
+parallel_analysis:
+  type: parallel
+  strategy: all_succeed
+  max_concurrent: 3
+  steps:
+    - name: lint
+      command: golangci-lint run
+    - name: test
+      command: go test ./...
+    - name: build
+      command: go build ./cmd/...
+  on_success: deploy
+  on_failure: error
+```
+
+Access individual step outputs: `{{.states.parallel_analysis.steps.lint.output}}`
 
 ### Variable Interpolation
 
@@ -364,6 +398,7 @@ make fmt            # Format code
 - `fatih/color` - Terminal colors
 - `google/uuid` - UUID generation
 - `stretchr/testify` - Testing
+- `golang.org/x/sync/errgroup` - Parallel execution
 
 ## Roadmap
 
@@ -385,7 +420,7 @@ make fmt            # Format code
 
 ### Phase 2 - Core Features (v0.2.0)
 - [x] State machine with transitions (cycle detection, unreachable states, terminal status)
-- [ ] Parallel execution
+- [x] Parallel execution (errgroup with strategies)
 - [ ] Retry with exponential backoff
 - [ ] Input validation
 - [ ] Resume command

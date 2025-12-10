@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F010**: Parallel step execution (errgroup)
+  - `type: parallel` state with concurrent step execution
+  - Strategies: `all_succeed`, `any_succeed`, `best_effort`
+  - `max_concurrent` limit with semaphore control
+  - Context cancellation on first failure (all_succeed mode)
 - **F009**: State machine with conditional transitions
   - Follow `on_success` transition on exit code 0, `on_failure` on non-zero
   - Terminal states (`type: terminal`) with `status: success|failure`
