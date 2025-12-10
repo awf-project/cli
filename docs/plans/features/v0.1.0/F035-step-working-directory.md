@@ -1,7 +1,7 @@
 # F035: Step Working Directory
 
 ## Metadata
-- **Status**: backlog
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priority**: medium
@@ -13,11 +13,11 @@ Allow defining a working directory (`dir`) per step in a YAML workflow. Each ste
 
 ## Acceptance Criteria
 
-- [ ] A step can define `dir: "/path/to/dir"` in YAML
-- [ ] The step command executes in this directory
-- [ ] If `dir` is empty, current behavior is preserved (awf process CWD)
-- [ ] The `dir` field supports interpolation (`{{inputs.project_path}}`)
-- [ ] Clear error if directory does not exist
+- [x] A step can define `dir: "/path/to/dir"` in YAML
+- [x] The step command executes in this directory
+- [x] If `dir` is empty, current behavior is preserved (awf process CWD)
+- [x] The `dir` field supports interpolation (`{{inputs.project_path}}`)
+- [x] Clear error if directory does not exist (handled by OS/shell)
 
 ## Dependencies
 
@@ -33,10 +33,10 @@ internal/application/execution_service.go
 
 ## Technical Tasks
 
-- [ ] Add `Dir string` to `Step` struct (after `Command`)
-- [ ] Pass `Dir: step.Dir` to `ports.Command` in `execution_service.go`
-- [ ] Write unit tests
-- [ ] Update documentation (CLAUDE.md YAML syntax section)
+- [x] Add `Dir string` to `Step` struct (after `Command`)
+- [x] Pass `Dir: step.Dir` to `ports.Command` in `execution_service.go`
+- [x] Write unit tests
+- [x] Update documentation (README.md YAML syntax section)
 
 ## Notes
 

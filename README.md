@@ -170,6 +170,7 @@ states:
     type: step
     command: |
       echo "Processing {{.inputs.file_path}}"
+    dir: "/tmp/workdir"  # optional working directory
     timeout: 30
     on_success: step2
     on_failure: error
@@ -195,6 +196,16 @@ states:
 | `step` | Execute a command |
 | `terminal` | End state (success or failure) |
 | `parallel` | Execute multiple steps concurrently (future) |
+
+### Step Options
+
+| Option | Description |
+|--------|-------------|
+| `command` | Shell command to execute |
+| `dir` | Working directory (supports interpolation, e.g., `{{.inputs.path}}`) |
+| `timeout` | Execution timeout in seconds |
+| `on_success` | Next state on success |
+| `on_failure` | Next state on failure |
 
 ### Variable Interpolation
 

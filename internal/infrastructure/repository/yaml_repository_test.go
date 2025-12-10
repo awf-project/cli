@@ -267,6 +267,45 @@ func TestYAMLRepository_Load_WithYamlExtension(t *testing.T) {
 	}
 }
 
+func TestYAMLRepository_Load_WithDir(t *testing.T) {
+	repo := NewYAMLRepository(fixturesPath)
+
+	wf, err := repo.Load(context.Background(), "valid-with-dir")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if wf == nil {
+		t.Fatal("Load() returned nil workflow")
+	}
+
+	// Check build step has absolute dir
+	build, ok := wf.GetStep("build")
+	if !ok {
+		t.Fatal("build step not found")
+	}
+	if build.Dir != "/tmp/project" {
+		t.Errorf("build.Dir = %q, want %q", build.Dir, "/tmp/project")
+	}
+
+	// Check test step has interpolated dir
+	test, ok := wf.GetStep("test")
+	if !ok {
+		t.Fatal("test step not found")
+	}
+	if test.Dir != "{{inputs.project_path}}" {
+		t.Errorf("test.Dir = %q, want %q", test.Dir, "{{inputs.project_path}}")
+	}
+
+	// Check done step has no dir (terminal)
+	done, ok := wf.GetStep("done")
+	if !ok {
+		t.Fatal("done step not found")
+	}
+	if done.Dir != "" {
+		t.Errorf("done.Dir = %q, want empty", done.Dir)
+	}
+}
+
 func TestYAMLRepository_Timeout(t *testing.T) {
 	repo := NewYAMLRepository(fixturesPath)
 

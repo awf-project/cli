@@ -78,6 +78,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Type:            stepType,
 		Description:     y.Description,
 		Command:         y.Command,
+		Dir:             y.Dir,
 		Branches:        y.Parallel,
 		Strategy:        y.Strategy,
 		MaxConcurrent:   y.MaxConcurrent,
