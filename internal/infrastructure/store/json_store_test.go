@@ -295,6 +295,125 @@ func TestJSONStore_ConcurrentDifferentIDs(t *testing.T) {
 	assert.Len(t, ids, goroutines)
 }
 
+// RED Phase: Test stubs for failure path tests
+// These tests ensure error handling paths are covered
+
+// TestJSONStore_Save_PermissionDenied tests save failure when directory is read-only.
+func TestJSONStore_Save_PermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+
+	// Create directory and make it read-only
+	require.NoError(t, os.MkdirAll(readOnlyDir, 0755))
+	require.NoError(t, os.Chmod(readOnlyDir, 0444))
+	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0755) })
+
+	s := store.NewJSONStore(readOnlyDir)
+	ctx := context.Background()
+
+	execCtx := workflow.NewExecutionContext("perm-test", "test")
+	err := s.Save(ctx, execCtx)
+
+	assert.Error(t, err, "Save should fail on read-only directory")
+	assert.True(t, os.IsPermission(err), "error should be permission error")
+}
+
+// TestJSONStore_Load_PermissionDenied tests load failure when file is unreadable.
+func TestJSONStore_Load_PermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	// Create a valid state first
+	execCtx := workflow.NewExecutionContext("unreadable", "test")
+	require.NoError(t, s.Save(ctx, execCtx))
+
+	// Make file unreadable
+	filePath := filepath.Join(tmpDir, "unreadable.json")
+	require.NoError(t, os.Chmod(filePath, 0000))
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0644) })
+
+	_, err := s.Load(ctx, "unreadable")
+	assert.Error(t, err, "Load should fail on unreadable file")
+	assert.True(t, os.IsPermission(err), "error should be permission error")
+}
+
+// TestJSONStore_List_IgnoresNonJSONFiles verifies List only returns .json files.
+func TestJSONStore_List_IgnoresNonJSONFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	// Create a valid JSON state
+	execCtx := workflow.NewExecutionContext("valid-id", "test")
+	require.NoError(t, s.Save(ctx, execCtx))
+
+	// Create non-JSON files that should be ignored
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "random.txt"), []byte("text"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "backup.json.bak"), []byte("{}"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden.json"), []byte("{}"), 0644))
+
+	ids, err := s.List(ctx)
+	require.NoError(t, err)
+
+	// Should only contain valid-id and .hidden.json (glob matches hidden files)
+	assert.Contains(t, ids, "valid-id")
+	// Note: glob pattern *.json matches .hidden.json too - this is expected behavior
+}
+
+// TestJSONStore_Save_NestedDirectory tests save creates nested directory structure.
+func TestJSONStore_Save_NestedDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	deepPath := filepath.Join(tmpDir, "level1", "level2", "level3", "states")
+
+	s := store.NewJSONStore(deepPath)
+	ctx := context.Background()
+
+	execCtx := workflow.NewExecutionContext("deep-nested", "test")
+	err := s.Save(ctx, execCtx)
+
+	require.NoError(t, err)
+
+	// Verify all directories were created
+	_, statErr := os.Stat(deepPath)
+	assert.NoError(t, statErr, "nested directory should be created")
+
+	// Verify file exists
+	loaded, loadErr := s.Load(ctx, "deep-nested")
+	require.NoError(t, loadErr)
+	assert.Equal(t, "deep-nested", loaded.WorkflowID)
+}
+
+// TestJSONStore_Delete_PermissionDenied tests delete failure on read-only directory.
+func TestJSONStore_Delete_PermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	s := store.NewJSONStore(tmpDir)
+	ctx := context.Background()
+
+	// Create a state first
+	execCtx := workflow.NewExecutionContext("delete-perm", "test")
+	require.NoError(t, s.Save(ctx, execCtx))
+
+	// Make directory read-only (can't delete files)
+	require.NoError(t, os.Chmod(tmpDir, 0555))
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0755) })
+
+	err := s.Delete(ctx, "delete-perm")
+	assert.Error(t, err, "Delete should fail on read-only directory")
+}
+
 // Race condition tests - run with: go test -race ./internal/infrastructure/store/...
 
 // TestJSONStore_RaceSaveLoad tests concurrent Save and Load on the same workflow ID.

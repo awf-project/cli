@@ -1,7 +1,7 @@
 # F038: Prompt Storage and Initialization
 
 ## Metadata
-- **Status**: implemented
+- **Status**: planned
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priority**: medium

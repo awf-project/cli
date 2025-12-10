@@ -3,7 +3,6 @@
 ## Backlog
 
 ### Phase 1 - MVP (v0.1.0)
-
 ### Phase 2 - Core Features (v0.2.0)
 - [F009](features/v0.2.0/F009-state-machine.md) State machine with transitions
 - [F010](features/v0.2.0/F010-parallel-execution.md) Parallel execution (errgroup)
@@ -73,7 +72,7 @@ _No features in review_
 - [F036](features/v0.1.0/F036-cli-init.md) CLI init command
 - [F037](features/v0.1.0/F037-step-success-feedback.md) Step success feedback
 - [F039](features/v0.1.0/F039-run-single-step.md) Run single step
----
+- [F040](features/v0.1.0/F040-.md) Organise le refactoring sur la base du rapport d'audit @audit-report.md
 
 ## Summary
 

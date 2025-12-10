@@ -346,3 +346,239 @@ func TestOutputWriter_IsJSONFormat(t *testing.T) {
 		assert.Equal(t, tt.want, w.IsJSONFormat())
 	}
 }
+
+// RED Phase: Test stubs for text output mode functions
+// These tests will compile and validate text format output
+
+func TestOutputWriter_WriteExecution_Text(t *testing.T) {
+	tests := []struct {
+		name    string
+		exec    ui.ExecutionInfo
+		wantOut []string
+	}{
+		{
+			name: "basic execution info",
+			exec: ui.ExecutionInfo{
+				WorkflowID:   "exec-123",
+				WorkflowName: "my-workflow",
+				Status:       "completed",
+				DurationMs:   1500,
+			},
+			wantOut: []string{"Workflow:", "my-workflow", "ID:", "exec-123", "Status:", "completed"},
+		},
+		{
+			name: "execution with current step",
+			exec: ui.ExecutionInfo{
+				WorkflowID:   "exec-456",
+				WorkflowName: "running-wf",
+				Status:       "running",
+				CurrentStep:  "process",
+				DurationMs:   500,
+			},
+			wantOut: []string{"running-wf", "running", "Current Step:", "process"},
+		},
+		{
+			name: "execution with steps",
+			exec: ui.ExecutionInfo{
+				WorkflowID:   "exec-789",
+				WorkflowName: "step-wf",
+				Status:       "completed",
+				DurationMs:   2000,
+				Steps: []ui.StepInfo{
+					{Name: "fetch", Status: "completed"},
+					{Name: "process", Status: "completed"},
+				},
+			},
+			wantOut: []string{"Steps:", "fetch", "process", "completed"},
+		},
+		{
+			name: "execution with step error",
+			exec: ui.ExecutionInfo{
+				WorkflowID:   "exec-err",
+				WorkflowName: "error-wf",
+				Status:       "failed",
+				DurationMs:   100,
+				Steps: []ui.StepInfo{
+					{Name: "failing", Status: "failed", Error: "command not found"},
+				},
+			},
+			wantOut: []string{"failing", "failed", "Error:", "command not found"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+			err := w.WriteExecution(tt.exec)
+			require.NoError(t, err)
+
+			output := buf.String()
+			for _, want := range tt.wantOut {
+				assert.Contains(t, output, want)
+			}
+		})
+	}
+}
+
+func TestOutputWriter_WriteRunResult_Text(t *testing.T) {
+	tests := []struct {
+		name    string
+		result  ui.RunResult
+		wantOut []string
+	}{
+		{
+			name: "successful run",
+			result: ui.RunResult{
+				WorkflowID: "run-123",
+				Status:     "completed",
+				DurationMs: 2000,
+			},
+			wantOut: []string{"completed", "2000ms", "Workflow ID:", "run-123"},
+		},
+		{
+			name: "failed run with error",
+			result: ui.RunResult{
+				WorkflowID: "run-456",
+				Status:     "failed",
+				DurationMs: 500,
+				Error:      "step failed with exit code 1",
+			},
+			wantOut: []string{"failed", "Error:", "exit code 1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+			err := w.WriteRunResult(tt.result)
+			require.NoError(t, err)
+
+			output := buf.String()
+			for _, want := range tt.wantOut {
+				assert.Contains(t, output, want)
+			}
+		})
+	}
+}
+
+func TestOutputWriter_WriteValidation_Text(t *testing.T) {
+	tests := []struct {
+		name    string
+		result  ui.ValidationResult
+		wantOut []string
+	}{
+		{
+			name: "valid workflow",
+			result: ui.ValidationResult{
+				Valid:    true,
+				Workflow: "deploy",
+			},
+			wantOut: []string{"✓", "deploy", "valid"},
+		},
+		{
+			name: "invalid workflow with errors",
+			result: ui.ValidationResult{
+				Valid:    false,
+				Workflow: "broken",
+				Errors:   []string{"missing initial state", "cycle detected"},
+			},
+			wantOut: []string{"✗", "broken", "invalid", "missing initial state", "cycle detected"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+			err := w.WriteValidation(tt.result)
+			require.NoError(t, err)
+
+			output := buf.String()
+			for _, want := range tt.wantOut {
+				assert.Contains(t, output, want)
+			}
+		})
+	}
+}
+
+func TestParseOutputFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    ui.OutputFormat
+		wantErr bool
+	}{
+		{
+			name:  "text format",
+			input: "text",
+			want:  ui.FormatText,
+		},
+		{
+			name:  "empty string defaults to text",
+			input: "",
+			want:  ui.FormatText,
+		},
+		{
+			name:  "json format",
+			input: "json",
+			want:  ui.FormatJSON,
+		},
+		{
+			name:  "table format",
+			input: "table",
+			want:  ui.FormatTable,
+		},
+		{
+			name:  "quiet format",
+			input: "quiet",
+			want:  ui.FormatQuiet,
+		},
+		{
+			name:    "invalid format",
+			input:   "invalid",
+			wantErr: true,
+		},
+		{
+			name:    "unknown format",
+			input:   "xml",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ui.ParseOutputFormat(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid output format")
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestOutputFormat_String(t *testing.T) {
+	tests := []struct {
+		format ui.OutputFormat
+		want   string
+	}{
+		{ui.FormatText, "text"},
+		{ui.FormatJSON, "json"},
+		{ui.FormatTable, "table"},
+		{ui.FormatQuiet, "quiet"},
+		{ui.OutputFormat(99), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.format.String())
+		})
+	}
+}

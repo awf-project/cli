@@ -1,0 +1,731 @@
+# ============================================================================
+# AUDIT WORKFLOW - Complete Coherence Check with Go Expert Analysis
+# ============================================================================
+# Evaluates coherence between: Code <-> Tests <-> Documentation
+# Uses Claude Go expert agent for semantic analysis
+# Mode: Continue all (collects all issues before reporting)
+# ============================================================================
+
+name: audit
+description: Complete coherence audit - Code vs Tests vs Documentation
+version: "2.0.0"
+author: awf
+tags:
+  - audit
+  - quality
+  - coherence
+  - ci
+  - agent
+
+inputs:
+  - name: coverage_threshold
+    type: integer
+    description: Minimum test coverage percentage
+    required: false
+    default: 80
+
+  - name: output_file
+    type: string
+    description: Output report filename
+    required: false
+    default: "audit-report.md"
+
+  - name: deep_analysis
+    type: boolean
+    description: Enable deep semantic analysis with Go expert agent
+    required: false
+    default: true
+
+states:
+  initial: build_check
+
+  # ==========================================================================
+  # PHASE 1: BUILD & COMPILE (BLOCKING)
+  # ==========================================================================
+
+  build_check:
+    type: step
+    description: Verify code compiles
+    command: |
+      echo "=== Build Check ==="
+      BUILD_OUTPUT=$(go build ./... 2>&1)
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 0 ]; then
+        echo "STATUS:PASS"
+        echo "BUILD:OK"
+      else
+        echo "BUILD_ERRORS:"
+        echo "$BUILD_OUTPUT"
+        echo "STATUS:FAIL"
+      fi
+    capture:
+      stdout: build_output
+    on_success: mod_verify
+    on_failure: error_build
+
+  mod_verify:
+    type: step
+    description: Verify go.mod integrity
+    command: |
+      echo "=== Module Verify ==="
+      MOD_OUTPUT=$(go mod verify 2>&1)
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 0 ]; then
+        echo "$MOD_OUTPUT"
+        echo "STATUS:PASS"
+      else
+        echo "MOD_ERRORS:"
+        echo "$MOD_OUTPUT"
+        echo "STATUS:FAIL"
+      fi
+    capture:
+      stdout: mod_output
+    on_success: collect_metrics
+    on_failure: error_build
+
+  # ==========================================================================
+  # PHASE 2: COLLECT RAW METRICS
+  # ==========================================================================
+
+  collect_metrics:
+    type: step
+    description: Collect all raw metrics for analysis
+    command: |
+      echo "=== Collecting Metrics ==="
+
+      # Format check
+      UNFORMATTED=$(gofmt -l . 2>/dev/null | grep -v vendor | head -20 || true)
+      echo "UNFORMATTED_FILES:$(echo "$UNFORMATTED" | wc -l | tr -d ' ')"
+      [ -n "$UNFORMATTED" ] && echo "$UNFORMATTED"
+
+      # Vet check
+      VET_OUTPUT=$(go vet ./... 2>&1 || true)
+      echo "VET_ISSUES:$(echo "$VET_OUTPUT" | grep -c ":" || echo 0)"
+      [ -n "$VET_OUTPUT" ] && echo "$VET_OUTPUT"
+
+      # Lint check
+      if command -v golangci-lint >/dev/null 2>&1; then
+        LINT_OUTPUT=$(golangci-lint run --output.format=line-number 2>&1 || true)
+        LINT_COUNT=$(echo "$LINT_OUTPUT" | grep -c ":" || echo 0)
+        echo "LINT_ISSUES:$LINT_COUNT"
+        [ -n "$LINT_OUTPUT" ] && echo "$LINT_OUTPUT" | head -30
+      else
+        echo "LINT_ISSUES:SKIP"
+      fi
+
+      echo "STATUS:COLLECTED"
+    capture:
+      stdout: metrics_output
+    continue_on_error: true
+    on_success: run_tests
+    on_failure: run_tests
+
+  run_tests:
+    type: step
+    description: Run all tests and collect results
+    timeout: 300s
+    command: |
+      echo "=== Running Tests ==="
+
+      # Unit tests
+      UNIT_RESULT=$(go test ./internal/... ./pkg/... 2>&1)
+      UNIT_EXIT=$?
+      UNIT_PASS=$(echo "$UNIT_RESULT" | grep -c "^ok" || echo 0)
+      UNIT_FAIL=$(echo "$UNIT_RESULT" | grep -c "^FAIL" || echo 0)
+      echo "UNIT_TESTS:pass=$UNIT_PASS,fail=$UNIT_FAIL"
+
+      # Race tests
+      RACE_RESULT=$(go test -race ./internal/... ./pkg/... 2>&1)
+      RACE_EXIT=$?
+      echo "RACE_DETECTOR:exit=$RACE_EXIT"
+
+      # Integration tests
+      if [ -d "tests/integration" ]; then
+        INT_RESULT=$(go test -tags=integration ./tests/integration/... 2>&1)
+        INT_EXIT=$?
+        INT_PASS=$(echo "$INT_RESULT" | grep -c "^ok" || echo 0)
+        INT_FAIL=$(echo "$INT_RESULT" | grep -c "^FAIL" || echo 0)
+        echo "INTEGRATION_TESTS:pass=$INT_PASS,fail=$INT_FAIL"
+      else
+        echo "INTEGRATION_TESTS:SKIP"
+      fi
+
+      # Coverage
+      go test -coverprofile=/tmp/coverage.out ./internal/... ./pkg/... 2>/dev/null
+      COVERAGE=$(go tool cover -func=/tmp/coverage.out 2>/dev/null | grep total | awk '{print $3}' | tr -d '%')
+      echo "COVERAGE_PERCENT:$COVERAGE"
+      rm -f /tmp/coverage.out
+
+      echo "STATUS:TESTED"
+    capture:
+      stdout: test_output
+    continue_on_error: true
+    on_success: collect_code_inventory
+    on_failure: collect_code_inventory
+
+  collect_code_inventory:
+    type: step
+    description: Inventory code structure for analysis
+    command: |
+      echo "=== Code Inventory ==="
+
+      # Public functions count
+      PUBLIC_FUNCS=$(grep -rn "^func [A-Z]" internal/ pkg/ --include="*.go" 2>/dev/null | grep -v "_test.go" || true)
+      echo "PUBLIC_FUNCTIONS:$(echo "$PUBLIC_FUNCS" | grep -c "^" || echo 0)"
+
+      # Test files count
+      TEST_FILES=$(find internal/ pkg/ -name "*_test.go" 2>/dev/null | wc -l)
+      echo "TEST_FILES:$TEST_FILES"
+
+      # Source files count
+      SOURCE_FILES=$(find internal/ pkg/ -name "*.go" ! -name "*_test.go" 2>/dev/null | wc -l)
+      echo "SOURCE_FILES:$SOURCE_FILES"
+
+      # Domain layer files
+      DOMAIN_FILES=$(find internal/domain -name "*.go" 2>/dev/null | wc -l)
+      echo "DOMAIN_FILES:$DOMAIN_FILES"
+
+      # List all packages
+      echo "PACKAGES:"
+      go list ./... 2>/dev/null | head -30
+
+      # List public functions by layer
+      echo "PUBLIC_BY_LAYER:"
+      echo "  domain: $(grep -rn "^func [A-Z]" internal/domain/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l)"
+      echo "  application: $(grep -rn "^func [A-Z]" internal/application/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l)"
+      echo "  infrastructure: $(grep -rn "^func [A-Z]" internal/infrastructure/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l)"
+      echo "  interfaces: $(grep -rn "^func [A-Z]" internal/interfaces/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l)"
+      echo "  pkg: $(grep -rn "^func [A-Z]" pkg/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l)"
+
+      echo "STATUS:INVENTORIED"
+    capture:
+      stdout: inventory_output
+    on_success: collect_docs_inventory
+    on_failure: collect_docs_inventory
+
+  collect_docs_inventory:
+    type: step
+    description: Inventory documentation for analysis
+    command: |
+      echo "=== Documentation Inventory ==="
+
+      # README sections
+      echo "README_SECTIONS:"
+      grep "^##" README.md 2>/dev/null | head -20
+
+      # CLI commands documented
+      echo "DOCUMENTED_COMMANDS:"
+      grep -oE "awf [a-z]+" README.md 2>/dev/null | sort -u
+
+      # Actual CLI commands
+      echo "ACTUAL_COMMANDS:"
+      if [ -f "./bin/awf" ]; then
+        ./bin/awf --help 2>/dev/null | grep -E "^  [a-z]+" | awk '{print $1}'
+      else
+        go build -o /tmp/awf ./cmd/awf/ 2>/dev/null && /tmp/awf --help 2>/dev/null | grep -E "^  [a-z]+" | awk '{print $1}'
+        rm -f /tmp/awf
+      fi
+
+      # Feature specs
+      echo "FEATURE_SPECS:"
+      find docs/plans/features -name "F*.md" 2>/dev/null | wc -l
+      ls docs/plans/features/*/F*.md 2>/dev/null | head -20
+
+      # Changelog entries
+      echo "CHANGELOG_ENTRIES:"
+      grep -c "^##\|^###" CHANGELOG.md 2>/dev/null || echo 0
+
+      # Memories
+      echo "SERENA_MEMORIES:"
+      ls .serena/memories/*.md 2>/dev/null | xargs -I {} basename {} .md
+
+      echo "STATUS:DOCS_INVENTORIED"
+    capture:
+      stdout: docs_output
+    on_success: agent_code_test_analysis
+    on_failure: agent_code_test_analysis
+
+  # ==========================================================================
+  # PHASE 3: GO EXPERT AGENT ANALYSIS
+  # ==========================================================================
+
+  agent_code_test_analysis:
+    type: step
+    description: Go expert analysis of code/test coherence
+    timeout: 600s
+    command: |
+      echo "=== Go Expert: Code/Test Coherence Analysis ==="
+
+      METRICS="{{.states.collect_metrics.Output}}"
+      TESTS="{{.states.run_tests.Output}}"
+      INVENTORY="{{.states.collect_code_inventory.Output}}"
+      THRESHOLD={{.inputs.coverage_threshold}}
+
+      claude -p "You are a Go expert analyzing code/test coherence for the awf project (AI Workflow CLI).
+
+      ## Project Context
+      This is a Go CLI tool using hexagonal architecture with these layers:
+      - internal/domain/ - Business logic, ZERO external dependencies
+      - internal/application/ - Services orchestrating domain
+      - internal/infrastructure/ - Adapters (YAML, JSON, Shell)
+      - internal/interfaces/cli/ - Cobra CLI commands
+      - pkg/ - Public reusable packages
+
+      ## Collected Metrics
+      $METRICS
+
+      ## Test Results
+      $TESTS
+
+      ## Code Inventory
+      $INVENTORY
+
+      ## Coverage Threshold
+      Required: ${THRESHOLD}%
+
+      ## Your Task
+      Analyze the coherence between code and tests. Focus on:
+
+      1. **Coverage Analysis**
+         - Is coverage meeting the ${THRESHOLD}% threshold?
+         - Which layers have lowest coverage?
+         - Are critical paths tested?
+
+      2. **Test Quality**
+         - Are there race conditions? (check RACE_DETECTOR result)
+         - Unit vs Integration test balance
+         - Missing test scenarios
+
+      3. **Architecture Compliance**
+         - Does domain layer have external dependencies? (should be ZERO)
+         - Are ports properly tested?
+         - Is dependency injection used correctly?
+
+      4. **Specific Gaps**
+         - List specific public functions that likely need tests
+         - Identify test files without corresponding source (orphans)
+         - Check if error paths are tested
+
+      ## Output Format
+      Output a structured analysis with:
+      - SCORE: X/10 (overall code/test coherence)
+      - CRITICAL_ISSUES: (blocking issues)
+      - WARNINGS: (non-blocking but important)
+      - RECOMMENDATIONS: (prioritized action items)
+
+      Be specific with file paths and function names when possible.
+      Use the Serena MCP tools (find_symbol, get_symbols_overview) if you need to explore the code.
+      " \
+        --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__search_for_pattern" \
+        --dangerously-skip-permissions \
+        2>&1 || echo "AGENT_ERROR: Claude analysis failed"
+    capture:
+      stdout: code_test_analysis
+    continue_on_error: true
+    on_success: agent_code_docs_analysis
+    on_failure: agent_code_docs_analysis
+
+  agent_code_docs_analysis:
+    type: step
+    description: Go expert analysis of code/docs coherence
+    timeout: 600s
+    command: |
+      echo "=== Go Expert: Code/Docs Coherence Analysis ==="
+
+      INVENTORY="{{.states.collect_code_inventory.Output}}"
+      DOCS="{{.states.collect_docs_inventory.Output}}"
+
+      # Get feature roadmap content
+      ROADMAP=$(cat .serena/memories/feature_roadmap.md 2>/dev/null || echo "No roadmap found")
+
+      claude -p "You are a Go expert analyzing code/documentation coherence for the awf project.
+
+      ## Code Inventory
+      $INVENTORY
+
+      ## Documentation Inventory
+      $DOCS
+
+      ## Feature Roadmap
+      $ROADMAP
+
+      ## Your Task
+      Analyze the coherence between code and documentation. Focus on:
+
+      1. **CLI Documentation**
+         - Are all CLI commands documented in README?
+         - Are command flags and options documented?
+         - Are usage examples accurate?
+
+      2. **Feature Roadmap Accuracy**
+         - Features marked DONE but not implemented?
+         - Features implemented but marked PLANNED?
+         - Check F009 (State Machine), F010 (Parallel) status vs code
+
+      3. **API Documentation**
+         - Do public functions have godoc comments?
+         - Are exported types documented?
+         - Is the architecture documented correctly?
+
+      4. **Code Comments**
+         - Are complex algorithms explained?
+         - Are non-obvious decisions documented?
+         - Are TODO/FIXME items tracked?
+
+      ## Output Format
+      Output a structured analysis with:
+      - SCORE: X/10 (overall code/docs coherence)
+      - OUTDATED_DOCS: (docs that don't match code)
+      - MISSING_DOCS: (code without documentation)
+      - ROADMAP_ISSUES: (roadmap vs reality gaps)
+      - RECOMMENDATIONS: (prioritized action items)
+
+      Use the Serena MCP tools to verify specific code patterns if needed.
+      " \
+        --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__search_for_pattern,mcp__plugin_common_serena__read_memory" \
+        --dangerously-skip-permissions \
+        2>&1 || echo "AGENT_ERROR: Claude analysis failed"
+    capture:
+      stdout: code_docs_analysis
+    continue_on_error: true
+    on_success: agent_architecture_analysis
+    on_failure: agent_architecture_analysis
+
+  agent_architecture_analysis:
+    type: step
+    description: Go expert deep architecture analysis
+    timeout: 600s
+    command: |
+      echo "=== Go Expert: Architecture Deep Analysis ==="
+
+      INVENTORY="{{.states.collect_code_inventory.Output}}"
+
+      # Get domain imports to check purity
+      DOMAIN_IMPORTS=$(grep -rh "^import\|^\t\"" internal/domain/ 2>/dev/null | sort -u || true)
+
+      # Get port definitions
+      PORTS=$(grep -rn "type.*interface" internal/domain/ports/ 2>/dev/null || true)
+
+      claude -p "You are a Go expert performing deep architecture analysis on the awf project.
+
+      ## Architecture Goal
+      Hexagonal/Clean Architecture with strict dependency inversion:
+      - Domain layer MUST have ZERO external dependencies (only stdlib)
+      - Application layer orchestrates domain via ports
+      - Infrastructure implements ports
+      - Interfaces (CLI) wire everything together
+
+      ## Code Inventory
+      $INVENTORY
+
+      ## Domain Layer Imports
+      $DOMAIN_IMPORTS
+
+      ## Port Definitions
+      $PORTS
+
+      ## Your Task
+      Perform deep architecture analysis:
+
+      1. **Domain Purity**
+         - Check if domain imports ONLY standard library
+         - Allowed: fmt, errors, time, context, strings, strconv, sort, sync, regexp
+         - NOT allowed: any third-party packages, any internal/* outside domain
+
+      2. **Port/Adapter Pattern**
+         - Are all external dependencies behind ports?
+         - Is CommandExecutor properly abstracted?
+         - Is StateStore properly abstracted?
+         - Is WorkflowRepository properly abstracted?
+
+      3. **Dependency Direction**
+         - Does domain depend on nothing external?
+         - Does application only depend on domain?
+         - Does infrastructure implement domain ports?
+
+      4. **SOLID Principles**
+         - Single Responsibility: Are services focused?
+         - Open/Closed: Can we extend without modifying?
+         - Liskov Substitution: Can adapters be swapped?
+         - Interface Segregation: Are ports minimal?
+         - Dependency Inversion: Do we depend on abstractions?
+
+      ## Output Format
+      - ARCHITECTURE_SCORE: X/10
+      - DOMAIN_PURITY: PASS/FAIL with details
+      - VIOLATIONS: List any architecture violations
+      - PATTERNS_USED: Correctly implemented patterns
+      - IMPROVEMENTS: Suggested architectural improvements
+
+      Use mcp__plugin_common_serena__find_symbol and mcp__plugin_common_serena__get_symbols_overview to explore the code structure.
+      " \
+        --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__find_referencing_symbols" \
+        --dangerously-skip-permissions \
+        2>&1 || echo "AGENT_ERROR: Claude analysis failed"
+    capture:
+      stdout: architecture_analysis
+    continue_on_error: true
+    on_success: agent_final_synthesis
+    on_failure: agent_final_synthesis
+
+  # ==========================================================================
+  # PHASE 4: FINAL SYNTHESIS
+  # ==========================================================================
+
+  agent_final_synthesis:
+    type: step
+    description: Go expert final synthesis and recommendations
+    timeout: 600s
+    command: |
+      echo "=== Go Expert: Final Synthesis ==="
+
+      THRESHOLD={{.inputs.coverage_threshold}}
+
+      # Write previous analyses to temp files to avoid shell escaping issues
+      cat > /tmp/awf_code_test.txt << 'CODE_TEST_EOF'
+      {{.states.agent_code_test_analysis.Output}}
+      CODE_TEST_EOF
+
+      cat > /tmp/awf_code_docs.txt << 'CODE_DOCS_EOF'
+      {{.states.agent_code_docs_analysis.Output}}
+      CODE_DOCS_EOF
+
+      cat > /tmp/awf_arch.txt << 'ARCH_EOF'
+      {{.states.agent_architecture_analysis.Output}}
+      ARCH_EOF
+
+      # Build prompt with file contents
+      cat > /tmp/awf_prompt.txt << PROMPT_EOF
+      You are a senior Go expert providing the final audit synthesis for the awf project.
+
+      ## Previous Analyses
+
+      ### Code/Test Coherence
+      $(cat /tmp/awf_code_test.txt)
+
+      ### Code/Docs Coherence
+      $(cat /tmp/awf_code_docs.txt)
+
+      ### Architecture Analysis
+      $(cat /tmp/awf_arch.txt)
+
+      ## Coverage Threshold
+      Required: ${THRESHOLD}%
+
+      ## Your Task
+      Synthesize all analyses into a final audit report:
+
+      1. **Executive Summary**
+         - Overall project health (1-10)
+         - Top 3 strengths
+         - Top 3 weaknesses
+
+      2. **Detailed Findings**
+         - Code Quality: X/10
+         - Test Coverage: X/10 (vs ${THRESHOLD}% threshold)
+         - Documentation: X/10
+         - Architecture: X/10
+
+      3. **Critical Issues** (must fix)
+         - List with priority and effort estimate
+
+      4. **Warnings** (should fix)
+         - List with priority and effort estimate
+
+      5. **Action Plan**
+         - Immediate actions (this sprint)
+         - Short-term actions (next sprint)
+         - Long-term improvements
+
+      6. **Metrics Summary**
+         - Total public functions
+         - Test coverage %
+         - Lint issues
+         - Documentation coverage estimate
+
+      ## Output Format
+      Output a well-formatted Markdown report suitable for saving directly to a file.
+      Include clear sections, bullet points, and a summary table.
+
+      End with:
+      OVERALL_STATUS: PASS|WARN|FAIL
+      OVERALL_SCORE: X/10
+      PROMPT_EOF
+
+      claude -p "$(cat /tmp/awf_prompt.txt)" \
+        --dangerously-skip-permissions \
+        2>&1 || echo "AGENT_ERROR: Claude synthesis failed"
+
+      rm -f /tmp/awf_code_test.txt /tmp/awf_code_docs.txt /tmp/awf_arch.txt /tmp/awf_prompt.txt
+    capture:
+      stdout: final_synthesis
+    on_success: generate_report
+    on_failure: generate_report
+
+  # ==========================================================================
+  # PHASE 5: REPORT GENERATION
+  # ==========================================================================
+
+  generate_report:
+    type: step
+    description: Generate final markdown report
+    command: |
+      OUTPUT_FILE="{{.inputs.output_file}}"
+
+      # Write header
+      echo "# AWF Audit Report" > "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')" >> "$OUTPUT_FILE"
+      echo "Workflow: audit v2.0.0 (Go Expert Analysis)" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "* * *" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "## Raw Metrics" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Build & Quality" >> "$OUTPUT_FILE"
+      echo '```' >> "$OUTPUT_FILE"
+
+      # Use heredoc with quoted delimiter to prevent shell interpretation
+      cat >> "$OUTPUT_FILE" << 'METRICS_EOF'
+      {{.states.collect_metrics.Output}}
+      METRICS_EOF
+
+      echo '```' >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Test Results" >> "$OUTPUT_FILE"
+      echo '```' >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'TESTS_EOF'
+      {{.states.run_tests.Output}}
+      TESTS_EOF
+
+      echo '```' >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Code Inventory" >> "$OUTPUT_FILE"
+      echo '```' >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'INVENTORY_EOF'
+      {{.states.collect_code_inventory.Output}}
+      INVENTORY_EOF
+
+      echo '```' >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "* * *" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "## Go Expert Analysis" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Code/Test Coherence" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'CODE_TEST_EOF'
+      {{.states.agent_code_test_analysis.Output}}
+      CODE_TEST_EOF
+
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Code/Docs Coherence" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'CODE_DOCS_EOF'
+      {{.states.agent_code_docs_analysis.Output}}
+      CODE_DOCS_EOF
+
+      echo "" >> "$OUTPUT_FILE"
+      echo "### Architecture Analysis" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'ARCH_EOF'
+      {{.states.agent_architecture_analysis.Output}}
+      ARCH_EOF
+
+      echo "" >> "$OUTPUT_FILE"
+      echo "* * *" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+      echo "## Final Synthesis" >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+
+      cat >> "$OUTPUT_FILE" << 'SYNTHESIS_EOF'
+      {{.states.agent_final_synthesis.Output}}
+      SYNTHESIS_EOF
+
+      echo "" >> "$OUTPUT_FILE"
+      echo "* * *" >> "$OUTPUT_FILE"
+      echo "*Report generated by awf audit workflow v2.0.0*" >> "$OUTPUT_FILE"
+
+      echo "Report generated: $OUTPUT_FILE"
+      echo "STATUS:DONE"
+    capture:
+      stdout: report_output
+    on_success: determine_exit
+    on_failure: error_report
+
+  determine_exit:
+    type: step
+    description: Determine final exit status from synthesis
+    command: |
+      # Write synthesis to temp file for safe grep
+      cat > /tmp/awf_synthesis.txt << 'SYNTHESIS_EOF'
+      {{.states.agent_final_synthesis.Output}}
+      SYNTHESIS_EOF
+
+      # Extract overall status from synthesis
+      if grep -q "OVERALL_STATUS: PASS" /tmp/awf_synthesis.txt 2>/dev/null; then
+        echo "EXIT:0"
+        echo "MESSAGE:Audit completed successfully - all checks passed"
+        echo "OVERALL:PASS"
+      elif grep -q "OVERALL_STATUS: WARN" /tmp/awf_synthesis.txt 2>/dev/null; then
+        echo "EXIT:1"
+        echo "MESSAGE:Audit completed with warnings"
+        echo "OVERALL:WARN"
+      elif grep -q "OVERALL_STATUS: FAIL" /tmp/awf_synthesis.txt 2>/dev/null; then
+        echo "EXIT:3"
+        echo "MESSAGE:Audit failed - critical issues require attention"
+        echo "OVERALL:FAIL"
+      else
+        # Fallback: check for AGENT_ERROR
+        if grep -q "AGENT_ERROR" /tmp/awf_synthesis.txt 2>/dev/null; then
+          echo "EXIT:2"
+          echo "MESSAGE:Audit completed but agent analysis failed"
+          echo "OVERALL:PARTIAL"
+        else
+          echo "EXIT:1"
+          echo "MESSAGE:Audit completed with unknown status"
+          echo "OVERALL:UNKNOWN"
+        fi
+      fi
+      rm -f /tmp/awf_synthesis.txt
+    capture:
+      stdout: exit_output
+    on_success: done
+    on_failure: done_with_warnings
+
+  # ==========================================================================
+  # TERMINAL STATES
+  # ==========================================================================
+
+  done:
+    type: terminal
+    status: success
+    message: "Audit completed - Report generated at {{.inputs.output_file}}"
+
+  done_with_warnings:
+    type: terminal
+    status: success
+    message: "Audit completed with warnings - Review {{.inputs.output_file}}"
+
+  error_build:
+    type: terminal
+    status: failure
+    message: "Build failed - Code does not compile"
+
+  error_report:
+    type: terminal
+    status: failure
+    message: "Report generation failed"
+
+hooks:
+  workflow_start:
+    - log: "Starting comprehensive audit with Go expert analysis..."
+  workflow_end:
+    - log: "Audit completed in {{.workflow.Duration}}"
+  workflow_error:
+    - log: "Audit error: {{.error.Message}}"
