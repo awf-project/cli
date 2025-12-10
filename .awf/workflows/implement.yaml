@@ -390,6 +390,119 @@ states:
     timeout: 10s
     capture:
       stdout: status_update_output
+    on_success: update_kanban
+    on_failure: update_kanban
+
+  update_kanban:
+    type: step
+    description: Move feature from Backlog to Done in KANBAN.md
+    command: |
+      KANBAN_FILE="docs/plans/KANBAN.md"
+      if [ ! -f "$KANBAN_FILE" ]; then
+        echo "KANBAN_NOT_FOUND"
+        exit 0
+      fi
+
+      # Find the feature line pattern (e.g., "- [F039](features/v0.1.0/F039-...")
+      FEATURE_PATTERN="\[{{.inputs.feature_id}}\]"
+
+      # Check if feature exists in file
+      if ! grep -q "$FEATURE_PATTERN" "$KANBAN_FILE"; then
+        echo "FEATURE_NOT_IN_KANBAN"
+        exit 0
+      fi
+
+      # Extract the full feature line
+      FEATURE_LINE=$(grep "$FEATURE_PATTERN" "$KANBAN_FILE" | head -1)
+
+      # Remove from current location (Backlog section)
+      sed -i "/$FEATURE_PATTERN/d" "$KANBAN_FILE"
+
+      # Find the Done section for the appropriate phase and add the feature
+      # First, find which phase this feature belongs to by checking the path
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      if [ -n "$SPEC_FILE" ]; then
+        # Extract version from path (e.g., v0.1.0)
+        VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+')
+
+        # Add to Done section - append after the "### Phase X" line in Done
+        # Find the correct phase in Done section and append
+        if [ -n "$VERSION" ]; then
+          # Use awk to insert the feature line in the Done section
+          awk -v feat="$FEATURE_LINE" -v ver="$VERSION" '
+            /^## Done/ { in_done=1 }
+            in_done && /^### Phase/ && $0 ~ ver {
+              print; getline;
+              while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
+              print feat
+              next
+            }
+            { print }
+          ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
+        fi
+      fi
+
+      echo "KANBAN_UPDATED"
+    timeout: 15s
+    capture:
+      stdout: kanban_update_output
+    on_success: update_readme
+    on_failure: update_readme
+
+  update_readme:
+    type: step
+    description: Claude updates README.md based on implemented feature
+    command: |
+      # Get staged files list
+      STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
+
+      # Find spec and plan files
+      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+
+      # Read spec content
+      SPEC_CONTENT=""
+      if [ -n "$SPEC_FILE" ] && [ -f "$SPEC_FILE" ]; then
+        SPEC_CONTENT=$(cat "$SPEC_FILE")
+      fi
+
+      # Read plan content
+      PLAN_CONTENT=""
+      if [ -f "$PLAN_FILE" ]; then
+        PLAN_CONTENT=$(cat "$PLAN_FILE")
+      fi
+
+      claude -p "Update the README.md to reflect the newly implemented feature {{.inputs.feature_id}}.
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Staged/Modified Files
+      $STAGED_FILES
+
+      ## Your Task
+      1. Read the current README.md
+      2. Update the Roadmap section:
+         - Check the checkbox for this feature (change '- [ ]' to '- [x]')
+         - If the feature is not listed, add it to the appropriate phase section
+      3. If the feature adds new CLI commands or flags:
+         - Update the Commands table
+         - Update the relevant Flags sections
+      4. If the feature changes workflow syntax:
+         - Update the Workflow Syntax section
+      5. Keep changes minimal and focused on this feature only
+
+      Output 'README_UPDATED' when done, or 'README_NO_CHANGES' if no updates needed." \
+        --allowedTools "Read,Edit" \
+        --dangerously-skip-permissions \
+        --output-format json 2>&1 || echo "README_UPDATE_FAILED"
+    timeout: 180s
+    capture:
+      stdout: readme_update_output
+      max_size: 1MB
     on_success: summary
     on_failure: summary
 
@@ -405,8 +518,6 @@ states:
       echo "║ Skills: {{.inputs.skills}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ TDD Results:"
-      LINT_BEFORE=$(echo '{{.states.run_lint_before.Output}}' | tail -1)
-      TESTS_BEFORE=$(echo '{{.states.run_tests_before.Output}}' | tail -1)
       RED_RESULT=$(echo '{{.states.run_tests_red.Output}}' | grep -o 'RED_PHASE_[A-Z]*' | tail -1)
       GREEN_RESULT=$(echo '{{.states.run_tests_green.Output}}' | grep -o 'GREEN_PHASE_[A-Z]*' | tail -1)
       LINT_AFTER=$(echo '{{.states.run_lint_after.Output}}' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS')
@@ -416,7 +527,10 @@ states:
       echo "║   GREEN Phase: $GREEN_RESULT"
       echo "║   Final Lint: $LINT_AFTER"
       echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ Status: {{.states.update_spec_status.Output}}"
+      echo "║ Documentation Updates:"
+      echo "║   Spec Status: {{.states.update_spec_status.Output}}"
+      echo "║   KANBAN: {{.states.update_kanban.Output}}"
+      echo "║   README: {{.states.update_readme.Output}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ NO COMMIT - Review changes and commit manually                 ║"
       echo "╚════════════════════════════════════════════════════════════════╝"
