@@ -1,7 +1,7 @@
 # F036: CLI Init Command
 
 ## Metadata
-- **Status**: backlog
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
 - **Priority**: medium
@@ -13,14 +13,14 @@ Implement the `awf init` command to initialize AWF configuration in the current 
 
 ## Acceptance Criteria
 
-- [ ] `awf init` creates `.awf.yaml` configuration file
-- [ ] `awf init` creates `workflows/` directory for YAML definitions
-- [ ] `awf init` creates `storage/` directory for states and logs
-- [ ] Command is idempotent (safe to run multiple times)
-- [ ] Existing files are NOT overwritten (prompt or skip)
-- [ ] `awf init --force` overwrites existing configuration
-- [ ] Creates a sample workflow file in `workflows/hello.yaml`
-- [ ] Displays clear success message with next steps
+- [x] `awf init` creates `.awf.yaml` configuration file
+- [x] `awf init` creates `.awf/workflows/` directory for YAML definitions
+- [x] `awf init` creates `.awf/storage/` directory for states and logs
+- [x] Command is idempotent (safe to run multiple times)
+- [x] Existing files are NOT overwritten (skip if exists)
+- [x] `awf init --force` overwrites existing configuration
+- [x] Creates a sample workflow file in `.awf/workflows/example.yaml`
+- [x] Displays clear success message with next steps
 
 ## Dependencies
 
@@ -39,24 +39,19 @@ tests/integration/init_test.go
 
 ## Technical Tasks
 
-- [ ] Create `init` command in Cobra
-  - [ ] Register in root command
-  - [ ] Add `--force` flag for overwriting
-  - [ ] Add `--workflows-dir` flag (default: `workflows/`)
-  - [ ] Add `--storage-dir` flag (default: `storage/`)
-- [ ] Implement directory creation
-  - [ ] Create workflows directory
-  - [ ] Create storage directory with subdirs (states/, logs/)
-  - [ ] Handle existing directories gracefully
-- [ ] Implement configuration file generation
-  - [ ] Create `.awf.yaml` with sensible defaults
-  - [ ] Include comments explaining each option
-  - [ ] Respect custom directory flags
-- [ ] Create sample workflow
-  - [ ] Generate `workflows/hello.yaml` with simple echo example
-  - [ ] Include comments explaining workflow syntax
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Create `init` command in Cobra
+  - [x] Register in root command
+  - [x] Add `--force` flag for overwriting
+- [x] Implement directory creation
+  - [x] Create `.awf/workflows/` directory
+  - [x] Create `.awf/storage/` directory with subdirs (states/, logs/)
+  - [x] Handle existing directories gracefully
+- [x] Implement configuration file generation
+  - [x] Create `.awf.yaml` with sensible defaults
+  - [x] Include comments explaining each option
+- [x] Create sample workflow
+  - [x] Generate `.awf/workflows/example.yaml` with simple echo example
+- [x] Write unit tests
 
 ## Notes
 

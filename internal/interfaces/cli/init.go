@@ -6,54 +6,133 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/infrastructure/xdg"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
+const (
+	awfDir         = ".awf"
+	workflowsDir   = "workflows"
+	storageDir     = "storage"
+	statesDir      = "states"
+	logsDir        = "logs"
+	configFileName = ".awf.yaml"
+	exampleFile    = "example.yaml"
+)
+
 func newInitCommand(cfg *Config) *cobra.Command {
-	return &cobra.Command{
+	var force bool
+
+	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize AWF in the current directory",
-		Long: `Initialize AWF in the current directory by creating the local workflows directory.
+		Long: `Initialize AWF in the current directory by creating the local configuration.
 
 This creates:
-  .awf/workflows/           Local workflows directory
+  .awf.yaml                  Configuration file
+  .awf/workflows/            Local workflows directory
   .awf/workflows/example.yaml  Example workflow file
+  .awf/storage/states/       State persistence directory
+  .awf/storage/logs/         Log files directory
 
 Examples:
-  awf init`,
+  awf init
+  awf init --force`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(cmd, cfg)
+			return runInit(cmd, cfg, force)
 		},
 	}
+
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing configuration")
+
+	return cmd
 }
 
-func runInit(cmd *cobra.Command, cfg *Config) error {
+func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
 
-	workflowsDir := xdg.LocalWorkflowsDir()
+	awfPath := awfDir
+	configPath := configFileName
 
-	// Check if directory already exists
-	if _, err := os.Stat(workflowsDir); err == nil {
-		formatter.Info(fmt.Sprintf("Directory '%s' already exists", workflowsDir))
-		return nil
+	// Check if already initialized
+	if !force {
+		if _, err := os.Stat(awfPath); err == nil {
+			formatter.Info(fmt.Sprintf("AWF already initialized in '%s'", awfPath))
+			formatter.Info("Use --force to reinitialize")
+			return nil
+		}
 	}
 
-	// Create directory
-	if err := os.MkdirAll(workflowsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+	// Create .awf directory structure
+	dirs := []string{
+		filepath.Join(awfPath, workflowsDir),
+		filepath.Join(awfPath, storageDir, statesDir),
+		filepath.Join(awfPath, storageDir, logsDir),
 	}
 
-	formatter.Success(fmt.Sprintf("Created %s", workflowsDir))
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	formatter.Success(fmt.Sprintf("Created %s", awfPath))
+
+	// Create config file
+	if err := createConfigFile(configPath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", configPath))
 
 	// Create example workflow
-	examplePath := filepath.Join(workflowsDir, "example.yaml")
-	exampleContent := `name: example
+	examplePath := filepath.Join(awfPath, workflowsDir, exampleFile)
+	if err := createExampleWorkflow(examplePath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", examplePath))
+
+	// Next steps
+	formatter.Info("\nNext steps:")
+	formatter.Info("  awf list          - List available workflows")
+	formatter.Info("  awf run example   - Run the example workflow")
+	formatter.Info("  awf validate      - Validate a workflow file")
+
+	return nil
+}
+
+func createConfigFile(path string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return nil // File exists, skip
+		}
+	}
+
+	content := `# AWF Configuration
+# https://github.com/vanoix/awf
+
+version: "1"
+
+# Default log level: debug, info, warn, error
+log_level: info
+
+# Output format: text, json, table, quiet
+output_format: text
+`
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func createExampleWorkflow(path string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return nil // File exists, skip
+		}
+	}
+
+	content := `name: example
 version: "1.0.0"
 description: Example workflow created by awf init
 
@@ -68,14 +147,5 @@ states:
   done:
     type: terminal
 `
-
-	if err := os.WriteFile(examplePath, []byte(exampleContent), 0644); err != nil {
-		return fmt.Errorf("failed to create example workflow: %w", err)
-	}
-
-	formatter.Success(fmt.Sprintf("Created %s", examplePath))
-	formatter.Info("\nRun 'awf list' to see available workflows")
-	formatter.Info("Run 'awf run example' to execute the example workflow")
-
-	return nil
+	return os.WriteFile(path, []byte(content), 0644)
 }
