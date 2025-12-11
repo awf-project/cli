@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F014**: BadgerDB History
 - **F013**: Commande Resume
 - **F012**: Validation des Inputs
 - **F011**: Retry avec Backoff Exponentiel

@@ -91,6 +91,7 @@ Examples:
 	cmd.AddCommand(newResumeCommand(cfg))
 	cmd.AddCommand(newStatusCommand(cfg))
 	cmd.AddCommand(newValidateCommand(cfg))
+	cmd.AddCommand(newHistoryCommand(cfg))
 
 	return cmd
 }

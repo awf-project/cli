@@ -5,10 +5,10 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 ## Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        AWF CLI                              │
-│  awf run | awf resume | awf list | awf status | awf validate │
-└─────────────────────────────┬───────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                            AWF CLI                                  │
+│  awf run | awf resume | awf list | awf status | awf validate | awf history │
+└─────────────────────────────────┬───────────────────────────────────┘
                               │
 ┌─────────────────────────────┴───────────────────────────────┐
 │                    YAML Workflow                            │
@@ -101,6 +101,7 @@ awf run hello --input name=World
 | `awf list` | List available workflows |
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
+| `awf history` | Show workflow execution history |
 | `awf version` | Show version info |
 
 ### Init Command Flags
@@ -134,6 +135,39 @@ awf resume abc123-def456
 
 # Resume with input override
 awf resume abc123-def456 --input max_tokens=5000
+```
+
+### History Command Flags
+
+```
+--workflow, -w    Filter by workflow name
+--status, -s      Filter by status (success, failed, interrupted)
+--since           Show executions since date (YYYY-MM-DD)
+--limit, -n       Maximum entries to show (default: 20)
+--stats           Show statistics only
+```
+
+```bash
+# List recent executions
+awf history
+
+# Filter by workflow
+awf history --workflow deploy
+
+# Filter by status
+awf history --status failed
+
+# Show executions since date
+awf history --since 2025-12-01
+
+# Show statistics only
+awf history --stats
+
+# JSON output for scripting
+awf history -f json
+
+# Combined filters
+awf history -w deploy -s success --since 2025-12-01 -n 50
 ```
 
 ### Global Flags
@@ -477,7 +511,6 @@ awf/
 **Required:**
 - Go 1.21+
 - Make
-- GCC (for CGO/SQLite)
 
 **For development:**
 - [golangci-lint](https://golangci-lint.run/welcome/install/) - Linter
@@ -512,6 +545,7 @@ make fmt            # Format code
 - `google/uuid` - UUID generation
 - `stretchr/testify` - Testing
 - `golang.org/x/sync/errgroup` - Parallel execution
+- `dgraph-io/badger/v4` - History storage
 
 ## Roadmap
 
@@ -537,7 +571,7 @@ make fmt            # Format code
 - [x] Retry with exponential backoff
 - [x] Input validation
 - [x] Resume command
-- [ ] SQLite history
+- [x] BadgerDB history
 
 ### Phase 3+ - Advanced Features
 - [ ] Conditions (if/else)

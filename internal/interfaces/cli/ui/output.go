@@ -224,6 +224,16 @@ func (w *OutputWriter) IsJSONFormat() bool {
 	return w.format == FormatJSON
 }
 
+// Out returns the output writer.
+func (w *OutputWriter) Out() io.Writer {
+	return w.out
+}
+
+// WriteJSON outputs any value as JSON.
+func (w *OutputWriter) WriteJSON(v any) error {
+	return w.writeJSON(v)
+}
+
 // WriteWorkflows outputs workflow list.
 func (w *OutputWriter) WriteWorkflows(workflows []WorkflowInfo) error {
 	switch w.format {

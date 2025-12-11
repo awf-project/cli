@@ -4,7 +4,6 @@
 
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
-- [F014](features/v0.2.0/F014-sqlite-history.md) SQLite history
 - [F041](features/v0.2.0/F041-template-reference-validation.md) Validate template interpolation references in workflow validation
 ### Phase 3 - Advanced Features (v0.3.0)
 - [F015](features/v0.3.0/F015-conditions.md) Complex conditions (if/else)
@@ -73,7 +72,7 @@ _No features in review_
 - [F040](features/v0.1.0/F040-.md) Organise le refactoring sur la base du rapport d'audit @audit-report.md
 - [F012](features/v0.2.0/F012-input-validation.md) Input validation
 - [F013](features/v0.2.0/F013-workflow-resume.md) Resume command
-
+- [F014](features/v0.2.0/F014-badger-history.md) BadgerDB history
 | Phase | Total | Backlog | Ready | In Progress | Review | Done |
 |-------|-------|---------|-------|-------------|--------|------|
 | 1 - MVP | 16 | 0 | 0 | 0 | 0 | 16 |

@@ -101,7 +101,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	// execute
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -161,7 +161,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -220,7 +220,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -257,7 +257,7 @@ func TestLinearExecution_WithValidFixture_Integration(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -311,7 +311,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -368,7 +368,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -438,7 +438,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -498,7 +498,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -542,7 +542,7 @@ states:
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
 	// Capture streaming output
 	var stdoutBuf, stderrBuf bytes.Buffer
