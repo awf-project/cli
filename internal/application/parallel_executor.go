@@ -89,6 +89,7 @@ func (e *ParallelExecutor) executeAllSucceed(
 	for _, branch := range branches {
 		branch := branch
 		g.Go(func() error {
+			startTime := time.Now()
 			// Acquire semaphore
 			if sem != nil {
 				select {
@@ -108,6 +109,7 @@ func (e *ParallelExecutor) executeAllSucceed(
 				result.AddResult(&workflow.BranchResult{
 					Name:        branch,
 					Error:       err,
+					StartedAt:   startTime,
 					CompletedAt: time.Now(),
 				})
 				return err
@@ -153,6 +155,7 @@ func (e *ParallelExecutor) executeAnySucceed(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			startTime := time.Now()
 
 			// Acquire semaphore
 			if sem != nil {
@@ -173,6 +176,7 @@ func (e *ParallelExecutor) executeAnySucceed(
 				result.AddResult(&workflow.BranchResult{
 					Name:        branch,
 					Error:       err,
+					StartedAt:   startTime,
 					CompletedAt: time.Now(),
 				})
 				return
@@ -237,6 +241,7 @@ func (e *ParallelExecutor) executeBestEffort(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			startTime := time.Now()
 
 			// Acquire semaphore
 			if sem != nil {
@@ -248,6 +253,7 @@ func (e *ParallelExecutor) executeBestEffort(
 					result.AddResult(&workflow.BranchResult{
 						Name:        branch,
 						Error:       ctx.Err(),
+						StartedAt:   startTime,
 						CompletedAt: time.Now(),
 					})
 					mu.Unlock()
@@ -264,6 +270,7 @@ func (e *ParallelExecutor) executeBestEffort(
 				result.AddResult(&workflow.BranchResult{
 					Name:        branch,
 					Error:       err,
+					StartedAt:   startTime,
 					CompletedAt: time.Now(),
 				})
 				return

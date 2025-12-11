@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -179,10 +180,22 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 	resolver := interpolation.NewTemplateResolver()
 
+	// Create history store and service
+	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	if err != nil {
+		return fmt.Errorf("failed to open history store: %w", err)
+	}
+	defer func() {
+		if err := historyStore.Close(); err != nil {
+			logger.Error("failed to close history store", "error", err)
+		}
+	}()
+	historySvc := application.NewHistoryService(historyStore, logger)
+
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
 
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)

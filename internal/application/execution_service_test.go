@@ -36,7 +36,7 @@ func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
 	executor.results["echo hello"] = &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
@@ -68,7 +68,7 @@ func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
 	executor := newMockExecutor() // default returns ExitCode: 0
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "multi", nil)
 
@@ -107,7 +107,7 @@ func TestExecutionService_Run_FailureTransition(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "failed"}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "fail-test", nil)
 
@@ -142,7 +142,7 @@ func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "fail-no-transition", nil)
 
@@ -175,7 +175,7 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
 
@@ -185,7 +185,7 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 
 func TestExecutionService_Run_WorkflowNotFound(t *testing.T) {
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Run(context.Background(), "nonexistent", nil)
 
@@ -205,7 +205,7 @@ func TestExecutionService_Run_WithInputs(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	inputs := map[string]any{"name": "test", "count": 42}
 	ctx, err := execSvc.Run(context.Background(), "input-test", inputs)
@@ -237,7 +237,7 @@ func TestExecutionService_Run_StepNotFound(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Run(context.Background(), "bad-ref", nil)
 
@@ -256,7 +256,7 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "immediate", nil)
 
@@ -267,7 +267,7 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 
 func TestNewExecutionService(t *testing.T) {
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	assert.NotNil(t, execSvc)
 }
@@ -317,7 +317,7 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 	executor := &errorMockExecutor{err: errors.New("command not found")}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
 
@@ -345,7 +345,7 @@ func TestExecutionService_Run_WithDir(t *testing.T) {
 	executor := newCapturingMockExecutor()
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Run(context.Background(), "dir-test", nil)
 
@@ -373,7 +373,7 @@ func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
 	executor := newCapturingMockExecutor()
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Run(context.Background(), "no-dir-test", nil)
 
@@ -399,7 +399,7 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 	executor := newMockExecutor()
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	execCtx, err := execSvc.Run(context.Background(), "checkpoint-test", nil)
 	require.NoError(t, err)
@@ -449,7 +449,7 @@ func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "continue-on-error", nil)
 
@@ -487,7 +487,7 @@ func TestExecutionService_Run_ContinueOnErrorWithExecutorError(t *testing.T) {
 	executor := &errorMockExecutor{err: errors.New("command not found")}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "continue-exec-error", nil)
 
@@ -519,7 +519,7 @@ func TestExecutionService_Run_ContinueOnErrorFalseFollowsOnFailure(t *testing.T)
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "normal-failure", nil)
 
@@ -568,7 +568,7 @@ func TestExecutionService_Run_ContinueOnErrorMultipleSteps(t *testing.T) {
 	executor.results["success"] = &ports.CommandResult{ExitCode: 0}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "multi-continue", nil)
 
@@ -608,7 +608,7 @@ func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "continue-no-onfailure", nil)
 
@@ -688,7 +688,7 @@ func TestExecutionService_Run_WithRetry_SucceedsOnRetry(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-success", nil)
 
@@ -740,7 +740,7 @@ func TestExecutionService_Run_WithRetry_ExhaustsAttempts(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-exhausted", nil)
 
@@ -791,7 +791,7 @@ func TestExecutionService_Run_WithRetry_ContextCancelled(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// Cancel after 100ms (before many retries can happen)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -833,7 +833,7 @@ func TestExecutionService_Run_NoRetryConfig(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "no-retry", nil)
 
@@ -877,7 +877,7 @@ func TestExecutionService_Run_WithRetry_OnlySpecificExitCodes(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-codes", nil)
 
@@ -923,7 +923,7 @@ func TestExecutionService_Run_WithRetry_RetryableExitCodeSucceeds(t *testing.T) 
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-specific-code", nil)
 
@@ -963,7 +963,7 @@ func TestExecutionService_Run_WithRetry_MaxAttemptsOne(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "no-retry-one", nil)
 
@@ -1005,7 +1005,7 @@ func TestExecutionService_Run_WithRetry_ExponentialBackoff(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	start := time.Now()
 	ctx, err := execSvc.Run(context.Background(), "retry-exponential", nil)
@@ -1071,7 +1071,7 @@ func TestExecutionService_Run_WithRetry_MultipleStepsWithRetry(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "multi-retry", nil)
 
@@ -1119,7 +1119,7 @@ func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	inputs := map[string]any{
 		"email": "test@example.com",
@@ -1157,7 +1157,7 @@ func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	inputs := map[string]any{
 		"email": "not-an-email",
@@ -1191,7 +1191,7 @@ func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// Empty inputs - required field missing
 	_, err := execSvc.Run(context.Background(), "required-missing", map[string]any{})
@@ -1227,7 +1227,7 @@ func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// count=150 exceeds max=100
 	inputs := map[string]any{
@@ -1265,7 +1265,7 @@ func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// "local" not in enum list
 	inputs := map[string]any{
@@ -1321,7 +1321,7 @@ func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// All inputs invalid
 	inputs := map[string]any{
@@ -1364,7 +1364,7 @@ func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// No inputs provided - default should be used
 	ctx, err := execSvc.Run(context.Background(), "default-values", nil)
@@ -1404,7 +1404,7 @@ func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// String "42" should be coerced to integer
 	inputs := map[string]any{
@@ -1439,7 +1439,7 @@ func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	inputs := map[string]any{
 		"name": "anything_goes",
@@ -1466,7 +1466,7 @@ func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// Pass some inputs anyway - should be ignored
 	inputs := map[string]any{
@@ -1500,7 +1500,7 @@ func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	tests := []struct {
 		name    string
@@ -1556,7 +1556,7 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	t.Run("not provided should succeed", func(t *testing.T) {
 		ctx, err := execSvc.Run(context.Background(), "optional-validation", nil)
@@ -1625,7 +1625,7 @@ func TestExecutionService_Resume_Success(t *testing.T) {
 	store.states["test-id-123"] = interruptedState
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	// Execute resume
 	ctx, err := execSvc.Resume(context.Background(), "test-id-123", nil)
@@ -1653,7 +1653,7 @@ func TestExecutionService_Resume_NotFound(t *testing.T) {
 	// Resume non-existent workflow should fail
 	store := newMockStateStore()
 	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Resume(context.Background(), "non-existent-id", nil)
 
@@ -1685,7 +1685,7 @@ func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Resume(context.Background(), "completed-id", nil)
 
@@ -1710,7 +1710,7 @@ func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
 	// No workflows added - "deleted-workflow" doesn't exist
 
 	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Resume(context.Background(), "orphan-id", nil)
 
@@ -1743,7 +1743,7 @@ func TestExecutionService_Resume_StepNotFound(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.Resume(context.Background(), "stale-id", nil)
 
@@ -1776,7 +1776,7 @@ func TestExecutionService_Resume_InputOverrides(t *testing.T) {
 
 	executor := newMockExecutor()
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	// Resume with overrides
 	overrides := map[string]any{"key": "overridden"}
@@ -1828,7 +1828,7 @@ func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Resume(context.Background(), "skip-id", nil)
 
@@ -1876,7 +1876,7 @@ func TestExecutionService_Resume_ParallelStep(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Resume(context.Background(), "parallel-id", nil)
 
@@ -1910,7 +1910,7 @@ func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Resume(context.Background(), "failed-id", nil)
 
@@ -1943,7 +1943,7 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Resume(context.Background(), "cancelled-id", nil)
 
@@ -2002,7 +2002,7 @@ func TestExecutionService_ListResumable_FiltersCompleted(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -2020,7 +2020,7 @@ func TestExecutionService_ListResumable_Empty(t *testing.T) {
 	store := newMockStateStore()
 
 	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -2049,7 +2049,7 @@ func TestExecutionService_ListResumable_AllCompleted(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -2075,7 +2075,7 @@ func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
 
 	resumable, err := execSvc.ListResumable(context.Background())
 

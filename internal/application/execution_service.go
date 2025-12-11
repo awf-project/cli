@@ -28,6 +28,7 @@ type ExecutionService struct {
 	hookExecutor     *HookExecutor
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
+	historySvc       *HistoryService
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -37,6 +38,7 @@ func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 }
 
 // NewExecutionService creates a new execution service.
+// historySvc can be nil to disable history recording.
 func NewExecutionService(
 	wfSvc *WorkflowService,
 	executor ports.CommandExecutor,
@@ -44,6 +46,7 @@ func NewExecutionService(
 	store ports.StateStore,
 	logger ports.Logger,
 	resolver interpolation.Resolver,
+	historySvc *HistoryService,
 ) *ExecutionService {
 	return &ExecutionService{
 		workflowSvc:      wfSvc,
@@ -53,6 +56,7 @@ func NewExecutionService(
 		logger:           logger,
 		resolver:         resolver,
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
+		historySvc:       historySvc,
 	}
 }
 
@@ -117,6 +121,7 @@ func (s *ExecutionService) Run(
 			execCtx.Status = workflow.StatusCompleted
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
+			s.recordHistory(execCtx)
 			s.logger.Info("workflow completed", "step", currentStep)
 			break
 		}
@@ -137,6 +142,7 @@ func (s *ExecutionService) Run(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
+			s.recordHistory(execCtx)
 			execErr = err
 			break
 		}
@@ -158,6 +164,7 @@ func (s *ExecutionService) Run(
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
+			s.recordHistory(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
@@ -328,6 +335,61 @@ func (s *ExecutionService) executeStep(
 func (s *ExecutionService) checkpoint(ctx context.Context, execCtx *workflow.ExecutionContext) {
 	if err := s.store.Save(ctx, execCtx); err != nil {
 		s.logger.Warn("checkpoint failed", "workflow_id", execCtx.WorkflowID, "error", err)
+	}
+}
+
+// recordHistory saves execution to history when workflow reaches terminal state.
+// Failures are logged but not fatal - execution continues.
+func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
+	if s.historySvc == nil {
+		return
+	}
+
+	// Only record terminal states
+	if execCtx.Status != workflow.StatusCompleted &&
+		execCtx.Status != workflow.StatusFailed &&
+		execCtx.Status != workflow.StatusCancelled {
+		return
+	}
+
+	// Map ExecutionContext to ExecutionRecord
+	record := &workflow.ExecutionRecord{
+		ID:           execCtx.WorkflowID,
+		WorkflowID:   execCtx.WorkflowID,
+		WorkflowName: execCtx.WorkflowName,
+		Status:       execCtx.Status.String(),
+		StartedAt:    execCtx.StartedAt,
+		CompletedAt:  execCtx.CompletedAt,
+	}
+
+	// Calculate duration
+	if !execCtx.CompletedAt.IsZero() {
+		record.DurationMs = execCtx.CompletedAt.Sub(execCtx.StartedAt).Milliseconds()
+	}
+
+	// Find last executed step for exit code and error
+	if len(execCtx.States) > 0 {
+		var lastState *workflow.StepState
+		for _, state := range execCtx.States {
+			stateCopy := state
+			if lastState == nil || state.CompletedAt.After(lastState.CompletedAt) {
+				lastState = &stateCopy
+			}
+		}
+		if lastState != nil {
+			record.ExitCode = lastState.ExitCode
+			if lastState.Error != "" {
+				record.ErrorMessage = lastState.Error
+			}
+		}
+	}
+
+	// Record to history store (use background context to avoid cancellation)
+	ctx := context.Background()
+	if err := s.historySvc.Record(ctx, record); err != nil {
+		s.logger.Warn("failed to record history", "workflow_id", execCtx.WorkflowID, "error", err)
+	} else {
+		s.logger.Debug("recorded execution history", "workflow_id", execCtx.WorkflowID, "status", record.Status)
 	}
 }
 
@@ -747,6 +809,7 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusCompleted
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
+			s.recordHistory(execCtx)
 			s.logger.Info("workflow completed", "step", currentStep)
 			break
 		}
@@ -767,6 +830,7 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
+			s.recordHistory(execCtx)
 			execErr = err
 			break
 		}
@@ -788,6 +852,7 @@ func (s *ExecutionService) executeFromStep(
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
+			s.recordHistory(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}

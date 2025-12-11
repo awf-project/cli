@@ -125,10 +125,22 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	resolver := interpolation.NewTemplateResolver()
 
+	// Create history store and service
+	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	if err != nil {
+		return fmt.Errorf("failed to open history store: %w", err)
+	}
+	defer func() {
+		if err := historyStore.Close(); err != nil {
+			logger.Error("failed to close history store", "error", err)
+		}
+	}()
+	historySvc := application.NewHistoryService(historyStore, logger)
+
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
 
 	// Pass writers to execution service for streaming mode
 	if stdoutWriter != nil {
@@ -529,10 +541,22 @@ func runSingleStep(
 	}
 	resolver := interpolation.NewTemplateResolver()
 
+	// Create history store and service
+	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	if err != nil {
+		return fmt.Errorf("failed to open history store: %w", err)
+	}
+	defer func() {
+		if err := historyStore.Close(); err != nil {
+			logger.Error("failed to close history store", "error", err)
+		}
+	}()
+	historySvc := application.NewHistoryService(historyStore, logger)
+
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
 
 	// Show start message
 	if !cfg.Quiet {
