@@ -580,11 +580,32 @@ states:
       OVERALL_SCORE: X/10
       PROMPT_EOF
 
-      claude -p "$(cat /tmp/awf_prompt.txt)" \
+      # Run Claude and capture output
+      SYNTHESIS_OUTPUT=$(claude -p "$(cat /tmp/awf_prompt.txt)" \
         --dangerously-skip-permissions \
-        2>&1 || echo "AGENT_ERROR: Claude synthesis failed"
+        2>&1 || echo "AGENT_ERROR: Claude synthesis failed")
+
+      echo "$SYNTHESIS_OUTPUT"
+
+      # Save for exit code determination
+      echo "$SYNTHESIS_OUTPUT" > /tmp/awf_synthesis_result.txt
 
       rm -f /tmp/awf_code_test.txt /tmp/awf_code_docs.txt /tmp/awf_arch.txt /tmp/awf_prompt.txt
+
+      # Determine exit code based on status
+      if grep -q "OVERALL_STATUS: PASS" /tmp/awf_synthesis_result.txt 2>/dev/null; then
+        rm -f /tmp/awf_synthesis_result.txt
+        exit 0
+      elif grep -q "OVERALL_STATUS: WARN" /tmp/awf_synthesis_result.txt 2>/dev/null; then
+        rm -f /tmp/awf_synthesis_result.txt
+        exit 1
+      elif grep -q "AGENT_ERROR" /tmp/awf_synthesis_result.txt 2>/dev/null; then
+        rm -f /tmp/awf_synthesis_result.txt
+        exit 2
+      else
+        rm -f /tmp/awf_synthesis_result.txt
+        exit 3  # FAIL or unknown
+      fi
     capture:
       stdout: final_synthesis
     on_success: generate_report
@@ -683,48 +704,13 @@ states:
       echo "STATUS:DONE"
     capture:
       stdout: report_output
-    on_success: determine_exit
+    transitions:
+      - when: "states.agent_final_synthesis.exit_code == 0"
+        goto: done
+      - when: "states.agent_final_synthesis.exit_code == 1"
+        goto: done_with_warnings
+      - goto: done_with_warnings  # fallback for FAIL/unknown
     on_failure: error_report
-
-  determine_exit:
-    type: step
-    description: Determine final exit status from synthesis
-    command: |
-      # Write synthesis to temp file for safe grep
-      cat > /tmp/awf_synthesis.txt << 'SYNTHESIS_EOF'
-      {{.states.agent_final_synthesis.Output}}
-      SYNTHESIS_EOF
-
-      # Extract overall status from synthesis
-      if grep -q "OVERALL_STATUS: PASS" /tmp/awf_synthesis.txt 2>/dev/null; then
-        echo "EXIT:0"
-        echo "MESSAGE:Audit completed successfully - all checks passed"
-        echo "OVERALL:PASS"
-      elif grep -q "OVERALL_STATUS: WARN" /tmp/awf_synthesis.txt 2>/dev/null; then
-        echo "EXIT:1"
-        echo "MESSAGE:Audit completed with warnings"
-        echo "OVERALL:WARN"
-      elif grep -q "OVERALL_STATUS: FAIL" /tmp/awf_synthesis.txt 2>/dev/null; then
-        echo "EXIT:3"
-        echo "MESSAGE:Audit failed - critical issues require attention"
-        echo "OVERALL:FAIL"
-      else
-        # Fallback: check for AGENT_ERROR
-        if grep -q "AGENT_ERROR" /tmp/awf_synthesis.txt 2>/dev/null; then
-          echo "EXIT:2"
-          echo "MESSAGE:Audit completed but agent analysis failed"
-          echo "OVERALL:PARTIAL"
-        else
-          echo "EXIT:1"
-          echo "MESSAGE:Audit completed with unknown status"
-          echo "OVERALL:UNKNOWN"
-        fi
-      fi
-      rm -f /tmp/awf_synthesis.txt
-    capture:
-      stdout: exit_output
-    on_success: done
-    on_failure: done_with_warnings
 
   # ==========================================================================
   # TERMINAL STATES

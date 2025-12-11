@@ -67,14 +67,27 @@ func (w *Workflow) Validate() error {
 			return fmt.Errorf("step '%s': %w", name, err)
 		}
 
-		// Non-terminal steps must have transitions
+		// Non-terminal steps must have some way to transition
+		// Either: OnSuccess/OnFailure (legacy) OR Transitions (conditional)
 		if step.Type == StepTypeCommand {
-			if step.OnSuccess == "" && step.OnFailure == "" {
-				return fmt.Errorf("step '%s': command step must have OnSuccess or OnFailure", name)
+			hasLegacyTransitions := step.OnSuccess != "" || step.OnFailure != ""
+			hasConditionalTransitions := len(step.Transitions) > 0
+			if !hasLegacyTransitions && !hasConditionalTransitions {
+				return fmt.Errorf("step '%s': command step must have OnSuccess/OnFailure or Transitions", name)
 			}
 		}
 
-		// Validate state references exist
+		// Validate Transitions targets exist
+		for i, tr := range step.Transitions {
+			if err := tr.Validate(); err != nil {
+				return fmt.Errorf("step '%s': transition %d: %w", name, i, err)
+			}
+			if _, ok := w.Steps[tr.Goto]; !ok {
+				return fmt.Errorf("step '%s': transition %d references unknown state '%s'", name, i, tr.Goto)
+			}
+		}
+
+		// Validate legacy state references exist
 		if step.OnSuccess != "" {
 			if _, ok := w.Steps[step.OnSuccess]; !ok {
 				return fmt.Errorf("step '%s': on_success references unknown state '%s'", name, step.OnSuccess)

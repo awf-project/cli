@@ -25,10 +25,16 @@ type ExecutionService struct {
 	store            ports.StateStore
 	logger           ports.Logger
 	resolver         interpolation.Resolver
+	evaluator        ExpressionEvaluator
 	hookExecutor     *HookExecutor
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
 	historySvc       *HistoryService
+}
+
+// ExpressionEvaluator evaluates conditional expressions.
+type ExpressionEvaluator interface {
+	Evaluate(expr string, ctx *interpolation.Context) (bool, error)
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -55,6 +61,31 @@ func NewExecutionService(
 		store:            store,
 		logger:           logger,
 		resolver:         resolver,
+		hookExecutor:     NewHookExecutor(executor, logger, resolver),
+		historySvc:       historySvc,
+	}
+}
+
+// NewExecutionServiceWithEvaluator creates a new execution service with expression evaluator.
+// This enables conditional transitions using the `when:` clause.
+func NewExecutionServiceWithEvaluator(
+	wfSvc *WorkflowService,
+	executor ports.CommandExecutor,
+	parallelExecutor ports.ParallelExecutor,
+	store ports.StateStore,
+	logger ports.Logger,
+	resolver interpolation.Resolver,
+	historySvc *HistoryService,
+	evaluator ExpressionEvaluator,
+) *ExecutionService {
+	return &ExecutionService{
+		workflowSvc:      wfSvc,
+		executor:         executor,
+		parallelExecutor: parallelExecutor,
+		store:            store,
+		logger:           logger,
+		resolver:         resolver,
+		evaluator:        evaluator,
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
 		historySvc:       historySvc,
 	}
@@ -327,7 +358,41 @@ func (s *ExecutionService) executeStep(
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
-	return step.OnSuccess, nil
+	// Resolve next step using transitions (if defined) or fallback to OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
+}
+
+// resolveNextStep determines the next step using conditional transitions or legacy OnSuccess/OnFailure.
+// If step has Transitions defined, evaluates them in order (first match wins).
+// If no transition matches and no default, falls back to OnSuccess/OnFailure based on success parameter.
+func (s *ExecutionService) resolveNextStep(
+	step *workflow.Step,
+	intCtx *interpolation.Context,
+	success bool,
+) (string, error) {
+	// If transitions are defined, evaluate them first
+	if len(step.Transitions) > 0 && s.evaluator != nil {
+		evalFunc := func(expr string) (bool, error) {
+			return s.evaluator.Evaluate(expr, intCtx)
+		}
+
+		nextStep, found, err := step.Transitions.EvaluateFirstMatch(evalFunc)
+		if err != nil {
+			return "", fmt.Errorf("evaluate transitions: %w", err)
+		}
+		if found {
+			s.logger.Debug("transition matched", "step", step.Name, "next", nextStep)
+			return nextStep, nil
+		}
+		// No transition matched, fall through to legacy handling
+		s.logger.Debug("no transition matched, using legacy", "step", step.Name)
+	}
+
+	// Legacy fallback: use OnSuccess/OnFailure
+	if success {
+		return step.OnSuccess, nil
+	}
+	return step.OnFailure, nil
 }
 
 // checkpoint saves the current execution state.
@@ -634,7 +699,8 @@ func (s *ExecutionService) executeParallelStep(
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
-	return step.OnSuccess, nil
+	// Resolve next step using transitions (if defined) or fallback to OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
 }
 
 // stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.

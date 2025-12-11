@@ -5,7 +5,7 @@
 ```
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
-v0.3.0 (Advanced)   ░░░░░░░░░░░░░░░░░░░░ PLANNED
+v0.3.0 (Advanced)   ████░░░░░░░░░░░░░░░░ IN PROGRESS
 v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
@@ -44,16 +44,16 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F014 | BadgerDB History | ✅ IMPLEMENTED |
 | F041 | Template Reference Validation | ✅ IMPLEMENTED |
 
-## v0.3.0 - Advanced Features (PLANNED)
+## v0.3.0 - Advanced Features (IN PROGRESS)
 
-| ID | Feature | Priority |
-|----|---------|----------|
-| F015 | Conditional Steps | High |
-| F016 | Loop Constructs | Medium |
-| F017 | Workflow Templates | Medium |
-| F018 | Encrypted Environment | Low |
-| F019 | Dry Run Mode | Medium |
-| F020 | Interactive Mode | Low |
+| ID | Feature | Status |
+|----|---------|--------|
+| F015 | Conditions Complexes (if/else) | ✅ IMPLEMENTED |
+| F016 | Loop Constructs | 📋 PLANNED (Medium) |
+| F017 | Workflow Templates | 📋 PLANNED (Medium) |
+| F018 | Encrypted Environment | 📋 PLANNED (Low) |
+| F019 | Dry Run Mode | 📋 PLANNED (Medium) |
+| F020 | Interactive Mode | 📋 PLANNED (Low) |
 
 ## v0.4.0 - AI & Extensibility (PLANNED)
 

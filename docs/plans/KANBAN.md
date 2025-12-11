@@ -5,7 +5,6 @@
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
 ### Phase 3 - Advanced Features (v0.3.0)
-- [F015](features/v0.3.0/F015-conditions.md) Complex conditions (if/else)
 - [F016](features/v0.3.0/F016-loops.md) Loops (for/while)
 - [F017](features/v0.3.0/F017-workflow-templates.md) Workflow templates
 - [F018](features/v0.3.0/F018-encrypted-env.md) Encrypted environment variables
