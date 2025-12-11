@@ -468,22 +468,38 @@ states:
   run_tests_red:
     type: step
     description: Run tests - should fail (RED phase)
-    command: make test-unit 2>&1
+    command: make test-unit 2>&1 || true
     timeout: 300s
     capture:
       stdout: tests_red_output
-    transitions:
-      - when: "states.run_tests_red.exit_code != 0"
-        goto: implement_feature  # RED OK - tests fail as expected
-      - goto: implement_feature  # RED WARNING - tests passed but continue anyway
-    on_failure: implement_feature
+    on_success: tdd_green_loop
+    on_failure: tdd_green_loop
     hooks:
       pre:
         - log: "Running tests (expecting failure - RED phase)..."
+      post:
+        - log: "RED phase complete - proceeding to implementation"
 
   #==========================================================================
-  # PHASE 4: TDD GREEN - Implementation (single-pass, F042 needed for retry)
+  # PHASE 4: TDD GREEN - Implementation with retry loop
   #==========================================================================
+
+  tdd_green_loop:
+    type: while
+    description: TDD GREEN retry loop - implement until tests pass
+    while: "true"
+    max_iterations: 3
+    break_when: "states.run_tests_green.exit_code == 0"
+    body:
+      - implement_feature
+      - run_fmt
+      - run_tests_green
+    on_complete: run_lint_final
+    hooks:
+      pre:
+        - log: "Starting TDD GREEN loop (max 3 iterations)..."
+      post:
+        - log: "TDD GREEN loop completed"
 
   implement_feature:
     type: step
@@ -499,7 +515,7 @@ states:
       )
       claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
 
-      ## PHASE: Implementation (GREEN phase)
+      ## PHASE: Implementation (GREEN phase) - Attempt {{.loop.Index1}}/3
 
       ## Feature Spec
       $SPEC_CONTENT
@@ -513,6 +529,11 @@ states:
       - Follow the implementation steps from the plan
       - Ensure code compiles and passes lint
       - Make tests pass (GREEN)
+      {{if not .loop.First}}
+      ## IMPORTANT: Previous attempt failed
+      This is retry attempt {{.loop.Index1}}. The previous implementation did not pass all tests.
+      Review the test output and fix the issues before proceeding.
+      {{end}}
 
       ## Available Agents
       {{.inputs.agents}}
@@ -529,8 +550,8 @@ states:
     capture:
       stdout: implement_output
       max_size: 10MB
-    on_success: run_fmt
-    on_failure: run_fmt
+    on_success: tdd_green_loop
+    on_failure: tdd_green_loop
     hooks:
       pre:
         - log: "Claude implementing feature..."
@@ -544,8 +565,8 @@ states:
     timeout: 60s
     capture:
       stdout: fmt_output
-    on_success: parallel_validation
-    on_failure: parallel_validation
+    on_success: tdd_green_loop
+    on_failure: tdd_green_loop
     hooks:
       pre:
         - log: "Formatting Go code..."
@@ -553,32 +574,8 @@ states:
         - log: "Code formatted"
 
   #==========================================================================
-  # PHASE 5: VALIDATION (PARALLEL)
+  # PHASE 5: VALIDATION (inside tdd_green_loop)
   #==========================================================================
-
-  parallel_validation:
-    type: parallel
-    description: Run final lint and tests in parallel
-    parallel:
-      - run_lint_after
-      - run_tests_green
-    strategy: best_effort
-    max_concurrent: 2
-    on_success: write_feature_tests
-    on_failure: write_feature_tests
-
-  run_lint_after:
-    type: step
-    description: Lint after implementation
-    command: make lint 2>&1 || echo "LINT_WARNING"
-    timeout: 120s
-    capture:
-      stdout: lint_after_output
-    on_success: write_feature_tests
-    on_failure: write_feature_tests
-    hooks:
-      pre:
-        - log: "Running lint after implementation..."
 
   run_tests_green:
     type: step
@@ -587,14 +584,26 @@ states:
     timeout: 300s
     capture:
       stdout: tests_green_output
-    transitions:
-      - when: "states.run_tests_green.exit_code == 0"
-        goto: write_feature_tests  # GREEN OK
-      - goto: write_feature_tests  # GREEN WARNING - tests still failing but continue
+    on_success: tdd_green_loop
+    on_failure: tdd_green_loop
+    hooks:
+      pre:
+        - log: "Running tests [attempt {{.loop.Index1}}]..."
+      post:
+        - log: "Tests completed"
+
+  run_lint_final:
+    type: step
+    description: Final lint check after tests pass
+    command: make lint 2>&1
+    timeout: 120s
+    capture:
+      stdout: lint_final_output
+    on_success: write_feature_tests
     on_failure: write_feature_tests
     hooks:
       pre:
-        - log: "Running tests (expecting pass - GREEN phase)..."
+        - log: "Running final lint check..."
 
   #==========================================================================
   # PHASE 5.5: FEATURE-SPECIFIC FUNCTIONAL TESTS
@@ -1055,7 +1064,7 @@ states:
         GREEN_RESULT="WARNING (tests still failing)"
       fi
       LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS'
-      {{.states.run_lint_after.Output}}
+      {{.states.run_lint_final.Output}}
       LINTEOF
       )
       FEATURE_TESTS=$(cat << 'FTEOF' | grep -q 'NO_FEATURE_TESTS_FOUND' && echo 'SKIPPED (no tests found)' || echo 'COMPLETED'

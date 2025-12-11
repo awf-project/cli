@@ -1,0 +1,54 @@
+# Nested loops test fixture
+# Tests that nested loops maintain independent contexts and restore
+# outer loop context correctly after inner loop completion.
+#
+# Expected output pattern:
+#   OUTER: row1 (1/2)
+#     INNER: colA (1/3)
+#     INNER: colB (2/3)
+#     INNER: colC (3/3)
+#   OUTER: row2 (2/2)
+#     INNER: colA (1/3)
+#     INNER: colB (2/3)
+#     INNER: colC (3/3)
+
+name: loop-nested
+version: "1.0.0"
+description: Nested for_each loops with independent contexts
+
+states:
+  initial: outer_loop
+
+  outer_loop:
+    type: for_each
+    items: '["row1", "row2"]'
+    max_iterations: 10
+    body:
+      - log_outer
+      - inner_loop
+    on_complete: done
+
+  log_outer:
+    type: step
+    description: Log outer loop iteration
+    command: 'echo "OUTER: {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})"'
+    on_success: outer_loop
+
+  inner_loop:
+    type: for_each
+    items: '["colA", "colB", "colC"]'
+    max_iterations: 10
+    body:
+      - log_inner
+    on_complete: outer_loop
+
+  log_inner:
+    type: step
+    description: Log inner loop iteration
+    command: 'echo "  INNER: {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})"'
+    on_success: inner_loop
+
+  done:
+    type: terminal
+    status: success
+    message: "Nested loops completed successfully"

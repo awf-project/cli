@@ -27,6 +27,11 @@ type LoopData struct {
 	Length int  // total items count (for_each only, -1 for while)
 }
 
+// Index1 returns the 1-based iteration index.
+func (l *LoopData) Index1() int {
+	return l.Index + 1
+}
+
 // StepStateData holds step execution results for interpolation.
 type StepStateData struct {
 	Output   string

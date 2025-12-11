@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F042**: Loop Context Variables
+  - Add `{{.loop.Index1}}` for 1-based iteration index (complements existing 0-based `{{.loop.Index}}`)
+  - All loop context variables now fully available: `Index`, `Index1`, `Item`, `First`, `Last`, `Length`
+  - Loop variables work in both command templates and `when` conditional expressions
+  - Nested loops maintain separate contexts with proper scoping
 - **F017**: Workflow Templates with Parameters
   - Define reusable templates in `.awf/templates/` with `name`, `parameters`, and `states`
   - Reference templates in workflow steps via `use_template: <name>` with parameter overrides

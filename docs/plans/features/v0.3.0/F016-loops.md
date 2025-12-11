@@ -60,7 +60,7 @@ internal/application/loop_executor.go
   - [x] loop.first
   - [x] loop.last
   - [x] loop.length
-- [x] Handle nested loops
+- [ ] Handle nested loops (see F043)
 - [x] Write unit tests
 - [x] Write integration tests
 

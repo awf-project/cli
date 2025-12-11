@@ -434,6 +434,7 @@ Access individual step outputs: `{{.states.parallel_analysis.steps.lint.output}}
 **Loop context variables:**
 - `{{.loop.item}}` - Current item value
 - `{{.loop.index}}` - 0-based iteration index
+- `{{.loop.index1}}` - 1-based iteration index
 - `{{.loop.first}}` - True on first iteration
 - `{{.loop.last}}` - True on last iteration
 - `{{.loop.length}}` - Total items count
@@ -450,7 +451,7 @@ process_files:
 
 process_single:
   type: step
-  command: 'echo "Processing {{.loop.item}} ({{.loop.index}}/{{.loop.length}})"'
+  command: 'echo "Processing {{.loop.item}} ({{.loop.index1}}/{{.loop.length}})"'
   on_success: process_files
 
 aggregate:

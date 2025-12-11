@@ -1,7 +1,7 @@
 # F042: Loop Context Variables
 
 ## Metadata
-- **Status**: planned
+- **Status**: implemented
 - **Phase**: 3-Enhanced
 - **Version**: v0.3.0
 - **Priority**: medium
@@ -18,17 +18,17 @@ This feature enables patterns like:
 
 ## Acceptance Criteria
 
-- [ ] `{{loop.index}}` returns the current 0-based iteration index
-- [ ] `{{loop.index1}}` returns the current 1-based iteration index
-- [ ] `{{loop.item}}` returns the current item value being iterated
-- [ ] `{{loop.first}}` returns true on the first iteration
-- [ ] `{{loop.last}}` returns true on the last iteration
-- [ ] `{{loop.length}}` returns the total number of items in the loop
-- [ ] Loop context variables work in step command templates
-- [ ] Loop context variables work in conditional expressions (`when` field)
-- [ ] Loop context variables are scoped to their loop (nested loops have separate contexts)
-- [ ] Loop context is cleared after loop completion
-- [ ] Accessing loop variables outside a loop returns empty/false values (no error)
+- [x] `{{loop.index}}` returns the current 0-based iteration index
+- [x] `{{loop.index1}}` returns the current 1-based iteration index
+- [x] `{{loop.item}}` returns the current item value being iterated
+- [x] `{{loop.first}}` returns true on the first iteration
+- [x] `{{loop.last}}` returns true on the last iteration
+- [x] `{{loop.length}}` returns the total number of items in the loop
+- [x] Loop context variables work in step command templates
+- [x] Loop context variables work in conditional expressions (`when` field)
+- [ ] Loop context variables are scoped to their loop (nested loops have separate contexts) - see F043
+- [x] Loop context is cleared after loop completion
+- [x] Accessing loop variables outside a loop returns empty/false values (no error)
 
 ## Dependencies
 
@@ -47,15 +47,15 @@ pkg/interpolation/expression.go
 
 ## Technical Tasks
 
-- [ ] Define loop context structure in domain layer
-- [ ] Implement loop context injection during iteration
-- [ ] Update interpolation engine to resolve loop.* variables
-- [ ] Update expression evaluator to handle loop.* in conditions
-- [ ] Handle nested loop context scoping
-- [ ] Write unit tests for loop context resolution
-- [ ] Write unit tests for nested loop scenarios
-- [ ] Write integration tests with real workflow files
-- [ ] Update documentation with loop variable examples
+- [x] Define loop context structure in domain layer
+- [x] Implement loop context injection during iteration
+- [x] Update interpolation engine to resolve loop.* variables
+- [x] Update expression evaluator to handle loop.* in conditions
+- [ ] Handle nested loop context scoping (see F043)
+- [x] Write unit tests for loop context resolution
+- [ ] Write integration tests for nested loop scenarios (see F043)
+- [x] Write integration tests with real workflow files
+- [x] Update documentation with loop variable examples
 
 ## Notes
 

@@ -846,3 +846,114 @@ func TestTemplateResolver_LoopItemTypes(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// F042: Loop Index1 (1-based index) Tests
+// =============================================================================
+
+func TestTemplateResolver_LoopIndex1(t *testing.T) {
+	resolver := interpolation.NewTemplateResolver()
+
+	tests := []struct {
+		name     string
+		template string
+		loop     *interpolation.LoopData
+		want     string
+	}{
+		{
+			name:     "index1 basic",
+			template: "Item {{.loop.Index1}} of {{.loop.Length}}",
+			loop: &interpolation.LoopData{
+				Item:   "test",
+				Index:  2,
+				First:  false,
+				Last:   false,
+				Length: 5,
+			},
+			want: "Item 3 of 5",
+		},
+		{
+			name:     "index1 at zero index",
+			template: "Position: {{.loop.Index1}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+			},
+			want: "Position: 1",
+		},
+		{
+			name:     "index1 at large index",
+			template: "Row {{.loop.Index1}}",
+			loop: &interpolation.LoopData{
+				Index: 99,
+			},
+			want: "Row 100",
+		},
+		{
+			name:     "index1 combined with index",
+			template: "{{.loop.Index}} (0-based) = {{.loop.Index1}} (1-based)",
+			loop: &interpolation.LoopData{
+				Index: 5,
+			},
+			want: "5 (0-based) = 6 (1-based)",
+		},
+		{
+			name:     "index1 in realistic template",
+			template: "Processing file {{.loop.Index1}}/{{.loop.Length}}: {{.loop.Item}}",
+			loop: &interpolation.LoopData{
+				Item:   "data.csv",
+				Index:  0,
+				First:  true,
+				Last:   false,
+				Length: 3,
+			},
+			want: "Processing file 1/3: data.csv",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			ctx.Loop = tt.loop
+
+			got, err := resolver.Resolve(tt.template, ctx)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestLoopData_Index1_Method(t *testing.T) {
+	tests := []struct {
+		name  string
+		index int
+		want  int
+	}{
+		{
+			name:  "zero returns one",
+			index: 0,
+			want:  1,
+		},
+		{
+			name:  "one returns two",
+			index: 1,
+			want:  2,
+		},
+		{
+			name:  "large index",
+			index: 99,
+			want:  100,
+		},
+		{
+			name:  "mid-range index",
+			index: 42,
+			want:  43,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loop := &interpolation.LoopData{Index: tt.index}
+			assert.Equal(t, tt.want, loop.Index1())
+		})
+	}
+}
