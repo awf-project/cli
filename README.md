@@ -196,9 +196,15 @@ inputs:
   - name: file_path
     type: string
     required: true
+    validation:
+      file_exists: true
+      file_extension: [".go", ".py", ".js"]
   - name: max_tokens
     type: integer
     default: 2000
+    validation:
+      min: 1
+      max: 10000
 
 states:
   initial: step1
@@ -341,6 +347,58 @@ AWF uses `{{.var}}` syntax (Go template style with dot prefix):
 {{.env.VARIABLE_NAME}}
 ```
 
+### Input Validation
+
+Inputs can be validated at runtime using the `validation` block:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `pattern` | string | Regex pattern the value must match |
+| `enum` | []string | List of allowed values |
+| `min` | int | Minimum value (integers only) |
+| `max` | int | Maximum value (integers only) |
+| `file_exists` | bool | File must exist on filesystem |
+| `file_extension` | []string | File must have one of these extensions |
+
+**Supported types:** `string`, `integer`, `boolean`
+
+**Example:**
+```yaml
+inputs:
+  - name: email
+    type: string
+    required: true
+    validation:
+      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+  - name: env
+    type: string
+    default: staging
+    validation:
+      enum: [dev, staging, prod]
+
+  - name: count
+    type: integer
+    default: 10
+    validation:
+      min: 1
+      max: 100
+
+  - name: config_file
+    type: string
+    required: true
+    validation:
+      file_exists: true
+      file_extension: [".yaml", ".yml", ".json"]
+```
+
+Validation errors are collected (not fail-fast) and reported together:
+```
+input validation failed: 2 errors:
+  - inputs.email: does not match pattern
+  - inputs.count: value 150 exceeds maximum 100
+```
+
 ## Architecture
 
 AWF follows Hexagonal/Clean Architecture:
@@ -457,7 +515,7 @@ make fmt            # Format code
 - [x] State machine with transitions (cycle detection, unreachable states, terminal status)
 - [x] Parallel execution (errgroup with strategies)
 - [x] Retry with exponential backoff
-- [ ] Input validation
+- [x] Input validation
 - [ ] Resume command
 - [ ] SQLite history
 

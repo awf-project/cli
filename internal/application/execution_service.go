@@ -14,6 +14,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
 	"github.com/vanoix/awf/pkg/retry"
+	"github.com/vanoix/awf/pkg/validation"
 )
 
 // ExecutionService orchestrates workflow execution.
@@ -83,6 +84,11 @@ func (s *ExecutionService) Run(
 	// Then apply user-provided inputs (overriding defaults)
 	for k, v := range inputs {
 		execCtx.SetInput(k, v)
+	}
+
+	// Validate inputs against definitions
+	if err := s.validateInputs(execCtx.Inputs, wf.Inputs); err != nil {
+		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
 	s.logger.Info("starting workflow", "workflow", wf.Name, "id", execCtx.WorkflowID)
@@ -612,4 +618,27 @@ func (a *stepExecutorAdapter) ExecuteStep(
 	}
 
 	return result, err
+}
+
+// validateInputs converts workflow.Input to validation.Input and validates.
+func (s *ExecutionService) validateInputs(inputs map[string]any, defs []workflow.Input) error {
+	valDefs := make([]validation.Input, len(defs))
+	for i, d := range defs {
+		valDefs[i] = validation.Input{
+			Name:     d.Name,
+			Type:     d.Type,
+			Required: d.Required,
+		}
+		if d.Validation != nil {
+			valDefs[i].Validation = &validation.Rules{
+				Pattern:       d.Validation.Pattern,
+				Enum:          d.Validation.Enum,
+				Min:           d.Validation.Min,
+				Max:           d.Validation.Max,
+				FileExists:    d.Validation.FileExists,
+				FileExtension: d.Validation.FileExtension,
+			}
+		}
+	}
+	return validation.ValidateInputs(inputs, valDefs)
 }

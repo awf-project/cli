@@ -1080,3 +1080,501 @@ func TestExecutionService_Run_WithRetry_MultipleStepsWithRetry(t *testing.T) {
 	assert.Equal(t, 2, executor.calls["cmd1"], "step1 should have retried once")
 	assert.Equal(t, 3, executor.calls["cmd2"], "step2 should have retried twice")
 }
+
+// =============================================================================
+// Input Validation Tests (F012)
+// =============================================================================
+
+func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
+	// Workflow with input validation - all inputs valid
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["input-validation"] = &workflow.Workflow{
+		Name:    "input-validation",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "email",
+				Type:     "string",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+				},
+			},
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	inputs := map[string]any{
+		"email": "test@example.com",
+		"count": 50,
+	}
+
+	ctx, err := execSvc.Run(context.Background(), "input-validation", inputs)
+
+	require.NoError(t, err, "workflow should complete with valid inputs")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+}
+
+func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
+	// Workflow with input validation - invalid email pattern
+	repo := newMockRepository()
+	repo.workflows["invalid-email"] = &workflow.Workflow{
+		Name:    "invalid-email",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "email",
+				Type:     "string",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	inputs := map[string]any{
+		"email": "not-an-email",
+	}
+
+	_, err := execSvc.Run(context.Background(), "invalid-email", inputs)
+
+	require.Error(t, err, "should fail with invalid email")
+	assert.Contains(t, err.Error(), "validation")
+	assert.Contains(t, err.Error(), "email")
+}
+
+func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
+	// Required input not provided
+	repo := newMockRepository()
+	repo.workflows["required-missing"] = &workflow.Workflow{
+		Name:    "required-missing",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "required_field",
+				Type:     "string",
+				Required: true,
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// Empty inputs - required field missing
+	_, err := execSvc.Run(context.Background(), "required-missing", map[string]any{})
+
+	require.Error(t, err, "should fail with missing required input")
+	assert.Contains(t, err.Error(), "validation")
+	assert.Contains(t, err.Error(), "required_field")
+}
+
+func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
+	// Integer input outside min/max range
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["integer-range"] = &workflow.Workflow{
+		Name:    "integer-range",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// count=150 exceeds max=100
+	inputs := map[string]any{
+		"count": 150,
+	}
+
+	_, err := execSvc.Run(context.Background(), "integer-range", inputs)
+
+	require.Error(t, err, "should fail with integer out of range")
+	assert.Contains(t, err.Error(), "validation")
+	assert.Contains(t, err.Error(), "count")
+}
+
+func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
+	// Enum input with invalid value
+	repo := newMockRepository()
+	repo.workflows["enum-validation"] = &workflow.Workflow{
+		Name:    "enum-validation",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "env",
+				Type:     "string",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Enum: []string{"dev", "staging", "prod"},
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// "local" not in enum list
+	inputs := map[string]any{
+		"env": "local",
+	}
+
+	_, err := execSvc.Run(context.Background(), "enum-validation", inputs)
+
+	require.Error(t, err, "should fail with invalid enum value")
+	assert.Contains(t, err.Error(), "validation")
+	assert.Contains(t, err.Error(), "env")
+}
+
+func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
+	// Multiple validation errors should be aggregated
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["multiple-errors"] = &workflow.Workflow{
+		Name:    "multiple-errors",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "email",
+				Type:     "string",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+				},
+			},
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+			{
+				Name:     "env",
+				Type:     "string",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Enum: []string{"dev", "staging", "prod"},
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// All inputs invalid
+	inputs := map[string]any{
+		"email": "not-an-email",
+		"count": 999,
+		"env":   "local",
+	}
+
+	_, err := execSvc.Run(context.Background(), "multiple-errors", inputs)
+
+	require.Error(t, err, "should fail with multiple validation errors")
+	assert.Contains(t, err.Error(), "validation")
+	// Error should mention multiple errors or contain multiple error messages
+}
+
+func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *testing.T) {
+	// Default values should be applied before validation runs
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["default-values"] = &workflow.Workflow{
+		Name:    "default-values",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: true,
+				Default:  50, // Default value within range
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// No inputs provided - default should be used
+	ctx, err := execSvc.Run(context.Background(), "default-values", nil)
+
+	require.NoError(t, err, "should succeed with default value")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify default was applied
+	val, ok := ctx.GetInput("count")
+	assert.True(t, ok)
+	assert.Equal(t, 50, val)
+}
+
+func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
+	// String "42" should be coerced to integer 42 for validation
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["type-coercion"] = &workflow.Workflow{
+		Name:    "type-coercion",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: true,
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// String "42" should be coerced to integer
+	inputs := map[string]any{
+		"count": "42",
+	}
+
+	ctx, err := execSvc.Run(context.Background(), "type-coercion", inputs)
+
+	require.NoError(t, err, "should succeed with coerced type")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
+	// Inputs without validation rules should still be accepted
+	repo := newMockRepository()
+	repo.workflows["no-validation"] = &workflow.Workflow{
+		Name:    "no-validation",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "name",
+				Type:     "string",
+				Required: true,
+				// No Validation field
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	inputs := map[string]any{
+		"name": "anything_goes",
+	}
+
+	ctx, err := execSvc.Run(context.Background(), "no-validation", inputs)
+
+	require.NoError(t, err, "should succeed without validation rules")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
+	// Workflow without any input definitions should work
+	repo := newMockRepository()
+	repo.workflows["no-inputs"] = &workflow.Workflow{
+		Name:    "no-inputs",
+		Initial: "start",
+		// No Inputs field
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	// Pass some inputs anyway - should be ignored
+	inputs := map[string]any{
+		"extra": "value",
+	}
+
+	ctx, err := execSvc.Run(context.Background(), "no-inputs", inputs)
+
+	require.NoError(t, err, "should succeed without input definitions")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
+	// Boolean type validation
+	repo := newMockRepository()
+	repo.workflows["boolean-validation"] = &workflow.Workflow{
+		Name:    "boolean-validation",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "verbose",
+				Type:     "boolean",
+				Required: true,
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	tests := []struct {
+		name    string
+		input   any
+		wantErr bool
+	}{
+		{name: "true bool", input: true, wantErr: false},
+		{name: "false bool", input: false, wantErr: false},
+		{name: "string true", input: "true", wantErr: false},
+		{name: "string false", input: "false", wantErr: false},
+		{name: "string yes", input: "yes", wantErr: false},
+		{name: "string no", input: "no", wantErr: false},
+		{name: "invalid string", input: "maybe", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inputs := map[string]any{"verbose": tt.input}
+			_, err := execSvc.Run(context.Background(), "boolean-validation", inputs)
+
+			if tt.wantErr {
+				require.Error(t, err, "should fail with invalid boolean")
+			} else {
+				require.NoError(t, err, "should succeed with valid boolean")
+			}
+		})
+	}
+}
+
+func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.T) {
+	// Optional input with validation rules - should validate if provided
+	min1, max100 := 1, 100
+	repo := newMockRepository()
+	repo.workflows["optional-validation"] = &workflow.Workflow{
+		Name:    "optional-validation",
+		Initial: "start",
+		Inputs: []workflow.Input{
+			{
+				Name:     "count",
+				Type:     "integer",
+				Required: false, // Optional
+				Validation: &workflow.InputValidation{
+					Min: &min1,
+					Max: &max100,
+				},
+			},
+		},
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+
+	t.Run("not provided should succeed", func(t *testing.T) {
+		ctx, err := execSvc.Run(context.Background(), "optional-validation", nil)
+		require.NoError(t, err)
+		assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	})
+
+	t.Run("valid value should succeed", func(t *testing.T) {
+		inputs := map[string]any{"count": 50}
+		ctx, err := execSvc.Run(context.Background(), "optional-validation", inputs)
+		require.NoError(t, err)
+		assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	})
+
+	t.Run("invalid value should fail", func(t *testing.T) {
+		inputs := map[string]any{"count": 999}
+		_, err := execSvc.Run(context.Background(), "optional-validation", inputs)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "validation")
+	})
+}

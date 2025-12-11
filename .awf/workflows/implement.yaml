@@ -2,8 +2,10 @@
 # Implements a feature following its plan using TDD (Strict TIDY approach).
 # No commit - user decides when to commit after review.
 #
-# Usage: awf run implement --input feature_id=F038
-# With agents: awf run implement --input feature_id=F038 --input agents="go:golang-expert"
+# Usage:
+#   awf run implement --input feature_id=F038
+#   awf run implement --input feature_id=F038 --input spec_file=docs/plans/features/v0.2.0/F038-retry.md
+#   awf run implement --input feature_id=F038 --input agents="go:golang-expert"
 
 name: implement
 description: Implement a feature using TDD approach with optional agents/skills
@@ -17,6 +19,15 @@ inputs:
     required: true
     validation:
       pattern: "^F[0-9]{3}$"
+
+  - name: spec_file
+    type: string
+    description: Direct path to spec file (skips find if provided)
+    required: false
+    default: ""
+    validation:
+      file_exists: true
+      file_extension: [".md"]
 
   - name: agents
     type: string
@@ -41,13 +52,18 @@ states:
     type: step
     description: Find specification
     command: |
-      # Find spec file to extract slug
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      # Use spec_file if provided, otherwise find it
+      if [ -n "{{.inputs.spec_file}}" ]; then
+        SPEC_FILE="{{.inputs.spec_file}}"
+      else
+        SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+      fi
+
       if [ -z "$SPEC_FILE" ]; then
         echo "ERROR: Spec not found for {{.inputs.feature_id}}"
         exit 1
       fi
-      
+
       echo "$SPEC_FILE"
     timeout: 30s
     capture:

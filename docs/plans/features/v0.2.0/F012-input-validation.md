@@ -1,7 +1,7 @@
 # F012: Validation des Inputs
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 2-Core
 - **Version**: v0.2.0
 - **Priority**: high
@@ -13,15 +13,15 @@ Validate workflow inputs at runtime against defined rules. Support type checking
 
 ## Acceptance Criteria
 
-- [ ] Validate required inputs are present
-- [ ] Validate type (string, integer, boolean)
-- [ ] Validate pattern (regex match)
-- [ ] Validate enum (value in allowed list)
-- [ ] Validate min/max for integers
-- [ ] Validate file_exists
-- [ ] Validate file_extension
-- [ ] Clear error messages with input name
-- [ ] Apply default values
+- [x] Validate required inputs are present
+- [x] Validate type (string, integer, boolean)
+- [x] Validate pattern (regex match)
+- [x] Validate enum (value in allowed list)
+- [x] Validate min/max for integers
+- [x] Validate file_exists
+- [x] Validate file_extension
+- [x] Clear error messages with input name
+- [x] Apply default values
 
 ## Dependencies
 
@@ -39,32 +39,32 @@ internal/application/validator.go
 
 ## Technical Tasks
 
-- [ ] Define InputDefinition struct
-  - [ ] Name
-  - [ ] Type (string, integer, boolean)
-  - [ ] Description
-  - [ ] Required
-  - [ ] Default
-  - [ ] Validation rules
-- [ ] Define ValidationRules struct
-  - [ ] Pattern (regex)
-  - [ ] Enum ([]string)
-  - [ ] Min, Max (int)
-  - [ ] FileExists (bool)
-  - [ ] FileExtension ([]string)
-- [ ] Implement InputValidator
-  - [ ] ValidateAll(inputs, definitions)
-  - [ ] ValidateRequired
-  - [ ] ValidateType
-  - [ ] ValidatePattern
-  - [ ] ValidateEnum
-  - [ ] ValidateRange
-  - [ ] ValidateFileExists
-  - [ ] ValidateFileExtension
-- [ ] Apply default values before validation
-- [ ] Collect all errors (not fail-fast)
-- [ ] Format error messages clearly
-- [ ] Write comprehensive unit tests
+- [x] Define InputDefinition struct
+  - [x] Name
+  - [x] Type (string, integer, boolean)
+  - [x] Description
+  - [x] Required
+  - [x] Default
+  - [x] Validation rules
+- [x] Define ValidationRules struct
+  - [x] Pattern (regex)
+  - [x] Enum ([]string)
+  - [x] Min, Max (int)
+  - [x] FileExists (bool)
+  - [x] FileExtension ([]string)
+- [x] Implement InputValidator
+  - [x] ValidateAll(inputs, definitions)
+  - [x] ValidateRequired
+  - [x] ValidateType
+  - [x] ValidatePattern
+  - [x] ValidateEnum
+  - [x] ValidateRange
+  - [x] ValidateFileExists
+  - [x] ValidateFileExtension
+- [x] Apply default values before validation
+- [x] Collect all errors (not fail-fast)
+- [x] Format error messages clearly
+- [x] Write comprehensive unit tests
 
 ## Notes
 
