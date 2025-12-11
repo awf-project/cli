@@ -50,7 +50,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 |----|---------|--------|
 | F015 | Conditions Complexes (if/else) | ✅ IMPLEMENTED |
 | F016 | Loop Constructs | ✅ IMPLEMENTED |
-| F017 | Workflow Templates | 📋 PLANNED (Medium) |
+| F017 | Workflow Templates | ✅ IMPLEMENTED |
 | F018 | Encrypted Environment | 📋 PLANNED (Low) |
 | F019 | Dry Run Mode | 📋 PLANNED (Medium) |
 | F020 | Interactive Mode | 📋 PLANNED (Low) |

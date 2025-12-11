@@ -1,0 +1,12 @@
+# Simple echo template - basic template with one required param
+name: simple-echo
+parameters:
+  - name: message
+    required: true
+  - name: prefix
+    default: "[INFO]"
+states:
+  initial: echo
+  echo:
+    type: command
+    command: "echo '{{parameters.prefix}} {{parameters.message}}'"

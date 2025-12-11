@@ -5,11 +5,10 @@
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
 ### Phase 3 - Advanced Features (v0.3.0)
-- [F017](features/v0.3.0/F017-workflow-templates.md) Workflow templates
 - [F018](features/v0.3.0/F018-encrypted-env.md) Encrypted environment variables
 - [F019](features/v0.3.0/F019-dry-run.md) Dry-run mode
 - [F020](features/v0.3.0/F020-interactive-mode.md) Interactive mode
-
+- [F042](features/v0.3.0/F042-loop-context-variables.md) Loop context variables (loop.index, loop.item) not available in templates and expressions
 ### Phase 4 - Extensibility & AI (v0.4.0)
 - [F021](features/v0.4.0/F021-plugin-system.md) Plugin system
 - [F022](features/v0.4.0/F022-custom-operations.md) Custom operations

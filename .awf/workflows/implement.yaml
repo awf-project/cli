@@ -474,35 +474,21 @@ states:
       stdout: tests_red_output
     transitions:
       - when: "states.run_tests_red.exit_code != 0"
-        goto: tdd_green_retry  # RED OK - tests fail as expected
-      - goto: tdd_green_retry  # RED WARNING - tests passed but continue anyway
-    on_failure: tdd_green_retry
+        goto: implement_feature  # RED OK - tests fail as expected
+      - goto: implement_feature  # RED WARNING - tests passed but continue anyway
+    on_failure: implement_feature
     hooks:
       pre:
         - log: "Running tests (expecting failure - RED phase)..."
 
   #==========================================================================
-  # PHASE 4: TDD GREEN - Implementation with Retry Loop (F016)
+  # PHASE 4: TDD GREEN - Implementation (single-pass, F042 needed for retry)
   #==========================================================================
 
-  tdd_green_retry:
-    type: while
-    description: TDD GREEN phase - retry until tests pass (max 3 attempts)
-    while: "loop.index == 0 || states.tdd_green_test.exit_code != 0"
-    max_iterations: 3
-    body:
-      - tdd_green_implement
-      - tdd_green_fmt
-      - tdd_green_test
-    on_complete: run_lint_final
-
-  tdd_green_implement:
+  implement_feature:
     type: step
-    description: Claude implements to make tests pass
+    description: Claude implements the feature (GREEN phase)
     command: |
-      ATTEMPT=$(({{loop.index}} + 1))
-      echo "=== TDD GREEN Implementation (Attempt $ATTEMPT/3) ==="
-
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
       SPECEOF
@@ -511,33 +497,15 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-
-      # Include previous failure context if retrying
-      RETRY_CONTEXT=""
-      if [ "{{loop.index}}" != "0" ]; then
-        PREV_OUTPUT=$(cat << 'PREVEOF'
-      {{.states.tdd_green_test.Output}}
-      PREVEOF
-      )
-        RETRY_CONTEXT="
-      ## RETRY CONTEXT (Attempt $ATTEMPT)
-      Previous test run failed. Here is the output:
-      \`\`\`
-      $PREV_OUTPUT
-      \`\`\`
-      Please analyze the failures and fix the implementation."
-      fi
-
       claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
 
-      ## PHASE: Implementation (GREEN phase - Attempt $ATTEMPT/3)
+      ## PHASE: Implementation (GREEN phase)
 
       ## Feature Spec
       $SPEC_CONTENT
 
       ## Implementation Plan
       $PLAN_CONTENT
-      $RETRY_CONTEXT
 
       ## Your Task
       Implement the actual logic to make all tests pass:
@@ -561,53 +529,196 @@ states:
     capture:
       stdout: implement_output
       max_size: 10MB
-    continue_on_error: true
+    on_success: run_fmt
+    on_failure: run_fmt
     hooks:
       pre:
-        - log: "Claude implementing (attempt {{loop.index}} + 1)..."
+        - log: "Claude implementing feature..."
 
-  tdd_green_fmt:
+  run_fmt:
     type: step
-    description: Format Go code
+    description: Format Go code before validation
     command: |
       go fmt ./...
       echo "STATUS:FORMATTED"
     timeout: 60s
     capture:
       stdout: fmt_output
-    continue_on_error: true
+    on_success: parallel_validation
+    on_failure: parallel_validation
     hooks:
       pre:
         - log: "Formatting Go code..."
-
-  tdd_green_test:
-    type: step
-    description: Run tests to check GREEN
-    command: make test-unit 2>&1
-    timeout: 300s
-    capture:
-      stdout: tests_green_output
-    continue_on_error: true
-    hooks:
-      pre:
-        - log: "Running tests (attempt {{loop.index}} + 1)..."
+      post:
+        - log: "Code formatted"
 
   #==========================================================================
-  # PHASE 5: FINAL VALIDATION
+  # PHASE 5: VALIDATION (PARALLEL)
   #==========================================================================
 
-  run_lint_final:
+  parallel_validation:
+    type: parallel
+    description: Run final lint and tests in parallel
+    parallel:
+      - run_lint_after
+      - run_tests_green
+    strategy: best_effort
+    max_concurrent: 2
+    on_success: write_feature_tests
+    on_failure: write_feature_tests
+
+  run_lint_after:
     type: step
-    description: Final lint check after retry loop
+    description: Lint after implementation
     command: make lint 2>&1 || echo "LINT_WARNING"
     timeout: 120s
     capture:
       stdout: lint_after_output
+    on_success: write_feature_tests
+    on_failure: write_feature_tests
+    hooks:
+      pre:
+        - log: "Running lint after implementation..."
+
+  run_tests_green:
+    type: step
+    description: Run tests - should pass (GREEN phase)
+    command: make test-unit 2>&1
+    timeout: 300s
+    capture:
+      stdout: tests_green_output
+    transitions:
+      - when: "states.run_tests_green.exit_code == 0"
+        goto: write_feature_tests  # GREEN OK
+      - goto: write_feature_tests  # GREEN WARNING - tests still failing but continue
+    on_failure: write_feature_tests
+    hooks:
+      pre:
+        - log: "Running tests (expecting pass - GREEN phase)..."
+
+  #==========================================================================
+  # PHASE 5.5: FEATURE-SPECIFIC FUNCTIONAL TESTS
+  #==========================================================================
+
+  write_feature_tests:
+    type: step
+    description: Claude writes comprehensive functional tests for this feature
+    command: |
+      SPEC_CONTENT=$(cat << 'SPECEOF'
+      {{.states.load_spec.Output}}
+      SPECEOF
+      )
+      PLAN_CONTENT=$(cat << 'PLANEOF'
+      {{.states.load_plan.Output}}
+      PLANEOF
+      )
+      claude -p "You are writing functional tests for feature {{.inputs.feature_id}}.
+
+      ## PHASE: Feature Functional Tests
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Your Task
+      Write comprehensive **functional tests** that validate the feature works end-to-end:
+
+      ### Test Categories Required
+      1. **Happy Path Tests** - Normal usage scenarios work correctly
+      2. **Edge Cases** - Boundary conditions, empty inputs, max values
+      3. **Error Handling** - Invalid inputs produce correct errors
+      4. **Integration** - Feature works with other components
+
+      ### Test Structure
+      - File: tests/integration/{component}_test.go (match existing file if extending)
+      - Build tag: //go:build integration
+      - Naming: Test{Component}_{Action}_Integration (e.g., TestTemplateService_ExpandWorkflow_Integration)
+      - REQUIRED: Add file-level comment '// Feature: {{.inputs.feature_id}}'
+      - Use testify/require for assertions
+      - Table-driven tests where appropriate
+      - Real fixtures in tests/fixtures/
+
+      ### Example Structure
+      \`\`\`go
+      //go:build integration
+
+      // Feature: {{.inputs.feature_id}}
+      package integration
+
+      import (
+          \"testing\"
+          \"github.com/stretchr/testify/require\"
+      )
+
+      func TestComponent_HappyPath_Integration(t *testing.T) {
+          // Setup real dependencies
+          // Execute feature end-to-end
+          // Assert expected behavior
+      }
+      \`\`\`
+
+      ### Requirements
+      - Tests MUST compile and run
+      - Tests MUST use the actual implementation (not mocks)
+      - Tests MUST cover acceptance criteria from spec
+      - Create necessary fixtures in tests/fixtures/
+
+      ## Available Agents
+      {{.inputs.agents}}
+
+      ## Available Skills
+      {{.inputs.skills}}" \
+        --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 600s
+    capture:
+      stdout: feature_tests_write_output
+      max_size: 5MB
+    on_success: run_feature_tests
+    on_failure: run_feature_tests
+    hooks:
+      pre:
+        - log: "Claude writing functional tests for {{.inputs.feature_id}}..."
+
+  run_feature_tests:
+    type: step
+    description: Run feature-specific functional tests
+    command: |
+      FEATURE_ID="{{.inputs.feature_id}}"
+
+      echo "=== Running functional tests for ${FEATURE_ID} ==="
+
+      # Find test files tagged with this feature
+      FEATURE_FILES=$(grep -l "// Feature: ${FEATURE_ID}" tests/integration/*_test.go 2>/dev/null || true)
+
+      if [ -z "$FEATURE_FILES" ]; then
+        echo "WARNING: No test files tagged with '// Feature: ${FEATURE_ID}'"
+        echo "Expected: Add '// Feature: ${FEATURE_ID}' comment after build tag"
+        exit 0
+      fi
+
+      echo "Found feature tests in:"
+      echo "$FEATURE_FILES"
+      echo ""
+
+      # Run only the tagged test files
+      go test -v -tags=integration $FEATURE_FILES 2>&1
+
+      echo ""
+      echo "FEATURE_TESTS_COMPLETED"
+    timeout: 300s
+    capture:
+      stdout: feature_tests_output
     on_success: parallel_docs_shell
     on_failure: parallel_docs_shell
     hooks:
       pre:
-        - log: "Running final lint check..."
+        - log: "Running functional tests for {{.inputs.feature_id}}..."
+      post:
+        - log: "Feature tests completed"
 
   #==========================================================================
   # PHASE 6: DOCUMENTATION UPDATES
@@ -932,8 +1043,7 @@ states:
       echo "║ TDD Results:"
       # Check exit codes stored in states (CamelCase for Go templates)
       RED_EXIT="{{.states.run_tests_red.ExitCode}}"
-      GREEN_EXIT="{{.states.tdd_green_test.ExitCode}}"
-      LOOP_ITERATIONS="{{.states.tdd_green_retry.Output}}"
+      GREEN_EXIT="{{.states.run_tests_green.ExitCode}}"
       if [ "$RED_EXIT" != "0" ]; then
         RED_RESULT="OK (tests failed as expected)"
       else
@@ -942,17 +1052,22 @@ states:
       if [ "$GREEN_EXIT" = "0" ]; then
         GREEN_RESULT="OK (tests passing)"
       else
-        GREEN_RESULT="WARNING (tests still failing after retries)"
+        GREEN_RESULT="WARNING (tests still failing)"
       fi
       LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS'
-      {{.states.run_lint_final.Output}}
+      {{.states.run_lint_after.Output}}
       LINTEOF
+      )
+      FEATURE_TESTS=$(cat << 'FTEOF' | grep -q 'NO_FEATURE_TESTS_FOUND' && echo 'SKIPPED (no tests found)' || echo 'COMPLETED'
+      {{.states.run_feature_tests.Output}}
+      FTEOF
       )
       echo "║   Baseline Lint: PASS"
       echo "║   Baseline Tests: PASS"
       echo "║   RED Phase: $RED_RESULT"
-      echo "║   GREEN Phase: $GREEN_RESULT (retry loop: $LOOP_ITERATIONS)"
+      echo "║   GREEN Phase: $GREEN_RESULT"
       echo "║   Final Lint: $LINT_AFTER"
+      echo "║   Feature Tests: $FEATURE_TESTS"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Documentation Updates:"
       echo "║   Spec Status: {{.states.update_spec_status.Output}}"

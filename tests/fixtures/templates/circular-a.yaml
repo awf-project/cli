@@ -1,0 +1,9 @@
+# Template that references circular-b (for circular detection testing)
+# When circular-b also references circular-a, it creates a cycle
+name: circular-a
+parameters: []
+states:
+  initial: run
+  run:
+    type: command
+    use_template: circular-b

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F017**: Workflow Templates with Parameters
+  - Define reusable templates in `.awf/templates/` with `name`, `parameters`, and `states`
+  - Reference templates in workflow steps via `use_template: <name>` with parameter overrides
+  - Parameters support `required` flag and `default` values with `{{parameters.X}}` interpolation
+  - Circular template reference detection with clear error messages
+  - Template validation at load time via `awf validate`
 - **F016**: Loop Constructs (for-each/while)
   - `for_each` step type iterates over lists with `items` field (supports JSON arrays or template expressions)
   - `while` step type repeats until condition evaluates to false
