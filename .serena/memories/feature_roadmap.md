@@ -4,7 +4,7 @@
 
 ```
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
-v0.2.0 (Core)       ░░░░░░░░░░░░░░░░░░░░ PLANNED
+v0.2.0 (Core)       ████████████████████ IMPLEMENTED
 v0.3.0 (Advanced)   ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
@@ -32,11 +32,11 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F039 | Run Single Step | ✅ Done |
 | F040 | Audit-Based Refactoring | 📋 PLANNED |
 
-## v0.2.0 - Core Features (IN PROGRESS)
+## v0.2.0 - Core Features (IMPLEMENTED)
 
 | ID | Feature | Status |
 |----|---------|--------|
-| F009 | State Machine Validation | 📋 PLANNED |
+| F009 | State Machine Validation | ✅ IMPLEMENTED |
 | F010 | Parallel Execution (errgroup) | ✅ IMPLEMENTED |
 | F011 | Retry with Backoff | ✅ IMPLEMENTED |
 | F012 | Input Validation | ✅ IMPLEMENTED |

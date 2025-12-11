@@ -276,7 +276,7 @@ func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "nonexistent", "--step=mystep"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "nonexistent", "--step=mystep"})
 
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -309,7 +309,7 @@ states:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "test", "--step=nonexistent"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "test", "--step=nonexistent"})
 
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -322,8 +322,9 @@ func TestRunCommand_SingleStep_Success(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 	_ = os.Chdir(tmpDir)
 
-	// Create storage directory
+	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
 
 	// Create a simple workflow
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
@@ -345,7 +346,7 @@ states:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "test", "--step=greet"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "test", "--step=greet"})
 
 	err := cmd.Execute()
 	// Should succeed (once implemented)
@@ -358,8 +359,9 @@ func TestRunCommand_SingleStep_WithInputs(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 	_ = os.Chdir(tmpDir)
 
-	// Create storage directory
+	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
 
 	// Create a workflow with inputs
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
@@ -384,7 +386,7 @@ states:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "input-test", "--step=show", "--input=message=test-value"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "input-test", "--step=show", "--input=message=test-value"})
 
 	err := cmd.Execute()
 	require.NoError(t, err)
@@ -396,8 +398,9 @@ func TestRunCommand_SingleStep_WithMocks(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 	_ = os.Chdir(tmpDir)
 
-	// Create storage directory
+	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
 
 	// Create a workflow where process depends on fetch output
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
@@ -425,6 +428,7 @@ states:
 	cmd.SetErr(&out)
 	// Execute the process step with mocked fetch output
 	cmd.SetArgs([]string{
+		"--storage=" + tmpDir,
 		"run", "mock-test",
 		"--step=process",
 		"--mock=states.fetch.output=mocked-data",
@@ -440,8 +444,9 @@ func TestRunCommand_SingleStep_TerminalStepError(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 	_ = os.Chdir(tmpDir)
 
-	// Create storage directory
+	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
 
 	// Create a workflow with a terminal step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
@@ -460,7 +465,7 @@ states:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	// Try to execute a terminal step (should error)
-	cmd.SetArgs([]string{"run", "terminal-test", "--step=done"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "terminal-test", "--step=done"})
 
 	err := cmd.Execute()
 	require.Error(t, err)

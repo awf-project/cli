@@ -9,10 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **F041**: Validate Template Interpolation References
+  - Static validation of `{{inputs.X}}` and `{{states.X.output}}` at parse time
+  - Detect forward references (step A references step B before B runs)
+  - Report all template errors in single pass with step context
 - **F014**: BadgerDB History
-- **F013**: Commande Resume
-- **F012**: Validation des Inputs
-- **F011**: Retry avec Backoff Exponentiel
+  - Store execution history in BadgerDB (pure Go, no CGO)
+  - `awf history` command with `--workflow`, `--status`, `--since` filters
+  - Statistics with `--stats` flag
+  - 30-day auto-cleanup at startup
+- **F013**: Resume Command
+  - `awf resume <workflow-id>` to continue interrupted workflows
+  - `awf resume --list` shows resumable workflows
+  - Input override on resume with `--input` flags
+- **F012**: Input Validation
+  - Validate workflow inputs at runtime against defined rules
+  - Type checking: `string`, `integer`, `boolean`
+  - Pattern validation (regex), enum, numeric ranges (`min`/`max`)
+  - File validation: `file_exists`, `file_extension`
+- **F011**: Retry with Exponential Backoff
+  - Automatic retry for failed steps with configurable `max_attempts`
+  - Backoff strategies: `exponential`, `linear`, `constant`
+  - Jitter support to prevent thundering herd
+  - Filter retryable failures by `retryable_exit_codes`
 - **F010**: Parallel step execution (errgroup)
   - `type: parallel` state with concurrent step execution
   - Strategies: `all_succeed`, `any_succeed`, `best_effort`
