@@ -468,21 +468,14 @@ states:
   run_tests_red:
     type: step
     description: Run tests - should fail (RED phase)
-    command: |
-      make test-unit 2>&1
-      EXIT_CODE=$?
-      if [ $EXIT_CODE -eq 0 ]; then
-        echo "WARNING: Tests passed but should have failed (RED phase)"
-        echo "RED_PHASE_WARNING"
-      else
-        echo "RED phase OK - tests fail as expected"
-        echo "RED_PHASE_OK"
-      fi
-      exit 0
+    command: make test-unit 2>&1
     timeout: 300s
     capture:
       stdout: tests_red_output
-    on_success: implement_feature
+    transitions:
+      - when: "states.run_tests_red.exit_code != 0"
+        goto: implement_feature  # RED OK - tests fail as expected
+      - goto: implement_feature  # RED WARNING - tests passed but continue anyway
     on_failure: implement_feature
     hooks:
       pre:
@@ -591,19 +584,14 @@ states:
   run_tests_green:
     type: step
     description: Run tests - should pass (GREEN phase)
-    command: |
-      make test-unit 2>&1
-      EXIT_CODE=$?
-      if [ $EXIT_CODE -eq 0 ]; then
-        echo "GREEN_PHASE_OK"
-      else
-        echo "GREEN_PHASE_WARNING: Tests still failing"
-      fi
-      exit 0
+    command: make test-unit 2>&1
     timeout: 300s
     capture:
       stdout: tests_green_output
-    on_success: parallel_docs_shell
+    transitions:
+      - when: "states.run_tests_green.exit_code == 0"
+        goto: parallel_docs_shell  # GREEN OK
+      - goto: parallel_docs_shell  # GREEN WARNING - tests still failing but continue
     on_failure: parallel_docs_shell
     hooks:
       pre:
@@ -930,9 +918,23 @@ states:
       echo "║ Skills: {{.inputs.skills}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ TDD Results:"
-      RED_RESULT=$(echo '{{.states.run_tests_red.Output}}' | grep -o 'RED_PHASE_[A-Z]*' | tail -1)
-      GREEN_RESULT=$(echo '{{.states.run_tests_green.Output}}' | grep -o 'GREEN_PHASE_[A-Z]*' | tail -1)
-      LINT_AFTER=$(echo '{{.states.run_lint_after.Output}}' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS')
+      # Check exit codes stored in states
+      RED_EXIT="{{.states.run_tests_red.exit_code}}"
+      GREEN_EXIT="{{.states.run_tests_green.exit_code}}"
+      if [ "$RED_EXIT" != "0" ]; then
+        RED_RESULT="OK (tests failed as expected)"
+      else
+        RED_RESULT="WARNING (tests passed, should have failed)"
+      fi
+      if [ "$GREEN_EXIT" = "0" ]; then
+        GREEN_RESULT="OK (tests passing)"
+      else
+        GREEN_RESULT="WARNING (tests still failing)"
+      fi
+      LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS'
+      {{.states.run_lint_after.Output}}
+      LINTEOF
+      )
       echo "║   Baseline Lint: PASS"
       echo "║   Baseline Tests: PASS"
       echo "║   RED Phase: $RED_RESULT"
@@ -945,7 +947,11 @@ states:
       echo "║   KANBAN: {{.states.update_kanban.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
       echo "║   CHANGELOG: {{.states.update_changelog_full.Output}}"
-      echo "║   Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
+      MEMORY_STATUS=$(cat << 'MEMEOF' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED'
+      {{.states.update_memories.Output}}
+      MEMEOF
+      )
+      echo "║   Memory: $MEMORY_STATUS"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ NO COMMIT - Review changes and commit manually                 ║"
       echo "╚════════════════════════════════════════════════════════════════╝"

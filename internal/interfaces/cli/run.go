@@ -18,6 +18,7 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -140,7 +141,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
+	exprEvaluator := expression.NewExprEvaluator()
+	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Pass writers to execution service for streaming mode
 	if stdoutWriter != nil {
@@ -556,7 +558,8 @@ func runSingleStep(
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
+	exprEvaluator := expression.NewExprEvaluator()
+	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Show start message
 	if !cfg.Quiet {

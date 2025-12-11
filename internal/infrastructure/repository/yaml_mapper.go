@@ -84,6 +84,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		MaxConcurrent:   y.MaxConcurrent,
 		OnSuccess:       y.OnSuccess,
 		OnFailure:       y.OnFailure,
+		Transitions:     mapTransitions(y.Transitions),
 		DependsOn:       y.DependsOn,
 		ContinueOnError: y.ContinueOnError,
 		Retry:           mapRetry(y.Retry),
@@ -199,6 +200,21 @@ func mapHook(actions []yamlHookAction) workflow.Hook {
 		}
 	}
 	return hook
+}
+
+// mapTransitions converts yamlTransition slice to domain Transitions.
+func mapTransitions(transitions []yamlTransition) workflow.Transitions {
+	if len(transitions) == 0 {
+		return nil
+	}
+	result := make(workflow.Transitions, len(transitions))
+	for i, t := range transitions {
+		result[i] = workflow.Transition{
+			When: t.When,
+			Goto: t.Goto,
+		}
+	}
+	return result
 }
 
 // parseDuration parses a duration string like "30s", "2m", "1h".

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F015**: Conditional Branching with `when:` Clauses
+  - Add `when:` clause on transitions for dynamic workflow paths based on expressions
+  - Support comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) and logical operators (`and`, `or`, `not`)
+  - Access all interpolation variables in conditions: `inputs.*`, `states.*`, `env.*`, `workflow.*`
+  - First-match-wins evaluation with fallback to default transition when no condition matches
+  - Clear error messages for invalid expressions with type coercion for string/numeric comparisons
 - **F041**: Validate Template Interpolation References
   - Static validation of `{{inputs.X}}` and `{{states.X.output}}` at parse time
   - Detect forward references (step A references step B before B runs)

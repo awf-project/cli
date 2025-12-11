@@ -149,7 +149,7 @@ func TestWorkflowValidation(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "step 'middle': command step must have OnSuccess or OnFailure",
+			errMsg:  "step 'middle': command step must have OnSuccess/OnFailure or Transitions",
 		},
 	}
 

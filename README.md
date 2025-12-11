@@ -307,6 +307,7 @@ states:
 | `on_failure` | Next state on failure (exit code ≠ 0) |
 | `continue_on_error` | Always follow `on_success` regardless of exit code |
 | `retry` | Retry configuration (see below) |
+| `transitions` | Conditional transitions (see below) |
 
 ### Retry Options
 
@@ -341,6 +342,41 @@ flaky_api_call:
   on_success: process_data
   on_failure: error
 ```
+
+### Conditional Transitions
+
+Steps can use `transitions:` for dynamic branching based on expressions:
+
+| Option | Description |
+|--------|-------------|
+| `when` | Expression to evaluate (optional, omit for default fallback) |
+| `goto` | Target state if condition matches |
+
+**Supported operators:**
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `and`, `or`, `not`
+- Grouping: `(expr)`
+
+**Available variables in expressions:**
+- `inputs.name` - Input values
+- `states.step_name.exit_code` - Step exit code
+- `states.step_name.output` - Step output
+- `env.VAR_NAME` - Environment variables
+
+**Example:**
+```yaml
+process:
+  type: step
+  command: analyze.sh
+  transitions:
+    - when: "states.process.exit_code == 0 and inputs.mode == 'full'"
+      goto: full_report
+    - when: "states.process.exit_code == 0"
+      goto: summary_report
+    - goto: error  # default fallback (no when clause)
+```
+
+Transitions are evaluated in order; first match wins. A transition without `when` acts as default fallback. If no `transitions:` are defined, `on_success`/`on_failure` are used for backward compatibility.
 
 ### Terminal Options
 
@@ -546,6 +582,7 @@ make fmt            # Format code
 - `stretchr/testify` - Testing
 - `golang.org/x/sync/errgroup` - Parallel execution
 - `dgraph-io/badger/v4` - History storage
+- `expr-lang/expr` - Expression evaluation for conditions
 
 ## Roadmap
 
@@ -574,8 +611,8 @@ make fmt            # Format code
 - [x] Resume command
 - [x] BadgerDB history
 
-### Phase 3+ - Advanced Features
-- [ ] Conditions (if/else)
+### Phase 3 - Advanced Features (v0.3.0)
+- [x] Conditions (if/else with `when:` clauses)
 - [ ] Loops (for/while)
 - [ ] Workflow templates
 - [ ] Plugin system

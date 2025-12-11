@@ -15,6 +15,7 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -195,7 +196,8 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc)
+	exprEvaluator := expression.NewExprEvaluator()
+	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)

@@ -192,7 +192,10 @@ states:
     timeout: 30s
     capture:
       stdout: commit_output
-    on_success: do_push
+    transitions:
+      - when: "inputs.push == true"
+        goto: do_push
+      - goto: summary  # no push requested
     on_failure: error_commit
     hooks:
       pre:
@@ -202,13 +205,8 @@ states:
 
   do_push:
     type: step
-    description: Push to remote if requested
+    description: Push to remote
     command: |
-      if [ "{{.inputs.push}}" != "true" ]; then
-        echo "Push skipped by user"
-        exit 0
-      fi
-
       BRANCH=$(git branch --show-current)
       UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "")
 
@@ -222,7 +220,10 @@ states:
     timeout: 120s
     capture:
       stdout: push_output
-    on_success: generate_pr_body
+    transitions:
+      - when: "inputs.pr == true"
+        goto: generate_pr_body
+      - goto: summary  # no PR requested
     on_failure: error_push
     hooks:
       pre:
@@ -234,13 +235,8 @@ states:
 
   generate_pr_body:
     type: step
-    description: Claude generates detailed PR body (if pr=true)
+    description: Claude generates detailed PR body
     command: |
-      if [ "{{.inputs.pr}}" != "true" ]; then
-        echo "PR_SKIPPED"
-        exit 0
-      fi
-
       DIFF_CONTENT=$(cat << 'DIFFEOF'
       {{.states.check_changes.Output}}
       DIFFEOF
@@ -284,7 +280,6 @@ states:
     capture:
       stdout: pr_body
       max_size: 50KB
-    continue_on_error: true
     on_success: create_pr
     on_failure: error_generate_pr_body
     hooks:
@@ -293,13 +288,8 @@ states:
 
   create_pr:
     type: step
-    description: Create PR using gh CLI (if pr=true)
+    description: Create PR using gh CLI
     command: |
-      if [ "{{.inputs.pr}}" != "true" ]; then
-        echo "PR_SKIPPED"
-        exit 0
-      fi
-
       # Use commit subject as PR title
       PR_TITLE=$(git log -1 --format='%s')
 
@@ -308,7 +298,7 @@ states:
       {{.states.generate_pr_body.Output}}
 
       ---
-      🤖 Generated with awf commit workflow
+      Generated with awf commit workflow
       BODYEOF
       )
 
@@ -347,9 +337,9 @@ states:
       else
         echo "║ Pushed: no"
       fi
-      PR_URL="{{.states.create_pr.Output}}"
-      if [ "$PR_URL" != "PR_SKIPPED" ] && [ -n "$PR_URL" ]; then
-        echo "║ PR: $PR_URL"
+      if [ "{{.inputs.pr}}" = "true" ]; then
+        # PR URL is shown in step output, not repeated here
+        echo "║ PR: created"
       fi
       echo "╚════════════════════════════════════════════════════════════════╝"
     timeout: 5s

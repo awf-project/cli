@@ -70,8 +70,9 @@ type Step struct {
 	Strategy        string         // for parallel: all_succeed, any_succeed, best_effort
 	MaxConcurrent   int            // for parallel: max concurrent branches
 	Timeout         int            // seconds
-	OnSuccess       string         // next state name
-	OnFailure       string         // next state name
+	OnSuccess       string         // next state name (legacy, use Transitions)
+	OnFailure       string         // next state name (legacy, use Transitions)
+	Transitions     Transitions    // conditional transitions (takes precedence over OnSuccess/OnFailure)
 	DependsOn       []string       // for ordering in parallel execution
 	Retry           *RetryConfig   // retry configuration
 	Capture         *CaptureConfig // output capture configuration

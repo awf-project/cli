@@ -21,24 +21,31 @@ type yamlStates struct {
 
 // yamlStep is the YAML representation of a step.
 type yamlStep struct {
-	Type            string         `yaml:"type"`
-	Description     string         `yaml:"description"`
-	Operation       string         `yaml:"operation"`
-	Command         string         `yaml:"command"`
-	Dir             string         `yaml:"dir"`
-	Timeout         string         `yaml:"timeout"`
-	OnSuccess       string         `yaml:"on_success"`
-	OnFailure       string         `yaml:"on_failure"`
-	DependsOn       []string       `yaml:"depends_on"`
-	Parallel        []string       `yaml:"parallel"`
-	Strategy        string         `yaml:"strategy"`
-	MaxConcurrent   int            `yaml:"max_concurrent"`
-	Retry           *yamlRetry     `yaml:"retry"`
-	Capture         *yamlCapture   `yaml:"capture"`
-	Hooks           *yamlStepHooks `yaml:"hooks"`
-	ContinueOnError bool           `yaml:"continue_on_error"`
-	Status          string         `yaml:"status"`  // for terminal steps
-	Message         string         `yaml:"message"` // for terminal steps
+	Type            string           `yaml:"type"`
+	Description     string           `yaml:"description"`
+	Operation       string           `yaml:"operation"`
+	Command         string           `yaml:"command"`
+	Dir             string           `yaml:"dir"`
+	Timeout         string           `yaml:"timeout"`
+	OnSuccess       string           `yaml:"on_success"`
+	OnFailure       string           `yaml:"on_failure"`
+	Transitions     []yamlTransition `yaml:"transitions"`
+	DependsOn       []string         `yaml:"depends_on"`
+	Parallel        []string         `yaml:"parallel"`
+	Strategy        string           `yaml:"strategy"`
+	MaxConcurrent   int              `yaml:"max_concurrent"`
+	Retry           *yamlRetry       `yaml:"retry"`
+	Capture         *yamlCapture     `yaml:"capture"`
+	Hooks           *yamlStepHooks   `yaml:"hooks"`
+	ContinueOnError bool             `yaml:"continue_on_error"`
+	Status          string           `yaml:"status"`  // for terminal steps
+	Message         string           `yaml:"message"` // for terminal steps
+}
+
+// yamlTransition is the YAML representation of a conditional transition.
+type yamlTransition struct {
+	When string `yaml:"when"` // condition expression (empty = default)
+	Goto string `yaml:"goto"` // target state name
 }
 
 // yamlInput is the YAML representation of an input.

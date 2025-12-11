@@ -1,7 +1,7 @@
 # F015: Conditions Complexes (if/else)
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: high
@@ -13,13 +13,13 @@ Add conditional branching based on expressions. Evaluate conditions using variab
 
 ## Acceptance Criteria
 
-- [ ] `when:` clause on transitions
-- [ ] Compare variables with operators (==, !=, <, >, <=, >=)
-- [ ] Logical operators (and, or, not)
-- [ ] Access to all interpolation variables
-- [ ] String and numeric comparisons
-- [ ] Clear error on invalid expressions
-- [ ] Fallback to default transition if no condition matches
+- [x] `when:` clause on transitions
+- [x] Compare variables with operators (==, !=, <, >, <=, >=)
+- [x] Logical operators (and, or, not)
+- [x] Access to all interpolation variables
+- [x] String and numeric comparisons
+- [x] Clear error on invalid expressions
+- [x] Fallback to default transition if no condition matches
 
 ## Dependencies
 
@@ -38,28 +38,28 @@ internal/application/executor.go
 
 ## Technical Tasks
 
-- [ ] Define Condition struct
-  - [ ] Expression string
-  - [ ] Target state
-- [ ] Define expression syntax
-  - [ ] Variable references: `inputs.count`
-  - [ ] Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
-  - [ ] Logical: `and`, `or`, `not`
-  - [ ] Grouping: `(expr)`
-- [ ] Implement ExpressionEvaluator
-  - [ ] Parse expression
-  - [ ] Evaluate against context
-  - [ ] Return boolean result
-- [ ] Extend state transitions
-  - [ ] Support `transitions:` with conditions
-  - [ ] Evaluate in order, first match wins
-  - [ ] Default transition if none match
-- [ ] Handle type coercion
-  - [ ] String to number
-  - [ ] Empty string = false
-- [ ] Write parser tests
-- [ ] Write evaluator tests
-- [ ] Write integration tests
+- [x] Define Condition struct
+  - [x] Expression string
+  - [x] Target state
+- [x] Define expression syntax
+  - [x] Variable references: `inputs.count`
+  - [x] Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
+  - [x] Logical: `and`, `or`, `not`
+  - [x] Grouping: `(expr)`
+- [x] Implement ExpressionEvaluator
+  - [x] Parse expression
+  - [x] Evaluate against context
+  - [x] Return boolean result
+- [x] Extend state transitions
+  - [x] Support `transitions:` with conditions
+  - [x] Evaluate in order, first match wins
+  - [x] Default transition if none match
+- [x] Handle type coercion
+  - [x] String to number
+  - [x] Empty string = false
+- [x] Write parser tests
+- [x] Write evaluator tests
+- [x] Write integration tests
 
 ## Notes
 

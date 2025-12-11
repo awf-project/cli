@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.8.0
+	github.com/expr-lang/expr v1.17.6
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
