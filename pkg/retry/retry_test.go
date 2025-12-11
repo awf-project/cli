@@ -252,11 +252,11 @@ func TestShouldRetry_ExceedsMaxAttempts(t *testing.T) {
 
 func TestNextDelay_UsesStrategy(t *testing.T) {
 	tests := []struct {
-		name     string
-		config   Config
-		attempt  int
-		wantMin  time.Duration
-		wantMax  time.Duration
+		name    string
+		config  Config
+		attempt int
+		wantMin time.Duration
+		wantMax time.Duration
 	}{
 		{
 			name: "constant strategy",

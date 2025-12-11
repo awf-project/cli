@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	defaultHistoryLimit    = 20
-	retentionPeriod        = 30 * 24 * time.Hour // 30 days
+	defaultHistoryLimit = 20
+	retentionPeriod     = 30 * 24 * time.Hour // 30 days
 )
 
 // HistoryService provides business logic for workflow execution history.

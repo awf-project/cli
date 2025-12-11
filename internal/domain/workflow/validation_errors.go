@@ -19,6 +19,17 @@ const (
 	ErrInvalidTransition   ValidationCode = "invalid_transition"
 	ErrNoTerminalState     ValidationCode = "no_terminal_state"
 	ErrMissingInitialState ValidationCode = "missing_initial_state"
+
+	// Template reference validation codes
+	ErrUndefinedInput           ValidationCode = "undefined_input"
+	ErrUndefinedStep            ValidationCode = "undefined_step"
+	ErrForwardReference         ValidationCode = "forward_reference"
+	ErrInvalidWorkflowProperty  ValidationCode = "invalid_workflow_property"
+	ErrInvalidStateProperty     ValidationCode = "invalid_state_property"
+	ErrInvalidErrorProperty     ValidationCode = "invalid_error_property"
+	ErrInvalidContextProperty   ValidationCode = "invalid_context_property"
+	ErrUnknownReferenceType     ValidationCode = "unknown_reference_type"
+	ErrErrorRefOutsideErrorHook ValidationCode = "error_ref_outside_error_hook"
 )
 
 // ValidationError represents a single validation issue.

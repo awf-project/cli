@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F041**: Validate Template Interpolation References
 - **F014**: BadgerDB History
 - **F013**: Commande Resume
 - **F012**: Validation des Inputs

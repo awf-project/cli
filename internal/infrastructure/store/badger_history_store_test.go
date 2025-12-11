@@ -305,11 +305,11 @@ func TestBadgerHistoryStore_List_FilterByDateRange(t *testing.T) {
 
 	// Create records at different times
 	times := []time.Time{
-		now.Add(-7 * 24 * time.Hour),  // 7 days ago
-		now.Add(-3 * 24 * time.Hour),  // 3 days ago
-		now.Add(-24 * time.Hour),      // 1 day ago
-		now.Add(-1 * time.Hour),       // 1 hour ago
-		now,                           // now
+		now.Add(-7 * 24 * time.Hour), // 7 days ago
+		now.Add(-3 * 24 * time.Hour), // 3 days ago
+		now.Add(-24 * time.Hour),     // 1 day ago
+		now.Add(-1 * time.Hour),      // 1 hour ago
+		now,                          // now
 	}
 	for i, completedAt := range times {
 		record := &workflow.ExecutionRecord{
@@ -648,10 +648,10 @@ func TestBadgerHistoryStore_GetStats_WithFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		filter         *workflow.HistoryFilter
-		expectedTotal  int
-		expectedAvgMs  int64
+		name          string
+		filter        *workflow.HistoryFilter
+		expectedTotal int
+		expectedAvgMs int64
 	}{
 		{
 			name:          "stats for deploy workflow",
@@ -791,6 +791,24 @@ func TestBadgerHistoryStore_Close(t *testing.T) {
 	ctx := context.Background()
 	_, err = s.List(ctx, &workflow.HistoryFilter{})
 	assert.Error(t, err, "operations after close should fail")
+}
+
+func TestBadgerHistoryStore_Close_DoubleClose(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := store.NewBadgerHistoryStore(tmpDir)
+	require.NoError(t, err)
+
+	// First close should succeed
+	err = s.Close()
+	assert.NoError(t, err)
+
+	// Second close should also succeed (idempotent)
+	err = s.Close()
+	assert.NoError(t, err, "double close should be safe")
+
+	// Third close should also succeed
+	err = s.Close()
+	assert.NoError(t, err, "multiple closes should be safe")
 }
 
 func TestBadgerHistoryStore_ConcurrentWrites(t *testing.T) {

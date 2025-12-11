@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
@@ -14,16 +15,18 @@ import (
 )
 
 const (
-	prefixExec = "exec:"    // Primary record: exec:{id} -> JSON(ExecutionRecord)
-	prefixWf   = "idx:wf:"  // Index by workflow: idx:wf:{workflow_name}:{timestamp_ns}:{id}
-	prefixSt   = "idx:st:"  // Index by status: idx:st:{status}:{timestamp_ns}:{id}
-	prefixTs   = "idx:ts:"  // Index by timestamp: idx:ts:{timestamp_ns}:{id}
+	prefixExec   = "exec:"   // Primary record: exec:{id} -> JSON(ExecutionRecord)
+	prefixWf     = "idx:wf:" // Index by workflow: idx:wf:{workflow_name}:{timestamp_ns}:{id}
+	prefixSt     = "idx:st:" // Index by status: idx:st:{status}:{timestamp_ns}:{id}
+	prefixTs     = "idx:ts:" // Index by timestamp: idx:ts:{timestamp_ns}:{id}
 	defaultLimit = 20
 )
 
 // BadgerHistoryStore implements HistoryStore using BadgerDB.
 type BadgerHistoryStore struct {
-	db *badger.DB
+	db        *badger.DB
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewBadgerHistoryStore creates a new BadgerDB-backed history store.
@@ -283,8 +286,12 @@ func (s *BadgerHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 }
 
 // Close gracefully shuts down the BadgerDB connection.
+// Safe to call multiple times - subsequent calls are no-ops.
 func (s *BadgerHistoryStore) Close() error {
-	return s.db.Close()
+	s.closeOnce.Do(func() {
+		s.closeErr = s.db.Close()
+	})
+	return s.closeErr
 }
 
 // scanWorkflowIndex scans the workflow index for matching records.

@@ -15,13 +15,13 @@ import (
 
 // mockHistoryStore implements ports.HistoryStore for testing
 type mockHistoryStore struct {
-	records     []*workflow.ExecutionRecord
-	recordErr   error
-	listErr     error
-	statsErr    error
-	cleanupErr  error
-	closeErr    error
-	cleanupAge  time.Duration
+	records      []*workflow.ExecutionRecord
+	recordErr    error
+	listErr      error
+	statsErr     error
+	cleanupErr   error
+	closeErr     error
+	cleanupAge   time.Duration
 	cleanedCount int
 }
 
@@ -158,10 +158,10 @@ func TestNewHistoryService(t *testing.T) {
 
 func TestHistoryService_Record(t *testing.T) {
 	tests := []struct {
-		name      string
-		record    *workflow.ExecutionRecord
-		storeErr  error
-		wantErr   bool
+		name     string
+		record   *workflow.ExecutionRecord
+		storeErr error
+		wantErr  bool
 	}{
 		{
 			name: "record success execution",
@@ -352,14 +352,14 @@ func TestHistoryService_List_AppliesDefaultLimit(t *testing.T) {
 
 func TestHistoryService_GetStats(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupRecords   []*workflow.ExecutionRecord
-		filter         *workflow.HistoryFilter
-		storeErr       error
-		expectedTotal  int
+		name            string
+		setupRecords    []*workflow.ExecutionRecord
+		filter          *workflow.HistoryFilter
+		storeErr        error
+		expectedTotal   int
 		expectedSuccess int
-		expectedFailed int
-		wantErr        bool
+		expectedFailed  int
+		wantErr         bool
 	}{
 		{
 			name:          "stats for empty store",
@@ -425,11 +425,11 @@ func TestHistoryService_GetStats(t *testing.T) {
 
 func TestHistoryService_Cleanup(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupRecords   []*workflow.ExecutionRecord
-		storeErr       error
+		name            string
+		setupRecords    []*workflow.ExecutionRecord
+		storeErr        error
 		expectedDeleted int
-		wantErr        bool
+		wantErr         bool
 	}{
 		{
 			name: "cleanup old records",
@@ -449,8 +449,8 @@ func TestHistoryService_Cleanup(t *testing.T) {
 			expectedDeleted: 0,
 		},
 		{
-			name:           "cleanup empty store",
-			setupRecords:   nil,
+			name:            "cleanup empty store",
+			setupRecords:    nil,
 			expectedDeleted: 0,
 		},
 		{

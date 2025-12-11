@@ -255,33 +255,33 @@ func TestHistoryStats_Fields(t *testing.T) {
 func TestExecutionRecord_DurationCalculation(t *testing.T) {
 	// Test that DurationMs can be correctly derived from timestamps
 	tests := []struct {
-		name              string
-		startedAt         time.Time
-		completedAt       time.Time
+		name               string
+		startedAt          time.Time
+		completedAt        time.Time
 		expectedDurationMs int64
 	}{
 		{
-			name:              "5 minute duration",
-			startedAt:         time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
-			completedAt:       time.Date(2025, 12, 10, 10, 5, 0, 0, time.UTC),
+			name:               "5 minute duration",
+			startedAt:          time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
+			completedAt:        time.Date(2025, 12, 10, 10, 5, 0, 0, time.UTC),
 			expectedDurationMs: 300000,
 		},
 		{
-			name:              "sub-second duration",
-			startedAt:         time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
-			completedAt:       time.Date(2025, 12, 10, 10, 0, 0, 500000000, time.UTC),
+			name:               "sub-second duration",
+			startedAt:          time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
+			completedAt:        time.Date(2025, 12, 10, 10, 0, 0, 500000000, time.UTC),
 			expectedDurationMs: 500,
 		},
 		{
-			name:              "zero duration",
-			startedAt:         time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
-			completedAt:       time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
+			name:               "zero duration",
+			startedAt:          time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
+			completedAt:        time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
 			expectedDurationMs: 0,
 		},
 		{
-			name:              "1 hour duration",
-			startedAt:         time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
-			completedAt:       time.Date(2025, 12, 10, 11, 0, 0, 0, time.UTC),
+			name:               "1 hour duration",
+			startedAt:          time.Date(2025, 12, 10, 10, 0, 0, 0, time.UTC),
+			completedAt:        time.Date(2025, 12, 10, 11, 0, 0, 0, time.UTC),
 			expectedDurationMs: 3600000,
 		},
 	}

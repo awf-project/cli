@@ -249,8 +249,8 @@ func TestBuildStepInfos(t *testing.T) {
 
 func TestCategorizeError(t *testing.T) {
 	tests := []struct {
-		name    string
-		errMsg  string
+		name     string
+		errMsg   string
 		wantExit int
 	}{
 		{
