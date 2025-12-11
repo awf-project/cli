@@ -1,0 +1,20 @@
+name: test-foreach
+version: "1.0.0"
+description: For-each loop test fixture
+
+states:
+  initial: process_files
+  process_files:
+    type: for_each
+    items: '["a.txt", "b.txt", "c.txt"]'
+    max_iterations: 10
+    body:
+      - echo_file
+    on_complete: done
+  echo_file:
+    type: step
+    command: 'echo "Processing {{.loop.Item}} ({{.loop.Index}}/{{.loop.Length}})"'
+    on_success: process_files
+  done:
+    type: terminal
+    status: success

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F016**: Loop Constructs (for-each/while)
+  - `for_each` step type iterates over lists with `items` field (supports JSON arrays or template expressions)
+  - `while` step type repeats until condition evaluates to false
+  - Loop context variables: `{{loop.item}}`, `{{loop.index}}`, `{{loop.first}}`, `{{loop.last}}`, `{{loop.length}}`
+  - `max_iterations` safety limit prevents runaway loops (default: 100)
+  - `break_when` condition enables early exit from loops
 - **F015**: Conditional Branching with `when:` Clauses
   - Add `when:` clause on transitions for dynamic workflow paths based on expressions
   - Support comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) and logical operators (`and`, `or`, `not`)

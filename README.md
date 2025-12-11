@@ -295,6 +295,8 @@ states:
 | `step` | Execute a command |
 | `terminal` | End state with `status: success` or `status: failure` |
 | `parallel` | Execute multiple steps concurrently |
+| `for_each` | Iterate over a list of items |
+| `while` | Repeat until condition is false |
 
 ### Step Options
 
@@ -417,6 +419,91 @@ parallel_analysis:
 ```
 
 Access individual step outputs: `{{.states.parallel_analysis.steps.lint.output}}`
+
+### Loop Options (for_each)
+
+| Option | Description |
+|--------|-------------|
+| `items` | Template expression or literal array of items to iterate |
+| `body` | List of step names to execute each iteration |
+| `max_iterations` | Safety limit (default: 100, max: 10000) |
+| `break_when` | Optional expression to exit loop early |
+| `on_complete` | Next state after loop completes |
+
+**Loop context variables:**
+- `{{.loop.item}}` - Current item value
+- `{{.loop.index}}` - 0-based iteration index
+- `{{.loop.first}}` - True on first iteration
+- `{{.loop.last}}` - True on last iteration
+- `{{.loop.length}}` - Total items count
+
+**Example:**
+```yaml
+process_files:
+  type: for_each
+  items: '["a.txt", "b.txt", "c.txt"]'
+  max_iterations: 100
+  body:
+    - process_single
+  on_complete: aggregate
+
+process_single:
+  type: step
+  command: 'echo "Processing {{.loop.item}} ({{.loop.index}}/{{.loop.length}})"'
+  on_success: process_files
+
+aggregate:
+  type: terminal
+  status: success
+```
+
+Items can also come from a template expression:
+```yaml
+items: "{{.inputs.files}}"
+```
+
+### Loop Options (while)
+
+| Option | Description |
+|--------|-------------|
+| `while` | Condition expression (loop while true) |
+| `body` | List of step names to execute each iteration |
+| `max_iterations` | Safety limit (default: 100, max: 10000) |
+| `break_when` | Optional expression to exit loop early |
+| `on_complete` | Next state after loop completes |
+
+**Loop context variables:**
+- `{{.loop.index}}` - 0-based iteration index
+- `{{.loop.first}}` - True on first iteration
+- `{{.loop.length}}` - Always -1 (unknown for while loops)
+
+**Example:**
+```yaml
+poll_status:
+  type: while
+  while: "states.check.output != 'ready'"
+  max_iterations: 60
+  body:
+    - check
+    - wait
+  on_complete: proceed
+
+check:
+  type: step
+  command: "curl -s https://api.example.com/status"
+  capture:
+    stdout: status
+  on_success: poll_status
+
+wait:
+  type: step
+  command: "sleep 5"
+  on_success: poll_status
+
+proceed:
+  type: terminal
+  status: success
+```
 
 ### Variable Interpolation
 
@@ -613,7 +700,7 @@ make fmt            # Format code
 
 ### Phase 3 - Advanced Features (v0.3.0)
 - [x] Conditions (if/else with `when:` clauses)
-- [ ] Loops (for/while)
+- [x] Loops (for/while)
 - [ ] Workflow templates
 - [ ] Plugin system
 - [ ] REST API

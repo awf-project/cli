@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -91,6 +92,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Capture:         mapCapture(y.Capture),
 		Hooks:           mapStepHooks(y.Hooks),
 		Status:          workflow.TerminalStatus(y.Status),
+		Loop:            mapLoopConfig(y),
 	}
 
 	// Parse timeout
@@ -114,6 +116,10 @@ func parseStepType(s string) (workflow.StepType, error) {
 		return workflow.StepTypeParallel, nil
 	case "terminal":
 		return workflow.StepTypeTerminal, nil
+	case "for_each":
+		return workflow.StepTypeForEach, nil
+	case "while":
+		return workflow.StepTypeWhile, nil
 	default:
 		return "", NewParseError("", "", "unknown step type: "+s)
 	}
@@ -160,6 +166,49 @@ func mapCapture(y *yamlCapture) *workflow.CaptureConfig {
 		Stderr:   y.Stderr,
 		MaxSize:  y.MaxSize,
 		Encoding: y.Encoding,
+	}
+}
+
+// mapLoopConfig converts yamlStep loop fields to domain LoopConfig.
+func mapLoopConfig(y yamlStep) *workflow.LoopConfig {
+	// Check if this is a loop step
+	hasItems := y.Items != nil
+	hasWhile := y.While != ""
+
+	if !hasItems && !hasWhile {
+		return nil
+	}
+
+	var loopType workflow.LoopType
+	var items string
+
+	if hasItems {
+		loopType = workflow.LoopTypeForEach
+		switch v := y.Items.(type) {
+		case string:
+			items = v
+		case []any:
+			// Convert to JSON string for later parsing
+			b, _ := json.Marshal(v)
+			items = string(b)
+		}
+	} else {
+		loopType = workflow.LoopTypeWhile
+	}
+
+	maxIter := y.MaxIterations
+	if maxIter == 0 {
+		maxIter = workflow.DefaultMaxIterations
+	}
+
+	return &workflow.LoopConfig{
+		Type:           loopType,
+		Items:          items,
+		Condition:      y.While,
+		Body:           y.Body,
+		MaxIterations:  maxIter,
+		BreakCondition: y.BreakWhen,
+		OnComplete:     y.OnComplete,
 	}
 }
 
