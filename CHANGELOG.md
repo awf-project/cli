@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F012**: Validation des Inputs
 - **F011**: Retry avec Backoff Exponentiel
 - **F010**: Parallel step execution (errgroup)
   - `type: parallel` state with concurrent step execution

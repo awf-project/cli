@@ -23,6 +23,9 @@ inputs:
     description: Minimum test coverage percentage
     required: false
     default: 80
+    validation:
+      min: 0
+      max: 100
 
   - name: output_file
     type: string

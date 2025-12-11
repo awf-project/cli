@@ -3,11 +3,10 @@
 # Optionally creates a PR using gh CLI.
 #
 # Usage:
-#   awf run commit                                    # Auto-analyze and commit
-#   awf run commit --input context="F038 implementation"  # With context hint
-#   awf run commit --input push=false                 # Without push
-#   awf run commit --input pr=true                    # Commit + PR
-#   awf run commit --input pr=true --input pr_base=develop  # PR to develop
+#   awf run commit                           # Auto-analyze and commit
+#   awf run commit --input push=true         # Commit and push
+#   awf run commit --input pr=true           # Commit + push + PR
+#   awf run commit --input pr_base=develop   # PR to develop branch
 #
 # Conventional Commits: https://www.conventionalcommits.org/en/v1.0.0/
 
@@ -18,22 +17,24 @@ author: awf
 
 inputs:
   - name: push
-    type: string
-    description: "Push after commit? (true/false)"
+    type: boolean
+    description: Push after commit
     required: false
-    default: "false"
+    default: false
 
   - name: pr
-    type: string
-    description: "Create PR after push? (true/false)"
+    type: boolean
+    description: Create PR after push
     required: false
-    default: "false"
+    default: false
 
   - name: pr_base
     type: string
-    description: "Base branch for PR (e.g., main, develop)"
+    description: Base branch for PR
     required: false
     default: "main"
+    validation:
+      enum: ["main", "develop"]
 
 states:
   initial: check_changes
