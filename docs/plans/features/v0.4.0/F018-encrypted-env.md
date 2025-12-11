@@ -2,8 +2,8 @@
 
 ## Metadata
 - **Status**: backlog
-- **Phase**: 3-Advanced
-- **Version**: v0.3.0
+- **Phase**: 4-Extensibility
+- **Version**: v0.4.0
 - **Priority**: medium
 - **Estimation**: M
 

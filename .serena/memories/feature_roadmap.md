@@ -54,6 +54,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F018 | Encrypted Environment | 📋 PLANNED (Low) |
 | F019 | Dry Run Mode | 📋 PLANNED (Medium) |
 | F020 | Interactive Mode | 📋 PLANNED (Low) |
+| F042 | Loop Context Variables | ✅ IMPLEMENTED |
 
 ## v0.4.0 - AI & Extensibility (PLANNED)
 
