@@ -1,0 +1,21 @@
+name: test-while
+version: "1.0.0"
+description: While loop test fixture
+
+states:
+  initial: countdown
+  countdown:
+    type: while
+    while: "states.decrement.exit_code == 0"
+    max_iterations: 10
+    body:
+      - decrement
+    on_complete: done
+  decrement:
+    type: step
+    command: 'test {{.loop.Index}} -lt 5'
+    on_success: countdown
+    on_failure: countdown
+  done:
+    type: terminal
+    status: success

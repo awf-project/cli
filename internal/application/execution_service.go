@@ -27,6 +27,7 @@ type ExecutionService struct {
 	resolver         interpolation.Resolver
 	evaluator        ExpressionEvaluator
 	hookExecutor     *HookExecutor
+	loopExecutor     *LoopExecutor
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
 	historySvc       *HistoryService
@@ -62,6 +63,7 @@ func NewExecutionService(
 		logger:           logger,
 		resolver:         resolver,
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
+		loopExecutor:     NewLoopExecutor(logger, nil, resolver),
 		historySvc:       historySvc,
 	}
 }
@@ -87,6 +89,7 @@ func NewExecutionServiceWithEvaluator(
 		resolver:         resolver,
 		evaluator:        evaluator,
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
+		loopExecutor:     NewLoopExecutor(logger, evaluator, resolver),
 		historySvc:       historySvc,
 	}
 }
@@ -163,9 +166,12 @@ func (s *ExecutionService) Run(
 
 		s.logger.Debug("executing step", "step", step.Name)
 
-		if step.Type == workflow.StepTypeParallel {
+		switch step.Type {
+		case workflow.StepTypeParallel:
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
-		} else {
+		case workflow.StepTypeForEach, workflow.StepTypeWhile:
+			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
+		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
 
@@ -488,7 +494,7 @@ func (s *ExecutionService) buildInterpolationContext(
 		env[k] = v // Override with workflow-specific env
 	}
 
-	return &interpolation.Context{
+	intCtx := &interpolation.Context{
 		Inputs: execCtx.Inputs,
 		States: states,
 		Workflow: interpolation.WorkflowData{
@@ -505,6 +511,19 @@ func (s *ExecutionService) buildInterpolationContext(
 		},
 		Error: nil, // Set in error hooks (F008)
 	}
+
+	// Include loop context if we're inside a loop
+	if execCtx.CurrentLoop != nil {
+		intCtx.Loop = &interpolation.LoopData{
+			Item:   execCtx.CurrentLoop.Item,
+			Index:  execCtx.CurrentLoop.Index,
+			First:  execCtx.CurrentLoop.First,
+			Last:   execCtx.CurrentLoop.Last,
+			Length: execCtx.CurrentLoop.Length,
+		}
+	}
+
+	return intCtx
 }
 
 // executeWithRetry executes a command with retry logic.
@@ -703,6 +722,110 @@ func (s *ExecutionService) executeParallelStep(
 	return s.resolveNextStep(step, intCtx, true)
 }
 
+// executeLoopStep executes a for_each or while loop step.
+func (s *ExecutionService) executeLoopStep(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	startTime := time.Now()
+
+	// Apply step timeout
+	stepCtx := ctx
+	if step.Timeout > 0 {
+		var cancel context.CancelFunc
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	// Execute pre-hooks
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Create step executor callback that executes body steps
+	stepExecutor := func(ctx context.Context, stepName string, loopIntCtx *interpolation.Context) error {
+		bodyStep, ok := wf.Steps[stepName]
+		if !ok {
+			return fmt.Errorf("body step not found: %s", stepName)
+		}
+		_, err := s.executeStep(ctx, wf, bodyStep, execCtx)
+		if err != nil {
+			return err
+		}
+		// Check if the step failed even if executeStep returned nil (due to on_failure handling)
+		if state, exists := execCtx.States[stepName]; exists && state.Status == workflow.StatusFailed {
+			if state.Error != "" {
+				return fmt.Errorf("step %s failed: %s", stepName, state.Error)
+			}
+			return fmt.Errorf("step %s failed with exit code %d", stepName, state.ExitCode)
+		}
+		return nil
+	}
+
+	// Execute loop based on type
+	var result *workflow.LoopResult
+	var err error
+
+	s.logger.Info("executing loop step", "step", step.Name, "type", step.Loop.Type)
+
+	if step.Type == workflow.StepTypeForEach {
+		result, err = s.loopExecutor.ExecuteForEach(
+			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext)
+	} else {
+		result, err = s.loopExecutor.ExecuteWhile(
+			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext)
+	}
+
+	// Record loop step state
+	loopState := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+	}
+
+	if err != nil {
+		// Check if the PARENT context was cancelled
+		if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			loopState.Status = workflow.StatusFailed
+			loopState.Error = err.Error()
+			execCtx.SetStepState(step.Name, loopState)
+			return "", fmt.Errorf("loop step %s: %w", step.Name, err)
+		}
+
+		loopState.Status = workflow.StatusFailed
+		loopState.Error = err.Error()
+		execCtx.SetStepState(step.Name, loopState)
+
+		// Execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", err
+	}
+
+	loopState.Status = workflow.StatusCompleted
+	if result != nil {
+		loopState.Output = fmt.Sprintf("completed %d iterations", result.TotalCount)
+	}
+	execCtx.SetStepState(step.Name, loopState)
+
+	// Execute post-hooks
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	return step.Loop.OnComplete, nil
+}
+
 // stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
 type stepExecutorAdapter struct {
 	execSvc *ExecutionService
@@ -886,9 +1009,12 @@ func (s *ExecutionService) executeFromStep(
 
 		s.logger.Debug("executing step", "step", step.Name)
 
-		if step.Type == workflow.StepTypeParallel {
+		switch step.Type {
+		case workflow.StepTypeParallel:
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
-		} else {
+		case workflow.StepTypeForEach, workflow.StepTypeWhile:
+			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
+		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
 

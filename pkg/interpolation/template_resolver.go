@@ -56,6 +56,9 @@ func (r *TemplateResolver) buildTemplateData(ctx *Context) map[string]any {
 	if ctx.Error != nil {
 		data["error"] = ctx.Error
 	}
+	if ctx.Loop != nil {
+		data["loop"] = ctx.Loop
+	}
 	return data
 }
 

@@ -1,7 +1,7 @@
 # F016: Boucles (for/while)
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: medium
@@ -13,13 +13,13 @@ Add loop constructs for iterating over lists or until a condition is met. Suppor
 
 ## Acceptance Criteria
 
-- [ ] `for_each:` iterates over list
-- [ ] `while:` repeats until condition false
-- [ ] Loop variable accessible via `{{loop.item}}`
-- [ ] Loop index via `{{loop.index}}`
-- [ ] Max iterations safety limit
-- [ ] Break condition support
-- [ ] Collect loop outputs
+- [x] `for_each:` iterates over list
+- [x] `while:` repeats until condition false
+- [x] Loop variable accessible via `{{loop.item}}`
+- [x] Loop index via `{{loop.index}}`
+- [x] Max iterations safety limit
+- [x] Break condition support
+- [x] Collect loop outputs
 
 ## Dependencies
 
@@ -37,32 +37,32 @@ internal/application/loop_executor.go
 
 ## Technical Tasks
 
-- [ ] Define LoopState struct
-  - [ ] Type (for_each, while)
-  - [ ] Items (for for_each)
-  - [ ] Condition (for while)
-  - [ ] Body (states to execute)
-  - [ ] MaxIterations
-  - [ ] BreakCondition
-- [ ] Implement ForEachExecutor
-  - [ ] Parse items from variable or literal
-  - [ ] Execute body for each item
-  - [ ] Set loop.item, loop.index
-  - [ ] Collect outputs
-- [ ] Implement WhileExecutor
-  - [ ] Evaluate condition
-  - [ ] Execute body while true
-  - [ ] Check max iterations
-  - [ ] Check break condition
-- [ ] Add loop context variables
-  - [ ] loop.item
-  - [ ] loop.index
-  - [ ] loop.first
-  - [ ] loop.last
-  - [ ] loop.length
-- [ ] Handle nested loops
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Define LoopState struct
+  - [x] Type (for_each, while)
+  - [x] Items (for for_each)
+  - [x] Condition (for while)
+  - [x] Body (states to execute)
+  - [x] MaxIterations
+  - [x] BreakCondition
+- [x] Implement ForEachExecutor
+  - [x] Parse items from variable or literal
+  - [x] Execute body for each item
+  - [x] Set loop.item, loop.index
+  - [x] Collect outputs
+- [x] Implement WhileExecutor
+  - [x] Evaluate condition
+  - [x] Execute body while true
+  - [x] Check max iterations
+  - [x] Check break condition
+- [x] Add loop context variables
+  - [x] loop.item
+  - [x] loop.index
+  - [x] loop.first
+  - [x] loop.last
+  - [x] loop.length
+- [x] Handle nested loops
+- [x] Write unit tests
+- [x] Write integration tests
 
 ## Notes
 

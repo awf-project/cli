@@ -40,6 +40,14 @@ type yamlStep struct {
 	ContinueOnError bool             `yaml:"continue_on_error"`
 	Status          string           `yaml:"status"`  // for terminal steps
 	Message         string           `yaml:"message"` // for terminal steps
+
+	// Loop configuration (for for_each and while types)
+	Items         any      `yaml:"items"`          // string or []any for for_each
+	While         string   `yaml:"while"`          // condition for while loop
+	Body          []string `yaml:"body"`           // steps to execute each iteration
+	MaxIterations int      `yaml:"max_iterations"` // safety limit
+	BreakWhen     string   `yaml:"break_when"`     // optional break condition
+	OnComplete    string   `yaml:"on_complete"`    // next state after loop
 }
 
 // yamlTransition is the YAML representation of a conditional transition.

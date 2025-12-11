@@ -5,7 +5,7 @@
 ```
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
-v0.3.0 (Advanced)   ████░░░░░░░░░░░░░░░░ IN PROGRESS
+v0.3.0 (Advanced)   ███████░░░░░░░░░░░░░ IN PROGRESS
 v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
@@ -49,7 +49,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | ID | Feature | Status |
 |----|---------|--------|
 | F015 | Conditions Complexes (if/else) | ✅ IMPLEMENTED |
-| F016 | Loop Constructs | 📋 PLANNED (Medium) |
+| F016 | Loop Constructs | ✅ IMPLEMENTED |
 | F017 | Workflow Templates | 📋 PLANNED (Medium) |
 | F018 | Encrypted Environment | 📋 PLANNED (Low) |
 | F019 | Dry Run Mode | 📋 PLANNED (Medium) |

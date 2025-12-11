@@ -9,7 +9,7 @@
 
 name: implement
 description: Implement a feature using TDD approach with optional agents/skills
-version: "1.0.0"
+version: "1.1.0"
 author: awf
 
 inputs:
@@ -474,21 +474,35 @@ states:
       stdout: tests_red_output
     transitions:
       - when: "states.run_tests_red.exit_code != 0"
-        goto: implement_feature  # RED OK - tests fail as expected
-      - goto: implement_feature  # RED WARNING - tests passed but continue anyway
-    on_failure: implement_feature
+        goto: tdd_green_retry  # RED OK - tests fail as expected
+      - goto: tdd_green_retry  # RED WARNING - tests passed but continue anyway
+    on_failure: tdd_green_retry
     hooks:
       pre:
         - log: "Running tests (expecting failure - RED phase)..."
 
   #==========================================================================
-  # PHASE 4: TDD GREEN - Implementation
+  # PHASE 4: TDD GREEN - Implementation with Retry Loop (F016)
   #==========================================================================
 
-  implement_feature:
+  tdd_green_retry:
+    type: while
+    description: TDD GREEN phase - retry until tests pass (max 3 attempts)
+    while: "loop.index == 0 || states.tdd_green_test.exit_code != 0"
+    max_iterations: 3
+    body:
+      - tdd_green_implement
+      - tdd_green_fmt
+      - tdd_green_test
+    on_complete: run_lint_final
+
+  tdd_green_implement:
     type: step
-    description: Claude implements the feature (GREEN phase)
+    description: Claude implements to make tests pass
     command: |
+      ATTEMPT=$(({{loop.index}} + 1))
+      echo "=== TDD GREEN Implementation (Attempt $ATTEMPT/3) ==="
+
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
       SPECEOF
@@ -497,15 +511,33 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
+
+      # Include previous failure context if retrying
+      RETRY_CONTEXT=""
+      if [ "{{loop.index}}" != "0" ]; then
+        PREV_OUTPUT=$(cat << 'PREVEOF'
+      {{.states.tdd_green_test.Output}}
+      PREVEOF
+      )
+        RETRY_CONTEXT="
+      ## RETRY CONTEXT (Attempt $ATTEMPT)
+      Previous test run failed. Here is the output:
+      \`\`\`
+      $PREV_OUTPUT
+      \`\`\`
+      Please analyze the failures and fix the implementation."
+      fi
+
       claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
 
-      ## PHASE: Implementation (GREEN phase)
+      ## PHASE: Implementation (GREEN phase - Attempt $ATTEMPT/3)
 
       ## Feature Spec
       $SPEC_CONTENT
 
       ## Implementation Plan
       $PLAN_CONTENT
+      $RETRY_CONTEXT
 
       ## Your Task
       Implement the actual logic to make all tests pass:
@@ -529,48 +561,44 @@ states:
     capture:
       stdout: implement_output
       max_size: 10MB
-    on_success: run_fmt
-    on_failure: run_fmt
+    continue_on_error: true
     hooks:
       pre:
-        - log: "Claude implementing feature..."
+        - log: "Claude implementing (attempt {{loop.index}} + 1)..."
 
-
-  run_fmt:
+  tdd_green_fmt:
     type: step
-    description: Format Go code before validation
+    description: Format Go code
     command: |
       go fmt ./...
       echo "STATUS:FORMATTED"
     timeout: 60s
     capture:
       stdout: fmt_output
-    on_success: parallel_validation
-    on_failure: parallel_validation
+    continue_on_error: true
     hooks:
       pre:
         - log: "Formatting Go code..."
-      post:
-        - log: "Code formatted"
 
-  #==========================================================================
-  # PHASE 5: VALIDATION (PARALLEL)
-  #==========================================================================
-
-  parallel_validation:
-    type: parallel
-    description: Run final lint and tests in parallel
-    parallel:
-      - run_lint_after
-      - run_tests_green
-    strategy: best_effort
-    max_concurrent: 2
-    on_success: parallel_docs_shell
-    on_failure: parallel_docs_shell
-
-  run_lint_after:
+  tdd_green_test:
     type: step
-    description: Lint after implementation
+    description: Run tests to check GREEN
+    command: make test-unit 2>&1
+    timeout: 300s
+    capture:
+      stdout: tests_green_output
+    continue_on_error: true
+    hooks:
+      pre:
+        - log: "Running tests (attempt {{loop.index}} + 1)..."
+
+  #==========================================================================
+  # PHASE 5: FINAL VALIDATION
+  #==========================================================================
+
+  run_lint_final:
+    type: step
+    description: Final lint check after retry loop
     command: make lint 2>&1 || echo "LINT_WARNING"
     timeout: 120s
     capture:
@@ -579,23 +607,7 @@ states:
     on_failure: parallel_docs_shell
     hooks:
       pre:
-        - log: "Running lint after implementation..."
-
-  run_tests_green:
-    type: step
-    description: Run tests - should pass (GREEN phase)
-    command: make test-unit 2>&1
-    timeout: 300s
-    capture:
-      stdout: tests_green_output
-    transitions:
-      - when: "states.run_tests_green.exit_code == 0"
-        goto: parallel_docs_shell  # GREEN OK
-      - goto: parallel_docs_shell  # GREEN WARNING - tests still failing but continue
-    on_failure: parallel_docs_shell
-    hooks:
-      pre:
-        - log: "Running tests (expecting pass - GREEN phase)..."
+        - log: "Running final lint check..."
 
   #==========================================================================
   # PHASE 6: DOCUMENTATION UPDATES
@@ -918,9 +930,10 @@ states:
       echo "║ Skills: {{.inputs.skills}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ TDD Results:"
-      # Check exit codes stored in states
-      RED_EXIT="{{.states.run_tests_red.exit_code}}"
-      GREEN_EXIT="{{.states.run_tests_green.exit_code}}"
+      # Check exit codes stored in states (CamelCase for Go templates)
+      RED_EXIT="{{.states.run_tests_red.ExitCode}}"
+      GREEN_EXIT="{{.states.tdd_green_test.ExitCode}}"
+      LOOP_ITERATIONS="{{.states.tdd_green_retry.Output}}"
       if [ "$RED_EXIT" != "0" ]; then
         RED_RESULT="OK (tests failed as expected)"
       else
@@ -929,16 +942,16 @@ states:
       if [ "$GREEN_EXIT" = "0" ]; then
         GREEN_RESULT="OK (tests passing)"
       else
-        GREEN_RESULT="WARNING (tests still failing)"
+        GREEN_RESULT="WARNING (tests still failing after retries)"
       fi
       LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS'
-      {{.states.run_lint_after.Output}}
+      {{.states.run_lint_final.Output}}
       LINTEOF
       )
       echo "║   Baseline Lint: PASS"
       echo "║   Baseline Tests: PASS"
       echo "║   RED Phase: $RED_RESULT"
-      echo "║   GREEN Phase: $GREEN_RESULT"
+      echo "║   GREEN Phase: $GREEN_RESULT (retry loop: $LOOP_ITERATIONS)"
       echo "║   Final Lint: $LINT_AFTER"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Documentation Updates:"

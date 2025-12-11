@@ -98,6 +98,20 @@ func (w *Workflow) Validate() error {
 				return fmt.Errorf("step '%s': on_failure references unknown state '%s'", name, step.OnFailure)
 			}
 		}
+
+		// Validate loop body step references exist
+		if step.Loop != nil && len(step.Loop.Body) > 0 {
+			for _, bodyStepName := range step.Loop.Body {
+				if _, ok := w.Steps[bodyStepName]; !ok {
+					return fmt.Errorf("step '%s': loop body references unknown step '%s'", name, bodyStepName)
+				}
+			}
+			if step.Loop.OnComplete != "" {
+				if _, ok := w.Steps[step.Loop.OnComplete]; !ok {
+					return fmt.Errorf("step '%s': on_complete references unknown state '%s'", name, step.Loop.OnComplete)
+				}
+			}
+		}
 	}
 
 	return nil

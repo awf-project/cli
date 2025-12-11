@@ -12,6 +12,8 @@ const (
 	StepTypeCommand  StepType = "command"
 	StepTypeParallel StepType = "parallel"
 	StepTypeTerminal StepType = "terminal"
+	StepTypeForEach  StepType = "for_each"
+	StepTypeWhile    StepType = "while"
 )
 
 // TerminalStatus defines the outcome of a terminal state.
@@ -79,6 +81,7 @@ type Step struct {
 	Hooks           StepHooks      // pre/post hooks
 	ContinueOnError bool           // don't fail workflow on error
 	Status          TerminalStatus // for terminal type: success or failure
+	Loop            *LoopConfig    // for for_each and while types
 }
 
 // Validate checks if the step configuration is valid.
@@ -102,6 +105,32 @@ func (s *Step) Validate() error {
 	case StepTypeTerminal:
 		if s.Status != "" && !validTerminalStatuses[s.Status] {
 			return fmt.Errorf("invalid terminal status %q: must be 'success' or 'failure'", s.Status)
+		}
+	case StepTypeForEach:
+		if s.Loop == nil {
+			return errors.New("loop config is required for for_each steps")
+		}
+		if s.Loop.Items == "" {
+			return errors.New("items is required for for_each steps")
+		}
+		if len(s.Loop.Body) == 0 {
+			return errors.New("body is required for loop steps")
+		}
+		if err := s.Loop.Validate(); err != nil {
+			return fmt.Errorf("loop config: %w", err)
+		}
+	case StepTypeWhile:
+		if s.Loop == nil {
+			return errors.New("loop config is required for while steps")
+		}
+		if s.Loop.Condition == "" {
+			return errors.New("condition is required for while steps")
+		}
+		if len(s.Loop.Body) == 0 {
+			return errors.New("body is required for loop steps")
+		}
+		if err := s.Loop.Validate(); err != nil {
+			return fmt.Errorf("loop config: %w", err)
 		}
 	default:
 		return errors.New("unknown step type")
