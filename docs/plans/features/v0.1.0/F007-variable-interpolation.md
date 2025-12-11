@@ -1,17 +1,17 @@
 # F007: Interpolation de Variables
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Implement `{{variable}}` interpolation in workflow commands and strings. Resolve inputs, state outputs, workflow metadata, environment variables, and error context. Use Go template syntax to avoid shell variable conflicts.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Interpolate `{{inputs.name}}` from workflow inputs
 - [x] Interpolate `{{states.step.output}}` from previous steps
@@ -21,12 +21,12 @@ Implement `{{variable}}` interpolation in workflow commands and strings. Resolve
 - [x] Support escaping: `\{\{` for literal braces
 - [x] Clear errors for undefined variables
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F002
-- **Débloque**: F003, F008
+- **Blocked by**: F001, F002
+- **Unblocks**: F003, F008
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 pkg/interpolation/resolver.go
@@ -34,7 +34,7 @@ pkg/interpolation/resolver_test.go
 internal/domain/workflow/context.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Resolver interface
   - [ ] Resolve(template string, context Context) (string, error)

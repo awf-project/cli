@@ -38,7 +38,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 |----|---------|--------|
 | F009 | State Machine Validation | 📋 PLANNED |
 | F010 | Parallel Execution (errgroup) | ✅ IMPLEMENTED |
-| F011 | Retry with Backoff | 📋 PLANNED |
+| F011 | Retry with Backoff | ✅ IMPLEMENTED |
 | F012 | Input Validation | 📋 PLANNED |
 | F013 | Workflow Resume | 📋 PLANNED |
 | F014 | SQLite History | 📋 PLANNED |

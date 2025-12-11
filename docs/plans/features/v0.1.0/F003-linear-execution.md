@@ -1,17 +1,17 @@
 # F003: Exécution Linéaire de Steps
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: critical
+- **Priority**: critical
 - **Estimation**: M
 
 ## Description
 
 Implement basic sequential workflow execution. Execute steps one at a time, following `on_success` transitions until reaching a terminal state. Handle command execution via shell, capture stdout/stderr, and track exit codes.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Execute shell commands via `/bin/sh -c`
 - [x] Follow on_success transitions between states
@@ -22,12 +22,12 @@ Implement basic sequential workflow execution. Execute steps one at a time, foll
 - [x] Respect step timeout
 - [x] Implements CommandExecutor port interface
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F002
-- **Débloque**: F004, F008, F009
+- **Blocked by**: F001, F002
+- **Unblocks**: F004, F008, F009
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/executor/shell_executor.go      # NEW
@@ -39,7 +39,7 @@ internal/domain/ports/executor.go                       # EXISTING (interface)
 internal/domain/workflow/context.go                     # EXISTING (entities)
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Implement ShellExecutor
   - [x] Execute command with context

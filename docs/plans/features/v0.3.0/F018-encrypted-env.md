@@ -1,17 +1,17 @@
 # F018: Variables d'Environnement Chiffrées
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
 
 Support encrypted environment variables and secrets. Allow storing sensitive values in encrypted form in configuration. Decrypt at runtime using a master key. Prevent accidental exposure in logs and outputs.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `awf encrypt` command to encrypt values
 - [ ] Store encrypted values in settings
@@ -21,12 +21,12 @@ Support encrypted environment variables and secrets. Allow storing sensitive val
 - [ ] Clear error if decryption fails
 - [ ] Support key rotation
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F006
-- **Débloque**: _none_
+- **Blocked by**: F006
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 pkg/crypto/encrypt.go
@@ -36,7 +36,7 @@ internal/application/secret_manager.go
 configs/secrets.yaml.enc
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Implement encryption module
   - [ ] AES-256-GCM encryption

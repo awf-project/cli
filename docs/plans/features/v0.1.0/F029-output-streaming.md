@@ -1,10 +1,10 @@
 # F029: Output Streaming
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
@@ -20,7 +20,7 @@ Output streams are prefixed to distinguish them:
 - `[OUT]` for stdout
 - `[ERR]` for stderr
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] `awf run workflow --output=streaming` streams output in real-time
 - [x] `awf run workflow --output=buffered` shows output after each step
@@ -31,12 +31,12 @@ Output streams are prefixed to distinguish them:
 - [x] Parallel step output is interleaved with step name prefix
 - [x] Output capture for `{{states.step.output}}` still works in all modes
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F003, F005
-- **Débloque**: _none_
+- **Blocked by**: F001, F003, F005
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/ports/executor.go          # Add OutputWriter to Command
@@ -46,7 +46,7 @@ internal/interfaces/cli/ui/output_writer.go  # New: prefixed writer
 internal/application/execution_service.go  # Pass writer to executor
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Add OutputMode type and flag
   - [ ] Define OutputMode enum (silent, streaming, buffered)

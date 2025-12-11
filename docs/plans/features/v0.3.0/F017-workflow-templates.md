@@ -1,17 +1,17 @@
 # F017: Templates de Workflows
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
 
 Support reusable workflow templates with parameters. Define common patterns once and instantiate with different configurations. Enable workflow composition and reduce duplication across workflow definitions.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Define templates with parameters
 - [ ] Instantiate templates in workflows
@@ -20,12 +20,12 @@ Support reusable workflow templates with parameters. Define common patterns once
 - [ ] Template validation at load time
 - [ ] Clear error for missing parameters
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F002, F007
-- **Débloque**: F023
+- **Blocked by**: F002, F007
+- **Unblocks**: F023
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/repository/template_repository.go
@@ -34,7 +34,7 @@ internal/application/template_resolver.go
 configs/workflows/templates/
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Template struct
   - [ ] Name

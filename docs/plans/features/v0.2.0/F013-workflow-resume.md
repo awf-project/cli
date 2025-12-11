@@ -1,17 +1,17 @@
 # F013: Commande Resume
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Implement workflow resumption from persisted state. Allow users to continue interrupted workflows from where they left off. Support listing resumable workflows and overriding inputs on resume.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `awf resume <workflow-id>` resumes execution
 - [ ] `awf resume --list` shows resumable workflows
@@ -21,12 +21,12 @@ Implement workflow resumption from persisted state. Allow users to continue inte
 - [ ] Validate state file exists and is valid
 - [ ] Clear error if workflow already completed
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F004, F005
-- **Débloque**: _none_
+- **Blocked by**: F004, F005
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/cli/commands/resume.go
@@ -34,7 +34,7 @@ internal/application/service.go
 internal/infrastructure/store/json_store.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Implement `resume` command
   - [ ] Parse workflow-id argument

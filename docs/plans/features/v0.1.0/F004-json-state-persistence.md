@@ -1,17 +1,17 @@
 # F004: Persistance d'État JSON
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Persist workflow execution state to JSON files. Save state after each step completion for crash recovery. Support atomic writes to prevent corruption. Enable workflow resumption from persisted state.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Save state after each step completion
 - [x] Atomic writes (temp file + rename)
@@ -20,12 +20,12 @@ Persist workflow execution state to JSON files. Save state after each step compl
 - [x] File locking for concurrent access prevention
 - [x] Implements StateStore port interface
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F003
-- **Débloque**: F013
+- **Blocked by**: F001, F003
+- **Unblocks**: F013
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/store/json_store.go      # NEW
@@ -35,7 +35,7 @@ internal/domain/ports/store.go                   # EXISTING (interface)
 storage/states/
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Define State struct (using existing ExecutionContext)
   - [x] workflow_id, workflow_name, workflow_version

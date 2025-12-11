@@ -1,17 +1,17 @@
 # F002: Parsing YAML des Workflows
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: critical
+- **Priority**: critical
 - **Estimation**: M
 
 ## Description
 
 Implement YAML workflow file parsing. Load workflow definitions from `configs/workflows/` directory, validate structure, and convert to domain entities. This is the primary input mechanism for AWF.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Parse valid YAML workflow files without error
 - [x] Return clear errors for invalid YAML syntax
@@ -20,12 +20,12 @@ Implement YAML workflow file parsing. Load workflow definitions from `configs/wo
 - [x] Support all workflow fields defined in projectBrief.md
 - [x] Implements WorkflowRepository port interface
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001
-- **Débloque**: F003, F005, F007
+- **Blocked by**: F001
+- **Unblocks**: F003, F005, F007
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/repository/yaml_repository.go
@@ -38,7 +38,7 @@ internal/domain/ports/repository.go
 configs/workflows/examples/
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define complete Workflow struct with YAML tags
   - [ ] Metadata (name, description, version, author, tags)

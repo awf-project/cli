@@ -1,10 +1,10 @@
 # F031: Output Formats
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
@@ -21,7 +21,7 @@ Support multiple output formats for CLI commands to enable scripting, CI/CD inte
 
 **Flag:** `--output` / `-o`
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `awf list -o json` outputs JSON array of workflows
 - [ ] `awf list -o table` outputs aligned table
@@ -35,12 +35,12 @@ Support multiple output formats for CLI commands to enable scripting, CI/CD inte
 - [ ] `--no-color` is respected in text format
 - [ ] `-o quiet` suppresses all non-essential output
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F005
-- **Débloque**: _none_
+- **Blocked by**: F001, F005
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/cli/config.go           # Add OutputFormat to Config
@@ -54,7 +54,7 @@ internal/interfaces/cli/ui/json_output.go   # New: JSON formatting
 internal/interfaces/cli/ui/table_output.go  # New: Table formatting
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define OutputFormat type
   - [ ] Create enum: text, json, table, quiet

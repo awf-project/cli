@@ -35,7 +35,7 @@ func TestExecuteSingleStep_Success(t *testing.T) {
 	executor.results["echo hello"] = &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	result, err := execSvc.ExecuteSingleStep(context.Background(), "test", "start", nil, nil)
 
@@ -67,7 +67,7 @@ func TestExecuteSingleStep_StepNotFound(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "test", "nonexistent", nil, nil)
 
@@ -77,7 +77,7 @@ func TestExecuteSingleStep_StepNotFound(t *testing.T) {
 
 func TestExecuteSingleStep_WorkflowNotFound(t *testing.T) {
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "nonexistent", "step", nil, nil)
 
@@ -115,7 +115,7 @@ func TestExecuteSingleStep_WithInputs(t *testing.T) {
 			"echo {{inputs.data}}": "echo test-value",
 		},
 	}
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, resolver)
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver)
 
 	inputs := map[string]any{"data": "test-value"}
 	result, err := execSvc.ExecuteSingleStep(context.Background(), "input-test", "process", inputs, nil)
@@ -160,7 +160,7 @@ func TestExecuteSingleStep_WithMocks(t *testing.T) {
 			"echo {{states.fetch.output}}": "echo mocked-data",
 		},
 	}
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, resolver)
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver)
 
 	// Mock the output of the "fetch" step
 	mocks := map[string]string{
@@ -202,7 +202,7 @@ func TestExecuteSingleStep_ExecutesHooks(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "hook-test", "start", nil, nil)
 
@@ -226,7 +226,7 @@ func TestExecuteSingleStep_TerminalStepError(t *testing.T) {
 	}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "terminal-test", "done", nil, nil)
 
@@ -256,7 +256,7 @@ func TestExecuteSingleStep_CommandFails(t *testing.T) {
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockStateStore(), &mockLogger{}, newMockResolver())
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver())
 
 	result, err := execSvc.ExecuteSingleStep(context.Background(), "fail-test", "fail", nil, nil)
 

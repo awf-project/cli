@@ -1,10 +1,10 @@
 # F034: Agent Tools
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-AI
 - **Version**: v0.4.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: XL
 
 ## Description
@@ -43,7 +43,7 @@ Enable AI agents to use tools (function calling) during workflow execution. The 
 3. **Approval modes** — Auto-approve, ask user, or deny by default
 4. **Provider-agnostic** — Abstract over different tool-use protocols
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Tool definitions in workflow YAML
 - [ ] Built-in tools: `shell`, `read_file`, `write_file`, `http_request`
@@ -56,12 +56,12 @@ Enable AI agents to use tools (function calling) during workflow execution. The 
 - [ ] Tool call logging for audit
 - [ ] Works with conversation mode (F033)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F032 (Agent Step Type)
-- **Débloque**: _none_
+- **Blocked by**: F032 (Agent Step Type)
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/tool.go               # Tool definitions
@@ -77,7 +77,7 @@ internal/infrastructure/sandbox/               # Execution sandboxing
 pkg/toolparse/                                 # Parse tool calls from responses
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Tool domain model
   - [ ] Tool struct (name, description, parameters, command)

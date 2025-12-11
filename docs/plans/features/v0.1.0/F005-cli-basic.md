@@ -1,17 +1,17 @@
 # F005: CLI Basique (run, list, status)
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Implement core CLI commands using Cobra: `run` to execute workflows, `list` to show available workflows, `status` to check running workflow state. This is the primary user interface for AWF.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] `awf run <workflow> --input=value` executes workflow
 - [x] `awf list` shows available workflows
@@ -21,12 +21,12 @@ Implement core CLI commands using Cobra: `run` to execute workflows, `list` to s
 - [x] Global flags: --verbose, --quiet, --config, --storage, --no-color, --log-level
 - [x] Clear error messages with exit codes (0-4)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F002, F003, F004
-- **Débloque**: F013
+- **Blocked by**: F001, F002, F003, F004
+- **Unblocks**: F013
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 cmd/awf/main.go
@@ -42,7 +42,7 @@ internal/interfaces/cli/ui/colors.go
 tests/integration/cli_test.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Set up Cobra root command
   - [x] Global flags (verbose, quiet, config, storage, no-color, log-level)

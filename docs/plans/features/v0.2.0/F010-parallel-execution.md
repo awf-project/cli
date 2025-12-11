@@ -1,32 +1,32 @@
 # F010: Exécution Parallèle (errgroup)
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: implemented
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: L
 
 ## Description
 
 Implement parallel step execution using Go's errgroup. Support parallel state type that runs multiple steps concurrently. Implement different strategies: all_succeed, any_succeed, best_effort. Control max concurrency with semaphore.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
-- [ ] Execute parallel steps concurrently
-- [ ] Respect max_concurrent limit
-- [ ] all_succeed: fail if any step fails
-- [ ] any_succeed: succeed if any step succeeds
-- [ ] best_effort: collect all results
-- [ ] Cancel remaining on first failure (all_succeed)
-- [ ] Each parallel step output accessible separately
+- [x] Execute parallel steps concurrently
+- [x] Respect max_concurrent limit
+- [x] all_succeed: fail if any step fails
+- [x] any_succeed: succeed if any step succeeds
+- [x] best_effort: collect all results
+- [x] Cancel remaining on first failure (all_succeed)
+- [x] Each parallel step output accessible separately
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F009
-- **Débloque**: _none_
+- **Blocked by**: F009
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/application/parallel_executor.go
@@ -35,31 +35,31 @@ internal/domain/workflow/state.go
 go.mod (add golang.org/x/sync)
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
-- [ ] Add errgroup dependency
-  - [ ] `go get golang.org/x/sync/errgroup`
-- [ ] Define ParallelStrategy enum
-  - [ ] all_succeed
-  - [ ] any_succeed
-  - [ ] best_effort
-- [ ] Define ParallelState struct
-  - [ ] Steps list
-  - [ ] Strategy
-  - [ ] MaxConcurrent
-- [ ] Implement ParallelExecutor
-  - [ ] Create errgroup with context
-  - [ ] Implement semaphore for max_concurrent
-  - [ ] Launch goroutines for each step
-  - [ ] Collect results per step
-  - [ ] Apply strategy logic
-- [ ] Handle context cancellation
-  - [ ] Cancel all on first error (all_succeed)
-  - [ ] Wait for all (best_effort)
-- [ ] Store individual outputs
-  - [ ] `{{states.parallel_step.steps.step_name.output}}`
-- [ ] Write unit tests with mock executor
-- [ ] Write integration tests
+- [x] Add errgroup dependency
+  - [x] `go get golang.org/x/sync/errgroup`
+- [x] Define ParallelStrategy enum
+  - [x] all_succeed
+  - [x] any_succeed
+  - [x] best_effort
+- [x] Define ParallelState struct
+  - [x] Steps list
+  - [x] Strategy
+  - [x] MaxConcurrent
+- [x] Implement ParallelExecutor
+  - [x] Create errgroup with context
+  - [x] Implement semaphore for max_concurrent
+  - [x] Launch goroutines for each step
+  - [x] Collect results per step
+  - [x] Apply strategy logic
+- [x] Handle context cancellation
+  - [x] Cancel all on first error (all_succeed)
+  - [x] Wait for all (best_effort)
+- [x] Store individual outputs
+  - [x] `{{states.parallel_step.steps.step_name.output}}`
+- [x] Write unit tests with mock executor
+- [x] Write integration tests
 
 ## Notes
 

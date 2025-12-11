@@ -1,17 +1,17 @@
 # F008: Hooks Pre/Post
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
 
 Implement hook execution at step and workflow levels. Execute pre-hooks before step commands, post-hooks after. Support workflow-level hooks for start, end, error, and cancel events. Hooks can log messages or run commands.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Execute step pre-hooks before step command
 - [x] Execute step post-hooks after step command
@@ -22,12 +22,12 @@ Implement hook execution at step and workflow levels. Execute pre-hooks before s
 - [x] Hooks support `log:` and `command:` actions
 - [x] Hook failures don't stop workflow (unless configured)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F003, F006, F007
-- **Débloque**: _none in MVP_
+- **Blocked by**: F001, F003, F006, F007
+- **Unblocks**: _none in MVP_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/hooks.go          # Hook domain models
@@ -37,7 +37,7 @@ internal/domain/workflow/step.go           # Step.Hooks field
 internal/domain/workflow/workflow.go       # Workflow.Hooks field
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Define Hook struct
   - [x] Type (log, command)

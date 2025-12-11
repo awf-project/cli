@@ -246,6 +246,41 @@ states:
 | `on_success` | Next state on success (exit code 0) |
 | `on_failure` | Next state on failure (exit code ≠ 0) |
 | `continue_on_error` | Always follow `on_success` regardless of exit code |
+| `retry` | Retry configuration (see below) |
+
+### Retry Options
+
+| Option | Description |
+|--------|-------------|
+| `max_attempts` | Maximum number of attempts (default: 1 = no retry) |
+| `initial_delay` | Delay before first retry (e.g., `1s`, `500ms`) |
+| `max_delay` | Maximum delay cap (e.g., `30s`) |
+| `backoff` | Strategy: `constant`, `linear`, or `exponential` |
+| `multiplier` | Multiplier for exponential backoff (default: 2) |
+| `jitter` | Random jitter factor 0.0-1.0 (e.g., 0.1 = ±10%) |
+| `retryable_exit_codes` | List of exit codes to retry (empty = retry all non-zero) |
+
+**Backoff Strategies:**
+- `constant`: Always wait `initial_delay`
+- `linear`: Wait `initial_delay * attempt`
+- `exponential`: Wait `initial_delay * multiplier^(attempt-1)`
+
+**Example:**
+```yaml
+flaky_api_call:
+  type: step
+  command: curl -f https://api.example.com/data
+  retry:
+    max_attempts: 5
+    initial_delay: 1s
+    max_delay: 30s
+    backoff: exponential
+    multiplier: 2
+    jitter: 0.1
+    retryable_exit_codes: [1, 22]  # curl exit codes
+  on_success: process_data
+  on_failure: error
+```
 
 ### Terminal Options
 
@@ -421,7 +456,7 @@ make fmt            # Format code
 ### Phase 2 - Core Features (v0.2.0)
 - [x] State machine with transitions (cycle detection, unreachable states, terminal status)
 - [x] Parallel execution (errgroup with strategies)
-- [ ] Retry with exponential backoff
+- [x] Retry with exponential backoff
 - [ ] Input validation
 - [ ] Resume command
 - [ ] SQLite history

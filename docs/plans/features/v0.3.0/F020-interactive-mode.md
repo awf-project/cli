@@ -1,17 +1,17 @@
 # F020: Interactive Mode
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: low
+- **Priority**: low
 - **Estimation**: M
 
 ## Description
 
 Add interactive execution mode with step-by-step confirmation. Pause before each step, show details, and prompt for continue/skip/abort. Enable debugging and manual intervention in automated workflows.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `awf run --interactive` enables step-by-step mode
 - [ ] Pause before each step with prompt
@@ -21,12 +21,12 @@ Add interactive execution mode with step-by-step confirmation. Pause before each
 - [ ] Allow modifying inputs during execution
 - [ ] Support breakpoints on specific states
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F005
-- **Débloque**: _none_
+- **Blocked by**: F005
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/cli/commands/run.go
@@ -34,7 +34,7 @@ internal/application/interactive_executor.go
 internal/interfaces/cli/ui/prompt.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Add --interactive flag to run command
 - [ ] Add --breakpoint flag for selective pauses

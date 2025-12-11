@@ -1,10 +1,10 @@
 # F030: XDG Workflow Discovery
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: S
 
 ## Description
@@ -23,7 +23,7 @@ Implement XDG Base Directory Specification for workflow and configuration storag
 
 Workflows found in multiple locations are merged. Local workflows take precedence over global ones with the same name.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Workflows in `./.awf/workflows/` are discovered
 - [x] `~/.config/awf/workflows/` is the new default global location
@@ -33,12 +33,12 @@ Workflows found in multiple locations are merged. Local workflows take precedenc
 - [x] `awf init` creates `./.awf/workflows/` directory
 - [x] `~/.awf/` migration notice if old directory exists
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F002
-- **Débloque**: _none_
+- **Blocked by**: F001, F002
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/cli/config.go              # XDG path resolution
@@ -50,7 +50,7 @@ internal/infrastructure/repository/yaml_repository.go  # Multi-path support
 internal/infrastructure/repository/composite_repository.go  # New: merge repos
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Add XDG path resolution
   - [x] Create `xdg.go` helper with `ConfigHome()`, `DataHome()` functions

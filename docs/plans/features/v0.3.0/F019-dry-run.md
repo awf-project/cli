@@ -1,17 +1,17 @@
 # F019: Dry-Run Mode
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: S
 
 ## Description
 
 Add dry-run mode that shows what would be executed without actually running commands. Display resolved commands, transitions, and interpolated values. Useful for debugging and validation before actual execution.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `awf run --dry-run` shows execution plan
 - [ ] Display resolved commands with interpolation
@@ -20,12 +20,12 @@ Add dry-run mode that shows what would be executed without actually running comm
 - [ ] Show hooks that would run
 - [ ] No side effects (no files written, commands run)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F005, F007
-- **Débloque**: _none_
+- **Blocked by**: F005, F007
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/cli/commands/run.go
@@ -33,7 +33,7 @@ internal/application/dry_run_executor.go
 internal/interfaces/cli/ui/dry_run_formatter.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Add --dry-run flag to run command
 - [ ] Implement DryRunExecutor

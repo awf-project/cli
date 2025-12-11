@@ -1,33 +1,33 @@
 # F011: Retry avec Backoff Exponentiel
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: implemented
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Implement automatic retry for failed steps with configurable backoff strategies. Support exponential, linear, and constant backoff. Add jitter to prevent thundering herd. Allow filtering by exit codes that are retryable.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
-- [ ] Retry on failure up to max_attempts
-- [ ] Support exponential backoff
-- [ ] Support linear backoff
-- [ ] Support constant backoff
-- [ ] Apply jitter to delays
-- [ ] Respect max_delay cap
-- [ ] Only retry specified exit codes
-- [ ] Log each retry attempt
+- [x] Retry on failure up to max_attempts
+- [x] Support exponential backoff
+- [x] Support linear backoff
+- [x] Support constant backoff
+- [x] Apply jitter to delays
+- [x] Respect max_delay cap
+- [x] Only retry specified exit codes
+- [x] Log each retry attempt
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F003
-- **Débloque**: _none_
+- **Blocked by**: F003
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 pkg/retry/retry.go
@@ -36,32 +36,32 @@ internal/domain/workflow/retry.go
 internal/application/executor.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
-- [ ] Define RetryConfig struct
-  - [ ] MaxAttempts
-  - [ ] InitialDelay
-  - [ ] MaxDelay
-  - [ ] Backoff (constant, linear, exponential)
-  - [ ] Multiplier
-  - [ ] Jitter (0.0-1.0)
-  - [ ] RetryableExitCodes
-- [ ] Implement Retryer
-  - [ ] Execute with retry logic
-  - [ ] Calculate delay based on strategy
-  - [ ] Apply jitter
-  - [ ] Check if exit code is retryable
-- [ ] Implement backoff strategies
-  - [ ] Constant: always initial_delay
-  - [ ] Linear: initial_delay * attempt
-  - [ ] Exponential: initial_delay * multiplier^(attempt-1)
-- [ ] Implement jitter
-  - [ ] delay ± (delay * jitter * random)
-- [ ] Integrate with ExecutionService
-  - [ ] Wrap step execution in retry
-  - [ ] Track attempt number in state
-- [ ] Write unit tests for retry logic
-- [ ] Write unit tests for backoff calculations
+- [x] Define RetryConfig struct
+  - [x] MaxAttempts
+  - [x] InitialDelay
+  - [x] MaxDelay
+  - [x] Backoff (constant, linear, exponential)
+  - [x] Multiplier
+  - [x] Jitter (0.0-1.0)
+  - [x] RetryableExitCodes
+- [x] Implement Retryer
+  - [x] Execute with retry logic
+  - [x] Calculate delay based on strategy
+  - [x] Apply jitter
+  - [x] Check if exit code is retryable
+- [x] Implement backoff strategies
+  - [x] Constant: always initial_delay
+  - [x] Linear: initial_delay * attempt
+  - [x] Exponential: initial_delay * multiplier^(attempt-1)
+- [x] Implement jitter
+  - [x] delay ± (delay * jitter * random)
+- [x] Integrate with ExecutionService
+  - [x] Wrap step execution in retry
+  - [x] Track attempt number in state
+- [x] Write unit tests for retry logic
+- [x] Write unit tests for backoff calculations
 
 ## Notes
 

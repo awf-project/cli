@@ -1,17 +1,17 @@
 # F022: Custom Operations
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 4-Extensibility
 - **Version**: v0.4.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: L
 
 ## Description
 
 Allow defining custom operations beyond shell commands. Support built-in operations (http, file, transform) and plugin-provided operations. Operations encapsulate common tasks with typed inputs and outputs.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Built-in HTTP operation (GET, POST, etc.)
 - [ ] Built-in file operations (read, write, copy)
@@ -21,12 +21,12 @@ Allow defining custom operations beyond shell commands. Support built-in operati
 - [ ] Operation discovery and help
 - [ ] Error handling per operation
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F021
-- **Débloque**: _none_
+- **Blocked by**: F021
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/operation/operation.go
@@ -36,7 +36,7 @@ internal/infrastructure/operations/file.go
 internal/infrastructure/operations/transform.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Operation interface
   - [ ] Name() string

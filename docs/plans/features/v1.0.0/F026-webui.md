@@ -1,17 +1,17 @@
 # F026: WebUI
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 5-Interfaces
 - **Version**: v1.0.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: XL
 
 ## Description
 
 Build a web-based user interface for AWF. Provide visual workflow management, execution monitoring, and log viewing. Enable non-technical users to interact with workflows through a browser.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Dashboard with execution overview
 - [ ] Workflow list with search/filter
@@ -22,12 +22,12 @@ Build a web-based user interface for AWF. Provide visual workflow management, ex
 - [ ] Execution history with filters
 - [ ] Basic workflow editor (optional)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F025
-- **Débloque**: _none_
+- **Blocked by**: F025
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 web/
@@ -41,7 +41,7 @@ web/
 internal/interfaces/api/static.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Choose frontend stack
   - [ ] React + TypeScript
