@@ -1,7 +1,7 @@
 # F017: Templates de Workflows
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: medium
@@ -13,12 +13,12 @@ Support reusable workflow templates with parameters. Define common patterns once
 
 ## Acceptance Criteria
 
-- [ ] Define templates with parameters
-- [ ] Instantiate templates in workflows
-- [ ] Template parameters override defaults
-- [ ] Templates can include other templates
-- [ ] Template validation at load time
-- [ ] Clear error for missing parameters
+- [x] Define templates with parameters
+- [x] Instantiate templates in workflows
+- [x] Template parameters override defaults
+- [x] Templates can include other templates
+- [x] Template validation at load time
+- [x] Clear error for missing parameters
 
 ## Dependencies
 
@@ -36,25 +36,25 @@ configs/workflows/templates/
 
 ## Technical Tasks
 
-- [ ] Define Template struct
-  - [ ] Name
-  - [ ] Parameters (with defaults)
-  - [ ] States
-- [ ] Define TemplateReference struct
-  - [ ] Template name
-  - [ ] Parameter values
-- [ ] Implement TemplateRepository
-  - [ ] Load templates from templates/ dir
-  - [ ] Cache loaded templates
-- [ ] Implement TemplateResolver
-  - [ ] Resolve template references
-  - [ ] Substitute parameters
-  - [ ] Merge into workflow
-- [ ] Support `use_template:` in state definitions
-- [ ] Handle template inheritance
-- [ ] Detect circular template references
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Define Template struct
+  - [x] Name
+  - [x] Parameters (with defaults)
+  - [x] States
+- [x] Define TemplateReference struct
+  - [x] Template name
+  - [x] Parameter values
+- [x] Implement TemplateRepository
+  - [x] Load templates from templates/ dir
+  - [x] Cache loaded templates
+- [x] Implement TemplateResolver
+  - [x] Resolve template references
+  - [x] Substitute parameters
+  - [x] Merge into workflow
+- [x] Support `use_template:` in state definitions
+- [x] Handle template inheritance
+- [x] Detect circular template references
+- [x] Write unit tests
+- [x] Write integration tests
 
 ## Notes
 

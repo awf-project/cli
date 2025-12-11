@@ -52,6 +52,7 @@ This creates:
 .awf/
 ├── workflows/
 │   └── example.yaml   # Sample workflow
+├── templates/         # Reusable workflow templates
 └── storage/
     ├── states/        # State persistence
     └── logs/          # Log files
@@ -505,6 +506,66 @@ proceed:
   status: success
 ```
 
+### Workflow Templates
+
+Templates allow defining reusable step patterns with parameters. Define once, use in multiple workflows.
+
+**Template definition** (`.awf/templates/ai-analyze.yaml`):
+```yaml
+name: ai-analyze
+parameters:
+  - name: prompt
+    required: true
+  - name: model
+    default: claude
+  - name: timeout
+    default: 120
+states:
+  ai-analyze:
+    type: step
+    command: "{{parameters.model}} -c '{{parameters.prompt}}'"
+    timeout: "{{parameters.timeout}}"
+    capture:
+      stdout: analysis
+```
+
+**Template usage** in a workflow:
+```yaml
+states:
+  code_analysis:
+    use_template: ai-analyze
+    parameters:
+      prompt: "Analyze this code: {{.states.extract.output}}"
+      model: gemini
+    on_success: format
+    on_failure: error
+```
+
+| Template Option | Description |
+|-----------------|-------------|
+| `name` | Template identifier |
+| `parameters` | List of parameter definitions |
+| `parameters[].name` | Parameter name |
+| `parameters[].required` | If true, must be provided when using template |
+| `parameters[].default` | Default value if not provided |
+| `states` | Step definitions using `{{parameters.X}}` placeholders |
+
+| Step Option | Description |
+|-------------|-------------|
+| `use_template` | Template name to instantiate |
+| `parameters` | Parameter values to pass to template |
+
+Template parameters use `{{parameters.name}}` syntax and are resolved at workflow load time. The step's `on_success`/`on_failure` transitions override any defined in the template.
+
+Templates are loaded from:
+1. `.awf/templates/` (local project)
+2. `$AWF_STORAGE/templates/` (global)
+
+**Validation:**
+- Missing required parameters produce clear errors
+- Circular template references are detected
+- Use `awf validate` to check template references before execution
+
 ### Variable Interpolation
 
 AWF uses `{{.var}}` syntax (Go template style with dot prefix):
@@ -609,9 +670,9 @@ awf/
 ├── cmd/awf/main.go              # CLI entry point
 ├── internal/
 │   ├── domain/
-│   │   ├── workflow/            # Entities: Workflow, Step, Context
+│   │   ├── workflow/            # Entities: Workflow, Step, Template, Context
 │   │   └── ports/               # Interfaces: Repository, Store, Executor
-│   ├── application/             # Services: WorkflowService, ExecutionService
+│   ├── application/             # Services: WorkflowService, ExecutionService, TemplateService
 │   ├── infrastructure/          # Adapters: YAML, JSON, Shell, XDG
 │   └── interfaces/cli/          # CLI commands and UI
 └── tests/                       # Integration tests
@@ -701,7 +762,7 @@ make fmt            # Format code
 ### Phase 3 - Advanced Features (v0.3.0)
 - [x] Conditions (if/else with `when:` clauses)
 - [x] Loops (for/while)
-- [ ] Workflow templates
+- [x] Workflow templates
 - [ ] Plugin system
 - [ ] REST API
 - [ ] Web UI

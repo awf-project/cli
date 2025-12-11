@@ -66,22 +66,23 @@ type Step struct {
 	Name            string
 	Type            StepType
 	Description     string
-	Command         string         // for command type
-	Dir             string         // working directory for command execution
-	Branches        []string       // for parallel type
-	Strategy        string         // for parallel: all_succeed, any_succeed, best_effort
-	MaxConcurrent   int            // for parallel: max concurrent branches
-	Timeout         int            // seconds
-	OnSuccess       string         // next state name (legacy, use Transitions)
-	OnFailure       string         // next state name (legacy, use Transitions)
-	Transitions     Transitions    // conditional transitions (takes precedence over OnSuccess/OnFailure)
-	DependsOn       []string       // for ordering in parallel execution
-	Retry           *RetryConfig   // retry configuration
-	Capture         *CaptureConfig // output capture configuration
-	Hooks           StepHooks      // pre/post hooks
-	ContinueOnError bool           // don't fail workflow on error
-	Status          TerminalStatus // for terminal type: success or failure
-	Loop            *LoopConfig    // for for_each and while types
+	Command         string               // for command type
+	Dir             string               // working directory for command execution
+	Branches        []string             // for parallel type
+	Strategy        string               // for parallel: all_succeed, any_succeed, best_effort
+	MaxConcurrent   int                  // for parallel: max concurrent branches
+	Timeout         int                  // seconds
+	OnSuccess       string               // next state name (legacy, use Transitions)
+	OnFailure       string               // next state name (legacy, use Transitions)
+	Transitions     Transitions          // conditional transitions (takes precedence over OnSuccess/OnFailure)
+	DependsOn       []string             // for ordering in parallel execution
+	Retry           *RetryConfig         // retry configuration
+	Capture         *CaptureConfig       // output capture configuration
+	Hooks           StepHooks            // pre/post hooks
+	ContinueOnError bool                 // don't fail workflow on error
+	Status          TerminalStatus       // for terminal type: success or failure
+	Loop            *LoopConfig          // for for_each and while types
+	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
 }
 
 // Validate checks if the step configuration is valid.

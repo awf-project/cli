@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 	"github.com/vanoix/awf/pkg/expression"
@@ -143,6 +144,15 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
+
+	// Setup template service for workflow template expansion
+	templatePaths := []string{
+		".awf/templates",
+		filepath.Join(cfg.StoragePath, "templates"),
+	}
+	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
+	templateSvc := application.NewTemplateService(templateRepo, logger)
+	execSvc.SetTemplateService(templateSvc)
 
 	// Pass writers to execution service for streaming mode
 	if stdoutWriter != nil {
@@ -560,6 +570,15 @@ func runSingleStep(
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
+
+	// Setup template service for workflow template expansion
+	templatePaths := []string{
+		".awf/templates",
+		filepath.Join(cfg.StoragePath, "templates"),
+	}
+	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
+	templateSvc := application.NewTemplateService(templateRepo, logger)
+	execSvc.SetTemplateService(templateSvc)
 
 	// Show start message
 	if !cfg.Quiet {

@@ -31,6 +31,7 @@ type ExecutionService struct {
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
 	historySvc       *HistoryService
+	templateSvc      *TemplateService
 }
 
 // ExpressionEvaluator evaluates conditional expressions.
@@ -42,6 +43,11 @@ type ExpressionEvaluator interface {
 func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 	s.stdoutWriter = stdout
 	s.stderrWriter = stderr
+}
+
+// SetTemplateService configures the template service for expanding template references.
+func (s *ExecutionService) SetTemplateService(svc *TemplateService) {
+	s.templateSvc = svc
 }
 
 // NewExecutionService creates a new execution service.
@@ -107,6 +113,13 @@ func (s *ExecutionService) Run(
 	}
 	if wf == nil {
 		return nil, fmt.Errorf("workflow not found: %s", workflowName)
+	}
+
+	// expand template references in workflow steps
+	if s.templateSvc != nil {
+		if err := s.templateSvc.ExpandWorkflow(ctx, wf); err != nil {
+			return nil, fmt.Errorf("expand templates: %w", err)
+		}
 	}
 
 	// initialize execution context

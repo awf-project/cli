@@ -1,0 +1,8 @@
+# Template with no parameters
+name: no-params
+parameters: []
+states:
+  initial: run
+  run:
+    type: command
+    command: "echo 'static command'"

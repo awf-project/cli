@@ -1,0 +1,17 @@
+# AI analysis template from F017 spec
+name: ai-analyze
+parameters:
+  - name: prompt
+    required: true
+  - name: model
+    default: claude
+  - name: timeout
+    default: 120s
+states:
+  initial: analyze
+  analyze:
+    type: command
+    command: "{{parameters.model}} -c '{{parameters.prompt}}'"
+    timeout: 120s
+    capture:
+      stdout: analysis

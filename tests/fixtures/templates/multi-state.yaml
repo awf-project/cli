@@ -1,0 +1,18 @@
+# Template with multiple states
+name: multi-state
+parameters:
+  - name: input
+    required: true
+states:
+  initial: step1
+  step1:
+    type: command
+    command: "echo 'Processing {{parameters.input}}'"
+    on_success: step2
+  step2:
+    type: command
+    command: "echo 'Step 2'"
+    on_success: done
+  done:
+    type: terminal
+    status: success

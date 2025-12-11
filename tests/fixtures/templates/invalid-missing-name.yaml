@@ -1,0 +1,9 @@
+# Template missing required name field
+parameters:
+  - name: test
+    required: true
+states:
+  initial: run
+  run:
+    type: command
+    command: "echo test"

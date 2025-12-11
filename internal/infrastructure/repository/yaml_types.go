@@ -48,6 +48,10 @@ type yamlStep struct {
 	MaxIterations int      `yaml:"max_iterations"` // safety limit
 	BreakWhen     string   `yaml:"break_when"`     // optional break condition
 	OnComplete    string   `yaml:"on_complete"`    // next state after loop
+
+	// Template reference (for using templates in steps)
+	UseTemplate string         `yaml:"use_template"` // template name to use
+	Parameters  map[string]any `yaml:"parameters"`   // parameters to pass to template
 }
 
 // yamlTransition is the YAML representation of a conditional transition.
@@ -113,4 +117,22 @@ type yamlStepHooks struct {
 type yamlHookAction struct {
 	Log     string `yaml:"log"`
 	Command string `yaml:"command"`
+}
+
+// yamlTemplate is the YAML representation of a workflow template.
+//
+//nolint:unused // F017 stub - will be used in template_repository.go
+type yamlTemplate struct {
+	Name       string              `yaml:"name"`
+	Parameters []yamlTemplateParam `yaml:"parameters"`
+	States     yamlStates          `yaml:"states"`
+}
+
+// yamlTemplateParam is the YAML representation of a template parameter.
+//
+//nolint:unused // F017 stub - will be used in template_repository.go
+type yamlTemplateParam struct {
+	Name     string `yaml:"name"`
+	Required bool   `yaml:"required"`
+	Default  any    `yaml:"default"`
 }

@@ -1,0 +1,14 @@
+# Template with all required parameters (no defaults)
+name: all-required
+parameters:
+  - name: source
+    required: true
+  - name: destination
+    required: true
+  - name: format
+    required: true
+states:
+  initial: convert
+  convert:
+    type: command
+    command: "convert {{parameters.source}} -f {{parameters.format}} {{parameters.destination}}"

@@ -1,0 +1,10 @@
+# Invalid YAML syntax for error testing
+name: invalid
+parameters:
+  - name: test
+    required: true
+states:
+  initial: run
+  run:
+    type: command
+    command: unquoted: invalid: yaml: here

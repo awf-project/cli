@@ -44,6 +44,13 @@ func (s *ExecutionService) ExecuteSingleStep(
 		return nil, fmt.Errorf("workflow not found: %s", workflowName)
 	}
 
+	// expand template references in workflow steps
+	if s.templateSvc != nil {
+		if err := s.templateSvc.ExpandWorkflow(ctx, wf); err != nil {
+			return nil, fmt.Errorf("expand templates: %w", err)
+		}
+	}
+
 	// Find step
 	step, ok := wf.Steps[stepName]
 	if !ok {

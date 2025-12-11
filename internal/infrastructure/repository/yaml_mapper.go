@@ -93,6 +93,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Hooks:           mapStepHooks(y.Hooks),
 		Status:          workflow.TerminalStatus(y.Status),
 		Loop:            mapLoopConfig(y),
+		TemplateRef:     mapTemplateRef(y.UseTemplate, y.Parameters),
 	}
 
 	// Parse timeout
@@ -281,4 +282,53 @@ func parseDuration(s string) (time.Duration, error) {
 	}
 
 	return 0, err
+}
+
+// mapTemplate converts yamlTemplate to domain Template.
+func mapTemplate(filePath string, y *yamlTemplate) (*workflow.Template, error) {
+	t := &workflow.Template{
+		Name:       y.Name,
+		Parameters: mapTemplateParams(y.Parameters),
+		States:     make(map[string]*workflow.Step),
+	}
+
+	// Map states
+	for name, step := range y.States.Steps {
+		domainStep, err := mapStep(filePath, name, step)
+		if err != nil {
+			return nil, err
+		}
+		t.States[name] = domainStep
+	}
+
+	// Validate template
+	if err := t.Validate(); err != nil {
+		return nil, NewParseError(filePath, "template", err.Error())
+	}
+
+	return t, nil
+}
+
+// mapTemplateParams converts yamlTemplateParam slice to domain.
+func mapTemplateParams(params []yamlTemplateParam) []workflow.TemplateParam {
+	result := make([]workflow.TemplateParam, len(params))
+	for i, p := range params {
+		result[i] = workflow.TemplateParam{
+			Name:     p.Name,
+			Required: p.Required,
+			Default:  p.Default,
+		}
+	}
+	return result
+}
+
+// mapTemplateRef converts use_template + parameters to WorkflowTemplateRef.
+func mapTemplateRef(useTemplate string, parameters map[string]any) *workflow.WorkflowTemplateRef {
+	if useTemplate == "" {
+		return nil
+	}
+	return &workflow.WorkflowTemplateRef{
+		TemplateName: useTemplate,
+		Parameters:   parameters,
+	}
 }

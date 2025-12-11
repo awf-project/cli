@@ -3,9 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -59,8 +61,27 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 		return err
 	}
 
-	// Validate
+	// Validate workflow structure
 	validationErr := svc.ValidateWorkflow(ctx, workflowName)
+
+	// If workflow is valid, also validate template references
+	if validationErr == nil {
+		templatePaths := []string{
+			".awf/templates",
+			filepath.Join(cfg.StoragePath, "templates"),
+		}
+		templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
+		templateSvc := application.NewTemplateService(templateRepo, nil)
+
+		for name, step := range wf.Steps {
+			if step.TemplateRef != nil {
+				if err := templateSvc.ValidateTemplateRef(ctx, step.TemplateRef); err != nil {
+					validationErr = fmt.Errorf("step %q: %w", name, err)
+					break
+				}
+			}
+		}
+	}
 
 	// JSON/quiet format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {

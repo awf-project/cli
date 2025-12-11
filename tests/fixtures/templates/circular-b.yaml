@@ -1,0 +1,8 @@
+# Template that references circular-a (for circular detection testing)
+name: circular-b
+parameters: []
+states:
+  initial: run
+  run:
+    type: command
+    use_template: circular-a
