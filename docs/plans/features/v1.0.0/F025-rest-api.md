@@ -1,17 +1,17 @@
 # F025: API REST
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 5-Interfaces
 - **Version**: v1.0.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: XL
 
 ## Description
 
 Expose AWF functionality via REST API. Allow remote workflow execution, status monitoring, and management. Enable integration with other systems and build web interfaces. Implements the hexagonal architecture's API adapter.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Start API server: `awf server`
 - [ ] POST /workflows/{name}/run - execute workflow
@@ -23,12 +23,12 @@ Expose AWF functionality via REST API. Allow remote workflow execution, status m
 - [ ] Rate limiting
 - [ ] OpenAPI documentation
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F005
-- **Débloque**: F026
+- **Blocked by**: F001, F005
+- **Unblocks**: F026
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 cmd/awf/main.go
@@ -39,7 +39,7 @@ internal/interfaces/api/dto/
 api/openapi.yaml
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Choose HTTP framework
   - [ ] Option: net/http + gorilla/mux

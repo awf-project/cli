@@ -1,17 +1,17 @@
 # F016: Boucles (for/while)
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: L
 
 ## Description
 
 Add loop constructs for iterating over lists or until a condition is met. Support for-each iteration over arrays and while loops with conditions. Enable data processing workflows that handle multiple items.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `for_each:` iterates over list
 - [ ] `while:` repeats until condition false
@@ -21,12 +21,12 @@ Add loop constructs for iterating over lists or until a condition is met. Suppor
 - [ ] Break condition support
 - [ ] Collect loop outputs
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F015
-- **Débloque**: _none_
+- **Blocked by**: F015
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/loop.go
@@ -35,7 +35,7 @@ internal/application/executor.go
 internal/application/loop_executor.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define LoopState struct
   - [ ] Type (for_each, while)

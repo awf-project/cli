@@ -1,17 +1,17 @@
 # F028: Webhooks
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 5-Interfaces
 - **Version**: v1.0.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
 
 Implement webhook notifications for workflow events. Send HTTP callbacks on workflow start, completion, failure, and step transitions. Enable integration with external systems for monitoring and automation.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Configure webhooks per workflow
 - [ ] Events: workflow_start, workflow_end, workflow_error, step_complete
@@ -21,12 +21,12 @@ Implement webhook notifications for workflow events. Send HTTP callbacks on work
 - [ ] Configurable timeout
 - [ ] Global and per-workflow webhooks
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F008
-- **Débloque**: _none_
+- **Blocked by**: F001, F008
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/webhook/dispatcher.go
@@ -35,7 +35,7 @@ internal/domain/webhook/config.go
 internal/application/webhook_service.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define WebhookConfig struct
   - [ ] URL

@@ -1,17 +1,17 @@
 # F027: Message Queue Support
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 5-Interfaces
 - **Version**: v1.0.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: L
 
 ## Description
 
 Integrate with message queues for async workflow triggering. Support consuming from queues and publishing results. Enable event-driven architectures and decoupled systems integration.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Consume messages from queue to trigger workflows
 - [ ] Publish workflow results to queue
@@ -21,12 +21,12 @@ Integrate with message queues for async workflow triggering. Support consuming f
 - [ ] Configurable concurrency
 - [ ] Graceful shutdown with in-flight handling
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001
-- **Débloque**: _none_
+- **Blocked by**: F001
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/interfaces/mq/consumer.go
@@ -37,7 +37,7 @@ internal/interfaces/mq/adapters/sqs.go
 cmd/awf/commands/worker.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define MessageQueue interface
   - [ ] Consume(ctx, handler)

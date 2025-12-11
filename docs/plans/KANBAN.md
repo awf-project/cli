@@ -4,7 +4,6 @@
 
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
-- [F011](features/v0.2.0/F011-retry-backoff.md) Retry with exponential backoff
 - [F012](features/v0.2.0/F012-input-validation.md) Input validation
 - [F013](features/v0.2.0/F013-workflow-resume.md) Resume command
 - [F014](features/v0.2.0/F014-sqlite-history.md) SQLite history
@@ -57,8 +56,7 @@ _No features in review_
 ### Phase 2 - Core Features (v0.2.0)
 - [F009](features/v0.2.0/F009-state-machine.md) State machine with conditional transitions
 - [F010](features/v0.2.0/F010-parallel-execution.md) Parallel execution (errgroup)
-
-### Phase 1 - MVP (v0.1.0)
+- [F011](features/v0.2.0/F011-retry-backoff.md) Retry with exponential backoff
 - [F001](features/v0.1.0/F001-hexagonal-architecture.md) Hexagonal architecture
 - [F002](features/v0.1.0/F002-yaml-parser.md) YAML workflow parsing
 - [F003](features/v0.1.0/F003-linear-execution.md) Linear step execution

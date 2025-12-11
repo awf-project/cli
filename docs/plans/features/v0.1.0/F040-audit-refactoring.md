@@ -14,22 +14,22 @@ Organize and execute refactoring tasks identified in the project audit report. T
 ## Acceptance Criteria
 
 ### Coverage Targets
-- [ ] Overall test coverage reaches 80%+
-- [ ] CLI layer (`internal/interfaces/cli`) coverage reaches 80%+
-- [ ] `runWorkflow` function coverage exceeds 80% (currently 46.4%)
-- [ ] `ExecuteSingleStep` coverage exceeds 80% (currently 63.5%)
-- [ ] Store layer coverage reaches 80%+ (currently 68.5%)
+- [x] Overall test coverage reaches 80%+
+- [x] CLI layer (`internal/interfaces/cli`) coverage reaches 80%+
+- [x] `runWorkflow` function coverage exceeds 80% (currently 46.4%)
+- [x] `ExecuteSingleStep` coverage exceeds 80% (currently 63.5%)
+- [x] Store layer coverage reaches 80%+ (currently 68.5%)
 
 ### Documentation Sync
-- [ ] F038 spec status corrected from "implemented" to "planned"
-- [ ] F039 marked as Done in Serena `feature_roadmap` memory
-- [ ] F039 acceptance criteria checked off in spec
-- [ ] CHANGELOG updated with F036, F037, F039 entries
+- [x] F038 spec status corrected from "implemented" to "planned"
+- [x] F039 marked as Done in Serena `feature_roadmap` memory
+- [x] F039 acceptance criteria checked off in spec
+- [x] CHANGELOG updated with F036, F037, F039 entries
 
 ### Code Quality
-- [ ] `pkg/interpolation` error types have tests
-- [ ] Status command display logic tested
-- [ ] All `go vet` and `golangci-lint` issues remain at 0
+- [x] `pkg/interpolation` error types have tests
+- [x] Status command display logic tested
+- [x] All `go vet` and `golangci-lint` issues remain at 0
 
 ## Dependencies
 
@@ -58,51 +58,51 @@ CHANGELOG.md
 ## Technical Tasks
 
 ### P0 — Critical (Must Fix)
-- [ ] Add tests for CLI `runWorkflow` function
-  - [ ] Test `showExecutionDetails` (line 310)
-  - [ ] Test `showStepOutputs` (line 321)
-  - [ ] Test `showEmptyStepFeedback` (line 341)
-  - [ ] Test `buildStepInfos` (line 350)
-  - [ ] Test `ExitCode` (line 396)
-  - [ ] Test `WithContext` (line 438)
-- [ ] Add tests for `ExecuteSingleStep` error paths
-  - [ ] Test step not found scenario
-  - [ ] Test workflow not found scenario
-  - [ ] Test execution failure scenario
-- [ ] Fix F038 spec status (change "implemented" to "planned")
+- [x] Add tests for CLI `runWorkflow` function
+  - [x] Test `showExecutionDetails` (line 310)
+  - [x] Test `showStepOutputs` (line 321)
+  - [x] Test `showEmptyStepFeedback` (line 341)
+  - [x] Test `buildStepInfos` (line 350)
+  - [x] Test `ExitCode` (line 396)
+  - [x] Test `WithContext` (line 438)
+- [x] Add tests for `ExecuteSingleStep` error paths
+  - [x] Test step not found scenario
+  - [x] Test workflow not found scenario
+  - [x] Test execution failure scenario
+- [x] Fix F038 spec status (change "implemented" to "planned")
 
 ### P1 — High Priority
-- [ ] Increase store layer coverage to 80%
-  - [ ] Test `Save` failure paths (disk full, permission denied)
-  - [ ] Mock `syscall.Flock` failures
-- [ ] Update Serena `feature_roadmap` memory for F039
-- [ ] Check off F039 acceptance criteria in spec
-- [ ] Update CHANGELOG with F036, F037, F039 entries
-- [ ] Test interpolation error types
-  - [ ] Add `TestVariableError_Error`
-  - [ ] Add `TestExecutionError_ErrorAndUnwrap`
-- [ ] Test status command display logic
-  - [ ] Test `toExecutionInfo`
-  - [ ] Test `displayStatus`
+- [x] Increase store layer coverage to 80%
+  - [x] Test `Save` failure paths (disk full, permission denied)
+  - [x] Mock `syscall.Flock` failures
+- [x] Update Serena `feature_roadmap` memory for F039
+- [x] Check off F039 acceptance criteria in spec
+- [x] Update CHANGELOG with F036, F037, F039 entries
+- [x] Test interpolation error types
+  - [x] Add `TestVariableError_Error`
+  - [x] Add `TestExecutionError_ErrorAndUnwrap`
+- [x] Test status command display logic
+  - [x] Test `toExecutionInfo`
+  - [x] Test `displayStatus`
 
 ### P2 — Medium Priority
-- [ ] Test text output modes in `ui/output.go`
-  - [ ] Test `writeExecutionText`
-  - [ ] Test `writeRunResultText`
-  - [ ] Test `writeValidationText`
-  - [ ] Test `calculateDuration`
-  - [ ] Test `ParseOutputFormat`
-- [ ] Test `NewApp` entry point (`root.go:24`)
-- [ ] Consider marking noOpLogger methods as coverage-excluded
+- [x] Test text output modes in `ui/output.go`
+  - [x] Test `writeExecutionText`
+  - [x] Test `writeRunResultText`
+  - [x] Test `writeValidationText`
+  - [x] Test `calculateDuration`
+  - [x] Test `ParseOutputFormat`
+- [x] Test `NewApp` entry point (`root.go:24`)
+- [x] Consider marking noOpLogger methods as coverage-excluded
 
 ### P3 — Low Priority
-- [ ] Clarify parallel state in README (type exists but execution not implemented)
-- [ ] Review CLAUDE.md dependencies (remove errgroup mention until F010)
-- [ ] Delete or test `Source.String()` method if unused
+- [x] Clarify parallel state in README (type exists but execution not implemented)
+- [x] Review CLAUDE.md dependencies (remove errgroup mention until F010)
+- [x] Delete or test `Source.String()` method if unused
 
 ### Documentation
-- [ ] Update documentation after all changes
-- [ ] Verify all cross-references between specs, memories, and README
+- [x] Update documentation after all changes
+- [x] Verify all cross-references between specs, memories, and README
 
 ## Notes
 

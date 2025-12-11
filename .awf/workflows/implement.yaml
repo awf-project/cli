@@ -585,8 +585,11 @@ states:
     command: |
       SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
       if [ -n "$SPEC_FILE" ]; then
-        sed -i 's/Status\*\*: planned/Status**: implemented/g' "$SPEC_FILE"
-        echo "Updated status in $SPEC_FILE"
+        # Update status (handle multiple possible values)
+        sed -i -E 's/(\*\*Status\*\*): (backlog|planned|in_progress)/\1: implemented/g' "$SPEC_FILE"
+        # Check all acceptance criteria checkboxes
+        sed -i 's/- \[ \]/- [x]/g' "$SPEC_FILE"
+        echo "Updated $SPEC_FILE"
       else
         echo "SPEC_UPDATE_SKIPPED"
       fi

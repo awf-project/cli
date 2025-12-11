@@ -1,17 +1,17 @@
 # F023: Workflow Composition (Sous-workflows)
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 4-Extensibility
 - **Version**: v0.4.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: L
 
 ## Description
 
 Enable calling one workflow from another as a sub-workflow. Pass inputs, receive outputs, and handle errors. Support both inline and referenced sub-workflows. Enable modular workflow design.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `call_workflow:` invokes another workflow
 - [ ] Pass inputs to sub-workflow
@@ -22,12 +22,12 @@ Enable calling one workflow from another as a sub-workflow. Pass inputs, receive
 - [ ] Sub-workflow state visible in parent
 - [ ] Timeout for sub-workflow execution
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F002, F003, F017
-- **Débloque**: _none_
+- **Blocked by**: F002, F003, F017
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/subworkflow.go
@@ -35,7 +35,7 @@ internal/application/subworkflow_executor.go
 internal/domain/workflow/state.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define SubWorkflowState struct
   - [ ] Workflow name/path

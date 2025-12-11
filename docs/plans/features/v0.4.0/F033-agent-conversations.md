@@ -1,10 +1,10 @@
 # F033: Agent Conversations
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-AI
 - **Version**: v0.4.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: L
 
 ## Description
@@ -40,7 +40,7 @@ Extend the `agent` step type (F032) to support managed multi-turn conversations 
 2. **Clarification loops** — Agent asks questions, workflow provides answers
 3. **Complex reasoning** — Chain-of-thought across multiple turns
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] New `mode: conversation` option for agent steps
 - [ ] Conversation history maintained in step state
@@ -53,12 +53,12 @@ Extend the `agent` step type (F032) to support managed multi-turn conversations 
 - [ ] Support for injecting context mid-conversation
 - [ ] Works with streaming output (F029)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F032 (Agent Step Type)
-- **Débloque**: _none_
+- **Blocked by**: F032 (Agent Step Type)
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/conversation.go        # New: conversation model
@@ -68,7 +68,7 @@ internal/application/conversation_manager.go    # New: conversation orchestratio
 pkg/tokenizer/                                  # New: token counting utilities
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Conversation domain model
   - [ ] Turn struct (role, content, tokens)

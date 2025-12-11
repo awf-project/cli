@@ -1,17 +1,17 @@
 # F021: Plugin System
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 4-Extensibility
 - **Version**: v0.4.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: XL
 
 ## Description
 
 Implement a plugin system allowing third-party extensions. Support custom operations, commands, and validators. Use Go plugin or RPC-based approach for extensibility without recompiling AWF core.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Plugin discovery from plugins/ directory
 - [ ] Plugin lifecycle (load, init, shutdown)
@@ -22,12 +22,12 @@ Implement a plugin system allowing third-party extensions. Support custom operat
 - [ ] Sandboxed plugin execution
 - [ ] Plugin versioning and compatibility
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F003
-- **Débloque**: F022
+- **Blocked by**: F001, F003
+- **Unblocks**: F022
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/plugin/manager.go
@@ -38,7 +38,7 @@ pkg/plugin/sdk/
 plugins/
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Choose plugin architecture
   - [ ] Option A: Go plugin (*.so, limited portability)

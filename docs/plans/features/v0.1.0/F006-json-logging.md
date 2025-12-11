@@ -1,17 +1,17 @@
 # F006: Logging JSON Structuré
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: S
 
 ## Description
 
 Implement structured JSON logging for workflow execution. Log all significant events (step start, step complete, errors) with contextual metadata. Support both file output and console output. Enable log analysis and debugging.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Log events in JSON format
 - [x] Include timestamp, level, message, workflow context
@@ -21,12 +21,12 @@ Implement structured JSON logging for workflow execution. Log all significant ev
 - [x] Mask sensitive values (API keys, passwords)
 - [x] Implements Logger port interface
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001
-- **Débloque**: F008
+- **Blocked by**: F001
+- **Unblocks**: F008
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/ports/logger.go              # Existing - Logger interface
@@ -41,7 +41,7 @@ internal/infrastructure/logger/masker_test.go
 storage/logs/
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Define Logger port interface
   - [x] Info(msg, fields)

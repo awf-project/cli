@@ -1,32 +1,32 @@
 # F009: State Machine avec Transitions
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: implemented
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: critical
+- **Priority**: critical
 - **Estimation**: L
 
 ## Description
 
 Implement full state machine logic with conditional transitions. Support `on_success` and `on_failure` transitions, terminal states, and state validation. Detect cycles and unreachable states at validation time.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
-- [ ] Follow on_success transition on exit code 0
-- [ ] Follow on_failure transition on non-zero exit
-- [ ] Stop execution at terminal states
-- [ ] Detect cycles during validation
-- [ ] Detect unreachable states during validation
-- [ ] Require at least one terminal state
-- [ ] Support continue_on_error flag
+- [x] Follow on_success transition on exit code 0
+- [x] Follow on_failure transition on non-zero exit
+- [x] Stop execution at terminal states
+- [x] Detect cycles during validation
+- [x] Detect unreachable states during validation
+- [x] Require at least one terminal state
+- [x] Support continue_on_error flag
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F003
-- **Débloque**: F010, F015
+- **Blocked by**: F003
+- **Unblocks**: F010, F015
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/state_machine.go
@@ -34,31 +34,31 @@ internal/domain/workflow/validator.go
 internal/application/executor.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
-- [ ] Define StateType enum
-  - [ ] step
-  - [ ] parallel
-  - [ ] terminal
-- [ ] Define TerminalStatus enum
-  - [ ] success
-  - [ ] failure
-- [ ] Implement StateMachine
-  - [ ] GetInitialState()
-  - [ ] GetNextState(current, result)
-  - [ ] IsTerminal(state)
-  - [ ] GetTerminalStatus(state)
-- [ ] Implement state graph validation
-  - [ ] All referenced states exist
-  - [ ] No orphan states (all reachable from initial)
-  - [ ] At least one terminal state
-  - [ ] Cycle detection (warning, not error)
-- [ ] Update ExecutionService for transitions
-  - [ ] Evaluate exit code
-  - [ ] Select on_success or on_failure
-  - [ ] Handle continue_on_error
-- [ ] Write unit tests for state machine logic
-- [ ] Write validation tests
+- [x] Define StateType enum
+  - [x] step
+  - [x] parallel
+  - [x] terminal
+- [x] Define TerminalStatus enum
+  - [x] success
+  - [x] failure
+- [x] Implement StateMachine
+  - [x] GetInitialState()
+  - [x] GetNextState(current, result)
+  - [x] IsTerminal(state)
+  - [x] GetTerminalStatus(state)
+- [x] Implement state graph validation
+  - [x] All referenced states exist
+  - [x] No orphan states (all reachable from initial)
+  - [x] At least one terminal state
+  - [x] Cycle detection (warning, not error)
+- [x] Update ExecutionService for transitions
+  - [x] Evaluate exit code
+  - [x] Select on_success or on_failure
+  - [x] Handle continue_on_error
+- [x] Write unit tests for state machine logic
+- [x] Write validation tests
 
 ## Notes
 

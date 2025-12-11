@@ -1,17 +1,17 @@
 # F024: Remote Workflows (HTTP)
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 4-Extensibility
 - **Version**: v0.4.0
-- **Priorité**: low
+- **Priority**: low
 - **Estimation**: M
 
 ## Description
 
 Load workflow definitions from remote URLs. Support HTTP(S) sources with caching and signature verification. Enable sharing workflows via registries or direct URLs without local installation.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Load workflow from HTTP(S) URL
 - [ ] Cache remote workflows locally
@@ -21,12 +21,12 @@ Load workflow definitions from remote URLs. Support HTTP(S) sources with caching
 - [ ] `awf run https://...` syntax
 - [ ] Registry support (index of workflows)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F002
-- **Débloque**: _none_
+- **Blocked by**: F002
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/repository/remote_repository.go
@@ -35,7 +35,7 @@ pkg/signature/verify.go
 configs/settings.yaml
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Implement RemoteRepository
   - [ ] Fetch workflow from URL

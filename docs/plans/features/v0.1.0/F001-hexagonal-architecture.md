@@ -1,10 +1,10 @@
 # F001: Architecture Hexagonale de Base
 
 ## Metadata
-- **Statut**: done
+- **Status**: done
 - **Phase**: 1-MVP
 - **Version**: v0.1.0
-- **Priorité**: critical
+- **Priority**: critical
 - **Estimation**: L
 
 ## Description
@@ -13,7 +13,7 @@ Set up the foundational hexagonal (ports & adapters) architecture for AWF. This 
 
 The domain layer contains pure business logic with no external dependencies. Application layer orchestrates use cases. Infrastructure provides concrete implementations. Interfaces layer handles CLI interactions.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [x] Project compiles with `go build ./...`
 - [x] Domain layer has zero external imports (except stdlib)
@@ -22,12 +22,12 @@ The domain layer contains pure business logic with no external dependencies. App
 - [x] Adapters implement port interfaces
 - [x] Dependency injection via constructors (no globals)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: _none_
-- **Débloque**: F002, F003, F004, F005, F006, F007, F008
+- **Blocked by**: _none_
+- **Unblocks**: F002, F003, F004, F005, F006, F007, F008
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 cmd/awf/main.go
@@ -45,7 +45,7 @@ go.mod
 Makefile
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [x] Initialize Go module
   - [x] `go mod init github.com/vanoix/awf`

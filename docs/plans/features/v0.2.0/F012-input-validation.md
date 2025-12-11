@@ -1,17 +1,17 @@
 # F012: Validation des Inputs
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: M
 
 ## Description
 
 Validate workflow inputs at runtime against defined rules. Support type checking, required fields, regex patterns, enums, numeric ranges, and file existence. Provide clear error messages for validation failures.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Validate required inputs are present
 - [ ] Validate type (string, integer, boolean)
@@ -23,12 +23,12 @@ Validate workflow inputs at runtime against defined rules. Support type checking
 - [ ] Clear error messages with input name
 - [ ] Apply default values
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F002
-- **Débloque**: _none_
+- **Blocked by**: F002
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 pkg/validation/validator.go
@@ -37,7 +37,7 @@ internal/domain/workflow/input.go
 internal/application/validator.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define InputDefinition struct
   - [ ] Name

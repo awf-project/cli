@@ -1,17 +1,17 @@
 # F015: Conditions Complexes (if/else)
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: L
 
 ## Description
 
 Add conditional branching based on expressions. Evaluate conditions using variable values, comparison operators, and logical operators. Enable dynamic workflow paths beyond simple success/failure transitions.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] `when:` clause on transitions
 - [ ] Compare variables with operators (==, !=, <, >, <=, >=)
@@ -21,12 +21,12 @@ Add conditional branching based on expressions. Evaluate conditions using variab
 - [ ] Clear error on invalid expressions
 - [ ] Fallback to default transition if no condition matches
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F007, F009
-- **Débloque**: F016
+- **Blocked by**: F007, F009
+- **Unblocks**: F016
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 pkg/expression/evaluator.go
@@ -36,7 +36,7 @@ internal/domain/workflow/state.go
 internal/application/executor.go
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define Condition struct
   - [ ] Expression string

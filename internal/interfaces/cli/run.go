@@ -127,7 +127,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger, resolver)
+	parallelExecutor := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver)
 
 	// Pass writers to execution service for streaming mode
 	if stdoutWriter != nil {
@@ -530,7 +531,8 @@ func runSingleStep(
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
-	execSvc := application.NewExecutionService(wfSvc, shellExecutor, stateStore, logger, resolver)
+	parallelExecutor := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver)
 
 	// Show start message
 	if !cfg.Quiet {

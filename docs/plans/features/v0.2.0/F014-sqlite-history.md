@@ -1,17 +1,17 @@
 # F014: Historique SQLite
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 2-Core
 - **Version**: v0.2.0
-- **Priorité**: medium
+- **Priority**: medium
 - **Estimation**: M
 
 ## Description
 
 Store workflow execution history in SQLite database. Track all executions with metadata for reporting and analysis. Support querying history by workflow name, status, date range. Enable `awf history` command.
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] Record each workflow execution
 - [ ] Store workflow_id, name, status, duration, timestamps
@@ -22,12 +22,12 @@ Store workflow execution history in SQLite database. Track all executions with m
 - [ ] Show summary statistics
 - [ ] Configurable retention period
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001
-- **Débloque**: _none_
+- **Blocked by**: F001
+- **Unblocks**: _none_
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/infrastructure/store/sqlite_store.go
@@ -37,7 +37,7 @@ storage/history.db
 go.mod (add sqlite3)
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Add sqlite3 dependency
   - [ ] `go get github.com/mattn/go-sqlite3`

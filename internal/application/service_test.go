@@ -126,6 +126,34 @@ func (m *mockResolver) Resolve(template string, ctx *interpolation.Context) (str
 	return template, nil
 }
 
+// mockParallelExecutor is a simple mock that executes branches sequentially.
+type mockParallelExecutor struct{}
+
+func newMockParallelExecutor() *mockParallelExecutor {
+	return &mockParallelExecutor{}
+}
+
+func (m *mockParallelExecutor) Execute(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	branches []string,
+	config workflow.ParallelConfig,
+	execCtx *workflow.ExecutionContext,
+	stepExecutor ports.StepExecutor,
+) (*workflow.ParallelResult, error) {
+	result := workflow.NewParallelResult()
+	for _, branch := range branches {
+		branchResult, err := stepExecutor.ExecuteStep(ctx, wf, branch, execCtx)
+		if branchResult != nil {
+			result.AddResult(branchResult)
+		}
+		if err != nil && config.Strategy == workflow.StrategyAllSucceed {
+			return result, err
+		}
+	}
+	return result, nil
+}
+
 func TestNewWorkflowService(t *testing.T) {
 	repo := newMockRepository()
 	store := newMockStateStore()

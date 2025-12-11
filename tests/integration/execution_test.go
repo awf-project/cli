@@ -100,7 +100,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	// execute
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -159,7 +160,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -217,7 +219,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -253,7 +256,8 @@ func TestLinearExecution_WithValidFixture_Integration(t *testing.T) {
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -306,7 +310,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -362,7 +367,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -431,7 +437,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -490,7 +497,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -533,7 +541,8 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
-	execSvc := application.NewExecutionService(wfSvc, exec, store, logger, resolver)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver)
 
 	// Capture streaming output
 	var stdoutBuf, stderrBuf bytes.Buffer

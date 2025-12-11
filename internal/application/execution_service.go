@@ -13,18 +13,20 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/vanoix/awf/pkg/retry"
 )
 
 // ExecutionService orchestrates workflow execution.
 type ExecutionService struct {
-	workflowSvc  *WorkflowService
-	executor     ports.CommandExecutor
-	store        ports.StateStore
-	logger       ports.Logger
-	resolver     interpolation.Resolver
-	hookExecutor *HookExecutor
-	stdoutWriter io.Writer
-	stderrWriter io.Writer
+	workflowSvc      *WorkflowService
+	executor         ports.CommandExecutor
+	parallelExecutor ports.ParallelExecutor
+	store            ports.StateStore
+	logger           ports.Logger
+	resolver         interpolation.Resolver
+	hookExecutor     *HookExecutor
+	stdoutWriter     io.Writer
+	stderrWriter     io.Writer
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -37,17 +39,19 @@ func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 func NewExecutionService(
 	wfSvc *WorkflowService,
 	executor ports.CommandExecutor,
+	parallelExecutor ports.ParallelExecutor,
 	store ports.StateStore,
 	logger ports.Logger,
 	resolver interpolation.Resolver,
 ) *ExecutionService {
 	return &ExecutionService{
-		workflowSvc:  wfSvc,
-		executor:     executor,
-		store:        store,
-		logger:       logger,
-		resolver:     resolver,
-		hookExecutor: NewHookExecutor(executor, logger, resolver),
+		workflowSvc:      wfSvc,
+		executor:         executor,
+		parallelExecutor: parallelExecutor,
+		store:            store,
+		logger:           logger,
+		resolver:         resolver,
+		hookExecutor:     NewHookExecutor(executor, logger, resolver),
 	}
 }
 
@@ -111,9 +115,18 @@ func (s *ExecutionService) Run(
 			break
 		}
 
-		// execute step
+		// execute step based on type
+		var nextStep string
+		var err error
+
 		s.logger.Debug("executing step", "step", step.Name)
-		nextStep, err := s.executeStep(ctx, wf, step, execCtx)
+
+		if step.Type == workflow.StepTypeParallel {
+			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
+		} else {
+			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
+		}
+
 		if err != nil {
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
@@ -134,8 +147,9 @@ func (s *ExecutionService) Run(
 	intCtx = s.buildInterpolationContext(execCtx)
 
 	if execErr != nil {
-		// check if this was a cancellation (SIGINT/SIGTERM)
-		if errors.Is(execErr, context.Canceled) || ctx.Err() == context.Canceled {
+		// check if this was a cancellation (SIGINT/SIGTERM) or timeout
+		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
+			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
@@ -211,14 +225,24 @@ func (s *ExecutionService) executeStep(
 		Stderr:  s.stderrWriter,
 	}
 
-	// execute
-	result, execErr := s.executor.Execute(stepCtx, cmd)
+	// execute (with retry if configured)
+	var result *ports.CommandResult
+	var execErr error
+	var attempt int
+
+	if step.Retry != nil && step.Retry.MaxAttempts > 1 {
+		result, attempt, execErr = s.executeWithRetry(stepCtx, step, cmd)
+	} else {
+		attempt = 1
+		result, execErr = s.executor.Execute(stepCtx, cmd)
+	}
 
 	// record step state
 	state := workflow.StepState{
 		Name:        step.Name,
 		StartedAt:   startTime,
 		CompletedAt: time.Now(),
+		Attempt:     attempt,
 	}
 
 	if result != nil {
@@ -229,6 +253,16 @@ func (s *ExecutionService) executeStep(
 
 	// determine outcome
 	if execErr != nil {
+		// Check if the PARENT context was cancelled (workflow-level cancellation)
+		// This is different from step timeout (stepCtx deadline exceeded)
+		// Step timeout should follow OnFailure, workflow cancellation should propagate
+		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			execCtx.SetStepState(step.Name, state)
+			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
 		state.Status = workflow.StatusFailed
 		state.Error = execErr.Error()
 		execCtx.SetStepState(step.Name, state)
@@ -338,4 +372,244 @@ func (s *ExecutionService) buildInterpolationContext(
 		},
 		Error: nil, // Set in error hooks (F008)
 	}
+}
+
+// executeWithRetry executes a command with retry logic.
+// Returns the final result, number of attempts made, and error.
+func (s *ExecutionService) executeWithRetry(
+	ctx context.Context,
+	step *workflow.Step,
+	cmd ports.Command,
+) (*ports.CommandResult, int, error) {
+	// Convert domain RetryConfig to retry.Config
+	retryCfg := retry.Config{
+		MaxAttempts:        step.Retry.MaxAttempts,
+		InitialDelay:       time.Duration(step.Retry.InitialDelayMs) * time.Millisecond,
+		MaxDelay:           time.Duration(step.Retry.MaxDelayMs) * time.Millisecond,
+		Strategy:           retry.Strategy(step.Retry.Backoff),
+		Multiplier:         step.Retry.Multiplier,
+		Jitter:             step.Retry.Jitter,
+		RetryableExitCodes: step.Retry.RetryableExitCodes,
+	}
+
+	// Create retryer with current time as seed for random jitter
+	retryer := retry.NewRetryer(retryCfg, &retryLoggerAdapter{s.logger}, time.Now().UnixNano())
+
+	var result *ports.CommandResult
+	var execErr error
+
+	for attempt := 1; attempt <= retryCfg.MaxAttempts; attempt++ {
+		result, execErr = s.executor.Execute(ctx, cmd)
+
+		// Determine exit code
+		exitCode := 0
+		if result != nil {
+			exitCode = result.ExitCode
+		}
+		if execErr != nil && exitCode == 0 {
+			// Execution error without exit code (e.g., context cancelled)
+			// Don't retry on context errors
+			if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) {
+				return result, attempt, execErr
+			}
+			exitCode = 1 // Treat as generic failure
+		}
+
+		// Success - no retry needed
+		if execErr == nil && exitCode == 0 {
+			return result, attempt, nil
+		}
+
+		// Check if we should retry
+		if !retryer.ShouldRetry(exitCode, attempt) {
+			s.logger.Debug("not retrying",
+				"step", step.Name,
+				"attempt", attempt,
+				"exit_code", exitCode,
+				"max_attempts", retryCfg.MaxAttempts,
+			)
+			return result, attempt, execErr
+		}
+
+		// Log retry
+		s.logger.Info("retrying step",
+			"step", step.Name,
+			"attempt", attempt,
+			"exit_code", exitCode,
+			"max_attempts", retryCfg.MaxAttempts,
+		)
+
+		// Wait before next attempt
+		if err := retryer.Wait(ctx, attempt); err != nil {
+			// Context cancelled during wait
+			return result, attempt, err
+		}
+	}
+
+	return result, retryCfg.MaxAttempts, execErr
+}
+
+// retryLoggerAdapter adapts ports.Logger to retry.Logger interface.
+type retryLoggerAdapter struct {
+	logger ports.Logger
+}
+
+func (a *retryLoggerAdapter) Debug(msg string, keysAndValues ...any) {
+	a.logger.Debug(msg, keysAndValues...)
+}
+
+func (a *retryLoggerAdapter) Info(msg string, keysAndValues ...any) {
+	a.logger.Info(msg, keysAndValues...)
+}
+
+// executeParallelStep executes a parallel step using the ParallelExecutor.
+func (s *ExecutionService) executeParallelStep(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	startTime := time.Now()
+
+	// apply step timeout
+	stepCtx := ctx
+	if step.Timeout > 0 {
+		var cancel context.CancelFunc
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	// build interpolation context for hooks
+	intCtx := s.buildInterpolationContext(execCtx)
+
+	// execute pre-hooks
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
+
+	// build parallel config
+	config := workflow.ParallelConfig{
+		Strategy:      workflow.ParseParallelStrategy(step.Strategy),
+		MaxConcurrent: step.MaxConcurrent,
+	}
+
+	// create step executor adapter
+	adapter := &stepExecutorAdapter{
+		execSvc: s,
+	}
+
+	// execute parallel branches
+	s.logger.Info("executing parallel step", "step", step.Name, "branches", step.Branches, "strategy", config.Strategy)
+	result, err := s.parallelExecutor.Execute(stepCtx, wf, step.Branches, config, execCtx, adapter)
+
+	// copy branch results to execCtx.States so they're available for interpolation
+	if result != nil {
+		for branchName, branchResult := range result.Results {
+			state := workflow.StepState{
+				Name:        branchName,
+				StartedAt:   branchResult.StartedAt,
+				CompletedAt: branchResult.CompletedAt,
+				Output:      branchResult.Output,
+				Stderr:      branchResult.Stderr,
+				ExitCode:    branchResult.ExitCode,
+			}
+			if branchResult.Error != nil {
+				state.Status = workflow.StatusFailed
+				state.Error = branchResult.Error.Error()
+			} else if branchResult.ExitCode != 0 {
+				state.Status = workflow.StatusFailed
+			} else {
+				state.Status = workflow.StatusCompleted
+			}
+			execCtx.SetStepState(branchName, state)
+		}
+	}
+
+	// record parallel step state
+	parallelState := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+	}
+
+	if err != nil {
+		// Check if the PARENT context was cancelled
+		if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			parallelState.Status = workflow.StatusFailed
+			parallelState.Error = err.Error()
+			execCtx.SetStepState(step.Name, parallelState)
+			return "", fmt.Errorf("parallel step %s: %w", step.Name, err)
+		}
+
+		parallelState.Status = workflow.StatusFailed
+		parallelState.Error = err.Error()
+		execCtx.SetStepState(step.Name, parallelState)
+
+		// execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("parallel step %s: %w", step.Name, err)
+	}
+
+	parallelState.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, parallelState)
+
+	// execute post-hooks on success
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	return step.OnSuccess, nil
+}
+
+// stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
+type stepExecutorAdapter struct {
+	execSvc *ExecutionService
+}
+
+// ExecuteStep implements ports.StepExecutor.
+func (a *stepExecutorAdapter) ExecuteStep(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	stepName string,
+	execCtx *workflow.ExecutionContext,
+) (*workflow.BranchResult, error) {
+	step, ok := wf.Steps[stepName]
+	if !ok {
+		return nil, fmt.Errorf("step not found: %s", stepName)
+	}
+
+	startTime := time.Now()
+	result := &workflow.BranchResult{
+		Name:      stepName,
+		StartedAt: startTime,
+	}
+
+	// Execute the step using the existing executeStep method
+	_, err := a.execSvc.executeStep(ctx, wf, step, execCtx)
+
+	result.CompletedAt = time.Now()
+
+	// Get the step state that was recorded by executeStep
+	if state, exists := execCtx.States[stepName]; exists {
+		result.Output = state.Output
+		result.Stderr = state.Stderr
+		result.ExitCode = state.ExitCode
+		if state.Error != "" {
+			result.Error = errors.New(state.Error)
+		}
+	}
+
+	if err != nil {
+		result.Error = err
+	}
+
+	return result, err
 }

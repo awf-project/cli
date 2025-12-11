@@ -1,10 +1,10 @@
 # F032: Agent Step Type
 
 ## Metadata
-- **Statut**: backlog
+- **Status**: backlog
 - **Phase**: 3-AI
 - **Version**: v0.4.0
-- **Priorité**: high
+- **Priority**: high
 - **Estimation**: L
 
 ## Description
@@ -41,7 +41,7 @@ Introduce a dedicated `agent` step type for invoking AI CLI agents (Claude Code,
 3. **Structured output** — Parse JSON responses when possible
 4. **Stateless invocations** — Multi-turn = multiple steps with state passing
 
-## Critères d'Acceptance
+## Acceptance Criteria
 
 - [ ] New step type `agent` recognized by workflow parser
 - [ ] Support for providers: `claude`, `codex`, `gemini`, `opencode`, `custom`
@@ -55,12 +55,12 @@ Introduce a dedicated `agent` step type for invoking AI CLI agents (Claude Code,
 - [ ] Error handling: provider not found, CLI not installed, timeout
 - [ ] Works with parallel steps (multiple agents in parallel)
 
-## Dépendances
+## Dependencies
 
-- **Bloqué par**: F001, F003, F005, F029
-- **Débloque**: F033 (Agent Conversations), F034 (Agent Tools)
+- **Blocked by**: F001, F003, F005, F029
+- **Unblocks**: F033 (Agent Conversations), F034 (Agent Tools)
 
-## Fichiers Impactés
+## Impacted Files
 
 ```
 internal/domain/workflow/step.go              # Add AgentStep type
@@ -77,7 +77,7 @@ internal/interfaces/cli/run.go               # --dry-run for agent prompts
 pkg/validation/agent_validation.go           # Validate agent config
 ```
 
-## Tâches Techniques
+## Technical Tasks
 
 - [ ] Define AgentStep domain model
   - [ ] Add `type: agent` to step type enum
