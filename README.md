@@ -570,6 +570,7 @@ make fmt            # Format code
 - [x] Parallel execution (errgroup with strategies)
 - [x] Retry with exponential backoff
 - [x] Input validation
+- [x] Template reference validation (detect undefined inputs, missing steps, forward references)
 - [x] Resume command
 - [x] BadgerDB history
 

@@ -1,7 +1,7 @@
 # F041: Validate Template Interpolation References
 
 ## Metadata
-- **Status**: planned
+- **Status**: implemented
 - **Phase**: 2-Enhanced
 - **Version**: v0.2.0
 - **Priority**: medium
@@ -15,14 +15,14 @@ This feature adds static validation of template references during `awf validate`
 
 ## Acceptance Criteria
 
-- [ ] Validation detects references to undefined inputs (`{{inputs.undefined_var}}`)
-- [ ] Validation detects references to non-existent steps (`{{states.missing_step.output}}`)
-- [ ] Validation detects forward references (step A references step B's output, but B runs after A)
-- [ ] Validation reports all template errors in a single pass (not fail-fast)
-- [ ] Error messages include the step name and exact template reference that failed
-- [ ] Valid template references pass validation without false positives
-- [ ] Environment variable references (`{{env.VAR}}`) are allowed without validation (runtime-resolved)
-- [ ] Workflow-level variables (`{{workflow.id}}`, etc.) are validated against known set
+- [x] Validation detects references to undefined inputs (`{{inputs.undefined_var}}`)
+- [x] Validation detects references to non-existent steps (`{{states.missing_step.output}}`)
+- [x] Validation detects forward references (step A references step B's output, but B runs after A)
+- [x] Validation reports all template errors in a single pass (not fail-fast)
+- [x] Error messages include the step name and exact template reference that failed
+- [x] Valid template references pass validation without false positives
+- [x] Environment variable references (`{{env.VAR}}`) are allowed without validation (runtime-resolved)
+- [x] Workflow-level variables (`{{workflow.id}}`, etc.) are validated against known set
 
 ## Dependencies
 
@@ -39,22 +39,22 @@ internal/application/...
 
 ## Technical Tasks
 
-- [ ] Extract template references from strings
-  - [ ] Parse `{{...}}` patterns
-  - [ ] Categorize by type (inputs, states, env, workflow, error)
-- [ ] Build reference validator
-  - [ ] Validate input references against workflow inputs
-  - [ ] Validate state references against defined steps
-  - [ ] Validate workflow references against known properties
-- [ ] Integrate with execution order
-  - [ ] Use workflow graph to detect forward references
-  - [ ] Handle parallel step references correctly
-- [ ] Aggregate validation errors
-  - [ ] Collect all errors before returning
-  - [ ] Format errors with context (step, field, reference)
-- [ ] Write unit tests
-- [ ] Write integration tests
-- [ ] Update documentation
+- [x] Extract template references from strings
+  - [x] Parse `{{...}}` patterns
+  - [x] Categorize by type (inputs, states, env, workflow, error)
+- [x] Build reference validator
+  - [x] Validate input references against workflow inputs
+  - [x] Validate state references against defined steps
+  - [x] Validate workflow references against known properties
+- [x] Integrate with execution order
+  - [x] Use workflow graph to detect forward references
+  - [x] Handle parallel step references correctly
+- [x] Aggregate validation errors
+  - [x] Collect all errors before returning
+  - [x] Format errors with context (step, field, reference)
+- [x] Write unit tests
+- [x] Write integration tests
+- [x] Update documentation
 
 ## Notes
 
