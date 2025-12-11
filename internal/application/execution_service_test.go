@@ -1578,3 +1578,514 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 		assert.Contains(t, err.Error(), "validation")
 	})
 }
+
+// =============================================================================
+// Resume Tests (F013)
+// =============================================================================
+
+func TestExecutionService_Resume_Success(t *testing.T) {
+	// Setup: Create a workflow with 3 steps, interrupt after step1, resume from step2
+	repo := newMockRepository()
+	repo.workflows["resume-test"] = &workflow.Workflow{
+		Name:    "resume-test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo 1", OnSuccess: "step2"},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand, Command: "echo 2", OnSuccess: "step3"},
+			"step3": {Name: "step3", Type: workflow.StepTypeCommand, Command: "echo 3", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	executor.results["echo 2"] = &ports.CommandResult{Stdout: "output2\n", ExitCode: 0}
+	executor.results["echo 3"] = &ports.CommandResult{Stdout: "output3\n", ExitCode: 0}
+
+	store := newMockStateStore()
+	// Pre-populate store with interrupted state (step1 completed, paused at step2)
+	interruptedState := &workflow.ExecutionContext{
+		WorkflowID:   "test-id-123",
+		WorkflowName: "resume-test",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "step2",
+		Inputs:       map[string]any{"key": "value"},
+		States: map[string]workflow.StepState{
+			"step1": {
+				Name:      "step1",
+				Status:    workflow.StatusCompleted,
+				Output:    "output1\n",
+				ExitCode:  0,
+				StartedAt: time.Now().Add(-time.Minute),
+			},
+		},
+		Env:       make(map[string]string),
+		StartedAt: time.Now().Add(-time.Minute),
+		UpdatedAt: time.Now(),
+	}
+	store.states["test-id-123"] = interruptedState
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	// Execute resume
+	ctx, err := execSvc.Resume(context.Background(), "test-id-123", nil)
+
+	require.NoError(t, err, "resume should succeed")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status, "workflow should be completed")
+	assert.Equal(t, "done", ctx.CurrentStep, "should end at terminal state")
+
+	// Verify step1 was NOT re-executed (output preserved from before)
+	state1, ok := ctx.GetStepState("step1")
+	require.True(t, ok, "step1 state should exist")
+	assert.Equal(t, "output1\n", state1.Output, "step1 output should be preserved")
+
+	// Verify step2 and step3 were executed
+	state2, ok := ctx.GetStepState("step2")
+	require.True(t, ok, "step2 state should exist")
+	assert.Equal(t, workflow.StatusCompleted, state2.Status, "step2 should be completed")
+
+	state3, ok := ctx.GetStepState("step3")
+	require.True(t, ok, "step3 state should exist")
+	assert.Equal(t, workflow.StatusCompleted, state3.Status, "step3 should be completed")
+}
+
+func TestExecutionService_Resume_NotFound(t *testing.T) {
+	// Resume non-existent workflow should fail
+	store := newMockStateStore()
+	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Resume(context.Background(), "non-existent-id", nil)
+
+	require.Error(t, err, "resume should fail for non-existent workflow")
+	assert.Contains(t, err.Error(), "not found", "error should indicate workflow not found")
+}
+
+func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
+	// Resume already-completed workflow should fail
+	store := newMockStateStore()
+	store.states["completed-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "completed-id",
+		WorkflowName: "some-workflow",
+		Status:       workflow.StatusCompleted, // Already completed
+		CurrentStep:  "done",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	repo := newMockRepository()
+	repo.workflows["some-workflow"] = &workflow.Workflow{
+		Name:    "some-workflow",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Resume(context.Background(), "completed-id", nil)
+
+	require.Error(t, err, "resume should fail for completed workflow")
+	assert.Contains(t, err.Error(), "completed", "error should mention workflow is completed")
+}
+
+func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
+	// Resume workflow when definition no longer exists
+	store := newMockStateStore()
+	store.states["orphan-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "orphan-id",
+		WorkflowName: "deleted-workflow", // This workflow no longer exists in repo
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "step2",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	repo := newMockRepository()
+	// No workflows added - "deleted-workflow" doesn't exist
+
+	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Resume(context.Background(), "orphan-id", nil)
+
+	require.Error(t, err, "resume should fail when workflow definition not found")
+	assert.Contains(t, err.Error(), "not found", "error should indicate workflow definition not found")
+}
+
+func TestExecutionService_Resume_StepNotFound(t *testing.T) {
+	// Resume when current step no longer exists in workflow (definition changed)
+	store := newMockStateStore()
+	store.states["stale-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "stale-id",
+		WorkflowName: "changed-workflow",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "old_step", // This step was removed from workflow
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	repo := newMockRepository()
+	repo.workflows["changed-workflow"] = &workflow.Workflow{
+		Name:    "changed-workflow",
+		Initial: "new_step",
+		Steps: map[string]*workflow.Step{
+			"new_step": {Name: "new_step", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "done"},
+			"done":     {Name: "done", Type: workflow.StepTypeTerminal},
+			// Note: "old_step" doesn't exist anymore
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	_, err := execSvc.Resume(context.Background(), "stale-id", nil)
+
+	require.Error(t, err, "resume should fail when current step no longer exists")
+	assert.Contains(t, err.Error(), "old_step", "error should mention the missing step name")
+}
+
+func TestExecutionService_Resume_InputOverrides(t *testing.T) {
+	// Resume with input overrides - verify overrides are merged
+	repo := newMockRepository()
+	repo.workflows["override-test"] = &workflow.Workflow{
+		Name:    "override-test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo {{inputs.key}}", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	store := newMockStateStore()
+	store.states["override-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "override-id",
+		WorkflowName: "override-test",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "step1",
+		Inputs:       map[string]any{"key": "original", "unchanged": "value"},
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	executor := newMockExecutor()
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	// Resume with overrides
+	overrides := map[string]any{"key": "overridden"}
+	ctx, err := execSvc.Resume(context.Background(), "override-id", overrides)
+
+	require.NoError(t, err, "resume with overrides should succeed")
+
+	// Check that "key" was overridden
+	val, ok := ctx.GetInput("key")
+	require.True(t, ok, "key input should exist")
+	assert.Equal(t, "overridden", val, "key should be overridden")
+
+	// Check that "unchanged" was preserved
+	val, ok = ctx.GetInput("unchanged")
+	require.True(t, ok, "unchanged input should exist")
+	assert.Equal(t, "value", val, "unchanged should be preserved")
+}
+
+func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
+	// Verify that completed steps are skipped during resume
+	repo := newMockRepository()
+	repo.workflows["skip-test"] = &workflow.Workflow{
+		Name:    "skip-test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "step1_cmd", OnSuccess: "step2"},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand, Command: "step2_cmd", OnSuccess: "step3"},
+			"step3": {Name: "step3", Type: workflow.StepTypeCommand, Command: "step3_cmd", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Track which commands were executed
+	executor := newRetryCountingExecutor()
+
+	store := newMockStateStore()
+	// step1 and step2 already completed, currently at step3
+	store.states["skip-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "skip-id",
+		WorkflowName: "skip-test",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "step3",
+		Inputs:       make(map[string]any),
+		States: map[string]workflow.StepState{
+			"step1": {Name: "step1", Status: workflow.StatusCompleted, Output: "out1"},
+			"step2": {Name: "step2", Status: workflow.StatusCompleted, Output: "out2"},
+		},
+		Env: make(map[string]string),
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	ctx, err := execSvc.Resume(context.Background(), "skip-id", nil)
+
+	require.NoError(t, err, "resume should succeed")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify step1 and step2 were NOT executed (commands not called)
+	assert.Equal(t, 0, executor.calls["step1_cmd"], "step1 should not be re-executed")
+	assert.Equal(t, 0, executor.calls["step2_cmd"], "step2 should not be re-executed")
+
+	// Verify step3 WAS executed
+	assert.Equal(t, 1, executor.calls["step3_cmd"], "step3 should be executed")
+}
+
+func TestExecutionService_Resume_ParallelStep(t *testing.T) {
+	// Resume from a parallel step
+	repo := newMockRepository()
+	repo.workflows["parallel-resume"] = &workflow.Workflow{
+		Name:    "parallel-resume",
+		Initial: "parallel",
+		Steps: map[string]*workflow.Step{
+			"parallel": {
+				Name:      "parallel",
+				Type:      workflow.StepTypeParallel,
+				Branches:  []string{"branch1", "branch2"},
+				Strategy:  "all_succeed",
+				OnSuccess: "done",
+			},
+			"branch1": {Name: "branch1", Type: workflow.StepTypeCommand, Command: "echo b1", OnSuccess: "done"},
+			"branch2": {Name: "branch2", Type: workflow.StepTypeCommand, Command: "echo b2", OnSuccess: "done"},
+			"done":    {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	store := newMockStateStore()
+	store.states["parallel-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "parallel-id",
+		WorkflowName: "parallel-resume",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "parallel",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	ctx, err := execSvc.Resume(context.Background(), "parallel-id", nil)
+
+	require.NoError(t, err, "resume with parallel step should succeed")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+}
+
+func TestExecutionService_Resume_FailedStatus(t *testing.T) {
+	// Can resume a workflow that was in failed status (retry after fixing issue)
+	repo := newMockRepository()
+	repo.workflows["failed-resume"] = &workflow.Workflow{
+		Name:    "failed-resume",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	store := newMockStateStore()
+	store.states["failed-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "failed-id",
+		WorkflowName: "failed-resume",
+		Status:       workflow.StatusFailed, // Previously failed
+		CurrentStep:  "step1",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	ctx, err := execSvc.Resume(context.Background(), "failed-id", nil)
+
+	require.NoError(t, err, "resume of failed workflow should succeed")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
+	// Can resume a workflow that was cancelled
+	repo := newMockRepository()
+	repo.workflows["cancelled-resume"] = &workflow.Workflow{
+		Name:    "cancelled-resume",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	store := newMockStateStore()
+	store.states["cancelled-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "cancelled-id",
+		WorkflowName: "cancelled-resume",
+		Status:       workflow.StatusCancelled, // Previously cancelled
+		CurrentStep:  "step1",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	ctx, err := execSvc.Resume(context.Background(), "cancelled-id", nil)
+
+	require.NoError(t, err, "resume of cancelled workflow should succeed")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// =============================================================================
+// ListResumable Tests (F013)
+// =============================================================================
+
+func TestExecutionService_ListResumable_FiltersCompleted(t *testing.T) {
+	// ListResumable should only return non-completed executions
+	store := newMockStateStore()
+
+	// Add various states
+	store.states["running-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "running-1",
+		WorkflowName: "wf1",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "step2",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+	store.states["failed-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "failed-1",
+		WorkflowName: "wf2",
+		Status:       workflow.StatusFailed,
+		CurrentStep:  "step1",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+	store.states["completed-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "completed-1",
+		WorkflowName: "wf3",
+		Status:       workflow.StatusCompleted, // Should be filtered out
+		CurrentStep:  "done",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+	store.states["cancelled-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "cancelled-1",
+		WorkflowName: "wf4",
+		Status:       workflow.StatusCancelled,
+		CurrentStep:  "step1",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+	store.states["pending-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "pending-1",
+		WorkflowName: "wf5",
+		Status:       workflow.StatusPending,
+		CurrentStep:  "",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+
+	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	resumable, err := execSvc.ListResumable(context.Background())
+
+	require.NoError(t, err, "list resumable should succeed")
+	assert.Len(t, resumable, 4, "should return 4 resumable workflows (all except completed)")
+
+	// Verify completed is not in the list
+	for _, exec := range resumable {
+		assert.NotEqual(t, workflow.StatusCompleted, exec.Status, "completed workflows should not be included")
+	}
+}
+
+func TestExecutionService_ListResumable_Empty(t *testing.T) {
+	// ListResumable with no states should return empty list
+	store := newMockStateStore()
+
+	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	resumable, err := execSvc.ListResumable(context.Background())
+
+	require.NoError(t, err, "list resumable should succeed")
+	assert.Empty(t, resumable, "should return empty list when no states")
+}
+
+func TestExecutionService_ListResumable_AllCompleted(t *testing.T) {
+	// ListResumable when all workflows are completed should return empty
+	store := newMockStateStore()
+	store.states["completed-1"] = &workflow.ExecutionContext{
+		WorkflowID:   "completed-1",
+		WorkflowName: "wf1",
+		Status:       workflow.StatusCompleted,
+		CurrentStep:  "done",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+	store.states["completed-2"] = &workflow.ExecutionContext{
+		WorkflowID:   "completed-2",
+		WorkflowName: "wf2",
+		Status:       workflow.StatusCompleted,
+		CurrentStep:  "done",
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+	}
+
+	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	resumable, err := execSvc.ListResumable(context.Background())
+
+	require.NoError(t, err, "list resumable should succeed")
+	assert.Empty(t, resumable, "should return empty list when all completed")
+}
+
+func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
+	// Verify ListResumable returns all required fields
+	store := newMockStateStore()
+	now := time.Now()
+	store.states["test-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "test-id",
+		WorkflowName: "test-workflow",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "current",
+		Inputs:       map[string]any{"key": "value"},
+		States: map[string]workflow.StepState{
+			"step1": {Name: "step1", Status: workflow.StatusCompleted},
+		},
+		StartedAt: now.Add(-time.Minute),
+		UpdatedAt: now,
+	}
+
+	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver())
+
+	resumable, err := execSvc.ListResumable(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, resumable, 1)
+
+	exec := resumable[0]
+	assert.Equal(t, "test-id", exec.WorkflowID)
+	assert.Equal(t, "test-workflow", exec.WorkflowName)
+	assert.Equal(t, workflow.StatusRunning, exec.Status)
+	assert.Equal(t, "current", exec.CurrentStep)
+	assert.Equal(t, now.Round(time.Second), exec.UpdatedAt.Round(time.Second))
+}

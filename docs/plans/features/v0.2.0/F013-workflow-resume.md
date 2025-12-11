@@ -1,7 +1,7 @@
 # F013: Commande Resume
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 2-Core
 - **Version**: v0.2.0
 - **Priority**: high
@@ -13,13 +13,13 @@ Implement workflow resumption from persisted state. Allow users to continue inte
 
 ## Acceptance Criteria
 
-- [ ] `awf resume <workflow-id>` resumes execution
-- [ ] `awf resume --list` shows resumable workflows
-- [ ] Resume from current_state in persisted state
-- [ ] Reuse outputs from completed states
-- [ ] Allow input override on resume
-- [ ] Validate state file exists and is valid
-- [ ] Clear error if workflow already completed
+- [x] `awf resume <workflow-id>` resumes execution
+- [x] `awf resume --list` shows resumable workflows
+- [x] Resume from current_state in persisted state
+- [x] Reuse outputs from completed states
+- [x] Allow input override on resume
+- [x] Validate state file exists and is valid
+- [x] Clear error if workflow already completed
 
 ## Dependencies
 
@@ -36,26 +36,26 @@ internal/infrastructure/store/json_store.go
 
 ## Technical Tasks
 
-- [ ] Implement `resume` command
-  - [ ] Parse workflow-id argument
-  - [ ] Parse --list flag
-  - [ ] Parse input override flags
-  - [ ] Call WorkflowService.Resume()
-- [ ] Implement list resumable workflows
-  - [ ] Filter states with status != completed
-  - [ ] Show workflow_id, name, current_state, updated_at
-- [ ] Implement WorkflowService.Resume()
-  - [ ] Load state from store
-  - [ ] Validate state is resumable
-  - [ ] Merge input overrides
-  - [ ] Continue from current_state
-  - [ ] Skip completed states
-- [ ] Handle edge cases
-  - [ ] State file not found
-  - [ ] Workflow already completed
-  - [ ] Workflow definition changed
-- [ ] Write unit tests
-- [ ] Write integration tests
+- [x] Implement `resume` command
+  - [x] Parse workflow-id argument
+  - [x] Parse --list flag
+  - [x] Parse input override flags
+  - [x] Call WorkflowService.Resume()
+- [x] Implement list resumable workflows
+  - [x] Filter states with status != completed
+  - [x] Show workflow_id, name, current_state, updated_at
+- [x] Implement WorkflowService.Resume()
+  - [x] Load state from store
+  - [x] Validate state is resumable
+  - [x] Merge input overrides
+  - [x] Continue from current_state
+  - [x] Skip completed states
+- [x] Handle edge cases
+  - [x] State file not found
+  - [x] Workflow already completed
+  - [x] Workflow definition changed
+- [x] Write unit tests
+- [x] Write integration tests
 
 ## Notes
 

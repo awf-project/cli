@@ -642,3 +642,172 @@ func (s *ExecutionService) validateInputs(inputs map[string]any, defs []workflow
 	}
 	return validation.ValidateInputs(inputs, valDefs)
 }
+
+// Resume continues an interrupted workflow execution from where it left off.
+// It loads persisted state, validates resumability, merges input overrides,
+// and continues execution from CurrentStep while skipping completed steps.
+func (s *ExecutionService) Resume(
+	ctx context.Context,
+	workflowID string,
+	inputOverrides map[string]any,
+) (*workflow.ExecutionContext, error) {
+	// 1. Load state
+	execCtx, err := s.store.Load(ctx, workflowID)
+	if err != nil {
+		return nil, fmt.Errorf("load state: %w", err)
+	}
+	if execCtx == nil {
+		return nil, fmt.Errorf("workflow execution not found: %s", workflowID)
+	}
+
+	// 2. Validate resumable (not completed)
+	if execCtx.Status == workflow.StatusCompleted {
+		return nil, fmt.Errorf("workflow already completed, cannot resume")
+	}
+
+	// 3. Load workflow definition
+	wf, err := s.workflowSvc.GetWorkflow(ctx, execCtx.WorkflowName)
+	if err != nil {
+		return nil, fmt.Errorf("load workflow: %w", err)
+	}
+	if wf == nil {
+		return nil, fmt.Errorf("workflow '%s' not found", execCtx.WorkflowName)
+	}
+
+	// 4. Validate current step exists
+	if _, exists := wf.Steps[execCtx.CurrentStep]; !exists {
+		return nil, fmt.Errorf("cannot resume: step '%s' no longer exists in workflow", execCtx.CurrentStep)
+	}
+
+	// 5. Merge input overrides
+	for k, v := range inputOverrides {
+		execCtx.SetInput(k, v)
+	}
+
+	// 6. Reset status to running
+	execCtx.Status = workflow.StatusRunning
+
+	// 7. Execute from current step
+	s.logger.Info("resuming workflow", "id", workflowID, "from", execCtx.CurrentStep)
+
+	// execute workflow_start hooks (on resume we might want these again)
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
+		s.logger.Warn("workflow_start hook failed", "error", err)
+	}
+
+	// Continue execution from current step
+	return s.executeFromStep(ctx, wf, execCtx)
+}
+
+// ListResumable returns all workflow executions that can be resumed.
+// A workflow is resumable if its status is not completed.
+func (s *ExecutionService) ListResumable(ctx context.Context) ([]*workflow.ExecutionContext, error) {
+	ids, err := s.store.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var resumable []*workflow.ExecutionContext
+	for _, id := range ids {
+		execCtx, err := s.store.Load(ctx, id)
+		if err != nil || execCtx == nil {
+			continue
+		}
+		// Only include non-completed executions
+		if execCtx.Status != workflow.StatusCompleted {
+			resumable = append(resumable, execCtx)
+		}
+	}
+	return resumable, nil
+}
+
+// executeFromStep continues workflow execution from the specified starting step.
+// It handles the execution loop, hooks, and state transitions.
+func (s *ExecutionService) executeFromStep(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	execCtx *workflow.ExecutionContext,
+) (*workflow.ExecutionContext, error) {
+	var execErr error
+	currentStep := execCtx.CurrentStep
+
+	for {
+		step, ok := wf.Steps[currentStep]
+		if !ok {
+			execCtx.Status = workflow.StatusFailed
+			execErr = fmt.Errorf("step not found: %s", currentStep)
+			break
+		}
+
+		execCtx.CurrentStep = currentStep
+
+		// terminal state - done
+		if step.Type == workflow.StepTypeTerminal {
+			execCtx.Status = workflow.StatusCompleted
+			execCtx.CompletedAt = time.Now()
+			s.checkpoint(ctx, execCtx)
+			s.logger.Info("workflow completed", "step", currentStep)
+			break
+		}
+
+		// execute step based on type
+		var nextStep string
+		var err error
+
+		s.logger.Debug("executing step", "step", step.Name)
+
+		if step.Type == workflow.StepTypeParallel {
+			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
+		} else {
+			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
+		}
+
+		if err != nil {
+			execCtx.Status = workflow.StatusFailed
+			s.logger.Error("step failed", "step", step.Name, "error", err)
+			s.checkpoint(ctx, execCtx)
+			execErr = err
+			break
+		}
+
+		// checkpoint after each step
+		s.checkpoint(ctx, execCtx)
+
+		currentStep = nextStep
+	}
+
+	// execute workflow hooks based on outcome
+	// use background context for hooks since main ctx may be cancelled
+	hookCtx := context.Background()
+	intCtx := s.buildInterpolationContext(execCtx)
+
+	if execErr != nil {
+		// check if this was a cancellation (SIGINT/SIGTERM) or timeout
+		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
+			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+			execCtx.Status = workflow.StatusCancelled
+			s.logger.Info("workflow cancelled", "workflow", wf.Name)
+			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
+				s.logger.Warn("workflow_cancel hook failed", "error", err)
+			}
+			return execCtx, execErr
+		}
+
+		// regular error - execute error hook
+		intCtx.Error = &interpolation.ErrorData{
+			Message: execErr.Error(),
+			State:   execCtx.CurrentStep,
+		}
+		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx); err != nil {
+			s.logger.Warn("workflow_error hook failed", "error", err)
+		}
+		return execCtx, execErr
+	}
+
+	// workflow completed successfully
+	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx); err != nil {
+		s.logger.Warn("workflow_end hook failed", "error", err)
+	}
+	return execCtx, nil
+}
