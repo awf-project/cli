@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ type mockStepExecutor struct {
 	executionLog []string
 	callCount    atomic.Int32
 	delay        time.Duration
+	mu           sync.Mutex
 }
 
 func newMockStepExecutor() *mockStepExecutor {
@@ -41,7 +43,9 @@ func (m *mockStepExecutor) ExecuteStep(
 	execCtx *workflow.ExecutionContext,
 ) (*workflow.BranchResult, error) {
 	m.callCount.Add(1)
+	m.mu.Lock()
 	m.executionLog = append(m.executionLog, stepName)
+	m.mu.Unlock()
 
 	if m.delay > 0 {
 		select {

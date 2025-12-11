@@ -536,11 +536,29 @@ states:
     capture:
       stdout: implement_output
       max_size: 10MB
+    on_success: run_fmt
+    on_failure: run_fmt
+    hooks:
+      pre:
+        - log: "Claude implementing feature..."
+
+
+  run_fmt:
+    type: step
+    description: Format Go code before validation
+    command: |
+      go fmt ./...
+      echo "STATUS:FORMATTED"
+    timeout: 60s
+    capture:
+      stdout: fmt_output
     on_success: parallel_validation
     on_failure: parallel_validation
     hooks:
       pre:
-        - log: "Claude implementing feature..."
+        - log: "Formatting Go code..."
+      post:
+        - log: "Code formatted"
 
   #==========================================================================
   # PHASE 5: VALIDATION (PARALLEL)
@@ -554,8 +572,8 @@ states:
       - run_tests_green
     strategy: best_effort
     max_concurrent: 2
-    on_success: update_spec_status
-    on_failure: update_spec_status
+    on_success: parallel_docs_shell
+    on_failure: parallel_docs_shell
 
   run_lint_after:
     type: step
@@ -564,8 +582,8 @@ states:
     timeout: 120s
     capture:
       stdout: lint_after_output
-    on_success: update_spec_status
-    on_failure: update_spec_status
+    on_success: parallel_docs_shell
+    on_failure: parallel_docs_shell
     hooks:
       pre:
         - log: "Running lint after implementation..."
@@ -585,15 +603,26 @@ states:
     timeout: 300s
     capture:
       stdout: tests_green_output
-    on_success: update_spec_status
-    on_failure: update_spec_status
+    on_success: parallel_docs_shell
+    on_failure: parallel_docs_shell
     hooks:
       pre:
         - log: "Running tests (expecting pass - GREEN phase)..."
 
   #==========================================================================
-  # PHASE 6: SUMMARY
+  # PHASE 6: DOCUMENTATION UPDATES
   #==========================================================================
+
+  parallel_docs_shell:
+    type: parallel
+    description: Fast shell-based documentation updates
+    parallel:
+      - update_spec_status
+      - update_kanban
+    strategy: best_effort
+    max_concurrent: 2
+    on_success: parallel_docs_claude
+    on_failure: parallel_docs_claude
 
   update_spec_status:
     type: step
@@ -612,8 +641,8 @@ states:
     timeout: 10s
     capture:
       stdout: status_update_output
-    on_success: update_kanban
-    on_failure: update_kanban
+    on_success: parallel_docs_claude
+    on_failure: parallel_docs_claude
 
   update_kanban:
     type: step
@@ -691,8 +720,23 @@ states:
     timeout: 15s
     capture:
       stdout: kanban_update_output
-    on_success: update_readme
-    on_failure: update_readme
+    on_success: parallel_docs_claude
+    on_failure: parallel_docs_claude
+
+  #--------------------------------------------------------------------------
+  # Claude-based documentation updates (parallel)
+  #--------------------------------------------------------------------------
+
+  parallel_docs_claude:
+    type: parallel
+    description: Claude-based documentation updates
+    parallel:
+      - update_readme
+      - update_changelog_full
+    strategy: best_effort
+    max_concurrent: 3
+    on_success: update_memories
+    on_failure: update_memories
 
   update_readme:
     type: step
@@ -748,63 +792,99 @@ states:
     capture:
       stdout: readme_update_output
       max_size: 1MB
-    on_success: update_changelog
-    on_failure: update_changelog
+    on_success: summary
+    on_failure: summary
 
-  update_changelog:
+  update_changelog_full:
     type: step
-    description: Add or update feature in CHANGELOG.md under Unreleased
+    description: Generate and insert rich changelog entry
     command: |
       CHANGELOG_FILE="CHANGELOG.md"
-      if [ ! -f "$CHANGELOG_FILE" ]; then
-        echo "CHANGELOG_NOT_FOUND"
-        exit 0
-      fi
 
-      # Get feature description from spec file
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -z "$SPEC_FILE" ]; then
-        echo "SPEC_NOT_FOUND"
-        exit 0
-      fi
-
-      # Extract title from spec (first H1 line after the feature ID)
-      TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" | sed 's/^# {{.inputs.feature_id}}: //')
-      if [ -z "$TITLE" ]; then
-        # Fallback: use slug from filename
-        TITLE=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//' | tr '-' ' ')
-      fi
-
-      # Check if feature already exists in CHANGELOG
-      if grep -q "\*\*{{.inputs.feature_id}}\*\*" "$CHANGELOG_FILE"; then
+      # Check if already exists
+      if grep -q "\*\*{{.inputs.feature_id}}\*\*" "$CHANGELOG_FILE" 2>/dev/null; then
         echo "FEATURE_ALREADY_IN_CHANGELOG"
         exit 0
       fi
 
-      # Build the changelog entry
-      ENTRY="- **{{.inputs.feature_id}}**: $TITLE"
+      # Try to generate rich entry with Claude
+      SPEC_CONTENT=$(cat << 'SPECEOF'
+      {{.states.load_spec.Output}}
+      SPECEOF
+      )
+      PLAN_CONTENT=$(cat << 'PLANEOF'
+      {{.states.load_plan.Output}}
+      PLANEOF
+      )
+
+      ENTRY=$(claude -p "Generate a CHANGELOG entry for feature {{.inputs.feature_id}}.
+
+      ## Feature Spec
+      $SPEC_CONTENT
+
+      ## Implementation Plan
+      $PLAN_CONTENT
+
+      ## Your Task
+      Create a rich changelog entry following this format:
+      - **{{.inputs.feature_id}}**: Short title (from spec H1)
+        - Key feature/capability 1 (use backticks for code terms)
+        - Key feature/capability 2
+        - Key feature/capability 3
+        - (3-5 bullets max, focus on user-facing changes)
+
+      Rules:
+      1. Title: Extract from spec H1, keep concise (5-10 words)
+      2. Bullets: Focus on WHAT it does, not HOW it's implemented
+      3. Use backticks for: commands, flags, config keys, code terms
+      4. Skip implementation details (internal refactors, test changes)
+      5. If breaking change: add 'BREAKING:' prefix to relevant bullet
+
+      Output ONLY the markdown entry, nothing else." \
+        --allowedTools "" \
+        --dangerously-skip-permissions \
+        --output-format text 2>/dev/null || echo "")
+
+      # Fallback if Claude failed or returned empty
+      if [ -z "$ENTRY" ] || ! echo "$ENTRY" | grep -q "{{.inputs.feature_id}}"; then
+        SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
+        TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" 2>/dev/null | sed 's/^# {{.inputs.feature_id}}: //')
+        if [ -z "$TITLE" ]; then
+          TITLE=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//' | tr '-' ' ')
+        fi
+        ENTRY="- **{{.inputs.feature_id}}**: $TITLE"
+        FALLBACK=true
+      fi
 
       # Insert after "### Added" under "[Unreleased]"
-      awk -v entry="$ENTRY" '
-        /^## \[Unreleased\]/ { in_unreleased=1 }
-        /^## \[/ && !/\[Unreleased\]/ { in_unreleased=0 }
-        in_unreleased && /^### Added/ {
-          print
-          print entry
-          next
-        }
-        { print }
-      ' "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.tmp" && mv "${CHANGELOG_FILE}.tmp" "$CHANGELOG_FILE"
+      if [ -f "$CHANGELOG_FILE" ]; then
+        awk -v entry="$ENTRY" '
+          /^## \[Unreleased\]/ { in_unreleased=1 }
+          /^## \[/ && !/\[Unreleased\]/ { in_unreleased=0 }
+          in_unreleased && /^### Added/ {
+            print
+            print entry
+            next
+          }
+          { print }
+        ' "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.tmp" && mv "${CHANGELOG_FILE}.tmp" "$CHANGELOG_FILE"
+      fi
 
-      echo "CHANGELOG_UPDATED"
-    timeout: 15s
+      if [ "$FALLBACK" = "true" ]; then
+        echo "CHANGELOG_UPDATED_FALLBACK"
+      else
+        echo "CHANGELOG_UPDATED"
+      fi
+    timeout: 90s
     capture:
       stdout: changelog_result
-    on_success: update_memories
-    on_failure: update_memories
+    on_success: summary
+    on_failure: summary
     hooks:
       pre:
-        - log: "Updating CHANGELOG.md..."
+        - log: "Generating changelog entry..."
+      post:
+        - log: "Changelog: {{.states.update_changelog_full.Output}}"
 
   update_memories:
     type: step
@@ -864,7 +944,7 @@ states:
       echo "║   Plan: {{.states.save_plan.Output}}"
       echo "║   KANBAN: {{.states.update_kanban.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
-      echo "║   CHANGELOG: {{.states.update_changelog.Output}}"
+      echo "║   CHANGELOG: {{.states.update_changelog_full.Output}}"
       echo "║   Memory: $(echo '{{.states.update_memories.Output}}' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED')"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ NO COMMIT - Review changes and commit manually                 ║"

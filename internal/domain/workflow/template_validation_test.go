@@ -6,7 +6,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
+
+// testAnalyzer wraps pkg/interpolation for testing template validation.
+type testAnalyzer struct{}
+
+func newTestAnalyzer() *testAnalyzer {
+	return &testAnalyzer{}
+}
+
+func (a *testAnalyzer) ExtractReferences(template string) ([]workflow.TemplateReference, error) {
+	refs, err := interpolation.ExtractReferences(template)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]workflow.TemplateReference, len(refs))
+	for i, ref := range refs {
+		result[i] = workflow.TemplateReference{
+			Type:      convertRefType(ref.Type),
+			Namespace: ref.Namespace,
+			Path:      ref.Path,
+			Property:  ref.Property,
+			Raw:       ref.Raw,
+		}
+	}
+	return result, nil
+}
+
+func convertRefType(t interpolation.ReferenceType) workflow.ReferenceType {
+	switch t {
+	case interpolation.TypeInputs:
+		return workflow.TypeInputs
+	case interpolation.TypeStates:
+		return workflow.TypeStates
+	case interpolation.TypeWorkflow:
+		return workflow.TypeWorkflow
+	case interpolation.TypeEnv:
+		return workflow.TypeEnv
+	case interpolation.TypeError:
+		return workflow.TypeError
+	case interpolation.TypeContext:
+		return workflow.TypeContext
+	default:
+		return workflow.TypeUnknown
+	}
+}
 
 // =============================================================================
 // Helper: Create test workflows
@@ -91,7 +137,7 @@ func newLinearWorkflow() *workflow.Workflow {
 
 func TestNewTemplateValidator(t *testing.T) {
 	w := newTestWorkflow()
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 
 	require.NotNil(t, v)
 }
@@ -104,7 +150,7 @@ func TestNewTemplateValidator_NilWorkflow(t *testing.T) {
 		_ = recover()
 	}()
 
-	v := workflow.NewTemplateValidator(nil)
+	v := workflow.NewTemplateValidator(nil, newTestAnalyzer())
 	// If we get here, validator should be nil or handle nil safely
 	_ = v
 }
@@ -115,7 +161,7 @@ func TestNewTemplateValidator_NilWorkflow(t *testing.T) {
 
 func TestTemplateValidator_ValidWorkflow(t *testing.T) {
 	w := newTestWorkflow()
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 
 	result := v.Validate()
 
@@ -127,7 +173,7 @@ func TestTemplateValidator_ValidInputReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo Hello {{inputs.name}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -137,7 +183,7 @@ func TestTemplateValidator_ValidMultipleInputReferences(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.name}} count={{inputs.count}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -175,7 +221,7 @@ func TestTemplateValidator_ValidStateReference(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "referencing previous step output should be valid")
@@ -213,7 +259,7 @@ func TestTemplateValidator_ValidStateReferenceAllProperties(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "all valid state properties should pass")
@@ -223,7 +269,7 @@ func TestTemplateValidator_ValidWorkflowReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo Workflow: {{workflow.name}} ID: {{workflow.id}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -233,7 +279,7 @@ func TestTemplateValidator_ValidWorkflowReferenceAllProperties(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{workflow.id}} {{workflow.name}} {{workflow.current_state}} {{workflow.started_at}} {{workflow.duration}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -243,7 +289,7 @@ func TestTemplateValidator_ValidEnvReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo HOME={{env.HOME}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "env references should not cause validation errors")
@@ -254,7 +300,7 @@ func TestTemplateValidator_ValidEnvReferenceAnyVariable(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{env.DOES_NOT_EXIST}} {{env.MY_CUSTOM_VAR}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "any env reference should pass static validation")
@@ -264,7 +310,7 @@ func TestTemplateValidator_ValidContextReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "cd {{context.working_dir}} && whoami"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -274,7 +320,7 @@ func TestTemplateValidator_ValidContextReferenceAllProperties(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{context.working_dir}} {{context.user}} {{context.hostname}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -284,7 +330,7 @@ func TestTemplateValidator_NoTemplateReferences(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo plain text without templates"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -298,7 +344,7 @@ func TestTemplateValidator_UndefinedInput(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.undefined_var}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -311,7 +357,7 @@ func TestTemplateValidator_MultipleUndefinedInputs(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.foo}} {{inputs.bar}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -323,7 +369,7 @@ func TestTemplateValidator_MixedDefinedUndefinedInputs(t *testing.T) {
 	// "name" is defined, "undefined" is not
 	w.Steps["start"].Command = "echo {{inputs.name}} {{inputs.undefined}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -337,7 +383,7 @@ func TestTemplateValidator_UndefinedInputInMultipleSteps(t *testing.T) {
 	w.Steps["step1"].Command = "echo {{inputs.undefined1}}"
 	w.Steps["step2"].Command = "echo {{inputs.undefined2}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -352,7 +398,7 @@ func TestTemplateValidator_UndefinedStep(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{states.nonexistent.output}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -391,7 +437,7 @@ func TestTemplateValidator_ForwardReference(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -404,7 +450,7 @@ func TestTemplateValidator_ForwardReferenceMultipleStepsAhead(t *testing.T) {
 	// step1 tries to reference step3 which is 2 steps ahead
 	w.Steps["step1"].Command = "echo {{states.step3.output}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -416,7 +462,7 @@ func TestTemplateValidator_SelfReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{states.start.output}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -455,7 +501,7 @@ func TestTemplateValidator_InvalidStateProperty(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -499,7 +545,7 @@ func TestTemplateValidator_InvalidStatePropertyCommonMistakes(t *testing.T) {
 				},
 			}
 
-			v := workflow.NewTemplateValidator(w)
+			v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 			result := v.Validate()
 
 			require.True(t, result.HasErrors())
@@ -533,7 +579,7 @@ func TestTemplateValidator_StateRefWithoutProperty(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	// Should error - missing property
@@ -548,7 +594,7 @@ func TestTemplateValidator_InvalidWorkflowProperty(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{workflow.unknown_property}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -572,7 +618,7 @@ func TestTemplateValidator_InvalidWorkflowPropertyCommonMistakes(t *testing.T) {
 			w := newTestWorkflow()
 			w.Steps["start"].Command = "echo {{workflow." + tt.property + "}}"
 
-			v := workflow.NewTemplateValidator(w)
+			v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 			result := v.Validate()
 
 			require.True(t, result.HasErrors())
@@ -589,7 +635,7 @@ func TestTemplateValidator_InvalidContextProperty(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{context.invalid}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -612,7 +658,7 @@ func TestTemplateValidator_InvalidContextPropertyCommonMistakes(t *testing.T) {
 			w := newTestWorkflow()
 			w.Steps["start"].Command = "echo {{context." + tt.property + "}}"
 
-			v := workflow.NewTemplateValidator(w)
+			v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 			result := v.Validate()
 
 			require.True(t, result.HasErrors())
@@ -633,7 +679,7 @@ func TestTemplateValidator_ErrorRefInErrorHook_Valid(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "error references in workflow error hooks are valid")
@@ -647,7 +693,7 @@ func TestTemplateValidator_ErrorRefAllProperties_Valid(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -657,7 +703,7 @@ func TestTemplateValidator_ErrorRefOutsideErrorHook_Invalid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{error.message}}" // ERROR: not in error hook
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -672,7 +718,7 @@ func TestTemplateValidator_ErrorRefInStartHook_Invalid(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -687,7 +733,7 @@ func TestTemplateValidator_ErrorRefInEndHook_Invalid(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -702,7 +748,7 @@ func TestTemplateValidator_InvalidErrorProperty(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -721,7 +767,7 @@ func TestTemplateValidator_ValidStepPreHook(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -735,7 +781,7 @@ func TestTemplateValidator_ValidStepPostHook(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -749,7 +795,7 @@ func TestTemplateValidator_InvalidRefInStepHook(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -765,7 +811,7 @@ func TestTemplateValidator_HookLogField(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -779,7 +825,7 @@ func TestTemplateValidator_InvalidRefInHookLog(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -793,7 +839,7 @@ func TestTemplateValidator_UnknownReferenceType(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{unknown.field}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -817,7 +863,7 @@ func TestTemplateValidator_TypoInNamespace(t *testing.T) {
 			w := newTestWorkflow()
 			w.Steps["start"].Command = "echo " + tt.template
 
-			v := workflow.NewTemplateValidator(w)
+			v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 			result := v.Validate()
 
 			require.True(t, result.HasErrors())
@@ -856,7 +902,7 @@ func TestTemplateValidator_AggregatesAllErrors(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -869,7 +915,7 @@ func TestTemplateValidator_AggregatesErrorsAcrossSteps(t *testing.T) {
 	w.Steps["step2"].Command = "echo {{inputs.undefined2}}"
 	w.Steps["step3"].Command = "echo {{inputs.undefined3}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -882,7 +928,7 @@ func TestTemplateValidator_AggregatesErrorsAcrossFields(t *testing.T) {
 	w.Steps["start"].Command = "echo {{inputs.undefined1}}"
 	w.Steps["start"].Dir = "{{inputs.undefined2}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -897,7 +943,7 @@ func TestTemplateValidator_ValidDirFieldReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Dir = "{{context.working_dir}}/subdir"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -907,7 +953,7 @@ func TestTemplateValidator_InvalidDirFieldReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Dir = "{{inputs.undefined}}/subdir"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -1075,7 +1121,7 @@ func TestTemplateValidator_ParallelStepBranchRefs(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "referencing parallel branch outputs after merge should be valid")
@@ -1108,7 +1154,7 @@ func TestTemplateValidator_ParallelBranchRefBeforeCompletion(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	// This is a potential forward reference issue - branches run concurrently
@@ -1137,7 +1183,7 @@ func TestTemplateValidator_EmptyInputsList(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -1159,7 +1205,7 @@ func TestTemplateValidator_InputRefWithNoInputsDefined(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -1172,7 +1218,7 @@ func TestTemplateValidator_TerminalStepsIgnored(t *testing.T) {
 	// Terminal steps don't have Command field used, so this is a no-op
 	// but the validator should handle gracefully
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors())
@@ -1244,7 +1290,7 @@ func TestTemplateValidator_ComplexRealWorldWorkflow(t *testing.T) {
 		},
 	}
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	assert.False(t, result.HasErrors(), "real-world workflow should validate successfully")
@@ -1258,7 +1304,7 @@ func TestTemplateValidator_ErrorMessageContainsStepName(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.undefined}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())
@@ -1269,7 +1315,7 @@ func TestTemplateValidator_ErrorMessageContainsReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.undefined}}"
 
-	v := workflow.NewTemplateValidator(w)
+	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
 
 	require.True(t, result.HasErrors())

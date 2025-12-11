@@ -1,14 +1,11 @@
 package workflow
 
-import (
-	"fmt"
-
-	"github.com/vanoix/awf/pkg/interpolation"
-)
+import "fmt"
 
 // TemplateValidator validates template interpolation references in workflows.
 type TemplateValidator struct {
 	workflow         *Workflow
+	analyzer         TemplateAnalyzer
 	executionOrder   []string
 	stepIndex        map[string]int
 	inputNames       map[string]bool
@@ -18,8 +15,9 @@ type TemplateValidator struct {
 }
 
 // NewTemplateValidator creates a validator for the given workflow.
-func NewTemplateValidator(w *Workflow) *TemplateValidator {
-	if w == nil {
+// The analyzer parameter is used to extract template references.
+func NewTemplateValidator(w *Workflow, analyzer TemplateAnalyzer) *TemplateValidator {
+	if w == nil || analyzer == nil {
 		return nil
 	}
 
@@ -37,6 +35,7 @@ func NewTemplateValidator(w *Workflow) *TemplateValidator {
 
 	return &TemplateValidator{
 		workflow:         w,
+		analyzer:         analyzer,
 		executionOrder:   order,
 		stepIndex:        stepIndex,
 		inputNames:       buildInputNames(w.Inputs),
@@ -161,7 +160,7 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 // stepName and fieldName provide context for error messages.
 // currentStepIndex is used to detect forward references.
 func (v *TemplateValidator) ValidateTemplate(template, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
-	refs, err := interpolation.ExtractReferences(template)
+	refs, err := v.analyzer.ExtractReferences(template)
 	if err != nil {
 		v.result.AddError(ErrUnknownReferenceType, stepName, fmt.Sprintf("failed to parse template: %v", err))
 		return
@@ -173,35 +172,35 @@ func (v *TemplateValidator) ValidateTemplate(template, stepName, fieldName strin
 }
 
 // ValidateReference validates a single reference against the workflow context.
-func (v *TemplateValidator) ValidateReference(ref interpolation.Reference, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
+func (v *TemplateValidator) ValidateReference(ref TemplateReference, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
 	switch ref.Type {
-	case interpolation.TypeInputs:
+	case TypeInputs:
 		v.validateInputRef(ref, stepName, fieldName)
-	case interpolation.TypeStates:
+	case TypeStates:
 		v.validateStateRef(ref, stepName, fieldName, currentStepIndex)
-	case interpolation.TypeWorkflow:
+	case TypeWorkflow:
 		v.validateWorkflowRef(ref, stepName, fieldName)
-	case interpolation.TypeEnv:
+	case TypeEnv:
 		// Environment variables are validated at runtime, not statically
 		// No validation needed
-	case interpolation.TypeError:
+	case TypeError:
 		v.validateErrorRef(ref, stepName, fieldName, isErrorHook)
-	case interpolation.TypeContext:
+	case TypeContext:
 		v.validateContextRef(ref, stepName, fieldName)
-	case interpolation.TypeUnknown:
+	case TypeUnknown:
 		v.result.AddError(ErrUnknownReferenceType, stepName,
 			fmt.Sprintf("unknown reference type %q in %s", ref.Raw, fieldName))
 	}
 }
 
-func (v *TemplateValidator) validateInputRef(ref interpolation.Reference, stepName, fieldName string) {
+func (v *TemplateValidator) validateInputRef(ref TemplateReference, stepName, fieldName string) {
 	if !v.inputNames[ref.Path] {
 		v.result.AddError(ErrUndefinedInput, stepName,
 			fmt.Sprintf("undefined input %q referenced in %s", ref.Path, fieldName))
 	}
 }
 
-func (v *TemplateValidator) validateStateRef(ref interpolation.Reference, stepName, fieldName string, currentStepIndex int) {
+func (v *TemplateValidator) validateStateRef(ref TemplateReference, stepName, fieldName string, currentStepIndex int) {
 	referencedStep := ref.Path
 
 	// Check if the step exists
@@ -246,7 +245,7 @@ func (v *TemplateValidator) validateStateRef(ref interpolation.Reference, stepNa
 		return
 	}
 
-	if !interpolation.ValidStateProperties[ref.Property] {
+	if !ValidStateProperties[ref.Property] {
 		v.result.AddError(ErrInvalidStateProperty, stepName,
 			fmt.Sprintf("invalid state property %q for step %q in %s", ref.Property, referencedStep, fieldName))
 	}
@@ -268,14 +267,14 @@ func (v *TemplateValidator) getStepNameFromPath(path string) string {
 	return path
 }
 
-func (v *TemplateValidator) validateWorkflowRef(ref interpolation.Reference, stepName, fieldName string) {
-	if !interpolation.ValidWorkflowProperties[ref.Path] {
+func (v *TemplateValidator) validateWorkflowRef(ref TemplateReference, stepName, fieldName string) {
+	if !ValidWorkflowProperties[ref.Path] {
 		v.result.AddError(ErrInvalidWorkflowProperty, stepName,
 			fmt.Sprintf("invalid workflow property %q in %s", ref.Path, fieldName))
 	}
 }
 
-func (v *TemplateValidator) validateErrorRef(ref interpolation.Reference, stepName, fieldName string, isErrorHook bool) {
+func (v *TemplateValidator) validateErrorRef(ref TemplateReference, stepName, fieldName string, isErrorHook bool) {
 	// Error references are only valid in error hook contexts
 	if !isErrorHook {
 		v.result.AddError(ErrErrorRefOutsideErrorHook, stepName,
@@ -284,14 +283,14 @@ func (v *TemplateValidator) validateErrorRef(ref interpolation.Reference, stepNa
 	}
 
 	// Validate the property
-	if !interpolation.ValidErrorProperties[ref.Path] {
+	if !ValidErrorProperties[ref.Path] {
 		v.result.AddError(ErrInvalidErrorProperty, stepName,
 			fmt.Sprintf("invalid error property %q in %s", ref.Path, fieldName))
 	}
 }
 
-func (v *TemplateValidator) validateContextRef(ref interpolation.Reference, stepName, fieldName string) {
-	if !interpolation.ValidContextProperties[ref.Path] {
+func (v *TemplateValidator) validateContextRef(ref TemplateReference, stepName, fieldName string) {
+	if !ValidContextProperties[ref.Path] {
 		v.result.AddError(ErrInvalidContextProperty, stepName,
 			fmt.Sprintf("invalid context property %q in %s", ref.Path, fieldName))
 	}
