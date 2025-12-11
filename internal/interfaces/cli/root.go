@@ -88,6 +88,7 @@ Examples:
 	cmd.AddCommand(newInitCommand(cfg))
 	cmd.AddCommand(newListCommand(cfg))
 	cmd.AddCommand(newRunCommand(cfg))
+	cmd.AddCommand(newResumeCommand(cfg))
 	cmd.AddCommand(newStatusCommand(cfg))
 	cmd.AddCommand(newValidateCommand(cfg))
 

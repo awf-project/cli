@@ -88,6 +88,16 @@ type ExecutionInfo struct {
 	Steps        []StepInfo `json:"steps,omitempty"`
 }
 
+// ResumableInfo contains information for resumable workflow display.
+type ResumableInfo struct {
+	WorkflowID   string `json:"workflow_id"`
+	WorkflowName string `json:"workflow_name"`
+	Status       string `json:"status"`
+	CurrentStep  string `json:"current_step"`
+	UpdatedAt    string `json:"updated_at"`
+	Progress     string `json:"progress"`
+}
+
 // RunResult is the JSON structure for run command.
 type RunResult struct {
 	WorkflowID string     `json:"workflow_id"`
@@ -325,6 +335,55 @@ func (w *OutputWriter) WritePrompts(prompts []PromptInfo) error {
 	default: // text
 		return w.writePromptsTable(prompts)
 	}
+}
+
+// WriteResumableList outputs a list of resumable workflows.
+func (w *OutputWriter) WriteResumableList(infos []ResumableInfo) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(infos)
+	case FormatTable:
+		return w.writeResumableBorderedTable(infos)
+	case FormatQuiet:
+		for _, info := range infos {
+			_, _ = fmt.Fprintln(w.out, info.WorkflowID)
+		}
+		return nil
+	default: // text
+		return w.writeResumableTable(infos)
+	}
+}
+
+func (w *OutputWriter) writeResumableTable(infos []ResumableInfo) error {
+	if len(infos) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No resumable workflows found")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "ID\tWORKFLOW\tSTATUS\tCURRENT STEP\tPROGRESS\tUPDATED")
+	for _, info := range infos {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			info.WorkflowID, info.WorkflowName, info.Status, info.CurrentStep, info.Progress, info.UpdatedAt)
+	}
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writeResumableBorderedTable(infos []ResumableInfo) error {
+	if len(infos) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No resumable workflows found")
+		return nil
+	}
+
+	table := newTableWriter(w.out, 20, 15, 10, 15, 12, 20)
+	table.separator()
+	table.row("ID", "WORKFLOW", "STATUS", "CURRENT STEP", "PROGRESS", "UPDATED")
+	table.separator()
+	for _, info := range infos {
+		table.row(info.WorkflowID, info.WorkflowName, info.Status, info.CurrentStep, info.Progress, info.UpdatedAt)
+	}
+	table.separator()
+	return nil
 }
 
 func (w *OutputWriter) writePromptsTable(prompts []PromptInfo) error {

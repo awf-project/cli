@@ -7,7 +7,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        AWF CLI                              │
-│   awf run | awf list | awf status | awf validate           │
+│  awf run | awf resume | awf list | awf status | awf validate │
 └─────────────────────────────┬───────────────────────────────┘
                               │
 ┌─────────────────────────────┴───────────────────────────────┐
@@ -97,6 +97,7 @@ awf run hello --input name=World
 |---------|-------------|
 | `awf init` | Initialize AWF in current directory |
 | `awf run <workflow>` | Execute a workflow |
+| `awf resume [workflow-id]` | Resume an interrupted workflow |
 | `awf list` | List available workflows |
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
@@ -114,6 +115,25 @@ awf init
 
 # Reinitialize (recreate config and example workflow)
 awf init --force
+```
+
+### Resume Command Flags
+
+```
+--list, -l        List resumable workflows
+--input, -i       Override input parameter on resume (key=value), can be repeated
+--output, -o      Output mode: silent (default), streaming, buffered
+```
+
+```bash
+# List all resumable (interrupted) workflows
+awf resume --list
+
+# Resume a specific workflow
+awf resume abc123-def456
+
+# Resume with input override
+awf resume abc123-def456 --input max_tokens=5000
 ```
 
 ### Global Flags
@@ -516,7 +536,7 @@ make fmt            # Format code
 - [x] Parallel execution (errgroup with strategies)
 - [x] Retry with exponential backoff
 - [x] Input validation
-- [ ] Resume command
+- [x] Resume command
 - [ ] SQLite history
 
 ### Phase 3+ - Advanced Features
