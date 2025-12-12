@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - uses: golangci/golangci-lint-action@v6
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run tests with race detector
+        run: go test -race -v ./internal/... ./pkg/...
+
+      - name: Generate coverage
+        run: go test -coverprofile=coverage.out ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          go build -ldflags "-X github.com/vanoix/awf/internal/interfaces/cli.Version=${VERSION} \
+            -X github.com/vanoix/awf/internal/interfaces/cli.Commit=${COMMIT} \
+            -X github.com/vanoix/awf/internal/interfaces/cli.BuildDate=${BUILD_DATE}" \
+            -o awf-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/awf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: awf-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: awf-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}
