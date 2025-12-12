@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -996,4 +997,293 @@ func TestLoopResult_AllSucceeded(t *testing.T) {
 		{Error: errors.New("failed")},
 	}
 	assert.False(t, result.AllSucceeded())
+}
+
+// =============================================================================
+// F043: Nested Loop Context Push/Pop Tests
+// =============================================================================
+
+func TestLoopExecutor_PushPopContext_Basic(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Initial state: no loop context
+	assert.Nil(t, execCtx.CurrentLoop)
+
+	// Push outer loop
+	exec.PushLoopContext(execCtx, "outer-item", 0, true, true, 1)
+	require.NotNil(t, execCtx.CurrentLoop)
+	assert.Equal(t, "outer-item", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 0, execCtx.CurrentLoop.Index)
+	assert.True(t, execCtx.CurrentLoop.First)
+	assert.True(t, execCtx.CurrentLoop.Last)
+	assert.Equal(t, 1, execCtx.CurrentLoop.Length)
+	assert.Nil(t, execCtx.CurrentLoop.Parent)
+
+	// Pop outer
+	popped := exec.PopLoopContext(execCtx)
+	assert.NotNil(t, popped)
+	assert.Equal(t, "outer-item", popped.Item)
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PushPopContext_Nested(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Push outer loop
+	exec.PushLoopContext(execCtx, "outer", 0, true, true, 1)
+	assert.Equal(t, "outer", execCtx.CurrentLoop.Item)
+	assert.Nil(t, execCtx.CurrentLoop.Parent)
+
+	// Push inner loop
+	exec.PushLoopContext(execCtx, "inner", 0, true, true, 1)
+	assert.Equal(t, "inner", execCtx.CurrentLoop.Item)
+	require.NotNil(t, execCtx.CurrentLoop.Parent)
+	assert.Equal(t, "outer", execCtx.CurrentLoop.Parent.Item)
+
+	// Pop inner - should restore outer
+	exec.PopLoopContext(execCtx)
+	require.NotNil(t, execCtx.CurrentLoop)
+	assert.Equal(t, "outer", execCtx.CurrentLoop.Item)
+	assert.Nil(t, execCtx.CurrentLoop.Parent)
+
+	// Pop outer - should be nil
+	exec.PopLoopContext(execCtx)
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PushPopContext_TripleNesting(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Push three levels
+	exec.PushLoopContext(execCtx, "L1", 0, true, true, 1)
+	exec.PushLoopContext(execCtx, "L2", 1, false, false, 3)
+	exec.PushLoopContext(execCtx, "L3", 2, false, true, 5)
+
+	// Verify chain
+	require.NotNil(t, execCtx.CurrentLoop)
+	assert.Equal(t, "L3", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 2, execCtx.CurrentLoop.Index)
+	assert.Equal(t, 5, execCtx.CurrentLoop.Length)
+
+	require.NotNil(t, execCtx.CurrentLoop.Parent)
+	assert.Equal(t, "L2", execCtx.CurrentLoop.Parent.Item)
+	assert.Equal(t, 1, execCtx.CurrentLoop.Parent.Index)
+	assert.Equal(t, 3, execCtx.CurrentLoop.Parent.Length)
+
+	require.NotNil(t, execCtx.CurrentLoop.Parent.Parent)
+	assert.Equal(t, "L1", execCtx.CurrentLoop.Parent.Parent.Item)
+	assert.Nil(t, execCtx.CurrentLoop.Parent.Parent.Parent)
+
+	// Pop all three
+	exec.PopLoopContext(execCtx)
+	assert.Equal(t, "L2", execCtx.CurrentLoop.Item)
+
+	exec.PopLoopContext(execCtx)
+	assert.Equal(t, "L1", execCtx.CurrentLoop.Item)
+
+	exec.PopLoopContext(execCtx)
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PopLoopContext_EmptyStack(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Pop from empty - should be safe (nil)
+	popped := exec.PopLoopContext(execCtx)
+	assert.Nil(t, popped)
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PushPopContext_PreservesAllFields(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	tests := []struct {
+		name   string
+		item   any
+		index  int
+		first  bool
+		last   bool
+		length int
+	}{
+		{
+			name:   "string item at start",
+			item:   "first-item",
+			index:  0,
+			first:  true,
+			last:   false,
+			length: 5,
+		},
+		{
+			name:   "string item at middle",
+			item:   "middle-item",
+			index:  2,
+			first:  false,
+			last:   false,
+			length: 5,
+		},
+		{
+			name:   "string item at end",
+			item:   "last-item",
+			index:  4,
+			first:  false,
+			last:   true,
+			length: 5,
+		},
+		{
+			name:   "int item",
+			item:   42,
+			index:  0,
+			first:  true,
+			last:   true,
+			length: 1,
+		},
+		{
+			name:   "map item",
+			item:   map[string]any{"key": "value", "num": 123},
+			index:  1,
+			first:  false,
+			last:   false,
+			length: 3,
+		},
+		{
+			name:   "nil item (while loop)",
+			item:   nil,
+			index:  5,
+			first:  false,
+			last:   false,
+			length: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset context
+			execCtx.CurrentLoop = nil
+
+			exec.PushLoopContext(execCtx, tt.item, tt.index, tt.first, tt.last, tt.length)
+
+			require.NotNil(t, execCtx.CurrentLoop)
+			assert.Equal(t, tt.item, execCtx.CurrentLoop.Item)
+			assert.Equal(t, tt.index, execCtx.CurrentLoop.Index)
+			assert.Equal(t, tt.first, execCtx.CurrentLoop.First)
+			assert.Equal(t, tt.last, execCtx.CurrentLoop.Last)
+			assert.Equal(t, tt.length, execCtx.CurrentLoop.Length)
+			assert.Nil(t, execCtx.CurrentLoop.Parent)
+
+			popped := exec.PopLoopContext(execCtx)
+			assert.Equal(t, tt.item, popped.Item)
+			assert.Nil(t, execCtx.CurrentLoop)
+		})
+	}
+}
+
+func TestLoopExecutor_PushPopContext_MixedLoopTypes(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Push a for_each loop (has item and known length)
+	exec.PushLoopContext(execCtx, "outer-item", 0, true, false, 3)
+	assert.Equal(t, "outer-item", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 3, execCtx.CurrentLoop.Length)
+
+	// Push a while loop inside (no item, unknown length)
+	exec.PushLoopContext(execCtx, nil, 0, true, false, -1)
+	assert.Nil(t, execCtx.CurrentLoop.Item)
+	assert.Equal(t, -1, execCtx.CurrentLoop.Length)
+	// Parent should still have for_each data
+	require.NotNil(t, execCtx.CurrentLoop.Parent)
+	assert.Equal(t, "outer-item", execCtx.CurrentLoop.Parent.Item)
+	assert.Equal(t, 3, execCtx.CurrentLoop.Parent.Length)
+
+	// Pop while loop
+	exec.PopLoopContext(execCtx)
+	assert.Equal(t, "outer-item", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 3, execCtx.CurrentLoop.Length)
+
+	// Pop for_each loop
+	exec.PopLoopContext(execCtx)
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PushPopContext_DeepNesting(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Push 10 levels of nesting (arbitrary deep nesting)
+	for i := 0; i < 10; i++ {
+		exec.PushLoopContext(execCtx, fmt.Sprintf("level-%d", i), i, i == 0, false, 10)
+	}
+
+	// Verify depth - traverse parent chain
+	current := execCtx.CurrentLoop
+	depth := 0
+	for current != nil {
+		depth++
+		current = current.Parent
+	}
+	assert.Equal(t, 10, depth)
+
+	// Verify innermost item
+	assert.Equal(t, "level-9", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 9, execCtx.CurrentLoop.Index)
+
+	// Pop all levels and verify order
+	for i := 9; i >= 0; i-- {
+		require.NotNil(t, execCtx.CurrentLoop)
+		assert.Equal(t, fmt.Sprintf("level-%d", i), execCtx.CurrentLoop.Item)
+		exec.PopLoopContext(execCtx)
+	}
+	assert.Nil(t, execCtx.CurrentLoop)
+}
+
+func TestLoopExecutor_PushPopContext_MultiplePopOnEmpty(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Multiple pops on empty should be safe
+	for i := 0; i < 5; i++ {
+		popped := exec.PopLoopContext(execCtx)
+		assert.Nil(t, popped)
+		assert.Nil(t, execCtx.CurrentLoop)
+	}
+}
+
+func TestLoopExecutor_PushPopContext_ParentChainPreserved(t *testing.T) {
+	logger := &mockLogger{}
+	exec := application.NewLoopExecutor(logger, nil, nil)
+	execCtx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	// Push outer loop
+	exec.PushLoopContext(execCtx, "A", 0, true, false, 2)
+	outer := execCtx.CurrentLoop
+
+	// Push inner loop
+	exec.PushLoopContext(execCtx, "1", 0, true, false, 3)
+	inner := execCtx.CurrentLoop
+
+	// Verify parent pointer is same instance as outer
+	assert.Same(t, outer, inner.Parent)
+
+	// Pop inner
+	exec.PopLoopContext(execCtx)
+
+	// Outer context should be unchanged
+	assert.Equal(t, "A", execCtx.CurrentLoop.Item)
+	assert.Equal(t, 0, execCtx.CurrentLoop.Index)
+	assert.True(t, execCtx.CurrentLoop.First)
+	assert.False(t, execCtx.CurrentLoop.Last)
+	assert.Equal(t, 2, execCtx.CurrentLoop.Length)
 }

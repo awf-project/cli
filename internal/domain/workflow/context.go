@@ -32,11 +32,12 @@ type StepState struct {
 
 // LoopContext holds the current loop iteration state.
 type LoopContext struct {
-	Item   any  // current item value (for_each)
-	Index  int  // 0-based iteration index
-	First  bool // true on first iteration
-	Last   bool // true on last iteration (for_each only)
-	Length int  // total items count (for_each only, -1 for while)
+	Item   any          // current item value (for_each)
+	Index  int          // 0-based iteration index
+	First  bool         // true on first iteration
+	Last   bool         // true on last iteration (for_each only)
+	Length int          // total items count (for_each only, -1 for while)
+	Parent *LoopContext // reference to enclosing loop (F043: nested loops)
 }
 
 // ExecutionContext holds the runtime state of a workflow execution.

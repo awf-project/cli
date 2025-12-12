@@ -55,6 +55,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F019 | Dry Run Mode | 📋 PLANNED (Medium) |
 | F020 | Interactive Mode | 📋 PLANNED (Low) |
 | F042 | Loop Context Variables | ✅ IMPLEMENTED |
+| F043 | Nested Loop Execution | ✅ IMPLEMENTED |
 
 ## v0.4.0 - AI & Extensibility (PLANNED)
 

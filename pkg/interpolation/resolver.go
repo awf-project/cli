@@ -20,11 +20,12 @@ type Context struct {
 
 // LoopData holds loop iteration context for interpolation.
 type LoopData struct {
-	Item   any  // current item value (for_each)
-	Index  int  // 0-based iteration index
-	First  bool // true on first iteration
-	Last   bool // true on last iteration (for_each only)
-	Length int  // total items count (for_each only, -1 for while)
+	Item   any       // current item value (for_each)
+	Index  int       // 0-based iteration index
+	First  bool      // true on first iteration
+	Last   bool      // true on last iteration (for_each only)
+	Length int       // total items count (for_each only, -1 for while)
+	Parent *LoopData // reference to enclosing loop for {{.loop.Parent.*}} access (F043)
 }
 
 // Index1 returns the 1-based iteration index.

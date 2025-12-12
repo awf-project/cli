@@ -1607,7 +1607,7 @@ FINISHED
 // TestF042_NestedForEachLoops_Integration tests nested for_each loops with
 // independent loop contexts for outer and inner loops.
 func TestF042_NestedForEachLoops_Integration(t *testing.T) {
-	t.Skip("PENDING: nested loops not yet implemented - this test documents expected behavior")
+	// F043 implementation enables nested loops
 
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1691,7 +1691,7 @@ OUTER[2/2]: row2 (first=false, last=true)
 // TestF042_NestedLoops_ContextRestored_Integration verifies that outer loop
 // context is properly restored after inner loop completes.
 func TestF042_NestedLoops_ContextRestored_Integration(t *testing.T) {
-	t.Skip("PENDING: nested loops not yet implemented - this test documents expected behavior")
+	// F043 implementation enables nested loops
 
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1780,7 +1780,7 @@ AFTER: outer=B idx=1 (context restored)
 // TestF042_NestedWhileInForEach_Integration tests a while loop nested inside
 // a for_each loop.
 func TestF042_NestedWhileInForEach_Integration(t *testing.T) {
-	t.Skip("PENDING: nested loops not yet implemented - this test documents expected behavior")
+	// F043 implementation enables nested loops
 
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1873,7 +1873,7 @@ states:
 
 // TestF042_TripleNestedLoops_Integration tests three levels of nested loops.
 func TestF042_TripleNestedLoops_Integration(t *testing.T) {
-	t.Skip("PENDING: nested loops not yet implemented - this test documents expected behavior")
+	// F043 implementation enables nested loops
 
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -2035,6 +2035,1454 @@ states:
 0-based=2 | 1-based=3 | diff=1
 0-based=3 | 1-based=4 | diff=1
 0-based=4 | 1-based=5 | diff=1
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// =============================================================================
+// F043: Nested Loop Parent Access Integration Tests
+// =============================================================================
+// These tests verify the {{.loop.Parent.*}} template access feature for nested loops.
+
+// TestF043_NestedLoops_ParentAccess_Integration tests that inner loops can access
+// outer loop context via {{.loop.Parent.*}} syntax.
+func TestF043_NestedLoops_ParentAccess_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "parent_access.log")
+
+	// Nested loops with inner loop accessing outer loop's context via Parent
+	wfYAML := `name: nested-parent-access
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["A", "B"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["1", "2"]'
+    max_iterations: 10
+    body:
+      - log_both
+    on_complete: outer_loop
+  log_both:
+    type: step
+    command: 'echo "outer={{.loop.Parent.Item}} inner={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-access.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-parent-access", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify inner loop can access outer loop's Item via Parent
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := `outer=A inner=1
+outer=A inner=2
+outer=B inner=1
+outer=B inner=2
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentIndexAccess_Integration tests accessing parent's index
+// and length fields via {{.loop.Parent.Index}}, {{.loop.Parent.Length}}, etc.
+func TestF043_NestedLoops_ParentIndexAccess_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "parent_index.log")
+
+	// Test accessing all Parent fields: Index, Index1, Length, First, Last
+	wfYAML := `name: nested-parent-index
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["row1", "row2", "row3"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["col1", "col2"]'
+    max_iterations: 10
+    body:
+      - log_indices
+    on_complete: outer_loop
+  log_indices:
+    type: step
+    command: 'echo "[{{.loop.Parent.Index1}}/{{.loop.Parent.Length}}][{{.loop.Index1}}/{{.loop.Length}}] outer={{.loop.Parent.Item}} inner={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-index.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-parent-index", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := `[1/3][1/2] outer=row1 inner=col1
+[1/3][2/2] outer=row1 inner=col2
+[2/3][1/2] outer=row2 inner=col1
+[2/3][2/2] outer=row2 inner=col2
+[3/3][1/2] outer=row3 inner=col1
+[3/3][2/2] outer=row3 inner=col2
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_DeepParentChain_Integration tests accessing grandparent
+// loop context via {{.loop.Parent.Parent.*}} for 3-level nesting.
+func TestF043_NestedLoops_DeepParentChain_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "deep_parent.log")
+
+	// Three levels of nesting with grandparent access
+	wfYAML := `name: triple-nested-parent
+version: "1.0.0"
+states:
+  initial: l1_loop
+  l1_loop:
+    type: for_each
+    items: '["A", "B"]'
+    max_iterations: 10
+    body:
+      - l2_loop
+    on_complete: done
+  l2_loop:
+    type: for_each
+    items: '["1", "2"]'
+    max_iterations: 10
+    body:
+      - l3_loop
+    on_complete: l1_loop
+  l3_loop:
+    type: for_each
+    items: '["x", "y"]'
+    max_iterations: 10
+    body:
+      - log_all
+    on_complete: l2_loop
+  log_all:
+    type: step
+    command: 'echo "L1={{.loop.Parent.Parent.Item}} L2={{.loop.Parent.Item}} L3={{.loop.Item}}" >> ` + logFile + `'
+    on_success: l3_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "triple-nested-parent.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "triple-nested-parent", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// 2 * 2 * 2 = 8 lines total
+	expected := `L1=A L2=1 L3=x
+L1=A L2=1 L3=y
+L1=A L2=2 L3=x
+L1=A L2=2 L3=y
+L1=B L2=1 L3=x
+L1=B L2=1 L3=y
+L1=B L2=2 L3=x
+L1=B L2=2 L3=y
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentFirstLast_Integration tests Parent.First and Parent.Last
+// boolean fields in nested loops.
+func TestF043_NestedLoops_ParentFirstLast_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "parent_first_last.log")
+
+	// Test First and Last flags access via Parent
+	wfYAML := `name: nested-first-last
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["first", "middle", "last"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["a", "b"]'
+    max_iterations: 10
+    body:
+      - log_flags
+    on_complete: outer_loop
+  log_flags:
+    type: step
+    command: 'echo "outer={{.loop.Parent.Item}} (first={{.loop.Parent.First}} last={{.loop.Parent.Last}}) inner={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-first-last.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-first-last", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := `outer=first (first=true last=false) inner=a
+outer=first (first=true last=false) inner=b
+outer=middle (first=false last=false) inner=a
+outer=middle (first=false last=false) inner=b
+outer=last (first=false last=true) inner=a
+outer=last (first=false last=true) inner=b
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_WhileInsideForEach_ParentAccess_Integration tests parent
+// access when a while loop is nested inside a for_each loop.
+func TestF043_NestedLoops_WhileInsideForEach_ParentAccess_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "while_parent.log")
+	counterFile := filepath.Join(tmpDir, "counter")
+
+	// while loop inside for_each, accessing parent's for_each context
+	wfYAML := `name: while-in-foreach-parent
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["batch1", "batch2"]'
+    max_iterations: 10
+    body:
+      - init_counter
+      - count_loop
+    on_complete: done
+  init_counter:
+    type: step
+    command: 'echo "0" > ` + counterFile + `'
+    on_success: outer_loop
+  count_loop:
+    type: while
+    while: 'true'
+    max_iterations: 3
+    body:
+      - increment
+    on_complete: outer_loop
+  increment:
+    type: step
+    command: |
+      COUNT=$(cat ` + counterFile + `)
+      NEW=$((COUNT + 1))
+      echo $NEW > ` + counterFile + `
+      echo "batch={{.loop.Parent.Item}} iter={{.loop.Index1}}" >> ` + logFile + `
+    on_success: count_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "while-in-foreach-parent.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "while-in-foreach-parent", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// 2 batches * 3 iterations each = 6 lines
+	expected := `batch=batch1 iter=1
+batch=batch1 iter=2
+batch=batch1 iter=3
+batch=batch2 iter=1
+batch=batch2 iter=2
+batch=batch2 iter=3
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentNilSafe_Integration verifies that accessing Parent
+// on top-level loop returns safely (no panic, empty/default value).
+func TestF043_NestedLoops_ParentNilSafe_Integration(t *testing.T) {
+	// F043 implementation enables nested loops
+
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "nil_parent.log")
+
+	// Single-level loop accessing Parent (should be nil/safe)
+	wfYAML := `name: single-loop-parent
+version: "1.0.0"
+states:
+  initial: process
+  process:
+    type: for_each
+    items: '["item1", "item2"]'
+    max_iterations: 10
+    body:
+      - log_parent
+    on_complete: done
+  log_parent:
+    type: step
+    command: 'echo "item={{.loop.Item}} parent={{.loop.Parent}}" >> ` + logFile + `'
+    on_success: process
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "single-loop-parent.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "single-loop-parent", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Should complete without panicking
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Go templates render nil as <no value> or empty string
+	lines := string(data)
+	assert.Contains(t, lines, "item=item1")
+	assert.Contains(t, lines, "item=item2")
+}
+
+// =============================================================================
+// F043: Additional Nested Loop Integration Tests
+// =============================================================================
+// Feature: F043
+// These tests cover edge cases, error handling, and combined feature scenarios
+// for nested loop execution with parent context access.
+
+// TestF043_NestedLoops_EmptyInnerLoop_Integration tests that an empty inner loop
+// correctly completes without executing body and restores outer loop context.
+func TestF043_NestedLoops_EmptyInnerLoop_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "empty_inner.log")
+
+	// Outer loop has items, inner loop is empty - should skip inner body
+	wfYAML := `name: nested-empty-inner
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["A", "B"]'
+    max_iterations: 10
+    body:
+      - log_before
+      - inner_loop
+      - log_after
+    on_complete: done
+  log_before:
+    type: step
+    command: 'echo "BEFORE: outer={{.loop.Item}}" >> ` + logFile + `'
+    on_success: outer_loop
+  inner_loop:
+    type: for_each
+    items: '[]'
+    max_iterations: 10
+    body:
+      - inner_step
+    on_complete: outer_loop
+  inner_step:
+    type: step
+    command: 'echo "INNER: should not appear" >> ` + logFile + `'
+    on_success: inner_loop
+  log_after:
+    type: step
+    command: 'echo "AFTER: outer={{.loop.Item}} (context preserved)" >> ` + logFile + `'
+    on_success: outer_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-empty-inner.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-empty-inner", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Inner loop body should NOT appear, outer context should be preserved
+	expected := `BEFORE: outer=A
+AFTER: outer=A (context preserved)
+BEFORE: outer=B
+AFTER: outer=B (context preserved)
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_InnerBreak_Integration tests break_when in nested loops.
+// When inner loop breaks via max_iterations, outer loop should continue normally.
+func TestF043_NestedLoops_InnerBreak_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "inner_break.log")
+
+	// Inner while loop limited by max_iterations, outer foreach continues
+	wfYAML := `name: nested-inner-break
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["batch1", "batch2"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: while
+    while: 'true'
+    max_iterations: 3
+    body:
+      - process
+    on_complete: outer_loop
+  process:
+    type: step
+    command: 'echo "{{.loop.Parent.Item}}/iter{{.loop.Index1}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-inner-break.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := &alwaysTrueEvaluator{}
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-inner-break", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Inner loop limited to 3 iterations per batch
+	expected := `batch1/iter1
+batch1/iter2
+batch1/iter3
+batch2/iter1
+batch2/iter2
+batch2/iter3
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ErrorInInner_Propagate_Integration tests that errors in
+// inner loop can propagate to outer loop's on_failure handler.
+func TestF043_NestedLoops_ErrorInInner_Propagate_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "error_propagate.log")
+
+	// Inner loop step fails, error propagates to outer loop's on_failure
+	wfYAML := `name: nested-error-propagate
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["batch1", "batch2"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: success_done
+    on_failure: error_handler
+  inner_loop:
+    type: for_each
+    items: '["ok", "fail", "never"]'
+    max_iterations: 10
+    body:
+      - process
+    on_complete: outer_loop
+    on_failure: outer_loop
+  process:
+    type: step
+    command: |
+      echo "Processing {{.loop.Parent.Item}}/{{.loop.Item}}" >> ` + logFile + `
+      test "{{.loop.Item}}" != "fail"
+    on_success: inner_loop
+  error_handler:
+    type: step
+    command: 'echo "ERROR HANDLED" >> ` + logFile + `'
+    on_success: error_done
+  success_done:
+    type: terminal
+    status: success
+  error_done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-error-propagate.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-error-propagate", nil)
+
+	require.NoError(t, err) // Workflow completes via error handler
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Should process ok, fail on "fail", then handle error
+	content := string(data)
+	assert.Contains(t, content, "Processing batch1/ok")
+	assert.Contains(t, content, "Processing batch1/fail")
+	// "never" should not appear because error occurs at "fail"
+	assert.NotContains(t, content, "Processing batch1/never")
+	assert.Contains(t, content, "ERROR HANDLED")
+}
+
+// TestF043_NestedLoops_FourLevelDeep_Integration tests 4 levels of nested loops
+// to validate arbitrary depth support with parent chain access.
+func TestF043_NestedLoops_FourLevelDeep_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "four_level.log")
+
+	// 4 levels: country -> city -> street -> house
+	wfYAML := `name: four-level-nested
+version: "1.0.0"
+states:
+  initial: country_loop
+  country_loop:
+    type: for_each
+    items: '["US", "UK"]'
+    max_iterations: 10
+    body:
+      - city_loop
+    on_complete: done
+  city_loop:
+    type: for_each
+    items: '["NYC", "LA"]'
+    max_iterations: 10
+    body:
+      - street_loop
+    on_complete: country_loop
+  street_loop:
+    type: for_each
+    items: '["Main"]'
+    max_iterations: 10
+    body:
+      - house_loop
+    on_complete: city_loop
+  house_loop:
+    type: for_each
+    items: '["101", "102"]'
+    max_iterations: 10
+    body:
+      - log_address
+    on_complete: street_loop
+  log_address:
+    type: step
+    command: 'echo "{{.loop.Parent.Parent.Parent.Item}}/{{.loop.Parent.Parent.Item}}/{{.loop.Parent.Item}}/{{.loop.Item}}" >> ` + logFile + `'
+    on_success: house_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "four-level-nested.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "four-level-nested", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// 2 countries * 2 cities * 1 street * 2 houses = 8 lines
+	expected := `US/NYC/Main/101
+US/NYC/Main/102
+US/LA/Main/101
+US/LA/Main/102
+UK/NYC/Main/101
+UK/NYC/Main/102
+UK/LA/Main/101
+UK/LA/Main/102
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentIndex1Arithmetic_Integration tests using Parent.Index1
+// in arithmetic expressions within shell commands.
+func TestF043_NestedLoops_ParentIndex1Arithmetic_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "arithmetic.log")
+
+	// Use parent indices for matrix-like row/column numbering
+	wfYAML := `name: nested-arithmetic
+version: "1.0.0"
+states:
+  initial: row_loop
+  row_loop:
+    type: for_each
+    items: '["R1", "R2", "R3"]'
+    max_iterations: 10
+    body:
+      - col_loop
+    on_complete: done
+  col_loop:
+    type: for_each
+    items: '["C1", "C2"]'
+    max_iterations: 10
+    body:
+      - log_cell
+    on_complete: row_loop
+  log_cell:
+    type: step
+    command: 'echo "Cell[{{.loop.Parent.Index1}},{{.loop.Index1}}]={{.loop.Parent.Item}}-{{.loop.Item}} position=$(({{.loop.Parent.Index}} * 2 + {{.loop.Index}}))" >> ` + logFile + `'
+    on_success: col_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-arithmetic.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-arithmetic", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Verify arithmetic with indices: position = row_idx * 2 + col_idx
+	expected := `Cell[1,1]=R1-C1 position=0
+Cell[1,2]=R1-C2 position=1
+Cell[2,1]=R2-C1 position=2
+Cell[2,2]=R2-C2 position=3
+Cell[3,1]=R3-C1 position=4
+Cell[3,2]=R3-C2 position=5
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_MixedForEachWhile_ParentAccess_Integration tests nested
+// for_each inside while loop with parent access to while's context.
+func TestF043_NestedLoops_MixedForEachWhile_ParentAccess_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "mixed_while_foreach.log")
+	counterFile := filepath.Join(tmpDir, "counter")
+
+	// While loop as outer, for_each as inner
+	wfYAML := `name: mixed-while-foreach
+version: "1.0.0"
+states:
+  initial: while_loop
+  while_loop:
+    type: while
+    while: 'true'
+    max_iterations: 2
+    body:
+      - inner_foreach
+    on_complete: done
+  inner_foreach:
+    type: for_each
+    items: '["a", "b"]'
+    max_iterations: 10
+    body:
+      - log_mixed
+    on_complete: while_loop
+  log_mixed:
+    type: step
+    command: 'echo "while_iter={{.loop.Parent.Index1}} foreach_item={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_foreach
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "mixed-while-foreach.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(counterFile, []byte("0"), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := &alwaysTrueEvaluator{}
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "mixed-while-foreach", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// 2 while iterations * 2 foreach items = 4 lines
+	expected := `while_iter=1 foreach_item=a
+while_iter=1 foreach_item=b
+while_iter=2 foreach_item=a
+while_iter=2 foreach_item=b
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_DynamicInnerItems_Integration tests inner loop with items
+// derived from outer loop context (using states).
+func TestF043_NestedLoops_DynamicInnerItems_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "dynamic_inner.log")
+
+	// Each batch generates different items for inner loop via captured output
+	wfYAML := `name: nested-dynamic-items
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["2", "3"]'
+    max_iterations: 10
+    body:
+      - generate_items
+      - inner_loop
+    on_complete: done
+  generate_items:
+    type: step
+    command: |
+      COUNT={{.loop.Item}}
+      ITEMS="["
+      for i in $(seq 1 $COUNT); do
+        [ "$i" -gt 1 ] && ITEMS="$ITEMS,"
+        ITEMS="$ITEMS\"item$i\""
+      done
+      ITEMS="$ITEMS]"
+      echo "$ITEMS"
+    capture:
+      stdout: items
+    on_success: outer_loop
+  inner_loop:
+    type: for_each
+    items: '{{.states.generate_items.Output}}'
+    max_iterations: 10
+    body:
+      - log_item
+    on_complete: outer_loop
+  log_item:
+    type: step
+    command: 'echo "batch={{.loop.Parent.Item}} item={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-dynamic-items.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-dynamic-items", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Batch "2" generates ["item1", "item2"], batch "3" generates ["item1", "item2", "item3"]
+	expected := `batch=2 item=item1
+batch=2 item=item2
+batch=3 item=item1
+batch=3 item=item2
+batch=3 item=item3
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentLengthInCondition_Integration tests using Parent.Length
+// in template conditions within nested loops.
+func TestF043_NestedLoops_ParentLengthInCondition_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "parent_length.log")
+
+	// Use Parent.Length to format output differently
+	wfYAML := `name: nested-parent-length
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["A", "B", "C"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["1", "2"]'
+    max_iterations: 10
+    body:
+      - log_with_length
+    on_complete: outer_loop
+  log_with_length:
+    type: step
+    command: 'echo "[outer={{.loop.Parent.Index1}}/{{.loop.Parent.Length}}][inner={{.loop.Index1}}/{{.loop.Length}}] {{.loop.Parent.Item}}{{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-length.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-parent-length", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := `[outer=1/3][inner=1/2] A1
+[outer=1/3][inner=2/2] A2
+[outer=2/3][inner=1/2] B1
+[outer=2/3][inner=2/2] B2
+[outer=3/3][inner=1/2] C1
+[outer=3/3][inner=2/2] C2
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_MaxIterationsInner_Integration tests that max_iterations
+// is correctly enforced on inner loops without affecting outer loop.
+func TestF043_NestedLoops_MaxIterationsInner_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "max_iter_inner.log")
+
+	// Inner while loop limited to 2 iterations, outer foreach completes normally
+	wfYAML := `name: nested-max-iter-inner
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["batch1", "batch2"]'
+    max_iterations: 10
+    body:
+      - inner_while
+    on_complete: done
+  inner_while:
+    type: while
+    while: 'true'
+    max_iterations: 2
+    body:
+      - log_inner
+    on_complete: outer_loop
+  log_inner:
+    type: step
+    command: 'echo "{{.loop.Parent.Item}}: iter={{.loop.Index1}}" >> ` + logFile + `'
+    on_success: inner_while
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-max-iter-inner.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := &alwaysTrueEvaluator{}
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-max-iter-inner", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Each batch has 2 iterations (max_iterations=2)
+	expected := `batch1: iter=1
+batch1: iter=2
+batch2: iter=1
+batch2: iter=2
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_SingleItemBothLoops_Integration tests edge case where
+// both outer and inner loops have single items.
+func TestF043_NestedLoops_SingleItemBothLoops_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "single_both.log")
+
+	// Both loops have single items - First and Last should both be true
+	wfYAML := `name: nested-single-both
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["only_outer"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["only_inner"]'
+    max_iterations: 10
+    body:
+      - log_flags
+    on_complete: outer_loop
+  log_flags:
+    type: step
+    command: 'echo "outer={{.loop.Parent.Item}}(first={{.loop.Parent.First}},last={{.loop.Parent.Last}}) inner={{.loop.Item}}(first={{.loop.First}},last={{.loop.Last}})" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-single-both.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-single-both", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// Single item means both First and Last are true
+	expected := `outer=only_outer(first=true,last=true) inner=only_inner(first=true,last=true)
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_MultipleBodyStepsWithParent_Integration tests nested loops
+// where inner loop has multiple body steps all accessing parent context.
+func TestF043_NestedLoops_MultipleBodyStepsWithParent_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "multi_body_parent.log")
+
+	// Inner loop with multiple body steps accessing parent
+	wfYAML := `name: nested-multi-body-parent
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["A", "B"]'
+    max_iterations: 10
+    body:
+      - inner_loop
+    on_complete: done
+  inner_loop:
+    type: for_each
+    items: '["1", "2"]'
+    max_iterations: 10
+    body:
+      - step1
+      - step2
+      - step3
+    on_complete: outer_loop
+  step1:
+    type: step
+    command: 'echo "S1: outer={{.loop.Parent.Item}} inner={{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  step2:
+    type: step
+    command: 'echo "S2: parent_idx={{.loop.Parent.Index1}} inner_idx={{.loop.Index1}}" >> ` + logFile + `'
+    on_success: inner_loop
+  step3:
+    type: step
+    command: 'echo "S3: done with {{.loop.Parent.Item}}/{{.loop.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-multi-body-parent.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-multi-body-parent", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	expected := `S1: outer=A inner=1
+S2: parent_idx=1 inner_idx=1
+S3: done with A/1
+S1: outer=A inner=2
+S2: parent_idx=1 inner_idx=2
+S3: done with A/2
+S1: outer=B inner=1
+S2: parent_idx=2 inner_idx=1
+S3: done with B/1
+S1: outer=B inner=2
+S2: parent_idx=2 inner_idx=2
+S3: done with B/2
+`
+	assert.Equal(t, expected, string(data))
+}
+
+// TestF043_NestedLoops_ParentAccessAfterInnerComplete_Integration verifies that
+// after inner loop completes, outer loop context is accessible in next outer step.
+func TestF043_NestedLoops_ParentAccessAfterInnerComplete_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "after_inner.log")
+
+	// Outer loop body: step before inner, inner loop, step after inner
+	// Step after inner should have correct outer context (not inner's context)
+	wfYAML := `name: nested-after-inner
+version: "1.0.0"
+states:
+  initial: outer_loop
+  outer_loop:
+    type: for_each
+    items: '["X", "Y"]'
+    max_iterations: 10
+    body:
+      - before
+      - inner_loop
+      - after
+    on_complete: done
+  before:
+    type: step
+    command: 'echo "BEFORE outer={{.loop.Item}} idx={{.loop.Index}}" >> ` + logFile + `'
+    on_success: outer_loop
+  inner_loop:
+    type: for_each
+    items: '["1", "2", "3"]'
+    max_iterations: 10
+    body:
+      - inner_step
+    on_complete: outer_loop
+  inner_step:
+    type: step
+    command: 'echo "  INNER={{.loop.Item}} parent={{.loop.Parent.Item}}" >> ` + logFile + `'
+    on_success: inner_loop
+  after:
+    type: step
+    command: 'echo "AFTER outer={{.loop.Item}} idx={{.loop.Index}} (restored)" >> ` + logFile + `'
+    on_success: outer_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-after-inner.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newLoopContextEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "nested-after-inner", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+
+	// After inner completes, outer context should be restored (not showing inner's values)
+	expected := `BEFORE outer=X idx=0
+  INNER=1 parent=X
+  INNER=2 parent=X
+  INNER=3 parent=X
+AFTER outer=X idx=0 (restored)
+BEFORE outer=Y idx=1
+  INNER=1 parent=Y
+  INNER=2 parent=Y
+  INNER=3 parent=Y
+AFTER outer=Y idx=1 (restored)
 `
 	assert.Equal(t, expected, string(data))
 }

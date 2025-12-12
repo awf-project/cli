@@ -438,6 +438,31 @@ Access individual step outputs: `{{.states.parallel_analysis.steps.lint.output}}
 - `{{.loop.first}}` - True on first iteration
 - `{{.loop.last}}` - True on last iteration
 - `{{.loop.length}}` - Total items count
+- `{{.loop.parent}}` - Parent loop context (for nested loops)
+
+**Nested loops:** Loops can contain other loops in their body. Inner loops access outer loop context via `{{.loop.parent.*}}`:
+```yaml
+outer_loop:
+  type: for_each
+  items: '["A", "B"]'
+  body:
+    - inner_loop
+  on_complete: done
+
+inner_loop:
+  type: for_each
+  items: '["1", "2"]'
+  body:
+    - process
+  on_complete: outer_loop
+
+process:
+  type: step
+  command: 'echo "outer={{.loop.parent.item}} inner={{.loop.item}}"'
+  on_success: inner_loop
+```
+
+Parent chains support arbitrary depth: `{{.loop.parent.parent.item}}` for 3-level nesting.
 
 **Example:**
 ```yaml
@@ -763,6 +788,7 @@ make fmt            # Format code
 ### Phase 3 - Advanced Features (v0.3.0)
 - [x] Conditions (if/else with `when:` clauses)
 - [x] Loops (for/while)
+- [x] Nested loops with parent context access (`{{.loop.parent.*}}`)
 - [x] Workflow templates
 - [ ] Plugin system
 - [ ] REST API

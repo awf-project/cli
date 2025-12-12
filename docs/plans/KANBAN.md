@@ -7,7 +7,6 @@
 ### Phase 3 - Advanced Features (v0.3.0)
 - [F019](features/v0.3.0/F019-dry-run.md) Dry-run mode
 - [F020](features/v0.3.0/F020-interactive-mode.md) Interactive mode
-- [F043](features/v0.3.0/F043-nested-loops.md) Nested loop execution
 
 ### Phase 4 - Extensibility & AI (v0.4.0)
 - [F018](features/v0.4.0/F018-encrypted-env.md) Encrypted environment variables
