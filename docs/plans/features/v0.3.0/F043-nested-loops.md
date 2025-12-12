@@ -1,7 +1,7 @@
 # F043: Nested Loop Execution
 
 ## Metadata
-- **Status**: planned
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: medium
@@ -13,14 +13,14 @@ Support for nested loop execution where a loop body can contain another loop sta
 
 ## Acceptance Criteria
 
-- [ ] A `for_each` or `while` loop can contain another loop state in its body
-- [ ] Outer loop context variables (`loop.index`, `loop.value`, `loop.first`, `loop.last`) are preserved during inner loop execution
-- [ ] Inner loop has its own isolated context variables that don't overwrite outer loop context
-- [ ] After inner loop completes, outer loop context is fully restored
-- [ ] Nested loops can access outer loop variables via `loop.parent` reference (e.g., `loop.parent.index`)
-- [ ] Arbitrary nesting depth is supported (loop within loop within loop)
-- [ ] State persistence correctly tracks nested loop positions for resume capability
-- [ ] Error in inner loop can be handled independently or propagate to outer loop based on configuration
+- [x] A `for_each` or `while` loop can contain another loop state in its body
+- [x] Outer loop context variables (`loop.index`, `loop.value`, `loop.first`, `loop.last`) are preserved during inner loop execution
+- [x] Inner loop has its own isolated context variables that don't overwrite outer loop context
+- [x] After inner loop completes, outer loop context is fully restored
+- [x] Nested loops can access outer loop variables via `loop.parent` reference (e.g., `loop.parent.index`)
+- [x] Arbitrary nesting depth is supported (loop within loop within loop)
+- [x] State persistence correctly tracks nested loop positions for resume capability
+- [x] Error in inner loop can be handled independently or propagate to outer loop based on configuration
 
 ## Dependencies
 
@@ -40,22 +40,22 @@ tests/fixtures/workflows/loop-nested.yaml
 
 ## Technical Tasks
 
-- [ ] Design loop context stack for nested execution
-  - [ ] Define context stack data structure
-  - [ ] Implement push/pop operations for loop context
-- [ ] Implement `loop.parent` variable resolution
-  - [ ] Add parent reference to loop context
-  - [ ] Update interpolation resolver for parent access
-- [ ] Modify execution service for nested loop handling
-  - [ ] Detect nested loop states during execution
-  - [ ] Preserve outer context before inner loop
-  - [ ] Restore outer context after inner loop
-- [ ] Update state persistence for nested loops
-  - [ ] Serialize loop context stack
-  - [ ] Support resume from nested loop position
-- [ ] Write unit tests
-- [ ] Write integration tests (enable pending tests in loop_test.go)
-- [ ] Update documentation
+- [x] Design loop context stack for nested execution
+  - [x] Define context stack data structure
+  - [x] Implement push/pop operations for loop context
+- [x] Implement `loop.parent` variable resolution
+  - [x] Add parent reference to loop context
+  - [x] Update interpolation resolver for parent access
+- [x] Modify execution service for nested loop handling
+  - [x] Detect nested loop states during execution
+  - [x] Preserve outer context before inner loop
+  - [x] Restore outer context after inner loop
+- [x] Update state persistence for nested loops
+  - [x] Serialize loop context stack
+  - [x] Support resume from nested loop position
+- [x] Write unit tests
+- [x] Write integration tests (enable pending tests in loop_test.go)
+- [x] Update documentation
 
 ## Notes
 

@@ -477,6 +477,23 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 	}
 }
 
+// buildLoopDataChain recursively converts domain LoopContext to interpolation LoopData.
+// This enables {{.loop.Parent.*}} template access for nested loops.
+// F043: Nested Loop Execution
+func buildLoopDataChain(domainLoop *workflow.LoopContext) *interpolation.LoopData {
+	if domainLoop == nil {
+		return nil
+	}
+	return &interpolation.LoopData{
+		Item:   domainLoop.Item,
+		Index:  domainLoop.Index,
+		First:  domainLoop.First,
+		Last:   domainLoop.Last,
+		Length: domainLoop.Length,
+		Parent: buildLoopDataChain(domainLoop.Parent), // Recursive for parent chain
+	}
+}
+
 // buildInterpolationContext converts ExecutionContext to interpolation.Context.
 func (s *ExecutionService) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
@@ -525,16 +542,8 @@ func (s *ExecutionService) buildInterpolationContext(
 		Error: nil, // Set in error hooks (F008)
 	}
 
-	// Include loop context if we're inside a loop
-	if execCtx.CurrentLoop != nil {
-		intCtx.Loop = &interpolation.LoopData{
-			Item:   execCtx.CurrentLoop.Item,
-			Index:  execCtx.CurrentLoop.Index,
-			First:  execCtx.CurrentLoop.First,
-			Last:   execCtx.CurrentLoop.Last,
-			Length: execCtx.CurrentLoop.Length,
-		}
-	}
+	// Include loop context if we're inside a loop (with parent chain for nested loops)
+	intCtx.Loop = buildLoopDataChain(execCtx.CurrentLoop)
 
 	return intCtx
 }
@@ -759,12 +768,22 @@ func (s *ExecutionService) executeLoopStep(
 	}
 
 	// Create step executor callback that executes body steps
+	// Supports nested loops: body steps can be loops themselves (F043)
 	stepExecutor := func(ctx context.Context, stepName string, loopIntCtx *interpolation.Context) error {
 		bodyStep, ok := wf.Steps[stepName]
 		if !ok {
 			return fmt.Errorf("body step not found: %s", stepName)
 		}
-		_, err := s.executeStep(ctx, wf, bodyStep, execCtx)
+		// Handle nested loops: body steps can be for_each or while loops
+		var err error
+		switch bodyStep.Type {
+		case workflow.StepTypeForEach, workflow.StepTypeWhile:
+			_, err = s.executeLoopStep(ctx, wf, bodyStep, execCtx)
+		case workflow.StepTypeParallel:
+			_, err = s.executeParallelStep(ctx, wf, bodyStep, execCtx)
+		default:
+			_, err = s.executeStep(ctx, wf, bodyStep, execCtx)
+		}
 		if err != nil {
 			return err
 		}

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F043**: Nested Loop Execution with Parent Context Access
+  - Loop states (`for_each`, `while`) can now contain other loop states in their body
+  - Inner loops access outer loop variables via `{{.loop.Parent.*}}` (e.g., `{{.loop.Parent.Item}}`, `{{.loop.Parent.Index}}`)
+  - Arbitrary nesting depth supported with parent chains (`{{.loop.Parent.Parent.*}}`)
+  - Outer loop context automatically preserved during inner loop execution and restored on completion
+  - Mixed loop types nest correctly (e.g., `while` inside `for_each` with full parent access)
 - **F042**: Loop Context Variables
   - Add `{{.loop.Index1}}` for 1-based iteration index (complements existing 0-based `{{.loop.Index}}`)
   - All loop context variables now fully available: `Index`, `Index1`, `Item`, `First`, `Last`, `Length`

@@ -38,6 +38,39 @@ func NewLoopExecutor(
 	}
 }
 
+// PushLoopContext sets a new loop context, linking to existing as parent.
+// This enables nested loops by preserving outer loop state.
+// F043: Nested Loop Execution
+func (e *LoopExecutor) PushLoopContext(
+	execCtx *workflow.ExecutionContext,
+	item any,
+	index int,
+	first, last bool,
+	length int,
+) {
+	newCtx := &workflow.LoopContext{
+		Item:   item,
+		Index:  index,
+		First:  first,
+		Last:   last,
+		Length: length,
+		Parent: execCtx.CurrentLoop, // Link to outer loop (nil if top-level)
+	}
+	execCtx.CurrentLoop = newCtx
+}
+
+// PopLoopContext restores the parent loop context.
+// Returns the popped context for inspection if needed.
+// F043: Nested Loop Execution
+func (e *LoopExecutor) PopLoopContext(execCtx *workflow.ExecutionContext) *workflow.LoopContext {
+	if execCtx.CurrentLoop == nil {
+		return nil
+	}
+	popped := execCtx.CurrentLoop
+	execCtx.CurrentLoop = execCtx.CurrentLoop.Parent
+	return popped
+}
+
 // ExecuteForEach iterates over items and executes body steps for each.
 func (e *LoopExecutor) ExecuteForEach(
 	ctx context.Context,
@@ -83,13 +116,8 @@ func (e *LoopExecutor) ExecuteForEach(
 		}
 
 		// Set loop context on execCtx so executeStep can access it
-		execCtx.CurrentLoop = &workflow.LoopContext{
-			Item:   item,
-			Index:  i,
-			First:  i == 0,
-			Last:   i == len(items)-1,
-			Length: len(items),
-		}
+		// Use push to enable nested loops (preserves parent context)
+		e.PushLoopContext(execCtx, item, i, i == 0, i == len(items)-1, len(items))
 
 		// Set loop context for this iteration (for callbacks)
 		intCtx = buildContext(execCtx)
@@ -128,18 +156,20 @@ func (e *LoopExecutor) ExecuteForEach(
 				e.logger.Warn("break condition evaluation failed", "error", err)
 			} else if shouldBreak {
 				result.BrokeAt = i
+				// Pop context before breaking to restore parent
+				e.PopLoopContext(execCtx)
 				break
 			}
 		}
+
+		// Pop loop context at end of iteration (restores parent for nested loops)
+		e.PopLoopContext(execCtx)
 
 		// Check for iteration error
 		if iterErr != nil {
 			return result, iterErr
 		}
 	}
-
-	// Clear loop context when done
-	execCtx.CurrentLoop = nil
 
 	result.CompletedAt = time.Now()
 	return result, nil
@@ -163,21 +193,23 @@ func (e *LoopExecutor) ExecuteWhile(
 		}
 
 		// Set loop context on execCtx so executeStep can access it
-		execCtx.CurrentLoop = &workflow.LoopContext{
-			Index:  i,
-			First:  i == 0,
-			Length: -1, // unknown for while loops
-		}
+		// Use push to enable nested loops (preserves parent context)
+		// While loops don't have an item, so we pass nil
+		e.PushLoopContext(execCtx, nil, i, i == 0, false, -1)
 
 		// Evaluate while condition
 		intCtx := buildContext(execCtx)
 
 		shouldContinue, err := e.evaluator.Evaluate(step.Loop.Condition, intCtx)
 		if err != nil {
+			// Pop context before returning on error
+			e.PopLoopContext(execCtx)
 			return result, fmt.Errorf("evaluate condition: %w", err)
 		}
 
 		if !shouldContinue {
+			// Pop context before breaking when condition is false
+			e.PopLoopContext(execCtx)
 			break
 		}
 
@@ -214,18 +246,20 @@ func (e *LoopExecutor) ExecuteWhile(
 				e.logger.Warn("break condition evaluation failed", "error", err)
 			} else if shouldBreak {
 				result.BrokeAt = i
+				// Pop context before breaking to restore parent
+				e.PopLoopContext(execCtx)
 				break
 			}
 		}
+
+		// Pop loop context at end of iteration (restores parent for nested loops)
+		e.PopLoopContext(execCtx)
 
 		// Check for iteration error
 		if iterErr != nil {
 			return result, iterErr
 		}
 	}
-
-	// Clear loop context when done
-	execCtx.CurrentLoop = nil
 
 	// Check if we hit max iterations without condition becoming false
 	if result.TotalCount >= step.Loop.MaxIterations {
