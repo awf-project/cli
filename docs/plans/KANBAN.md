@@ -5,7 +5,6 @@
 ### Phase 1 - MVP (v0.1.0)
 ### Phase 2 - Core Features (v0.2.0)
 ### Phase 3 - Advanced Features (v0.3.0)
-- [F019](features/v0.3.0/F019-dry-run.md) Dry-run mode
 - [F020](features/v0.3.0/F020-interactive-mode.md) Interactive mode
 
 ### Phase 4 - Extensibility & AI (v0.4.0)

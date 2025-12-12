@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F019**: Dry-Run Mode
+  - `awf run --dry-run` shows execution plan without running commands
+  - Displays resolved commands with interpolated variables and values
+  - Shows state transitions, hooks (pre/post), and workflow configuration
+  - Supports parallel steps (branches, strategies) and loops (for-each, while)
+  - Outputs in text or JSON format (`--format=json`)
 - **F043**: Nested Loop Execution with Parent Context Access
   - Loop states (`for_each`, `while`) can now contain other loop states in their body
   - Inner loops access outer loop variables via `{{.loop.Parent.*}}` (e.g., `{{.loop.Parent.Item}}`, `{{.loop.Parent.Index}}`)

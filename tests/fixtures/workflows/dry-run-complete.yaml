@@ -1,0 +1,122 @@
+name: dry-run-complete
+description: Complete workflow fixture for dry-run testing with all features
+version: "1.0.0"
+author: test
+tags:
+  - dry-run
+  - test
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to input file
+    required: true
+  - name: count
+    type: integer
+    required: false
+    default: 10
+  - name: verbose
+    type: boolean
+    required: false
+    default: false
+
+env:
+  - API_KEY
+  - DATABASE_URL
+
+hooks:
+  workflow_start:
+    - log: "Starting workflow: {{workflow.name}}"
+  workflow_end:
+    - log: "Completed in {{workflow.duration}}s"
+  workflow_error:
+    - log: "Error: {{error.message}}"
+
+states:
+  initial: validate
+
+  validate:
+    type: step
+    description: Validate input file exists
+    command: test -f "{{inputs.file_path}}"
+    timeout: 5
+    on_success: extract
+    on_failure: error
+    hooks:
+      pre:
+        - log: "Validating: {{inputs.file_path}}"
+
+  extract:
+    type: step
+    description: Extract content from file
+    command: cat "{{inputs.file_path}}"
+    timeout: 30
+    on_success: process_parallel
+    on_failure: error
+    capture:
+      stdout: file_content
+      max_size: 10MB
+    retry:
+      max_attempts: 3
+      initial_delay: 1s
+      backoff: exponential
+      multiplier: 2.0
+
+  process_parallel:
+    type: parallel
+    description: Run analysis and backup in parallel
+    parallel:
+      - analyze
+      - backup
+    strategy: all_succeed
+    max_concurrent: 2
+    on_success: conditional_check
+    on_failure: error
+
+  analyze:
+    type: step
+    description: Analyze the content
+    command: echo "analyzing content..."
+    on_success: process_parallel
+    on_failure: error
+
+  backup:
+    type: step
+    description: Backup the file
+    command: echo "backing up file..."
+    continue_on_error: true
+    on_success: process_parallel
+    on_failure: error
+
+  conditional_check:
+    type: step
+    description: Check condition and route
+    command: echo "checking condition..."
+    transitions:
+      - when: "inputs.verbose == true"
+        goto: verbose_output
+      - when: "inputs.count > 5"
+        goto: large_count_handler
+      - goto: done
+
+  verbose_output:
+    type: step
+    description: Verbose output mode
+    command: echo "verbose mode enabled"
+    on_success: done
+
+  large_count_handler:
+    type: step
+    description: Handle large count
+    command: 'echo "handling large count: {{inputs.count}}"'
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+    message: "Workflow completed successfully"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"
