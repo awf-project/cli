@@ -215,6 +215,10 @@ awf status $WORKFLOW_ID -f quiet
                   Example: --mock states.step1.output="mocked value"
 --dry-run         Show execution plan without running commands
                   Displays resolved commands, transitions, hooks, and variable values
+--interactive     Enable step-by-step mode with prompts before each step
+                  Actions: [c]ontinue, [s]kip, [a]bort, [i]nspect, [e]dit, [r]etry
+--breakpoint, -b  Pause only at specific steps (requires --interactive)
+                  Example: --breakpoint step1,step2
 ```
 
 ## Workflow Discovery
@@ -793,6 +797,7 @@ make fmt            # Format code
 - [x] Nested loops with parent context access (`{{.loop.parent.*}}`)
 - [x] Workflow templates
 - [x] Dry-run mode (`--dry-run` flag)
+- [x] Interactive mode (`--interactive` flag with step-by-step execution)
 - [ ] Plugin system
 - [ ] REST API
 - [ ] Web UI

@@ -29,6 +29,8 @@ func newRunCommand(cfg *Config) *cobra.Command {
 	var stepFlag string
 	var mockFlags []string
 	var dryRunFlag bool
+	var interactiveFlag bool
+	var breakpointFlags []string
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -45,12 +47,18 @@ Single step execution:
   Use --step to execute only a specific step from the workflow.
   Use --mock to inject state values for step dependencies.
 
+Interactive mode:
+  Use --interactive for step-by-step execution with prompts.
+  Use --breakpoint to pause only at specific steps.
+
 Examples:
   awf run analyze-code --input file=main.go
   awf run build-project --input target=linux --output=streaming
   awf run my-workflow --step=process --input data=test
   awf run my-workflow --step=analyze --mock states.fetch.output="cached data"
-  awf run my-workflow --dry-run`,
+  awf run my-workflow --dry-run
+  awf run my-workflow --interactive
+  awf run my-workflow --interactive --breakpoint validate,process`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if outputMode != "" {
@@ -62,6 +70,9 @@ Examples:
 			}
 			if dryRunFlag {
 				return runDryRun(cmd, cfg, args[0], inputFlags)
+			}
+			if interactiveFlag {
+				return runInteractive(cmd, cfg, args[0], inputFlags, breakpointFlags)
 			}
 			if stepFlag != "" {
 				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags)
@@ -78,6 +89,10 @@ Examples:
 		"Mock state value for single step execution (states.step.output=value)")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false,
 		"Show execution plan without running commands")
+	cmd.Flags().BoolVar(&interactiveFlag, "interactive", false,
+		"Execute in interactive step-by-step mode with prompts")
+	cmd.Flags().StringArrayVar(&breakpointFlags, "breakpoint", nil,
+		"Pause only at specified steps in interactive mode (comma-separated)")
 
 	return cmd
 }
@@ -324,6 +339,95 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	// Output the plan
 	dryRunFormatter := ui.NewDryRunFormatter(cmd.OutOrStdout(), !cfg.NoColor)
 	return writer.WriteDryRun(plan, dryRunFormatter)
+}
+
+// runInteractive executes the workflow in interactive step-by-step mode.
+func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, breakpointFlags []string) error {
+	// Parse inputs
+	inputs, err := parseInputFlags(inputFlags)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Parse breakpoints (flatten comma-separated values)
+	var breakpoints []string
+	for _, bp := range breakpointFlags {
+		for _, b := range strings.Split(bp, ",") {
+			b = strings.TrimSpace(b)
+			if b != "" {
+				breakpoints = append(breakpoints, b)
+			}
+		}
+	}
+
+	// Create formatter for text output
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	// Setup context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	// Initialize dependencies
+	repo := NewWorkflowRepository()
+	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
+	shellExecutor := executor.NewShellExecutor()
+	logger := &cliLogger{
+		formatter: formatter,
+		verbose:   cfg.Verbose,
+		silent:    false,
+	}
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := expression.NewExprEvaluator()
+
+	// Create services
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	parallelExecutor := application.NewParallelExecutor(logger)
+
+	// Create interactive prompt
+	prompt := ui.NewCLIPrompt(cmd.InOrStdin(), cmd.OutOrStdout(), !cfg.NoColor)
+
+	// Create interactive executor
+	interactiveExec := application.NewInteractiveExecutor(
+		wfSvc, shellExecutor, parallelExecutor, stateStore,
+		logger, resolver, exprEvaluator, prompt,
+	)
+
+	// Setup template service
+	templatePaths := []string{
+		".awf/templates",
+		filepath.Join(cfg.StoragePath, "templates"),
+	}
+	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
+	templateSvc := application.NewTemplateService(templateRepo, logger)
+	interactiveExec.SetTemplateService(templateSvc)
+
+	// Set breakpoints if specified
+	if len(breakpoints) > 0 {
+		interactiveExec.SetBreakpoints(breakpoints)
+	}
+
+	// Execute interactive workflow
+	_, execErr := interactiveExec.Run(ctx, workflowName, inputs)
+	if execErr != nil {
+		// Context cancellation is handled gracefully in interactive mode
+		if errors.Is(execErr, context.Canceled) {
+			return nil // Not an error for interactive abort
+		}
+		return &exitError{code: categorizeError(execErr), err: execErr}
+	}
+
+	return nil
 }
 
 func parseInputFlags(flags []string) (map[string]any, error) {
