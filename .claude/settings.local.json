@@ -37,7 +37,8 @@
       "mcp__plugin_common_repomix__attach_packed_output",
       "mcp__plugin_common_serena__read_memory",
       "mcp__plugin_common_serena__edit_memory",
-      "WebSearch"
+      "WebSearch",
+      "Skill(common:github-actions)"
     ]
   }
 }
