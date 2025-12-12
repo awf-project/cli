@@ -309,11 +309,6 @@ func (e *DryRunExecutor) buildTransitions(step *workflow.Step) []workflow.DryRun
 		}
 	}
 
-	// For parallel steps, add the success transition after branches complete
-	if step.Type == workflow.StepTypeParallel && step.OnSuccess != "" && len(step.Transitions) == 0 {
-		// Already added above via legacy
-	}
-
 	// For loop steps, add the on_complete transition
 	if step.Loop != nil && step.Loop.OnComplete != "" {
 		// Check if not already added

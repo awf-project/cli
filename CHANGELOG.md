@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F020**: Interactive Mode for Step-by-Step Workflow Execution
+  - `awf run --interactive` enables pause-before-each-step execution with user prompts
+  - Six actions available at each step: `[c]ontinue`, `[s]kip`, `[a]bort`, `[i]nspect`, `[e]dit`, `[r]etry`
+  - `--breakpoint` flag allows selective pausing on specific steps only
+  - Step details shown before execution: name, type, resolved command, timeout, transitions
+  - Step results displayed after execution: output, exit code, duration, status
 - **F019**: Dry-Run Mode
   - `awf run --dry-run` shows execution plan without running commands
   - Displays resolved commands with interpolated variables and values

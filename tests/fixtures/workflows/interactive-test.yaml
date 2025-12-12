@@ -1,0 +1,55 @@
+name: interactive-test
+description: Workflow for testing interactive mode features
+version: "1.0.0"
+author: test
+tags:
+  - interactive
+  - test
+
+inputs:
+  - name: message
+    type: string
+    description: A message to process
+    required: false
+    default: "hello world"
+  - name: count
+    type: integer
+    required: false
+    default: 3
+
+states:
+  initial: step_one
+
+  step_one:
+    type: step
+    description: First step - echoes message
+    command: 'echo "Step 1: {{.inputs.message}}"'
+    timeout: 5
+    on_success: step_two
+    on_failure: error
+
+  step_two:
+    type: step
+    description: Second step - processes count
+    command: 'echo "Step 2: count is {{.inputs.count}}"'
+    timeout: 5
+    on_success: step_three
+    on_failure: error
+
+  step_three:
+    type: step
+    description: Third step - final processing
+    command: 'echo "Step 3: done"'
+    timeout: 5
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+    message: "Interactive workflow completed"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Interactive workflow failed"

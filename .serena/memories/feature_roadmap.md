@@ -5,7 +5,7 @@
 ```
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
-v0.3.0 (Advanced)   ███████░░░░░░░░░░░░░ IN PROGRESS
+v0.3.0 (Advanced)   █████████████████░░░ IN PROGRESS
 v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
@@ -53,7 +53,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F017 | Workflow Templates | ✅ IMPLEMENTED |
 | F018 | Encrypted Environment | 📋 PLANNED (Low) |
 | F019 | Dry Run Mode | ✅ IMPLEMENTED |
-| F020 | Interactive Mode | 📋 PLANNED (Low) |
+| F020 | Interactive Mode | ✅ IMPLEMENTED |
 | F042 | Loop Context Variables | ✅ IMPLEMENTED |
 | F043 | Nested Loop Execution | ✅ IMPLEMENTED |
 

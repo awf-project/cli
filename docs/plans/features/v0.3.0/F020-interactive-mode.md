@@ -1,7 +1,7 @@
 # F020: Interactive Mode
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: low
@@ -13,13 +13,13 @@ Add interactive execution mode with step-by-step confirmation. Pause before each
 
 ## Acceptance Criteria
 
-- [ ] `awf run --interactive` enables step-by-step mode
-- [ ] Pause before each step with prompt
-- [ ] Options: continue, skip, abort, inspect
-- [ ] Show step details before execution
-- [ ] Show output after execution
-- [ ] Allow modifying inputs during execution
-- [ ] Support breakpoints on specific states
+- [x] `awf run --interactive` enables step-by-step mode
+- [x] Pause before each step with prompt
+- [x] Options: continue, skip, abort, inspect
+- [x] Show step details before execution
+- [x] Show output after execution
+- [x] Allow modifying inputs during execution
+- [x] Support breakpoints on specific states
 
 ## Dependencies
 
@@ -36,31 +36,31 @@ internal/interfaces/cli/ui/prompt.go
 
 ## Technical Tasks
 
-- [ ] Add --interactive flag to run command
-- [ ] Add --breakpoint flag for selective pauses
-- [ ] Implement InteractiveExecutor
-  - [ ] Wrap standard executor
-  - [ ] Pause before step
-  - [ ] Display step info
-  - [ ] Read user input
-  - [ ] Handle actions
-- [ ] Implement interactive prompt
-  - [ ] [c]ontinue - execute step
-  - [ ] [s]kip - skip to next state (on_success)
-  - [ ] [a]bort - stop workflow
-  - [ ] [i]nspect - show context details
-  - [ ] [e]dit - modify input value
-  - [ ] [r]etry - re-run previous step
-- [ ] Display step details
-  - [ ] State name and type
-  - [ ] Resolved command
-  - [ ] Expected transitions
-  - [ ] Current context variables
-- [ ] Display step result
-  - [ ] Exit code
-  - [ ] Output (truncated)
-  - [ ] Duration
-- [ ] Write integration tests
+- [x] Add --interactive flag to run command
+- [x] Add --breakpoint flag for selective pauses
+- [x] Implement InteractiveExecutor
+  - [x] Wrap standard executor
+  - [x] Pause before step
+  - [x] Display step info
+  - [x] Read user input
+  - [x] Handle actions
+- [x] Implement interactive prompt
+  - [x] [c]ontinue - execute step
+  - [x] [s]kip - skip to next state (on_success)
+  - [x] [a]bort - stop workflow
+  - [x] [i]nspect - show context details
+  - [x] [e]dit - modify input value
+  - [x] [r]etry - re-run previous step
+- [x] Display step details
+  - [x] State name and type
+  - [x] Resolved command
+  - [x] Expected transitions
+  - [x] Current context variables
+- [x] Display step result
+  - [x] Exit code
+  - [x] Output (truncated)
+  - [x] Duration
+- [x] Write integration tests
 
 ## Notes
 
