@@ -8,113 +8,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **F020**: Interactive Mode for Step-by-Step Workflow Execution
-  - `awf run --interactive` enables pause-before-each-step execution with user prompts
-  - Six actions available at each step: `[c]ontinue`, `[s]kip`, `[a]bort`, `[i]nspect`, `[e]dit`, `[r]etry`
-  - `--breakpoint` flag allows selective pausing on specific steps only
-  - Step details shown before execution: name, type, resolved command, timeout, transitions
-  - Step results displayed after execution: output, exit code, duration, status
+
+#### Execution Modes
+- **F020**: Interactive Mode for step-by-step workflow execution
+  - `awf run --interactive` enables pause-before-each-step execution
+  - Actions: `[c]ontinue`, `[s]kip`, `[a]bort`, `[i]nspect`, `[e]dit`, `[r]etry`
+  - `--breakpoint` flag for selective pausing on specific steps
+  - Step details and results displayed during execution
 - **F019**: Dry-Run Mode
   - `awf run --dry-run` shows execution plan without running commands
-  - Displays resolved commands with interpolated variables and values
-  - Shows state transitions, hooks (pre/post), and workflow configuration
-  - Supports parallel steps (branches, strategies) and loops (for-each, while)
-  - Outputs in text or JSON format (`--format=json`)
-- **F043**: Nested Loop Execution with Parent Context Access
-  - Loop states (`for_each`, `while`) can now contain other loop states in their body
-  - Inner loops access outer loop variables via `{{.loop.Parent.*}}` (e.g., `{{.loop.Parent.Item}}`, `{{.loop.Parent.Index}}`)
-  - Arbitrary nesting depth supported with parent chains (`{{.loop.Parent.Parent.*}}`)
-  - Outer loop context automatically preserved during inner loop execution and restored on completion
-  - Mixed loop types nest correctly (e.g., `while` inside `for_each` with full parent access)
+  - Displays resolved commands, transitions, hooks, and configuration
+  - Supports parallel steps and loops; outputs text or JSON format
+- **F039**: Single step execution with `--step` flag
+  - Execute specific steps: `awf run workflow.yaml --step=step_name`
+  - Mock dependencies: `--mock states.prev_step.output="value"`
+
+#### Loop Constructs
+- **F043**: Nested Loop Execution with parent context access
+  - Inner loops access outer variables via `{{.loop.Parent.*}}`
+  - Arbitrary nesting depth with parent chains
+  - Mixed loop types nest correctly
 - **F042**: Loop Context Variables
-  - Add `{{.loop.Index1}}` for 1-based iteration index (complements existing 0-based `{{.loop.Index}}`)
-  - All loop context variables now fully available: `Index`, `Index1`, `Item`, `First`, `Last`, `Length`
-  - Loop variables work in both command templates and `when` conditional expressions
-  - Nested loops maintain separate contexts with proper scoping
-- **F017**: Workflow Templates with Parameters
-  - Define reusable templates in `.awf/templates/` with `name`, `parameters`, and `states`
-  - Reference templates in workflow steps via `use_template: <name>` with parameter overrides
-  - Parameters support `required` flag and `default` values with `{{parameters.X}}` interpolation
-  - Circular template reference detection with clear error messages
-  - Template validation at load time via `awf validate`
+  - `{{.loop.Index1}}` for 1-based index
+  - Full context: `Index`, `Index1`, `Item`, `First`, `Last`, `Length`
+  - Works in commands and `when` expressions
 - **F016**: Loop Constructs (for-each/while)
-  - `for_each` step type iterates over lists with `items` field (supports JSON arrays or template expressions)
-  - `while` step type repeats until condition evaluates to false
-  - Loop context variables: `{{loop.item}}`, `{{loop.index}}`, `{{loop.first}}`, `{{loop.last}}`, `{{loop.length}}`
-  - `max_iterations` safety limit prevents runaway loops (default: 100)
-  - `break_when` condition enables early exit from loops
+  - `for_each` iterates over lists; `while` repeats until condition false
+  - `max_iterations` safety limit; `break_when` for early exit
+
+#### Workflow Features
+- **F017**: Workflow Templates with Parameters
+  - Define templates in `.awf/templates/` with parameters
+  - Reference via `use_template: <name>` with overrides
+  - Circular reference detection; validation at load time
 - **F015**: Conditional Branching with `when:` Clauses
-  - Add `when:` clause on transitions for dynamic workflow paths based on expressions
-  - Support comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) and logical operators (`and`, `or`, `not`)
-  - Access all interpolation variables in conditions: `inputs.*`, `states.*`, `env.*`, `workflow.*`
-  - First-match-wins evaluation with fallback to default transition when no condition matches
-  - Clear error messages for invalid expressions with type coercion for string/numeric comparisons
+  - Dynamic transitions based on expressions
+  - Operators: `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`
+  - Access `inputs.*`, `states.*`, `env.*`, `workflow.*`
 - **F041**: Validate Template Interpolation References
-  - Static validation of `{{inputs.X}}` and `{{states.X.output}}` at parse time
-  - Detect forward references (step A references step B before B runs)
-  - Report all template errors in single pass with step context
+  - Static validation of `{{inputs.X}}` and `{{states.X.output}}`
+  - Forward reference detection; all errors reported in single pass
+
+#### State Machine & Execution
 - **F014**: BadgerDB History
-  - Store execution history in BadgerDB (pure Go, no CGO)
-  - `awf history` command with `--workflow`, `--status`, `--since` filters
-  - Statistics with `--stats` flag
-  - 30-day auto-cleanup at startup
+  - `awf history` with `--workflow`, `--status`, `--since` filters
+  - Statistics with `--stats`; 30-day auto-cleanup
 - **F013**: Resume Command
   - `awf resume <workflow-id>` to continue interrupted workflows
   - `awf resume --list` shows resumable workflows
-  - Input override on resume with `--input` flags
 - **F012**: Input Validation
-  - Validate workflow inputs at runtime against defined rules
-  - Type checking: `string`, `integer`, `boolean`
-  - Pattern validation (regex), enum, numeric ranges (`min`/`max`)
-  - File validation: `file_exists`, `file_extension`
+  - Types: `string`, `integer`, `boolean`
+  - Rules: `pattern`, `enum`, `min`/`max`, `file_exists`, `file_extension`
 - **F011**: Retry with Exponential Backoff
-  - Automatic retry for failed steps with configurable `max_attempts`
-  - Backoff strategies: `exponential`, `linear`, `constant`
-  - Jitter support to prevent thundering herd
-  - Filter retryable failures by `retryable_exit_codes`
-- **F010**: Parallel step execution (errgroup)
-  - `type: parallel` state with concurrent step execution
+  - Strategies: `exponential`, `linear`, `constant`
+  - Jitter support; `retryable_exit_codes` filter
+- **F010**: Parallel Step Execution
   - Strategies: `all_succeed`, `any_succeed`, `best_effort`
-  - `max_concurrent` limit with semaphore control
-  - Context cancellation on first failure (all_succeed mode)
-- **F009**: State machine with conditional transitions
-  - Follow `on_success` transition on exit code 0, `on_failure` on non-zero
-  - Terminal states (`type: terminal`) with `status: success|failure`
-  - State graph validation: detect cycles, unreachable states, missing terminals
-  - `continue_on_error` flag to always follow `on_success` path
-- **F039**: Single step execution with `--step` flag for debugging and testing individual workflow steps
-  - Execute specific steps: `awf run workflow.yaml --step=step_name`
-  - Mock state dependencies: `--mock states.prev_step.output="value"`
-  - Step hooks (pre/post) execute normally
-- **F037**: Step success feedback for steps with no output in silent/streaming modes
-  - Shows `✓ step_name completed successfully` for empty-output steps
-- **F036**: CLI init command (`awf init`) to initialize AWF in current directory
-  - Creates `.awf/workflows/` and `.awf/prompts/` directories
+  - `max_concurrent` limit; context cancellation on failure
+- **F009**: State Machine with Transitions
+  - `on_success`/`on_failure` transitions
+  - Terminal states; cycle/unreachable state detection
+  - `continue_on_error` flag
+
+#### CLI & Usability
+- **F036**: CLI init command (`awf init`)
+  - Creates `.awf/workflows/`, `.awf/prompts/` directories
   - Creates example workflow file
-- ParallelStrategy validation: Invalid strategies now fail at validation time
-  - Valid values: `all_succeed`, `any_succeed`, `best_effort`, or empty (default)
-  - Invalid strategies return clear error message
-- Race condition tests for JSONStore (`TestJSONStore_RaceSaveLoad`, `TestJSONStore_RaceSaveDelete`, `TestJSONStore_RaceListSave`)
-- CLI integration tests expanded:
-  - `TestCLI_Run_FailingCommand_Integration` - workflow with failing command
-  - `TestCLI_Validate_InvalidStrategy_Integration` - validates strategy error message
-  - `TestCLI_Run_OutputModes_Integration` - tests quiet/verbose/default modes
-  - `TestCLI_Run_MultiStep_Integration` - multi-step workflow execution
-- Code review report: `docs/code-review-2025-12.md`
+- **F037**: Step success feedback for empty-output steps
+- ParallelStrategy validation at load time
+- Race condition tests for JSONStore
+- Expanded CLI integration tests
 
 ### Changed
-
-- YAML parsing now reports all errors instead of silently skipping malformed steps
-  - Uses `errors.Join()` to aggregate multiple parsing errors
-  - Users get detailed feedback on which states failed to parse
+  
+- YAML parsing reports all errors instead of silently skipping malformed steps
+  - Uses `errors.Join()` for aggregation
 
 ### Fixed
 
-- **Race condition in JSONStore**: Concurrent `Save` operations to the same workflow ID could corrupt the state file. Fixed by using unique temp file names with PID and nanosecond timestamp.
+- **Race condition in JSONStore**: Concurrent `Save` operations used same temp file; now uses unique names with PID and nanosecond timestamp
 
 ### Removed
 
 - **BREAKING**: `Args` field removed from `ports.Command` struct
-  - This field was never used by `ShellExecutor`
-  - Commands are passed as shell strings to `/bin/sh -c`
+  - Was unused by `ShellExecutor`
   - Use `ShellEscape()` from `pkg/interpolation` for user-provided values
+
+---
+
+[Unreleased]: https://github.com/vanoix/awf/compare/HEAD
