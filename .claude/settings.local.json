@@ -38,7 +38,8 @@
       "mcp__plugin_common_serena__read_memory",
       "mcp__plugin_common_serena__edit_memory",
       "WebSearch",
-      "Skill(common:github-actions)"
+      "Skill(common:github-actions)",
+      "Skill(common:docs)"
     ]
   }
 }

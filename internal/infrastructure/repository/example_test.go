@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoadExampleWorkflow(t *testing.T) {
-	repo := NewYAMLRepository("../../../configs/workflows")
+	repo := NewYAMLRepository("../../../tests/fixtures/workflows")
 
 	wf, err := repo.Load(context.Background(), "example-simple")
 	if err != nil {

@@ -1,82 +1,49 @@
 # AWF - AI Workflow CLI
 
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
+
 A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.
 
-## Overview
+## Features
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                            AWF CLI                                  │
-│  awf run | awf resume | awf list | awf status | awf validate | awf history │
-└─────────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────┴───────────────────────────────┐
-│                    YAML Workflow                            │
-│   States → Transitions → Commands → Outputs                 │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-┌─────────────────────────────┴───────────────────────────────┐
-│                  Execution Engine                           │
-│   Shell Executor │ State Persistence │ Signal Handling      │
-└─────────────────────────────────────────────────────────────┘
-```
+- **State Machine Execution** - Define workflows as state machines with conditional transitions
+- **Parallel Execution** - Run multiple steps concurrently with configurable strategies
+- **Loop Constructs** - For-each and while loops with full context access
+- **Retry with Backoff** - Automatic retry with exponential, linear, or constant backoff
+- **Workflow Templates** - Reusable step patterns with parameters
+- **Input Validation** - Type checking, patterns, enums, file validation
+- **Dry-Run Mode** - Preview execution plan without running commands
+- **Interactive Mode** - Step-by-step execution with prompts
 
 ## Installation
-
-### From source
-
-```bash
-git clone https://github.com/vanoix/awf.git
-cd awf
-make build
-make install
-```
-
-### Quick install
 
 ```bash
 go install github.com/vanoix/awf/cmd/awf@latest
 ```
 
+Or build from source:
+
+```bash
+git clone https://github.com/vanoix/awf.git
+cd awf && make build && make install
+```
+
+See [Installation Guide](docs/getting-started/installation.md) for details.
+
 ## Quick Start
 
-### 1. Initialize AWF
-
 ```bash
+# Initialize AWF
 awf init
-```
 
-This creates:
-```
-.awf.yaml              # Configuration file
-.awf/
-├── workflows/
-│   └── example.yaml   # Sample workflow
-├── templates/         # Reusable workflow templates
-└── storage/
-    ├── states/        # State persistence
-    └── logs/          # Log files
-```
-
-### 2. Run the example workflow
-
-```bash
+# Run example workflow
 awf run example
-```
 
-Output:
-```
-Hello from AWF!
-Workflow completed successfully
-```
-
-### 3. Create your own workflow
-
-```yaml
-# .awf/workflows/hello.yaml
+# Create your own workflow
+cat > .awf/workflows/hello.yaml << 'EOF'
 name: hello
 version: "1.0.0"
-description: A simple hello world workflow
 
 states:
   initial: greet
@@ -86,11 +53,13 @@ states:
     on_success: done
   done:
     type: terminal
-```
+EOF
 
-```bash
+# Run with input
 awf run hello --input name=World
 ```
+
+See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 
 ## Commands
 
@@ -98,781 +67,137 @@ awf run hello --input name=World
 |---------|-------------|
 | `awf init` | Initialize AWF in current directory |
 | `awf run <workflow>` | Execute a workflow |
-| `awf resume [workflow-id]` | Resume an interrupted workflow |
-| `awf list` | List available workflows |
-| `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
-| `awf history` | Show workflow execution history |
-| `awf version` | Show version info |
-| `awf completion <shell>` | Generate shell autocompletion |
+| `awf list` | List available workflows |
+| `awf resume` | Resume interrupted workflow |
+| `awf history` | Show execution history |
+| `awf status <id>` | Check workflow status |
 
-### Completion Command
+See [Command Reference](docs/user-guide/commands.md) for all options.
 
-Generate shell autocompletion scripts:
-
-```bash
-# Bash
-awf completion bash > /etc/bash_completion.d/awf
-
-# Zsh
-awf completion zsh > "${fpath[1]}/_awf"
-
-# Fish
-awf completion fish > ~/.config/fish/completions/awf.fish
-
-# PowerShell
-awf completion powershell > awf.ps1
-```
-
-### Init Command Flags
-
-```
---force    Overwrite existing configuration files
-```
-
-```bash
-# Initialize a new project
-awf init
-
-# Reinitialize (recreate config and example workflow)
-awf init --force
-```
-
-### Resume Command Flags
-
-```
---list, -l        List resumable workflows
---input, -i       Override input parameter on resume (key=value), can be repeated
---output, -o      Output mode: silent (default), streaming, buffered
-```
-
-```bash
-# List all resumable (interrupted) workflows
-awf resume --list
-
-# Resume a specific workflow
-awf resume abc123-def456
-
-# Resume with input override
-awf resume abc123-def456 --input max_tokens=5000
-```
-
-### History Command Flags
-
-```
---workflow, -w    Filter by workflow name
---status, -s      Filter by status (success, failed, interrupted)
---since           Show executions since date (YYYY-MM-DD)
---limit, -n       Maximum entries to show (default: 20)
---stats           Show statistics only
-```
-
-```bash
-# List recent executions
-awf history
-
-# Filter by workflow
-awf history --workflow deploy
-
-# Filter by status
-awf history --status failed
-
-# Show executions since date
-awf history --since 2025-12-01
-
-# Show statistics only
-awf history --stats
-
-# JSON output for scripting
-awf history -f json
-
-# Combined filters
-awf history -w deploy -s success --since 2025-12-01 -n 50
-```
-
-### Global Flags
-
-```
---verbose, -v     Enable verbose output
---quiet, -q       Suppress non-error output
---no-color        Disable colored output
---format, -f      Output format (text, json, table, quiet) - default: text
---config          Path to config file
---storage         Path to storage directory
---log-level       Log level (debug, info, warn, error)
-```
-
-### Output Formats
-
-| Format | Description | Use case |
-|--------|-------------|----------|
-| `text` | Human-readable with colors (default) | Interactive terminal |
-| `json` | Structured JSON | Scripting, pipes, CI/CD |
-| `table` | Aligned columns with headers | Lists, reports |
-| `quiet` | Minimal output (IDs, exit codes only) | Silent scripts |
-
-```bash
-# JSON output for scripting
-awf list -f json
-awf status abc123 -f json
-
-# Quiet mode for pipelines
-WORKFLOW_ID=$(awf run deploy -f quiet)
-awf status $WORKFLOW_ID -f quiet
-```
-
-### Run Command Flags
-
-```
---input, -i       Input parameter (key=value), can be repeated
---output, -o      Output mode: silent (default), streaming, buffered
-                  - silent: No command output displayed
-                  - streaming: Real-time output with [OUT]/[ERR] prefixes
-                  - buffered: Show output after each step completes
---step, -s        Execute only a specific step from the workflow
---mock, -m        Mock state values for single step execution (key=value)
-                  Example: --mock states.step1.output="mocked value"
---dry-run         Show execution plan without running commands
-                  Displays resolved commands, transitions, hooks, and variable values
---interactive     Enable step-by-step mode with prompts before each step
-                  Actions: [c]ontinue, [s]kip, [a]bort, [i]nspect, [e]dit, [r]etry
---breakpoint, -b  Pause only at specific steps (requires --interactive)
-                  Example: --breakpoint step1,step2
-```
-
-## Workflow Discovery
-
-AWF discovers workflows from multiple locations (priority high to low):
-
-1. `AWF_WORKFLOWS_PATH` environment variable
-2. `./.awf/workflows/` (local project)
-3. `$XDG_CONFIG_HOME/awf/workflows/` (global, default: `~/.config/awf/workflows/`)
-
-Local workflows override global ones with the same name. Use `awf list` to see all workflows with their source.
-
-### XDG Base Directory
-
-AWF follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html):
-
-```
-~/.config/awf/              # Config ($XDG_CONFIG_HOME/awf)
-└── workflows/              # Global workflows
-
-~/.local/share/awf/         # Data ($XDG_DATA_HOME/awf)
-├── states/                 # Execution states
-└── logs/                   # Log files
-```
-
-## Workflow Syntax
-
-### Basic Structure
+## Example Workflow
 
 ```yaml
-name: my-workflow
-version: "1.0.0"
-description: Workflow description
-
-inputs:
-  - name: file_path
-    type: string
-    required: true
-    validation:
-      file_exists: true
-      file_extension: [".go", ".py", ".js"]
-  - name: max_tokens
-    type: integer
-    default: 2000
-    validation:
-      min: 1
-      max: 10000
-
-states:
-  initial: step1
-
-  step1:
-    type: step
-    command: |
-      echo "Processing {{.inputs.file_path}}"
-    dir: "/tmp/workdir"  # optional working directory
-    timeout: 30
-    on_success: step2
-    on_failure: error
-
-  step2:
-    type: step
-    command: |
-      claude -c "Analyze: {{.states.step1.output}}"
-    on_success: done
-    on_failure: error
-
-  done:
-    type: terminal
-    status: success
-
-  error:
-    type: terminal
-    status: failure
-```
-
-### State Types
-
-| Type | Description |
-|------|-------------|
-| `step` | Execute a command |
-| `terminal` | End state with `status: success` or `status: failure` |
-| `parallel` | Execute multiple steps concurrently |
-| `for_each` | Iterate over a list of items |
-| `while` | Repeat until condition is false |
-
-### Step Options
-
-| Option | Description |
-|--------|-------------|
-| `command` | Shell command to execute |
-| `dir` | Working directory (supports interpolation, e.g., `{{.inputs.path}}`) |
-| `timeout` | Execution timeout in seconds |
-| `on_success` | Next state on success (exit code 0) |
-| `on_failure` | Next state on failure (exit code ≠ 0) |
-| `continue_on_error` | Always follow `on_success` regardless of exit code |
-| `retry` | Retry configuration (see below) |
-| `transitions` | Conditional transitions (see below) |
-
-### Retry Options
-
-| Option | Description |
-|--------|-------------|
-| `max_attempts` | Maximum number of attempts (default: 1 = no retry) |
-| `initial_delay` | Delay before first retry (e.g., `1s`, `500ms`) |
-| `max_delay` | Maximum delay cap (e.g., `30s`) |
-| `backoff` | Strategy: `constant`, `linear`, or `exponential` |
-| `multiplier` | Multiplier for exponential backoff (default: 2) |
-| `jitter` | Random jitter factor 0.0-1.0 (e.g., 0.1 = ±10%) |
-| `retryable_exit_codes` | List of exit codes to retry (empty = retry all non-zero) |
-
-**Backoff Strategies:**
-- `constant`: Always wait `initial_delay`
-- `linear`: Wait `initial_delay * attempt`
-- `exponential`: Wait `initial_delay * multiplier^(attempt-1)`
-
-**Example:**
-```yaml
-flaky_api_call:
-  type: step
-  command: curl -f https://api.example.com/data
-  retry:
-    max_attempts: 5
-    initial_delay: 1s
-    max_delay: 30s
-    backoff: exponential
-    multiplier: 2
-    jitter: 0.1
-    retryable_exit_codes: [1, 22]  # curl exit codes
-  on_success: process_data
-  on_failure: error
-```
-
-### Conditional Transitions
-
-Steps can use `transitions:` for dynamic branching based on expressions:
-
-| Option | Description |
-|--------|-------------|
-| `when` | Expression to evaluate (optional, omit for default fallback) |
-| `goto` | Target state if condition matches |
-
-**Supported operators:**
-- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
-- Logical: `and`, `or`, `not`
-- Grouping: `(expr)`
-
-**Available variables in expressions:**
-- `inputs.name` - Input values
-- `states.step_name.exit_code` - Step exit code
-- `states.step_name.output` - Step output
-- `env.VAR_NAME` - Environment variables
-
-**Example:**
-```yaml
-process:
-  type: step
-  command: analyze.sh
-  transitions:
-    - when: "states.process.exit_code == 0 and inputs.mode == 'full'"
-      goto: full_report
-    - when: "states.process.exit_code == 0"
-      goto: summary_report
-    - goto: error  # default fallback (no when clause)
-```
-
-Transitions are evaluated in order; first match wins. A transition without `when` acts as default fallback. If no `transitions:` are defined, `on_success`/`on_failure` are used for backward compatibility.
-
-### Terminal Options
-
-| Option | Description |
-|--------|-------------|
-| `status` | Terminal status: `success` or `failure` |
-
-### Parallel Options
-
-| Option | Description |
-|--------|-------------|
-| `steps` | List of steps to execute concurrently |
-| `strategy` | `all_succeed` (default), `any_succeed`, or `best_effort` |
-| `max_concurrent` | Maximum concurrent steps (default: unlimited) |
-| `on_success` | Next state on success |
-| `on_failure` | Next state on failure |
-
-**Strategies:**
-- `all_succeed`: All steps must succeed, cancel remaining on first failure
-- `any_succeed`: Succeed if at least one step succeeds
-- `best_effort`: Collect all results, never cancel early
-
-**Example:**
-```yaml
-parallel_analysis:
-  type: parallel
-  strategy: all_succeed
-  max_concurrent: 3
-  steps:
-    - name: lint
-      command: golangci-lint run
-    - name: test
-      command: go test ./...
-    - name: build
-      command: go build ./cmd/...
-  on_success: deploy
-  on_failure: error
-```
-
-Access individual step outputs: `{{.states.parallel_analysis.steps.lint.output}}`
-
-### Loop Options (for_each)
-
-| Option | Description |
-|--------|-------------|
-| `items` | Template expression or literal array of items to iterate |
-| `body` | List of step names to execute each iteration |
-| `max_iterations` | Safety limit (default: 100, max: 10000) |
-| `break_when` | Optional expression to exit loop early |
-| `on_complete` | Next state after loop completes |
-
-**Loop context variables:**
-- `{{.loop.item}}` - Current item value
-- `{{.loop.index}}` - 0-based iteration index
-- `{{.loop.index1}}` - 1-based iteration index
-- `{{.loop.first}}` - True on first iteration
-- `{{.loop.last}}` - True on last iteration
-- `{{.loop.length}}` - Total items count
-- `{{.loop.parent}}` - Parent loop context (for nested loops)
-
-**Nested loops:** Loops can contain other loops in their body. Inner loops access outer loop context via `{{.loop.parent.*}}`:
-```yaml
-outer_loop:
-  type: for_each
-  items: '["A", "B"]'
-  body:
-    - inner_loop
-  on_complete: done
-
-inner_loop:
-  type: for_each
-  items: '["1", "2"]'
-  body:
-    - process
-  on_complete: outer_loop
-
-process:
-  type: step
-  command: 'echo "outer={{.loop.parent.item}} inner={{.loop.item}}"'
-  on_success: inner_loop
-```
-
-Parent chains support arbitrary depth: `{{.loop.parent.parent.item}}` for 3-level nesting.
-
-**Example:**
-```yaml
-process_files:
-  type: for_each
-  items: '["a.txt", "b.txt", "c.txt"]'
-  max_iterations: 100
-  body:
-    - process_single
-  on_complete: aggregate
-
-process_single:
-  type: step
-  command: 'echo "Processing {{.loop.item}} ({{.loop.index1}}/{{.loop.length}})"'
-  on_success: process_files
-
-aggregate:
-  type: terminal
-  status: success
-```
-
-Items can also come from a template expression:
-```yaml
-items: "{{.inputs.files}}"
-```
-
-### Loop Options (while)
-
-| Option | Description |
-|--------|-------------|
-| `while` | Condition expression (loop while true) |
-| `body` | List of step names to execute each iteration |
-| `max_iterations` | Safety limit (default: 100, max: 10000) |
-| `break_when` | Optional expression to exit loop early |
-| `on_complete` | Next state after loop completes |
-
-**Loop context variables:**
-- `{{.loop.index}}` - 0-based iteration index
-- `{{.loop.first}}` - True on first iteration
-- `{{.loop.length}}` - Always -1 (unknown for while loops)
-
-**Example:**
-```yaml
-poll_status:
-  type: while
-  while: "states.check.output != 'ready'"
-  max_iterations: 60
-  body:
-    - check
-    - wait
-  on_complete: proceed
-
-check:
-  type: step
-  command: "curl -s https://api.example.com/status"
-  capture:
-    stdout: status
-  on_success: poll_status
-
-wait:
-  type: step
-  command: "sleep 5"
-  on_success: poll_status
-
-proceed:
-  type: terminal
-  status: success
-```
-
-### Workflow Templates
-
-Templates allow defining reusable step patterns with parameters. Define once, use in multiple workflows.
-
-**Template definition** (`.awf/templates/ai-analyze.yaml`):
-```yaml
-name: ai-analyze
-parameters:
-  - name: prompt
-    required: true
-  - name: model
-    default: claude
-  - name: timeout
-    default: 120
-states:
-  ai-analyze:
-    type: step
-    command: "{{parameters.model}} -c '{{parameters.prompt}}'"
-    timeout: "{{parameters.timeout}}"
-    capture:
-      stdout: analysis
-```
-
-**Template usage** in a workflow:
-```yaml
-states:
-  code_analysis:
-    use_template: ai-analyze
-    parameters:
-      prompt: "Analyze this code: {{.states.extract.output}}"
-      model: gemini
-    on_success: format
-    on_failure: error
-```
-
-| Template Option | Description |
-|-----------------|-------------|
-| `name` | Template identifier |
-| `parameters` | List of parameter definitions |
-| `parameters[].name` | Parameter name |
-| `parameters[].required` | If true, must be provided when using template |
-| `parameters[].default` | Default value if not provided |
-| `states` | Step definitions using `{{parameters.X}}` placeholders |
-
-| Step Option | Description |
-|-------------|-------------|
-| `use_template` | Template name to instantiate |
-| `parameters` | Parameter values to pass to template |
-
-Template parameters use `{{parameters.name}}` syntax and are resolved at workflow load time. The step's `on_success`/`on_failure` transitions override any defined in the template.
-
-Templates are loaded from:
-1. `.awf/templates/` (local project)
-2. `$AWF_STORAGE/templates/` (global)
-
-**Validation:**
-- Missing required parameters produce clear errors
-- Circular template references are detected
-- Use `awf validate` to check template references before execution
-
-### Variable Interpolation
-
-AWF uses `{{.var}}` syntax (Go template style with dot prefix):
-
-```yaml
-# Inputs
-{{.inputs.variable_name}}
-
-# Previous step outputs
-{{.states.step_name.output}}
-
-# Workflow metadata
-{{.workflow.id}}
-{{.workflow.name}}
-
-# Environment variables
-{{.env.VARIABLE_NAME}}
-```
-
-### Input Validation
-
-Inputs can be validated at runtime using the `validation` block:
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `pattern` | string | Regex pattern the value must match |
-| `enum` | []string | List of allowed values |
-| `min` | int | Minimum value (integers only) |
-| `max` | int | Maximum value (integers only) |
-| `file_exists` | bool | File must exist on filesystem |
-| `file_extension` | []string | File must have one of these extensions |
-
-**Supported types:** `string`, `integer`, `boolean`
-
-**Example:**
-```yaml
-inputs:
-  - name: email
-    type: string
-    required: true
-    validation:
-      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-
-  - name: env
-    type: string
-    default: staging
-    validation:
-      enum: [dev, staging, prod]
-
-  - name: count
-    type: integer
-    default: 10
-    validation:
-      min: 1
-      max: 100
-
-  - name: config_file
-    type: string
-    required: true
-    validation:
-      file_exists: true
-      file_extension: [".yaml", ".yml", ".json"]
-```
-
-Validation errors are collected (not fail-fast) and reported together:
-```
-input validation failed: 2 errors:
-  - inputs.email: does not match pattern
-  - inputs.count: value 150 exceeds maximum 100
-```
-
-## Architecture
-
-AWF follows Hexagonal/Clean Architecture:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     INTERFACES LAYER                        │
-│      CLI (current)  │  API (future)  │  MQ (future)        │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-┌───────────────────────────┴─────────────────────────────────┐
-│                   APPLICATION LAYER                         │
-│   WorkflowService │ ExecutionService │ StateManager         │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-┌───────────────────────────┴─────────────────────────────────┐
-│                      DOMAIN LAYER                           │
-│   Workflow │ Step │ ExecutionContext │ Ports (Interfaces)   │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-┌───────────────────────────┴─────────────────────────────────┐
-│                  INFRASTRUCTURE LAYER                       │
-│   YAMLRepository │ JSONStateStore │ ShellExecutor          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Project Structure
-
-```
-awf/
-├── cmd/awf/main.go              # CLI entry point
-├── internal/
-│   ├── domain/
-│   │   ├── workflow/            # Entities: Workflow, Step, Template, Context
-│   │   └── ports/               # Interfaces: Repository, Store, Executor
-│   ├── application/             # Services: WorkflowService, ExecutionService, TemplateService
-│   ├── infrastructure/          # Adapters: YAML, JSON, Shell, XDG
-│   └── interfaces/cli/          # CLI commands and UI
-└── tests/                       # Integration tests
-```
-
-## Exit Codes
-
-| Code | Type | Description |
-|------|------|-------------|
-| 0 | Success | Workflow completed |
-| 1 | User | Bad input, missing file |
-| 2 | Workflow | Invalid state reference |
-| 3 | Execution | Command failed, timeout |
-| 4 | System | IO error, permissions |
-
-## Development
-
-### Prerequisites
-
-**Required:**
-- Go 1.21+
-- Make
-
-**For development:**
-- [golangci-lint](https://golangci-lint.run/welcome/install/) - Linter
-
-```bash
-# Arch Linux
-paru -S golangci-lint
-
-# macOS
-brew install golangci-lint
-
-# Other (via Go)
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-```
-
-### Build & Test
-
-```bash
-make build          # Build binary to ./bin/awf
-make test           # Run all tests
-make test-unit      # Unit tests only
-make test-coverage  # Generate coverage report
-make lint           # Run linter
-make fmt            # Format code
-```
-
-### Dependencies
-
-- `spf13/cobra` - CLI framework
-- `gopkg.in/yaml.v3` - YAML parsing
-- `fatih/color` - Terminal colors
-- `google/uuid` - UUID generation
-- `stretchr/testify` - Testing
-- `golang.org/x/sync/errgroup` - Parallel execution
-- `dgraph-io/badger/v4` - History storage
-- `expr-lang/expr` - Expression evaluation for conditions
-
-## Roadmap
-
-### Phase 1 - MVP (v0.1.0) - Complete
-- [x] Hexagonal architecture
-- [x] YAML workflow parsing
-- [x] Linear step execution
-- [x] JSON state persistence
-- [x] CLI (run, list, status, validate, init)
-- [x] JSON structured logging
-- [x] Variable interpolation
-- [x] Pre/post hooks
-- [x] Output streaming (--output flag)
-- [x] XDG workflow discovery
-- [x] Output formats (--format flag)
-- [x] Step working directory (dir field)
-- [x] CLI init command (--force flag)
-- [x] Run single step (--step flag)
-
-### Phase 2 - Core Features (v0.2.0)
-- [x] State machine with transitions (cycle detection, unreachable states, terminal status)
-- [x] Parallel execution (errgroup with strategies)
-- [x] Retry with exponential backoff
-- [x] Input validation
-- [x] Template reference validation (detect undefined inputs, missing steps, forward references)
-- [x] Resume command
-- [x] BadgerDB history
-
-### Phase 3 - Advanced Features (v0.3.0)
-- [x] Conditions (if/else with `when:` clauses)
-- [x] Loops (for/while)
-- [x] Nested loops with parent context access (`{{.loop.parent.*}}`)
-- [x] Workflow templates
-- [x] Dry-run mode (`--dry-run` flag)
-- [x] Interactive mode (`--interactive` flag with step-by-step execution)
-- [ ] Plugin system
-- [ ] REST API
-- [ ] Web UI
-
-## Examples
-
-### Code Analysis Workflow
-
-```yaml
-name: analyze-code
+name: code-review
 version: "1.0.0"
 
 inputs:
   - name: file
     type: string
     required: true
+    validation:
+      file_exists: true
 
 states:
-  initial: read_file
-
-  read_file:
+  initial: read
+  read:
     type: step
     command: cat "{{.inputs.file}}"
     on_success: analyze
     on_failure: error
-
   analyze:
     type: step
-    command: |
-      claude -c "Review this code and suggest improvements:
-
-      {{.states.read_file.output}}"
+    command: claude -c "Review: {{.states.read.output}}"
     timeout: 120
     on_success: done
     on_failure: error
-
   done:
     type: terminal
-
   error:
     type: terminal
+    status: failure
 ```
 
-Run:
 ```bash
-awf run analyze-code --input file=main.go
+awf run code-review --input file=main.go
 ```
+
+See [Examples](docs/user-guide/examples.md) for more workflows.
+
+## Documentation
+
+| Section | Description |
+|---------|-------------|
+| [Getting Started](docs/getting-started/) | Installation and first steps |
+| [User Guide](docs/user-guide/) | Commands, workflow syntax, templates |
+| [Reference](docs/reference/) | Exit codes, interpolation, validation |
+| [Development](docs/development/) | Architecture, contributing, testing |
+
+## Architecture
+
+AWF follows hexagonal (clean) architecture:
+
+```
+Interfaces (CLI) → Application (Services) → Domain (Entities, Ports)
+                                                    ↑
+                        Infrastructure (YAML, JSON, Shell) ─┘
+```
+
+See [Architecture](docs/development/architecture.md) for details.
+
+## Development
+
+```bash
+make build          # Build binary
+make test           # Run all tests
+make lint           # Run linter
+make test-coverage  # Generate coverage report
+```
+
+See [Testing Guide](docs/development/testing.md) for conventions.
 
 ## Contributing
 
+Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
+2. Create a feature branch
 3. Write tests for your changes
-4. Commit with conventional commits (`git commit -m 'feat: add amazing feature'`)
-5. Push and open a Pull Request
+4. Submit a Pull Request
+
+## Support the Project
+
+AWF is maintained by [Alexandre Balmes](https://github.com/pocky) and relies on community support to ensure continued development, maintenance, and reliability.
+
+### Why Sponsor?
+
+Your support helps:
+- **Maintenance**: Bug fixes, security updates, dependency upgrades
+- **Improvements**: New features, performance optimizations
+- **Quality**: Documentation, testing, code reviews
+- **Reliability**: CI/CD, release management, long-term support
+
+### How to Support
+
+**Direct sponsorship:**
+- [GitHub Sponsors](https://github.com/sponsors/pocky)
+
+**Commercial engagement:**
+
+Hiring services from the author's companies directly funds AWF development:
+- [Vanoix](https://vanoix.com) - Tech Consulting
+- [d11n Studio](https://d11n.studio) - AI Solutions
+- [akawaka](https://akawaka.fr) - Web Development
+
+All commercial clients receive a free commercial license for AWF.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+### Open Source License
+
+This project is licensed under the [EUPL-1.2](LICENSE) (European Union Public License).
+
+- **Individuals**: Free to use, modify, and distribute
+- **Companies**: Free to use under EUPL-1.2 terms (copyleft - modifications must be shared)
+- **GPL Compatibility**: EUPL-1.2 is [compatible with GPL](https://joinup.ec.europa.eu/collection/eupl/matrix-eupl-compatible-open-source-licences)
+
+### Commercial License
+
+Companies seeking exemption from copyleft obligations can obtain a commercial license.
+
+**Free commercial license for:**
+- [Project sponsors](https://github.com/sponsors/pocky)
+- Active contributors
+- Clients of [Vanoix](https://vanoix.com) (author's company)
+
+**Contact:** alexandre@vanoix.com
