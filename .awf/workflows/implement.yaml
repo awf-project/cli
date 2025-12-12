@@ -119,22 +119,7 @@ states:
     description: Claude explores codebase for implementation context
     command: |
       SPEC_CONTENT=$(cat "{{.states.find_spec.Output}}")
-      claude -p "You are exploring the awf (AI Workflow CLI) codebase to understand how to implement a new feature.
-
-      ## Feature to implement
-      $SPEC_CONTENT
-
-      ## Your Task
-      1. Explore the codebase architecture (hexagonal: domain/application/infrastructure/interfaces)
-      2. Find similar features already implemented as reference
-      3. Identify key interfaces and types that will be affected
-      4. List 3-5 critical files that must be modified or created
-
-      Output a structured exploration report:
-      - Architecture layer(s) involved
-      - Critical files with reasons
-      - Pattern files to follow
-      - Dependencies and risks" \
+      claude -p "$(cat .awf/prompts/implement/explore.md)" \
         --allowedTools "Read,Grep,Glob" \
         --dangerously-skip-permissions \
         --output-format json
@@ -183,33 +168,7 @@ states:
       if [ -n "$SESSION_ID" ]; then
         RESUME_FLAG="--resume $SESSION_ID"
       fi
-      claude $RESUME_FLAG -p "Based on your exploration, create a detailed implementation plan for {{.inputs.feature_id}}.
-
-      ## Output Format (Markdown)
-      # Implementation Plan: {{.inputs.feature_id}}
-
-      ## Summary
-      (2-3 sentences describing the approach)
-
-      ## Implementation Steps
-      1. Step description
-         - File: path/to/file.go
-         - Action: CREATE/MODIFY
-         - Changes: specific changes needed
-
-      ## Test Plan
-      - Unit tests needed
-      - Integration tests needed
-
-      ## Files to Modify
-      | File | Action | Complexity |
-      |------|--------|------------|
-      | path | CREATE/MODIFY | S/M/L |
-
-      ## Risks
-      - Risk and mitigation
-
-      Be specific and actionable." \
+      claude $RESUME_FLAG -p "$(cat .awf/prompts/implement/plan.md)" \
         --allowedTools "Read,Grep,Glob" \
         --output-format json
     timeout: 300s
@@ -374,32 +333,7 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
-
-      ## PHASE: Write Interfaces/Types/Stubs (RED phase - step 1)
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Your Task
-      Create ONLY the interfaces, types, and stub implementations needed for the tests to compile.
-      The stubs should:
-      - Return zero values or panic(\"not implemented\")
-      - Allow tests to compile but fail when run
-      - Follow the plan's file structure
-
-      DO NOT implement the actual logic yet - just the skeleton.
-
-      ## Available Agents
-      {{.inputs.agents}}
-
-      ## Available Skills
-      {{.inputs.skills}}
-
-      If agents/skills are specified, use them via Task/Skill tools when appropriate." \
+      claude -p "$(cat .awf/prompts/implement/interfaces.md)" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
@@ -425,33 +359,7 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
-
-      ## PHASE: Write Tests (RED phase - step 2)
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Your Task
-      Write comprehensive tests based on the Test Plan section:
-      - Unit tests for each component
-      - Integration tests if specified
-      - Tests should use the interfaces/stubs created in the previous step
-      - Tests MUST compile (use existing interfaces)
-      - Tests SHOULD fail when run (stubs don't implement logic)
-
-      Follow the project's testing conventions (table-driven tests, testify).
-
-      ## Available Agents
-      {{.inputs.agents}}
-
-      ## Available Skills
-      {{.inputs.skills}}
-
-      If agents/skills are specified, use them via Task/Skill tools when appropriate." \
+      claude -p "$(cat .awf/prompts/implement/tests.md)" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
@@ -513,36 +421,7 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "You are implementing feature {{.inputs.feature_id}} using strict TDD.
-
-      ## PHASE: Implementation (GREEN phase) - Attempt {{.loop.Index1}}/3
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Your Task
-      Implement the actual logic to make all tests pass:
-      - Replace stub implementations with real code
-      - Follow the implementation steps from the plan
-      - Ensure code compiles and passes lint
-      - Make tests pass (GREEN)
-      {{if not .loop.First}}
-      ## IMPORTANT: Previous attempt failed
-      This is retry attempt {{.loop.Index1}}. The previous implementation did not pass all tests.
-      Review the test output and fix the issues before proceeding.
-      {{end}}
-
-      ## Available Agents
-      {{.inputs.agents}}
-
-      ## Available Skills
-      {{.inputs.skills}}
-
-      If agents/skills are specified, use them via Task/Skill tools when appropriate.
-      For example, use go:golang-expert for complex Go patterns." \
+      claude -p "$(cat .awf/prompts/implement/feature.md)" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
@@ -621,64 +500,7 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "You are writing functional tests for feature {{.inputs.feature_id}}.
-
-      ## PHASE: Feature Functional Tests
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Your Task
-      Write comprehensive **functional tests** that validate the feature works end-to-end:
-
-      ### Test Categories Required
-      1. **Happy Path Tests** - Normal usage scenarios work correctly
-      2. **Edge Cases** - Boundary conditions, empty inputs, max values
-      3. **Error Handling** - Invalid inputs produce correct errors
-      4. **Integration** - Feature works with other components
-
-      ### Test Structure
-      - File: tests/integration/{component}_test.go (match existing file if extending)
-      - Build tag: //go:build integration
-      - Naming: Test{Component}_{Action}_Integration (e.g., TestTemplateService_ExpandWorkflow_Integration)
-      - REQUIRED: Add file-level comment '// Feature: {{.inputs.feature_id}}'
-      - Use testify/require for assertions
-      - Table-driven tests where appropriate
-      - Real fixtures in tests/fixtures/
-
-      ### Example Structure
-      \`\`\`go
-      //go:build integration
-
-      // Feature: {{.inputs.feature_id}}
-      package integration
-
-      import (
-          \"testing\"
-          \"github.com/stretchr/testify/require\"
-      )
-
-      func TestComponent_HappyPath_Integration(t *testing.T) {
-          // Setup real dependencies
-          // Execute feature end-to-end
-          // Assert expected behavior
-      }
-      \`\`\`
-
-      ### Requirements
-      - Tests MUST compile and run
-      - Tests MUST use the actual implementation (not mocks)
-      - Tests MUST cover acceptance criteria from spec
-      - Create necessary fixtures in tests/fixtures/
-
-      ## Available Agents
-      {{.inputs.agents}}
-
-      ## Available Skills
-      {{.inputs.skills}}" \
+      claude -p "$(cat .awf/prompts/implement/feature-tests.md)" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
@@ -881,30 +703,7 @@ states:
         PLAN_CONTENT=$(cat "$PLAN_FILE")
       fi
 
-      claude -p "Update the README.md to reflect the newly implemented feature {{.inputs.feature_id}}.
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Staged/Modified Files
-      $STAGED_FILES
-
-      ## Your Task
-      1. Read the current README.md
-      2. Update the Roadmap section:
-         - Check the checkbox for this feature (change '- [ ]' to '- [x]')
-         - If the feature is not listed, add it to the appropriate phase section
-      3. If the feature adds new CLI commands or flags:
-         - Update the Commands table
-         - Update the relevant Flags sections
-      4. If the feature changes workflow syntax:
-         - Update the Workflow Syntax section
-      5. Keep changes minimal and focused on this feature only
-
-      Output 'README_UPDATED' when done, or 'README_NO_CHANGES' if no updates needed." \
+      claude -p "$(cat .awf/prompts/implement/docs.md)" \
         --allowedTools "Read,Edit" \
         --dangerously-skip-permissions \
         --output-format json 2>&1 || echo "README_UPDATE_FAILED"
@@ -937,30 +736,7 @@ states:
       PLANEOF
       )
 
-      ENTRY=$(claude -p "Generate a CHANGELOG entry for feature {{.inputs.feature_id}}.
-
-      ## Feature Spec
-      $SPEC_CONTENT
-
-      ## Implementation Plan
-      $PLAN_CONTENT
-
-      ## Your Task
-      Create a rich changelog entry following this format:
-      - **{{.inputs.feature_id}}**: Short title (from spec H1)
-        - Key feature/capability 1 (use backticks for code terms)
-        - Key feature/capability 2
-        - Key feature/capability 3
-        - (3-5 bullets max, focus on user-facing changes)
-
-      Rules:
-      1. Title: Extract from spec H1, keep concise (5-10 words)
-      2. Bullets: Focus on WHAT it does, not HOW it's implemented
-      3. Use backticks for: commands, flags, config keys, code terms
-      4. Skip implementation details (internal refactors, test changes)
-      5. If breaking change: add 'BREAKING:' prefix to relevant bullet
-
-      Output ONLY the markdown entry, nothing else." \
+      ENTRY=$(claude -p "$(cat .awf/prompts/implement/changelog.md)" \
         --allowedTools "" \
         --dangerously-skip-permissions \
         --output-format text 2>/dev/null || echo "")

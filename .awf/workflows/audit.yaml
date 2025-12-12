@@ -289,61 +289,7 @@ states:
       INVENTORY="{{.states.collect_code_inventory.Output}}"
       THRESHOLD={{.inputs.coverage_threshold}}
 
-      claude -p "You are a Go expert analyzing code/test coherence for the awf project (AI Workflow CLI).
-
-      ## Project Context
-      This is a Go CLI tool using hexagonal architecture with these layers:
-      - internal/domain/ - Business logic, ZERO external dependencies
-      - internal/application/ - Services orchestrating domain
-      - internal/infrastructure/ - Adapters (YAML, JSON, Shell)
-      - internal/interfaces/cli/ - Cobra CLI commands
-      - pkg/ - Public reusable packages
-
-      ## Collected Metrics
-      $METRICS
-
-      ## Test Results
-      $TESTS
-
-      ## Code Inventory
-      $INVENTORY
-
-      ## Coverage Threshold
-      Required: ${THRESHOLD}%
-
-      ## Your Task
-      Analyze the coherence between code and tests. Focus on:
-
-      1. **Coverage Analysis**
-         - Is coverage meeting the ${THRESHOLD}% threshold?
-         - Which layers have lowest coverage?
-         - Are critical paths tested?
-
-      2. **Test Quality**
-         - Are there race conditions? (check RACE_DETECTOR result)
-         - Unit vs Integration test balance
-         - Missing test scenarios
-
-      3. **Architecture Compliance**
-         - Does domain layer have external dependencies? (should be ZERO)
-         - Are ports properly tested?
-         - Is dependency injection used correctly?
-
-      4. **Specific Gaps**
-         - List specific public functions that likely need tests
-         - Identify test files without corresponding source (orphans)
-         - Check if error paths are tested
-
-      ## Output Format
-      Output a structured analysis with:
-      - SCORE: X/10 (overall code/test coherence)
-      - CRITICAL_ISSUES: (blocking issues)
-      - WARNINGS: (non-blocking but important)
-      - RECOMMENDATIONS: (prioritized action items)
-
-      Be specific with file paths and function names when possible.
-      Use the Serena MCP tools (find_symbol, get_symbols_overview) if you need to explore the code.
-      " \
+      claude -p "$(cat .awf/prompts/audit/code-test-analysis.md)" \
         --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__search_for_pattern" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude analysis failed"
@@ -366,50 +312,7 @@ states:
       # Get feature roadmap content
       ROADMAP=$(cat .serena/memories/feature_roadmap.md 2>/dev/null || echo "No roadmap found")
 
-      claude -p "You are a Go expert analyzing code/documentation coherence for the awf project.
-
-      ## Code Inventory
-      $INVENTORY
-
-      ## Documentation Inventory
-      $DOCS
-
-      ## Feature Roadmap
-      $ROADMAP
-
-      ## Your Task
-      Analyze the coherence between code and documentation. Focus on:
-
-      1. **CLI Documentation**
-         - Are all CLI commands documented in README?
-         - Are command flags and options documented?
-         - Are usage examples accurate?
-
-      2. **Feature Roadmap Accuracy**
-         - Features marked DONE but not implemented?
-         - Features implemented but marked PLANNED?
-         - Check F009 (State Machine), F010 (Parallel) status vs code
-
-      3. **API Documentation**
-         - Do public functions have godoc comments?
-         - Are exported types documented?
-         - Is the architecture documented correctly?
-
-      4. **Code Comments**
-         - Are complex algorithms explained?
-         - Are non-obvious decisions documented?
-         - Are TODO/FIXME items tracked?
-
-      ## Output Format
-      Output a structured analysis with:
-      - SCORE: X/10 (overall code/docs coherence)
-      - OUTDATED_DOCS: (docs that don't match code)
-      - MISSING_DOCS: (code without documentation)
-      - ROADMAP_ISSUES: (roadmap vs reality gaps)
-      - RECOMMENDATIONS: (prioritized action items)
-
-      Use the Serena MCP tools to verify specific code patterns if needed.
-      " \
+      claude -p "$(cat .awf/prompts/audit/code-docs-coherence.md)" \
         --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__search_for_pattern,mcp__plugin_common_serena__read_memory" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude analysis failed"
@@ -434,59 +337,7 @@ states:
       # Get port definitions
       PORTS=$(grep -rn "type.*interface" internal/domain/ports/ 2>/dev/null || true)
 
-      claude -p "You are a Go expert performing deep architecture analysis on the awf project.
-
-      ## Architecture Goal
-      Hexagonal/Clean Architecture with strict dependency inversion:
-      - Domain layer MUST have ZERO external dependencies (only stdlib)
-      - Application layer orchestrates domain via ports
-      - Infrastructure implements ports
-      - Interfaces (CLI) wire everything together
-
-      ## Code Inventory
-      $INVENTORY
-
-      ## Domain Layer Imports
-      $DOMAIN_IMPORTS
-
-      ## Port Definitions
-      $PORTS
-
-      ## Your Task
-      Perform deep architecture analysis:
-
-      1. **Domain Purity**
-         - Check if domain imports ONLY standard library
-         - Allowed: fmt, errors, time, context, strings, strconv, sort, sync, regexp
-         - NOT allowed: any third-party packages, any internal/* outside domain
-
-      2. **Port/Adapter Pattern**
-         - Are all external dependencies behind ports?
-         - Is CommandExecutor properly abstracted?
-         - Is StateStore properly abstracted?
-         - Is WorkflowRepository properly abstracted?
-
-      3. **Dependency Direction**
-         - Does domain depend on nothing external?
-         - Does application only depend on domain?
-         - Does infrastructure implement domain ports?
-
-      4. **SOLID Principles**
-         - Single Responsibility: Are services focused?
-         - Open/Closed: Can we extend without modifying?
-         - Liskov Substitution: Can adapters be swapped?
-         - Interface Segregation: Are ports minimal?
-         - Dependency Inversion: Do we depend on abstractions?
-
-      ## Output Format
-      - ARCHITECTURE_SCORE: X/10
-      - DOMAIN_PURITY: PASS/FAIL with details
-      - VIOLATIONS: List any architecture violations
-      - PATTERNS_USED: Correctly implemented patterns
-      - IMPROVEMENTS: Suggested architectural improvements
-
-      Use mcp__plugin_common_serena__find_symbol and mcp__plugin_common_serena__get_symbols_overview to explore the code structure.
-      " \
+      claude -p "$(cat .awf/prompts/audit/architecture-analysis.md)" \
         --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__find_referencing_symbols" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude analysis failed"
@@ -522,66 +373,11 @@ states:
       {{.states.agent_architecture_analysis.Output}}
       ARCH_EOF
 
-      # Build prompt with file contents
-      cat > /tmp/awf_prompt.txt << PROMPT_EOF
-      You are a senior Go expert providing the final audit synthesis for the awf project.
-
-      ## Previous Analyses
-
-      ### Code/Test Coherence
-      $(cat /tmp/awf_code_test.txt)
-
-      ### Code/Docs Coherence
-      $(cat /tmp/awf_code_docs.txt)
-
-      ### Architecture Analysis
-      $(cat /tmp/awf_arch.txt)
-
-      ## Coverage Threshold
-      Required: ${THRESHOLD}%
-
-      ## Your Task
-      Synthesize all analyses into a final audit report:
-
-      1. **Executive Summary**
-         - Overall project health (1-10)
-         - Top 3 strengths
-         - Top 3 weaknesses
-
-      2. **Detailed Findings**
-         - Code Quality: X/10
-         - Test Coverage: X/10 (vs ${THRESHOLD}% threshold)
-         - Documentation: X/10
-         - Architecture: X/10
-
-      3. **Critical Issues** (must fix)
-         - List with priority and effort estimate
-
-      4. **Warnings** (should fix)
-         - List with priority and effort estimate
-
-      5. **Action Plan**
-         - Immediate actions (this sprint)
-         - Short-term actions (next sprint)
-         - Long-term improvements
-
-      6. **Metrics Summary**
-         - Total public functions
-         - Test coverage %
-         - Lint issues
-         - Documentation coverage estimate
-
-      ## Output Format
-      Output a well-formatted Markdown report suitable for saving directly to a file.
-      Include clear sections, bullet points, and a summary table.
-
-      End with:
-      OVERALL_STATUS: PASS|WARN|FAIL
-      OVERALL_SCORE: X/10
-      PROMPT_EOF
+      # Build prompt from template file (contains $(cat ...) references to temp files)
+      PROMPT_CONTENT=$(cat .awf/prompts/audit/synthesis.md)
 
       # Run Claude and capture output
-      SYNTHESIS_OUTPUT=$(claude -p "$(cat /tmp/awf_prompt.txt)" \
+      SYNTHESIS_OUTPUT=$(claude -p "$PROMPT_CONTENT" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude synthesis failed")
 
@@ -590,7 +386,7 @@ states:
       # Save for exit code determination
       echo "$SYNTHESIS_OUTPUT" > /tmp/awf_synthesis_result.txt
 
-      rm -f /tmp/awf_code_test.txt /tmp/awf_code_docs.txt /tmp/awf_arch.txt /tmp/awf_prompt.txt
+      rm -f /tmp/awf_code_test.txt /tmp/awf_code_docs.txt /tmp/awf_arch.txt
 
       # Determine exit code based on status
       if grep -q "OVERALL_STATUS: PASS" /tmp/awf_synthesis_result.txt 2>/dev/null; then
