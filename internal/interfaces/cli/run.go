@@ -23,6 +23,26 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
+// setupSignalHandler starts a goroutine that cancels ctx on SIGINT/SIGTERM.
+// If onSignal is not nil, it's called when a signal is received before cancelling.
+// Returns a cleanup function that MUST be deferred to prevent goroutine leaks.
+func setupSignalHandler(ctx context.Context, cancel context.CancelFunc, onSignal func()) func() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigChan:
+			if onSignal != nil {
+				onSignal()
+			}
+			cancel()
+		case <-ctx.Done():
+			// Context cancelled externally, exit cleanly
+		}
+	}()
+	return func() { signal.Stop(sigChan) }
+}
+
 func newRunCommand(cfg *Config) *cobra.Command {
 	var inputFlags []string
 	var outputMode string
@@ -125,16 +145,12 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
+	cleanup := setupSignalHandler(ctx, cancel, func() {
 		if cfg.OutputFormat != ui.FormatJSON && cfg.OutputFormat != ui.FormatTable {
 			formatter.Warning("\nReceived interrupt signal, cancelling...")
 		}
-		cancel()
-	}()
+	})
+	defer cleanup()
 
 	// Initialize dependencies
 	repo := NewWorkflowRepository()
@@ -370,13 +386,8 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		cancel()
-	}()
+	cleanup := setupSignalHandler(ctx, cancel, nil)
+	defer cleanup()
 
 	// Initialize dependencies
 	repo := NewWorkflowRepository()
@@ -698,14 +709,10 @@ func runSingleStep(
 	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
+	cleanup := setupSignalHandler(ctx, cancel, func() {
 		formatter.Warning("\nReceived interrupt signal, cancelling...")
-		cancel()
-	}()
+	})
+	defer cleanup()
 
 	// Initialize dependencies
 	repo := NewWorkflowRepository()

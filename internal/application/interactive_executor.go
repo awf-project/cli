@@ -328,7 +328,7 @@ func (e *InteractiveExecutor) handleInteractivePrompt(
 
 		switch action {
 		case workflow.ActionInspect:
-			e.prompt.ShowContext(interpCtx)
+			e.prompt.ShowContext(toRuntimeContext(interpCtx))
 			continue
 
 		case workflow.ActionEdit:
@@ -803,4 +803,63 @@ func (a *interactiveStepExecutorAdapter) ExecuteStep(
 	}
 
 	return result, err
+}
+
+// toRuntimeContext converts an interpolation.Context to a domain RuntimeContext.
+func toRuntimeContext(ctx *interpolation.Context) *workflow.RuntimeContext {
+	rc := &workflow.RuntimeContext{
+		Inputs: ctx.Inputs,
+		States: make(map[string]workflow.RuntimeStepState, len(ctx.States)),
+		Workflow: workflow.RuntimeWorkflowData{
+			ID:           ctx.Workflow.ID,
+			Name:         ctx.Workflow.Name,
+			CurrentState: ctx.Workflow.CurrentState,
+			StartedAt:    ctx.Workflow.StartedAt,
+		},
+		Env: ctx.Env,
+		Context: workflow.RuntimeContextData{
+			WorkingDir: ctx.Context.WorkingDir,
+			User:       ctx.Context.User,
+			Hostname:   ctx.Context.Hostname,
+		},
+	}
+
+	for k, v := range ctx.States {
+		rc.States[k] = workflow.RuntimeStepState{
+			Output:   v.Output,
+			Stderr:   v.Stderr,
+			ExitCode: v.ExitCode,
+			Status:   v.Status,
+		}
+	}
+
+	if ctx.Error != nil {
+		rc.Error = &workflow.RuntimeErrorData{
+			Message:  ctx.Error.Message,
+			State:    ctx.Error.State,
+			ExitCode: ctx.Error.ExitCode,
+			Type:     ctx.Error.Type,
+		}
+	}
+
+	if ctx.Loop != nil {
+		rc.Loop = convertLoopData(ctx.Loop)
+	}
+
+	return rc
+}
+
+// convertLoopData recursively converts interpolation.LoopData to domain RuntimeLoopData.
+func convertLoopData(ld *interpolation.LoopData) *workflow.RuntimeLoopData {
+	if ld == nil {
+		return nil
+	}
+	return &workflow.RuntimeLoopData{
+		Item:   ld.Item,
+		Index:  ld.Index,
+		First:  ld.First,
+		Last:   ld.Last,
+		Length: ld.Length,
+		Parent: convertLoopData(ld.Parent),
+	}
 }

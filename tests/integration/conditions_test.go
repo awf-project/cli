@@ -1,6 +1,6 @@
 //go:build integration
 
-package integration
+package integration_test
 
 import (
 	"context"
@@ -32,11 +32,11 @@ func (m *conditionsMockLogger) WithContext(ctx map[string]any) ports.Logger {
 
 func TestConditionalTransitions(t *testing.T) {
 	tests := []struct {
-		name         string
-		workflow     string
-		inputs       map[string]any
+		name          string
+		workflow      string
+		inputs        map[string]any
 		wantFinalStep string
-		wantErr      bool
+		wantErr       bool
 	}{
 		{
 			name: "condition matches first transition",
@@ -70,9 +70,9 @@ states:
     type: terminal
     status: success
 `,
-			inputs:       map[string]any{"mode": "full"},
+			inputs:        map[string]any{"mode": "full"},
 			wantFinalStep: "done",
-			wantErr:      false,
+			wantErr:       false,
 		},
 		{
 			name: "condition matches second transition",
@@ -104,9 +104,9 @@ states:
     type: terminal
     status: success
 `,
-			inputs:       map[string]any{"mode": "summary"},
+			inputs:        map[string]any{"mode": "summary"},
 			wantFinalStep: "done",
-			wantErr:      false,
+			wantErr:       false,
 		},
 		{
 			name: "falls back to default transition",
@@ -139,9 +139,9 @@ states:
     type: terminal
     status: success
 `,
-			inputs:       map[string]any{"mode": "unknown"},
+			inputs:        map[string]any{"mode": "unknown"},
 			wantFinalStep: "done",
-			wantErr:      false,
+			wantErr:       false,
 		},
 		{
 			name: "condition based on exit code",
@@ -163,9 +163,9 @@ states:
     type: terminal
     status: failure
 `,
-			inputs:       map[string]any{},
+			inputs:        map[string]any{},
 			wantFinalStep: "success",
-			wantErr:      false,
+			wantErr:       false,
 		},
 		{
 			name: "complex condition with and",
@@ -187,9 +187,9 @@ states:
     type: terminal
     status: success
 `,
-			inputs:       map[string]any{"count": 10, "mode": "batch"},
+			inputs:        map[string]any{"count": 10, "mode": "batch"},
 			wantFinalStep: "batch_process",
-			wantErr:      false,
+			wantErr:       false,
 		},
 		{
 			name: "backward compatibility with on_success/on_failure",
@@ -209,9 +209,9 @@ states:
     type: terminal
     status: failure
 `,
-			inputs:       map[string]any{},
+			inputs:        map[string]any{},
 			wantFinalStep: "done",
-			wantErr:      false,
+			wantErr:       false,
 		},
 	}
 

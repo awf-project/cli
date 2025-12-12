@@ -1,9 +1,6 @@
 package ports
 
-import (
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
-)
+import "github.com/vanoix/awf/internal/domain/workflow"
 
 // InteractivePrompt defines the contract for interactive mode user interaction.
 // Implementations handle UI rendering and user input during step-by-step execution.
@@ -24,8 +21,8 @@ type InteractivePrompt interface {
 	// ShowStepResult displays the outcome of step execution.
 	ShowStepResult(state *workflow.StepState, nextStep string)
 
-	// ShowContext displays the current interpolation context (inputs, states).
-	ShowContext(ctx *interpolation.Context)
+	// ShowContext displays the current runtime context (inputs, states).
+	ShowContext(ctx *workflow.RuntimeContext)
 
 	// EditInput prompts the user to edit an input value.
 	// Returns the new value and any error from parsing.

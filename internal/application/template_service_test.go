@@ -427,7 +427,7 @@ func TestTemplateService_ExpandWorkflow_MissingRequiredParam(t *testing.T) {
 	err := svc.ExpandWorkflow(context.Background(), wf)
 	require.Error(t, err)
 
-	var missingParam *repository.MissingParameterError
+	var missingParam *workflow.MissingParameterError
 	require.ErrorAs(t, err, &missingParam)
 	assert.Equal(t, "simple-echo", missingParam.TemplateName)
 	assert.Equal(t, "message", missingParam.ParameterName)
@@ -461,7 +461,7 @@ func TestTemplateService_ExpandWorkflow_MissingAllRequiredParams(t *testing.T) {
 	err := svc.ExpandWorkflow(context.Background(), wf)
 	require.Error(t, err)
 
-	var missingParam *repository.MissingParameterError
+	var missingParam *workflow.MissingParameterError
 	require.ErrorAs(t, err, &missingParam)
 }
 
@@ -508,7 +508,7 @@ func TestTemplateService_ExpandWorkflow_CircularReference(t *testing.T) {
 	err := svc.ExpandWorkflow(context.Background(), wf)
 	require.Error(t, err)
 
-	var circularErr *repository.CircularTemplateError
+	var circularErr *workflow.CircularTemplateError
 	require.ErrorAs(t, err, &circularErr)
 	assert.NotEmpty(t, circularErr.Chain)
 }
@@ -541,7 +541,7 @@ func TestTemplateService_ExpandWorkflow_SelfReference(t *testing.T) {
 	err := svc.ExpandWorkflow(context.Background(), wf)
 	require.Error(t, err)
 
-	var circularErr *repository.CircularTemplateError
+	var circularErr *workflow.CircularTemplateError
 	require.ErrorAs(t, err, &circularErr)
 }
 
@@ -619,7 +619,7 @@ func TestTemplateService_ValidateTemplateRef_MissingRequired(t *testing.T) {
 	err := svc.ValidateTemplateRef(context.Background(), ref)
 	require.Error(t, err)
 
-	var missingParam *repository.MissingParameterError
+	var missingParam *workflow.MissingParameterError
 	require.ErrorAs(t, err, &missingParam)
 }
 

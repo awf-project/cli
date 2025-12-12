@@ -64,7 +64,7 @@ func (m *mockInteractivePrompt) ShowStepResult(state *workflow.StepState, nextSt
 	m.resultShown = true
 }
 
-func (m *mockInteractivePrompt) ShowContext(ctx *interpolation.Context) {
+func (m *mockInteractivePrompt) ShowContext(ctx *workflow.RuntimeContext) {
 	m.contextShown = true
 }
 

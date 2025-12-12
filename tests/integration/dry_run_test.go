@@ -965,11 +965,11 @@ func TestDryRun_VariousWorkflows_Integration(t *testing.T) {
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
 
 	tests := []struct {
-		name         string
-		workflow     string
-		inputs       []string
+		name           string
+		workflow       string
+		inputs         []string
 		expectContains []string
-		expectError  bool
+		expectError    bool
 	}{
 		{
 			name:     "simple workflow",

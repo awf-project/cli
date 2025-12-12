@@ -7,7 +7,6 @@ import (
 
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -64,7 +63,7 @@ func (s *TemplateService) expandStep(
 			chain = append(chain, k)
 		}
 		chain = append(chain, ref.TemplateName)
-		return &repository.CircularTemplateError{Chain: chain}
+		return &workflow.CircularTemplateError{Chain: chain}
 	}
 	visited[ref.TemplateName] = true
 	defer delete(visited, ref.TemplateName)
@@ -170,7 +169,7 @@ func (s *TemplateService) mergeParameters(
 	// Check required parameters
 	for _, name := range tmpl.GetRequiredParams() {
 		if _, ok := params[name]; !ok {
-			return nil, &repository.MissingParameterError{
+			return nil, &workflow.MissingParameterError{
 				TemplateName:  tmpl.Name,
 				ParameterName: name,
 				Required:      tmpl.GetRequiredParams(),
