@@ -104,6 +104,25 @@ awf run hello --input name=World
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf history` | Show workflow execution history |
 | `awf version` | Show version info |
+| `awf completion <shell>` | Generate shell autocompletion |
+
+### Completion Command
+
+Generate shell autocompletion scripts:
+
+```bash
+# Bash
+awf completion bash > /etc/bash_completion.d/awf
+
+# Zsh
+awf completion zsh > "${fpath[1]}/_awf"
+
+# Fish
+awf completion fish > ~/.config/fish/completions/awf.fish
+
+# PowerShell
+awf completion powershell > awf.ps1
+```
 
 ### Init Command Flags
 

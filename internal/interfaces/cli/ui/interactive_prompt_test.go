@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // =============================================================================
@@ -208,12 +207,17 @@ func TestCLIPrompt_ShowContext(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	ctx := interpolation.NewContext()
-	ctx.Inputs["file"] = "test.txt"
-	ctx.Inputs["count"] = 10
-	ctx.States["validate"] = interpolation.StepStateData{
-		Output:   "valid",
-		ExitCode: 0,
+	ctx := &workflow.RuntimeContext{
+		Inputs: map[string]any{
+			"file":  "test.txt",
+			"count": 10,
+		},
+		States: map[string]workflow.RuntimeStepState{
+			"validate": {
+				Output:   "valid",
+				ExitCode: 0,
+			},
+		},
 	}
 
 	prompt.ShowContext(ctx)

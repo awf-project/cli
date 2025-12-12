@@ -30,7 +30,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F037 | Step Success Feedback | ✅ Done |
 | F038 | Prompt Storage & Init | 📋 PLANNED |
 | F039 | Run Single Step | ✅ Done |
-| F040 | Audit-Based Refactoring | 📋 PLANNED |
+| F040 | Audit-Based Refactoring | ✅ Done |
 
 ## v0.2.0 - Core Features (IMPLEMENTED)
 

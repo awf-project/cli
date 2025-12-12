@@ -10,7 +10,6 @@ import (
 
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Ensure CLIPrompt implements InteractivePrompt.
@@ -131,8 +130,8 @@ func (p *CLIPrompt) ShowStepResult(state *workflow.StepState, nextStep string) {
 	}
 }
 
-// ShowContext displays the current interpolation context.
-func (p *CLIPrompt) ShowContext(ctx *interpolation.Context) {
+// ShowContext displays the current runtime context.
+func (p *CLIPrompt) ShowContext(ctx *workflow.RuntimeContext) {
 	_, _ = fmt.Fprintf(p.writer, "\n┌─ Context %s┐\n", strings.Repeat("─", 50))
 
 	// Show inputs

@@ -259,7 +259,7 @@ func TestTemplateService_ValidateTemplateRef_Integration(t *testing.T) {
 		err := svc.ValidateTemplateRef(ctx, ref)
 		require.Error(t, err)
 
-		var missingErr *repository.MissingParameterError
+		var missingErr *workflow.MissingParameterError
 		require.ErrorAs(t, err, &missingErr)
 	})
 
@@ -364,7 +364,7 @@ func TestTemplateService_CircularReference_Integration(t *testing.T) {
 	// Should detect circular reference
 	require.Error(t, err)
 
-	var circularErr *repository.CircularTemplateError
+	var circularErr *workflow.CircularTemplateError
 	require.ErrorAs(t, err, &circularErr)
 }
 
@@ -530,7 +530,7 @@ func TestTemplateService_ComplexParameters_Integration(t *testing.T) {
 		err := svc.ExpandWorkflow(ctx, wf)
 		require.Error(t, err)
 
-		var missingErr *repository.MissingParameterError
+		var missingErr *workflow.MissingParameterError
 		require.ErrorAs(t, err, &missingErr)
 		assert.Equal(t, "destination", missingErr.ParameterName)
 	})
