@@ -7,6 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // OutputFormat defines the output format for CLI commands.
@@ -344,6 +346,19 @@ func (w *OutputWriter) WritePrompts(prompts []PromptInfo) error {
 		return nil
 	default: // text
 		return w.writePromptsTable(prompts)
+	}
+}
+
+// WriteDryRun outputs the dry-run execution plan.
+func (w *OutputWriter) WriteDryRun(plan *workflow.DryRunPlan, formatter *DryRunFormatter) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(plan)
+	case FormatQuiet:
+		_, _ = fmt.Fprintln(w.out, plan.WorkflowName)
+		return nil
+	default: // text and table use the formatter
+		return formatter.Format(plan)
 	}
 }
 

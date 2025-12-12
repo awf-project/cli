@@ -1,0 +1,22 @@
+name: dry-run-with-dir
+description: Workflow with working directory to test dir field in dry-run
+version: "1.0.0"
+
+states:
+  initial: change_dir
+
+  change_dir:
+    type: step
+    description: Run command in specific directory
+    command: pwd
+    dir: /tmp
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

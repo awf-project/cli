@@ -1,7 +1,7 @@
 # F019: Dry-Run Mode
 
 ## Metadata
-- **Status**: backlog
+- **Status**: implemented
 - **Phase**: 3-Advanced
 - **Version**: v0.3.0
 - **Priority**: medium
@@ -13,12 +13,12 @@ Add dry-run mode that shows what would be executed without actually running comm
 
 ## Acceptance Criteria
 
-- [ ] `awf run --dry-run` shows execution plan
-- [ ] Display resolved commands with interpolation
-- [ ] Show state transitions
-- [ ] Validate workflow without execution
-- [ ] Show hooks that would run
-- [ ] No side effects (no files written, commands run)
+- [x] `awf run --dry-run` shows execution plan
+- [x] Display resolved commands with interpolation
+- [x] Show state transitions
+- [x] Validate workflow without execution
+- [x] Show hooks that would run
+- [x] No side effects (no files written, commands run)
 
 ## Dependencies
 
@@ -35,24 +35,24 @@ internal/interfaces/cli/ui/dry_run_formatter.go
 
 ## Technical Tasks
 
-- [ ] Add --dry-run flag to run command
-- [ ] Implement DryRunExecutor
-  - [ ] Walk through states without execution
-  - [ ] Resolve interpolations
-  - [ ] Collect execution plan
-  - [ ] Return structured plan
-- [ ] Implement DryRunFormatter
-  - [ ] Display step-by-step plan
-  - [ ] Show resolved commands
-  - [ ] Show variable values
-  - [ ] Highlight hooks
-- [ ] Handle conditional transitions
-  - [ ] Show all possible paths
-  - [ ] Or require mock values
-- [ ] Handle parallel states
-  - [ ] Show all parallel branches
-- [ ] Add --dry-run-inputs for mock values
-- [ ] Write unit tests
+- [x] Add --dry-run flag to run command
+- [x] Implement DryRunExecutor
+  - [x] Walk through states without execution
+  - [x] Resolve interpolations
+  - [x] Collect execution plan
+  - [x] Return structured plan
+- [x] Implement DryRunFormatter
+  - [x] Display step-by-step plan
+  - [x] Show resolved commands
+  - [x] Show variable values
+  - [x] Highlight hooks
+- [x] Handle conditional transitions
+  - [x] Show all possible paths
+  - [x] Or require mock values
+- [x] Handle parallel states
+  - [x] Show all parallel branches
+- [x] Add --dry-run-inputs for mock values
+- [x] Write unit tests
 
 ## Notes
 

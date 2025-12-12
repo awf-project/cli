@@ -28,6 +28,7 @@ func newRunCommand(cfg *Config) *cobra.Command {
 	var outputMode string
 	var stepFlag string
 	var mockFlags []string
+	var dryRunFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -48,7 +49,8 @@ Examples:
   awf run analyze-code --input file=main.go
   awf run build-project --input target=linux --output=streaming
   awf run my-workflow --step=process --input data=test
-  awf run my-workflow --step=analyze --mock states.fetch.output="cached data"`,
+  awf run my-workflow --step=analyze --mock states.fetch.output="cached data"
+  awf run my-workflow --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if outputMode != "" {
@@ -57,6 +59,9 @@ Examples:
 					return err
 				}
 				cfg.OutputMode = mode
+			}
+			if dryRunFlag {
+				return runDryRun(cmd, cfg, args[0], inputFlags)
 			}
 			if stepFlag != "" {
 				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags)
@@ -71,6 +76,8 @@ Examples:
 	cmd.Flags().StringVarP(&stepFlag, "step", "s", "", "Execute only this step (skips state machine)")
 	cmd.Flags().StringArrayVarP(&mockFlags, "mock", "m", nil,
 		"Mock state value for single step execution (states.step.output=value)")
+	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false,
+		"Show execution plan without running commands")
 
 	return cmd
 }
@@ -263,6 +270,60 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	return nil
+}
+
+// runDryRun executes a dry-run of the workflow, showing the execution plan without running commands.
+func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string) error {
+	// Parse inputs
+	inputs, err := parseInputFlags(inputFlags)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Create output writer for JSON/quiet formats
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+
+	// Create formatter for text output
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	// Initialize dependencies
+	repo := NewWorkflowRepository()
+	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
+	shellExecutor := executor.NewShellExecutor()
+	logger := &cliLogger{
+		formatter: formatter,
+		verbose:   cfg.Verbose,
+		silent:    cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable,
+	}
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := expression.NewExprEvaluator()
+
+	// Create services
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	dryRunExec := application.NewDryRunExecutor(wfSvc, resolver, exprEvaluator, logger)
+
+	// Setup template service for workflow template expansion
+	templatePaths := []string{
+		".awf/templates",
+		filepath.Join(cfg.StoragePath, "templates"),
+	}
+	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
+	templateSvc := application.NewTemplateService(templateRepo, logger)
+	dryRunExec.SetTemplateService(templateSvc)
+
+	// Execute dry-run
+	plan, err := dryRunExec.Execute(cmd.Context(), workflowName, inputs)
+	if err != nil {
+		return fmt.Errorf("dry-run failed: %w", err)
+	}
+
+	// Output the plan
+	dryRunFormatter := ui.NewDryRunFormatter(cmd.OutOrStdout(), !cfg.NoColor)
+	return writer.WriteDryRun(plan, dryRunFormatter)
 }
 
 func parseInputFlags(flags []string) (map[string]any, error) {

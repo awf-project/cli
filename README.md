@@ -213,6 +213,8 @@ awf status $WORKFLOW_ID -f quiet
 --step, -s        Execute only a specific step from the workflow
 --mock, -m        Mock state values for single step execution (key=value)
                   Example: --mock states.step1.output="mocked value"
+--dry-run         Show execution plan without running commands
+                  Displays resolved commands, transitions, hooks, and variable values
 ```
 
 ## Workflow Discovery
@@ -790,6 +792,7 @@ make fmt            # Format code
 - [x] Loops (for/while)
 - [x] Nested loops with parent context access (`{{.loop.parent.*}}`)
 - [x] Workflow templates
+- [x] Dry-run mode (`--dry-run` flag)
 - [ ] Plugin system
 - [ ] REST API
 - [ ] Web UI
