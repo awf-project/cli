@@ -475,12 +475,12 @@ states:
 // TestRunCommand_DryRun tests the dry-run functionality
 func TestRunCommand_DryRun(t *testing.T) {
 	tests := []struct {
-		name         string
+		name          string
 		setupWorkflow func(t *testing.T, tmpDir string)
-		args         []string
-		wantErr      bool
-		errContains  string
-		validateOut  func(t *testing.T, output string)
+		args          []string
+		wantErr       bool
+		errContains   string
+		validateOut   func(t *testing.T, output string)
 	}{
 		{
 			name: "basic dry-run shows execution plan",
@@ -848,8 +848,8 @@ states:
 				// EOF happens when stdin is exhausted during prompts
 				if err != nil {
 					if !strings.Contains(err.Error(), "context canceled") &&
-					   !strings.Contains(err.Error(), "EOF") &&
-					   !strings.Contains(err.Error(), "read input") {
+						!strings.Contains(err.Error(), "EOF") &&
+						!strings.Contains(err.Error(), "read input") {
 						t.Errorf("unexpected error: %v", err)
 					}
 				}
