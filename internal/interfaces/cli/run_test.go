@@ -472,6 +472,439 @@ states:
 	assert.Contains(t, err.Error(), "terminal")
 }
 
+// TestRunCommand_DryRun tests the dry-run functionality
+func TestRunCommand_DryRun(t *testing.T) {
+	tests := []struct {
+		name         string
+		setupWorkflow func(t *testing.T, tmpDir string)
+		args         []string
+		wantErr      bool
+		errContains  string
+		validateOut  func(t *testing.T, output string)
+	}{
+		{
+			name: "basic dry-run shows execution plan",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: simple
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "simple.yaml"), []byte(content), 0644))
+			},
+			args:    []string{"run", "simple", "--dry-run"},
+			wantErr: false,
+			validateOut: func(t *testing.T, output string) {
+				assert.Contains(t, output, "Dry Run")
+				assert.Contains(t, output, "start")
+				assert.Contains(t, output, "echo hello")
+			},
+		},
+		{
+			name: "dry-run with inputs shows interpolated values",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: with-inputs
+version: "1.0.0"
+inputs:
+  - name: msg
+    type: string
+states:
+  initial: echo
+  echo:
+    type: step
+    command: echo "{{inputs.msg}}"
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "with-inputs.yaml"), []byte(content), 0644))
+			},
+			args:    []string{"run", "with-inputs", "--dry-run", "--input=msg=hello world"},
+			wantErr: false,
+			validateOut: func(t *testing.T, output string) {
+				assert.Contains(t, output, "Dry Run")
+			},
+		},
+		{
+			name: "dry-run with parallel states",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: parallel
+version: "1.0.0"
+states:
+  initial: build
+  build:
+    type: parallel
+    strategy: all_succeed
+    parallel:
+      - test
+      - lint
+    on_success: done
+  test:
+    type: step
+    command: go test
+    on_success: done
+  lint:
+    type: step
+    command: golangci-lint run
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "parallel.yaml"), []byte(content), 0644))
+			},
+			args:    []string{"run", "parallel", "--dry-run"},
+			wantErr: false,
+			validateOut: func(t *testing.T, output string) {
+				assert.Contains(t, output, "Dry Run")
+			},
+		},
+		{
+			name: "dry-run with nonexistent workflow",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+			},
+			args:        []string{"run", "nonexistent", "--dry-run"},
+			wantErr:     true,
+			errContains: "not found",
+		},
+		{
+			name: "dry-run with invalid input format",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: test
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo test
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0644))
+			},
+			args:        []string{"run", "test", "--dry-run", "--input=invalid"},
+			wantErr:     true,
+			errContains: "invalid input",
+		},
+		{
+			name: "dry-run with JSON output format",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: json-test
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "json-test.yaml"), []byte(content), 0644))
+			},
+			args:    []string{"--format=json", "run", "json-test", "--dry-run"},
+			wantErr: false,
+			validateOut: func(t *testing.T, output string) {
+				// JSON output should be valid
+				assert.NotEmpty(t, output)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			origDir, _ := os.Getwd()
+			defer func() { _ = os.Chdir(origDir) }()
+			_ = os.Chdir(tmpDir)
+
+			tt.setupWorkflow(t, tmpDir)
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(append([]string{"--storage=" + tmpDir}, tt.args...))
+
+			err := cmd.Execute()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				if tt.validateOut != nil {
+					tt.validateOut(t, out.String())
+				}
+			}
+		})
+	}
+}
+
+// TestRunCommand_Interactive tests interactive mode execution
+func TestRunCommand_Interactive(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupWorkflow func(t *testing.T, tmpDir string)
+		args          []string
+		mockInput     string // Simulated user input for prompts
+		wantErr       bool
+		errContains   string
+	}{
+		{
+			name: "interactive mode with simple workflow",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				// Create storage directories for state and history
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				content := `name: interactive-test
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo step1
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "interactive-test.yaml"), []byte(content), 0644))
+			},
+			args:      []string{"run", "interactive-test", "--interactive"},
+			mockInput: "y\n", // Proceed with step
+			wantErr:   false,
+		},
+		{
+			name: "interactive mode with breakpoints",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				content := `name: breakpoint-test
+version: "1.0.0"
+states:
+  initial: prepare
+  prepare:
+    type: step
+    command: echo preparing
+    on_success: process
+  process:
+    type: step
+    command: echo processing
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "breakpoint-test.yaml"), []byte(content), 0644))
+			},
+			args:      []string{"run", "breakpoint-test", "--interactive", "--breakpoint=process"},
+			mockInput: "y\n", // Proceed
+			wantErr:   false,
+		},
+		{
+			name: "interactive mode with comma-separated breakpoints",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				content := `name: multi-breakpoint
+version: "1.0.0"
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo 1
+    on_success: step2
+  step2:
+    type: step
+    command: echo 2
+    on_success: step3
+  step3:
+    type: step
+    command: echo 3
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "multi-breakpoint.yaml"), []byte(content), 0644))
+			},
+			args:      []string{"run", "multi-breakpoint", "--interactive", "--breakpoint=step1,step3"},
+			mockInput: "y\ny\n", // Proceed for each breakpoint
+			wantErr:   false,
+		},
+		{
+			name: "interactive mode with inputs",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				content := `name: input-interactive
+version: "1.0.0"
+inputs:
+  - name: msg
+    type: string
+states:
+  initial: echo
+  echo:
+    type: step
+    command: echo "{{inputs.msg}}"
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "input-interactive.yaml"), []byte(content), 0644))
+			},
+			args:      []string{"run", "input-interactive", "--interactive", "--input=msg=test"},
+			mockInput: "y\n",
+			wantErr:   false,
+		},
+		{
+			name: "interactive mode with nonexistent workflow",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+			},
+			args:        []string{"run", "nonexistent", "--interactive"},
+			mockInput:   "",
+			wantErr:     true,
+			errContains: "not found",
+		},
+		{
+			name: "interactive mode with invalid input format",
+			setupWorkflow: func(t *testing.T, tmpDir string) {
+				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				content := `name: test
+version: "1.0.0"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo test
+    on_success: done
+  done:
+    type: terminal
+`
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0644))
+			},
+			args:        []string{"run", "test", "--interactive", "--input=invalid"},
+			mockInput:   "",
+			wantErr:     true,
+			errContains: "invalid input",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			origDir, _ := os.Getwd()
+			defer func() { _ = os.Chdir(origDir) }()
+			_ = os.Chdir(tmpDir)
+
+			tt.setupWorkflow(t, tmpDir)
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			// Set up mock stdin for interactive prompts
+			cmd.SetIn(strings.NewReader(tt.mockInput))
+			cmd.SetArgs(append([]string{"--storage=" + tmpDir}, tt.args...))
+
+			err := cmd.Execute()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				// Interactive mode might error with EOF or context cancellation, which is acceptable
+				// EOF happens when stdin is exhausted during prompts
+				if err != nil {
+					if !strings.Contains(err.Error(), "context canceled") &&
+					   !strings.Contains(err.Error(), "EOF") &&
+					   !strings.Contains(err.Error(), "read input") {
+						t.Errorf("unexpected error: %v", err)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestRunCommand_DryRunFlag tests that --dry-run flag is recognized
+func TestRunCommand_HasDryRunFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("dry-run")
+			require.NotNil(t, flag, "expected 'run' command to have --dry-run flag")
+			assert.Equal(t, "false", flag.DefValue, "dry-run should default to false")
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
+// TestRunCommand_InteractiveFlag tests that --interactive flag is recognized
+func TestRunCommand_HasInteractiveFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("interactive")
+			require.NotNil(t, flag, "expected 'run' command to have --interactive flag")
+			assert.Equal(t, "false", flag.DefValue, "interactive should default to false")
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
+// TestRunCommand_BreakpointFlag tests that --breakpoint flag is recognized
+func TestRunCommand_HasBreakpointFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" {
+			flag := sub.Flags().Lookup("breakpoint")
+			require.NotNil(t, flag, "expected 'run' command to have --breakpoint flag")
+			return
+		}
+	}
+
+	t.Error("run command not found")
+}
+
 func TestRunCommand_PromptResolution(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -119,10 +119,10 @@ states:
       echo "VET_ISSUES:$(echo "$VET_OUTPUT" | grep -c ":" || echo 0)"
       [ -n "$VET_OUTPUT" ] && echo "$VET_OUTPUT"
 
-      # Lint check
+      # Lint check (golangci-lint v2 uses default text output with line numbers)
       if command -v golangci-lint >/dev/null 2>&1; then
-        LINT_OUTPUT=$(golangci-lint run --output.format=line-number 2>&1 || true)
-        LINT_COUNT=$(echo "$LINT_OUTPUT" | grep -c ":" || echo 0)
+        LINT_OUTPUT=$(golangci-lint run 2>&1 || true)
+        LINT_COUNT=$(echo "$LINT_OUTPUT" | grep -cE "^[^:]+:[0-9]+:" || echo 0)
         echo "LINT_ISSUES:$LINT_COUNT"
         [ -n "$LINT_OUTPUT" ] && echo "$LINT_OUTPUT" | head -30
       else
@@ -258,6 +258,69 @@ states:
       echo "STATUS:DOCS_INVENTORIED"
     capture:
       stdout: docs_output
+    on_success: search_audit_context
+    on_failure: search_audit_context
+
+  # ==========================================================================
+  # PHASE 2.5: SEARCH HISTORICAL CONTEXT (PARALLEL)
+  # ==========================================================================
+
+  search_audit_context:
+    type: parallel
+    description: Search claude-mem for established patterns and past issues
+    parallel:
+      - search_test_patterns
+      - search_arch_violations
+      - search_doc_standards
+    strategy: best_effort
+    max_concurrent: 3
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
+    hooks:
+      pre:
+        - log: "Searching claude-mem for historical context..."
+      post:
+        - log: "Historical context retrieved"
+
+  search_test_patterns:
+    type: step
+    description: Search for established test patterns
+    timeout: 60s
+    command: |
+      claude --print -p "Use claude-mem search tools to find established test patterns and coverage strategies in this project. Look for: testing conventions, coverage requirements, test organization patterns. Return max 10 items in index format." \
+        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__search,mcp__plugin_claude-mem_claude-mem-search__how_it_works" \
+        --dangerously-skip-permissions \
+        --output-format json 2>/dev/null | jq -r '.result // "No test patterns found"' | head -30
+    capture:
+      stdout: test_patterns
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
+
+  search_arch_violations:
+    type: step
+    description: Search for past architecture violations
+    timeout: 60s
+    command: |
+      claude --print -p "Use claude-mem search tools to find past architecture violations, domain purity issues, and how they were resolved. Focus on: dependency violations, layer breaches, hexagonal architecture issues. Return max 10 items." \
+        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__decisions,mcp__plugin_claude-mem_claude-mem-search__changes" \
+        --dangerously-skip-permissions \
+        --output-format json 2>/dev/null | jq -r '.result // "No violations found"' | head -30
+    capture:
+      stdout: arch_violations
+    on_success: parallel_analysis
+    on_failure: parallel_analysis
+
+  search_doc_standards:
+    type: step
+    description: Search for documentation standards
+    timeout: 60s
+    command: |
+      claude --print -p "Use claude-mem search tools to find documentation standards and godoc conventions used in this project. Return max 5 items." \
+        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__how_it_works" \
+        --dangerously-skip-permissions \
+        --output-format json 2>/dev/null | jq -r '.result // "No doc standards found"' | head -20
+    capture:
+      stdout: doc_standards
     on_success: parallel_analysis
     on_failure: parallel_analysis
 
@@ -288,8 +351,20 @@ states:
       TESTS="{{.states.run_tests.Output}}"
       INVENTORY="{{.states.collect_code_inventory.Output}}"
       THRESHOLD={{.inputs.coverage_threshold}}
+      TEST_PATTERNS=$(cat << 'PATEOF'
+      {{.states.search_test_patterns.Output}}
+      PATEOF
+      )
 
-      claude -p "$(cat .awf/prompts/audit/code-test-analysis.md)" \
+      # Expand variables in prompt template
+      PROMPT=$(cat .awf/prompts/audit/code-test-analysis.md | \
+        sed "s|\$METRICS|$METRICS|g" | \
+        sed "s|\$TESTS|$TESTS|g" | \
+        sed "s|\$INVENTORY|$INVENTORY|g" | \
+        sed "s|\${THRESHOLD}|$THRESHOLD|g" | \
+        sed "s|\$TEST_PATTERNS|$TEST_PATTERNS|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__search_for_pattern" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude analysis failed"
@@ -337,7 +412,20 @@ states:
       # Get port definitions
       PORTS=$(grep -rn "type.*interface" internal/domain/ports/ 2>/dev/null || true)
 
-      claude -p "$(cat .awf/prompts/audit/architecture-analysis.md)" \
+      # Historical context from claude-mem
+      ARCH_VIOLATIONS=$(cat << 'VIOLEOF'
+      {{.states.search_arch_violations.Output}}
+      VIOLEOF
+      )
+
+      # Expand variables in prompt template
+      PROMPT=$(cat .awf/prompts/audit/architecture-analysis.md | \
+        sed "s|\$INVENTORY|$INVENTORY|g" | \
+        sed "s|\$DOMAIN_IMPORTS|$DOMAIN_IMPORTS|g" | \
+        sed "s|\$PORTS|$PORTS|g" | \
+        sed "s|\$ARCH_VIOLATIONS|$ARCH_VIOLATIONS|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,mcp__plugin_common_serena__find_symbol,mcp__plugin_common_serena__get_symbols_overview,mcp__plugin_common_serena__find_referencing_symbols" \
         --dangerously-skip-permissions \
         2>&1 || echo "AGENT_ERROR: Claude analysis failed"

@@ -2,6 +2,10 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -326,4 +330,265 @@ func TestHistoryCommand_AcceptsNoArguments(t *testing.T) {
 	// History command should not require positional arguments
 	// The Args field should be nil (accepts any) or NoArgs
 	assert.Nil(t, historyCmd.Args, "history command should not require positional args")
+}
+
+func TestRunHistory_NoHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create empty history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "history"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "No execution history found")
+}
+
+func TestRunHistory_InvalidSinceFormat(t *testing.T) {
+	tests := []struct {
+		name        string
+		sinceValue  string
+		errContains string
+	}{
+		{
+			name:        "invalid date format",
+			sinceValue:  "not-a-date",
+			errContains: "invalid --since format",
+		},
+		{
+			name:        "wrong date format DD-MM-YYYY",
+			sinceValue:  "13-12-2025",
+			errContains: "invalid --since format",
+		},
+		{
+			name:        "partial date",
+			sinceValue:  "2025-12",
+			errContains: "invalid --since format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			origDir, _ := os.Getwd()
+			defer func() { _ = os.Chdir(origDir) }()
+			_ = os.Chdir(tmpDir)
+
+			// Create history directory
+			historyDir := filepath.Join(tmpDir, "history")
+			require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			var errOut bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&errOut)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--since=" + tt.sinceValue})
+
+			err := cmd.Execute()
+			// Error should be in stderr or returned from Execute
+			if err != nil {
+				assert.Contains(t, err.Error(), tt.errContains)
+			} else {
+				// Check stderr for error message
+				errOutput := errOut.String()
+				assert.Contains(t, errOutput, tt.errContains)
+			}
+		})
+	}
+}
+
+func TestRunHistory_ValidSinceFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--since=2025-12-01"})
+
+	err := cmd.Execute()
+	// Should not error on date parsing
+	require.NoError(t, err)
+}
+
+func TestRunHistory_Stats(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	t.Run("text format shows statistics", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--stats"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := out.String()
+		assert.Contains(t, output, "Execution Statistics")
+		assert.Contains(t, output, "Total Executions:")
+		assert.Contains(t, output, "Success:")
+		assert.Contains(t, output, "Failed:")
+		assert.Contains(t, output, "Cancelled:")
+	})
+
+	t.Run("json format shows statistics", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs([]string{"--storage=" + tmpDir, "--format=json", "history", "--stats"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := out.String()
+		var stats map[string]interface{}
+		err = json.Unmarshal([]byte(output), &stats)
+		require.NoError(t, err, "output should be valid JSON")
+
+		assert.Contains(t, stats, "total_executions")
+		assert.Contains(t, stats, "success_count")
+		assert.Contains(t, stats, "failed_count")
+		assert.Contains(t, stats, "cancelled_count")
+		assert.Contains(t, stats, "avg_duration_ms")
+	})
+}
+
+func TestRunHistory_JSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "--format=json", "history"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	// Empty history should return valid JSON array
+	var records []interface{}
+	err = json.Unmarshal([]byte(output), &records)
+	require.NoError(t, err, "output should be valid JSON array")
+}
+
+func TestRunHistory_Filters(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "filter by workflow name",
+			args: []string{"--storage=" + tmpDir, "history", "--workflow=deploy"},
+		},
+		{
+			name: "filter by status success",
+			args: []string{"--storage=" + tmpDir, "history", "--status=success"},
+		},
+		{
+			name: "filter by status failed",
+			args: []string{"--storage=" + tmpDir, "history", "--status=failed"},
+		},
+		{
+			name: "filter by status cancelled",
+			args: []string{"--storage=" + tmpDir, "history", "--status=cancelled"},
+		},
+		{
+			name: "limit results",
+			args: []string{"--storage=" + tmpDir, "history", "--limit=10"},
+		},
+		{
+			name: "combined filters",
+			args: []string{"--storage=" + tmpDir, "history", "--workflow=test", "--status=success", "--limit=5"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tt.args)
+
+			err := cmd.Execute()
+			// Should not error (even if no results found)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestRunHistory_TextOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create history directory
+	historyDir := filepath.Join(tmpDir, "history")
+	require.NoError(t, os.MkdirAll(historyDir, 0755))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "history"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	// For empty history, should show "No execution history found"
+	if !strings.Contains(output, "No execution history found") {
+		// If there are records, should have table headers
+		assert.Contains(t, output, "ID")
+		assert.Contains(t, output, "WORKFLOW")
+		assert.Contains(t, output, "STATUS")
+		assert.Contains(t, output, "DURATION")
+		assert.Contains(t, output, "COMPLETED")
+	}
 }
