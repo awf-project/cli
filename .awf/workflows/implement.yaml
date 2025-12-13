@@ -1,10 +1,10 @@
 # Feature Implementation Workflow
 # Implements a feature following its plan using TDD (Strict TIDY approach).
+# Fetches spec content directly from GitHub issue.
 # No commit - user decides when to commit after review.
 #
 # Usage:
 #   awf run implement --input feature_id=F038
-#   awf run implement --input feature_id=F038 --input spec_file=docs/plans/features/v0.2.0/F038-retry.md
 #   awf run implement --input feature_id=F038 --input agents="go:golang-expert"
 
 name: implement
@@ -19,15 +19,6 @@ inputs:
     required: true
     validation:
       pattern: "^F[0-9]{3}$"
-
-  - name: spec_file
-    type: string
-    description: Direct path to spec file (skips find if provided)
-    required: false
-    default: ""
-    validation:
-      file_exists: true
-      file_extension: [".md"]
 
   - name: agents
     type: string
@@ -50,38 +41,49 @@ states:
 
   find_spec:
     type: step
-    description: Find specification
+    description: Find GitHub issue containing the specification
     command: |
-      # Use spec_file if provided, otherwise find it
-      if [ -n "{{.inputs.spec_file}}" ]; then
-        SPEC_FILE="{{.inputs.spec_file}}"
-      else
-        SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      fi
+      # Search for GitHub issue by feature ID
+      ISSUE_JSON=$(gh issue list --repo vanoix/awf \
+        --search "{{.inputs.feature_id}}:" --state all \
+        --json url,title,body --jq '.[0]' 2>/dev/null)
 
-      if [ -z "$SPEC_FILE" ]; then
-        echo "ERROR: Spec not found for {{.inputs.feature_id}}"
+      if [ -z "$ISSUE_JSON" ] || [ "$ISSUE_JSON" = "null" ]; then
+        echo "ERROR: No GitHub issue found for {{.inputs.feature_id}}" >&2
         exit 1
       fi
 
-      echo "$SPEC_FILE"
+      ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url')
+      ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+      SPEC_CONTENT=$(echo "$ISSUE_JSON" | jq -r '.body')
+
+      # Output JSON with issue info and spec content
+      jq -n \
+        --arg url "$ISSUE_URL" \
+        --arg title "$ISSUE_TITLE" \
+        --arg content "$SPEC_CONTENT" \
+        '{issue_url: $url, title: $title, spec_content: $content}'
     timeout: 30s
     capture:
-      stdout: spec_file
+      stdout: spec_info
     on_success: create_branch
     on_failure: error_find_spec
     hooks:
       pre:
-        - log: "Find spec..."
+        - log: "Finding GitHub issue for {{.inputs.feature_id}}..."
       post:
-        - log: "Found spec {{.inputs.feature_id}}"
+        - log: "Found issue for {{.inputs.feature_id}}"
 
   create_branch:
     type: step
     description: Create or switch to feature branch
     command: |
-      # Extract slug from filename (F038-prompt-storage.md -> prompt-storage)
-      SLUG=$(basename "{{.states.find_spec.Output}}" .md | sed 's/^F[0-9]*-//')
+      # Parse title from find_spec JSON output
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
+
+      # Extract slug from title (e.g., "F038: Prompt Storage" -> prompt-storage)
+      SLUG=$(echo "$ISSUE_TITLE" | sed 's/^F[0-9]*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g')
       BRANCH="feature/{{.inputs.feature_id}}-${SLUG}"
 
       # Check if already on this branch
@@ -102,13 +104,59 @@ states:
     timeout: 30s
     capture:
       stdout: branch_name
-    on_success: search_feature_context
+    on_success: set_in_progress
     on_failure: error_branch
     hooks:
       pre:
         - log: "Creating/switching to feature branch..."
       post:
         - log: "On branch {{.states.create_branch.Output}}"
+
+  set_in_progress:
+    type: step
+    description: Set GitHub issue status to In Progress
+    command: |
+      PROJECT_NUM=1
+
+      # Get issue_url from find_spec
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url // empty')
+
+      if [ -z "$ISSUE_URL" ]; then
+        echo "SKIP_NO_ISSUE"
+        exit 0
+      fi
+
+      # Get project info
+      PROJECT_ID=$(gh project view $PROJECT_NUM --owner vanoix --format json | jq -r '.id')
+      ITEMS=$(gh project item-list $PROJECT_NUM --owner vanoix --format json --limit 100)
+      ITEM_ID=$(echo "$ITEMS" | jq -r ".items[] | select(.content.url==\"$ISSUE_URL\") | .id")
+
+      if [ -z "$ITEM_ID" ]; then
+        echo "SKIP_NOT_IN_PROJECT"
+        exit 0
+      fi
+
+      # Get field IDs
+      FIELDS=$(gh project field-list $PROJECT_NUM --owner vanoix --format json)
+      STATUS_FIELD=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .id')
+      IN_PROGRESS_OPT=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
+
+      # Update status
+      gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+        --field-id "$STATUS_FIELD" --single-select-option-id "$IN_PROGRESS_OPT" 2>/dev/null || true
+
+      echo "IN_PROGRESS"
+    timeout: 30s
+    capture:
+      stdout: in_progress_result
+    on_success: search_feature_context
+    on_failure: search_feature_context
+    hooks:
+      pre:
+        - log: "Setting issue status to In Progress..."
+      post:
+        - log: "Status: {{.states.set_in_progress.Output}}"
 
   #==========================================================================
   # PHASE 1: PLANNING
@@ -155,7 +203,9 @@ states:
     type: step
     description: Claude explores codebase for implementation context
     command: |
-      SPEC_CONTENT=$(cat "{{.states.find_spec.Output}}")
+      # Get spec content from find_spec (GitHub issue)
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
       FEATURE_CONTEXT=$(cat << 'CTXEOF'
       {{.states.search_feature_context.Output}}
       CTXEOF
@@ -283,14 +333,18 @@ states:
 
   load_spec:
     type: step
-    description: Find and read feature spec
+    description: Extract spec content from find_spec output
     command: |
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -z "$SPEC_FILE" ]; then
-        echo "ERROR: Spec not found for {{.inputs.feature_id}}"
+      # Get spec content from find_spec (already fetched from GitHub issue)
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
+
+      if [ -z "$SPEC_CONTENT" ]; then
+        echo "ERROR: No spec content found for {{.inputs.feature_id}}"
         exit 1
       fi
-      cat "$SPEC_FILE"
+
+      echo "$SPEC_CONTENT"
     timeout: 10s
     capture:
       stdout: spec_content
@@ -299,7 +353,7 @@ states:
     on_failure: error_baseline
     hooks:
       pre:
-        - log: "Loading spec for {{.inputs.feature_id}}..."
+        - log: "Extracting spec for {{.inputs.feature_id}}..."
 
   load_plan:
     type: step
@@ -709,8 +763,8 @@ states:
     timeout: 300s
     capture:
       stdout: feature_tests_output
-    on_success: parallel_docs_shell
-    on_failure: parallel_docs_shell
+    on_success: set_done
+    on_failure: set_done
     hooks:
       pre:
         - log: "Running functional tests for {{.inputs.feature_id}}..."
@@ -718,118 +772,57 @@ states:
         - log: "Feature tests completed"
 
   #==========================================================================
-  # PHASE 6: DOCUMENTATION UPDATES
+  # PHASE 6: GITHUB STATUS + DOCUMENTATION
   #==========================================================================
 
-  parallel_docs_shell:
-    type: parallel
-    description: Fast shell-based documentation updates
-    parallel:
-      - update_spec_status
-      - update_kanban
-    strategy: best_effort
-    max_concurrent: 2
-    on_success: parallel_docs_claude
-    on_failure: parallel_docs_claude
-
-  update_spec_status:
+  set_done:
     type: step
-    description: Update spec status to implemented
+    description: Set GitHub issue status to Done and close issue
     command: |
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -n "$SPEC_FILE" ]; then
-        # Update status (handle multiple possible values)
-        sed -i -E 's/(\*\*Status\*\*): (backlog|planned|in_progress)/\1: implemented/g' "$SPEC_FILE"
-        # Check all acceptance criteria checkboxes
-        sed -i 's/- \[ \]/- [x]/g' "$SPEC_FILE"
-        echo "Updated $SPEC_FILE"
-      else
-        echo "SPEC_UPDATE_SKIPPED"
+      PROJECT_NUM=1
+
+      # Get issue_url from find_spec
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url // empty')
+
+      if [ -z "$ISSUE_URL" ]; then
+        echo "SKIP_NO_ISSUE"
+        exit 0
       fi
-    timeout: 10s
+
+      # Get project info
+      PROJECT_ID=$(gh project view $PROJECT_NUM --owner vanoix --format json | jq -r '.id')
+      ITEMS=$(gh project item-list $PROJECT_NUM --owner vanoix --format json --limit 100)
+      ITEM_ID=$(echo "$ITEMS" | jq -r ".items[] | select(.content.url==\"$ISSUE_URL\") | .id")
+
+      if [ -z "$ITEM_ID" ]; then
+        echo "SKIP_NOT_IN_PROJECT"
+        exit 0
+      fi
+
+      # Get field IDs
+      FIELDS=$(gh project field-list $PROJECT_NUM --owner vanoix --format json)
+      STATUS_FIELD=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .id')
+      DONE_OPT=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .options[] | select(.name=="Done") | .id')
+
+      # Update status to Done
+      gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+        --field-id "$STATUS_FIELD" --single-select-option-id "$DONE_OPT" 2>/dev/null || true
+
+      # Close the issue
+      gh issue close "$ISSUE_URL" --repo vanoix/awf 2>/dev/null || true
+
+      echo "DONE"
+    timeout: 30s
     capture:
-      stdout: status_update_output
+      stdout: done_result
     on_success: parallel_docs_claude
     on_failure: parallel_docs_claude
-
-  update_kanban:
-    type: step
-    description: Move feature from Backlog to Done in KANBAN.md
-    command: |
-      KANBAN_FILE="docs/plans/KANBAN.md"
-      if [ ! -f "$KANBAN_FILE" ]; then
-        echo "KANBAN_NOT_FOUND"
-        exit 0
-      fi
-
-      # Find the feature line pattern (e.g., "- [F039](features/v0.1.0/F039-...")
-      FEATURE_PATTERN="\[{{.inputs.feature_id}}\]"
-
-      # Check if feature exists in file
-      if ! grep -q "$FEATURE_PATTERN" "$KANBAN_FILE"; then
-        echo "FEATURE_NOT_IN_KANBAN"
-        exit 0
-      fi
-
-      # Extract the full feature line
-      FEATURE_LINE=$(grep "$FEATURE_PATTERN" "$KANBAN_FILE" | head -1)
-
-      # Remove from current location (Backlog section)
-      sed -i "/$FEATURE_PATTERN/d" "$KANBAN_FILE"
-
-      # Find which phase this feature belongs to
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -z "$SPEC_FILE" ]; then
-        echo "KANBAN_SPEC_NOT_FOUND"
-        exit 0
-      fi
-
-      # Extract version and map to phase
-      VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+')
-      case "$VERSION" in
-        v0.1.0) PHASE_HEADER="### Phase 1 - MVP (v0.1.0)" ;;
-        v0.2.0) PHASE_HEADER="### Phase 2 - Core Features (v0.2.0)" ;;
-        v0.3.0) PHASE_HEADER="### Phase 3 - Advanced Features (v0.3.0)" ;;
-        v0.4.0) PHASE_HEADER="### Phase 4 - Extensibility & AI (v0.4.0)" ;;
-        v1.0.0) PHASE_HEADER="### Phase 5 - Interfaces (v1.0.0)" ;;
-        *) PHASE_HEADER="### Phase 2 - Core Features (v0.2.0)" ;;
-      esac
-
-      # Check if phase section exists in Done
-      if grep -q "^$PHASE_HEADER" "$KANBAN_FILE"; then
-        # Phase exists - insert feature after header
-        awk -v feat="$FEATURE_LINE" -v phase="$PHASE_HEADER" '
-          /^## Done/ { in_done=1 }
-          /^## Summary/ { in_done=0 }
-          in_done && $0 == phase {
-            print
-            getline
-            while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
-            print feat
-            next
-          }
-          { print }
-        ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
-      else
-        # Phase doesn't exist in Done - create it after ## Done
-        awk -v feat="$FEATURE_LINE" -v phase="$PHASE_HEADER" '
-          /^## Done/ {
-            print
-            print ""
-            print phase
-            print feat
-            next
-          }
-          { print }
-        ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
-      fi
-
-      echo "KANBAN_UPDATED"
-    timeout: 15s
-    capture:
-      stdout: kanban_update_output
-    on_success: parallel_docs_claude
-    on_failure: parallel_docs_claude
+    hooks:
+      pre:
+        - log: "Setting issue status to Done..."
+      post:
+        - log: "Status: {{.states.set_done.Output}}"
 
   #--------------------------------------------------------------------------
   # Claude-based documentation updates (parallel)
@@ -853,17 +846,12 @@ states:
       # Get staged files list
       STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
 
-      # Find spec and plan files
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
-
-      # Read spec content
-      SPEC_CONTENT=""
-      if [ -n "$SPEC_FILE" ] && [ -f "$SPEC_FILE" ]; then
-        SPEC_CONTENT=$(cat "$SPEC_FILE")
-      fi
+      # Get spec content from find_spec (GitHub issue)
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
 
       # Read plan content
+      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
       PLAN_CONTENT=""
       if [ -f "$PLAN_FILE" ]; then
         PLAN_CONTENT=$(cat "$PLAN_FILE")
@@ -909,10 +897,12 @@ states:
 
       # Fallback if Claude failed or returned empty
       if [ -z "$ENTRY" ] || ! echo "$ENTRY" | grep -q "{{.inputs.feature_id}}"; then
-        SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-        TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" 2>/dev/null | sed 's/^# {{.inputs.feature_id}}: //')
+        # Get title from find_spec (GitHub issue)
+        SPEC_INFO='{{.states.find_spec.Output}}'
+        ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
+        TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
         if [ -z "$TITLE" ]; then
-          TITLE=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//' | tr '-' ' ')
+          TITLE="Feature {{.inputs.feature_id}}"
         fi
         ENTRY="- **{{.inputs.feature_id}}**: $TITLE"
         FALLBACK=true
@@ -952,10 +942,14 @@ states:
     type: step
     description: Update project memories via Claude
     command: |
-      # Extract version from spec file path
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      VERSION=$(echo "$SPEC_FILE" | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
-      TITLE=$(grep -m1 "^# {{.inputs.feature_id}}:" "$SPEC_FILE" 2>/dev/null | sed 's/^# {{.inputs.feature_id}}: //' || echo "Feature {{.inputs.feature_id}}")
+      # Get info from find_spec (GitHub issue)
+      SPEC_INFO='{{.states.find_spec.Output}}'
+      ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
+      TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
+
+      # Try to extract version from issue labels or use unknown
+      ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url')
+      VERSION=$(gh issue view "$ISSUE_URL" --repo vanoix/awf --json labels --jq '.labels[].name | select(startswith("v"))' 2>/dev/null | head -1 || echo "unknown")
 
       claude -p "Update the project memories to reflect the implemented feature {{.inputs.feature_id}}.
 
@@ -1020,10 +1014,9 @@ states:
       echo "║   Final Lint: $LINT_AFTER"
       echo "║   Feature Tests: $FEATURE_TESTS"
       echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ Documentation Updates:"
-      echo "║   Spec Status: {{.states.update_spec_status.Output}}"
+      echo "║ Updates:"
       echo "║   Plan: {{.states.save_plan.Output}}"
-      echo "║   KANBAN: {{.states.update_kanban.Output}}"
+      echo "║   GitHub Issue: {{.states.set_done.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
       echo "║   CHANGELOG: {{.states.update_changelog_full.Output}}"
 
