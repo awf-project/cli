@@ -36,6 +36,12 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 	// process group for clean termination
 	execCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
+	// kill entire process group on context cancellation (Go 1.20+)
+	execCmd.Cancel = func() error {
+		return syscall.Kill(-execCmd.Process.Pid, syscall.SIGKILL)
+	}
+	execCmd.WaitDelay = 100 * time.Millisecond
+
 	// working directory
 	if cmd.Dir != "" {
 		execCmd.Dir = cmd.Dir
@@ -74,11 +80,8 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 		Stderr: stderr.String(),
 	}
 
-	// handle context cancellation - kill process group
+	// handle context cancellation (process group already killed by Cancel func)
 	if ctx.Err() != nil {
-		if execCmd.Process != nil {
-			_ = syscall.Kill(-execCmd.Process.Pid, syscall.SIGKILL)
-		}
 		result.ExitCode = -1
 		return result, ctx.Err()
 	}
