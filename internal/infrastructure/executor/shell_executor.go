@@ -3,6 +3,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -83,7 +84,8 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 	}
 
 	// extract exit code from ExitError
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		result.ExitCode = exitErr.ExitCode()
 		return result, nil // non-zero exit is not an error for us
 	}

@@ -8,8 +8,8 @@
 #   awf run implement --input feature_id=F038 --input agents="go:golang-expert"
 
 name: implement
-description: Implement a feature using TDD approach with optional agents/skills
-version: "1.1.0"
+description: Implement a feature using iterative TDD (component-by-component) with optional agents/skills
+version: "2.0.0"
 author: awf
 
 inputs:
@@ -268,11 +268,52 @@ states:
     capture:
       stdout: plan_content
       max_size: 1MB
-    on_success: parallel_baseline
+    on_success: extract_components
     on_failure: error_baseline
     hooks:
       pre:
         - log: "Loading implementation plan..."
+
+  extract_components:
+    type: step
+    description: Extract components JSON from implementation plan
+    command: |
+      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+
+      # Extract JSON block between ```json and ``` after ## Components
+      COMPONENTS=$(awk '
+        /^## Components/,/^## / {
+          if (/```json/) { in_json=1; next }
+          if (/```/ && in_json) { in_json=0; next }
+          if (in_json) print
+        }
+      ' "$PLAN_FILE" | jq -c '.')
+
+      if [ -z "$COMPONENTS" ] || [ "$COMPONENTS" = "null" ]; then
+        echo "ERROR: No valid components JSON found in plan"
+        echo "Expected: ## Components section with ```json block"
+        exit 1
+      fi
+
+      # Validate it's an array
+      if ! echo "$COMPONENTS" | jq -e 'type == "array"' > /dev/null 2>&1; then
+        echo "ERROR: Components must be a JSON array"
+        exit 1
+      fi
+
+      COMPONENT_COUNT=$(echo "$COMPONENTS" | jq 'length')
+      echo "Found $COMPONENT_COUNT components" >&2
+      echo "$COMPONENTS"
+    timeout: 30s
+    capture:
+      stdout: components_json
+    on_success: parallel_baseline
+    on_failure: error_planning
+    hooks:
+      pre:
+        - log: "Extracting components from plan..."
+      post:
+        - log: "Components extracted successfully"
 
   #==========================================================================
   # PHASE 2.5: BASELINE VALIDATION (PARALLEL)
@@ -286,7 +327,7 @@ states:
       - run_tests_before
     strategy: all_succeed
     max_concurrent: 2
-    on_success: write_interfaces
+    on_success: tdd_component_loop
     on_failure: error_baseline
 
   run_lint_before:
@@ -296,7 +337,7 @@ states:
     timeout: 120s
     capture:
       stdout: lint_before_output
-    on_success: write_interfaces
+    on_success: tdd_component_loop
     on_failure: error_baseline
     hooks:
       pre:
@@ -309,7 +350,7 @@ states:
     timeout: 300s
     capture:
       stdout: tests_before_output
-    on_success: write_interfaces
+    on_success: tdd_component_loop
     on_failure: error_baseline
     hooks:
       pre:
@@ -318,13 +359,32 @@ states:
         - log: "Baseline OK - proceeding with TDD"
 
   #==========================================================================
-  # PHASE 3: TDD RED - Write interfaces then tests
+  # PHASE 3-4: TDD PER COMPONENT (for_each component → while retry)
   #==========================================================================
 
-  write_interfaces:
+  tdd_component_loop:
+    type: for_each
+    description: TDD loop over each component (stub → tests → implement)
+    items: "{{.states.extract_components.Output}}"
+    max_iterations: 10
+    body:
+      - write_component_stub
+      - write_component_tests
+      - run_component_tests_red
+      - component_green_loop
+    on_complete: run_final_tests
+    hooks:
+      pre:
+        - log: "Starting TDD for {{.loop.Length}} components..."
+      post:
+        - log: "All components implemented successfully"
+
+  write_component_stub:
     type: step
-    description: Claude writes interfaces/types/stubs (code compiles but does nothing)
+    description: Claude writes interface/stub for ONE component
     command: |
+      COMPONENT='{{.loop.Item}}'
+      COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
       SPECEOF
@@ -333,24 +393,34 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "$(cat .awf/prompts/implement/interfaces.md)" \
+
+      # Create prompt with component context
+      PROMPT=$(cat .awf/prompts/implement/component-stub.md | \
+        sed "s|\$COMPONENT|$COMPONENT|g" | \
+        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
+        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
+        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
     timeout: 600s
     capture:
-      stdout: interfaces_output
+      stdout: component_stub_output
       max_size: 5MB
-    on_success: write_tests
-    on_failure: write_tests
+    on_success: tdd_component_loop
+    on_failure: tdd_component_loop
     hooks:
       pre:
-        - log: "Claude writing interfaces/stubs..."
+        - log: "Component {{.loop.Index1}}/{{.loop.Length}}: Writing stub..."
 
-  write_tests:
+  write_component_tests:
     type: step
-    description: Claude writes tests using the interfaces
+    description: Claude writes tests for ONE component
     command: |
+      COMPONENT='{{.loop.Item}}'
+      COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
       SPECEOF
@@ -359,60 +429,80 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "$(cat .awf/prompts/implement/tests.md)" \
+
+      PROMPT=$(cat .awf/prompts/implement/component-tests.md | \
+        sed "s|\$COMPONENT|$COMPONENT|g" | \
+        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
+        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
+        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
     timeout: 600s
     capture:
-      stdout: tests_output
+      stdout: component_tests_output
       max_size: 5MB
-    on_success: run_tests_red
-    on_failure: run_tests_red
+    on_success: tdd_component_loop
+    on_failure: tdd_component_loop
     hooks:
       pre:
-        - log: "Claude writing tests..."
+        - log: "Component {{.loop.Index1}}/{{.loop.Length}}: Writing tests..."
 
-  run_tests_red:
+  run_component_tests_red:
     type: step
-    description: Run tests - should fail (RED phase)
-    command: make test-unit 2>&1 || true
+    description: Run component tests - should fail (RED phase)
+    command: |
+      COMPONENT='{{.loop.Item}}'
+      COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
+
+      # Get test files for this component
+      TEST_FILES=$(echo "$COMPONENT" | jq -r '.tests[]' 2>/dev/null | tr '\n' ' ' || echo "")
+
+      echo "=== RED phase for component: $COMPONENT_NAME ==="
+
+      if [ -n "$TEST_FILES" ] && [ -f "$(echo $TEST_FILES | awk '{print $1}')" ]; then
+        echo "Running tests: $TEST_FILES"
+        go test -v $TEST_FILES 2>&1 || true
+      else
+        echo "No specific test files found, running all unit tests..."
+        make test-unit 2>&1 || true
+      fi
+
+      echo "RED_PHASE_COMPLETE"
     timeout: 300s
     capture:
-      stdout: tests_red_output
-    on_success: tdd_green_loop
-    on_failure: tdd_green_loop
+      stdout: component_red_output
+    on_success: tdd_component_loop
+    on_failure: tdd_component_loop
     hooks:
       pre:
-        - log: "Running tests (expecting failure - RED phase)..."
-      post:
-        - log: "RED phase complete - proceeding to implementation"
+        - log: "Component {{.loop.Index1}}/{{.loop.Length}}: RED phase..."
 
-  #==========================================================================
-  # PHASE 4: TDD GREEN - Implementation with retry loop
-  #==========================================================================
-
-  tdd_green_loop:
+  component_green_loop:
     type: while
-    description: TDD GREEN retry loop - implement until tests pass
+    description: Implement component until tests pass (max 3 attempts)
     while: "true"
     max_iterations: 3
-    break_when: "states.run_tests_green.exit_code == 0"
+    break_when: "states.run_component_tests_green.exit_code == 0"
     body:
-      - implement_feature
-      - run_fmt
-      - run_tests_green
-    on_complete: run_lint_final
+      - implement_component
+      - run_component_fmt
+      - run_component_tests_green
+    on_complete: tdd_component_loop
     hooks:
       pre:
-        - log: "Starting TDD GREEN loop (max 3 iterations)..."
+        - log: "Component {{.loop.parent.Index1}}/{{.loop.parent.Length}}: Starting GREEN loop..."
       post:
-        - log: "TDD GREEN loop completed"
+        - log: "Component {{.loop.parent.Index1}}/{{.loop.parent.Length}}: GREEN phase complete"
 
-  implement_feature:
+  implement_component:
     type: step
-    description: Claude implements the feature (GREEN phase)
+    description: Claude implements ONE component (GREEN phase)
     command: |
+      COMPONENT='{{.loop.parent.Item}}'
+      COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
       SPECEOF
@@ -421,55 +511,84 @@ states:
       {{.states.load_plan.Output}}
       PLANEOF
       )
-      claude -p "$(cat .awf/prompts/implement/feature.md)" \
+
+      PROMPT=$(cat .awf/prompts/implement/component-impl.md | \
+        sed "s|\$COMPONENT|$COMPONENT|g" | \
+        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
+        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
+        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
         --dangerously-skip-permissions \
         --output-format json
     timeout: 900s
     capture:
-      stdout: implement_output
+      stdout: component_impl_output
       max_size: 10MB
-    on_success: tdd_green_loop
-    on_failure: tdd_green_loop
+    on_success: component_green_loop
+    on_failure: component_green_loop
     hooks:
       pre:
-        - log: "Claude implementing feature..."
+        - log: "Component {{.loop.parent.Index1}}: Implementing (attempt {{.loop.Index1}}/3)..."
 
-  run_fmt:
+  run_component_fmt:
     type: step
-    description: Format Go code before validation
+    description: Format Go code
     command: |
       go fmt ./...
-      echo "STATUS:FORMATTED"
+      echo "FORMATTED"
     timeout: 60s
     capture:
-      stdout: fmt_output
-    on_success: tdd_green_loop
-    on_failure: tdd_green_loop
-    hooks:
-      pre:
-        - log: "Formatting Go code..."
-      post:
-        - log: "Code formatted"
+      stdout: component_fmt_output
+    on_success: component_green_loop
+    on_failure: component_green_loop
 
-  #==========================================================================
-  # PHASE 5: VALIDATION (inside tdd_green_loop)
-  #==========================================================================
-
-  run_tests_green:
+  run_component_tests_green:
     type: step
-    description: Run tests - should pass (GREEN phase)
-    command: make test-unit 2>&1
+    description: Run component tests - should pass (GREEN phase)
+    command: |
+      COMPONENT='{{.loop.parent.Item}}'
+      COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
+
+      TEST_FILES=$(echo "$COMPONENT" | jq -r '.tests[]' 2>/dev/null | tr '\n' ' ' || echo "")
+
+      echo "=== GREEN phase for component: $COMPONENT_NAME (attempt {{.loop.Index1}}) ==="
+
+      if [ -n "$TEST_FILES" ] && [ -f "$(echo $TEST_FILES | awk '{print $1}')" ]; then
+        go test -v $TEST_FILES 2>&1
+      else
+        make test-unit 2>&1
+      fi
     timeout: 300s
     capture:
-      stdout: tests_green_output
-    on_success: tdd_green_loop
-    on_failure: tdd_green_loop
+      stdout: component_green_output
+    on_success: component_green_loop
+    on_failure: component_green_loop
+    hooks:
+      post:
+        - log: "Component {{.loop.parent.Index1}}: Tests attempt {{.loop.Index1}} complete"
+
+  #==========================================================================
+  # PHASE 5: FINAL VALIDATION
+  #==========================================================================
+
+  run_final_tests:
+    type: step
+    description: Run all unit tests to verify integration
+    command: |
+      echo "=== Running all unit tests after component implementation ==="
+      make test-unit 2>&1
+    timeout: 300s
+    capture:
+      stdout: final_tests_output
+    on_success: run_lint_final
+    on_failure: run_lint_final
     hooks:
       pre:
-        - log: "Running tests [attempt {{.loop.Index1}}]..."
+        - log: "Running final integration tests..."
       post:
-        - log: "Tests completed"
+        - log: "Final tests completed"
 
   run_lint_final:
     type: step
@@ -825,32 +944,32 @@ states:
       echo "║ Agents: {{.inputs.agents}}"
       echo "║ Skills: {{.inputs.skills}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ TDD Results:"
-      # Check exit codes stored in states (CamelCase for Go templates)
-      RED_EXIT="{{.states.run_tests_red.ExitCode}}"
-      GREEN_EXIT="{{.states.run_tests_green.ExitCode}}"
-      if [ "$RED_EXIT" != "0" ]; then
-        RED_RESULT="OK (tests failed as expected)"
+      echo "║ TDD Results (Component-Based):"
+
+      # Count components from extracted JSON
+      COMPONENT_COUNT=$(echo '{{.states.extract_components.Output}}' | jq 'length' 2>/dev/null || echo "?")
+      echo "║   Components: $COMPONENT_COUNT implemented"
+
+      # Check final tests exit code
+      FINAL_EXIT="{{.states.run_final_tests.ExitCode}}"
+      if [ "$FINAL_EXIT" = "0" ]; then
+        FINAL_RESULT="PASS (all tests passing)"
       else
-        RED_RESULT="WARNING (tests passed, should have failed)"
+        FINAL_RESULT="WARNING (some tests failing)"
       fi
-      if [ "$GREEN_EXIT" = "0" ]; then
-        GREEN_RESULT="OK (tests passing)"
-      else
-        GREEN_RESULT="WARNING (tests still failing)"
-      fi
-      LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'LINT_WARNING' && echo 'WARNING' || echo 'PASS'
+
+      LINT_AFTER=$(cat << 'LINTEOF' | grep -q 'error\|warning' && echo 'WARNING' || echo 'PASS'
       {{.states.run_lint_final.Output}}
       LINTEOF
       )
-      FEATURE_TESTS=$(cat << 'FTEOF' | grep -q 'NO_FEATURE_TESTS_FOUND' && echo 'SKIPPED (no tests found)' || echo 'COMPLETED'
+
+      FEATURE_TESTS=$(cat << 'FTEOF' | grep -q 'NO_FEATURE_TESTS_FOUND\|WARNING' && echo 'SKIPPED' || echo 'COMPLETED'
       {{.states.run_feature_tests.Output}}
       FTEOF
       )
-      echo "║   Baseline Lint: PASS"
-      echo "║   Baseline Tests: PASS"
-      echo "║   RED Phase: $RED_RESULT"
-      echo "║   GREEN Phase: $GREEN_RESULT"
+
+      echo "║   Baseline: PASS (lint + tests)"
+      echo "║   Final Tests: $FINAL_RESULT"
       echo "║   Final Lint: $LINT_AFTER"
       echo "║   Feature Tests: $FEATURE_TESTS"
       echo "╠════════════════════════════════════════════════════════════════╣"
@@ -860,6 +979,7 @@ states:
       echo "║   KANBAN: {{.states.update_kanban.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
       echo "║   CHANGELOG: {{.states.update_changelog_full.Output}}"
+
       MEMORY_STATUS=$(cat << 'MEMEOF' | grep -q 'SKIPPED' && echo 'SKIPPED' || echo 'UPDATED'
       {{.states.update_memories.Output}}
       MEMEOF

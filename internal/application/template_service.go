@@ -99,8 +99,8 @@ func (s *TemplateService) expandStep(
 
 	// Check if template step also has a template ref (nested templates)
 	if templateStep.TemplateRef != nil {
-		if err := s.expandStep(ctx, stepName, templateStep, visited); err != nil {
-			return err
+		if nestedErr := s.expandStep(ctx, stepName, templateStep, visited); nestedErr != nil {
+			return nestedErr
 		}
 	}
 

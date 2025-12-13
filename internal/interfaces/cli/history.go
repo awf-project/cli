@@ -95,17 +95,17 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 		Limit:        limit,
 	}
 	if since != "" {
-		t, err := time.Parse("2006-01-02", since)
-		if err != nil {
-			return writer.WriteError(fmt.Errorf("invalid --since format, expected YYYY-MM-DD: %w", err), 1) // user error
+		t, parseErr := time.Parse("2006-01-02", since)
+		if parseErr != nil {
+			return writer.WriteError(fmt.Errorf("invalid --since format, expected YYYY-MM-DD: %w", parseErr), 1) // user error
 		}
 		filter.Since = t
 	}
 
 	if showStats {
-		stats, err := historySvc.GetStats(ctx, filter)
-		if err != nil {
-			return writer.WriteError(fmt.Errorf("get stats: %w", err), 4)
+		stats, statsErr := historySvc.GetStats(ctx, filter)
+		if statsErr != nil {
+			return writer.WriteError(fmt.Errorf("get stats: %w", statsErr), 4)
 		}
 		return writeHistoryStats(writer, cfg, stats)
 	}
