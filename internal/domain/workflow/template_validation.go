@@ -21,8 +21,11 @@ func NewTemplateValidator(w *Workflow, analyzer TemplateAnalyzer) *TemplateValid
 		return nil
 	}
 
-	// Build execution order
-	order, _ := ComputeExecutionOrder(w.Steps, w.Initial)
+	// Build execution order (errors are handled by main Validate())
+	order, err := ComputeExecutionOrder(w.Steps, w.Initial)
+	if err != nil {
+		return nil // Let main validation catch this
+	}
 
 	// Build step index for forward reference detection
 	stepIndex := make(map[string]int, len(order))

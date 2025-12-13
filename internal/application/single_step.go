@@ -46,8 +46,8 @@ func (s *ExecutionService) ExecuteSingleStep(
 
 	// expand template references in workflow steps
 	if s.templateSvc != nil {
-		if err := s.templateSvc.ExpandWorkflow(ctx, wf); err != nil {
-			return nil, fmt.Errorf("expand templates: %w", err)
+		if expandErr := s.templateSvc.ExpandWorkflow(ctx, wf); expandErr != nil {
+			return nil, fmt.Errorf("expand templates: %w", expandErr)
 		}
 	}
 
@@ -80,8 +80,8 @@ func (s *ExecutionService) ExecuteSingleStep(
 	}
 
 	// Execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
-		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); hookErr != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", hookErr)
 	}
 
 	// Resolve command variables

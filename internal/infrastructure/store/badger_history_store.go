@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -18,7 +19,7 @@ const (
 	prefixExec   = "exec:"   // Primary record: exec:{id} -> JSON(ExecutionRecord)
 	prefixWf     = "idx:wf:" // Index by workflow: idx:wf:{workflow_name}:{timestamp_ns}:{id}
 	prefixSt     = "idx:st:" // Index by status: idx:st:{status}:{timestamp_ns}:{id}
-	prefixTs     = "idx:ts:" // Index by timestamp: idx:ts:{timestamp_ns}:{id}
+	prefixTS     = "idx:ts:" // Index by timestamp: idx:ts:{timestamp_ns}:{id}
 	defaultLimit = 20
 )
 
@@ -76,7 +77,7 @@ func (s *BadgerHistoryStore) Record(ctx context.Context, record *workflow.Execut
 		}
 
 		// Index by timestamp
-		tsKey := fmt.Sprintf("%s%020d:%s", prefixTs, ts, record.ID)
+		tsKey := fmt.Sprintf("%s%020d:%s", prefixTS, ts, record.ID)
 		if err := txn.Set([]byte(tsKey), nil); err != nil {
 			return fmt.Errorf("store timestamp index: %w", err)
 		}
@@ -116,8 +117,8 @@ func (s *BadgerHistoryStore) List(ctx context.Context, filter *workflow.HistoryF
 	records := make([]*workflow.ExecutionRecord, 0, len(recordIDs))
 	err = s.db.View(func(txn *badger.Txn) error {
 		for _, id := range recordIDs {
-			record, err := s.getRecord(txn, id)
-			if err != nil {
+			record, getErr := s.getRecord(txn, id)
+			if getErr != nil {
 				continue // Skip missing records
 			}
 
@@ -212,12 +213,12 @@ func (s *BadgerHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		prefix := []byte(prefixTs)
+		prefix := []byte(prefixTS)
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
 			// Parse timestamp from key: idx:ts:{timestamp_ns}:{id}
 			keyStr := string(key)
-			parts := strings.Split(keyStr[len(prefixTs):], ":")
+			parts := strings.Split(keyStr[len(prefixTS):], ":")
 			if len(parts) < 2 {
 				continue
 			}
@@ -244,8 +245,8 @@ func (s *BadgerHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 	// Get full record data to find all associated indexes
 	err = s.db.View(func(txn *badger.Txn) error {
 		for _, id := range recordIDsToDelete {
-			record, err := s.getRecord(txn, id)
-			if err != nil {
+			record, getErr := s.getRecord(txn, id)
+			if getErr != nil {
 				continue
 			}
 
@@ -256,7 +257,7 @@ func (s *BadgerHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 				[]byte(fmt.Sprintf("%s%s", prefixExec, id)),
 				[]byte(fmt.Sprintf("%s%s:%020d:%s", prefixWf, record.WorkflowName, ts, id)),
 				[]byte(fmt.Sprintf("%s%s:%020d:%s", prefixSt, record.Status, ts, id)),
-				[]byte(fmt.Sprintf("%s%020d:%s", prefixTs, ts, id)),
+				[]byte(fmt.Sprintf("%s%020d:%s", prefixTS, ts, id)),
 			)
 			deleteCount++
 		}
@@ -269,10 +270,10 @@ func (s *BadgerHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 	// Delete in batches
 	err = s.db.Update(func(txn *badger.Txn) error {
 		for _, key := range keysToDelete {
-			if err := txn.Delete(key); err != nil {
+			if delErr := txn.Delete(key); delErr != nil {
 				// Ignore not found errors
-				if err != badger.ErrKeyNotFound {
-					return err
+				if !errors.Is(delErr, badger.ErrKeyNotFound) {
+					return delErr
 				}
 			}
 		}
@@ -352,7 +353,7 @@ func (s *BadgerHistoryStore) scanTimestampIndex(since, until time.Time) ([]strin
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		prefix := []byte(prefixTs)
+		prefix := []byte(prefixTS)
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
 			id := extractIDFromTimestampKey(string(key))
@@ -399,7 +400,7 @@ func extractIDFromIndexKey(key, prefix string) string {
 // extractIDFromTimestampKey extracts the record ID from a timestamp index key.
 // Key format: idx:ts:{timestamp}:{id}
 func extractIDFromTimestampKey(key string) string {
-	suffix := key[len(prefixTs):]
+	suffix := key[len(prefixTS):]
 	parts := strings.Split(suffix, ":")
 	if len(parts) < 2 {
 		return ""

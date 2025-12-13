@@ -271,17 +271,18 @@ func mapTransitions(transitions []yamlTransition) workflow.Transitions {
 // Also supports integer-only strings as seconds.
 func parseDuration(s string) (time.Duration, error) {
 	// Try standard Go duration format
-	d, err := time.ParseDuration(s)
-	if err == nil {
+	d, parseErr := time.ParseDuration(s)
+	if parseErr == nil {
 		return d, nil
 	}
 
 	// Try as plain integer (seconds)
-	if secs, err := strconv.Atoi(s); err == nil {
+	secs, atoiErr := strconv.Atoi(s)
+	if atoiErr == nil {
 		return time.Duration(secs) * time.Second, nil
 	}
 
-	return 0, err
+	return 0, parseErr
 }
 
 // mapTemplate converts yamlTemplate to domain Template.

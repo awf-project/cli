@@ -37,13 +37,13 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 
 	// Parse YAML
 	var yamlWf yamlWorkflow
-	if err := yaml.Unmarshal(data, &yamlWf); err != nil {
-		return nil, WrapParseError(filePath, err)
+	if unmarshalErr := yaml.Unmarshal(data, &yamlWf); unmarshalErr != nil {
+		return nil, WrapParseError(filePath, unmarshalErr)
 	}
 
 	// Parse states (custom handling for inline steps)
-	if err := r.parseStates(data, &yamlWf); err != nil {
-		return nil, WrapParseError(filePath, err)
+	if parseErr := r.parseStates(data, &yamlWf); parseErr != nil {
+		return nil, WrapParseError(filePath, parseErr)
 	}
 
 	// Validate required fields

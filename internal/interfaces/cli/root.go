@@ -72,12 +72,12 @@ Examples:
 	// Parse format flag before each command
 	originalPreRun := cmd.PersistentPreRun
 	cmd.PersistentPreRun = func(c *cobra.Command, args []string) {
-		if format, err := ui.ParseOutputFormat(formatStr); err != nil {
+		format, err := ui.ParseOutputFormat(formatStr)
+		if err != nil {
 			c.PrintErrf("Error: %s\n", err)
 			os.Exit(1)
-		} else {
-			cfg.OutputFormat = format
 		}
+		cfg.OutputFormat = format
 		if originalPreRun != nil {
 			originalPreRun(c, args)
 		}

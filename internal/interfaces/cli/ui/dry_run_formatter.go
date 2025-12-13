@@ -131,12 +131,12 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	// Type-specific formatting
 	switch step.Type {
 	case workflow.StepTypeParallel:
-		if err := f.formatParallelStep(step); err != nil {
-			return err
+		if fmtErr := f.formatParallelStep(step); fmtErr != nil {
+			return fmtErr
 		}
 	case workflow.StepTypeForEach, workflow.StepTypeWhile:
-		if err := f.formatLoopStep(step); err != nil {
-			return err
+		if fmtErr := f.formatLoopStep(step); fmtErr != nil {
+			return fmtErr
 		}
 	case workflow.StepTypeCommand:
 		// Command
@@ -159,8 +159,8 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	}
 
 	// Hooks
-	if err := f.formatHooks(step.Hooks); err != nil {
-		return err
+	if hookErr := f.formatHooks(step.Hooks); hookErr != nil {
+		return hookErr
 	}
 
 	// Timeout

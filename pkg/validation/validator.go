@@ -252,7 +252,7 @@ func validatePattern(name string, value string, pattern string) error {
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return fmt.Errorf("inputs.%s: invalid regex pattern %q: %v", name, pattern, err)
+		return fmt.Errorf("inputs.%s: invalid regex pattern %q: %w", name, pattern, err)
 	}
 
 	if !re.MatchString(value) {
@@ -302,7 +302,7 @@ func validateFileExists(name string, path string) error {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("inputs.%s: file does not exist: %s", name, path)
 		}
-		return fmt.Errorf("inputs.%s: cannot access file: %s: %v", name, path, err)
+		return fmt.Errorf("inputs.%s: cannot access file: %s: %w", name, path, err)
 	}
 
 	return nil
