@@ -20,6 +20,11 @@ $INVENTORY
 ## Coverage Threshold
 Required: ${THRESHOLD}%
 
+## Established Test Patterns (from project history)
+$TEST_PATTERNS
+
+Evaluate compliance with these established patterns when analyzing test quality.
+
 ## Your Task
 Analyze the coherence between code and tests. Focus on:
 

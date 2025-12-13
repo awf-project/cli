@@ -28,7 +28,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F035 | Step Working Directory | ✅ Done |
 | F036 | CLI Init Command | ✅ Done |
 | F037 | Step Success Feedback | ✅ Done |
-| F038 | Prompt Storage & Init | 📋 PLANNED |
+| F038 | Prompt Storage & Init | ✅ Done |
 | F039 | Run Single Step | ✅ Done |
 | F040 | Audit-Based Refactoring | ✅ Done |
 

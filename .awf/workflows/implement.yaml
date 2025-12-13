@@ -102,7 +102,7 @@ states:
     timeout: 30s
     capture:
       stdout: branch_name
-    on_success: explore_codebase
+    on_success: search_feature_context
     on_failure: error_branch
     hooks:
       pre:
@@ -114,12 +114,59 @@ states:
   # PHASE 1: PLANNING
   #==========================================================================
 
+  search_feature_context:
+    type: step
+    description: Search claude-mem for similar features and patterns
+    command: |
+      FEATURE_ID="{{.inputs.feature_id}}"
+
+      echo "## Historical Context from claude-mem"
+      echo ""
+
+      # Search for similar feature implementations
+      echo "### Similar Feature Implementations"
+      SIMILAR=$(claude --print -p "Use claude-mem search tools to find observations about similar features to $FEATURE_ID. Look for: implementation patterns, decisions made, lessons learned. Return a concise summary (max 10 items)." \
+        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__search,mcp__plugin_claude-mem_claude-mem-search__decisions" \
+        --dangerously-skip-permissions \
+        --output-format json 2>/dev/null | jq -r '.result // "No similar features found"' | head -50)
+      echo "$SIMILAR"
+      echo ""
+
+      # Search for established architecture patterns
+      echo "### Established Architecture Patterns"
+      PATTERNS=$(claude --print -p "Use claude-mem how_it_works tool to find architecture patterns used in previous feature implementations in this project. Focus on hexagonal architecture, ports/adapters, and domain patterns." \
+        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__how_it_works" \
+        --dangerously-skip-permissions \
+        --output-format json 2>/dev/null | jq -r '.result // "No patterns found"' | head -30)
+      echo "$PATTERNS"
+    timeout: 120s
+    capture:
+      stdout: feature_context
+      max_size: 100KB
+    on_success: explore_codebase
+    on_failure: explore_codebase
+    hooks:
+      pre:
+        - log: "Searching claude-mem for historical context..."
+      post:
+        - log: "Historical context retrieved"
+
   explore_codebase:
     type: step
     description: Claude explores codebase for implementation context
     command: |
       SPEC_CONTENT=$(cat "{{.states.find_spec.Output}}")
-      claude -p "$(cat .awf/prompts/implement/explore.md)" \
+      FEATURE_CONTEXT=$(cat << 'CTXEOF'
+      {{.states.search_feature_context.Output}}
+      CTXEOF
+      )
+
+      # Expand variables in prompt template
+      PROMPT=$(cat .awf/prompts/implement/explore.md | \
+        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
+        sed "s|\$FEATURE_CONTEXT|$FEATURE_CONTEXT|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob" \
         --dangerously-skip-permissions \
         --output-format json

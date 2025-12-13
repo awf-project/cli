@@ -17,7 +17,12 @@
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
       "WebSearch",
-      "Bash(golangci-lint run:*)"
+      "Bash(golangci-lint run:*)",
+      "mcp__plugin_common_repomix__attach_packed_output",
+      "mcp__plugin_common_repomix__grep_repomix_output",
+      "Bash(make test-coverage:*)",
+      "Bash(go tool cover:*)",
+      "Bash(grep:*)"
     ]
   }
 }

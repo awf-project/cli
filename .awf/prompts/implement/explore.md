@@ -3,6 +3,11 @@ You are exploring the awf (AI Workflow CLI) codebase to understand how to implem
 ## Feature to implement
 $SPEC_CONTENT
 
+## Historical Context (from claude-mem)
+$FEATURE_CONTEXT
+
+Use this historical context as reference for patterns and decisions, but adapt to current requirements.
+
 ## Your Task
 1. Explore the codebase architecture (hexagonal: domain/application/infrastructure/interfaces)
 2. Find similar features already implemented as reference

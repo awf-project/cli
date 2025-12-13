@@ -16,6 +16,11 @@ $DOMAIN_IMPORTS
 ## Port Definitions
 $PORTS
 
+## Past Architecture Issues (from project history)
+$ARCH_VIOLATIONS
+
+Check if any of these past issues have reappeared or if similar patterns exist.
+
 ## Your Task
 Perform deep architecture analysis:
 

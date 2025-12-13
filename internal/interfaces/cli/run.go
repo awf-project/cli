@@ -111,7 +111,7 @@ Examples:
 		"Show execution plan without running commands")
 	cmd.Flags().BoolVar(&interactiveFlag, "interactive", false,
 		"Execute in interactive step-by-step mode with prompts")
-	cmd.Flags().StringArrayVar(&breakpointFlags, "breakpoint", nil,
+	cmd.Flags().StringArrayVarP(&breakpointFlags, "breakpoint", "b", nil,
 		"Pause only at specified steps in interactive mode (comma-separated)")
 
 	return cmd
