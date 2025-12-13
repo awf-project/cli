@@ -1,10 +1,10 @@
 # Feature Creation Workflow
-# Creates a new feature spec, explores the codebase, and generates an implementation plan.
+# Generates a feature spec using Claude and creates a GitHub issue with the full content.
 #
 # Usage: awf run feature --input feature_id=F038 --input version=v0.2.0 --input description="Add retry logic"
 
 name: feature
-description: Create feature spec, explore codebase, and generate implementation plan
+description: Generate feature spec and create GitHub issue
 version: "1.0.0"
 author: awf
 
@@ -32,7 +32,7 @@ states:
   initial: read_template
 
   #==========================================================================
-  # PHASE 1: SPEC CREATION
+  # PHASE 1: SPEC GENERATION
   #==========================================================================
 
   read_template:
@@ -104,108 +104,108 @@ states:
     timeout: 10s
     capture:
       stdout: spec_json
-    on_success: save_spec
+    on_success: create_github_issue
     on_failure: error_generation
 
-  save_spec:
+  #==========================================================================
+  # PHASE 2: GITHUB INTEGRATION
+  #==========================================================================
+
+  create_github_issue:
     type: step
-    description: Save feature spec to file
+    description: Create GitHub issue for the feature
     command: |
       SPEC_JSON=$(cat << 'JSONEOF'
       {{.states.extract_spec.Output}}
       JSONEOF
       )
 
-      # Extract slug with proper empty/null handling
-      SLUG=$(echo "$SPEC_JSON" | jq -r 'if .slug == "" or .slug == null then "feature" else .slug end')
-
-      # Sanitize slug: lowercase, replace spaces with dashes, remove invalid chars
-      SLUG=$(echo "$SLUG" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
-
-      # Final fallback if slug is still empty
-      if [ -z "$SLUG" ]; then
-        SLUG="feature"
+      # Extract content from JSON
+      CONTENT=$(echo "$SPEC_JSON" | jq -r '.content // empty')
+      if [ -z "$CONTENT" ]; then
+        echo "ERROR: No content in spec JSON" >&2
+        exit 1
       fi
 
-      # Extract content
-      CONTENT=$(echo "$SPEC_JSON" | jq -r 'if .content == "" or .content == null then "# No content generated" else .content end')
+      # Extract title from first line of content
+      TITLE=$(echo "$CONTENT" | head -1 | sed 's/^# //')
+      if [ -z "$TITLE" ]; then
+        TITLE="{{.inputs.feature_id}}: {{.inputs.description}}"
+      fi
 
-      SPEC_DIR="docs/plans/features/{{.inputs.version}}"
-      mkdir -p "$SPEC_DIR"
-      SPEC_FILE="$SPEC_DIR/{{.inputs.feature_id}}-${SLUG}.md"
-      echo "$CONTENT" > "$SPEC_FILE"
-      echo "$SPEC_FILE"
-    timeout: 10s
+      # Get body (skip title line)
+      SPEC_BODY=$(echo "$CONTENT" | tail -n +2)
+
+      # Build issue body
+      BODY="$SPEC_BODY
+
+---
+_Created via awf run feature_"
+
+      # Create issue and return URL (gh issue create outputs URL directly)
+      gh issue create --repo vanoix/awf \
+        --title "$TITLE" \
+        --body "$BODY" \
+        --label "feature,{{.inputs.version}}"
+    timeout: 30s
     capture:
-      stdout: spec_file_path
-    on_success: add_to_kanban
-    on_failure: error_save
+      stdout: issue_url
+    on_success: add_to_project
+    on_failure: summary
     hooks:
       pre:
-        - log: "Saving spec file..."
+        - log: "Creating GitHub issue..."
       post:
-        - log: "Spec saved to {{.states.save_spec.Output}}"
+        - log: "Issue created: {{.states.create_github_issue.Output}}"
 
-  add_to_kanban:
+  add_to_project:
     type: step
-    description: Add feature to KANBAN.md Backlog
+    description: Add issue to GitHub Project with Status=Backlog
     command: |
-      KANBAN_FILE="docs/plans/KANBAN.md"
-      if [ ! -f "$KANBAN_FILE" ]; then
-        echo "KANBAN_NOT_FOUND"
+      PROJECT_NUM=1
+      ISSUE_URL="{{.states.create_github_issue.Output}}"
+
+      # Add to project
+      ITEM_ID=$(gh project item-add $PROJECT_NUM --owner vanoix \
+        --url "$ISSUE_URL" --format json | jq -r '.id')
+
+      if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
+        echo "FAILED_TO_ADD"
         exit 0
       fi
 
-      # Find spec file to extract slug (works even when running single step)
-      SPEC_FILE=$(find docs/plans/features -name "{{.inputs.feature_id}}-*.md" -type f | head -1)
-      if [ -z "$SPEC_FILE" ]; then
-        echo "SPEC_NOT_FOUND"
-        exit 0
-      fi
-      SLUG=$(basename "$SPEC_FILE" .md | sed 's/^F[0-9]*-//')
+      # Get project and field IDs
+      PROJECT_ID=$(gh project view $PROJECT_NUM --owner vanoix --format json | jq -r '.id')
+      FIELDS=$(gh project field-list $PROJECT_NUM --owner vanoix --format json)
 
-      # Build the feature line
-      FEATURE_LINE="- [{{.inputs.feature_id}}](features/{{.inputs.version}}/{{.inputs.feature_id}}-${SLUG}.md) {{.inputs.description}}"
+      STATUS_FIELD=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .id')
+      BACKLOG_OPT=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .options[] | select(.name=="Backlog") | .id')
+      VERSION_FIELD=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Version") | .id')
+      VERSION_OPT=$(echo "$FIELDS" | jq -r ".fields[] | select(.name==\"Version\") | .options[] | select(.name==\"{{.inputs.version}}\") | .id")
 
-      # Check if feature already exists
-      if grep -q "\[{{.inputs.feature_id}}\]" "$KANBAN_FILE"; then
-        echo "FEATURE_ALREADY_IN_KANBAN"
-        exit 0
+      # Set Status to Backlog
+      if [ -n "$STATUS_FIELD" ] && [ -n "$BACKLOG_OPT" ]; then
+        gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+          --field-id "$STATUS_FIELD" --single-select-option-id "$BACKLOG_OPT" 2>/dev/null || true
       fi
 
-      # Find the correct phase section in Backlog based on version
-      # Map version to phase name
-      case "{{.inputs.version}}" in
-        v0.1.0) PHASE_PATTERN="Phase 1 - MVP" ;;
-        v0.2.0) PHASE_PATTERN="Phase 2 - Core" ;;
-        v0.3.0) PHASE_PATTERN="Phase 3 - Advanced" ;;
-        v0.4.0) PHASE_PATTERN="Phase 4 - Extensibility" ;;
-        v1.0.0) PHASE_PATTERN="Phase 5 - Interfaces" ;;
-        *) PHASE_PATTERN="Phase 2 - Core" ;;
-      esac
+      # Set Version
+      if [ -n "$VERSION_FIELD" ] && [ -n "$VERSION_OPT" ]; then
+        gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+          --field-id "$VERSION_FIELD" --single-select-option-id "$VERSION_OPT" 2>/dev/null || true
+      fi
 
-      # Insert feature into the correct Backlog phase section
-      awk -v feat="$FEATURE_LINE" -v phase="$PHASE_PATTERN" '
-        /^## Backlog/ { in_backlog=1 }
-        /^## Ready/ { in_backlog=0 }
-        in_backlog && /^### / && $0 ~ phase {
-          print
-          getline
-          # Skip existing features in this section
-          while ($0 ~ /^- \[F[0-9]+\]/) { print; getline }
-          # Insert new feature
-          print feat
-          next
-        }
-        { print }
-      ' "$KANBAN_FILE" > "${KANBAN_FILE}.tmp" && mv "${KANBAN_FILE}.tmp" "$KANBAN_FILE"
-
-      echo "KANBAN_UPDATED"
-    timeout: 15s
+      echo "ADDED_TO_PROJECT"
+    timeout: 60s
     capture:
-      stdout: kanban_result
+      stdout: project_result
     on_success: summary
     on_failure: summary
+    hooks:
+      pre:
+        - log: "Adding to GitHub Project..."
+      post:
+        - log: "Project: {{.states.add_to_project.Output}}"
 
   summary:
     type: step
@@ -218,11 +218,9 @@ states:
       echo "║ Version: {{.inputs.version}}"
       echo "║ Description: {{.inputs.description}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ Files created:"
-      echo "║   Spec: {{.states.save_spec.Output}}"
-      echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ Documentation:"
-      echo "║   KANBAN: {{.states.add_to_kanban.Output}}"
+      echo "║ GitHub:"
+      echo "║   Issue: {{.states.create_github_issue.Output}}"
+      echo "║   Project: {{.states.add_to_project.Output}}"
       echo "╚════════════════════════════════════════════════════════════════╝"
     timeout: 5s
     capture:
@@ -248,11 +246,6 @@ states:
     type: terminal
     status: failure
     message: "Claude failed to generate feature spec"
-
-  error_save:
-    type: terminal
-    status: failure
-    message: "Failed to save feature spec file"
 
 hooks:
   workflow_start:
