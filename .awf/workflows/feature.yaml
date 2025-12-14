@@ -38,7 +38,7 @@ states:
   read_template:
     type: step
     description: Read feature template
-    command: cat docs/plans/features/TEMPLATE.md
+    command: cat .specify/templates/feature.md
     timeout: 5s
     capture:
       stdout: template_content
@@ -104,8 +104,107 @@ states:
     timeout: 10s
     capture:
       stdout: spec_json
-    on_success: create_github_issue
+    on_success: run_clarify
     on_failure: error_generation
+
+  run_clarify:
+    type: step
+    description: Interactive clarification with user (Spec-Kit)
+    command: |
+      SPEC_JSON=$(cat << 'JSONEOF'
+      {{.states.extract_spec.Output}}
+      JSONEOF
+      )
+
+      SPEC_CONTENT=$(echo "$SPEC_JSON" | jq -r '.content // empty')
+
+      # Load clarify prompt and substitute spec content
+      PROMPT=$(cat .awf/prompts/feature/clarify.md | sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g")
+
+      claude -p "$PROMPT" \
+        --allowedTools "AskUserQuestion,Read,Grep,Glob" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 300s
+    capture:
+      stdout: clarify_output
+      max_size: 1MB
+    on_success: merge_clarifications
+    on_failure: create_github_issue
+    hooks:
+      pre:
+        - log: "Running interactive clarification..."
+      post:
+        - log: "Clarification complete"
+
+  merge_clarifications:
+    type: step
+    description: Merge clarification answers into spec
+    command: |
+      ORIGINAL=$(cat << 'JSONEOF'
+      {{.states.extract_spec.Output}}
+      JSONEOF
+      )
+
+      CLARIFY_OUTPUT=$(cat << 'JSONEOF'
+      {{.states.run_clarify.Output}}
+      JSONEOF
+      )
+
+      # Extract clarifications from Claude output
+      CLARIFY_RESULT=$(echo "$CLARIFY_OUTPUT" | jq -r '.result // empty')
+
+      # If no clarifications or empty, pass through original
+      if [ -z "$CLARIFY_RESULT" ] || echo "$CLARIFY_RESULT" | jq -e '.clarifications == []' > /dev/null 2>&1; then
+        echo "$ORIGINAL"
+        exit 0
+      fi
+
+      # Parse clarifications and append to content
+      CLARIFICATIONS=$(echo "$CLARIFY_RESULT" | jq -r '
+        if .clarifications then
+          "## Clarifications\n\n" +
+          (.clarifications | map("- **\(.category)**: \(.question)\n  - Answer: \(.answer)\n  - Impact: \(.impact // "N/A")") | join("\n\n"))
+        else
+          ""
+        end
+      ')
+
+      UPDATED_REQS=$(echo "$CLARIFY_RESULT" | jq -r '
+        if .updated_requirements and (.updated_requirements | length > 0) then
+          "\n\n### Updated Requirements\n\n" +
+          (.updated_requirements | map("- \(.)") | join("\n"))
+        else
+          ""
+        end
+      ')
+
+      # Get original content and slug
+      SLUG=$(echo "$ORIGINAL" | jq -r '.slug')
+      CONTENT=$(echo "$ORIGINAL" | jq -r '.content')
+
+      # Append clarifications section before Notes
+      if echo "$CONTENT" | grep -q "## Notes"; then
+        CONTENT=$(echo "$CONTENT" | sed "/## Notes/i\\
+$CLARIFICATIONS$UPDATED_REQS\\
+")
+      else
+        CONTENT="$CONTENT
+
+$CLARIFICATIONS$UPDATED_REQS"
+      fi
+
+      # Output updated JSON
+      jq -n --arg slug "$SLUG" --arg content "$CONTENT" \
+        '{slug: $slug, content: $content}'
+    timeout: 30s
+    capture:
+      stdout: final_spec_json
+    on_success: create_github_issue
+    on_failure: create_github_issue
+    hooks:
+      post:
+        - log: "Clarifications merged into spec"
 
   #==========================================================================
   # PHASE 2: GITHUB INTEGRATION
@@ -115,10 +214,18 @@ states:
     type: step
     description: Create GitHub issue for the feature
     command: |
+      # Use merged spec if available, fallback to original
       SPEC_JSON=$(cat << 'JSONEOF'
-      {{.states.extract_spec.Output}}
+      {{.states.merge_clarifications.Output}}
       JSONEOF
       )
+      # Fallback to extract_spec if merge_clarifications is empty
+      if [ -z "$SPEC_JSON" ] || [ "$SPEC_JSON" = "null" ]; then
+        SPEC_JSON=$(cat << 'JSONEOF'
+      {{.states.extract_spec.Output}}
+      JSONEOF
+        )
+      fi
 
       # Extract content from JSON
       CONTENT=$(echo "$SPEC_JSON" | jq -r '.content // empty')
@@ -240,7 +347,7 @@ _Created via awf run feature_"
   error_template:
     type: terminal
     status: failure
-    message: "Failed to read feature template - ensure docs/plans/features/TEMPLATE.md exists"
+    message: "Failed to read feature template - ensure .specify/templates/feature.md exists"
 
   error_generation:
     type: terminal
