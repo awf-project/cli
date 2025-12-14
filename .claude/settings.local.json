@@ -22,7 +22,18 @@
       "mcp__plugin_common_repomix__grep_repomix_output",
       "Bash(make test-coverage:*)",
       "Bash(go tool cover:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(./bin/awf validate:*)",
+      "Bash(./bin/awf list:*)",
+      "mcp__plugin_common_serena__check_onboarding_performed",
+      "mcp__plugin_common_repomix__read_repomix_output",
+      "Bash(./bin/awf run:*)",
+      "Bash(python3:*)",
+      "Bash(gh issue list:*)",
+      "Bash(./bin/awf status:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "mcp__plugin_common_serena__read_memory"
     ]
   }
 }

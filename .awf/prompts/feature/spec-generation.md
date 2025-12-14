@@ -1,4 +1,4 @@
-# Task: Generate Feature Specification for {{.inputs.feature_id}}
+# Task: Generate Feature Specification for $FEATURE_ID
 
 ## Prerequisites
 
@@ -6,9 +6,9 @@
 
 ## Feature Info
 
-- **ID**: {{.inputs.feature_id}}
-- **Version**: {{.inputs.version}}
-- **Description**: {{.inputs.description}}
+- **ID**: $FEATURE_ID
+- **Version**: $VERSION
+- **Description**: $DESCRIPTION
 
 ## Template
 
@@ -63,7 +63,7 @@ If the feature involves data:
 | Field | Value |
 |-------|-------|
 | Status | `backlog` |
-| Version | {{.inputs.version}} |
+| Version | $VERSION |
 | Priority | Infer from description (high/medium/low) |
 | Estimation | Infer from complexity (S/M/L/XL) |
 
