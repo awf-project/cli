@@ -80,6 +80,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 
 ## Feature Spec Location
 
-All feature specs are in `docs/plans/features/<version>/F<ID>-<name>.md`
+All feature specs are in **GitHub Issues** (vanoix/awf repository).
+Implementation plans are in `.specify/implementation/<feature_id>/plan.md`.
 
-Example: `docs/plans/features/v0.2.0/F010-parallel-execution.md`
+Example: `.specify/implementation/F010/plan.md`
