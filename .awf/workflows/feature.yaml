@@ -52,7 +52,13 @@ states:
     type: step
     description: Generate feature spec using Claude
     command: |
-      claude -p "$(cat .awf/prompts/feature/spec-generation.md)" \
+      # Substitute variables in prompt template
+      PROMPT=$(cat .awf/prompts/feature/spec-generation.md | \
+        sed "s|\$FEATURE_ID|{{.inputs.feature_id}}|g" | \
+        sed "s|\$VERSION|{{.inputs.version}}|g" | \
+        sed "s|\$DESCRIPTION|{{.inputs.description}}|g")
+
+      claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob" \
         --dangerously-skip-permissions \
         --output-format json
@@ -130,7 +136,7 @@ states:
       stdout: clarify_output
       max_size: 1MB
     on_success: merge_clarifications
-    on_failure: create_github_issue
+    on_failure: merge_clarifications
     hooks:
       pre:
         - log: "Running interactive clarification..."
@@ -185,13 +191,11 @@ states:
 
       # Append clarifications section before Notes
       if echo "$CONTENT" | grep -q "## Notes"; then
-        CONTENT=$(echo "$CONTENT" | sed "/## Notes/i\\
-$CLARIFICATIONS$UPDATED_REQS\\
-")
+        # Use awk to insert before ## Notes
+        CONTENT=$(echo "$CONTENT" | awk -v clarify="$CLARIFICATIONS$UPDATED_REQS" '/^## Notes/{print clarify; print ""; print; next}1')
       else
-        CONTENT="$CONTENT
-
-$CLARIFICATIONS$UPDATED_REQS"
+        # Append at the end
+        CONTENT=$(printf '%s\n\n%s' "$CONTENT" "$CLARIFICATIONS$UPDATED_REQS")
       fi
 
       # Output updated JSON
@@ -214,18 +218,11 @@ $CLARIFICATIONS$UPDATED_REQS"
     type: step
     description: Create GitHub issue for the feature
     command: |
-      # Use merged spec if available, fallback to original
+      # Get spec from merge step (always runs, passes through original if no clarifications)
       SPEC_JSON=$(cat << 'JSONEOF'
       {{.states.merge_clarifications.Output}}
       JSONEOF
       )
-      # Fallback to extract_spec if merge_clarifications is empty
-      if [ -z "$SPEC_JSON" ] || [ "$SPEC_JSON" = "null" ]; then
-        SPEC_JSON=$(cat << 'JSONEOF'
-      {{.states.extract_spec.Output}}
-      JSONEOF
-        )
-      fi
 
       # Extract content from JSON
       CONTENT=$(echo "$SPEC_JSON" | jq -r '.content // empty')
@@ -243,11 +240,8 @@ $CLARIFICATIONS$UPDATED_REQS"
       # Get body (skip title line)
       SPEC_BODY=$(echo "$CONTENT" | tail -n +2)
 
-      # Build issue body
-      BODY="$SPEC_BODY
-
----
-_Created via awf run feature_"
+      # Build issue body with footer
+      BODY=$(printf '%s\n\n---\n_Created via awf run feature_' "$SPEC_BODY")
 
       # Create issue and return URL (gh issue create outputs URL directly)
       gh issue create --repo vanoix/awf \
