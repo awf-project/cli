@@ -470,7 +470,8 @@ func parseInputFlags(flags []string) (map[string]any, error) {
 const promptPrefix = "@prompts/"
 
 // resolvePromptInput resolves a value that may reference a prompt file.
-// If the value starts with @prompts/, the file content is loaded from .awf/prompts/.
+// If the value starts with @prompts/, the file content is loaded by searching
+// multiple paths in priority order (local first, then global).
 // Otherwise, the value is returned as-is.
 func resolvePromptInput(value string) (string, error) {
 	if !strings.HasPrefix(value, promptPrefix) {
@@ -485,27 +486,45 @@ func resolvePromptInput(value string) (string, error) {
 		return "", fmt.Errorf("invalid prompt path: path traversal not allowed")
 	}
 
-	// Build full path to prompt file
-	promptsDir := ".awf/prompts"
-	fullPath := filepath.Join(promptsDir, relativePath)
+	// Search multiple paths in priority order
+	return resolvePromptFromPaths(relativePath, BuildPromptPaths())
+}
 
-	// Security: verify resolved path is still within prompts directory
-	cleanPath := filepath.Clean(fullPath)
-	if !strings.HasPrefix(cleanPath, filepath.Clean(promptsDir)) {
-		return "", fmt.Errorf("invalid prompt path: path traversal not allowed")
-	}
+// resolvePromptFromPaths searches for a prompt file across multiple paths in priority order.
+// Returns the content of the first found prompt file.
+func resolvePromptFromPaths(relativePath string, paths []repository.SourcedPath) (string, error) {
+	var searchedPaths []string
 
-	// Read file content
-	content, err := os.ReadFile(fullPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("prompt file not found: %s", relativePath)
+	for _, sp := range paths {
+		fullPath := filepath.Join(sp.Path, relativePath)
+		searchedPaths = append(searchedPaths, fullPath)
+
+		// Check if file exists and is a regular file (not a directory)
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			// File doesn't exist in this path, continue to next
+			continue
 		}
-		return "", fmt.Errorf("failed to read prompt file: %w", err)
+		if info.IsDir() {
+			// Path exists but is a directory, not a file - this is an error
+			return "", fmt.Errorf("prompt path is a directory, not a file: %s", fullPath)
+		}
+
+		// File found - read and return content
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt file %s: %w", fullPath, err)
+		}
+
+		return strings.TrimSpace(string(content)), nil
 	}
 
-	// Trim leading/trailing whitespace
-	return strings.TrimSpace(string(content)), nil
+	// File not found in any path
+	if len(searchedPaths) == 0 {
+		return "", fmt.Errorf("prompt '%s' not found: no search paths configured", relativePath)
+	}
+	return "", fmt.Errorf("prompt '%s' not found in any of the search paths: %s",
+		relativePath, strings.Join(searchedPaths, ", "))
 }
 
 func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/vanoix/awf/internal/infrastructure/xdg"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -23,6 +24,7 @@ const (
 
 func newInitCommand(cfg *Config) *cobra.Command {
 	var force bool
+	var global bool
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -38,16 +40,23 @@ This creates:
   .awf/storage/states/         State persistence directory
   .awf/storage/logs/           Log files directory
 
+Use --global to initialize the global prompts directory at $XDG_CONFIG_HOME/awf/prompts/.
+
 Examples:
   awf init
-  awf init --force`,
+  awf init --force
+  awf init --global`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if global {
+				return runInitGlobal(cmd, cfg, force)
+			}
 			return runInit(cmd, cfg, force)
 		},
 	}
 
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing configuration")
+	cmd.Flags().BoolVar(&global, "global", false, "Initialize global prompts directory")
 
 	return cmd
 }
@@ -112,6 +121,40 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	formatter.Info("  awf list          - List available workflows")
 	formatter.Info("  awf run example   - Run the example workflow")
 	formatter.Info("  awf validate      - Validate a workflow file")
+
+	return nil
+}
+
+func runInitGlobal(cmd *cobra.Command, cfg *Config, force bool) error {
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	globalPromptsDir := xdg.AWFPromptsDir()
+
+	// Check if already initialized
+	if !force {
+		if _, err := os.Stat(globalPromptsDir); err == nil {
+			formatter.Info(fmt.Sprintf("Global prompts already initialized in '%s'", globalPromptsDir))
+			formatter.Info("Use --force to reinitialize")
+			return nil
+		}
+	}
+
+	// Create global prompts directory
+	if err := os.MkdirAll(globalPromptsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", globalPromptsDir, err)
+	}
+	formatter.Success(fmt.Sprintf("Created %s", globalPromptsDir))
+
+	// Create example prompt
+	promptPath := filepath.Join(globalPromptsDir, examplePromptFile)
+	if err := createExamplePrompt(promptPath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", promptPath))
 
 	return nil
 }

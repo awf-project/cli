@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/spf13/cobra"
+	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -133,64 +135,100 @@ func runListPrompts(cmd *cobra.Command, cfg *Config) error {
 		NoColor: cfg.NoColor,
 	})
 
-	promptsDir := ".awf/prompts"
+	// Get all prompt paths in priority order (local first, then global)
+	promptPaths := BuildPromptPaths()
 
-	// Check if prompts directory exists
-	if _, err := os.Stat(promptsDir); os.IsNotExist(err) {
-		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
-			return writer.WritePrompts([]ui.PromptInfo{})
-		}
-		formatter.Info("No prompts directory found")
-		formatter.Info("Run 'awf init' to create the prompts directory")
-		return nil
-	}
-
-	// Walk the prompts directory to find all prompt files
-	var prompts []ui.PromptInfo
-	err := filepath.WalkDir(promptsDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		// Get relative path from prompts directory
-		relPath, err := filepath.Rel(promptsDir, path)
-		if err != nil {
-			return err
-		}
-
-		// Get file info for size and mod time
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		prompts = append(prompts, ui.PromptInfo{
-			Name:    relPath,
-			Path:    path,
-			Size:    info.Size(),
-			ModTime: info.ModTime().Format("2006-01-02 15:04"),
-		})
-		return nil
-	})
+	// Collect prompts from all paths, deduplicating by name (first wins = local wins)
+	prompts, err := collectPromptsFromPaths(promptPaths)
 	if err != nil {
-		return fmt.Errorf("failed to scan prompts directory: %w", err)
+		return fmt.Errorf("failed to scan prompts directories: %w", err)
 	}
 
 	if len(prompts) == 0 {
 		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 			return writer.WritePrompts([]ui.PromptInfo{})
 		}
-		formatter.Info("No prompts found in .awf/prompts/")
+		formatter.Info("No prompts found")
+		formatter.Info("Search paths:")
+		for _, sp := range promptPaths {
+			formatter.Info(fmt.Sprintf("  - %s (%s)", sp.Path, sp.Source))
+		}
+		formatter.Info("Run 'awf init' to create the prompts directory")
 		return nil
 	}
 
-	// Sort prompts by name
+	// Sort prompts by source then name
 	sort.Slice(prompts, func(i, j int) bool {
+		if prompts[i].Source != prompts[j].Source {
+			return prompts[i].Source < prompts[j].Source
+		}
 		return prompts[i].Name < prompts[j].Name
 	})
 
 	return writer.WritePrompts(prompts)
+}
+
+// collectPromptsFromPaths walks multiple prompt directories and returns deduplicated prompts.
+// Earlier paths take precedence (local wins over global for same-named prompts).
+func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, error) {
+	if len(paths) == 0 {
+		return []ui.PromptInfo{}, nil
+	}
+
+	// Track seen prompt names for deduplication (first wins)
+	seen := make(map[string]struct{})
+	var prompts []ui.PromptInfo
+
+	for _, sp := range paths {
+		basePath := filepath.Clean(sp.Path)
+
+		// Skip non-existent directories
+		info, err := os.Stat(basePath)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+
+		// Walk directory tree
+		err = filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil // Skip entries with errors
+			}
+			if d.IsDir() {
+				return nil // Skip directories themselves
+			}
+
+			// Calculate relative name from base path
+			relName, err := filepath.Rel(basePath, path)
+			if err != nil {
+				return nil
+			}
+
+			// Skip if already seen (earlier path wins)
+			if _, exists := seen[relName]; exists {
+				return nil
+			}
+			seen[relName] = struct{}{}
+
+			// Get file info for size and mod time
+			fileInfo, err := d.Info()
+			if err != nil {
+				return nil
+			}
+
+			prompts = append(prompts, ui.PromptInfo{
+				Name:    relName,
+				Source:  sp.Source.String(),
+				Path:    path,
+				Size:    fileInfo.Size(),
+				ModTime: fileInfo.ModTime().Format("2006-01-02 15:04:05"),
+			})
+
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("walking %s: %w", basePath, err)
+		}
+	}
+
+	return prompts, nil
 }

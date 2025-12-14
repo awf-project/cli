@@ -122,6 +122,44 @@ func TestAWFWorkflowsDir(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, ".config", "awf", "workflows"), got)
 }
 
+func TestAWFPromptsDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		envValue string
+		want     string
+	}{
+		{
+			name:     "uses XDG_CONFIG_HOME when set",
+			envValue: "/custom/config",
+			want:     "/custom/config/awf/prompts",
+		},
+		{
+			name:     "defaults to ~/.config/awf/prompts when unset",
+			envValue: "",
+			want:     filepath.Join(home, ".config", "awf", "prompts"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := os.Getenv("XDG_CONFIG_HOME")
+			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
+
+			if tt.envValue != "" {
+				_ = os.Setenv("XDG_CONFIG_HOME", tt.envValue)
+			} else {
+				_ = os.Unsetenv("XDG_CONFIG_HOME")
+			}
+
+			got := AWFPromptsDir()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestAWFStatesDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)

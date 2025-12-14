@@ -775,24 +775,30 @@ func (s *ExecutionService) executeLoopStep(
 			return fmt.Errorf("body step not found: %s", stepName)
 		}
 		// Handle nested loops: body steps can be for_each or while loops
+		var nextStep string
 		var err error
 		switch bodyStep.Type {
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
-			_, err = s.executeLoopStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = s.executeLoopStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeParallel:
-			_, err = s.executeParallelStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = s.executeParallelStep(ctx, wf, bodyStep, execCtx)
 		default:
-			_, err = s.executeStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
 		}
 		if err != nil {
 			return err
 		}
-		// Check if the step failed even if executeStep returned nil (due to on_failure handling)
-		if state, exists := execCtx.States[stepName]; exists && state.Status == workflow.StatusFailed {
-			if state.Error != "" {
-				return fmt.Errorf("step %s failed: %s", stepName, state.Error)
+		// Distinguish retry vs escape patterns:
+		// - Retry: on_failure returns to THIS loop (step.Name) → continue loop
+		// - Escape: on_failure transitions ELSEWHERE → propagate failure to break loop
+		if nextStep != "" && nextStep != step.Name {
+			// Step wanted to transition elsewhere while in failed state - escape pattern
+			if state, exists := execCtx.States[stepName]; exists && state.Status == workflow.StatusFailed {
+				if state.Error != "" {
+					return fmt.Errorf("step %s failed: %s", stepName, state.Error)
+				}
+				return fmt.Errorf("step %s failed with exit code %d", stepName, state.ExitCode)
 			}
-			return fmt.Errorf("step %s failed with exit code %d", stepName, state.ExitCode)
 		}
 		return nil
 	}

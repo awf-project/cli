@@ -105,3 +105,19 @@ func BuildWorkflowPaths() []repository.SourcedPath {
 func NewWorkflowRepository() *repository.CompositeRepository {
 	return repository.NewCompositeRepository(BuildWorkflowPaths())
 }
+
+// BuildPromptPaths returns the prompt paths in priority order:
+// 1. ./.awf/prompts/ (local project)
+// 2. $XDG_CONFIG_HOME/awf/prompts/ (global)
+func BuildPromptPaths() []repository.SourcedPath {
+	return []repository.SourcedPath{
+		{
+			Path:   xdg.LocalPromptsDir(),
+			Source: repository.SourceLocal,
+		},
+		{
+			Path:   xdg.AWFPromptsDir(),
+			Source: repository.SourceGlobal,
+		},
+	}
+}
