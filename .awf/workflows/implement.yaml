@@ -78,8 +78,11 @@ states:
     type: step
     description: Create or switch to feature branch
     command: |
-      # Parse title from find_spec JSON output
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Parse title from find_spec JSON output (use heredoc for multiline JSON)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
 
       # Extract slug from title (e.g., "F038: Prompt Storage" -> prompt-storage)
@@ -118,8 +121,11 @@ states:
     command: |
       PROJECT_NUM=1
 
-      # Get issue_url from find_spec
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get issue_url from find_spec (use heredoc for multiline JSON)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url // empty')
 
       if [ -z "$ISSUE_URL" ]; then
@@ -203,18 +209,20 @@ states:
     type: step
     description: Claude explores codebase for implementation context
     command: |
-      # Get spec content from find_spec (GitHub issue)
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get spec content from find_spec (GitHub issue, use heredoc for multiline JSON)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
       FEATURE_CONTEXT=$(cat << 'CTXEOF'
       {{.states.search_feature_context.Output}}
       CTXEOF
       )
 
-      # Expand variables in prompt template
-      PROMPT=$(cat .awf/prompts/implement/explore.md | \
-        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
-        sed "s|\$FEATURE_CONTEXT|$FEATURE_CONTEXT|g")
+      # Expand variables in prompt template using envsubst (handles multiline content)
+      export SPEC_CONTENT FEATURE_CONTEXT
+      PROMPT=$(envsubst < .awf/prompts/implement/explore.md)
 
       claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob" \
@@ -312,8 +320,8 @@ states:
     type: step
     description: Save implementation plan
     command: |
-      mkdir -p docs/plans/implementation
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      mkdir -p .specify/implementation/{{.inputs.feature_id}}
+      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
       cat > "$PLAN_FILE" << 'AWF_PLAN_CONTENT_EOF'
       {{.states.extract_plan.Output}}
       AWF_PLAN_CONTENT_EOF
@@ -321,11 +329,94 @@ states:
     timeout: 10s
     capture:
       stdout: plan_file_path
+    on_success: generate_tasks
+    on_failure: generate_tasks
+    hooks:
+      post:
+        - log: "Plan saved to {{.states.save_plan.Output}}"
+
+  generate_tasks:
+    type: step
+    description: Generate task breakdown from plan (Spec-Kit)
+    command: |
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
+      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
+
+      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
+      PLAN_CONTENT=""
+      if [ -f "$PLAN_FILE" ]; then
+        PLAN_CONTENT=$(cat "$PLAN_FILE")
+      fi
+
+      # Load tasks prompt and substitute variables using envsubst
+      export SPEC_CONTENT PLAN_CONTENT
+      PROMPT=$(envsubst < .awf/prompts/implement/tasks.md)
+
+      claude -p "$PROMPT" \
+        --allowedTools "Read,Grep,Glob" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 300s
+    capture:
+      stdout: tasks_raw
+      max_size: 2MB
+    on_success: extract_tasks_content
+    on_failure: load_spec
+    hooks:
+      pre:
+        - log: "Generating task breakdown..."
+      post:
+        - log: "Tasks generated"
+
+  extract_tasks_content:
+    type: step
+    description: Extract tasks content from Claude output
+    command: |
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
+      {{.states.generate_tasks.Output}}
+      JSONEOF
+      )
+
+      # Try to parse as JSON and extract result
+      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
+        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
+        if [ -n "$RESULT" ]; then
+          echo "$RESULT"
+        else
+          echo "# No tasks generated"
+          exit 1
+        fi
+      else
+        echo "# Tasks extraction failed"
+        exit 1
+      fi
+    timeout: 10s
+    capture:
+      stdout: tasks_content
+    on_success: save_tasks
+    on_failure: load_spec
+
+  save_tasks:
+    type: step
+    description: Save tasks breakdown
+    command: |
+      mkdir -p .specify/implementation/{{.inputs.feature_id}}
+      TASKS_FILE=".specify/implementation/{{.inputs.feature_id}}/tasks.md"
+      cat > "$TASKS_FILE" << 'AWF_TASKS_CONTENT_EOF'
+      {{.states.extract_tasks_content.Output}}
+      AWF_TASKS_CONTENT_EOF
+      echo "$TASKS_FILE"
+    timeout: 10s
+    capture:
+      stdout: tasks_file_path
     on_success: load_spec
     on_failure: load_spec
     hooks:
       post:
-        - log: "Plan saved to {{.states.save_plan.Output}}"
+        - log: "Tasks saved to {{.states.save_tasks.Output}}"
 
   #==========================================================================
   # PHASE 2: VALIDATION BASELINE
@@ -335,8 +426,11 @@ states:
     type: step
     description: Extract spec content from find_spec output
     command: |
-      # Get spec content from find_spec (already fetched from GitHub issue)
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get spec content from find_spec (already fetched from GitHub issue, use heredoc)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
 
       if [ -z "$SPEC_CONTENT" ]; then
@@ -359,7 +453,7 @@ states:
     type: step
     description: Read implementation plan
     command: |
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
       if [ ! -f "$PLAN_FILE" ]; then
         echo "ERROR: Plan not found at $PLAN_FILE"
         exit 1
@@ -377,9 +471,53 @@ states:
 
   extract_components:
     type: step
-    description: Extract components JSON from implementation plan
+    description: Extract components/tasks JSON for TDD loop
     command: |
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
+      TASKS_FILE=".specify/implementation/{{.inputs.feature_id}}/tasks.md"
+
+      # Try tasks.md first (Spec-Kit format)
+      if [ -f "$TASKS_FILE" ]; then
+        echo "Using tasks.md format" >&2
+
+        # Parse tasks from markdown format into JSON array
+        # Format: - [ ] T001 [P] [US1] Description with file path
+        TASKS=$(awk '
+          /^- \[ \] T[0-9]+/ {
+            # Extract task ID
+            match($0, /T[0-9]+/);
+            id = substr($0, RSTART, RLENGTH);
+
+            # Check for [P] parallelizable marker
+            parallel = (index($0, "[P]") > 0) ? "true" : "false";
+
+            # Extract user story if present
+            user_story = "";
+            if (match($0, /\[US[0-9]+\]/)) {
+              user_story = substr($0, RSTART+1, RLENGTH-2);
+            }
+
+            # Extract description (everything after markers)
+            desc = $0;
+            gsub(/^- \[ \] T[0-9]+ /, "", desc);
+            gsub(/\[P\] /, "", desc);
+            gsub(/\[US[0-9]+\] /, "", desc);
+
+            # Output JSON line
+            printf "{\"name\":\"%s\",\"description\":\"%s\",\"parallel\":%s,\"user_story\":\"%s\"}\n", id, desc, parallel, user_story;
+          }
+        ' "$TASKS_FILE" | jq -sc '.')
+
+        if [ -n "$TASKS" ] && [ "$TASKS" != "[]" ]; then
+          TASK_COUNT=$(echo "$TASKS" | jq 'length')
+          echo "Found $TASK_COUNT tasks" >&2
+          echo "$TASKS"
+          exit 0
+        fi
+      fi
+
+      # Fallback to components from plan.md (legacy format)
+      echo "Using components format (legacy)" >&2
 
       # Extract JSON block between ```json and ``` after ## Components
       COMPONENTS=$(awk '
@@ -392,7 +530,8 @@ states:
 
       if [ -z "$COMPONENTS" ] || [ "$COMPONENTS" = "null" ]; then
         echo "ERROR: No valid components JSON found in plan"
-        echo "Expected: ## Components section with ```json block"
+        echo 'Expected: ## Components section with ```json block'
+        echo "Or: tasks.md file with T001 format tasks"
         exit 1
       fi
 
@@ -412,9 +551,9 @@ states:
     on_failure: error_planning
     hooks:
       pre:
-        - log: "Extracting components from plan..."
+        - log: "Extracting components/tasks from plan..."
       post:
-        - log: "Components extracted successfully"
+        - log: "Components/tasks extracted successfully"
 
   #==========================================================================
   # PHASE 2.5: BASELINE VALIDATION (PARALLEL)
@@ -467,7 +606,7 @@ states:
     type: for_each
     description: TDD loop over each component (stub → tests → implement)
     items: "{{.states.extract_components.Output}}"
-    max_iterations: 10
+    max_iterations: 50
     body:
       - write_component_stub
       - write_component_tests
@@ -476,7 +615,7 @@ states:
     on_complete: run_final_tests
     hooks:
       pre:
-        - log: "Starting TDD for {{.loop.Length}} components..."
+        - log: "Starting TDD component loop..."
       post:
         - log: "All components implemented successfully"
 
@@ -495,12 +634,9 @@ states:
       PLANEOF
       )
 
-      # Create prompt with component context
-      PROMPT=$(cat .awf/prompts/implement/component-stub.md | \
-        sed "s|\$COMPONENT|$COMPONENT|g" | \
-        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
-        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
-        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+      # Create prompt with component context using envsubst
+      export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      PROMPT=$(envsubst < .awf/prompts/implement/component-stub.md)
 
       claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
@@ -531,11 +667,9 @@ states:
       PLANEOF
       )
 
-      PROMPT=$(cat .awf/prompts/implement/component-tests.md | \
-        sed "s|\$COMPONENT|$COMPONENT|g" | \
-        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
-        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
-        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+      # Create prompt using envsubst
+      export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      PROMPT=$(envsubst < .awf/prompts/implement/component-tests.md)
 
       claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
@@ -586,7 +720,7 @@ states:
     description: Implement component until tests pass (max 3 attempts)
     while: "true"
     max_iterations: 3
-    break_when: "states.run_component_tests_green.exit_code == 0"
+    break_when: 'states.run_component_tests_green.output contains "TEST_EXIT_CODE=0"'
     body:
       - implement_component
       - run_component_fmt
@@ -594,15 +728,15 @@ states:
     on_complete: tdd_component_loop
     hooks:
       pre:
-        - log: "Component {{.loop.parent.Index1}}/{{.loop.parent.Length}}: Starting GREEN loop..."
+        - log: "Component {{.loop.Index1}}/{{.loop.Length}}: Starting GREEN loop..."
       post:
-        - log: "Component {{.loop.parent.Index1}}/{{.loop.parent.Length}}: GREEN phase complete"
+        - log: "Component {{.loop.Index1}}/{{.loop.Length}}: GREEN phase complete"
 
   implement_component:
     type: step
     description: Claude implements ONE component (GREEN phase)
     command: |
-      COMPONENT='{{.loop.parent.Item}}'
+      COMPONENT='{{.loop.Parent.Item}}'
       COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
@@ -613,11 +747,9 @@ states:
       PLANEOF
       )
 
-      PROMPT=$(cat .awf/prompts/implement/component-impl.md | \
-        sed "s|\$COMPONENT|$COMPONENT|g" | \
-        sed "s|\$COMPONENT_NAME|$COMPONENT_NAME|g" | \
-        sed "s|\$SPEC_CONTENT|$SPEC_CONTENT|g" | \
-        sed "s|\$PLAN_CONTENT|$PLAN_CONTENT|g")
+      # Create prompt using envsubst
+      export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      PROMPT=$(envsubst < .awf/prompts/implement/component-impl.md)
 
       claude -p "$PROMPT" \
         --allowedTools "Read,Grep,Glob,Edit,Write,Bash,Task" \
@@ -631,7 +763,7 @@ states:
     on_failure: component_green_loop
     hooks:
       pre:
-        - log: "Component {{.loop.parent.Index1}}: Implementing (attempt {{.loop.Index1}}/3)..."
+        - log: "Component {{.loop.Parent.Index1}}: Implementing (attempt {{.loop.Index1}}/3)..."
 
   run_component_fmt:
     type: step
@@ -649,7 +781,7 @@ states:
     type: step
     description: Run component tests - should pass (GREEN phase)
     command: |
-      COMPONENT='{{.loop.parent.Item}}'
+      COMPONENT='{{.loop.Parent.Item}}'
       COMPONENT_NAME=$(echo "$COMPONENT" | jq -r '.name')
 
       TEST_FILES=$(echo "$COMPONENT" | jq -r '.tests[]' 2>/dev/null | tr '\n' ' ' || echo "")
@@ -658,9 +790,13 @@ states:
 
       if [ -n "$TEST_FILES" ] && [ -f "$(echo $TEST_FILES | awk '{print $1}')" ]; then
         go test -v $TEST_FILES 2>&1
+        TEST_EXIT_CODE=$?
       else
         make test-unit 2>&1
+        TEST_EXIT_CODE=$?
       fi
+      echo "TEST_EXIT_CODE=$TEST_EXIT_CODE"
+      exit 0  # Always succeed - loop handles retry logic via break_when
     timeout: 300s
     capture:
       stdout: component_green_output
@@ -668,7 +804,7 @@ states:
     on_failure: component_green_loop
     hooks:
       post:
-        - log: "Component {{.loop.parent.Index1}}: Tests attempt {{.loop.Index1}} complete"
+        - log: "Component {{.loop.Parent.Index1}}: Tests attempt {{.loop.Index1}} complete"
 
   #==========================================================================
   # PHASE 5: FINAL VALIDATION
@@ -781,8 +917,11 @@ states:
     command: |
       PROJECT_NUM=1
 
-      # Get issue_url from find_spec
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get issue_url from find_spec (use heredoc for multiline JSON)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url // empty')
 
       if [ -z "$ISSUE_URL" ]; then
@@ -846,12 +985,15 @@ states:
       # Get staged files list
       STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
 
-      # Get spec content from find_spec (GitHub issue)
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get spec content from find_spec (GitHub issue, use heredoc for multiline JSON)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
 
       # Read plan content
-      PLAN_FILE="docs/plans/implementation/{{.inputs.feature_id}}-plan.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
       PLAN_CONTENT=""
       if [ -f "$PLAN_FILE" ]; then
         PLAN_CONTENT=$(cat "$PLAN_FILE")
@@ -897,8 +1039,11 @@ states:
 
       # Fallback if Claude failed or returned empty
       if [ -z "$ENTRY" ] || ! echo "$ENTRY" | grep -q "{{.inputs.feature_id}}"; then
-        # Get title from find_spec (GitHub issue)
-        SPEC_INFO='{{.states.find_spec.Output}}'
+        # Get title from find_spec (GitHub issue, use heredoc)
+        SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+        )
         ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
         TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
         if [ -z "$TITLE" ]; then
@@ -942,8 +1087,11 @@ states:
     type: step
     description: Update project memories via Claude
     command: |
-      # Get info from find_spec (GitHub issue)
-      SPEC_INFO='{{.states.find_spec.Output}}'
+      # Get info from find_spec (GitHub issue, use heredoc)
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
       ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
       TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
 

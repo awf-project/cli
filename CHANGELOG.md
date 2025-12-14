@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+I now have all the information needed to create the CHANGELOG entry. Based on my analysis:
+
+**F044 XDG Prompt Discovery** is a feature that:
+1. Discovers prompts from both local (`.awf/prompts/`) and global (`$XDG_CONFIG_HOME/awf/prompts/`) directories
+2. Shows source (local/global) when listing prompts via `awf list prompts`
+3. Local prompts take precedence over global when names conflict
+4. Supports nested directory structures (e.g., `agents/claude/system.md`)
+5. Resolves `@prompts/` prefix in workflow inputs to actual file content
+6. Adds `awf init --global` to create global prompts directory
+7. Includes path traversal security protection
+
+---
+
+## CHANGELOG Entry for F044
+
+**1. Category:** Added
+
+**2. Subcategory:** CLI & Usability
+
+**3. Entry:**
+
+```markdown
+- **F044**: XDG Prompt Discovery
+  - `awf list prompts` discovers from local (`.awf/prompts/`) and global (`$XDG_CONFIG_HOME/awf/prompts/`)
+  - Local prompts override global when names conflict; source shown in listing
+  - `@prompts/` prefix in `--input` resolves to file content (e.g., `--input prompt=@prompts/system.md`)
+  - `awf init --global` creates global prompts directory with example template
+  - Nested paths supported: `@prompts/agents/claude/system.md`
+```
+
+**4. Notes:** No breaking changes. Feature extends existing `awf init` and `awf list` commands. Path traversal attempts (e.g., `@prompts/../secret.txt`) are rejected for security.
 
 #### Execution Modes
 - **F020**: Interactive Mode for step-by-step workflow execution

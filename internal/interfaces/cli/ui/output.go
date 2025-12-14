@@ -143,6 +143,7 @@ type ValidationResultTable struct {
 // PromptInfo represents a prompt file for list prompts command.
 type PromptInfo struct {
 	Name    string `json:"name"`
+	Source  string `json:"source"`
 	Path    string `json:"path"`
 	Size    int64  `json:"size"`
 	ModTime string `json:"mod_time,omitempty"`
@@ -415,24 +416,24 @@ func (w *OutputWriter) writePromptsTable(prompts []PromptInfo) error {
 	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
 
 	// Header
-	_, _ = fmt.Fprintln(tw, "NAME\tSIZE\tMODIFIED")
+	_, _ = fmt.Fprintln(tw, "NAME\tSOURCE\tSIZE\tMODIFIED")
 
 	for _, p := range prompts {
-		_, _ = fmt.Fprintf(tw, "%s\t%d B\t%s\n", p.Name, p.Size, p.ModTime)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%d B\t%s\n", p.Name, p.Source, p.Size, p.ModTime)
 	}
 
 	return tw.Flush()
 }
 
 func (w *OutputWriter) writePromptsBorderedTable(prompts []PromptInfo) error {
-	table := newTableWriter(w.out, 30, 10, 16)
+	table := newTableWriter(w.out, 30, 8, 10, 16)
 
 	table.separator()
-	table.row("NAME", "SIZE", "MODIFIED")
+	table.row("NAME", "SOURCE", "SIZE", "MODIFIED")
 	table.separator()
 
 	for _, p := range prompts {
-		table.row(p.Name, fmt.Sprintf("%d B", p.Size), p.ModTime)
+		table.row(p.Name, p.Source, fmt.Sprintf("%d B", p.Size), p.ModTime)
 	}
 	table.separator()
 

@@ -2,11 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
@@ -565,4 +570,455 @@ func TestCliLogger_InfoWithContext(t *testing.T) {
 	assert.Contains(t, output, "step started")
 	assert.Contains(t, output, "workflow=test-wf")
 	assert.Contains(t, output, "step=fetch")
+}
+
+// TestResolvePromptFromPaths tests the multi-path prompt resolution function.
+// This implements T006 - Update resolvePromptInput() to search multiple paths in priority order.
+func TestResolvePromptFromPaths(t *testing.T) {
+	// Base fixture path relative to project root
+	fixtureBase := "tests/fixtures/prompts"
+
+	tests := []struct {
+		name         string
+		relativePath string
+		paths        []repository.SourcedPath
+		wantContains string // substring expected in content
+		wantErr      bool
+		errContains  string
+	}{
+		// --- Happy path: Local-only prompt ---
+		{
+			name:         "finds prompt in local directory only",
+			relativePath: "local-only.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "Source: local",
+			wantErr:      false,
+		},
+		// --- Happy path: Global-only prompt ---
+		{
+			name:         "finds prompt in global directory when not in local",
+			relativePath: "system.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "Source: global",
+			wantErr:      false,
+		},
+		// --- Priority: Local overrides Global (US2) ---
+		{
+			name:         "local prompt takes precedence over global with same name",
+			relativePath: "shared.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "local-shared-content", // Must be local version, not global
+			wantErr:      false,
+		},
+		// --- Nested directories (FR-006) ---
+		{
+			name:         "supports nested directories in local path",
+			relativePath: "nested/local-deep.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "local",
+			wantErr:      false,
+		},
+		{
+			name:         "supports nested directories in global path",
+			relativePath: "nested/deep.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "deep",
+			wantErr:      false,
+		},
+		// --- Error: File not found in any path ---
+		{
+			name:         "error when prompt not found in any path",
+			relativePath: "nonexistent.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantErr:     true,
+			errContains: "not found",
+		},
+		// --- Edge case: Empty paths slice ---
+		{
+			name:         "error when no paths provided",
+			relativePath: "any.md",
+			paths:        []repository.SourcedPath{},
+			wantErr:      true,
+			errContains:  "not found",
+		},
+		// --- Edge case: Paths don't exist on disk ---
+		{
+			name:         "error when path directories don't exist",
+			relativePath: "test.md",
+			paths: []repository.SourcedPath{
+				{Path: "/nonexistent/path/1", Source: repository.SourceLocal},
+				{Path: "/nonexistent/path/2", Source: repository.SourceGlobal},
+			},
+			wantErr:     true,
+			errContains: "not found",
+		},
+		// --- Edge case: Only global path provided ---
+		{
+			name:         "finds prompt when only global path provided",
+			relativePath: "system.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "Source: global",
+			wantErr:      false,
+		},
+		// --- Edge case: Only local path provided ---
+		{
+			name:         "finds prompt when only local path provided",
+			relativePath: "local-only.md",
+			paths: []repository.SourcedPath{
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+			},
+			wantContains: "Source: local",
+			wantErr:      false,
+		},
+		// --- Priority order matters ---
+		{
+			name:         "first path in slice takes priority",
+			relativePath: "shared.md",
+			paths: []repository.SourcedPath{
+				// Reversed order: global first, should return global content
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+				{Path: filepath.Join(fixtureBase, "local"), Source: repository.SourceLocal},
+			},
+			wantContains: "global-shared-content", // Global should win when listed first
+			wantErr:      false,
+		},
+		// --- Edge case: First path doesn't exist but second does ---
+		{
+			name:         "falls through to second path when first doesn't exist",
+			relativePath: "system.md",
+			paths: []repository.SourcedPath{
+				{Path: "/nonexistent/local", Source: repository.SourceLocal},
+				{Path: filepath.Join(fixtureBase, "global"), Source: repository.SourceGlobal},
+			},
+			wantContains: "Source: global",
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Change to project root for fixture paths to work
+			origDir, err := os.Getwd()
+			require.NoError(t, err)
+
+			// Navigate to project root (3 levels up from internal/interfaces/cli)
+			projectRoot := filepath.Join(origDir, "..", "..", "..")
+			err = os.Chdir(projectRoot)
+			require.NoError(t, err)
+			defer func() { _ = os.Chdir(origDir) }()
+
+			// Call the function under test
+			content, err := resolvePromptFromPaths(tt.relativePath, tt.paths)
+
+			if tt.wantErr {
+				require.Error(t, err, "expected error but got none")
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains,
+						"error message should contain %q", tt.errContains)
+				}
+			} else {
+				require.NoError(t, err, "unexpected error: %v", err)
+				assert.Contains(t, content, tt.wantContains,
+					"content should contain %q", tt.wantContains)
+			}
+		})
+	}
+}
+
+// TestResolvePromptFromPaths_ContentTrimming verifies whitespace handling
+func TestResolvePromptFromPaths_ContentTrimming(t *testing.T) {
+	// Create temp directory with a prompt file containing whitespace
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Write file with leading/trailing whitespace
+	content := "\n\n  content with whitespace  \n\n"
+	require.NoError(t, os.WriteFile(
+		filepath.Join(promptsDir, "whitespace.md"),
+		[]byte(content),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("whitespace.md", paths)
+	require.NoError(t, err)
+
+	// Content should be trimmed
+	assert.Equal(t, "content with whitespace", result,
+		"content should have leading/trailing whitespace trimmed")
+}
+
+// TestResolvePromptFromPaths_EmptyFile tests handling of empty prompt files
+func TestResolvePromptFromPaths_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Write empty file
+	require.NoError(t, os.WriteFile(
+		filepath.Join(promptsDir, "empty.md"),
+		[]byte(""),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("empty.md", paths)
+	require.NoError(t, err)
+	assert.Empty(t, result, "empty file should return empty string")
+}
+
+// TestResolvePromptFromPaths_WhitespaceOnlyFile tests handling of whitespace-only files
+func TestResolvePromptFromPaths_WhitespaceOnlyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Write file with only whitespace
+	require.NoError(t, os.WriteFile(
+		filepath.Join(promptsDir, "spaces.md"),
+		[]byte("   \n\t\n   "),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("spaces.md", paths)
+	require.NoError(t, err)
+	assert.Empty(t, result, "whitespace-only file should return empty string after trimming")
+}
+
+// TestResolvePromptFromPaths_LargeFile tests handling of large prompt files
+func TestResolvePromptFromPaths_LargeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Write a large file (1MB of content)
+	largeContent := strings.Repeat("This is a line of content.\n", 40000)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(promptsDir, "large.md"),
+		[]byte(largeContent),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("large.md", paths)
+	require.NoError(t, err)
+	assert.Contains(t, result, "This is a line of content",
+		"large file content should be readable")
+}
+
+// TestResolvePromptFromPaths_SpecialCharactersInFilename tests filenames with special chars
+func TestResolvePromptFromPaths_SpecialCharactersInFilename(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{"filename with spaces", "my prompt.md"},
+		{"filename with dashes", "my-prompt.md"},
+		{"filename with underscores", "my_prompt.md"},
+		{"filename with dots", "my.prompt.v2.md"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Write file
+			require.NoError(t, os.WriteFile(
+				filepath.Join(promptsDir, tt.filename),
+				[]byte("special char content"),
+				0644,
+			))
+
+			paths := []repository.SourcedPath{
+				{Path: promptsDir, Source: repository.SourceLocal},
+			}
+
+			result, err := resolvePromptFromPaths(tt.filename, paths)
+			require.NoError(t, err)
+			assert.Contains(t, result, "special char content")
+		})
+	}
+}
+
+// TestResolvePromptFromPaths_DifferentFileExtensions tests various file extensions
+func TestResolvePromptFromPaths_DifferentFileExtensions(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	extensions := []string{".md", ".txt", ".prompt", ".yaml", ""}
+
+	for _, ext := range extensions {
+		filename := "test" + ext
+		expectedContent := "content for ext:" + ext
+		t.Run("extension_"+ext, func(t *testing.T) {
+			require.NoError(t, os.WriteFile(
+				filepath.Join(promptsDir, filename),
+				[]byte(expectedContent),
+				0644,
+			))
+
+			paths := []repository.SourcedPath{
+				{Path: promptsDir, Source: repository.SourceLocal},
+			}
+
+			result, err := resolvePromptFromPaths(filename, paths)
+			require.NoError(t, err)
+			assert.Contains(t, result, expectedContent)
+		})
+	}
+}
+
+// TestResolvePromptFromPaths_DeeplyNested tests deeply nested directory structures
+func TestResolvePromptFromPaths_DeeplyNested(t *testing.T) {
+	tmpDir := t.TempDir()
+	deepPath := filepath.Join(tmpDir, "prompts", "a", "b", "c", "d", "e")
+	require.NoError(t, os.MkdirAll(deepPath, 0755))
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(deepPath, "deep.md"),
+		[]byte("deeply nested content"),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: filepath.Join(tmpDir, "prompts"), Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("a/b/c/d/e/deep.md", paths)
+	require.NoError(t, err)
+	assert.Contains(t, result, "deeply nested content")
+}
+
+// TestResolvePromptFromPaths_SymlinkHandling tests behavior with symlinks
+func TestResolvePromptFromPaths_SymlinkHandling(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(targetDir, 0755))
+
+	// Create actual file in target directory
+	require.NoError(t, os.WriteFile(
+		filepath.Join(targetDir, "actual.md"),
+		[]byte("symlinked content"),
+		0644,
+	))
+
+	// Create symlink in prompts directory
+	symlinkPath := filepath.Join(promptsDir, "linked.md")
+	err := os.Symlink(filepath.Join(targetDir, "actual.md"), symlinkPath)
+	if err != nil {
+		t.Skip("symlinks not supported on this system")
+	}
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("linked.md", paths)
+	require.NoError(t, err)
+	assert.Contains(t, result, "symlinked content")
+}
+
+// TestResolvePromptFromPaths_MultiplePathsWithPartialExistence tests mixed existing/non-existing paths
+func TestResolvePromptFromPaths_MultiplePathsWithPartialExistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	existingDir := filepath.Join(tmpDir, "existing")
+	require.NoError(t, os.MkdirAll(existingDir, 0755))
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(existingDir, "test.md"),
+		[]byte("found in existing path"),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: filepath.Join(tmpDir, "nonexistent1"), Source: repository.SourceLocal},
+		{Path: filepath.Join(tmpDir, "nonexistent2"), Source: repository.SourceLocal},
+		{Path: existingDir, Source: repository.SourceGlobal},
+		{Path: filepath.Join(tmpDir, "nonexistent3"), Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("test.md", paths)
+	require.NoError(t, err)
+	assert.Contains(t, result, "found in existing path")
+}
+
+// TestResolvePromptFromPaths_FileInDirectoryNotFile tests that directories are not treated as files
+func TestResolvePromptFromPaths_FileInDirectoryNotFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Create a directory with the same name as what we're looking for
+	require.NoError(t, os.MkdirAll(filepath.Join(promptsDir, "notafile.md"), 0755))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	_, err := resolvePromptFromPaths("notafile.md", paths)
+	// Should error because it's a directory, not a file
+	require.Error(t, err)
+}
+
+// TestResolvePromptFromPaths_UTF8Content tests handling of UTF-8 content
+func TestResolvePromptFromPaths_UTF8Content(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptsDir := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+
+	// Content with various Unicode characters
+	utf8Content := "Hello 世界! Émoji: 🚀 Symbols: ∑∫∂ Greek: αβγδ"
+	require.NoError(t, os.WriteFile(
+		filepath.Join(promptsDir, "unicode.md"),
+		[]byte(utf8Content),
+		0644,
+	))
+
+	paths := []repository.SourcedPath{
+		{Path: promptsDir, Source: repository.SourceLocal},
+	}
+
+	result, err := resolvePromptFromPaths("unicode.md", paths)
+	require.NoError(t, err)
+	assert.Equal(t, utf8Content, result)
 }
