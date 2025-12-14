@@ -1,0 +1,189 @@
+# Feature Spec Generation Workflow
+# Generates a feature spec using Claude and saves it locally.
+# Use feature-publish to create the GitHub issue afterwards.
+#
+# Usage: awf run feature-spec --input feature_id=F038 --input version=v0.2.0 --input description="Add retry logic"
+
+name: feature-spec
+description: Generate feature spec and save locally for review
+version: "1.0.0"
+author: awf
+
+inputs:
+  - name: feature_id
+    type: string
+    description: Feature ID (e.g., F038)
+    required: true
+    validation:
+      pattern: "^F[0-9]{3}$"
+
+  - name: version
+    type: string
+    description: Target version (e.g., v0.2.0)
+    required: true
+    validation:
+      pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+  - name: description
+    type: string
+    description: Feature description
+    required: true
+
+states:
+  initial: read_template
+
+  #==========================================================================
+  # PHASE 1: SPEC GENERATION
+  #==========================================================================
+
+  read_template:
+    type: step
+    description: Read feature template
+    command: cat .specify/templates/feature.md
+    timeout: 5s
+    capture:
+      stdout: template_content
+    on_success: generate_spec
+    on_failure: error_template
+    hooks:
+      pre:
+        - log: "Reading feature template..."
+
+  generate_spec:
+    type: step
+    description: Generate feature spec using Claude
+    command: |
+      # Substitute variables in prompt template
+      PROMPT=$(cat .awf/prompts/feature/spec-generation.md | \
+        sed "s|\$FEATURE_ID|{{.inputs.feature_id}}|g" | \
+        sed "s|\$VERSION|{{.inputs.version}}|g" | \
+        sed "s|\$DESCRIPTION|{{.inputs.description}}|g")
+
+      claude -p "$PROMPT" \
+        --allowedTools "Read,Grep,Glob" \
+        --dangerously-skip-permissions \
+        --output-format json
+    timeout: 180s
+    capture:
+      stdout: spec_raw
+      max_size: 1MB
+    on_success: extract_spec
+    on_failure: error_generation
+    hooks:
+      pre:
+        - log: "Claude generating feature spec..."
+
+  extract_spec:
+    type: step
+    description: Extract spec JSON from Claude response
+    command: |
+      # Extract .result from Claude JSON output, then parse embedded JSON
+      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
+      {{.states.generate_spec.Output}}
+      JSONEOF
+      )
+
+      # Try to extract .result and parse it as JSON
+      RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
+
+      if [ -z "$RESULT" ]; then
+        echo "ERROR: No result in Claude output" >&2
+        exit 1
+      fi
+
+      # Strip markdown code fences if present (```json ... ```)
+      RESULT=$(echo "$RESULT" | sed 's/^```json//; s/^```//; s/```$//' | sed '/^$/d')
+
+      # Check if result is valid JSON with required fields
+      if echo "$RESULT" | jq -e '.slug and .content' > /dev/null 2>&1; then
+        echo "$RESULT"
+      else
+        # Try to extract JSON object from text (handles extra whitespace/text around JSON)
+        JSON_MATCH=$(echo "$RESULT" | grep -oP '\{.*"slug".*"content".*\}' | head -1)
+        if [ -n "$JSON_MATCH" ] && echo "$JSON_MATCH" | jq -e '.slug and .content' > /dev/null 2>&1; then
+          echo "$JSON_MATCH"
+        else
+          echo "ERROR: Invalid JSON format - missing slug or content" >&2
+          echo "Raw result: $RESULT" >&2
+          exit 1
+        fi
+      fi
+    timeout: 10s
+    capture:
+      stdout: spec_json
+    on_success: save_spec
+    on_failure: error_generation
+
+  save_spec:
+    type: step
+    description: Save spec to file for review
+    command: |
+      SPEC_JSON=$(cat << 'JSONEOF'
+      {{.states.extract_spec.Output}}
+      JSONEOF
+      )
+
+      mkdir -p .specify/specs
+      SPEC_FILE=".specify/specs/{{.inputs.feature_id}}.json"
+      echo "$SPEC_JSON" > "$SPEC_FILE"
+      echo "$SPEC_FILE"
+    timeout: 10s
+    capture:
+      stdout: spec_file
+    on_success: done
+    on_failure: error_save
+    hooks:
+      pre:
+        - log: "Saving spec to file..."
+      post:
+        - log: "Spec saved to {{.states.save_spec.Output}}"
+
+  #==========================================================================
+  # TERMINAL STATES
+  #==========================================================================
+
+  done:
+    type: terminal
+    status: success
+    message: |
+      ╔════════════════════════════════════════════════════════════════════╗
+      ║                    SPEC GENERATED - NEXT STEPS                     ║
+      ╠════════════════════════════════════════════════════════════════════╣
+      ║                                                                    ║
+      ║  Feature: {{.inputs.feature_id}}                                   ║
+      ║  Spec: {{.states.save_spec.Output}}                                ║
+      ║                                                                    ║
+      ║  1. Review the spec:                                               ║
+      ║     cat {{.states.save_spec.Output}} | jq -r '.content'            ║
+      ║                                                                    ║
+      ║  2. (Optional) Refine with Claude:                                 ║
+      ║     claude "Review and improve this spec"                          ║
+      ║                                                                    ║
+      ║  3. Publish to GitHub:                                             ║
+      ║     awf run feature-publish \                                      ║
+      ║       --input spec_file={{.states.save_spec.Output}}               ║
+      ║                                                                    ║
+      ╚════════════════════════════════════════════════════════════════════╝
+
+  error_template:
+    type: terminal
+    status: failure
+    message: "Failed to read feature template - ensure .specify/templates/feature.md exists"
+
+  error_generation:
+    type: terminal
+    status: failure
+    message: "Claude failed to generate feature spec"
+
+  error_save:
+    type: terminal
+    status: failure
+    message: "Failed to save spec to .specify/specs/"
+
+hooks:
+  workflow_start:
+    - log: "=== Generating spec for {{.inputs.feature_id}} ({{.inputs.version}}) ==="
+  workflow_end:
+    - log: "=== Spec generation completed in {{.workflow.Duration}} ==="
+  workflow_error:
+    - log: "=== Spec generation failed: {{.error.Message}} ==="
