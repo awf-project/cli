@@ -13,6 +13,17 @@ import (
 )
 
 func TestListCommand_NoWorkflows(t *testing.T) {
+	// Use temp directory for XDG to isolate from global workflows
+	tmpDir := t.TempDir()
+	originalXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+
+	// Also ensure no local workflows directory exists
+	originalWD, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(originalWD)
+
 	cmd := cli.NewRootCommand()
 
 	buf := new(bytes.Buffer)
