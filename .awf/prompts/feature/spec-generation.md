@@ -1,78 +1,85 @@
-# Task: Generate Feature Specification for {{.inputs.feature_id}}
+# Task: Generate Feature Specification for $FEATURE_ID
 
 ## Prerequisites
 
-**IMPORTANT:** Before starting, use the Skill tool with `common:docs` to load documentation standards.
+**IMPORTANT:** Before starting, read the project constitution at `.specify/memory/constitution.md` to understand governing principles.
 
 ## Feature Info
 
-- **ID**: {{.inputs.feature_id}}
-- **Version**: {{.inputs.version}}
-- **Description**: {{.inputs.description}}
+- **ID**: $FEATURE_ID
+- **Version**: $VERSION
+- **Description**: $DESCRIPTION
 
 ## Template
 
-$(cat docs/plans/features/TEMPLATE.md)
-
-## Naming Convention
-
-Files: `F0XX-feature-name-in-kebab-case.md`
-Examples: `F036-cli-init.md`, `F007-variable-interpolation.md`, `F029-output-streaming.md`
+$(cat .specify/templates/feature.md)
 
 ## Instructions
 
 ### Step 1: Understand the Feature
 
 1. Read the description carefully
-2. Search existing features for related functionality: `grep -r "related-term" docs/plans/features/`
-3. Identify dependencies on other features (if any)
+2. Search existing features via GitHub: `gh issue list --search "F0"`
+3. Check constitution compliance: `.specify/memory/constitution.md`
+4. Identify dependencies on other features (if any)
 
-### Step 2: Fill the Template
+### Step 2: Generate User Stories (P1/P2/P3)
 
-| Section | Guidelines |
-|---------|------------|
-| **Title** | `# F0XX: Short Title` (3-6 words, action-oriented) |
-| **Status** | Set to `planned` |
-| **Version** | Set to {{.inputs.version}} |
-| **Priority** | `high`, `medium`, or `low` based on user impact |
-| **Summary** | 2-3 sentences explaining WHAT and WHY |
-| **Acceptance Criteria** | 3-7 testable criteria using checkboxes |
-| **Technical Tasks** | Leave as `[ ] TBD - to be filled after codebase exploration` |
-| **Impacted Files** | Leave as `TBD - to be identified during implementation planning` |
+**Priority levels:**
+- **P1 (Must Have)**: Core functionality, feature is useless without it
+- **P2 (Should Have)**: Important but can be deferred if needed
+- **P3 (Nice to Have)**: Enhancements, edge cases, polish
 
-### Step 3: Write Quality Acceptance Criteria
-
-**Good criteria:**
-- [ ] `awf run --flag` displays expected output
-- [ ] Invalid input shows error message with exit code 1
-- [ ] Configuration persists across sessions
-
-**Bad criteria:**
-- [ ] Feature works correctly (too vague)
-- [ ] Code is clean (not testable)
-- [ ] User is happy (subjective)
+**For each user story:**
+1. Write in "As a... I want... So that..." format
+2. Add 2-3 acceptance scenarios (Given/When/Then)
+3. Include an independent test description
 
 **Rules:**
-- Each criterion must be independently testable
-- Use specific values/behaviors, not vague terms
-- Include both happy path and error cases
-- Reference CLI commands, flags, or outputs when applicable
+- Minimum 1 P1 story, maximum 5 total stories
+- Each story must be independently testable
+- No implementation details (languages, frameworks)
 
-### Step 4: Generate Slug
+### Step 3: Define Requirements
 
-Create a kebab-case slug (2-4 words):
-- `cli-init` for CLI initialization feature
-- `dry-run-mode` for dry-run execution
-- `loop-context-vars` for loop context variables
+**Functional Requirements (FR):**
+- Derived from user stories
+- Testable and specific
+- Examples: "CLI returns exit code 0 on success", "Invalid input shows error message"
 
-## Validation
+**Non-Functional Requirements (NFR):**
+- Performance: "Workflow parsing < 100ms"
+- Security: "No secrets logged in plaintext"
+- Reliability: "Graceful timeout handling"
+
+### Step 4: Identify Key Entities
+
+If the feature involves data:
+- List entities with their key attributes
+- Keep technology-agnostic (no "JSON field" or "Go struct")
+
+### Step 5: Fill Metadata
+
+| Field | Value |
+|-------|-------|
+| Status | `backlog` |
+| Version | $VERSION |
+| Priority | Infer from description (high/medium/low) |
+| Estimation | Infer from complexity (S/M/L/XL) |
+
+### Step 6: Generate Slug
+
+Create kebab-case slug (2-4 words):
+- Examples: `cli-init`, `dry-run-mode`, `loop-context-vars`
+- Derived from feature title
+
+## Validation Checklist
 
 Before output, verify:
-- [ ] Title is concise (3-6 words)
-- [ ] Summary explains WHAT and WHY
-- [ ] Acceptance criteria are testable (3-7 items)
-- [ ] Status is `planned`
-- [ ] Version matches {{.inputs.version}}
+- [ ] At least 1 P1 user story with acceptance scenarios
+- [ ] All requirements are testable
+- [ ] No implementation details in user stories
+- [ ] Metadata is complete
 - [ ] Slug is kebab-case, 2-4 words
 
 ## Output Format
@@ -84,6 +91,6 @@ Output a JSON object with exactly this structure:
 ```
 
 - `slug`: lowercase, kebab-case, 2-4 words
-- `content`: full markdown spec following template
+- `content`: full markdown spec following Spec-Kit template
 
 **Output ONLY the JSON, no explanations.**

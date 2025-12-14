@@ -168,7 +168,7 @@ states:
     capture:
       stdout: commit_output
     transitions:
-      - when: "inputs.push == true"
+      - when: "inputs.push == true || inputs.pr == true"
         goto: do_push
       - goto: summary  # no push requested
     on_failure: error_commit
@@ -212,22 +212,19 @@ states:
     type: step
     description: Claude generates detailed PR body
     command: |
-      DIFF_CONTENT=$(cat << 'DIFFEOF'
-      {{.states.check_changes.Output}}
-      DIFFEOF
-      )
+      # Get fresh diff info to avoid ARG_MAX limits with large state outputs
+      export BRANCH=$(git branch --show-current)
+      export FEATURE_ID=$(echo "$BRANCH" | grep -oE 'F[0-9]{3}' || echo "")
+      export COMMIT_MSG=$(git log -1 --format='%B')
 
-      BRANCH_INFO=$(cat << 'BRANCHEOF'
-      {{.states.get_branch_info.Output}}
-      BRANCHEOF
-      )
+      # Summary for PR body (not full diff)
+      export DIFF_SUMMARY=$(git log origin/{{.inputs.pr_base}}..HEAD --oneline 2>/dev/null || git log -1 --oneline)
+      export FILES_CHANGED=$(git diff --stat origin/{{.inputs.pr_base}}..HEAD 2>/dev/null || git diff --stat HEAD~1)
 
-      COMMIT_MSG=$(cat << 'COMMITEOF'
-      {{.states.generate_commit.Output}}
-      COMMITEOF
-      )
+      # Use envsubst to expand variables in the prompt
+      PROMPT=$(envsubst < .awf/prompts/commit/pr-body.md)
 
-      claude -p "$(cat .awf/prompts/commit/pr-body.md)" \
+      claude -p "$PROMPT" \
         --allowedTools "" \
         --output-format text
     timeout: 120s

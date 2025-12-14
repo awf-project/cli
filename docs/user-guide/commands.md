@@ -5,9 +5,11 @@
 | Command | Description |
 |---------|-------------|
 | `awf init` | Initialize AWF in current directory |
+| `awf init --global` | Initialize global prompts directory |
 | `awf run <workflow>` | Execute a workflow |
 | `awf resume [workflow-id]` | Resume an interrupted workflow |
 | `awf list` | List available workflows |
+| `awf list prompts` | List available prompt files |
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf history` | Show workflow execution history |
@@ -51,7 +53,7 @@ awf status $WORKFLOW_ID -f quiet
 
 ## awf init
 
-Initialize AWF in the current directory.
+Initialize AWF in the current directory or global prompts directory.
 
 ```bash
 awf init [flags]
@@ -62,28 +64,42 @@ awf init [flags]
 | Flag | Description |
 |------|-------------|
 | `--force` | Overwrite existing configuration files |
+| `--global` | Initialize global prompts directory at `$XDG_CONFIG_HOME/awf/prompts/` |
 
 ### Examples
 
 ```bash
-# Initialize a new project
+# Initialize a new project (local)
 awf init
 
 # Reinitialize (recreate config and example workflow)
 awf init --force
+
+# Initialize global prompts directory
+awf init --global
 ```
 
-### Created Structure
+### Created Structure (Local)
 
 ```
 .awf.yaml              # Configuration file
 .awf/
 ├── workflows/
 │   └── example.yaml   # Sample workflow
+├── prompts/
+│   └── example.md     # Example prompt file
 ├── templates/         # Reusable workflow templates
 └── storage/
     ├── states/        # State persistence
     └── logs/          # Log files
+```
+
+### Created Structure (Global)
+
+```
+$XDG_CONFIG_HOME/awf/
+└── prompts/
+    └── example.md     # Example prompt file
 ```
 
 ---
@@ -195,6 +211,12 @@ List available workflows.
 awf list [flags]
 ```
 
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `prompts` | List available prompt files |
+
 ### Examples
 
 ```bash
@@ -207,6 +229,58 @@ awf list -f json
 # Table format
 awf list -f table
 ```
+
+---
+
+## awf list prompts
+
+List available prompt files from local and global directories.
+
+```bash
+awf list prompts [flags]
+```
+
+### Description
+
+Displays all prompt files discovered from:
+1. `.awf/prompts/` (local project)
+2. `$XDG_CONFIG_HOME/awf/prompts/` (global, default: `~/.config/awf/prompts/`)
+
+Local prompts override global prompts with the same name. The output shows the source (local/global) for each prompt.
+
+### Examples
+
+```bash
+# List all prompts
+awf list prompts
+
+# JSON output
+awf list prompts -f json
+
+# Table format
+awf list prompts -f table
+```
+
+### Output Fields
+
+| Field | Description |
+|-------|-------------|
+| Name | Relative path from prompts directory |
+| Source | Origin: `local` or `global` |
+| Path | Absolute file path |
+| Size | File size in bytes |
+| ModTime | Last modification time |
+
+### Using Prompts
+
+Reference prompts in workflow inputs using the `@prompts/` prefix:
+
+```bash
+awf run my-workflow --input prompt=@prompts/system.md
+awf run ai-task --input context=@prompts/ai/agents/analyzer.md
+```
+
+The `@prompts/` prefix searches local directory first, then global.
 
 ---
 

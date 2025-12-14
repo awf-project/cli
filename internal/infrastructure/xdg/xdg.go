@@ -38,6 +38,11 @@ func AWFWorkflowsDir() string {
 	return filepath.Join(AWFConfigDir(), "workflows")
 }
 
+// AWFPromptsDir returns the global prompts directory ($XDG_CONFIG_HOME/awf/prompts)
+func AWFPromptsDir() string {
+	return filepath.Join(AWFConfigDir(), "prompts")
+}
+
 // AWFStatesDir returns the states storage directory
 func AWFStatesDir() string {
 	return filepath.Join(AWFDataDir(), "states")

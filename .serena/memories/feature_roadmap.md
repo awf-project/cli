@@ -5,7 +5,7 @@
 ```
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
-v0.3.0 (Advanced)   █████████████████░░░ IN PROGRESS
+v0.3.0 (Advanced)   ██████████████████░░ IN PROGRESS (8/9 done)
 v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
@@ -56,6 +56,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F020 | Interactive Mode | ✅ IMPLEMENTED |
 | F042 | Loop Context Variables | ✅ IMPLEMENTED |
 | F043 | Nested Loop Execution | ✅ IMPLEMENTED |
+| F044 | XDG Prompt Discovery | ✅ IMPLEMENTED |
 
 ## v0.4.0 - AI & Extensibility (PLANNED)
 
@@ -80,6 +81,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 
 ## Feature Spec Location
 
-All feature specs are in `docs/plans/features/<version>/F<ID>-<name>.md`
+All feature specs are in **GitHub Issues** (vanoix/awf repository).
+Implementation plans are in `.specify/implementation/<feature_id>/plan.md`.
 
-Example: `docs/plans/features/v0.2.0/F010-parallel-execution.md`
+Example: `.specify/implementation/F010/plan.md`

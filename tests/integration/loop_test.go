@@ -2705,7 +2705,6 @@ states:
     body:
       - process
     on_complete: outer_loop
-    on_failure: outer_loop
   process:
     type: step
     command: |
