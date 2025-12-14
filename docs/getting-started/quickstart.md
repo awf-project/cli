@@ -90,6 +90,33 @@ AWF discovers workflows from multiple locations (priority high to low):
 
 Local workflows override global ones with the same name.
 
+## Prompt Discovery
+
+AWF discovers prompts from multiple locations (priority high to low):
+
+1. `./.awf/prompts/` (local project)
+2. `$XDG_CONFIG_HOME/awf/prompts/` (global, default: `~/.config/awf/prompts/`)
+
+Local prompts override global ones with the same name.
+
+```bash
+# List all prompts
+awf list prompts
+
+# Initialize global prompts directory
+awf init --global
+```
+
+### Using Prompts
+
+Reference prompts in workflow inputs using the `@prompts/` prefix:
+
+```bash
+awf run my-workflow --input prompt=@prompts/system.md
+```
+
+The `@prompts/` prefix loads the file content and passes it as the input value.
+
 ## Common Flags
 
 | Flag | Description |

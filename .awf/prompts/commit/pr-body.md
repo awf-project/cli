@@ -15,8 +15,10 @@ Brief description of modifications
 - [ ] Test item 2
 
 CONTEXT:
-Branch: $BRANCH_INFO
+Branch: $BRANCH
+Feature: $FEATURE_ID
 Commit: $COMMIT_MSG
-Diff: $DIFF_CONTENT
+Commits: $DIFF_SUMMARY
+Files: $FILES_CHANGED
 
 Output the PR body now, starting with '## Summary':
