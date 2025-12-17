@@ -75,8 +75,8 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
 
 	// Open history store
-	historyPath := filepath.Join(cfg.StoragePath, "history")
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyPath := filepath.Join(cfg.StoragePath, "history.db")
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	if err != nil {
 		return writer.WriteError(fmt.Errorf("open history store: %w", err), 4) // system error
 	}

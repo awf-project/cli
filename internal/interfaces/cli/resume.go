@@ -182,7 +182,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	resolver := interpolation.NewTemplateResolver()
 
 	// Create history store and service
-	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		return fmt.Errorf("failed to open history store: %w", err)
 	}

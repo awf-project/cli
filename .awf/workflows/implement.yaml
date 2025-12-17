@@ -1,24 +1,29 @@
-# Feature Implementation Workflow
-# Implements a feature following its plan using TDD (Strict TIDY approach).
-# Fetches spec content directly from GitHub issue.
+# Issue Implementation Workflow
+# Implements any GitHub issue using TDD (Strict TIDY approach).
+# Supports features (F044), bugs (#48), and other issue types.
+# Requires plan from 'awf run plan' workflow.
 # No commit - user decides when to commit after review.
 #
 # Usage:
-#   awf run implement --input feature_id=F038
-#   awf run implement --input feature_id=F038 --input agents="go:golang-expert"
+#   awf run implement --input issue=F044        # Feature
+#   awf run implement --input issue=48          # Bug
+#   awf run implement --input issue=48 --input agents="go:golang-expert"
+#
+# Prerequisites:
+#   awf run plan --input issue=48
 
 name: implement
-description: Implement a feature using iterative TDD (component-by-component) with optional agents/skills
-version: "2.0.0"
+description: Implement any GitHub issue using TDD (requires plan from 'awf run plan')
+version: "2.2.0"
 author: awf
 
 inputs:
-  - name: feature_id
+  - name: issue
     type: string
-    description: Feature ID (e.g., F038)
+    description: GitHub issue number (48) or feature ID (F044)
     required: true
     validation:
-      pattern: "^F[0-9]{3}$"
+      pattern: "^(F[0-9]{3}|[0-9]+)$"
 
   - name: agents
     type: string
@@ -36,387 +41,97 @@ states:
   initial: find_spec
 
   #==========================================================================
-  # PHASE 0: GIT BRANCH SETUP
+  # PHASE 0: SPEC RETRIEVAL & PLAN CHECK
   #==========================================================================
 
   find_spec:
     type: step
-    description: Find GitHub issue containing the specification
+    description: Find GitHub issue (by number or feature ID)
     command: |
-      # Search for GitHub issue by feature ID
-      ISSUE_JSON=$(gh issue list --repo vanoix/awf \
-        --search "{{.inputs.feature_id}}:" --state all \
-        --json url,title,body --jq '.[0]' 2>/dev/null)
+      ISSUE_INPUT="{{.inputs.issue}}"
+
+      # Detect if it's a number or F-prefixed ID
+      if echo "$ISSUE_INPUT" | grep -qE '^[0-9]+$'; then
+        # Direct issue number - fetch by number
+        ISSUE_JSON=$(gh issue view "$ISSUE_INPUT" --repo vanoix/awf \
+          --json url,number,title,body,labels 2>/dev/null)
+      else
+        # F-prefixed ID - search by title
+        ISSUE_JSON=$(gh issue list --repo vanoix/awf \
+          --search "${ISSUE_INPUT}:" --state all \
+          --json url,number,title,body,labels --jq '.[0]' 2>/dev/null)
+      fi
 
       if [ -z "$ISSUE_JSON" ] || [ "$ISSUE_JSON" = "null" ]; then
-        echo "ERROR: No GitHub issue found for {{.inputs.feature_id}}" >&2
+        echo "ERROR: No GitHub issue found for {{.inputs.issue}}" >&2
         exit 1
       fi
 
       ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url')
+      ISSUE_NUM=$(echo "$ISSUE_JSON" | jq -r '.number')
       ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
       SPEC_CONTENT=$(echo "$ISSUE_JSON" | jq -r '.body')
 
-      # Output JSON with issue info and spec content
+      # Detect type from labels
+      LABELS=$(echo "$ISSUE_JSON" | jq -r '.labels[].name' 2>/dev/null | tr '\n' ',' || echo "")
+      if echo "$LABELS" | grep -qi "bug"; then
+        ISSUE_TYPE="bug"
+      elif echo "$LABELS" | grep -qi "feature"; then
+        ISSUE_TYPE="feature"
+      else
+        ISSUE_TYPE="issue"
+      fi
+
+      # Output JSON with issue info, type, and spec content
       jq -n \
         --arg url "$ISSUE_URL" \
+        --arg num "$ISSUE_NUM" \
         --arg title "$ISSUE_TITLE" \
         --arg content "$SPEC_CONTENT" \
-        '{issue_url: $url, title: $title, spec_content: $content}'
+        --arg type "$ISSUE_TYPE" \
+        --arg input "$ISSUE_INPUT" \
+        '{issue_url: $url, issue_num: $num, title: $title, spec_content: $content, issue_type: $type, issue_input: $input}'
     timeout: 30s
     capture:
       stdout: spec_info
-    on_success: create_branch
+    on_success: check_plan_exists
     on_failure: error_find_spec
     hooks:
       pre:
-        - log: "Finding GitHub issue for {{.inputs.feature_id}}..."
+        - log: "Finding GitHub issue for {{.inputs.issue}}..."
       post:
-        - log: "Found issue for {{.inputs.feature_id}}"
+        - log: "Found issue for {{.inputs.issue}}"
 
-  create_branch:
+  check_plan_exists:
     type: step
-    description: Create or switch to feature branch
+    description: Verify plan and tasks files exist
     command: |
-      # Parse title from find_spec JSON output (use heredoc for multiline JSON)
-      SPEC_INFO=$(cat << 'JSONEOF'
-      {{.states.find_spec.Output}}
-      JSONEOF
-      )
-      ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
+      PLAN_FILE=".specify/implementation/{{.inputs.issue}}/plan.md"
+      TASKS_FILE=".specify/implementation/{{.inputs.issue}}/tasks.md"
 
-      # Extract slug from title (e.g., "F038: Prompt Storage" -> prompt-storage)
-      SLUG=$(echo "$ISSUE_TITLE" | sed 's/^F[0-9]*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g')
-      BRANCH="feature/{{.inputs.feature_id}}-${SLUG}"
-
-      # Check if already on this branch
-      CURRENT=$(git branch --show-current)
-      if [ "$CURRENT" = "$BRANCH" ]; then
-        echo "$BRANCH"
-        exit 0
-      fi
-
-      # Check if branch exists locally
-      if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-        git checkout "$BRANCH"
-      else
-        git checkout -b "$BRANCH"
-      fi
-
-      echo "$BRANCH"
-    timeout: 30s
-    capture:
-      stdout: branch_name
-    on_success: set_in_progress
-    on_failure: error_branch
-    hooks:
-      pre:
-        - log: "Creating/switching to feature branch..."
-      post:
-        - log: "On branch {{.states.create_branch.Output}}"
-
-  set_in_progress:
-    type: step
-    description: Set GitHub issue status to In Progress
-    command: |
-      PROJECT_NUM=1
-
-      # Get issue_url from find_spec (use heredoc for multiline JSON)
-      SPEC_INFO=$(cat << 'JSONEOF'
-      {{.states.find_spec.Output}}
-      JSONEOF
-      )
-      ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url // empty')
-
-      if [ -z "$ISSUE_URL" ]; then
-        echo "SKIP_NO_ISSUE"
-        exit 0
-      fi
-
-      # Get project info
-      PROJECT_ID=$(gh project view $PROJECT_NUM --owner vanoix --format json | jq -r '.id')
-      ITEMS=$(gh project item-list $PROJECT_NUM --owner vanoix --format json --limit 100)
-      ITEM_ID=$(echo "$ITEMS" | jq -r ".items[] | select(.content.url==\"$ISSUE_URL\") | .id")
-
-      if [ -z "$ITEM_ID" ]; then
-        echo "SKIP_NOT_IN_PROJECT"
-        exit 0
-      fi
-
-      # Get field IDs
-      FIELDS=$(gh project field-list $PROJECT_NUM --owner vanoix --format json)
-      STATUS_FIELD=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .id')
-      IN_PROGRESS_OPT=$(echo "$FIELDS" | jq -r '.fields[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
-
-      # Update status
-      gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
-        --field-id "$STATUS_FIELD" --single-select-option-id "$IN_PROGRESS_OPT" 2>/dev/null || true
-
-      echo "IN_PROGRESS"
-    timeout: 30s
-    capture:
-      stdout: in_progress_result
-    on_success: search_feature_context
-    on_failure: search_feature_context
-    hooks:
-      pre:
-        - log: "Setting issue status to In Progress..."
-      post:
-        - log: "Status: {{.states.set_in_progress.Output}}"
-
-  #==========================================================================
-  # PHASE 1: PLANNING
-  #==========================================================================
-
-  search_feature_context:
-    type: step
-    description: Search claude-mem for similar features and patterns
-    command: |
-      FEATURE_ID="{{.inputs.feature_id}}"
-
-      echo "## Historical Context from claude-mem"
-      echo ""
-
-      # Search for similar feature implementations
-      echo "### Similar Feature Implementations"
-      SIMILAR=$(claude --print -p "Use claude-mem search tools to find observations about similar features to $FEATURE_ID. Look for: implementation patterns, decisions made, lessons learned. Return a concise summary (max 10 items)." \
-        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__search,mcp__plugin_claude-mem_claude-mem-search__decisions" \
-        --dangerously-skip-permissions \
-        --output-format json 2>/dev/null | jq -r '.result // "No similar features found"' | head -50)
-      echo "$SIMILAR"
-      echo ""
-
-      # Search for established architecture patterns
-      echo "### Established Architecture Patterns"
-      PATTERNS=$(claude --print -p "Use claude-mem how_it_works tool to find architecture patterns used in previous feature implementations in this project. Focus on hexagonal architecture, ports/adapters, and domain patterns." \
-        --allowedTools "mcp__plugin_claude-mem_claude-mem-search__how_it_works" \
-        --dangerously-skip-permissions \
-        --output-format json 2>/dev/null | jq -r '.result // "No patterns found"' | head -30)
-      echo "$PATTERNS"
-    timeout: 120s
-    capture:
-      stdout: feature_context
-      max_size: 100KB
-    on_success: explore_codebase
-    on_failure: explore_codebase
-    hooks:
-      pre:
-        - log: "Searching claude-mem for historical context..."
-      post:
-        - log: "Historical context retrieved"
-
-  explore_codebase:
-    type: step
-    description: Claude explores codebase for implementation context
-    command: |
-      # Get spec content from find_spec (GitHub issue, use heredoc for multiline JSON)
-      SPEC_INFO=$(cat << 'JSONEOF'
-      {{.states.find_spec.Output}}
-      JSONEOF
-      )
-      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
-      FEATURE_CONTEXT=$(cat << 'CTXEOF'
-      {{.states.search_feature_context.Output}}
-      CTXEOF
-      )
-
-      # Expand variables in prompt template using envsubst (handles multiline content)
-      export SPEC_CONTENT FEATURE_CONTEXT
-      PROMPT=$(envsubst < .awf/prompts/implement/explore.md)
-
-      claude -p "$PROMPT" \
-        --allowedTools "Read,Grep,Glob" \
-        --dangerously-skip-permissions \
-        --output-format json
-    timeout: 300s
-    capture:
-      stdout: exploration_raw
-      max_size: 5MB
-    on_success: parse_exploration
-    on_failure: error_exploration
-    hooks:
-      pre:
-        - log: "Claude exploring codebase..."
-      post:
-        - log: "Exploration complete"
-
-  parse_exploration:
-    type: step
-    description: Extract exploration result and session ID
-    command: |
-      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
-      {{.states.explore_codebase.Output}}
-      JSONEOF
-      )
-
-      # Try to parse as JSON, fallback to empty object
-      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
-        echo "$CLAUDE_OUTPUT" | jq -c '{session_id: (.session_id // null), result: (.result // "No exploration result")}'
-      else
-        echo '{"session_id": null, "result": "Failed to parse exploration output"}'
-      fi
-    timeout: 10s
-    capture:
-      stdout: exploration_parsed
-    on_success: create_plan
-    on_failure: create_plan
-
-  create_plan:
-    type: step
-    description: Claude creates implementation plan
-    command: |
-      SESSION_ID=$(cat << 'JSONEOF' | jq -r '.session_id // empty'
-      {{.states.parse_exploration.Output}}
-      JSONEOF
-      )
-      RESUME_FLAG=""
-      if [ -n "$SESSION_ID" ]; then
-        RESUME_FLAG="--resume $SESSION_ID"
-      fi
-      claude $RESUME_FLAG -p "$(cat .awf/prompts/implement/plan.md)" \
-        --allowedTools "Read,Grep,Glob" \
-        --output-format json
-    timeout: 300s
-    capture:
-      stdout: plan_raw
-      max_size: 5MB
-    on_success: extract_plan
-    on_failure: error_planning
-    hooks:
-      pre:
-        - log: "Claude creating implementation plan..."
-
-  extract_plan:
-    type: step
-    description: Extract plan content
-    command: |
-      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
-      {{.states.create_plan.Output}}
-      JSONEOF
-      )
-
-      # Try to parse as JSON and extract result
-      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
-        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
-        if [ -n "$RESULT" ]; then
-          echo "$RESULT"
-        else
-          echo "# No plan generated"
-          echo ""
-          echo "Claude did not return a result field."
-        fi
-      else
-        echo "# Plan extraction failed"
-        echo ""
-        echo "Raw output was not valid JSON."
-      fi
-    timeout: 10s
-    capture:
-      stdout: plan_content
-    on_success: save_plan
-    on_failure: save_plan
-
-  save_plan:
-    type: step
-    description: Save implementation plan
-    command: |
-      mkdir -p .specify/implementation/{{.inputs.feature_id}}
-      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
-      cat > "$PLAN_FILE" << 'AWF_PLAN_CONTENT_EOF'
-      {{.states.extract_plan.Output}}
-      AWF_PLAN_CONTENT_EOF
-      echo "$PLAN_FILE"
-    timeout: 10s
-    capture:
-      stdout: plan_file_path
-    on_success: generate_tasks
-    on_failure: generate_tasks
-    hooks:
-      post:
-        - log: "Plan saved to {{.states.save_plan.Output}}"
-
-  generate_tasks:
-    type: step
-    description: Generate task breakdown from plan (Spec-Kit)
-    command: |
-      SPEC_INFO=$(cat << 'JSONEOF'
-      {{.states.find_spec.Output}}
-      JSONEOF
-      )
-      SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
-
-      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
-      PLAN_CONTENT=""
-      if [ -f "$PLAN_FILE" ]; then
-        PLAN_CONTENT=$(cat "$PLAN_FILE")
-      fi
-
-      # Load tasks prompt and substitute variables using envsubst
-      export SPEC_CONTENT PLAN_CONTENT
-      PROMPT=$(envsubst < .awf/prompts/implement/tasks.md)
-
-      claude -p "$PROMPT" \
-        --allowedTools "Read,Grep,Glob" \
-        --dangerously-skip-permissions \
-        --output-format json
-    timeout: 300s
-    capture:
-      stdout: tasks_raw
-      max_size: 2MB
-    on_success: extract_tasks_content
-    on_failure: load_spec
-    hooks:
-      pre:
-        - log: "Generating task breakdown..."
-      post:
-        - log: "Tasks generated"
-
-  extract_tasks_content:
-    type: step
-    description: Extract tasks content from Claude output
-    command: |
-      CLAUDE_OUTPUT=$(cat << 'JSONEOF'
-      {{.states.generate_tasks.Output}}
-      JSONEOF
-      )
-
-      # Try to parse as JSON and extract result
-      if echo "$CLAUDE_OUTPUT" | jq -e '.' > /dev/null 2>&1; then
-        RESULT=$(echo "$CLAUDE_OUTPUT" | jq -r '.result // empty')
-        if [ -n "$RESULT" ]; then
-          echo "$RESULT"
-        else
-          echo "# No tasks generated"
-          exit 1
-        fi
-      else
-        echo "# Tasks extraction failed"
+      if [ ! -f "$PLAN_FILE" ]; then
+        echo "ERROR: Plan not found at $PLAN_FILE"
+        echo "Run 'awf run plan --input issue={{.inputs.issue}}' first"
         exit 1
       fi
-    timeout: 10s
-    capture:
-      stdout: tasks_content
-    on_success: save_tasks
-    on_failure: load_spec
 
-  save_tasks:
-    type: step
-    description: Save tasks breakdown
-    command: |
-      mkdir -p .specify/implementation/{{.inputs.feature_id}}
-      TASKS_FILE=".specify/implementation/{{.inputs.feature_id}}/tasks.md"
-      cat > "$TASKS_FILE" << 'AWF_TASKS_CONTENT_EOF'
-      {{.states.extract_tasks_content.Output}}
-      AWF_TASKS_CONTENT_EOF
-      echo "$TASKS_FILE"
-    timeout: 10s
+      if [ ! -f "$TASKS_FILE" ]; then
+        echo "ERROR: Tasks not found at $TASKS_FILE"
+        echo "Run 'awf run plan --input issue={{.inputs.issue}}' first"
+        exit 1
+      fi
+
+      echo "PLAN_EXISTS"
+    timeout: 5s
     capture:
-      stdout: tasks_file_path
+      stdout: plan_check_result
     on_success: load_spec
-    on_failure: load_spec
+    on_failure: error_no_plan
     hooks:
+      pre:
+        - log: "Checking plan exists..."
       post:
-        - log: "Tasks saved to {{.states.save_tasks.Output}}"
+        - log: "Plan verified"
 
   #==========================================================================
   # PHASE 2: VALIDATION BASELINE
@@ -434,7 +149,7 @@ states:
       SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
 
       if [ -z "$SPEC_CONTENT" ]; then
-        echo "ERROR: No spec content found for {{.inputs.feature_id}}"
+        echo "ERROR: No spec content found for {{.inputs.issue}}"
         exit 1
       fi
 
@@ -447,13 +162,13 @@ states:
     on_failure: error_baseline
     hooks:
       pre:
-        - log: "Extracting spec for {{.inputs.feature_id}}..."
+        - log: "Extracting spec for {{.inputs.issue}}..."
 
   load_plan:
     type: step
     description: Read implementation plan
     command: |
-      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.issue}}/plan.md"
       if [ ! -f "$PLAN_FILE" ]; then
         echo "ERROR: Plan not found at $PLAN_FILE"
         exit 1
@@ -473,8 +188,8 @@ states:
     type: step
     description: Extract components/tasks JSON for TDD loop
     command: |
-      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
-      TASKS_FILE=".specify/implementation/{{.inputs.feature_id}}/tasks.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.issue}}/plan.md"
+      TASKS_FILE=".specify/implementation/{{.inputs.issue}}/tasks.md"
 
       # Try tasks.md first (Spec-Kit format)
       if [ -f "$TASKS_FILE" ]; then
@@ -520,12 +235,14 @@ states:
       echo "Using components format (legacy)" >&2
 
       # Extract JSON block between ```json and ``` after ## Components
+      # Note: Can't use range /^## Components/,/^## / because both patterns match the same line
       COMPONENTS=$(awk '
-        /^## Components/,/^## / {
-          if (/```json/) { in_json=1; next }
-          if (/```/ && in_json) { in_json=0; next }
-          if (in_json) print
-        }
+        BEGIN { in_section=0; in_json=0 }
+        /^## Components/ { in_section=1; next }
+        /^## / && in_section { in_section=0 }
+        in_section && /```json/ { in_json=1; next }
+        in_section && /```/ && in_json { in_json=0; next }
+        in_section && in_json { print }
       ' "$PLAN_FILE" | jq -c '.')
 
       if [ -z "$COMPONENTS" ] || [ "$COMPONENTS" = "null" ]; then
@@ -548,7 +265,7 @@ states:
     capture:
       stdout: components_json
     on_success: parallel_baseline
-    on_failure: error_planning
+    on_failure: error_baseline
     hooks:
       pre:
         - log: "Extracting components/tasks from plan..."
@@ -599,12 +316,12 @@ states:
         - log: "Baseline OK - proceeding with TDD"
 
   #==========================================================================
-  # PHASE 3-4: TDD PER COMPONENT (for_each component → while retry)
+  # PHASE 3-4: TDD PER COMPONENT (for_each component -> while retry)
   #==========================================================================
 
   tdd_component_loop:
     type: for_each
-    description: TDD loop over each component (stub → tests → implement)
+    description: TDD loop over each component (stub -> tests -> implement)
     items: "{{.states.extract_components.Output}}"
     max_iterations: 50
     body:
@@ -857,12 +574,12 @@ states:
         - log: "Running final lint check..."
 
   #==========================================================================
-  # PHASE 5.5: FEATURE-SPECIFIC FUNCTIONAL TESTS
+  # PHASE 5.5: ISSUE-SPECIFIC FUNCTIONAL TESTS
   #==========================================================================
 
   write_feature_tests:
     type: step
-    description: Claude writes comprehensive functional tests for this feature
+    description: Claude writes comprehensive functional tests for this issue
     command: |
       SPEC_CONTENT=$(cat << 'SPECEOF'
       {{.states.load_spec.Output}}
@@ -884,26 +601,26 @@ states:
     on_failure: run_feature_tests
     hooks:
       pre:
-        - log: "Claude writing functional tests for {{.inputs.feature_id}}..."
+        - log: "Claude writing functional tests for {{.inputs.issue}}..."
 
   run_feature_tests:
     type: step
-    description: Run feature-specific functional tests
+    description: Run issue-specific functional tests
     command: |
-      FEATURE_ID="{{.inputs.feature_id}}"
+      ISSUE_INPUT="{{.inputs.issue}}"
 
-      echo "=== Running functional tests for ${FEATURE_ID} ==="
+      echo "=== Running functional tests for ${ISSUE_INPUT} ==="
 
-      # Find test files tagged with this feature
-      FEATURE_FILES=$(grep -l "// Feature: ${FEATURE_ID}" tests/integration/*_test.go 2>/dev/null || true)
+      # Find test files tagged with this issue
+      FEATURE_FILES=$(grep -l "// Feature: ${ISSUE_INPUT}\|// Issue: ${ISSUE_INPUT}\|// Bug: ${ISSUE_INPUT}" tests/integration/*_test.go 2>/dev/null || true)
 
       if [ -z "$FEATURE_FILES" ]; then
-        echo "WARNING: No test files tagged with '// Feature: ${FEATURE_ID}'"
-        echo "Expected: Add '// Feature: ${FEATURE_ID}' comment after build tag"
+        echo "WARNING: No test files tagged with '// Feature: ${ISSUE_INPUT}' or '// Issue: ${ISSUE_INPUT}'"
+        echo "Expected: Add appropriate comment after build tag"
         exit 0
       fi
 
-      echo "Found feature tests in:"
+      echo "Found tests in:"
       echo "$FEATURE_FILES"
       echo ""
 
@@ -911,7 +628,7 @@ states:
       go test -v -tags=integration $FEATURE_FILES 2>&1
 
       echo ""
-      echo "FEATURE_TESTS_COMPLETED"
+      echo "TESTS_COMPLETED"
     timeout: 300s
     capture:
       stdout: feature_tests_output
@@ -919,9 +636,9 @@ states:
     on_failure: set_done
     hooks:
       pre:
-        - log: "Running functional tests for {{.inputs.feature_id}}..."
+        - log: "Running functional tests for {{.inputs.issue}}..."
       post:
-        - log: "Feature tests completed"
+        - log: "Functional tests completed"
 
   #==========================================================================
   # PHASE 6: GITHUB STATUS + DOCUMENTATION
@@ -996,7 +713,7 @@ states:
 
   update_readme:
     type: step
-    description: Claude updates README.md based on implemented feature
+    description: Claude updates README.md based on implemented issue
     command: |
       # Get staged files list
       STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
@@ -1009,7 +726,7 @@ states:
       SPEC_CONTENT=$(echo "$SPEC_INFO" | jq -r '.spec_content')
 
       # Read plan content
-      PLAN_FILE=".specify/implementation/{{.inputs.feature_id}}/plan.md"
+      PLAN_FILE=".specify/implementation/{{.inputs.issue}}/plan.md"
       PLAN_CONTENT=""
       if [ -f "$PLAN_FILE" ]; then
         PLAN_CONTENT=$(cat "$PLAN_FILE")
@@ -1032,9 +749,17 @@ states:
     command: |
       CHANGELOG_FILE="CHANGELOG.md"
 
+      # Get issue info
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
+      ISSUE_TYPE=$(echo "$SPEC_INFO" | jq -r '.issue_type')
+      ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
+
       # Check if already exists
-      if grep -q "\*\*{{.inputs.feature_id}}\*\*" "$CHANGELOG_FILE" 2>/dev/null; then
-        echo "FEATURE_ALREADY_IN_CHANGELOG"
+      if grep -q "\*\*{{.inputs.issue}}\*\*\|#{{.inputs.issue}}" "$CHANGELOG_FILE" 2>/dev/null; then
+        echo "ISSUE_ALREADY_IN_CHANGELOG"
         exit 0
       fi
 
@@ -1054,27 +779,28 @@ states:
         --output-format text 2>/dev/null || echo "")
 
       # Fallback if Claude failed or returned empty
-      if [ -z "$ENTRY" ] || ! echo "$ENTRY" | grep -q "{{.inputs.feature_id}}"; then
-        # Get title from find_spec (GitHub issue, use heredoc)
-        SPEC_INFO=$(cat << 'JSONEOF'
-      {{.states.find_spec.Output}}
-      JSONEOF
-        )
-        ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
-        TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
+      if [ -z "$ENTRY" ]; then
+        # Clean title for changelog
+        TITLE=$(echo "$ISSUE_TITLE" | sed 's/^F[0-9]*: //' | sed 's/^bug: //')
         if [ -z "$TITLE" ]; then
-          TITLE="Feature {{.inputs.feature_id}}"
+          TITLE="Issue {{.inputs.issue}}"
         fi
-        ENTRY="- **{{.inputs.feature_id}}**: $TITLE"
+        ENTRY="- **{{.inputs.issue}}**: $TITLE"
         FALLBACK=true
       fi
 
-      # Insert after "### Added" under "[Unreleased]"
+      # Determine section based on issue type
+      case "$ISSUE_TYPE" in
+        bug) SECTION="### Fixed" ;;
+        *) SECTION="### Added" ;;
+      esac
+
+      # Insert after appropriate section under "[Unreleased]"
       if [ -f "$CHANGELOG_FILE" ]; then
-        awk -v entry="$ENTRY" '
+        awk -v entry="$ENTRY" -v section="$SECTION" '
           /^## \[Unreleased\]/ { in_unreleased=1 }
           /^## \[/ && !/\[Unreleased\]/ { in_unreleased=0 }
-          in_unreleased && /^### Added/ {
+          in_unreleased && $0 == section {
             print
             print entry
             next
@@ -1109,19 +835,21 @@ states:
       JSONEOF
       )
       ISSUE_TITLE=$(echo "$SPEC_INFO" | jq -r '.title')
-      TITLE=$(echo "$ISSUE_TITLE" | sed 's/^{{.inputs.feature_id}}: //')
+      ISSUE_TYPE=$(echo "$SPEC_INFO" | jq -r '.issue_type')
+      TITLE=$(echo "$ISSUE_TITLE" | sed 's/^F[0-9]*: //' | sed 's/^bug: //')
 
       # Try to extract version from issue labels or use unknown
       ISSUE_URL=$(echo "$SPEC_INFO" | jq -r '.issue_url')
       VERSION=$(gh issue view "$ISSUE_URL" --repo vanoix/awf --json labels --jq '.labels[].name | select(startswith("v"))' 2>/dev/null | head -1 || echo "unknown")
 
-      claude -p "Update the project memories to reflect the implemented feature {{.inputs.feature_id}}.
+      claude -p "Update the project memories to reflect the implemented issue {{.inputs.issue}}.
 
       Use mcp__plugin_common_serena__edit_memory to update feature_roadmap:
-      - Mark {{.inputs.feature_id}} as IMPLEMENTED in the $VERSION section
+      - Mark {{.inputs.issue}} as IMPLEMENTED in the $VERSION section
 
-      Feature details:
-      - ID: {{.inputs.feature_id}}
+      Issue details:
+      - ID: {{.inputs.issue}}
+      - Type: $ISSUE_TYPE
       - Version: $VERSION
       - Title: $TITLE
 
@@ -1142,10 +870,17 @@ states:
     type: step
     description: Generate implementation summary
     command: |
+      # Get issue info
+      SPEC_INFO=$(cat << 'JSONEOF'
+      {{.states.find_spec.Output}}
+      JSONEOF
+      )
+      ISSUE_TYPE=$(echo "$SPEC_INFO" | jq -r '.issue_type')
+
       echo "╔════════════════════════════════════════════════════════════════╗"
-      echo "║           FEATURE IMPLEMENTATION COMPLETE                      ║"
+      echo "║           IMPLEMENTATION COMPLETE                              ║"
       echo "╠════════════════════════════════════════════════════════════════╣"
-      echo "║ Feature: {{.inputs.feature_id}}"
+      echo "║ Issue: {{.inputs.issue}} (${ISSUE_TYPE})"
       echo "║ Agents: {{.inputs.agents}}"
       echo "║ Skills: {{.inputs.skills}}"
       echo "╠════════════════════════════════════════════════════════════════╣"
@@ -1168,7 +903,7 @@ states:
       LINTEOF
       )
 
-      FEATURE_TESTS=$(cat << 'FTEOF' | grep -q 'NO_FEATURE_TESTS_FOUND\|WARNING' && echo 'SKIPPED' || echo 'COMPLETED'
+      TESTS_STATUS=$(cat << 'FTEOF' | grep -q 'WARNING' && echo 'SKIPPED' || echo 'COMPLETED'
       {{.states.run_feature_tests.Output}}
       FTEOF
       )
@@ -1176,10 +911,10 @@ states:
       echo "║   Baseline: PASS (lint + tests)"
       echo "║   Final Tests: $FINAL_RESULT"
       echo "║   Final Lint: $LINT_AFTER"
-      echo "║   Feature Tests: $FEATURE_TESTS"
+      echo "║   Issue Tests: $TESTS_STATUS"
       echo "╠════════════════════════════════════════════════════════════════╣"
       echo "║ Updates:"
-      echo "║   Plan: {{.states.save_plan.Output}}"
+      echo "║   Plan: .specify/implementation/{{.inputs.issue}}/plan.md"
       echo "║   GitHub Issue: {{.states.set_done.Output}}"
       echo "║   README: {{.states.update_readme.Output}}"
       echo "║   CHANGELOG: {{.states.update_changelog_full.Output}}"
@@ -1205,36 +940,26 @@ states:
   done:
     type: terminal
     status: success
-    message: "Feature {{.inputs.feature_id}} implementation complete - review and commit manually"
+    message: "Issue {{.inputs.issue}} implementation complete - review and commit manually"
 
   error_find_spec:
     type: terminal
     status: failure
-    message: "Unable to find spec {{.inputs.feature_id}}"
+    message: "Unable to find issue {{.inputs.issue}}"
 
-  error_exploration:
+  error_no_plan:
     type: terminal
     status: failure
-    message: "Claude exploration failed - check claude CLI is installed and authenticated"
-
-  error_planning:
-    type: terminal
-    status: failure
-    message: "Claude planning failed"
+    message: "Plan not found. Run 'awf run plan --input issue={{.inputs.issue}}' first"
 
   error_baseline:
     type: terminal
     status: failure
     message: "Baseline validation failed - fix lint/tests before implementing"
 
-  error_branch:
-    type: terminal
-    status: failure
-    message: "Failed to create feature branch - check spec file exists"
-
 hooks:
   workflow_start:
-    - log: "=== Implementing {{.inputs.feature_id}} with TDD ==="
+    - log: "=== Implementing {{.inputs.issue}} with TDD ==="
   workflow_end:
     - log: "=== Implementation completed in {{.workflow.Duration}} ==="
   workflow_error:

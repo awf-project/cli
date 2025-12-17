@@ -72,10 +72,10 @@ func TestHistoryStore_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
 	// Create and use history store
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -116,9 +116,9 @@ func TestHistoryStore_FilterByWorkflowName_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -158,9 +158,9 @@ func TestHistoryStore_FilterByStatus_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -208,9 +208,9 @@ func TestHistoryStore_FilterByDateRange_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -256,9 +256,9 @@ func TestHistoryStore_Cleanup_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -313,13 +313,13 @@ func TestHistoryStore_Persistence_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 	ctx := context.Background()
 	now := time.Now()
 
 	// First session: write data
 	func() {
-		historyStore, err := store.NewBadgerHistoryStore(historyPath)
+		historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 		require.NoError(t, err)
 		defer historyStore.Close()
 
@@ -337,13 +337,13 @@ func TestHistoryStore_Persistence_Integration(t *testing.T) {
 		}
 	}()
 
-	// Verify data directory exists
+	// Verify data file exists
 	_, err := os.Stat(historyPath)
 	require.NoError(t, err)
 
 	// Second session: read data
 	func() {
-		historyStore, err := store.NewBadgerHistoryStore(historyPath)
+		historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 		require.NoError(t, err)
 		defer historyStore.Close()
 
@@ -366,9 +366,9 @@ func TestHistoryService_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -410,13 +410,13 @@ func TestHistoryService_CleanupOnInit_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 	ctx := context.Background()
 	now := time.Now()
 
 	// First session: write old data
 	func() {
-		historyStore, err := store.NewBadgerHistoryStore(historyPath)
+		historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 		require.NoError(t, err)
 		defer historyStore.Close()
 
@@ -445,7 +445,7 @@ func TestHistoryService_CleanupOnInit_Integration(t *testing.T) {
 
 	// Second session: service cleanup on init
 	func() {
-		historyStore, err := store.NewBadgerHistoryStore(historyPath)
+		historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 		require.NoError(t, err)
 		defer historyStore.Close()
 
@@ -473,7 +473,7 @@ func TestWorkflowExecution_RecordsHistory_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
 	// Create workflow directory and file
 	require.NoError(t, os.MkdirAll(workflowDir, 0755))
@@ -499,7 +499,7 @@ states:
 	logger := &historyMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 	historySvc := application.NewHistoryService(historyStore, logger)
@@ -531,9 +531,9 @@ func TestHistoryStore_CombinedFilters_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 
@@ -616,9 +616,9 @@ func TestHistoryStore_StatsWithFilters_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	historyPath := filepath.Join(tmpDir, "history")
+	historyPath := filepath.Join(tmpDir, "history.db")
 
-	historyStore, err := store.NewBadgerHistoryStore(historyPath)
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	require.NoError(t, err)
 	defer historyStore.Close()
 

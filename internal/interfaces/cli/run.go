@@ -166,7 +166,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	resolver := interpolation.NewTemplateResolver()
 
 	// Create history store and service
-	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		return fmt.Errorf("failed to open history store: %w", err)
 	}
@@ -745,7 +745,7 @@ func runSingleStep(
 	resolver := interpolation.NewTemplateResolver()
 
 	// Create history store and service
-	historyStore, err := store.NewBadgerHistoryStore(filepath.Join(cfg.StoragePath, "history"))
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		return fmt.Errorf("failed to open history store: %w", err)
 	}

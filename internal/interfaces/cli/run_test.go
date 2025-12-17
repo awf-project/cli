@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -903,6 +904,186 @@ func TestRunCommand_HasBreakpointFlag(t *testing.T) {
 	}
 
 	t.Error("run command not found")
+}
+
+// TestRunCommand_SQLiteHistoryStore_Wiring tests that workflows correctly use SQLiteHistoryStore
+// This validates the T004 CLI wiring update from BadgerDB to SQLite
+func TestRunCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
+	tests := []struct {
+		name        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "workflow execution uses SQLite history store",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			origDir, _ := os.Getwd()
+			defer func() { _ = os.Chdir(origDir) }()
+			_ = os.Chdir(tmpDir)
+
+			// Setup workflow and directories
+			workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+			require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+			require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+
+			workflowContent := `name: sqlite-test
+version: "1.0.0"
+states:
+  initial: echo
+  echo:
+    type: step
+    command: echo "testing sqlite"
+    on_success: done
+  done:
+    type: terminal
+`
+			require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "sqlite-test.yaml"), []byte(workflowContent), 0644))
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "sqlite-test"})
+
+			err := cmd.Execute()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+
+				// Verify SQLite database file was created (not Badger directory)
+				historyDBPath := filepath.Join(tmpDir, "history.db")
+				_, statErr := os.Stat(historyDBPath)
+				assert.NoError(t, statErr, "SQLite history.db should exist after workflow execution")
+
+				// Verify no Badger directory was created
+				badgerPath := filepath.Join(tmpDir, "history")
+				_, badgerErr := os.Stat(badgerPath)
+				assert.True(t, os.IsNotExist(badgerErr), "Badger history directory should NOT exist")
+			}
+		})
+	}
+}
+
+// TestRunCommand_ConcurrentWorkflows validates that bug-48 is fixed
+// Multiple workflows should be able to run concurrently without lock errors
+func TestRunCommand_ConcurrentWorkflows(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Setup workflow and directories
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+
+	// Create a workflow that takes a bit of time
+	workflowContent := `name: concurrent-test
+version: "1.0.0"
+states:
+  initial: work
+  work:
+    type: step
+    command: echo "workflow running" && sleep 0.1
+    on_success: done
+  done:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "concurrent-test.yaml"), []byte(workflowContent), 0644))
+
+	// Run multiple workflows concurrently
+	const numConcurrent = 3
+	errChan := make(chan error, numConcurrent)
+	doneChan := make(chan struct{}, numConcurrent)
+
+	for i := 0; i < numConcurrent; i++ {
+		go func(workerID int) {
+			// Each goroutine needs its own command instance
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "concurrent-test"})
+
+			err := cmd.Execute()
+			if err != nil {
+				errChan <- fmt.Errorf("worker %d failed: %w (output: %s)", workerID, err, out.String())
+			}
+			doneChan <- struct{}{}
+		}(i)
+	}
+
+	// Wait for all workers to complete
+	for i := 0; i < numConcurrent; i++ {
+		<-doneChan
+	}
+	close(errChan)
+
+	// Check if any worker failed
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	// All concurrent executions should succeed (bug-48 fix validation)
+	assert.Empty(t, errors, "concurrent workflow executions should not fail with lock errors")
+
+	// Verify history.db exists and is a valid SQLite file
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	info, err := os.Stat(historyDBPath)
+	require.NoError(t, err)
+	assert.True(t, info.Size() > 0, "history.db should have content")
+}
+
+// TestRunCommand_SingleStep_SQLiteHistory verifies single step execution uses SQLite
+func TestRunCommand_SingleStep_SQLiteHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Setup
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+
+	workflowContent := `name: step-test
+version: "1.0.0"
+states:
+  initial: greet
+  greet:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "step-test.yaml"), []byte(workflowContent), 0644))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "step-test", "--step=greet"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify SQLite database was used
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, statErr := os.Stat(historyDBPath)
+	assert.NoError(t, statErr, "SQLite history.db should exist after single step execution")
 }
 
 func TestRunCommand_PromptResolution(t *testing.T) {

@@ -122,7 +122,7 @@ Implements domain ports with concrete technologies.
 - `state/` - JSON file store implementing `StateStore`
 - `executor/` - Shell executor implementing `Executor`
 - `logger/` - Zap logger implementation
-- `history/` - BadgerDB history storage
+- `store/` - SQLite history storage
 - `xdg/` - XDG directory discovery
 
 **Implementation Details:**

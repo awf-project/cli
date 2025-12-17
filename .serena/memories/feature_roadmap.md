@@ -41,7 +41,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F011 | Retry with Backoff | ✅ IMPLEMENTED |
 | F012 | Input Validation | ✅ IMPLEMENTED |
 | F013 | Workflow Resume | ✅ IMPLEMENTED |
-| F014 | BadgerDB History | ✅ IMPLEMENTED |
+| F014 | SQLite History (Bug #48: replaced BadgerDB for concurrent access) | ✅ IMPLEMENTED |
 | F041 | Template Reference Validation | ✅ IMPLEMENTED |
 
 ## v0.3.0 - Advanced Features (IN PROGRESS)
