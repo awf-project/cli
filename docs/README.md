@@ -47,4 +47,4 @@ For contributors and developers:
 
 - [CHANGELOG](../CHANGELOG.md) - Version history
 - [CONTRIBUTING](../CONTRIBUTING.md) - How to contribute
-- [LICENSE](../LICENSE) - MIT License
+- [LICENSE](../LICENSE) - EUPL-1.2 License

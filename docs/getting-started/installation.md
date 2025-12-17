@@ -90,7 +90,7 @@ AWF uses these Go packages:
 | `fatih/color` | Terminal colors |
 | `google/uuid` | UUID generation |
 | `golang.org/x/sync/errgroup` | Parallel execution |
-| `dgraph-io/badger/v4` | History storage |
+| `modernc.org/sqlite` | History storage (SQLite) |
 | `expr-lang/expr` | Expression evaluation |
 
 ## Next Steps

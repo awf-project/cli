@@ -592,3 +592,221 @@ func TestRunHistory_TextOutput(t *testing.T) {
 		assert.Contains(t, output, "COMPLETED")
 	}
 }
+
+// TestHistoryCommand_SQLiteHistoryStore_Wiring validates that the history command
+// uses SQLiteHistoryStore (T005 component validation for bug-48 fix)
+func TestHistoryCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "history"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify SQLite database file was created (not Badger directory)
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, statErr := os.Stat(historyDBPath)
+	assert.NoError(t, statErr, "SQLite history.db should exist after history command execution")
+
+	// Verify no Badger directory was created
+	badgerPath := filepath.Join(tmpDir, "history")
+	info, badgerErr := os.Stat(badgerPath)
+	if badgerErr == nil && info.IsDir() {
+		// If directory exists, it should be empty (leftover from old tests)
+		entries, _ := os.ReadDir(badgerPath)
+		assert.Empty(t, entries, "Badger history directory should be empty (no MANIFEST/VLOG files)")
+	}
+}
+
+// TestHistoryCommand_ConcurrentAccess validates that multiple history commands
+// can run concurrently without lock errors (bug-48 fix validation)
+func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	const numConcurrent = 3
+	errChan := make(chan error, numConcurrent)
+	doneChan := make(chan struct{}, numConcurrent)
+
+	for i := 0; i < numConcurrent; i++ {
+		go func(workerID int) {
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "history"})
+
+			err := cmd.Execute()
+			if err != nil {
+				errChan <- err
+			}
+			doneChan <- struct{}{}
+		}(i)
+	}
+
+	// Wait for all workers to complete
+	for i := 0; i < numConcurrent; i++ {
+		<-doneChan
+	}
+	close(errChan)
+
+	// Check if any worker failed
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	// All concurrent executions should succeed (no lock errors)
+	assert.Empty(t, errors, "concurrent history command executions should not fail with lock errors")
+
+	// Verify history.db exists and is a valid SQLite file
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	info, err := os.Stat(historyDBPath)
+	require.NoError(t, err)
+	assert.True(t, info.Size() > 0, "history.db should have content")
+}
+
+// TestHistoryCommand_Stats_SQLiteIntegration validates stats with SQLite store
+func TestHistoryCommand_Stats_SQLiteIntegration(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Execute history stats command
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--stats"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify SQLite database was created
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, statErr := os.Stat(historyDBPath)
+	assert.NoError(t, statErr, "SQLite history.db should exist after stats query")
+
+	// Output should contain stats
+	output := out.String()
+	assert.Contains(t, output, "Execution Statistics")
+}
+
+// TestHistoryCommand_FilterWithSQLite validates filtering with SQLite store
+func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "filter by workflow",
+			args: []string{"history", "--workflow=test"},
+		},
+		{
+			name: "filter by status",
+			args: []string{"history", "--status=success"},
+		},
+		{
+			name: "filter with limit",
+			args: []string{"history", "--limit=10"},
+		},
+		{
+			name: "filter with since date",
+			args: []string{"history", "--since=2025-01-01"},
+		},
+		{
+			name: "combined filters",
+			args: []string{"history", "--workflow=deploy", "--status=failed", "--limit=5"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			origDir, _ := os.Getwd()
+			defer func() { _ = os.Chdir(origDir) }()
+			_ = os.Chdir(tmpDir)
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(append([]string{"--storage=" + tmpDir}, tt.args...))
+
+			err := cmd.Execute()
+			require.NoError(t, err)
+
+			// Verify SQLite database was created
+			historyDBPath := filepath.Join(tmpDir, "history.db")
+			_, statErr := os.Stat(historyDBPath)
+			assert.NoError(t, statErr, "SQLite history.db should exist after filtered query")
+		})
+	}
+}
+
+// TestHistoryCommand_JSONOutput_SQLite validates JSON output with SQLite store
+func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "--format=json", "history"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify SQLite database was created
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, statErr := os.Stat(historyDBPath)
+	assert.NoError(t, statErr, "SQLite history.db should exist for JSON output")
+
+	// Output should be valid JSON
+	output := out.String()
+	var records []interface{}
+	jsonErr := json.Unmarshal([]byte(output), &records)
+	require.NoError(t, jsonErr, "output should be valid JSON array")
+}
+
+// TestHistoryCommand_StatsJSON_SQLite validates JSON stats output with SQLite
+func TestHistoryCommand_StatsJSON_SQLite(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "--format=json", "history", "--stats"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify SQLite database was created
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, statErr := os.Stat(historyDBPath)
+	assert.NoError(t, statErr, "SQLite history.db should exist for JSON stats")
+
+	// Output should be valid JSON with stats fields
+	output := out.String()
+	var stats map[string]interface{}
+	jsonErr := json.Unmarshal([]byte(output), &stats)
+	require.NoError(t, jsonErr, "output should be valid JSON object")
+	assert.Contains(t, stats, "total_executions")
+}
