@@ -1,4 +1,4 @@
-# Task: Update Documentation for Feature {{.inputs.feature_id}}
+# Task: Update Documentation for Feature $FEATURE_ID
 
 ## Prerequisites
 
@@ -29,7 +29,7 @@ $STAGED_FILES
 
 1. Read `README.md` - understand current structure
 2. Read `docs/README.md` - documentation index
-3. Search for existing references: `grep -r "{{.inputs.feature_id}}" docs/`
+3. Search for existing references: `grep -r "$FEATURE_ID" docs/`
 
 ### Step 2: Update README.md
 

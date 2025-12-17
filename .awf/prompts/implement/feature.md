@@ -1,6 +1,6 @@
-You are implementing feature {{.inputs.feature_id}} using strict TDD.
+You are implementing feature $FEATURE_ID using strict TDD.
 
-## PHASE: Implementation (GREEN phase) - Attempt {{.loop.Index1}}/3
+## PHASE: Implementation (GREEN phase) - Attempt $LOOP_INDEX/3
 
 ## Feature Spec
 $SPEC_CONTENT
@@ -14,17 +14,15 @@ Implement the actual logic to make all tests pass:
 - Follow the implementation steps from the plan
 - Ensure code compiles and passes lint
 - Make tests pass (GREEN)
-{{if not .loop.First}}
-## IMPORTANT: Previous attempt failed
-This is retry attempt {{.loop.Index1}}. The previous implementation did not pass all tests.
-Review the test output and fix the issues before proceeding.
-{{end}}
+
+## IMPORTANT: Retry context
+This is attempt $LOOP_INDEX of 3. If previous attempts failed, review the test output and fix the issues.
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS
 
 If agents/skills are specified, use them via Task/Skill tools when appropriate.
 For example, use go:golang-expert for complex Go patterns.

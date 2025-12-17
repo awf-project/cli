@@ -1,4 +1,4 @@
-You are writing functional tests for feature {{.inputs.feature_id}}.
+You are writing functional tests for feature $FEATURE_ID.
 
 ## PHASE: Feature Functional Tests
 
@@ -21,7 +21,7 @@ Write comprehensive **functional tests** that validate the feature works end-to-
 - File: tests/integration/{component}_test.go (match existing file if extending)
 - Build tag: //go:build integration
 - Naming: Test{Component}_{Action}_Integration (e.g., TestTemplateService_ExpandWorkflow_Integration)
-- REQUIRED: Add file-level comment '// Feature: {{.inputs.feature_id}}'
+- REQUIRED: Add file-level comment '// Feature: $FEATURE_ID'
 - Use testify/require for assertions
 - Table-driven tests where appropriate
 - Real fixtures in tests/fixtures/
@@ -30,7 +30,7 @@ Write comprehensive **functional tests** that validate the feature works end-to-
 ```go
 //go:build integration
 
-// Feature: {{.inputs.feature_id}}
+// Feature: $FEATURE_ID
 package integration
 
 import (
@@ -52,7 +52,7 @@ func TestComponent_HappyPath_Integration(t *testing.T) {
 - Create necessary fixtures in tests/fixtures/
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS

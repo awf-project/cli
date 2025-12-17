@@ -1,4 +1,4 @@
-You are implementing feature {{.inputs.feature_id}} using strict TDD.
+You are implementing feature $FEATURE_ID using strict TDD.
 
 ## PHASE: Write Interfaces/Types/Stubs (RED phase - step 1)
 
@@ -18,9 +18,9 @@ The stubs should:
 DO NOT implement the actual logic yet - just the skeleton.
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS
 
 If agents/skills are specified, use them via Task/Skill tools when appropriate.

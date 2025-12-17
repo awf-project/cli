@@ -1,7 +1,7 @@
-You are implementing feature {{.inputs.feature_id}} using strict TDD.
+You are implementing feature $FEATURE_ID using strict TDD.
 
-## PHASE: Implementation (GREEN phase) - Attempt {{.loop.Index1}}/3
-## Component: {{.loop.parent.Index1}}/{{.loop.parent.Length}}
+## PHASE: Implementation (GREEN phase) - Attempt $LOOP_INDEX/3
+## Component: $LOOP_PARENT_INDEX/$LOOP_PARENT_LENGTH
 
 ## Component Details
 ```json
@@ -26,11 +26,8 @@ Requirements:
 - Ensure code compiles and passes lint
 - Make this component's tests pass (GREEN)
 
-{{if not .loop.First}}
-## IMPORTANT: Previous attempt failed
-This is retry attempt {{.loop.Index1}}. The previous implementation did not pass all tests.
-Review the test output and fix the issues before proceeding.
-{{end}}
+## IMPORTANT: Retry context
+This is attempt $LOOP_INDEX of 3. If previous attempts failed, review the test output and fix the issues.
 
 DO NOT:
 - Touch other components
@@ -40,10 +37,10 @@ DO NOT:
 Focus ONLY on this component's implementation files.
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS
 
 If agents/skills are specified, use them via Task/Skill tools when appropriate.
 For example, use go:golang-expert for complex Go patterns.
