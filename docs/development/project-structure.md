@@ -45,9 +45,9 @@ awf/
 │   │   ├── executor/            # Command execution
 │   │   │   ├── shell.go         # Shell executor
 │   │   │   └── shell_test.go
-│   │   ├── history/             # Execution history
-│   │   │   ├── badger.go        # BadgerDB adapter
-│   │   │   └── badger_test.go
+│   │   ├── store/               # Data storage
+│   │   │   ├── sqlite_history_store.go      # SQLite history adapter
+│   │   │   └── sqlite_history_store_test.go
 │   │   ├── logger/              # Logging
 │   │   │   └── zap.go           # Zap logger adapter
 │   │   └── xdg/                 # XDG directories
@@ -195,7 +195,7 @@ import "github.com/vanoix/awf/pkg/interpolation"
 | Coverage | `coverage.html` | Test coverage report |
 | Logs | `.awf/storage/logs/` | Runtime logs |
 | State | `.awf/storage/states/` | Workflow state files |
-| History | `.awf/storage/history.db` | BadgerDB history |
+| History | `.awf/storage/history.db` | SQLite history database |
 
 ## See Also
 

@@ -609,3 +609,137 @@ func TestResumeCommand_MultipleInputOverrides(t *testing.T) {
 	}
 	t.Error("resume command not found")
 }
+
+// =============================================================================
+// SQLite History Store Integration Tests (bug-48)
+// =============================================================================
+
+func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
+	// Test that resume command creates history.db (SQLite) instead of Badger directory
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	// Create states and workflows directories
+	statesDir := filepath.Join(tmpDir, "states")
+	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
+	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+
+	// Create a running workflow state
+	now := time.Now().Format(time.RFC3339)
+	runningState := `{
+		"WorkflowID": "sqlite-test-id",
+		"WorkflowName": "sqlite-workflow",
+		"Status": "running",
+		"CurrentStep": "step2",
+		"Inputs": {},
+		"States": {
+			"step1": {
+				"Name": "step1",
+				"Status": "completed",
+				"Output": "step1 done"
+			}
+		},
+		"Env": {},
+		"StartedAt": "` + now + `",
+		"UpdatedAt": "` + now + `"
+	}`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(statesDir, "sqlite-test-id.json"),
+		[]byte(runningState),
+		0644,
+	))
+
+	// Create the workflow definition
+	workflowContent := `name: sqlite-workflow
+version: "1.0.0"
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo step1
+    on_success: step2
+  step2:
+    type: step
+    command: echo step2
+    on_success: done
+  done:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(workflowsDir, "sqlite-workflow.yaml"),
+		[]byte(workflowContent),
+		0644,
+	))
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "sqlite-test-id"})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "resume should succeed")
+
+	// Verify SQLite database file was created
+	historyDBPath := filepath.Join(tmpDir, "history.db")
+	_, err = os.Stat(historyDBPath)
+	assert.NoError(t, err, "history.db should exist (SQLite)")
+
+	// Verify Badger directory was NOT created
+	badgerDir := filepath.Join(tmpDir, "history")
+	_, err = os.Stat(badgerDir)
+	assert.True(t, os.IsNotExist(err), "Badger history directory should NOT exist")
+}
+
+func TestResumeCommand_ConcurrentAccess(t *testing.T) {
+	// Test that multiple concurrent resume --list commands don't cause lock errors
+	// This validates the bug-48 fix for the resume command
+	tmpDir := t.TempDir()
+
+	// Create states directory with resumable workflows
+	statesDir := filepath.Join(tmpDir, "states")
+	require.NoError(t, os.MkdirAll(statesDir, 0755))
+
+	// Create multiple running workflow states
+	for i := 0; i < 3; i++ {
+		state := `{
+			"WorkflowID": "concurrent-` + string(rune('a'+i)) + `",
+			"WorkflowName": "concurrent-workflow",
+			"Status": "running",
+			"CurrentStep": "step1",
+			"Inputs": {},
+			"States": {},
+			"StartedAt": "2025-01-01T10:00:00Z",
+			"UpdatedAt": "2025-01-01T10:05:00Z"
+		}`
+		require.NoError(t, os.WriteFile(
+			filepath.Join(statesDir, "concurrent-"+string(rune('a'+i))+".json"),
+			[]byte(state),
+			0644,
+		))
+	}
+
+	// Run concurrent resume --list commands
+	const concurrency = 3
+	errCh := make(chan error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			cmd := cli.NewRootCommand()
+			buf := new(bytes.Buffer)
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list"})
+			errCh <- cmd.Execute()
+		}()
+	}
+
+	// Collect results - all should succeed without lock errors
+	for i := 0; i < concurrency; i++ {
+		err := <-errCh
+		assert.NoError(t, err, "concurrent resume --list should not fail with lock errors")
+	}
+}

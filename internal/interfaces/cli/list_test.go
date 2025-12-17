@@ -94,6 +94,11 @@ func TestListPromptsCommand(t *testing.T) {
 		defer func() { _ = os.Chdir(origDir) }()
 		_ = os.Chdir(tmpDir)
 
+		// Isolate from global prompts
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+
 		// Create empty prompts directory
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
 		require.NoError(t, os.MkdirAll(promptsDir, 0755))
@@ -116,6 +121,11 @@ func TestListPromptsCommand(t *testing.T) {
 		origDir, _ := os.Getwd()
 		defer func() { _ = os.Chdir(origDir) }()
 		_ = os.Chdir(tmpDir)
+
+		// Isolate from global prompts
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
 
 		// Don't create .awf/prompts directory
 
@@ -265,6 +275,11 @@ func TestListPromptsCommand(t *testing.T) {
 		origDir, _ := os.Getwd()
 		defer func() { _ = os.Chdir(origDir) }()
 		_ = os.Chdir(tmpDir)
+
+		// Isolate from global prompts
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
 		require.NoError(t, os.MkdirAll(promptsDir, 0755))
