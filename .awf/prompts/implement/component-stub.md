@@ -1,7 +1,7 @@
-You are implementing feature {{.inputs.feature_id}} using strict TDD.
+You are implementing feature $FEATURE_ID using strict TDD.
 
 ## PHASE: Write Interface/Stub (RED phase - step 1)
-## Component: {{.loop.Index1}}/{{.loop.Length}}
+## Component: $LOOP_INDEX/$LOOP_LENGTH
 
 ## Component Details
 ```json
@@ -33,9 +33,9 @@ DO NOT:
 Focus ONLY on this component. The code must compile with existing codebase.
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS
 
 If agents/skills are specified, use them via Task/Skill tools when appropriate.

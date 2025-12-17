@@ -636,6 +636,11 @@ states:
 
       # Create prompt with component context using envsubst
       export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      export FEATURE_ID="{{.inputs.feature_id}}"
+      export AGENTS="{{.inputs.agents}}"
+      export SKILLS="{{.inputs.skills}}"
+      export LOOP_INDEX="{{.loop.Index1}}"
+      export LOOP_LENGTH="{{.loop.Length}}"
       PROMPT=$(envsubst < .awf/prompts/implement/component-stub.md)
 
       claude -p "$PROMPT" \
@@ -669,6 +674,11 @@ states:
 
       # Create prompt using envsubst
       export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      export FEATURE_ID="{{.inputs.feature_id}}"
+      export AGENTS="{{.inputs.agents}}"
+      export SKILLS="{{.inputs.skills}}"
+      export LOOP_INDEX="{{.loop.Index1}}"
+      export LOOP_LENGTH="{{.loop.Length}}"
       PROMPT=$(envsubst < .awf/prompts/implement/component-tests.md)
 
       claude -p "$PROMPT" \
@@ -749,6 +759,12 @@ states:
 
       # Create prompt using envsubst
       export COMPONENT COMPONENT_NAME SPEC_CONTENT PLAN_CONTENT
+      export FEATURE_ID="{{.inputs.feature_id}}"
+      export AGENTS="{{.inputs.agents}}"
+      export SKILLS="{{.inputs.skills}}"
+      export LOOP_INDEX="{{.loop.Index1}}"
+      export LOOP_PARENT_INDEX="{{.loop.Parent.Index1}}"
+      export LOOP_PARENT_LENGTH="{{.loop.Parent.Length}}"
       PROMPT=$(envsubst < .awf/prompts/implement/component-impl.md)
 
       claude -p "$PROMPT" \

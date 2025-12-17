@@ -1,9 +1,9 @@
-# Task: Generate Task Breakdown for {{.inputs.feature_id}}
+# Task: Generate Task Breakdown for $FEATURE_ID
 
 ## Prerequisites
 
 Read the following inputs:
-- Implementation plan: `.specify/implementation/{{.inputs.feature_id}}/plan.md`
+- Implementation plan: `.specify/implementation/$FEATURE_ID/plan.md`
 - Feature spec: From GitHub issue (provided in context)
 - Constitution: `.specify/memory/constitution.md`
 
@@ -94,7 +94,7 @@ Bad:
 Output markdown with the task breakdown:
 
 ```markdown
-# Tasks: {{.inputs.feature_id}}
+# Tasks: $FEATURE_ID
 
 ## Summary
 - Total tasks: N

@@ -1,4 +1,4 @@
-You are implementing feature {{.inputs.feature_id}} using strict TDD.
+You are implementing feature $FEATURE_ID using strict TDD.
 
 ## PHASE: Write Tests (RED phase - step 2)
 
@@ -19,9 +19,9 @@ Write comprehensive tests based on the Test Plan section:
 Follow the project's testing conventions (table-driven tests, testify).
 
 ## Available Agents
-{{.inputs.agents}}
+$AGENTS
 
 ## Available Skills
-{{.inputs.skills}}
+$SKILLS
 
 If agents/skills are specified, use them via Task/Skill tools when appropriate.

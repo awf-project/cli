@@ -1,4 +1,4 @@
-# Task: Generate CHANGELOG Entry for Feature {{.inputs.feature_id}}
+# Task: Generate CHANGELOG Entry for Feature $FEATURE_ID
 
 ## Prerequisites
 
@@ -49,7 +49,7 @@ Read `CHANGELOG.md` to understand:
 1. Look for H1 (`# F0XX: Title`) in spec
 2. If no H1, derive from filename: `F038-prompt-storage.md` → "Prompt Storage"
 3. Keep concise: 3-8 words
-4. Format: `**{{.inputs.feature_id}}**: Title`
+4. Format: `**$FEATURE_ID**: Title`
 
 ### Step 4: Write User-Facing Bullets
 
@@ -113,10 +113,10 @@ Provide:
 3. **Entry**: The markdown entry ready to insert:
 
 ```markdown
-- **{{.inputs.feature_id}}**: {{Title}}
-  - {{Bullet 1}}
-  - {{Bullet 2}}
-  - {{Bullet 3}}
+- **$FEATURE_ID**: [Title]
+  - [Bullet 1]
+  - [Bullet 2]
+  - [Bullet 3]
 ```
 
 4. **Notes**: Any context (e.g., "Breaking change - update migration guide")

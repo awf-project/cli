@@ -1,4 +1,4 @@
-# Task: Create Implementation Plan for {{.inputs.feature_id}}
+# Task: Create Implementation Plan for $FEATURE_ID
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Generate the following files:
 ### 1. Implementation Plan (plan.md)
 
 ```markdown
-# Implementation Plan: {{.inputs.feature_id}}
+# Implementation Plan: $FEATURE_ID
 
 ## Summary
 (2-3 sentences describing the approach)
@@ -79,7 +79,7 @@ Rules:
 ## Test Plan
 - Unit tests for each component
 - Integration tests (if needed)
-- Feature tests tagged with {{.inputs.feature_id}}
+- Feature tests tagged with $FEATURE_ID
 
 ## Risks
 - Risk and mitigation
@@ -90,7 +90,7 @@ Rules:
 If technical decisions required research:
 
 ```markdown
-# Research: {{.inputs.feature_id}}
+# Research: $FEATURE_ID
 
 ## Questions Investigated
 
@@ -110,7 +110,7 @@ If technical decisions required research:
 ### 3. Data Model (data-model.md) - If entities involved
 
 ```markdown
-# Data Model: {{.inputs.feature_id}}
+# Data Model: $FEATURE_ID
 
 ## Entities
 
