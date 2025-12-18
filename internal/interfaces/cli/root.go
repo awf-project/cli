@@ -92,6 +92,7 @@ Examples:
 	cmd.AddCommand(newStatusCommand(cfg))
 	cmd.AddCommand(newValidateCommand(cfg))
 	cmd.AddCommand(newHistoryCommand(cfg))
+	cmd.AddCommand(newPluginCommand(cfg))
 
 	return cmd
 }

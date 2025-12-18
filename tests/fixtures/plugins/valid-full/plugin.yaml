@@ -1,0 +1,42 @@
+# Full plugin manifest with all fields
+name: awf-plugin-slack
+version: 1.2.3
+description: Slack notifications for AWF workflows
+awf_version: ">=0.4.0"
+author: Jane Developer <jane@example.com>
+license: MIT
+homepage: https://github.com/example/awf-plugin-slack
+capabilities:
+  - operations
+  - commands
+
+config:
+  webhook_url:
+    type: string
+    required: true
+    description: Slack webhook URL for sending notifications
+  channel:
+    type: string
+    required: false
+    default: "#general"
+    description: Target Slack channel
+  notify_on_failure:
+    type: boolean
+    required: false
+    default: true
+    description: Send notification on workflow failure
+  retry_count:
+    type: integer
+    required: false
+    default: 3
+    description: Number of retry attempts
+  log_level:
+    type: string
+    required: false
+    default: info
+    description: Logging verbosity
+    enum:
+      - debug
+      - info
+      - warn
+      - error

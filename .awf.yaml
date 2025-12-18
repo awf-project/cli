@@ -1,0 +1,10 @@
+# AWF Configuration
+# https://github.com/vanoix/awf
+
+version: "1"
+
+# Default log level: debug, info, warn, error
+log_level: info
+
+# Output format: text, json, table, quiet
+output_format: text

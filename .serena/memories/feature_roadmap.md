@@ -6,7 +6,7 @@
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
 v0.3.0 (Advanced)   ██████████████████░░ IN PROGRESS (8/9 done)
-v0.4.0 (AI/Plugins) ░░░░░░░░░░░░░░░░░░░░ PLANNED
+v0.4.0 (AI/Plugins) ███░░░░░░░░░░░░░░░░░ IN PROGRESS (1/7 done)
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
 
@@ -58,11 +58,11 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F043 | Nested Loop Execution | ✅ IMPLEMENTED |
 | F044 | XDG Prompt Discovery | ✅ IMPLEMENTED |
 
-## v0.4.0 - AI & Extensibility (PLANNED)
+## v0.4.0 - AI & Extensibility (IN PROGRESS)
 
-| ID | Feature | Priority |
-|----|---------|----------|
-| F021 | Plugin System | High |
+| ID | Feature | Status |
+|----|---------|--------|
+| F021 | Plugin System | ✅ IMPLEMENTED |
 | F022 | Custom Operations | Medium |
 | F023 | Workflow Composition | Medium |
 | F024 | Remote Workflows | Low |

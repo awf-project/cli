@@ -13,6 +13,9 @@
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf history` | Show workflow execution history |
+| `awf plugin list` | List installed plugins |
+| `awf plugin enable <name>` | Enable a plugin |
+| `awf plugin disable <name>` | Disable a plugin |
 | `awf version` | Show version info |
 | `awf completion <shell>` | Generate shell autocompletion |
 
@@ -375,6 +378,106 @@ awf history -f json
 
 # Combined filters
 awf history -w deploy -s success --since 2025-12-01 -n 50
+```
+
+---
+
+## awf plugin
+
+Manage AWF plugins.
+
+```bash
+awf plugin <subcommand> [flags]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List all discovered plugins |
+| `enable <name>` | Enable a disabled plugin |
+| `disable <name>` | Disable an enabled plugin |
+
+---
+
+## awf plugin list
+
+List all installed plugins with their status.
+
+```bash
+awf plugin list [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-f, --format` | Output format (text, json) |
+
+### Output Columns
+
+| Column | Description |
+|--------|-------------|
+| Name | Plugin identifier |
+| Version | Semantic version |
+| Status | `enabled`, `disabled`, or `error` |
+| Description | Brief plugin description |
+| Capabilities | Plugin features: `operations`, `commands`, `validators` |
+
+### Examples
+
+```bash
+# List all plugins
+awf plugin list
+
+# JSON output for scripting
+awf plugin list -f json
+```
+
+---
+
+## awf plugin enable
+
+Enable a disabled plugin.
+
+```bash
+awf plugin enable <name>
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Plugin name to enable |
+
+### Examples
+
+```bash
+# Enable a plugin
+awf plugin enable awf-plugin-slack
+```
+
+---
+
+## awf plugin disable
+
+Disable an enabled plugin.
+
+```bash
+awf plugin disable <name>
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Plugin name to disable |
+
+### Examples
+
+```bash
+# Disable a plugin
+awf plugin disable awf-plugin-slack
 ```
 
 ---

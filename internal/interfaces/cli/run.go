@@ -171,11 +171,19 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to open history store: %w", err)
 	}
 	defer func() {
-		if err := historyStore.Close(); err != nil {
-			logger.Error("failed to close history store", "error", err)
+		if closeErr := historyStore.Close(); closeErr != nil {
+			logger.Error("failed to close history store", "error", closeErr)
 		}
 	}()
 	historySvc := application.NewHistoryService(historyStore, logger)
+
+	// Initialize plugin system
+	pluginResult, err := initPluginSystem(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize plugins: %w", err)
+	}
+	defer pluginResult.Cleanup()
+	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
@@ -750,11 +758,19 @@ func runSingleStep(
 		return fmt.Errorf("failed to open history store: %w", err)
 	}
 	defer func() {
-		if err := historyStore.Close(); err != nil {
-			logger.Error("failed to close history store", "error", err)
+		if closeErr := historyStore.Close(); closeErr != nil {
+			logger.Error("failed to close history store", "error", closeErr)
 		}
 	}()
 	historySvc := application.NewHistoryService(historyStore, logger)
+
+	// Initialize plugin system
+	pluginResult, err := initPluginSystem(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize plugins: %w", err)
+	}
+	defer pluginResult.Cleanup()
+	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)

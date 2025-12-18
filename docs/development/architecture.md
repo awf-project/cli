@@ -12,17 +12,17 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                   APPLICATION LAYER                         │
-│   WorkflowService │ ExecutionService │ StateManager         │
+│   WorkflowService │ ExecutionService │ PluginService        │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                      DOMAIN LAYER                           │
-│   Workflow │ Step │ ExecutionContext │ Ports (Interfaces)   │
+│   Workflow │ Step │ Plugin │ Ports (Interfaces)             │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                  INFRASTRUCTURE LAYER                       │
-│   YAMLRepository │ JSONStateStore │ ShellExecutor          │
+│   YAMLRepository │ JSONStateStore │ RPCPluginManager        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,7 +49,8 @@ The core business logic. No external dependencies.
 
 **Components:**
 - `workflow/` - Workflow, Step, State, Context entities
-- `ports/` - Repository, StateStore, Executor interfaces
+- `plugin/` - Plugin manifest, operation schema, state entities
+- `ports/` - Repository, StateStore, Executor, PluginManager interfaces
 
 **Key Entities:**
 ```go
@@ -91,6 +92,13 @@ type StateStore interface {
 type Executor interface {
     Execute(ctx context.Context, cmd Command) (Result, error)
 }
+
+type PluginManager interface {
+    Discover() ([]*plugin.Manifest, error)
+    Load(name string) error
+    Init(name string, config map[string]interface{}) error
+    Shutdown(name string) error
+}
 ```
 
 ### Application Layer
@@ -104,6 +112,7 @@ Orchestrates use cases using domain entities and ports.
 - `ExecutionService` - Workflow execution engine
 - `StateManager` - State persistence management
 - `TemplateService` - Template loading and resolution
+- `PluginService` - Plugin lifecycle orchestration
 
 **Key Responsibilities:**
 - Coordinate domain operations
@@ -121,6 +130,7 @@ Implements domain ports with concrete technologies.
 - `repository/` - YAML file loader implementing `Repository`
 - `state/` - JSON file store implementing `StateStore`
 - `executor/` - Shell executor implementing `Executor`
+- `plugin/` - RPC plugin manager, manifest parser, state store
 - `logger/` - Zap logger implementation
 - `store/` - SQLite history storage
 - `xdg/` - XDG directory discovery
@@ -151,6 +161,16 @@ type ShellExecutor struct{}
 
 func (e *ShellExecutor) Execute(ctx context.Context, cmd Command) (Result, error) {
     // Execute via /bin/sh -c
+}
+
+// RPC Plugin Manager
+type RPCPluginManager struct {
+    pluginsDir string
+    clients    map[string]*plugin.Client
+}
+
+func (m *RPCPluginManager) Load(name string) error {
+    // Start plugin process via HashiCorp go-plugin
 }
 ```
 

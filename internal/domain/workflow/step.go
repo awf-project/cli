@@ -9,11 +9,12 @@ import (
 type StepType string
 
 const (
-	StepTypeCommand  StepType = "command"
-	StepTypeParallel StepType = "parallel"
-	StepTypeTerminal StepType = "terminal"
-	StepTypeForEach  StepType = "for_each"
-	StepTypeWhile    StepType = "while"
+	StepTypeCommand   StepType = "command"
+	StepTypeParallel  StepType = "parallel"
+	StepTypeTerminal  StepType = "terminal"
+	StepTypeForEach   StepType = "for_each"
+	StepTypeWhile     StepType = "while"
+	StepTypeOperation StepType = "operation" // F021: plugin-provided operation
 )
 
 // TerminalStatus defines the outcome of a terminal state.
@@ -68,6 +69,8 @@ type Step struct {
 	Description     string
 	Command         string               // for command type
 	Dir             string               // working directory for command execution
+	Operation       string               // F021: plugin operation name (e.g., "slack.send")
+	OperationInputs map[string]any       // F021: plugin operation input parameters
 	Branches        []string             // for parallel type
 	Strategy        string               // for parallel: all_succeed, any_succeed, best_effort
 	MaxConcurrent   int                  // for parallel: max concurrent branches
@@ -132,6 +135,10 @@ func (s *Step) Validate() error {
 		}
 		if err := s.Loop.Validate(); err != nil {
 			return fmt.Errorf("loop config: %w", err)
+		}
+	case StepTypeOperation:
+		if s.Operation == "" {
+			return errors.New("operation is required for operation-type steps")
 		}
 	default:
 		return errors.New("unknown step type")

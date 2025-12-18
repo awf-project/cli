@@ -1,0 +1,6 @@
+# Minimal valid plugin manifest
+name: awf-plugin-simple
+version: 1.0.0
+awf_version: ">=0.4.0"
+capabilities:
+  - operations
