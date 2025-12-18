@@ -1,0 +1,10 @@
+# Config with all supported input types
+# Tests: YAML type conversion to Go types
+
+inputs:
+  string_val: "hello"
+  int_val: 42
+  float_val: 3.14
+  bool_true: true
+  bool_false: false
+  null_val: null

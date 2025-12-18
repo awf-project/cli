@@ -1,0 +1,11 @@
+# Config with unknown keys fixture (should produce warning)
+# Tests: Unknown keys warning, but execution proceeds
+
+inputs:
+  project: "test-project"
+
+# These unknown keys should trigger warnings
+unknown_key: "some value"
+deprecated_setting: true
+future_feature:
+  nested: "data"
