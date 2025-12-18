@@ -118,10 +118,11 @@ type ValidationResult struct {
 
 // InputInfo represents workflow input for table output.
 type InputInfo struct {
-	Name     string
-	Type     string
-	Required bool
-	Default  string
+	Name        string
+	Type        string
+	Required    bool
+	Default     string
+	Description string
 }
 
 // StepSummary represents a workflow step summary for table output.

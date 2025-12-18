@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F035**: Workflow Arguments Help Command
+  - `awf run <workflow> --help` displays workflow-specific input parameters
+  - Shows input name, type, required/optional status, default values, and description
+  - Workflow description displayed at top when present
+  - Graceful handling for workflows with no inputs or non-existent workflows
 
 #### Extensibility
 - **F021**: Plugin System
