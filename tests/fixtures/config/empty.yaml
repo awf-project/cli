@@ -1,0 +1,2 @@
+# Empty config file fixture
+# Tests: Empty file returns empty config (no error)

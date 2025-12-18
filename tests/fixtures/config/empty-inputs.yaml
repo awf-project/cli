@@ -1,0 +1,4 @@
+# Config with empty inputs section
+# Tests: inputs: {} returns config with empty map
+
+inputs:

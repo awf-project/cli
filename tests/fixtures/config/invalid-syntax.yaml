@@ -1,0 +1,6 @@
+# Invalid YAML syntax fixture
+# Tests: Malformed YAML produces clear error with line info
+
+inputs: [
+  # Unclosed bracket - intentionally malformed YAML
+  project: "broken"

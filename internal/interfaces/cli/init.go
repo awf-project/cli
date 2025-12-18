@@ -18,6 +18,7 @@ const (
 	statesDir         = "states"
 	logsDir           = "logs"
 	configFileName    = ".awf.yaml"
+	projectConfigFile = "config.yaml"
 	exampleFile       = "example.yaml"
 	examplePromptFile = "example.md"
 )
@@ -33,6 +34,7 @@ func newInitCommand(cfg *Config) *cobra.Command {
 
 This creates:
   .awf.yaml                    Configuration file
+  .awf/config.yaml             Project config with inputs template
   .awf/workflows/              Local workflows directory
   .awf/workflows/example.yaml  Example workflow file
   .awf/prompts/                Prompt templates directory
@@ -101,6 +103,13 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 		return err
 	}
 	formatter.Success(fmt.Sprintf("Created %s", configPath))
+
+	// Create project config file with inputs template (FR-006)
+	projectConfigPath := filepath.Join(awfPath, projectConfigFile)
+	if err := createProjectConfigFile(projectConfigPath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", projectConfigPath))
 
 	// Create example workflow
 	examplePath := filepath.Join(awfPath, workflowsDir, exampleFile)
@@ -201,6 +210,34 @@ states:
 
   done:
     type: terminal
+`
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// createProjectConfigFile creates the project configuration file at .awf/config.yaml
+// with a commented inputs: section as a template.
+// This file is used to pre-populate workflow inputs (FR-006).
+func createProjectConfigFile(path string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return nil // File exists, skip
+		}
+	}
+
+	content := `# AWF Project Configuration
+# https://github.com/vanoix/awf
+#
+# This file provides default values for workflow inputs.
+# CLI --input flags override these values.
+#
+# IMPORTANT: Do not store secrets here - use environment variables instead.
+
+# Workflow inputs - pre-populate values for awf run
+# Uncomment and modify the examples below:
+inputs:
+  # project: my-project
+  # environment: staging
+  # debug: false
 `
 	return os.WriteFile(path, []byte(content), 0644)
 }
