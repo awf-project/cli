@@ -1,0 +1,6 @@
+# Invalid YAML syntax
+name: bad-plugin
+version: 1.0.0
+  awf_version: ">=0.4.0"  # bad indentation
+capabilities:
+  - operations

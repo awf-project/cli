@@ -1,0 +1,5 @@
+# Missing required 'name' field
+version: 1.0.0
+awf_version: ">=0.4.0"
+capabilities:
+  - operations

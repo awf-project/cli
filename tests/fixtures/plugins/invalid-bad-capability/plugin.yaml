@@ -1,0 +1,7 @@
+# Invalid capability value
+name: bad-capability-plugin
+version: 1.0.0
+awf_version: ">=0.4.0"
+capabilities:
+  - operations
+  - unknown_capability  # not a valid capability

@@ -55,6 +55,7 @@ type Config struct {
 	LogLevel     string
 	ConfigPath   string
 	StoragePath  string
+	PluginsDir   string // Override plugin discovery directory (empty = use BuildPluginPaths)
 }
 
 // DefaultConfig returns default configuration.
@@ -120,4 +121,34 @@ func BuildPromptPaths() []repository.SourcedPath {
 			Source: repository.SourceGlobal,
 		},
 	}
+}
+
+// BuildPluginPaths returns plugin paths in priority order:
+// 1. AWF_PLUGINS_PATH env var
+// 2. ./.awf/plugins/ (local project)
+// 3. $XDG_DATA_HOME/awf/plugins/ (global)
+func BuildPluginPaths() []repository.SourcedPath {
+	var paths []repository.SourcedPath
+
+	// 1. Environment variable (highest priority)
+	if envPath := os.Getenv("AWF_PLUGINS_PATH"); envPath != "" {
+		paths = append(paths, repository.SourcedPath{
+			Path:   envPath,
+			Source: repository.SourceEnv,
+		})
+	}
+
+	// 2. Local project directory
+	paths = append(paths, repository.SourcedPath{
+		Path:   xdg.LocalPluginsDir(),
+		Source: repository.SourceLocal,
+	})
+
+	// 3. Global XDG data directory (lowest priority)
+	paths = append(paths, repository.SourcedPath{
+		Path:   xdg.AWFPluginsDir(),
+		Source: repository.SourceGlobal,
+	})
+
+	return paths
 }

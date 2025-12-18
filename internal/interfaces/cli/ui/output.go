@@ -149,6 +149,16 @@ type PromptInfo struct {
 	ModTime string `json:"mod_time,omitempty"`
 }
 
+// PluginInfo represents a plugin for list plugins command.
+type PluginInfo struct {
+	Name         string   `json:"name"`
+	Version      string   `json:"version,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Status       string   `json:"status"`
+	Enabled      bool     `json:"enabled"`
+	Capabilities []string `json:"capabilities,omitempty"`
+}
+
 // tableWriter renders ASCII-bordered tables.
 type tableWriter struct {
 	w       io.Writer
@@ -350,6 +360,23 @@ func (w *OutputWriter) WritePrompts(prompts []PromptInfo) error {
 	}
 }
 
+// WritePlugins outputs plugin list.
+func (w *OutputWriter) WritePlugins(plugins []PluginInfo) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(plugins)
+	case FormatTable:
+		return w.writePluginsBorderedTable(plugins)
+	case FormatQuiet:
+		for _, p := range plugins {
+			_, _ = fmt.Fprintln(w.out, p.Name)
+		}
+		return nil
+	default: // text
+		return w.writePluginsTable(plugins)
+	}
+}
+
 // WriteDryRun outputs the dry-run execution plan.
 func (w *OutputWriter) WriteDryRun(plan *workflow.DryRunPlan, formatter *DryRunFormatter) error {
 	switch w.format {
@@ -434,6 +461,60 @@ func (w *OutputWriter) writePromptsBorderedTable(prompts []PromptInfo) error {
 
 	for _, p := range prompts {
 		table.row(p.Name, p.Source, fmt.Sprintf("%d B", p.Size), p.ModTime)
+	}
+	table.separator()
+
+	return nil
+}
+
+func (w *OutputWriter) writePluginsTable(plugins []PluginInfo) error {
+	if len(plugins) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No plugins found")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+
+	// Header
+	_, _ = fmt.Fprintln(tw, "NAME\tVERSION\tSTATUS\tENABLED\tCAPABILITIES")
+
+	for _, p := range plugins {
+		enabled := "yes"
+		if !p.Enabled {
+			enabled = "no"
+		}
+		caps := strings.Join(p.Capabilities, ", ")
+		if caps == "" {
+			caps = "-"
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Name, p.Version, p.Status, enabled, caps)
+	}
+
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
+	if len(plugins) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No plugins found")
+		return nil
+	}
+
+	table := newTableWriter(w.out, 20, 10, 12, 8, 25)
+
+	table.separator()
+	table.row("NAME", "VERSION", "STATUS", "ENABLED", "CAPABILITIES")
+	table.separator()
+
+	for _, p := range plugins {
+		enabled := "yes"
+		if !p.Enabled {
+			enabled = "no"
+		}
+		caps := strings.Join(p.Capabilities, ", ")
+		if caps == "" {
+			caps = "-"
+		}
+		table.row(p.Name, p.Version, p.Status, enabled, caps)
 	}
 	table.separator()
 

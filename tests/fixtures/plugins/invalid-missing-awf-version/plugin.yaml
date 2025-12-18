@@ -1,0 +1,5 @@
+# Missing required 'awf_version' field
+name: no-awf-version-plugin
+version: 1.0.0
+capabilities:
+  - operations
