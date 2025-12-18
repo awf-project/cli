@@ -19,19 +19,20 @@ import (
 
 // ExecutionService orchestrates workflow execution.
 type ExecutionService struct {
-	workflowSvc      *WorkflowService
-	executor         ports.CommandExecutor
-	parallelExecutor ports.ParallelExecutor
-	store            ports.StateStore
-	logger           ports.Logger
-	resolver         interpolation.Resolver
-	evaluator        ExpressionEvaluator
-	hookExecutor     *HookExecutor
-	loopExecutor     *LoopExecutor
-	stdoutWriter     io.Writer
-	stderrWriter     io.Writer
-	historySvc       *HistoryService
-	templateSvc      *TemplateService
+	workflowSvc       *WorkflowService
+	executor          ports.CommandExecutor
+	parallelExecutor  ports.ParallelExecutor
+	store             ports.StateStore
+	logger            ports.Logger
+	resolver          interpolation.Resolver
+	evaluator         ExpressionEvaluator
+	hookExecutor      *HookExecutor
+	loopExecutor      *LoopExecutor
+	stdoutWriter      io.Writer
+	stderrWriter      io.Writer
+	historySvc        *HistoryService
+	templateSvc       *TemplateService
+	operationProvider ports.OperationProvider // F021: plugin operations
 }
 
 // ExpressionEvaluator evaluates conditional expressions.
@@ -48,6 +49,12 @@ func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 // SetTemplateService configures the template service for expanding template references.
 func (s *ExecutionService) SetTemplateService(svc *TemplateService) {
 	s.templateSvc = svc
+}
+
+// SetOperationProvider configures the plugin operation provider for F021.
+// When set, operation-type steps can execute plugin-provided operations.
+func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider) {
+	s.operationProvider = provider
 }
 
 // NewExecutionService creates a new execution service.
@@ -184,6 +191,8 @@ func (s *ExecutionService) Run(
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
 			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
+		case workflow.StepTypeOperation:
+			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -1052,6 +1061,8 @@ func (s *ExecutionService) executeFromStep(
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
 			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
+		case workflow.StepTypeOperation:
+			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -1105,4 +1116,210 @@ func (s *ExecutionService) executeFromStep(
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
 	return execCtx, nil
+}
+
+// ErrNoOperationProvider is returned when an operation step is executed without a configured provider.
+var ErrNoOperationProvider = errors.New("operation provider not configured")
+
+// ErrOperationNotImplemented is kept for backward compatibility with tests.
+// Deprecated: This error is no longer returned by the implementation.
+var ErrOperationNotImplemented = errors.New("plugin operation execution: not implemented")
+
+// executePluginOperation executes a plugin-provided operation step.
+// F021: Plugin System - Executes operations registered by plugins.
+// Returns ErrNoOperationProvider if no operation provider is configured.
+func (s *ExecutionService) executePluginOperation(
+	ctx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	startTime := time.Now()
+
+	// Validate provider is configured
+	if s.operationProvider == nil {
+		return "", fmt.Errorf("step %s: %w", step.Name, ErrNoOperationProvider)
+	}
+
+	// Validate operation exists
+	_, found := s.operationProvider.GetOperation(step.Operation)
+	if !found {
+		return "", fmt.Errorf("step %s: operation %q not found", step.Name, step.Operation)
+	}
+
+	// Apply step timeout
+	stepCtx := ctx
+	if step.Timeout > 0 {
+		var cancel context.CancelFunc
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	// Build interpolation context
+	intCtx := s.buildInterpolationContext(execCtx)
+
+	// Execute pre-hooks
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Resolve operation inputs via interpolation
+	resolvedInputs, err := s.resolveOperationInputs(step.OperationInputs, intCtx)
+	if err != nil {
+		return "", fmt.Errorf("step %s: resolve inputs: %w", step.Name, err)
+	}
+
+	// Execute the operation
+	s.logger.Debug("executing plugin operation", "step", step.Name, "operation", step.Operation)
+	result, execErr := s.operationProvider.Execute(stepCtx, step.Operation, resolvedInputs)
+
+	// Record step state
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Attempt:     1,
+	}
+
+	// Serialize operation outputs to step output
+	if result != nil && result.Outputs != nil {
+		state.Output = s.serializeOperationOutputs(result.Outputs)
+	}
+
+	// Handle execution error (e.g., context cancelled, provider error)
+	if execErr != nil {
+		// Check if parent context was cancelled (workflow-level cancellation)
+		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			execCtx.SetStepState(step.Name, state)
+			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
+		state.Status = workflow.StatusFailed
+		state.Error = execErr.Error()
+		execCtx.SetStepState(step.Name, state)
+
+		// Execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+	}
+
+	// Handle operation failure (Success=false in result)
+	if result != nil && !result.Success {
+		state.Status = workflow.StatusFailed
+		if result.Error != "" {
+			state.Error = result.Error
+		}
+		execCtx.SetStepState(step.Name, state)
+
+		// Execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		errMsg := "operation failed"
+		if result.Error != "" {
+			errMsg = result.Error
+		}
+		return "", fmt.Errorf("step %s: %s", step.Name, errMsg)
+	}
+
+	// Success
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	// Execute post-hooks on success
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	// Resolve next step using transitions or OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
+}
+
+// resolveOperationInputs resolves all string values in operation inputs via interpolation.
+func (s *ExecutionService) resolveOperationInputs(
+	inputs map[string]any,
+	intCtx *interpolation.Context,
+) (map[string]any, error) {
+	if inputs == nil {
+		return nil, nil
+	}
+
+	resolved := make(map[string]any, len(inputs))
+	for key, value := range inputs {
+		resolvedValue, err := s.resolveOperationValue(value, intCtx)
+		if err != nil {
+			return nil, fmt.Errorf("input %q: %w", key, err)
+		}
+		resolved[key] = resolvedValue
+	}
+	return resolved, nil
+}
+
+// resolveOperationValue recursively resolves interpolation in operation input values.
+func (s *ExecutionService) resolveOperationValue(value any, intCtx *interpolation.Context) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return s.resolver.Resolve(v, intCtx)
+	case map[string]any:
+		resolved := make(map[string]any, len(v))
+		for k, val := range v {
+			resolvedVal, err := s.resolveOperationValue(val, intCtx)
+			if err != nil {
+				return nil, err
+			}
+			resolved[k] = resolvedVal
+		}
+		return resolved, nil
+	case []any:
+		resolved := make([]any, len(v))
+		for i, val := range v {
+			resolvedVal, err := s.resolveOperationValue(val, intCtx)
+			if err != nil {
+				return nil, err
+			}
+			resolved[i] = resolvedVal
+		}
+		return resolved, nil
+	default:
+		// Non-string primitives (int, bool, etc.) pass through unchanged
+		return value, nil
+	}
+}
+
+// serializeOperationOutputs converts operation outputs to a string for step state.
+func (s *ExecutionService) serializeOperationOutputs(outputs map[string]any) string {
+	if len(outputs) == 0 {
+		return ""
+	}
+	// Simple key=value format for now
+	var result strings.Builder
+	first := true
+	for k, v := range outputs {
+		if !first {
+			result.WriteString("\n")
+		}
+		result.WriteString(fmt.Sprintf("%s=%v", k, v))
+		first = false
+	}
+	return result.String()
 }

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Extensibility
+- **F021**: Plugin System
+  - Discover plugins from `$XDG_DATA_HOME/awf/plugins/` with YAML manifests
+  - `awf plugin list`, `awf plugin enable`, `awf plugin disable` for management
+  - Plugins register custom operations usable as workflow steps
+  - Plugin SDK (`pkg/plugin/sdk`) for third-party plugin development
+  - RPC-based architecture with process isolation and graceful shutdown
+
 #### CLI & Usability
 - **F044**: XDG Prompt Discovery
   - `awf list prompts` discovers from local (`.awf/prompts/`) and global (`$XDG_CONFIG_HOME/awf/prompts/`)

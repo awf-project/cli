@@ -70,3 +70,13 @@ func LocalWorkflowsDir() string {
 func LocalPromptsDir() string {
 	return ".awf/prompts"
 }
+
+// AWFPluginsDir returns the global plugins directory ($XDG_DATA_HOME/awf/plugins)
+func AWFPluginsDir() string {
+	return filepath.Join(AWFDataDir(), "plugins")
+}
+
+// LocalPluginsDir returns the local project plugins directory
+func LocalPluginsDir() string {
+	return ".awf/plugins"
+}

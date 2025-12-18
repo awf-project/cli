@@ -582,3 +582,335 @@ func TestOutputFormat_String(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Plugin Output Tests (T019)
+// =============================================================================
+
+func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "test-plugin",
+			Version:      "1.0.0",
+			Description:  "Test plugin",
+			Status:       "discovered",
+			Enabled:      true,
+			Capabilities: []string{"operations"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	var got []ui.PluginInfo
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "test-plugin", got[0].Name)
+	assert.Equal(t, "1.0.0", got[0].Version)
+	assert.True(t, got[0].Enabled)
+	assert.Contains(t, got[0].Capabilities, "operations")
+}
+
+func TestOutputWriter_WritePlugins_JSON_Multiple(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+
+	plugins := []ui.PluginInfo{
+		{Name: "plugin-a", Version: "1.0.0", Status: "running", Enabled: true},
+		{Name: "plugin-b", Version: "2.0.0", Status: "discovered", Enabled: false},
+		{Name: "plugin-c", Version: "3.0.0", Status: "stopped", Enabled: true},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	var got []ui.PluginInfo
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 3)
+}
+
+func TestOutputWriter_WritePlugins_JSON_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+
+	plugins := []ui.PluginInfo{}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	var got []ui.PluginInfo
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestOutputWriter_WritePlugins_Table(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "my-plugin",
+			Version:      "1.0.0",
+			Status:       "running",
+			Enabled:      true,
+			Capabilities: []string{"operations", "commands"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Should have ASCII borders
+	assert.Contains(t, output, "+")
+	assert.Contains(t, output, "|")
+	// Should have headers
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "VERSION")
+	assert.Contains(t, output, "STATUS")
+	assert.Contains(t, output, "ENABLED")
+	assert.Contains(t, output, "CAPABILITIES")
+	// Should have data
+	assert.Contains(t, output, "my-plugin")
+	assert.Contains(t, output, "1.0.0")
+	assert.Contains(t, output, "running")
+}
+
+func TestOutputWriter_WritePlugins_Table_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+
+	plugins := []ui.PluginInfo{}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No plugins found")
+}
+
+func TestOutputWriter_WritePlugins_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "text-plugin",
+			Version:      "2.0.0",
+			Status:       "initialized",
+			Enabled:      true,
+			Capabilities: []string{"validators"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Should have tabular output (tabwriter format)
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "text-plugin")
+	assert.Contains(t, output, "2.0.0")
+}
+
+func TestOutputWriter_WritePlugins_Text_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+	plugins := []ui.PluginInfo{}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No plugins found")
+}
+
+func TestOutputWriter_WritePlugins_Quiet(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+
+	plugins := []ui.PluginInfo{
+		{Name: "plugin-1"},
+		{Name: "plugin-2"},
+		{Name: "plugin-3"},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Equal(t, "plugin-1\nplugin-2\nplugin-3\n", output)
+}
+
+func TestOutputWriter_WritePlugins_Quiet_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+
+	plugins := []ui.PluginInfo{}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Empty(t, output)
+}
+
+func TestOutputWriter_WritePlugins_ShowsEnabledStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		enabled  bool
+		wantText string
+	}{
+		{
+			name:     "enabled plugin",
+			enabled:  true,
+			wantText: "yes",
+		},
+		{
+			name:     "disabled plugin",
+			enabled:  false,
+			wantText: "no",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+			plugins := []ui.PluginInfo{
+				{Name: "test-plugin", Version: "1.0.0", Status: "discovered", Enabled: tt.enabled},
+			}
+
+			err := w.WritePlugins(plugins)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.Contains(t, output, tt.wantText)
+		})
+	}
+}
+
+func TestOutputWriter_WritePlugins_ShowsCapabilities(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "cap-plugin",
+			Version:      "1.0.0",
+			Status:       "running",
+			Enabled:      true,
+			Capabilities: []string{"operations", "commands", "validators"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Capabilities should be displayed (comma-separated or similar)
+	assert.Contains(t, output, "operations")
+}
+
+func TestOutputWriter_WritePlugins_EmptyCapabilities(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "no-cap-plugin",
+			Version:      "1.0.0",
+			Status:       "discovered",
+			Enabled:      true,
+			Capabilities: []string{}, // No capabilities
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Should show a placeholder for no capabilities
+	assert.Contains(t, output, "-")
+}
+
+func TestOutputWriter_WritePlugins_AllFormats(t *testing.T) {
+	formats := []struct {
+		name   string
+		format ui.OutputFormat
+	}{
+		{"text", ui.FormatText},
+		{"json", ui.FormatJSON},
+		{"table", ui.FormatTable},
+		{"quiet", ui.FormatQuiet},
+	}
+
+	plugins := []ui.PluginInfo{
+		{Name: "format-test-plugin", Version: "1.0.0", Status: "running", Enabled: true},
+	}
+
+	for _, tt := range formats {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, tt.format, true)
+
+			err := w.WritePlugins(plugins)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.NotEmpty(t, output, "output should not be empty")
+		})
+	}
+}
+
+func TestPluginInfo_JSONSerialization(t *testing.T) {
+	// Test that PluginInfo serializes correctly with all fields
+	plugin := ui.PluginInfo{
+		Name:         "full-plugin",
+		Version:      "1.2.3",
+		Description:  "A full plugin for testing",
+		Status:       "running",
+		Enabled:      true,
+		Capabilities: []string{"operations", "commands"},
+	}
+
+	data, err := json.Marshal(plugin)
+	require.NoError(t, err)
+
+	var got ui.PluginInfo
+	err = json.Unmarshal(data, &got)
+	require.NoError(t, err)
+
+	assert.Equal(t, plugin.Name, got.Name)
+	assert.Equal(t, plugin.Version, got.Version)
+	assert.Equal(t, plugin.Description, got.Description)
+	assert.Equal(t, plugin.Status, got.Status)
+	assert.Equal(t, plugin.Enabled, got.Enabled)
+	assert.Equal(t, plugin.Capabilities, got.Capabilities)
+}
+
+func TestPluginInfo_JSONOmitsEmptyFields(t *testing.T) {
+	// Test that optional fields are omitted when empty
+	plugin := ui.PluginInfo{
+		Name:    "minimal-plugin",
+		Status:  "discovered",
+		Enabled: false,
+		// Version, Description, Capabilities are empty
+	}
+
+	data, err := json.Marshal(plugin)
+	require.NoError(t, err)
+
+	output := string(data)
+	// Should not contain empty optional fields (due to omitempty tags)
+	assert.NotContains(t, output, `"version":""`)
+	assert.NotContains(t, output, `"description":""`)
+}

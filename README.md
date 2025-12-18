@@ -15,6 +15,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 - **Input Validation** - Type checking, patterns, enums, file validation
 - **Dry-Run Mode** - Preview execution plan without running commands
 - **Interactive Mode** - Step-by-step execution with prompts
+- **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation
 
@@ -72,6 +73,9 @@ See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 | `awf resume` | Resume interrupted workflow |
 | `awf history` | Show execution history |
 | `awf status <id>` | Check workflow status |
+| `awf plugin list` | List installed plugins |
+| `awf plugin enable <name>` | Enable a plugin |
+| `awf plugin disable <name>` | Disable a plugin |
 
 See [Command Reference](docs/user-guide/commands.md) for all options.
 
