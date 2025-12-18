@@ -3,6 +3,7 @@ package xdg
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -208,4 +209,169 @@ func TestLocalWorkflowsDir(t *testing.T) {
 func TestLocalPromptsDir(t *testing.T) {
 	got := LocalPromptsDir()
 	assert.Equal(t, ".awf/prompts", got)
+}
+
+// =============================================================================
+// Plugin Directory Tests (T014)
+// =============================================================================
+
+func TestAWFPluginsDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		envValue string
+		want     string
+	}{
+		{
+			name:     "uses XDG_DATA_HOME when set",
+			envValue: "/custom/data",
+			want:     "/custom/data/awf/plugins",
+		},
+		{
+			name:     "defaults to ~/.local/share/awf/plugins when unset",
+			envValue: "",
+			want:     filepath.Join(home, ".local", "share", "awf", "plugins"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := os.Getenv("XDG_DATA_HOME")
+			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
+
+			if tt.envValue != "" {
+				_ = os.Setenv("XDG_DATA_HOME", tt.envValue)
+			} else {
+				_ = os.Unsetenv("XDG_DATA_HOME")
+			}
+
+			got := AWFPluginsDir()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestAWFPluginsDir_IsUnderDataDir(t *testing.T) {
+	// AWFPluginsDir should be under AWFDataDir
+	orig := os.Getenv("XDG_DATA_HOME")
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
+	_ = os.Unsetenv("XDG_DATA_HOME")
+
+	dataDir := AWFDataDir()
+	pluginsDir := AWFPluginsDir()
+
+	// Use strings.HasPrefix instead of deprecated filepath.HasPrefix
+	assert.True(t, strings.HasPrefix(pluginsDir, dataDir),
+		"AWFPluginsDir (%s) should be under AWFDataDir (%s)", pluginsDir, dataDir)
+}
+
+func TestAWFPluginsDir_EndsWithPlugins(t *testing.T) {
+	orig := os.Getenv("XDG_DATA_HOME")
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
+	_ = os.Unsetenv("XDG_DATA_HOME")
+
+	got := AWFPluginsDir()
+
+	assert.True(t, filepath.Base(got) == "plugins",
+		"AWFPluginsDir should end with 'plugins', got: %s", got)
+}
+
+func TestLocalPluginsDir(t *testing.T) {
+	got := LocalPluginsDir()
+	assert.Equal(t, ".awf/plugins", got)
+}
+
+func TestLocalPluginsDir_IsRelative(t *testing.T) {
+	got := LocalPluginsDir()
+
+	assert.False(t, filepath.IsAbs(got),
+		"LocalPluginsDir should be relative, got: %s", got)
+}
+
+func TestLocalPluginsDir_MirrorsLocalWorkflowsPattern(t *testing.T) {
+	// LocalPluginsDir should follow same pattern as LocalWorkflowsDir
+	workflowsDir := LocalWorkflowsDir()
+	pluginsDir := LocalPluginsDir()
+
+	// Both should be under .awf/
+	assert.True(t, strings.HasPrefix(workflowsDir, ".awf/"),
+		"LocalWorkflowsDir should be under .awf/")
+	assert.True(t, strings.HasPrefix(pluginsDir, ".awf/"),
+		"LocalPluginsDir should be under .awf/")
+
+	// Both should have similar structure: .awf/<type>
+	assert.Equal(t, ".awf/workflows", workflowsDir)
+	assert.Equal(t, ".awf/plugins", pluginsDir)
+}
+
+func TestPluginsDirs_ConsistentWithOtherDirs(t *testing.T) {
+	// Plugin dirs should follow same XDG patterns as other dirs
+	orig := os.Getenv("XDG_DATA_HOME")
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
+
+	// Test with custom XDG_DATA_HOME
+	customPath := "/custom/data/path"
+	_ = os.Setenv("XDG_DATA_HOME", customPath)
+
+	statesDir := AWFStatesDir()
+	logsDir := AWFLogsDir()
+	pluginsDir := AWFPluginsDir()
+
+	// All should use the same base
+	assert.Equal(t, filepath.Join(customPath, "awf", "states"), statesDir)
+	assert.Equal(t, filepath.Join(customPath, "awf", "logs"), logsDir)
+	assert.Equal(t, filepath.Join(customPath, "awf", "plugins"), pluginsDir)
+}
+
+func TestPluginsDirs_TableDriven(t *testing.T) {
+	tests := []struct {
+		name        string
+		xdgDataHome string
+		wantGlobal  func() string
+		wantLocal   string
+	}{
+		{
+			name:        "default XDG unset",
+			xdgDataHome: "",
+			wantGlobal: func() string {
+				home, _ := os.UserHomeDir()
+				return filepath.Join(home, ".local", "share", "awf", "plugins")
+			},
+			wantLocal: ".awf/plugins",
+		},
+		{
+			name:        "custom XDG_DATA_HOME",
+			xdgDataHome: "/opt/awf/data",
+			wantGlobal: func() string {
+				return "/opt/awf/data/awf/plugins"
+			},
+			wantLocal: ".awf/plugins",
+		},
+		{
+			name:        "XDG with trailing slash",
+			xdgDataHome: "/custom/data/",
+			wantGlobal: func() string {
+				return filepath.Join("/custom/data/", "awf", "plugins")
+			},
+			wantLocal: ".awf/plugins",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := os.Getenv("XDG_DATA_HOME")
+			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
+
+			if tt.xdgDataHome != "" {
+				_ = os.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
+			} else {
+				_ = os.Unsetenv("XDG_DATA_HOME")
+			}
+
+			assert.Equal(t, tt.wantGlobal(), AWFPluginsDir())
+			assert.Equal(t, tt.wantLocal, LocalPluginsDir())
+		})
+	}
 }

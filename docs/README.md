@@ -25,6 +25,7 @@ Learn how to use AWF effectively:
 - [Commands](user-guide/commands.md) - All CLI commands and flags
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference
 - [Templates](user-guide/templates.md) - Reusable workflow templates
+- [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 
 ## Reference
