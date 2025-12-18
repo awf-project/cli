@@ -80,3 +80,8 @@ func AWFPluginsDir() string {
 func LocalPluginsDir() string {
 	return ".awf/plugins"
 }
+
+// LocalConfigPath returns the local project config file path (.awf/config.yaml)
+func LocalConfigPath() string {
+	return ".awf/config.yaml"
+}

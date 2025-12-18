@@ -89,6 +89,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Creates example workflow file
 - **F037**: Step success feedback for empty-output steps
 
+#### Configuration
+- **F036**: Project Configuration File
+  - `.awf/config.yaml` for project-level input defaults
+  - Auto-population of workflow inputs from config
+  - CLI `--input` flags override config values
+  - `awf config show` displays current configuration (text/JSON/quiet formats)
+  - Validation with clear error messages for invalid YAML
+  - Warnings for unknown configuration keys
+
 ### Changed
 
 - YAML parsing reports all errors instead of silently skipping malformed steps

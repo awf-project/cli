@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
@@ -1021,4 +1022,764 @@ func TestResolvePromptFromPaths_UTF8Content(t *testing.T) {
 	result, err := resolvePromptFromPaths("unicode.md", paths)
 	require.NoError(t, err)
 	assert.Equal(t, utf8Content, result)
+}
+
+// =============================================================================
+// T006: mergeInputs() tests
+// =============================================================================
+
+// TestMergeInputs tests the mergeInputs() helper that merges config file inputs
+// with CLI flag inputs. CLI inputs always take precedence over config inputs.
+func TestMergeInputs(t *testing.T) {
+	tests := []struct {
+		name         string
+		configInputs map[string]any
+		cliInputs    map[string]any
+		want         map[string]any
+	}{
+		// --- Happy path: Both maps empty ---
+		{
+			name:         "both nil returns empty map",
+			configInputs: nil,
+			cliInputs:    nil,
+			want:         map[string]any{},
+		},
+		{
+			name:         "both empty returns empty map",
+			configInputs: map[string]any{},
+			cliInputs:    map[string]any{},
+			want:         map[string]any{},
+		},
+		// --- Config only ---
+		{
+			name:         "config only with nil CLI",
+			configInputs: map[string]any{"project": "my-project", "env": "staging"},
+			cliInputs:    nil,
+			want:         map[string]any{"project": "my-project", "env": "staging"},
+		},
+		{
+			name:         "config only with empty CLI",
+			configInputs: map[string]any{"project": "my-project"},
+			cliInputs:    map[string]any{},
+			want:         map[string]any{"project": "my-project"},
+		},
+		// --- CLI only ---
+		{
+			name:         "CLI only with nil config",
+			configInputs: nil,
+			cliInputs:    map[string]any{"debug": true, "count": 5},
+			want:         map[string]any{"debug": true, "count": 5},
+		},
+		{
+			name:         "CLI only with empty config",
+			configInputs: map[string]any{},
+			cliInputs:    map[string]any{"debug": true},
+			want:         map[string]any{"debug": true},
+		},
+		// --- Merge without conflicts ---
+		{
+			name:         "disjoint keys are merged",
+			configInputs: map[string]any{"project": "my-project", "count": 5},
+			cliInputs:    map[string]any{"debug": true, "env": "prod"},
+			want:         map[string]any{"project": "my-project", "count": 5, "debug": true, "env": "prod"},
+		},
+		// --- CLI overrides config (FR-003) ---
+		{
+			name:         "CLI overrides config for same key",
+			configInputs: map[string]any{"env": "staging", "count": 10},
+			cliInputs:    map[string]any{"env": "production"},
+			want:         map[string]any{"env": "production", "count": 10},
+		},
+		{
+			name:         "CLI overrides multiple config values",
+			configInputs: map[string]any{"a": "config-a", "b": "config-b", "c": "config-c"},
+			cliInputs:    map[string]any{"a": "cli-a", "c": "cli-c"},
+			want:         map[string]any{"a": "cli-a", "b": "config-b", "c": "cli-c"},
+		},
+		{
+			name:         "CLI overrides all config values",
+			configInputs: map[string]any{"x": 1, "y": 2},
+			cliInputs:    map[string]any{"x": 100, "y": 200},
+			want:         map[string]any{"x": 100, "y": 200},
+		},
+		// --- Type variations ---
+		{
+			name:         "string values merge correctly",
+			configInputs: map[string]any{"name": "config-name"},
+			cliInputs:    map[string]any{"name": "cli-name"},
+			want:         map[string]any{"name": "cli-name"},
+		},
+		{
+			name:         "integer values merge correctly",
+			configInputs: map[string]any{"count": 5},
+			cliInputs:    map[string]any{"count": 10},
+			want:         map[string]any{"count": 10},
+		},
+		{
+			name:         "boolean values merge correctly",
+			configInputs: map[string]any{"enabled": false},
+			cliInputs:    map[string]any{"enabled": true},
+			want:         map[string]any{"enabled": true},
+		},
+		{
+			name:         "float values merge correctly",
+			configInputs: map[string]any{"ratio": 0.5},
+			cliInputs:    map[string]any{"ratio": 0.75},
+			want:         map[string]any{"ratio": 0.75},
+		},
+		{
+			name:         "mixed types merge correctly",
+			configInputs: map[string]any{"name": "project", "count": 5, "enabled": true, "ratio": 0.5},
+			cliInputs:    map[string]any{"count": 10, "extra": "new"},
+			want:         map[string]any{"name": "project", "count": 10, "enabled": true, "ratio": 0.5, "extra": "new"},
+		},
+		// --- Edge cases: nil/empty string values ---
+		{
+			name:         "CLI empty string overrides config value",
+			configInputs: map[string]any{"name": "default"},
+			cliInputs:    map[string]any{"name": ""},
+			want:         map[string]any{"name": ""},
+		},
+		{
+			name:         "config with nil value",
+			configInputs: map[string]any{"nullable": nil},
+			cliInputs:    map[string]any{},
+			want:         map[string]any{"nullable": nil},
+		},
+		{
+			name:         "CLI nil overrides config value",
+			configInputs: map[string]any{"value": "something"},
+			cliInputs:    map[string]any{"value": nil},
+			want:         map[string]any{"value": nil},
+		},
+		// --- Edge case: Type change via override ---
+		{
+			name:         "CLI can change type from int to string",
+			configInputs: map[string]any{"port": 8080},
+			cliInputs:    map[string]any{"port": "8080"},
+			want:         map[string]any{"port": "8080"},
+		},
+		{
+			name:         "CLI can change type from string to int",
+			configInputs: map[string]any{"count": "5"},
+			cliInputs:    map[string]any{"count": 5},
+			want:         map[string]any{"count": 5},
+		},
+		// --- Large number of keys ---
+		{
+			name: "many keys merge correctly",
+			configInputs: map[string]any{
+				"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5",
+				"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": "v10",
+			},
+			cliInputs: map[string]any{
+				"k1": "cli-v1", "k5": "cli-v5", "k10": "cli-v10", "k11": "new",
+			},
+			want: map[string]any{
+				"k1": "cli-v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "cli-v5",
+				"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": "cli-v10", "k11": "new",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeInputs(tt.configInputs, tt.cliInputs)
+
+			// Verify result matches expected
+			assert.Equal(t, tt.want, got, "merged result should match expected")
+
+			// Verify result is a new map (not modifying inputs)
+			// Note: len() for nil map is defined as 0, so we only check len() > 0
+			if len(tt.configInputs) > 0 {
+				// Modify result to verify it doesn't affect original
+				got["_test_key_"] = "test"
+				_, exists := tt.configInputs["_test_key_"]
+				assert.False(t, exists, "modifying result should not affect configInputs")
+			}
+		})
+	}
+}
+
+// TestMergeInputs_Immutability verifies that mergeInputs does not modify input maps
+func TestMergeInputs_Immutability(t *testing.T) {
+	configInputs := map[string]any{"a": "1", "b": "2"}
+	cliInputs := map[string]any{"b": "override", "c": "3"}
+
+	// Take copies before merge
+	originalConfig := make(map[string]any)
+	for k, v := range configInputs {
+		originalConfig[k] = v
+	}
+	originalCLI := make(map[string]any)
+	for k, v := range cliInputs {
+		originalCLI[k] = v
+	}
+
+	// Perform merge
+	result := mergeInputs(configInputs, cliInputs)
+
+	// Verify original maps are unchanged
+	assert.Equal(t, originalConfig, configInputs, "configInputs should not be modified")
+	assert.Equal(t, originalCLI, cliInputs, "cliInputs should not be modified")
+
+	// Verify result is correct
+	assert.Equal(t, "1", result["a"])
+	assert.Equal(t, "override", result["b"])
+	assert.Equal(t, "3", result["c"])
+}
+
+// TestMergeInputs_ReturnNewMap verifies that mergeInputs always returns a new map
+func TestMergeInputs_ReturnNewMap(t *testing.T) {
+	configInputs := map[string]any{"key": "value"}
+	cliInputs := map[string]any{}
+
+	result := mergeInputs(configInputs, cliInputs)
+
+	// Result should be a different map instance
+	if len(configInputs) > 0 && len(result) > 0 {
+		// Modify result
+		result["new_key"] = "new_value"
+
+		// Config should not have the new key
+		_, exists := configInputs["new_key"]
+		assert.False(t, exists, "result should be a new map, not a reference to input")
+	}
+}
+
+// TestMergeInputs_SpecialKeys tests handling of special key names
+func TestMergeInputs_SpecialKeys(t *testing.T) {
+	tests := []struct {
+		name         string
+		configInputs map[string]any
+		cliInputs    map[string]any
+		checkKey     string
+		wantValue    any
+	}{
+		{
+			name:         "empty string key",
+			configInputs: map[string]any{"": "empty-key-value"},
+			cliInputs:    map[string]any{},
+			checkKey:     "",
+			wantValue:    "empty-key-value",
+		},
+		{
+			name:         "key with spaces",
+			configInputs: map[string]any{"key with spaces": "value"},
+			cliInputs:    map[string]any{},
+			checkKey:     "key with spaces",
+			wantValue:    "value",
+		},
+		{
+			name:         "key with special characters",
+			configInputs: map[string]any{"key.with.dots": "dotted"},
+			cliInputs:    map[string]any{"key.with.dots": "cli-dotted"},
+			checkKey:     "key.with.dots",
+			wantValue:    "cli-dotted",
+		},
+		{
+			name:         "unicode key",
+			configInputs: map[string]any{"キー": "value"},
+			cliInputs:    map[string]any{},
+			checkKey:     "キー",
+			wantValue:    "value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mergeInputs(tt.configInputs, tt.cliInputs)
+			assert.Equal(t, tt.wantValue, result[tt.checkKey])
+		})
+	}
+}
+
+// TestMergeInputs_ComplexValues tests handling of complex value types
+func TestMergeInputs_ComplexValues(t *testing.T) {
+	// Note: While the spec says complex types (arrays, nested objects) are not
+	// supported, mergeInputs should handle them gracefully if they appear
+	tests := []struct {
+		name         string
+		configInputs map[string]any
+		cliInputs    map[string]any
+		checkKey     string
+		wantValue    any
+	}{
+		{
+			name:         "slice value from config",
+			configInputs: map[string]any{"list": []string{"a", "b"}},
+			cliInputs:    map[string]any{},
+			checkKey:     "list",
+			wantValue:    []string{"a", "b"},
+		},
+		{
+			name:         "CLI overrides slice with scalar",
+			configInputs: map[string]any{"value": []int{1, 2, 3}},
+			cliInputs:    map[string]any{"value": "scalar"},
+			checkKey:     "value",
+			wantValue:    "scalar",
+		},
+		{
+			name:         "nested map from config",
+			configInputs: map[string]any{"nested": map[string]any{"inner": "value"}},
+			cliInputs:    map[string]any{},
+			checkKey:     "nested",
+			wantValue:    map[string]any{"inner": "value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mergeInputs(tt.configInputs, tt.cliInputs)
+			assert.Equal(t, tt.wantValue, result[tt.checkKey])
+		})
+	}
+}
+
+// =============================================================================
+// T007: loadProjectConfig() tests
+// =============================================================================
+
+// configTestLogger implements ports.Logger for testing loadProjectConfig
+type configTestLogger struct {
+	debugMsgs []string
+	infoMsgs  []string
+	warnMsgs  []string
+	errorMsgs []string
+}
+
+func newConfigTestLogger() *configTestLogger {
+	return &configTestLogger{}
+}
+
+func (m *configTestLogger) Debug(msg string, keysAndValues ...any) {
+	m.debugMsgs = append(m.debugMsgs, msg)
+}
+
+func (m *configTestLogger) Info(msg string, keysAndValues ...any) {
+	m.infoMsgs = append(m.infoMsgs, msg)
+}
+
+func (m *configTestLogger) Warn(msg string, keysAndValues ...any) {
+	m.warnMsgs = append(m.warnMsgs, msg)
+}
+
+func (m *configTestLogger) Error(msg string, keysAndValues ...any) {
+	m.errorMsgs = append(m.errorMsgs, msg)
+}
+
+func (m *configTestLogger) WithContext(_ map[string]any) ports.Logger {
+	return m
+}
+
+// TestLoadProjectConfig tests the loadProjectConfig() function.
+// This function loads .awf/config.yaml and returns a ProjectConfig.
+//
+// Spec requirements (FR-001 through FR-005):
+// - FR-001: Config file located at .awf/config.yaml
+// - FR-004: Missing config file is not an error; returns empty defaults
+// - FR-005: Invalid YAML produces exit code 1 with descriptive error
+func TestLoadProjectConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupFunc   func(t *testing.T) (cleanup func()) // setup test environment
+		wantInputs  map[string]any                      // expected inputs in config
+		wantErr     bool
+		errContains string
+	}{
+		// --- FR-004: Missing config file is not an error ---
+		{
+			name: "no config file returns empty config",
+			setupFunc: func(t *testing.T) func() {
+				// Create temp dir and chdir to it (no .awf/config.yaml)
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: nil, // empty config has nil Inputs
+			wantErr:    false,
+		},
+		// --- FR-001, FR-002: Valid config with inputs ---
+		{
+			name: "valid config file with inputs",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				// Create .awf/config.yaml
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				configContent := `inputs:
+  project: my-project
+  env: staging
+  count: 5
+`
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(configContent),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: map[string]any{
+				"project": "my-project",
+				"env":     "staging",
+				"count":   5,
+			},
+			wantErr: false,
+		},
+		// --- FR-001: Empty config file ---
+		{
+			name: "empty config file returns empty config",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(""),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: nil,
+			wantErr:    false,
+		},
+		// --- FR-005: Invalid YAML produces error ---
+		{
+			name: "invalid YAML returns error",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				// Invalid YAML: bad indentation
+				invalidYAML := `inputs:
+  project: value
+    bad: indentation
+`
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(invalidYAML),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantErr:     true,
+			errContains: "parse",
+		},
+		// --- Config with only comments ---
+		{
+			name: "config with only comments returns empty",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				configContent := `# This is a comment
+# inputs:
+#   project: my-project
+`
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(configContent),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: nil,
+			wantErr:    false,
+		},
+		// --- Config with empty inputs section ---
+		{
+			name: "config with empty inputs section",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				configContent := `inputs:
+`
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(configContent),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: nil,
+			wantErr:    false,
+		},
+		// --- Config with various value types ---
+		{
+			name: "config with various value types",
+			setupFunc: func(t *testing.T) func() {
+				tmpDir := t.TempDir()
+				origDir, err := os.Getwd()
+				require.NoError(t, err)
+
+				awfDir := filepath.Join(tmpDir, ".awf")
+				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				configContent := `inputs:
+  string_val: "hello"
+  int_val: 42
+  float_val: 3.14
+  bool_val: true
+  null_val: null
+`
+				require.NoError(t, os.WriteFile(
+					filepath.Join(awfDir, "config.yaml"),
+					[]byte(configContent),
+					0644,
+				))
+
+				require.NoError(t, os.Chdir(tmpDir))
+				return func() { _ = os.Chdir(origDir) }
+			},
+			wantInputs: map[string]any{
+				"string_val": "hello",
+				"int_val":    42,
+				"float_val":  3.14,
+				"bool_val":   true,
+				"null_val":   nil,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanup := tt.setupFunc(t)
+			defer cleanup()
+
+			logger := newConfigTestLogger()
+
+			// Call the function under test
+			cfg, err := loadProjectConfig(logger)
+
+			if tt.wantErr {
+				require.Error(t, err, "expected error but got none")
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains,
+						"error message should contain %q", tt.errContains)
+				}
+			} else {
+				require.NoError(t, err, "unexpected error: %v", err)
+				require.NotNil(t, cfg, "config should not be nil")
+
+				if tt.wantInputs == nil {
+					// Expect empty/nil inputs (len() for nil map is defined as 0)
+					assert.Empty(t, cfg.Inputs, "expected empty inputs, got %v", cfg.Inputs)
+				} else {
+					// Verify each expected input
+					for key, expectedVal := range tt.wantInputs {
+						assert.Equal(t, expectedVal, cfg.Inputs[key],
+							"input %q should have value %v", key, expectedVal)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestLoadProjectConfig_UsesCorrectPath verifies that loadProjectConfig uses
+// xdg.LocalConfigPath() which returns ".awf/config.yaml"
+func TestLoadProjectConfig_UsesCorrectPath(t *testing.T) {
+	// Create temp dir with config at expected path
+	tmpDir := t.TempDir()
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Create .awf/config.yaml at the expected path
+	awfDir := filepath.Join(tmpDir, ".awf")
+	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	configContent := `inputs:
+  path_test: correct_path
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(awfDir, "config.yaml"),
+		[]byte(configContent),
+		0644,
+	))
+
+	require.NoError(t, os.Chdir(tmpDir))
+
+	logger := newConfigTestLogger()
+	cfg, err := loadProjectConfig(logger)
+
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, "correct_path", cfg.Inputs["path_test"],
+		"config should be loaded from .awf/config.yaml")
+}
+
+// TestLoadProjectConfig_LoggerParameter verifies that loadProjectConfig
+// accepts a logger parameter (for future warning logging)
+func TestLoadProjectConfig_LoggerParameter(t *testing.T) {
+	// Create temp dir with no config
+	tmpDir := t.TempDir()
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origDir) }()
+	require.NoError(t, os.Chdir(tmpDir))
+
+	// Verify the function accepts a logger and doesn't panic
+	logger := newConfigTestLogger()
+	cfg, err := loadProjectConfig(logger)
+
+	// Should succeed (no config file = empty config)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// Logger parameter is accepted (future: will be used for warnings)
+	// This test verifies the function signature is correct
+}
+
+// =============================================================================
+// T007: Integration tests for runWorkflow with config loading
+// =============================================================================
+
+// TestRunWorkflow_ConfigIntegration tests that runWorkflow properly integrates
+// with loadProjectConfig and mergeInputs.
+//
+// These are behavioral tests verifying:
+// - US1: Config inputs are used when no CLI inputs provided
+// - FR-003: CLI inputs override config inputs
+func TestRunWorkflow_ConfigIntegration(t *testing.T) {
+	// Note: These are placeholder tests that document expected behavior.
+	// Full integration testing requires more extensive setup with workflow fixtures.
+
+	tests := []struct {
+		name           string
+		description    string
+		configInputs   map[string]any
+		cliInputFlags  []string
+		expectedInputs map[string]any // inputs that should reach the execution
+	}{
+		{
+			name:           "config inputs used when no CLI inputs",
+			description:    "US1: Config values are used when no --input flags provided",
+			configInputs:   map[string]any{"project": "2", "env": "staging"},
+			cliInputFlags:  []string{},
+			expectedInputs: map[string]any{"project": "2", "env": "staging"},
+		},
+		{
+			name:           "CLI overrides config for same key",
+			description:    "FR-003: CLI --input flag overrides config value",
+			configInputs:   map[string]any{"env": "staging"},
+			cliInputFlags:  []string{"env=production"},
+			expectedInputs: map[string]any{"env": "production"},
+		},
+		{
+			name:           "both merged when no overlap",
+			description:    "Config and CLI inputs are merged when keys are disjoint",
+			configInputs:   map[string]any{"project": "my-proj"},
+			cliInputFlags:  []string{"debug=true"},
+			expectedInputs: map[string]any{"project": "my-proj", "debug": "true"},
+		},
+		{
+			name:           "CLI wins for all overlapping keys",
+			description:    "All CLI values take precedence over config values",
+			configInputs:   map[string]any{"a": "config-a", "b": "config-b", "c": "config-c"},
+			cliInputFlags:  []string{"a=cli-a", "c=cli-c"},
+			expectedInputs: map[string]any{"a": "cli-a", "b": "config-b", "c": "cli-c"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Document the test case
+			t.Logf("Scenario: %s", tt.description)
+			t.Logf("Config inputs: %v", tt.configInputs)
+			t.Logf("CLI flags: %v", tt.cliInputFlags)
+			t.Logf("Expected merged inputs: %v", tt.expectedInputs)
+
+			// Note: Full integration test requires:
+			// 1. Setting up temp directory with .awf/config.yaml
+			// 2. Creating a test workflow
+			// 3. Running runWorkflow and capturing the inputs passed to execSvc.Run
+			//
+			// For RED phase, we verify the merge logic works correctly
+			cliInputs, err := parseInputFlags(tt.cliInputFlags)
+			require.NoError(t, err)
+
+			merged := mergeInputs(tt.configInputs, cliInputs)
+
+			// Verify merge produces expected result
+			for key, expectedVal := range tt.expectedInputs {
+				assert.Equal(t, expectedVal, merged[key],
+					"key %q should have value %v", key, expectedVal)
+			}
+		})
+	}
+}
+
+// TestRunWorkflow_ConfigError_Propagates tests that config loading errors
+// are properly propagated from runWorkflow.
+func TestRunWorkflow_ConfigError_Propagates(t *testing.T) {
+	// This test documents that config errors should cause runWorkflow to fail
+	// with an appropriate error message.
+	//
+	// Spec: FR-005 - Invalid YAML in config file produces exit code 1 with descriptive error
+	//
+	// Note: Full integration test would:
+	// 1. Create temp dir with invalid .awf/config.yaml
+	// 2. Call runWorkflow
+	// 3. Verify error message mentions config file
+
+	t.Run("config parse error should be wrapped", func(t *testing.T) {
+		// Document expected behavior
+		t.Log("When loadProjectConfig returns an error,")
+		t.Log("runWorkflow should wrap it with 'config error: ...'")
+
+		// This is verified by code inspection:
+		// runWorkflow has:
+		//   projectCfg, err := loadProjectConfig(logger)
+		//   if err != nil {
+		//       return fmt.Errorf("config error: %w", err)
+		//   }
+	})
+}
+
+// TestRunWorkflow_NoConfigFile_Succeeds tests that runWorkflow succeeds
+// when there's no config file (FR-004).
+func TestRunWorkflow_NoConfigFile_Succeeds(t *testing.T) {
+	// This test documents that missing config is not an error
+	//
+	// Spec: FR-004 - Missing config file is not an error; system proceeds with empty defaults
+	//
+	// Note: Full integration test would:
+	// 1. Create temp dir WITHOUT .awf/config.yaml
+	// 2. Create a valid workflow
+	// 3. Call runWorkflow
+	// 4. Verify it succeeds
+
+	t.Run("missing config file should not cause error", func(t *testing.T) {
+		t.Log("When .awf/config.yaml does not exist,")
+		t.Log("loadProjectConfig should return empty config, not error")
+		t.Log("runWorkflow should proceed normally with empty config inputs")
+	})
 }

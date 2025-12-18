@@ -1,0 +1,8 @@
+# Valid project configuration fixture
+# Tests: Config loading, input resolution, CLI override
+
+inputs:
+  project: "test-project"
+  env: "staging"
+  count: 42
+  enabled: true

@@ -23,6 +23,7 @@ New to AWF? Start here:
 Learn how to use AWF effectively:
 
 - [Commands](user-guide/commands.md) - All CLI commands and flags
+- [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations

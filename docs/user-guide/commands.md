@@ -16,6 +16,7 @@
 | `awf plugin list` | List installed plugins |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf config show` | Display project configuration |
 | `awf version` | Show version info |
 | `awf completion <shell>` | Generate shell autocompletion |
 
@@ -87,6 +88,7 @@ awf init --global
 ```
 .awf.yaml              # Configuration file
 .awf/
+├── config.yaml        # Project configuration (inputs pre-population)
 ├── workflows/
 │   └── example.yaml   # Sample workflow
 ├── prompts/
@@ -96,6 +98,8 @@ awf init --global
     ├── states/        # State persistence
     └── logs/          # Log files
 ```
+
+See [Project Configuration](configuration.md) for details on `.awf/config.yaml`.
 
 ### Created Structure (Global)
 
@@ -479,6 +483,75 @@ awf plugin disable <name>
 # Disable a plugin
 awf plugin disable awf-plugin-slack
 ```
+
+---
+
+## awf config show
+
+Display project configuration values from `.awf/config.yaml`.
+
+```bash
+awf config show [flags]
+```
+
+### Description
+
+Shows all configured input values from the project configuration file. If no configuration file exists, displays a message suggesting to run `awf init`.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-f, --format` | Output format: `text` (default), `json`, `quiet` |
+
+### Output Formats
+
+| Format | Description |
+|--------|-------------|
+| `text` | Human-readable table with keys and values |
+| `json` | Structured JSON with path, exists flag, and inputs |
+| `quiet` | Keys only, one per line (sorted alphabetically) |
+
+### Examples
+
+```bash
+# Display configuration in default format
+awf config show
+
+# JSON output for scripting
+awf config show --format json
+
+# List just the configured input keys
+awf config show --format quiet
+```
+
+### Example Output
+
+**Text format:**
+```
+Project Configuration (.awf/config.yaml)
+
+  project: my-project
+  env: staging
+  count: 42
+```
+
+**JSON format:**
+```json
+{
+  "path": ".awf/config.yaml",
+  "exists": true,
+  "inputs": {
+    "project": "my-project",
+    "env": "staging",
+    "count": 42
+  }
+}
+```
+
+### See Also
+
+- [Project Configuration](configuration.md) - Configuration file reference
 
 ---
 

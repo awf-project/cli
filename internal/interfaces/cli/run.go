@@ -15,9 +15,11 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/config"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
+	"github.com/vanoix/awf/internal/infrastructure/xdg"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -164,6 +166,15 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		silent:    silentOutput,
 	}
 	resolver := interpolation.NewTemplateResolver()
+
+	// Load project config from .awf/config.yaml
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	// Merge config inputs with CLI inputs (CLI wins)
+	inputs = mergeInputs(projectCfg.Inputs, inputs)
 
 	// Create history store and service
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
@@ -842,4 +853,41 @@ func ParseMockFlags(flags []string) (map[string]string, error) {
 	}
 
 	return mocks, nil
+}
+
+// loadProjectConfig loads the project configuration from .awf/config.yaml.
+// Returns empty config if file doesn't exist (not an error).
+// Returns error for invalid YAML or file read errors.
+//
+// The logger is used to emit warnings for unknown config keys.
+func loadProjectConfig(logger ports.Logger) (*config.ProjectConfig, error) {
+	_ = logger // Reserved for future warning logging (unknown keys)
+
+	configPath := xdg.LocalConfigPath()
+	loader := config.NewYAMLConfigLoader(configPath)
+
+	return loader.Load()
+}
+
+// mergeInputs merges config file inputs with CLI flag inputs.
+// CLI inputs take precedence over config inputs (CLI always wins).
+// Returns a new map containing all merged inputs.
+//
+// Merge priority (highest wins):
+//
+//	CLI flags (--input key=value) > Config file (.awf/config.yaml)
+func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	// Copy config inputs first (lower priority)
+	for k, v := range configInputs {
+		result[k] = v
+	}
+
+	// Apply CLI inputs (higher priority, overwrites config)
+	for k, v := range cliInputs {
+		result[k] = v
+	}
+
+	return result
 }

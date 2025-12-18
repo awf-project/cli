@@ -134,7 +134,7 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 
 func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []string) error {
 	// Parse input overrides
-	inputs, err := parseInputFlags(inputFlags)
+	cliInputs, err := parseInputFlags(inputFlags)
 	if err != nil {
 		return fmt.Errorf("invalid input: %w", err)
 	}
@@ -180,6 +180,15 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		silent:    silentOutput,
 	}
 	resolver := interpolation.NewTemplateResolver()
+
+	// Load project config from .awf/config.yaml
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	// Merge config inputs with CLI inputs (CLI wins)
+	inputs := mergeInputs(projectCfg.Inputs, cliInputs)
 
 	// Create history store and service
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))

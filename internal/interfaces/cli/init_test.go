@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/interfaces/cli"
+	"gopkg.in/yaml.v3"
 )
 
 func TestInitCommand(t *testing.T) {
@@ -1042,6 +1043,296 @@ func TestInitCommand_GlobalFlag_XDGConfigHome(t *testing.T) {
 		assert.Contains(t, output, customConfigHome,
 			"output should show the actual XDG_CONFIG_HOME path used")
 	})
+}
+
+// TestInitCommand_ProjectConfigFile tests creation of .awf/config.yaml (FR-006).
+// This is the project configuration file that contains the inputs template.
+// It is separate from .awf.yaml (root config) and contains workflow input defaults.
+func TestInitCommand_ProjectConfigFile(t *testing.T) {
+	t.Run("creates .awf/config.yaml with inputs template", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Verify project config file was created at .awf/config.yaml
+		projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+		_, statErr := os.Stat(projectConfigPath)
+		require.NoError(t, statErr, ".awf/config.yaml should be created")
+
+		// Verify content has inputs section (commented template)
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+		contentStr := string(content)
+
+		// FR-006: Must have commented inputs: section
+		assert.Contains(t, contentStr, "inputs:",
+			"project config should contain inputs: section")
+	})
+
+	t.Run("project config contains commented example inputs", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+		contentStr := string(content)
+
+		// Per data model example, should have commented example inputs
+		assert.Contains(t, contentStr, "# project:",
+			"should have commented project example")
+		assert.Contains(t, contentStr, "# environment:",
+			"should have commented environment example")
+	})
+
+	t.Run("project config documents CLI override behavior", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+		contentStr := string(content)
+
+		// FR-003: CLI flags override config - should be documented
+		assert.Contains(t, contentStr, "--input",
+			"should document that CLI --input flags override config values")
+	})
+
+	t.Run("project config warns about secrets", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+		contentStr := string(content)
+
+		// NFR-002: No secrets guidance
+		assert.Contains(t, contentStr, "secret",
+			"should warn about not storing secrets")
+	})
+
+	t.Run("skips project config if already exists without force", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		// First run init to create the initial structure
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Now modify the config.yaml with custom content
+		awfDir := filepath.Join(tmpDir, ".awf")
+		existingContent := "# My custom project config\ninputs:\n  myvar: myvalue\n"
+		projectConfigPath := filepath.Join(awfDir, "config.yaml")
+		require.NoError(t, os.WriteFile(projectConfigPath, []byte(existingContent), 0644))
+
+		// Run init again WITHOUT --force (should skip since .awf exists)
+		cmd2 := cli.NewRootCommand()
+		cmd2.SetArgs([]string{"init"})
+
+		var out2 bytes.Buffer
+		cmd2.SetOut(&out2)
+		cmd2.SetErr(&out2)
+
+		err = cmd2.Execute()
+		require.NoError(t, err)
+
+		// Should say "already initialized"
+		assert.Contains(t, out2.String(), "already initialized",
+			"should indicate already initialized")
+
+		// Verify existing content is preserved
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+
+		assert.Contains(t, string(content), "myvar",
+			"existing project config should be preserved without --force")
+	})
+
+	t.Run("force overwrites existing project config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		// Pre-create .awf directory and config.yaml
+		awfDir := filepath.Join(tmpDir, ".awf")
+		require.NoError(t, os.MkdirAll(awfDir, 0755))
+
+		oldContent := "# Old config that should be replaced\nold: content\n"
+		projectConfigPath := filepath.Join(awfDir, "config.yaml")
+		require.NoError(t, os.WriteFile(projectConfigPath, []byte(oldContent), 0644))
+
+		// Run init --force
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--force"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Verify content was overwritten with new template
+		content, err := os.ReadFile(projectConfigPath)
+		require.NoError(t, err)
+		contentStr := string(content)
+
+		assert.NotContains(t, contentStr, "Old config",
+			"old content should be replaced with --force")
+		assert.Contains(t, contentStr, "inputs:",
+			"new template should have inputs section")
+	})
+
+	t.Run("output mentions project config creation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		_ = os.Chdir(tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := out.String()
+		// Should show that .awf/config.yaml was created
+		assert.Contains(t, output, ".awf/config.yaml",
+			"output should mention .awf/config.yaml creation")
+	})
+
+	t.Run("help text documents project config", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		initCmd, _, err := cmd.Find([]string{"init"})
+		require.NoError(t, err)
+
+		longDesc := initCmd.Long
+		assert.Contains(t, longDesc, ".awf/config.yaml",
+			"help text should document .awf/config.yaml creation")
+	})
+}
+
+// TestInitCommand_ProjectConfigFile_ValidYAML tests that the generated project
+// config is valid YAML that can be parsed.
+func TestInitCommand_ProjectConfigFile_ValidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"init"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+	content, err := os.ReadFile(projectConfigPath)
+	require.NoError(t, err)
+
+	// Try to parse as YAML - should not error
+	var parsed map[string]interface{}
+	err = parseYAML(content, &parsed)
+	require.NoError(t, err, "generated project config should be valid YAML")
+}
+
+// TestInitCommand_ProjectConfigFile_Permissions tests file permissions.
+func TestInitCommand_ProjectConfigFile_Permissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"init"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	projectConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+	info, err := os.Stat(projectConfigPath)
+	require.NoError(t, err)
+
+	// Should be 0644 (readable by owner/group, writable by owner)
+	mode := info.Mode().Perm()
+	assert.True(t, mode&0400 != 0, "file should be readable by owner")
+	assert.True(t, mode&0200 != 0, "file should be writable by owner")
+}
+
+// parseYAML is a helper for YAML parsing in tests.
+func parseYAML(data []byte, v interface{}) error {
+	return yaml.Unmarshal(data, v)
 }
 
 // TestInitCommand_GlobalFlag_ExamplePromptPermissions verifies file permissions.
