@@ -914,3 +914,166 @@ func TestPluginInfo_JSONOmitsEmptyFields(t *testing.T) {
 	assert.NotContains(t, output, `"version":""`)
 	assert.NotContains(t, output, `"description":""`)
 }
+
+// =============================================================================
+// InputInfo Tests (F035 - Workflow Arguments Help Command)
+// =============================================================================
+
+func TestInputInfo_DescriptionField(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       ui.InputInfo
+		wantDesc    string
+		description string
+	}{
+		{
+			name: "input with description",
+			input: ui.InputInfo{
+				Name:        "greeting",
+				Type:        "string",
+				Required:    false,
+				Default:     "hello",
+				Description: "Greeting message to display",
+			},
+			wantDesc:    "Greeting message to display",
+			description: "should store and return description",
+		},
+		{
+			name: "input without description (empty string)",
+			input: ui.InputInfo{
+				Name:        "count",
+				Type:        "integer",
+				Required:    true,
+				Default:     "",
+				Description: "",
+			},
+			wantDesc:    "",
+			description: "should allow empty description for backward compatibility",
+		},
+		{
+			name: "input with long description",
+			input: ui.InputInfo{
+				Name:        "verbose",
+				Type:        "boolean",
+				Required:    false,
+				Default:     "false",
+				Description: "Enable verbose output mode with detailed logging for debugging purposes",
+			},
+			wantDesc:    "Enable verbose output mode with detailed logging for debugging purposes",
+			description: "should handle long descriptions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.wantDesc, tt.input.Description, tt.description)
+		})
+	}
+}
+
+func TestInputInfo_AllFieldsPresent(t *testing.T) {
+	input := ui.InputInfo{
+		Name:        "environment",
+		Type:        "string",
+		Required:    true,
+		Default:     "production",
+		Description: "Target deployment environment",
+	}
+
+	assert.Equal(t, "environment", input.Name)
+	assert.Equal(t, "string", input.Type)
+	assert.True(t, input.Required)
+	assert.Equal(t, "production", input.Default)
+	assert.Equal(t, "Target deployment environment", input.Description)
+}
+
+func TestInputInfo_BackwardCompatibility(t *testing.T) {
+	// Test that InputInfo can be created without Description field
+	// This ensures backward compatibility with existing code
+	input := ui.InputInfo{
+		Name:     "legacy_input",
+		Type:     "string",
+		Required: false,
+		Default:  "default_value",
+		// Description field omitted - should default to empty string
+	}
+
+	assert.Equal(t, "legacy_input", input.Name)
+	assert.Equal(t, "", input.Description, "Description should default to empty string")
+}
+
+func TestInputInfo_UsedInValidationResultTable(t *testing.T) {
+	// Test that InputInfo with Description works in ValidationResultTable
+	result := ui.ValidationResultTable{
+		Valid:    true,
+		Workflow: "test-workflow",
+		Inputs: []ui.InputInfo{
+			{
+				Name:        "branch",
+				Type:        "string",
+				Required:    true,
+				Default:     "",
+				Description: "Git branch to deploy",
+			},
+			{
+				Name:        "dry_run",
+				Type:        "boolean",
+				Required:    false,
+				Default:     "false",
+				Description: "Simulate deployment without making changes",
+			},
+			{
+				Name:        "timeout",
+				Type:        "integer",
+				Required:    false,
+				Default:     "30",
+				Description: "", // No description for this input
+			},
+		},
+		Steps: []ui.StepSummary{
+			{Name: "deploy", Type: "step", Next: "(terminal)"},
+		},
+	}
+
+	assert.Len(t, result.Inputs, 3)
+	assert.Equal(t, "Git branch to deploy", result.Inputs[0].Description)
+	assert.Equal(t, "Simulate deployment without making changes", result.Inputs[1].Description)
+	assert.Equal(t, "", result.Inputs[2].Description, "third input should have no description")
+}
+
+func TestInputInfo_DescriptionWithSpecialCharacters(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+	}{
+		{
+			name:        "with quotes",
+			description: `Value for "special" input`,
+		},
+		{
+			name:        "with newline escape",
+			description: "First line\\nSecond line",
+		},
+		{
+			name:        "with unicode",
+			description: "Deployment target \u2192 production",
+		},
+		{
+			name:        "with angle brackets",
+			description: "Format: <name>@<version>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := ui.InputInfo{
+				Name:        "special",
+				Type:        "string",
+				Required:    false,
+				Default:     "",
+				Description: tt.description,
+			}
+			assert.Equal(t, tt.description, input.Description)
+		})
+	}
+}
