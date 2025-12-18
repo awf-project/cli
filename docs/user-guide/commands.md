@@ -123,6 +123,7 @@ awf run <workflow> [flags]
 
 | Flag | Description |
 |------|-------------|
+| `--help, -h` | Show workflow-specific help with input parameters |
 | `--input, -i` | Input parameter (key=value), can be repeated |
 | `--output, -o` | Output mode: silent (default), streaming, buffered |
 | `--step, -s` | Execute only a specific step from the workflow |
@@ -162,7 +163,58 @@ awf run deploy --interactive --breakpoint build,deploy
 
 # Execute single step with mocked dependencies
 awf run deploy --step deploy_step --mock states.build.output="build-123"
+
+# View workflow help with input parameters
+awf run deploy --help
 ```
+
+### Workflow-Specific Help
+
+View input parameters and details for a specific workflow before running it:
+
+```bash
+awf run <workflow> --help
+```
+
+This displays:
+- Workflow description (if defined)
+- All input parameters with their types (string, integer, boolean)
+- Required/optional status for each input
+- Default values for optional inputs
+- Input descriptions
+
+#### Example Output
+
+```
+Execute a workflow by name with optional input parameters.
+
+Description: Deploy application to specified environment
+
+Input Parameters:
+  NAME          TYPE      REQUIRED    DEFAULT       DESCRIPTION
+  env           string    yes         -             Target environment (dev, staging, prod)
+  version       string    yes         -             Version tag to deploy
+  dry_run       boolean   no          false         Run deployment checks without applying
+  timeout       integer   no          300           Deployment timeout in seconds
+
+Usage:
+  awf run deploy [flags]
+
+Flags:
+  -h, --help              help for run
+  -i, --input strings     Input parameter (key=value)
+  ...
+```
+
+#### Help for Non-Existent Workflow
+
+```bash
+awf run unknown-workflow --help
+# Error: workflow "unknown-workflow" not found
+# exit code 1
+```
+
+---
 
 ### Interactive Mode Actions
 

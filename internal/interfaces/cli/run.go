@@ -116,7 +116,66 @@ Examples:
 	cmd.Flags().StringArrayVarP(&breakpointFlags, "breakpoint", "b", nil,
 		"Pause only at specified steps in interactive mode (comma-separated)")
 
+	// Wire custom help function for workflow-specific help (F035)
+	cmd.SetHelpFunc(workflowHelpFunc(cfg))
+
 	return cmd
+}
+
+// workflowHelpFunc returns a custom help function that displays workflow-specific help
+// when a workflow argument is provided, or falls back to default Cobra help otherwise.
+// This enables `awf run <workflow> --help` to show dynamic workflow input parameters.
+func workflowHelpFunc(cfg *Config) func(*cobra.Command, []string) {
+	// Default help rendering fallback
+	defaultHelp := func(cmd *cobra.Command) {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), cmd.Long)
+		_, _ = fmt.Fprintln(cmd.OutOrStdout())
+		if err := cmd.UsageFunc()(cmd); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error displaying usage: %v\n", err)
+		}
+	}
+
+	return func(cmd *cobra.Command, _ []string) {
+		// Get positional arguments (workflow name) from parsed flags
+		positionalArgs := cmd.Flags().Args()
+
+		// If no workflow argument, show default help
+		if len(positionalArgs) == 0 {
+			defaultHelp(cmd)
+			return
+		}
+
+		workflowName := positionalArgs[0]
+
+		// Load workflow from repository
+		repo := NewWorkflowRepository()
+		wf, err := repo.Load(context.Background(), workflowName)
+		if err != nil {
+			// Error loading workflow - show error and default help
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: workflow '%s' not found: %v\n\n", workflowName, err)
+			defaultHelp(cmd)
+			return
+		}
+		if wf == nil {
+			// Workflow not found (repository returns nil, nil for non-existent workflows)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: workflow '%s' not found\n\n", workflowName)
+			defaultHelp(cmd)
+			return
+		}
+
+		// Render workflow-specific help
+		noColor := cfg != nil && cfg.NoColor
+		if err := RenderWorkflowHelp(cmd, wf, cmd.OutOrStdout(), noColor); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error rendering help: %v\n", err)
+			return
+		}
+
+		// Also show standard command flags
+		_, _ = fmt.Fprintln(cmd.OutOrStdout())
+		if err := cmd.UsageFunc()(cmd); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error displaying usage: %v\n", err)
+		}
+	}
 }
 
 func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string) error {
