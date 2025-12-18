@@ -93,6 +93,7 @@ Examples:
 	cmd.AddCommand(newValidateCommand(cfg))
 	cmd.AddCommand(newHistoryCommand(cfg))
 	cmd.AddCommand(newPluginCommand(cfg))
+	cmd.AddCommand(newConfigCommand(cfg))
 
 	return cmd
 }

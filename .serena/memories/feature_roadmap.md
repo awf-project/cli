@@ -6,7 +6,7 @@
 v0.1.0 (MVP)        ████████████████████ IMPLEMENTED
 v0.2.0 (Core)       ████████████████████ IMPLEMENTED
 v0.3.0 (Advanced)   ██████████████████░░ IN PROGRESS (8/9 done)
-v0.4.0 (AI/Plugins) ███░░░░░░░░░░░░░░░░░ IN PROGRESS (1/7 done)
+v0.4.0 (AI/Plugins) ████░░░░░░░░░░░░░░░░ IN PROGRESS (2/8 done)
 v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░ PLANNED
 ```
 
@@ -26,7 +26,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F030 | XDG Workflow Discovery | ✅ Done |
 | F031 | Output Formats | ✅ Done (table format now uses ASCII borders) |
 | F035 | Step Working Directory | ✅ Done |
-| F036 | CLI Init Command | ✅ Done |
+| F036 | CLI Init Command & Project Configuration | ✅ Done |
 | F037 | Step Success Feedback | ✅ Done |
 | F038 | Prompt Storage & Init | ✅ Done |
 | F039 | Run Single Step | ✅ Done |
@@ -69,6 +69,7 @@ v1.0.0 (Interfaces) ░░░░░░░░░░░░░░░░░░░░
 | F032 | Agent Step Type | High |
 | F033 | Agent Conversations | Medium |
 | F034 | Agent Tool Use | Medium |
+| F036 | Project Configuration File | ✅ IMPLEMENTED |
 
 ## v1.0.0 - Multiple Interfaces (PLANNED)
 
