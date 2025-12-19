@@ -519,3 +519,346 @@ func TestLoopResult_BrokenAtIteration(t *testing.T) {
 	assert.Equal(t, 2, result.BrokeAt)
 	assert.True(t, result.WasBroken())
 }
+
+// =============================================================================
+// MaxIterationsExpr Tests (F037)
+// =============================================================================
+
+func TestLoopConfig_IsMaxIterationsDynamic(t *testing.T) {
+	tests := []struct {
+		name              string
+		maxIterationsExpr string
+		expected          bool
+	}{
+		{
+			name:              "empty expression is not dynamic",
+			maxIterationsExpr: "",
+			expected:          false,
+		},
+		{
+			name:              "input variable is dynamic",
+			maxIterationsExpr: "{{inputs.limit}}",
+			expected:          true,
+		},
+		{
+			name:              "env variable is dynamic",
+			maxIterationsExpr: "{{env.MAX_RETRIES}}",
+			expected:          true,
+		},
+		{
+			name:              "arithmetic expression is dynamic",
+			maxIterationsExpr: "{{inputs.a + inputs.b}}",
+			expected:          true,
+		},
+		{
+			name:              "states reference is dynamic",
+			maxIterationsExpr: "{{states.init.output}}",
+			expected:          true,
+		},
+		{
+			name:              "whitespace only is dynamic (edge case)",
+			maxIterationsExpr: "   ",
+			expected:          true,
+		},
+		{
+			name:              "plain number string is dynamic",
+			maxIterationsExpr: "10",
+			expected:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := LoopConfig{
+				MaxIterationsExpr: tt.maxIterationsExpr,
+			}
+			assert.Equal(t, tt.expected, config.IsMaxIterationsDynamic())
+		})
+	}
+}
+
+func TestLoopConfig_Validate_WithMaxIterationsExpr(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  LoopConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid for_each with dynamic max_iterations from input",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a", "b", "c"]`,
+				Body:              []string{"process"},
+				MaxIterationsExpr: "{{inputs.limit}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid for_each with dynamic max_iterations from env",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a", "b"]`,
+				Body:              []string{"process"},
+				MaxIterationsExpr: "{{env.LOOP_LIMIT}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid while with dynamic max_iterations",
+			config: LoopConfig{
+				Type:              LoopTypeWhile,
+				Condition:         "states.check.output != 'done'",
+				Body:              []string{"check"},
+				MaxIterationsExpr: "{{inputs.max_retries}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid with arithmetic expression in max_iterations",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             "{{inputs.files}}",
+				Body:              []string{"process"},
+				MaxIterationsExpr: "{{inputs.pages * inputs.retries_per_page}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "dynamic max_iterations skips range validation",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"process"},
+				MaxIterations:     -999, // would fail without dynamic
+				MaxIterationsExpr: "{{inputs.limit}}",
+			},
+			wantErr: false, // skips validation because expr is set
+		},
+		{
+			name: "dynamic max_iterations with static field at max+1",
+			config: LoopConfig{
+				Type:              LoopTypeWhile,
+				Condition:         "true",
+				Body:              []string{"check"},
+				MaxIterations:     MaxAllowedIterations + 1, // would fail without dynamic
+				MaxIterationsExpr: "{{env.SAFE_LIMIT}}",
+			},
+			wantErr: false, // skips validation because expr is set
+		},
+		{
+			name: "static max_iterations still validated when no expr",
+			config: LoopConfig{
+				Type:          LoopTypeForEach,
+				Items:         `["a"]`,
+				Body:          []string{"process"},
+				MaxIterations: -1,
+			},
+			wantErr: true,
+			errMsg:  "max_iterations must be non-negative",
+		},
+		{
+			name: "static max_iterations exceeds limit when no expr",
+			config: LoopConfig{
+				Type:          LoopTypeForEach,
+				Items:         `["a"]`,
+				Body:          []string{"process"},
+				MaxIterations: MaxAllowedIterations + 1,
+			},
+			wantErr: true,
+			errMsg:  "max_iterations exceeds maximum allowed limit",
+		},
+		{
+			name: "both static and dynamic set - dynamic takes precedence",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"process"},
+				MaxIterations:     50,                  // valid static value
+				MaxIterationsExpr: "{{inputs.custom}}", // dynamic overrides
+			},
+			wantErr: false,
+		},
+		{
+			name: "for_each still requires items with dynamic max",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Body:              []string{"process"},
+				MaxIterationsExpr: "{{inputs.limit}}",
+			},
+			wantErr: true,
+			errMsg:  "items",
+		},
+		{
+			name: "while still requires condition with dynamic max",
+			config: LoopConfig{
+				Type:              LoopTypeWhile,
+				Body:              []string{"check"},
+				MaxIterationsExpr: "{{inputs.limit}}",
+			},
+			wantErr: true,
+			errMsg:  "condition",
+		},
+		{
+			name: "body still required with dynamic max",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				MaxIterationsExpr: "{{inputs.limit}}",
+			},
+			wantErr: true,
+			errMsg:  "body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestLoopConfig_MaxIterationsExpr_Field(t *testing.T) {
+	// Test that field is properly stored and retrieved
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "simple input reference",
+			expr:     "{{inputs.count}}",
+			expected: "{{inputs.count}}",
+		},
+		{
+			name:     "environment variable",
+			expr:     "{{env.ITERATION_LIMIT}}",
+			expected: "{{env.ITERATION_LIMIT}}",
+		},
+		{
+			name:     "complex arithmetic",
+			expr:     "{{inputs.pages * inputs.items_per_page}}",
+			expected: "{{inputs.pages * inputs.items_per_page}}",
+		},
+		{
+			name:     "nested expression with states",
+			expr:     "{{states.setup.iterations}}",
+			expected: "{{states.setup.iterations}}",
+		},
+		{
+			name:     "combined inputs and env",
+			expr:     "{{inputs.base + env.EXTRA}}",
+			expected: "{{inputs.base + env.EXTRA}}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"process"},
+				MaxIterationsExpr: tt.expr,
+			}
+
+			assert.Equal(t, tt.expected, config.MaxIterationsExpr)
+			assert.True(t, config.IsMaxIterationsDynamic())
+		})
+	}
+}
+
+func TestLoopConfig_WithMaxIterationsExpr_AllFields(t *testing.T) {
+	// Test complete config with all fields including MaxIterationsExpr
+	config := LoopConfig{
+		Type:              LoopTypeForEach,
+		Items:             `["file1.txt", "file2.txt"]`,
+		Condition:         "",
+		Body:              []string{"process_file", "validate"},
+		MaxIterations:     0, // will be overridden by expr
+		MaxIterationsExpr: "{{inputs.max_files}}",
+		BreakCondition:    "states.validate.exit_code != 0",
+		OnComplete:        "summarize",
+	}
+
+	assert.Equal(t, LoopTypeForEach, config.Type)
+	assert.NotEmpty(t, config.Items)
+	assert.Len(t, config.Body, 2)
+	assert.Equal(t, 0, config.MaxIterations)
+	assert.Equal(t, "{{inputs.max_files}}", config.MaxIterationsExpr)
+	assert.True(t, config.IsMaxIterationsDynamic())
+	assert.NotEmpty(t, config.BreakCondition)
+	assert.Equal(t, "summarize", config.OnComplete)
+
+	err := config.Validate()
+	require.NoError(t, err)
+}
+
+func TestLoopConfig_MaxIterationsExpr_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  LoopConfig
+		wantErr bool
+	}{
+		{
+			name: "zero static with dynamic expression",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"step"},
+				MaxIterations:     0,
+				MaxIterationsExpr: "{{inputs.n}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative static with dynamic expression",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"step"},
+				MaxIterations:     -100,
+				MaxIterationsExpr: "{{inputs.n}}",
+			},
+			wantErr: false, // dynamic skips static validation
+		},
+		{
+			name: "very long expression",
+			config: LoopConfig{
+				Type:              LoopTypeWhile,
+				Condition:         "true",
+				Body:              []string{"step"},
+				MaxIterationsExpr: "{{inputs.very_long_variable_name_that_might_be_used_in_some_workflows}}",
+			},
+			wantErr: false,
+		},
+		{
+			name: "expression with special characters",
+			config: LoopConfig{
+				Type:              LoopTypeForEach,
+				Items:             `["a"]`,
+				Body:              []string{"step"},
+				MaxIterationsExpr: "{{inputs.count_2024}}",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

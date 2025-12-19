@@ -45,7 +45,7 @@ type yamlStep struct {
 	Items         any      `yaml:"items"`          // string or []any for for_each
 	While         string   `yaml:"while"`          // condition for while loop
 	Body          []string `yaml:"body"`           // steps to execute each iteration
-	MaxIterations int      `yaml:"max_iterations"` // safety limit
+	MaxIterations any      `yaml:"max_iterations"` // safety limit (int or string expression)
 	BreakWhen     string   `yaml:"break_when"`     // optional break condition
 	OnComplete    string   `yaml:"on_complete"`    // next state after loop
 

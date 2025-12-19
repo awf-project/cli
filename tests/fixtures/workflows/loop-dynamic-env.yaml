@@ -1,0 +1,25 @@
+# F037 Test Fixture: Dynamic max_iterations from environment variable
+# US1: Define Dynamic Max Iterations from Environment
+name: test-loop-dynamic-env
+version: "1.0.0"
+description: Loop with dynamic max_iterations from environment variable
+
+env:
+  - LOOP_LIMIT
+
+states:
+  initial: process_loop
+  process_loop:
+    type: for_each
+    items: '["one", "two", "three", "four", "five"]'
+    max_iterations: "{{.env.LOOP_LIMIT}}"
+    body:
+      - process_item
+    on_complete: done
+  process_item:
+    type: step
+    command: 'echo "Processing: {{.loop.Item}}"'
+    on_success: process_loop
+  done:
+    type: terminal
+    status: success

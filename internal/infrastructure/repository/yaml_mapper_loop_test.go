@@ -425,3 +425,260 @@ func TestMapStep_LoopPreservesOtherFields(t *testing.T) {
 	assert.True(t, step.ContinueOnError)
 	require.NotNil(t, step.Loop)
 }
+
+// =============================================================================
+// F037: Dynamic MaxIterations Tests
+// =============================================================================
+
+func TestMapLoopConfig_DynamicMaxIterations(t *testing.T) {
+	tests := []struct {
+		name            string
+		maxIterations   any
+		wantMaxIter     int
+		wantMaxIterExpr string
+		wantDynamic     bool
+	}{
+		{
+			name:            "integer max_iterations",
+			maxIterations:   50,
+			wantMaxIter:     50,
+			wantMaxIterExpr: "",
+			wantDynamic:     false,
+		},
+		{
+			name:            "string expression max_iterations",
+			maxIterations:   "{{inputs.limit}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{inputs.limit}}",
+			wantDynamic:     true,
+		},
+		{
+			name:            "env variable expression",
+			maxIterations:   "{{env.MAX_RETRIES}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{env.MAX_RETRIES}}",
+			wantDynamic:     true,
+		},
+		{
+			name:            "arithmetic expression",
+			maxIterations:   "{{inputs.pages * inputs.retries_per_page}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{inputs.pages * inputs.retries_per_page}}",
+			wantDynamic:     true,
+		},
+		{
+			name:            "simple arithmetic",
+			maxIterations:   "{{inputs.a + inputs.b}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{inputs.a + inputs.b}}",
+			wantDynamic:     true,
+		},
+		{
+			name:            "nil uses default",
+			maxIterations:   nil,
+			wantMaxIter:     workflow.DefaultMaxIterations,
+			wantMaxIterExpr: "",
+			wantDynamic:     false,
+		},
+		{
+			name:            "zero integer uses default",
+			maxIterations:   0,
+			wantMaxIter:     workflow.DefaultMaxIterations,
+			wantMaxIterExpr: "",
+			wantDynamic:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yamlStep := yamlStep{
+				Type:          "for_each",
+				Items:         "{{inputs.items}}",
+				Body:          []string{"process"},
+				MaxIterations: tt.maxIterations,
+			}
+
+			got := mapLoopConfig(yamlStep)
+
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantMaxIter, got.MaxIterations, "MaxIterations mismatch")
+			assert.Equal(t, tt.wantMaxIterExpr, got.MaxIterationsExpr, "MaxIterationsExpr mismatch")
+			assert.Equal(t, tt.wantDynamic, got.IsMaxIterationsDynamic(), "IsMaxIterationsDynamic mismatch")
+		})
+	}
+}
+
+func TestMapLoopConfig_DynamicMaxIterations_While(t *testing.T) {
+	tests := []struct {
+		name            string
+		maxIterations   any
+		wantMaxIter     int
+		wantMaxIterExpr string
+	}{
+		{
+			name:            "while with dynamic max_iterations",
+			maxIterations:   "{{inputs.max_retries}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{inputs.max_retries}}",
+		},
+		{
+			name:            "while with integer max_iterations",
+			maxIterations:   30,
+			wantMaxIter:     30,
+			wantMaxIterExpr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yamlStep := yamlStep{
+				Type:          "while",
+				While:         "states.check.output != 'done'",
+				Body:          []string{"check"},
+				MaxIterations: tt.maxIterations,
+			}
+
+			got := mapLoopConfig(yamlStep)
+
+			require.NotNil(t, got)
+			assert.Equal(t, workflow.LoopTypeWhile, got.Type)
+			assert.Equal(t, tt.wantMaxIter, got.MaxIterations)
+			assert.Equal(t, tt.wantMaxIterExpr, got.MaxIterationsExpr)
+		})
+	}
+}
+
+func TestMapLoopConfig_MaxIterationsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name            string
+		maxIterations   any
+		wantMaxIter     int
+		wantMaxIterExpr string
+	}{
+		{
+			name:            "empty string expression treated as dynamic",
+			maxIterations:   "",
+			wantMaxIter:     workflow.DefaultMaxIterations, // empty string should use default
+			wantMaxIterExpr: "",
+		},
+		{
+			name:            "large integer",
+			maxIterations:   9999,
+			wantMaxIter:     9999,
+			wantMaxIterExpr: "",
+		},
+		{
+			name:            "expression with state reference",
+			maxIterations:   "{{states.setup.output}}",
+			wantMaxIter:     0,
+			wantMaxIterExpr: "{{states.setup.output}}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yamlStep := yamlStep{
+				Type:          "for_each",
+				Items:         "{{inputs.items}}",
+				Body:          []string{"process"},
+				MaxIterations: tt.maxIterations,
+			}
+
+			got := mapLoopConfig(yamlStep)
+
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantMaxIter, got.MaxIterations, "MaxIterations")
+			assert.Equal(t, tt.wantMaxIterExpr, got.MaxIterationsExpr, "MaxIterationsExpr")
+		})
+	}
+}
+
+func TestMapLoopConfig_MaxIterationsInvalidTypes(t *testing.T) {
+	// These are edge cases where YAML might parse unexpected types
+	// The mapper should handle them gracefully (use defaults)
+	tests := []struct {
+		name          string
+		maxIterations any
+		wantMaxIter   int
+	}{
+		{
+			name:          "float falls back to default",
+			maxIterations: 3.14,
+			wantMaxIter:   workflow.DefaultMaxIterations,
+		},
+		{
+			name:          "bool falls back to default",
+			maxIterations: true,
+			wantMaxIter:   workflow.DefaultMaxIterations,
+		},
+		{
+			name:          "slice falls back to default",
+			maxIterations: []string{"a", "b"},
+			wantMaxIter:   workflow.DefaultMaxIterations,
+		},
+		{
+			name:          "map falls back to default",
+			maxIterations: map[string]int{"x": 1},
+			wantMaxIter:   workflow.DefaultMaxIterations,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yamlStep := yamlStep{
+				Type:          "for_each",
+				Items:         "{{inputs.items}}",
+				Body:          []string{"process"},
+				MaxIterations: tt.maxIterations,
+			}
+
+			got := mapLoopConfig(yamlStep)
+
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantMaxIter, got.MaxIterations)
+			assert.Empty(t, got.MaxIterationsExpr, "invalid types should not set MaxIterationsExpr")
+		})
+	}
+}
+
+func TestMapStep_DynamicMaxIterations(t *testing.T) {
+	yamlStep := yamlStep{
+		Type:          "for_each",
+		Description:   "Dynamic iteration limit",
+		Items:         "{{inputs.files}}",
+		Body:          []string{"process"},
+		MaxIterations: "{{inputs.limit}}",
+		OnComplete:    "done",
+	}
+
+	step, err := mapStep("test.yaml", "dynamic_loop", yamlStep)
+
+	require.NoError(t, err)
+	require.NotNil(t, step)
+	require.NotNil(t, step.Loop)
+
+	assert.Equal(t, 0, step.Loop.MaxIterations, "MaxIterations should be 0 when expression is used")
+	assert.Equal(t, "{{inputs.limit}}", step.Loop.MaxIterationsExpr)
+	assert.True(t, step.Loop.IsMaxIterationsDynamic())
+}
+
+func TestMapStep_DynamicMaxIterations_WithArithmetic(t *testing.T) {
+	yamlStep := yamlStep{
+		Type:          "for_each",
+		Description:   "Calculate iteration limit",
+		Items:         "{{inputs.pages}}",
+		Body:          []string{"fetch_page"},
+		MaxIterations: "{{inputs.pages * inputs.retries_per_page}}",
+		OnComplete:    "aggregate",
+	}
+
+	step, err := mapStep("test.yaml", "paginated_loop", yamlStep)
+
+	require.NoError(t, err)
+	require.NotNil(t, step)
+	require.NotNil(t, step.Loop)
+
+	assert.Equal(t, 0, step.Loop.MaxIterations)
+	assert.Equal(t, "{{inputs.pages * inputs.retries_per_page}}", step.Loop.MaxIterationsExpr)
+	assert.True(t, step.Loop.IsMaxIterationsDynamic())
+}

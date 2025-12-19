@@ -1,0 +1,25 @@
+# F037 Test Fixture: Invalid workflow with undefined variable in max_iterations
+# US4: Validate Interpolated Loop Variables at Parse Time
+name: test-loop-dynamic-invalid
+version: "1.0.0"
+description: Loop with undefined variable - should trigger validation warning
+
+# Note: 'undefined_var' is intentionally NOT defined in inputs
+# This workflow is used to test validation warnings for undefined variables
+
+states:
+  initial: bad_loop
+  bad_loop:
+    type: for_each
+    items: '["a", "b", "c"]'
+    max_iterations: "{{.inputs.undefined_var}}"
+    body:
+      - process
+    on_complete: done
+  process:
+    type: step
+    command: 'echo "Processing"'
+    on_success: bad_loop
+  done:
+    type: terminal
+    status: success
