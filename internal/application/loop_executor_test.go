@@ -43,6 +43,32 @@ func (m *mockExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Conte
 	return false, nil
 }
 
+// configurableMockResolver implements interpolation.Resolver with configurable results
+type configurableMockResolver struct {
+	results map[string]string
+	calls   []string
+	err     error
+}
+
+func newConfigurableMockResolver() *configurableMockResolver {
+	return &configurableMockResolver{
+		results: make(map[string]string),
+		calls:   make([]string, 0),
+	}
+}
+
+func (m *configurableMockResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	m.calls = append(m.calls, template)
+	if m.err != nil {
+		return "", m.err
+	}
+	if result, ok := m.results[template]; ok {
+		return result, nil
+	}
+	// Default: return template unchanged
+	return template, nil
+}
+
 // stepExecutorRecorder records step executions for verification
 type stepExecutorRecorder struct {
 	executions []stepExecution
@@ -216,7 +242,8 @@ func TestLoopExecutor_ExecuteForEach_WithBreakCondition(t *testing.T) {
 	assert.Equal(t, 1, result.TotalCount)
 }
 
-func TestLoopExecutor_ExecuteForEach_ExceedsMaxIterations(t *testing.T) {
+func TestLoopExecutor_ExecuteForEach_MaxIterationsLimitsExecution(t *testing.T) {
+	// F037: max_iterations now limits execution rather than causing an error
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -228,7 +255,7 @@ func TestLoopExecutor_ExecuteForEach_ExceedsMaxIterations(t *testing.T) {
 		Steps: map[string]*workflow.Step{},
 	}
 
-	// Create items that exceed max_iterations
+	// Create items that exceed max_iterations - should only process first 3
 	step := &workflow.Step{
 		Name: "loop_step",
 		Type: workflow.StepTypeForEach,
@@ -236,18 +263,22 @@ func TestLoopExecutor_ExecuteForEach_ExceedsMaxIterations(t *testing.T) {
 			Type:          workflow.LoopTypeForEach,
 			Items:         `["a", "b", "c", "d", "e"]`,
 			Body:          []string{"process"},
-			MaxIterations: 3, // Less than items count
+			MaxIterations: 3, // Less than items count - limits to 3
 		},
 	}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-foreach-max")
 
-	_, err := loopExec.ExecuteForEach(
+	var processedItems []string
+	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
 		step,
 		execCtx,
 		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			if intCtx.Loop != nil {
+				processedItems = append(processedItems, fmt.Sprintf("%v", intCtx.Loop.Item))
+			}
 			return nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
@@ -255,8 +286,10 @@ func TestLoopExecutor_ExecuteForEach_ExceedsMaxIterations(t *testing.T) {
 		},
 	)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "max_iterations")
+	require.NoError(t, err)
+	// Should only process first 3 items
+	assert.Len(t, result.Iterations, 3)
+	assert.Equal(t, []string{"a", "b", "c"}, processedItems)
 }
 
 func TestLoopExecutor_ExecuteForEach_StepError(t *testing.T) {
@@ -1286,4 +1319,2208 @@ func TestLoopExecutor_PushPopContext_ParentChainPreserved(t *testing.T) {
 	assert.True(t, execCtx.CurrentLoop.First)
 	assert.False(t, execCtx.CurrentLoop.Last)
 	assert.Equal(t, 2, execCtx.CurrentLoop.Length)
+}
+
+// =============================================================================
+// F037: ResolveMaxIterations Tests
+// =============================================================================
+
+func TestLoopExecutor_ResolveMaxIterations_SimpleInteger(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Configure resolver to return the literal value
+	resolver.results["{{inputs.limit}}"] = "5"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "5"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 5, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_FromEnvVariable(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{env.LOOP_LIMIT}}"] = "10"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Env["LOOP_LIMIT"] = "10"
+
+	result, err := exec.ResolveMaxIterations("{{env.LOOP_LIMIT}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 10, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticAddition(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "2 + 3"
+	resolver.results["{{inputs.a + inputs.b}}"] = "2 + 3"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["a"] = "2"
+	ctx.Inputs["b"] = "3"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.a + inputs.b}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 5, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticMultiplication(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression: pages * retries_per_page
+	resolver.results["{{inputs.pages * inputs.retries_per_page}}"] = "3 * 2"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["pages"] = "3"
+	ctx.Inputs["retries_per_page"] = "2"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.pages * inputs.retries_per_page}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 6, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticSubtraction(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "10 - 3"
+	resolver.results["{{inputs.total - inputs.offset}}"] = "10 - 3"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["total"] = "10"
+	ctx.Inputs["offset"] = "3"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.total - inputs.offset}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticDivision(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "20 / 4" (exact integer division)
+	resolver.results["{{inputs.total / inputs.batch_size}}"] = "20 / 4"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["total"] = "20"
+	ctx.Inputs["batch_size"] = "4"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.total / inputs.batch_size}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 5, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticModulo(t *testing.T) {
+	// NOTE: FR-006 only requires +, -, *, / operators.
+	// Modulo (%) is NOT in the spec, but expr-lang supports it.
+	// The implementation currently doesn't recognize % as an arithmetic operator
+	// because it's not in strings.ContainsAny("+-*/").
+	// This test verifies that % expressions are NOT currently supported.
+	// If modulo support is added later, update this test.
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "17 % 5" - but % is not recognized as operator
+	resolver.results["{{inputs.total % inputs.divisor}}"] = "17 % 5"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["total"] = "17"
+	ctx.Inputs["divisor"] = "5"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.total % inputs.divisor}}", ctx)
+
+	// Modulo is not supported per FR-006, should error
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticComplexExpression(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "(2 + 3) * 4"
+	resolver.results["{{(inputs.a + inputs.b) * inputs.c}}"] = "(2 + 3) * 4"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["a"] = "2"
+	ctx.Inputs["b"] = "3"
+	ctx.Inputs["c"] = "4"
+
+	result, err := exec.ResolveMaxIterations("{{(inputs.a + inputs.b) * inputs.c}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 20, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticDivisionByZero(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "10 / 0"
+	resolver.results["{{inputs.total / inputs.divisor}}"] = "10 / 0"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["total"] = "10"
+	ctx.Inputs["divisor"] = "0"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.total / inputs.divisor}}", ctx)
+
+	// Division by zero should return error (expr-lang behavior may vary)
+	// If it returns infinity or NaN, it will fail the integer conversion
+	require.Error(t, err)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticNonWholeNumber(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "7 / 2" = 3.5 (non-whole number)
+	resolver.results["{{inputs.a / inputs.b}}"] = "7 / 2"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["a"] = "7"
+	ctx.Inputs["b"] = "2"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.a / inputs.b}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be an integer")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticInvalidSyntax(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to truly invalid syntax (unclosed parenthesis)
+	resolver.results["{{inputs.expr}}"] = "2 + (3 * 4"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["expr"] = "2 + (3 * 4"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.expr}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticNegativeResult(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "3 - 10" = -7
+	resolver.results["{{inputs.a - inputs.b}}"] = "3 - 10"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["a"] = "3"
+	ctx.Inputs["b"] = "10"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.a - inputs.b}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be at least 1")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticExceedsMax(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "5000 * 3" = 15000 (exceeds max 10000)
+	resolver.results["{{inputs.a * inputs.b}}"] = "5000 * 3"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["a"] = "5000"
+	ctx.Inputs["b"] = "3"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.a * inputs.b}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_BoundaryMin(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "1"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "1"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_BoundaryMax(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "10000"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "10000"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 10000, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorZero(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "0"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "0"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be at least 1")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorNegative(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "-5"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "-5"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be at least 1")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorExceedsMax(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "10001"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "10001"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorNonInteger(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "not_a_number"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "not_a_number"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorFloat(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "3.14"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "3.14"
+
+	_, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.Error(t, err)
+	// Could be "invalid syntax" or custom message about integers
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorMissingVariable(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Resolver returns error for missing variable
+	resolver.err = errors.New("undefined variable: inputs.undefined_var")
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+
+	_, err := exec.ResolveMaxIterations("{{inputs.undefined_var}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "undefined variable")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ErrorEmptyExpression(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+
+	_, err := exec.ResolveMaxIterations("", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_FromStepOutput(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{states.count.output}}"] = "7"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.States["count"] = interpolation.StepStateData{
+		Output:   "7",
+		ExitCode: 0,
+		Status:   "completed",
+	}
+
+	result, err := exec.ResolveMaxIterations("{{states.count.output}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_TrimWhitespace(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Resolved value has whitespace (e.g., from command output)
+	resolver.results["{{inputs.limit}}"] = "  42  \n"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+	ctx.Inputs["limit"] = "  42  \n"
+
+	result, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 42, result)
+}
+
+// =============================================================================
+// F037 T011: ExecuteForEach with Dynamic MaxIterationsExpr Tests
+// =============================================================================
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_FromInput(t *testing.T) {
+	// Test US1: max_iterations from {{inputs.limit}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Configure resolver: items resolve normally, max_iterations expr resolves to "5"
+	resolver.results[`["a", "b", "c"]`] = `["a", "b", "c"]`
+	resolver.results["{{inputs.limit}}"] = "5"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-dynamic-max",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{loop.item}}",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b", "c"]`,
+			Body:              []string{"process"},
+			MaxIterations:     0, // Not used when dynamic expr is set
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "5"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 3, result.TotalCount)
+	assert.Len(t, recorder.executions, 3)
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_LimitsToResolvedValue(t *testing.T) {
+	// F037: max_iterations limits execution to resolved value (not an error)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// 5 items but max_iterations resolves to 3 - should only process first 3
+	resolver.results[`["a", "b", "c", "d", "e"]`] = `["a", "b", "c", "d", "e"]`
+	resolver.results["{{inputs.limit}}"] = "3"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-dynamic-max-limited",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b", "c", "d", "e"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-limited")
+
+	var processedItems []string
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			if intCtx.Loop != nil {
+				processedItems = append(processedItems, fmt.Sprintf("%v", intCtx.Loop.Item))
+			}
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "3"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	// Should process only first 3 items (limited by dynamic max_iterations)
+	assert.Len(t, result.Iterations, 3)
+	assert.Equal(t, []string{"a", "b", "c"}, processedItems)
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ResolverError(t *testing.T) {
+	// Test: resolver fails to resolve max_iterations expression
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Items resolve fine, but max_iterations expression fails
+	resolver.results[`["a", "b"]`] = `["a", "b"]`
+	// Note: We need a resolver that can fail for specific expressions
+	// Since our mock uses a single err field, we'll create a custom one
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-dynamic-max-error",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.undefined_var}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-error")
+
+	// Use a resolver that returns the expression unchanged (undefined variable)
+	// The ResolveMaxIterations will then fail to parse it as int
+	_, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when resolver fails")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve max_iterations")
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_InvalidValue(t *testing.T) {
+	// Test: resolved max_iterations is not a valid integer
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a", "b"]`] = `["a", "b"]`
+	resolver.results["{{inputs.limit}}"] = "not_a_number"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-dynamic-max-invalid",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-invalid")
+
+	_, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations is invalid")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "not_a_number"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve max_iterations")
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ZeroValue(t *testing.T) {
+	// Test: resolved max_iterations is zero (invalid)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a"]`] = `["a"]`
+	resolver.results["{{inputs.limit}}"] = "0"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-dynamic-max-zero",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-zero")
+
+	_, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations is zero")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "0"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least 1")
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ExceedsLimit(t *testing.T) {
+	// Test: resolved max_iterations exceeds MaxAllowedIterations (10000)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a"]`] = `["a"]`
+	resolver.results["{{inputs.limit}}"] = "50000"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-dynamic-max-exceeds",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-exceeds")
+
+	_, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations exceeds limit")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "50000"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_Arithmetic(t *testing.T) {
+	// Test US3: arithmetic expression in max_iterations
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a", "b", "c", "d", "e"]`] = `["a", "b", "c", "d", "e"]`
+	resolver.results["{{inputs.a + inputs.b}}"] = "2 + 3" // Resolves to arithmetic
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-dynamic-max-arithmetic",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b", "c", "d", "e"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.a + inputs.b}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-arithmetic")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["a"] = "2"
+			ctx.Inputs["b"] = "3"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 5, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_FromEnv(t *testing.T) {
+	// Test US1: max_iterations from {{env.LOOP_LIMIT}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["x", "y"]`] = `["x", "y"]`
+	resolver.results["{{env.LOOP_LIMIT}}"] = "10"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-dynamic-max-env",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["x", "y"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{env.LOOP_LIMIT}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-env")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Env["LOOP_LIMIT"] = "10"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 2, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_FromStepOutput(t *testing.T) {
+	// Test US2: max_iterations from {{states.count.output}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["item1", "item2", "item3"]`] = `["item1", "item2", "item3"]`
+	resolver.results["{{states.count.output}}"] = "5"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-dynamic-max-step-output",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["item1", "item2", "item3"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{states.count.output}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-step-output")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.States["count"] = interpolation.StepStateData{
+				Output:   "5",
+				ExitCode: 0,
+				Status:   "completed",
+			}
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 3, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteForEach_StaticMaxIterations_StillWorks(t *testing.T) {
+	// Test backward compatibility: static max_iterations still works
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a", "b"]`] = `["a", "b"]`
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-static-max",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b"]`,
+			Body:              []string{"process"},
+			MaxIterations:     100, // Static value
+			MaxIterationsExpr: "",  // No dynamic expression
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-static-max")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 2, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ExactMatch(t *testing.T) {
+	// Test: items count exactly matches resolved max_iterations (boundary)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results[`["a", "b", "c"]`] = `["a", "b", "c"]`
+	resolver.results["{{inputs.limit}}"] = "3"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-dynamic-max-exact",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:    "process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeForEach,
+			Items:             `["a", "b", "c"]`,
+			Body:              []string{"process"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-dynamic-max-exact")
+	recorder := newStepExecutorRecorder()
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		recorder.execute,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "3"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 3, result.TotalCount)
+}
+
+// =============================================================================
+// F037 T012: ExecuteWhile with Dynamic MaxIterationsExpr Tests
+// =============================================================================
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromInput(t *testing.T) {
+	// Test US1: while loop max_iterations from {{inputs.limit}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true // Condition always true (will hit max)
+	resolver := newConfigurableMockResolver()
+
+	// Configure resolver for max_iterations expression
+	resolver.results["{{inputs.limit}}"] = "3"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-max",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "while_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterations:     0, // Not used when dynamic expr is set
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-max")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "3"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 3, result.TotalCount)
+	assert.Equal(t, 3, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromEnv(t *testing.T) {
+	// Test US1: while loop max_iterations from {{env.MAX_RETRIES}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{env.MAX_RETRIES}}"] = "5"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-max-env",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "retry_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"retry"},
+			MaxIterationsExpr: "{{env.MAX_RETRIES}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-max-env")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Env["MAX_RETRIES"] = "5"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 5, result.TotalCount)
+	assert.Equal(t, 5, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromStepOutput(t *testing.T) {
+	// Test US2: while loop max_iterations from {{states.count.output}}
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{states.setup.output}}"] = "4"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-max-state",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "poll_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"poll"},
+			MaxIterationsExpr: "{{states.setup.output}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-max-state")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.States["setup"] = interpolation.StepStateData{
+				Output:   "4",
+				ExitCode: 0,
+				Status:   "completed",
+			}
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 4, result.TotalCount)
+	assert.Equal(t, 4, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_Arithmetic(t *testing.T) {
+	// Test US3: arithmetic expression in while loop max_iterations
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	// Expression resolves to "2 * 3" = 6
+	resolver.results["{{inputs.retries * inputs.multiplier}}"] = "2 * 3"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-max-arithmetic",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "calc_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.retries * inputs.multiplier}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-max-arithmetic")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["retries"] = "2"
+			ctx.Inputs["multiplier"] = "3"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 6, result.TotalCount)
+	assert.Equal(t, 6, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ConditionExitsEarly(t *testing.T) {
+	// Test: condition becomes false before hitting dynamic max_iterations
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "100" // High limit
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-early-exit",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "early_exit_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "states.check.output != 'done'",
+			Body:              []string{"check"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-early-exit")
+	callCount := 0
+
+	// Condition returns true for first 3 calls, then false
+	evaluator.results["states.check.output != 'done'"] = true
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			if callCount >= 3 {
+				evaluator.results["states.check.output != 'done'"] = false
+			}
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "100"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 3, result.TotalCount)
+	assert.Equal(t, 3, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ResolverError(t *testing.T) {
+	// Test: resolver fails to resolve max_iterations expression
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	// Resolver returns error for undefined variable
+	resolver.err = errors.New("undefined variable: inputs.missing")
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-resolver-error",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "error_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.missing}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-resolver-error")
+
+	_, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when resolver fails")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve max_iterations")
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_InvalidValue(t *testing.T) {
+	// Test: resolved max_iterations is not a valid integer
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "not_a_number"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-invalid",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "invalid_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-invalid")
+
+	_, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations is invalid")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "not_a_number"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve max_iterations")
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ZeroValue(t *testing.T) {
+	// Test: resolved max_iterations is zero (invalid, must be >= 1)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "0"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-zero",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "zero_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-zero")
+
+	_, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations is zero")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "0"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least 1")
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_NegativeValue(t *testing.T) {
+	// Test: resolved max_iterations is negative (invalid)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "-5"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-negative",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "negative_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-negative")
+
+	_, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations is negative")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "-5"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least 1")
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ExceedsLimit(t *testing.T) {
+	// Test: resolved max_iterations exceeds MaxAllowedIterations (10000)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "50000"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-exceeds",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "exceeds_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-exceeds")
+
+	_, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			t.Error("should not execute when max_iterations exceeds limit")
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "50000"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StaticStillWorks(t *testing.T) {
+	// Test backward compatibility: static max_iterations still works for while loops
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-static-max",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "static_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterations:     4,  // Static value
+			MaxIterationsExpr: "", // No dynamic expression
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-static-max")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 4, result.TotalCount)
+	assert.Equal(t, 4, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_BoundaryMin(t *testing.T) {
+	// Test boundary: max_iterations = 1 (minimum valid value)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "1"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-min",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "min_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-min")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "1"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, result.TotalCount)
+	assert.Equal(t, 1, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_BoundaryMax(t *testing.T) {
+	// Test boundary: max_iterations = 10000 (maximum allowed value)
+	// Note: we don't actually run 10000 iterations, just verify it's accepted
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "10000"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-max-boundary",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "max_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "states.done.output == 'yes'",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-max-boundary")
+
+	// Condition is false immediately, so loop exits after 0 iterations
+	// This test just verifies the max_iterations value is accepted
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "10000"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Condition was false from start, so no iterations
+	assert.Equal(t, 0, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WithBreakCondition(t *testing.T) {
+	// Test: dynamic max_iterations combined with break condition
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true // While condition
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "10"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-with-break",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "break_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+			BreakCondition:    "states.work.output == 'stop'",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-with-break")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			// Trigger break after 3 iterations
+			if callCount >= 3 {
+				evaluator.results["states.work.output == 'stop'"] = true
+			}
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "10"
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.WasBroken())
+	assert.Equal(t, 3, result.TotalCount) // Stopped at break, not max
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WhitespaceInValue(t *testing.T) {
+	// Test: resolved value has whitespace (common with command output)
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	// Simulates command output with trailing newline
+	resolver.results["{{states.count.output}}"] = "  7  \n"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-whitespace",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "whitespace_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{states.count.output}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-whitespace")
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.States["count"] = interpolation.StepStateData{
+				Output:   "  7  \n",
+				ExitCode: 0,
+				Status:   "completed",
+			}
+			return ctx
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 7, result.TotalCount)
+	assert.Equal(t, 7, callCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StepError(t *testing.T) {
+	// Test: step error during execution with dynamic max_iterations
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "10"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-step-error",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "error_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-step-error")
+	callCount := 0
+	stepErr := errors.New("step execution failed")
+
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			if callCount == 3 {
+				return stepErr
+			}
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			ctx := interpolation.NewContext()
+			ctx.Inputs["limit"] = "10"
+			return ctx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Equal(t, stepErr, err)
+	assert.Equal(t, 3, callCount)
+	assert.Equal(t, 3, result.TotalCount)
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ContextCancellation(t *testing.T) {
+	// Test: context cancellation with dynamic max_iterations
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newConfigurableMockResolver()
+
+	resolver.results["{{inputs.limit}}"] = "100"
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name:  "test-while-dynamic-cancel",
+		Steps: map[string]*workflow.Step{},
+	}
+
+	step := &workflow.Step{
+		Name: "cancel_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:              workflow.LoopTypeWhile,
+			Condition:         "true",
+			Body:              []string{"work"},
+			MaxIterationsExpr: "{{inputs.limit}}",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-cancel")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+
+	result, err := loopExec.ExecuteWhile(
+		ctx,
+		wf,
+		step,
+		execCtx,
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+			callCount++
+			if callCount == 3 {
+				cancel() // Cancel after 3rd iteration
+			}
+			return nil
+		},
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			intCtx := interpolation.NewContext()
+			intCtx.Inputs["limit"] = "100"
+			return intCtx
+		},
+	)
+
+	require.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+	assert.Less(t, result.TotalCount, 100) // Should not complete all iterations
+}
+
+func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_TableDriven(t *testing.T) {
+	// Table-driven tests for various dynamic max_iterations scenarios
+	tests := []struct {
+		name               string
+		maxIterationsExpr  string
+		resolveResult      string
+		resolveErr         error
+		conditionResults   map[string]bool
+		expectedIterations int
+		wantErr            bool
+		errContains        string
+	}{
+		{
+			name:               "valid small limit",
+			maxIterationsExpr:  "{{inputs.n}}",
+			resolveResult:      "2",
+			conditionResults:   map[string]bool{"true": true},
+			expectedIterations: 2,
+			wantErr:            false,
+		},
+		{
+			name:               "valid medium limit",
+			maxIterationsExpr:  "{{env.LIMIT}}",
+			resolveResult:      "50",
+			conditionResults:   map[string]bool{"true": true},
+			expectedIterations: 50,
+			wantErr:            false,
+		},
+		{
+			name:              "zero value",
+			maxIterationsExpr: "{{inputs.zero}}",
+			resolveResult:     "0",
+			conditionResults:  map[string]bool{"true": true},
+			wantErr:           true,
+			errContains:       "at least 1",
+		},
+		{
+			name:              "negative value",
+			maxIterationsExpr: "{{inputs.neg}}",
+			resolveResult:     "-1",
+			conditionResults:  map[string]bool{"true": true},
+			wantErr:           true,
+			errContains:       "at least 1",
+		},
+		{
+			name:              "exceeds limit",
+			maxIterationsExpr: "{{inputs.huge}}",
+			resolveResult:     "20000",
+			conditionResults:  map[string]bool{"true": true},
+			wantErr:           true,
+			errContains:       "exceeds",
+		},
+		{
+			name:              "non-numeric",
+			maxIterationsExpr: "{{inputs.text}}",
+			resolveResult:     "abc",
+			conditionResults:  map[string]bool{"true": true},
+			wantErr:           true,
+		},
+		{
+			name:              "resolver error",
+			maxIterationsExpr: "{{inputs.missing}}",
+			resolveErr:        errors.New("variable not found"),
+			conditionResults:  map[string]bool{"true": true},
+			wantErr:           true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			evaluator := newMockExpressionEvaluator()
+			for k, v := range tt.conditionResults {
+				evaluator.results[k] = v
+			}
+			resolver := newConfigurableMockResolver()
+
+			if tt.resolveErr != nil {
+				resolver.err = tt.resolveErr
+			} else {
+				resolver.results[tt.maxIterationsExpr] = tt.resolveResult
+			}
+
+			loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+			wf := &workflow.Workflow{
+				Name:  "test-while-table",
+				Steps: map[string]*workflow.Step{},
+			}
+
+			step := &workflow.Step{
+				Name: "table_loop",
+				Type: workflow.StepTypeWhile,
+				Loop: &workflow.LoopConfig{
+					Type:              workflow.LoopTypeWhile,
+					Condition:         "true",
+					Body:              []string{"work"},
+					MaxIterationsExpr: tt.maxIterationsExpr,
+				},
+			}
+
+			execCtx := workflow.NewExecutionContext("test-id", "test-while-table")
+			callCount := 0
+
+			result, err := loopExec.ExecuteWhile(
+				context.Background(),
+				wf,
+				step,
+				execCtx,
+				func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+					callCount++
+					return nil
+				},
+				func(ec *workflow.ExecutionContext) *interpolation.Context {
+					return interpolation.NewContext()
+				},
+			)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedIterations, result.TotalCount)
+				assert.Equal(t, tt.expectedIterations, callCount)
+			}
+		})
+	}
+}
+
+func TestLoopExecutor_ResolveMaxIterations_TableDriven(t *testing.T) {
+	tests := []struct {
+		name          string
+		expr          string
+		resolveResult string
+		resolveErr    error
+		wantValue     int
+		wantErr       bool
+		errContains   string
+	}{
+		{
+			name:          "valid integer from input",
+			expr:          "{{inputs.count}}",
+			resolveResult: "5",
+			wantValue:     5,
+			wantErr:       false,
+		},
+		{
+			name:          "valid min boundary",
+			expr:          "{{inputs.min}}",
+			resolveResult: "1",
+			wantValue:     1,
+			wantErr:       false,
+		},
+		{
+			name:          "valid max boundary",
+			expr:          "{{inputs.max}}",
+			resolveResult: "10000",
+			wantValue:     10000,
+			wantErr:       false,
+		},
+		{
+			name:          "large valid value",
+			expr:          "{{inputs.large}}",
+			resolveResult: "9999",
+			wantValue:     9999,
+			wantErr:       false,
+		},
+		{
+			name:          "zero is invalid",
+			expr:          "{{inputs.zero}}",
+			resolveResult: "0",
+			wantErr:       true,
+			errContains:   "at least 1",
+		},
+		{
+			name:          "negative is invalid",
+			expr:          "{{inputs.neg}}",
+			resolveResult: "-10",
+			wantErr:       true,
+			errContains:   "at least 1",
+		},
+		{
+			name:          "exceeds max limit",
+			expr:          "{{inputs.huge}}",
+			resolveResult: "100000",
+			wantErr:       true,
+			errContains:   "exceeds",
+		},
+		{
+			name:          "non-numeric string",
+			expr:          "{{inputs.text}}",
+			resolveResult: "hello",
+			wantErr:       true,
+			errContains:   "invalid",
+		},
+		{
+			name:          "float value",
+			expr:          "{{inputs.float}}",
+			resolveResult: "5.5",
+			wantErr:       true,
+		},
+		{
+			name:       "resolver error",
+			expr:       "{{inputs.missing}}",
+			resolveErr: errors.New("variable not found"),
+			wantErr:    true,
+		},
+		{
+			name:        "empty expression",
+			expr:        "",
+			wantErr:     true,
+			errContains: "empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			evaluator := newMockExpressionEvaluator()
+			resolver := newConfigurableMockResolver()
+
+			if tt.resolveErr != nil {
+				resolver.err = tt.resolveErr
+			} else {
+				resolver.results[tt.expr] = tt.resolveResult
+			}
+
+			exec := application.NewLoopExecutor(logger, evaluator, resolver)
+			ctx := interpolation.NewContext()
+
+			result, err := exec.ResolveMaxIterations(tt.expr, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantValue, result)
+			}
+		})
+	}
 }

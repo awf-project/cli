@@ -375,6 +375,151 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// F037: Dynamic MaxIterations YAML Parsing Tests
+// =============================================================================
+
+func TestYAMLRepository_Load_LoopWithIntegerMaxIterations(t *testing.T) {
+	repo := NewYAMLRepository(fixturesPath)
+
+	wf, err := repo.Load(context.Background(), "loop-foreach")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if wf == nil {
+		t.Fatal("Load() returned nil workflow")
+	}
+
+	// Get the for_each step
+	processFiles, ok := wf.GetStep("process_files")
+	if !ok {
+		t.Fatal("process_files step not found")
+	}
+
+	if processFiles.Type != workflow.StepTypeForEach {
+		t.Errorf("process_files.Type = %v, want %v", processFiles.Type, workflow.StepTypeForEach)
+	}
+	if processFiles.Loop == nil {
+		t.Fatal("process_files.Loop is nil")
+	}
+
+	// Verify integer max_iterations parsing
+	if processFiles.Loop.MaxIterations != 10 {
+		t.Errorf("Loop.MaxIterations = %d, want 10", processFiles.Loop.MaxIterations)
+	}
+	if processFiles.Loop.MaxIterationsExpr != "" {
+		t.Errorf("Loop.MaxIterationsExpr = %q, want empty", processFiles.Loop.MaxIterationsExpr)
+	}
+	if processFiles.Loop.IsMaxIterationsDynamic() {
+		t.Error("Loop.IsMaxIterationsDynamic() = true, want false")
+	}
+}
+
+func TestYAMLRepository_Load_LoopWithDynamicMaxIterations(t *testing.T) {
+	repo := NewYAMLRepository(fixturesPath)
+
+	wf, err := repo.Load(context.Background(), "loop-dynamic")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if wf == nil {
+		t.Fatal("Load() returned nil workflow")
+	}
+
+	// Get the for_each step with dynamic max_iterations
+	countLoop, ok := wf.GetStep("count_loop")
+	if !ok {
+		t.Fatal("count_loop step not found")
+	}
+
+	if countLoop.Type != workflow.StepTypeForEach {
+		t.Errorf("count_loop.Type = %v, want %v", countLoop.Type, workflow.StepTypeForEach)
+	}
+	if countLoop.Loop == nil {
+		t.Fatal("count_loop.Loop is nil")
+	}
+
+	// Verify dynamic max_iterations parsing
+	if countLoop.Loop.MaxIterations != 0 {
+		t.Errorf("Loop.MaxIterations = %d, want 0 (expression mode)", countLoop.Loop.MaxIterations)
+	}
+	// Go template syntax requires dot prefix for accessing map values
+	expectedExpr := "{{.inputs.limit}}"
+	if countLoop.Loop.MaxIterationsExpr != expectedExpr {
+		t.Errorf("Loop.MaxIterationsExpr = %q, want %q", countLoop.Loop.MaxIterationsExpr, expectedExpr)
+	}
+	if !countLoop.Loop.IsMaxIterationsDynamic() {
+		t.Error("Loop.IsMaxIterationsDynamic() = false, want true")
+	}
+}
+
+func TestYAMLRepository_Load_LoopWithDynamicMaxIterationsFromEnv(t *testing.T) {
+	repo := NewYAMLRepository(fixturesPath)
+
+	wf, err := repo.Load(context.Background(), "loop-dynamic-env")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if wf == nil {
+		t.Fatal("Load() returned nil workflow")
+	}
+
+	// Get the for_each step with env-based max_iterations
+	processLoop, ok := wf.GetStep("process_loop")
+	if !ok {
+		t.Fatal("process_loop step not found")
+	}
+
+	if processLoop.Loop == nil {
+		t.Fatal("process_loop.Loop is nil")
+	}
+
+	// Verify env-based expression parsing
+	// Go template syntax requires dot prefix for accessing map values
+	expectedExpr := "{{.env.LOOP_LIMIT}}"
+	if processLoop.Loop.MaxIterationsExpr != expectedExpr {
+		t.Errorf("Loop.MaxIterationsExpr = %q, want %q", processLoop.Loop.MaxIterationsExpr, expectedExpr)
+	}
+	if !processLoop.Loop.IsMaxIterationsDynamic() {
+		t.Error("Loop.IsMaxIterationsDynamic() = false, want true")
+	}
+}
+
+func TestYAMLRepository_Load_LoopWithArithmeticMaxIterations(t *testing.T) {
+	repo := NewYAMLRepository(fixturesPath)
+
+	wf, err := repo.Load(context.Background(), "loop-dynamic-arithmetic")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if wf == nil {
+		t.Fatal("Load() returned nil workflow")
+	}
+
+	// Get the for_each step with arithmetic expression
+	retryLoop, ok := wf.GetStep("retry_loop")
+	if !ok {
+		t.Fatal("retry_loop step not found")
+	}
+
+	if retryLoop.Loop == nil {
+		t.Fatal("retry_loop.Loop is nil")
+	}
+
+	// Verify arithmetic expression parsing
+	// Arithmetic uses separate templates: {{.inputs.pages}} * {{.inputs.retries_per_page}}
+	expectedExpr := "{{.inputs.pages}} * {{.inputs.retries_per_page}}"
+	if retryLoop.Loop.MaxIterationsExpr != expectedExpr {
+		t.Errorf("Loop.MaxIterationsExpr = %q, want %q", retryLoop.Loop.MaxIterationsExpr, expectedExpr)
+	}
+	if !retryLoop.Loop.IsMaxIterationsDynamic() {
+		t.Error("Loop.IsMaxIterationsDynamic() = false, want true")
+	}
+	if retryLoop.Loop.MaxIterations != 0 {
+		t.Errorf("Loop.MaxIterations = %d, want 0 (expression mode)", retryLoop.Loop.MaxIterations)
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
