@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **F042**: Loop Context Variables
   - `{{.loop.Index1}}` for 1-based index
   - Full context: `Index`, `Index1`, `Item`, `First`, `Last`, `Length`
+- **F037**: Dynamic Variable Interpolation in Loops
+  - `max_iterations` supports `{{.inputs.*}}` and `{{.env.*}}` interpolation
+  - Arithmetic expressions: `{{.inputs.pages * .inputs.retries_per_page}}`
+  - Loop conditions (`while`, `until`) support dynamic interpolation
+  - Parse-time validation warns about undefined variables via `awf validate`
 - **F016**: Loop Constructs
   - `for_each` iterates over lists; `while` repeats until condition false
   - `max_iterations` safety limit; `break_when` for early exit
@@ -92,7 +97,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **F036**: CLI Init Command
   - `awf init` creates `.awf/workflows/`, `.awf/prompts/` directories
   - Creates example workflow file
-- **F037**: Step success feedback for empty-output steps
 
 #### Configuration
 - **F036**: Project Configuration File

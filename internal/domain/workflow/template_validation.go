@@ -1,6 +1,9 @@
 package workflow
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // TemplateValidator validates template interpolation references in workflows.
 type TemplateValidator struct {
@@ -148,6 +151,11 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 		v.ValidateTemplate(step.Dir, stepPath, "dir", currentIdx, isErrorHook)
 	}
 
+	// Validate loop expressions
+	if step.Loop != nil {
+		v.validateLoopExpressions(step, stepPath, currentIdx)
+	}
+
 	// Validate step hooks
 	for _, action := range step.Hooks.Pre {
 		hookPath := fmt.Sprintf("%s.hooks.pre", stepPath)
@@ -156,6 +164,37 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 	for _, action := range step.Hooks.Post {
 		hookPath := fmt.Sprintf("%s.hooks.post", stepPath)
 		v.validateHookAction(action, hookPath, false)
+	}
+}
+
+// validateLoopExpressions validates template references in loop configuration fields.
+// Uses the existing ValidateTemplate method to check all loop expression fields:
+// - MaxIterationsExpr: dynamic max iterations expression
+// - Condition: while loop condition
+// - Items: for_each loop items expression
+// - BreakCondition: early exit condition
+func (v *TemplateValidator) validateLoopExpressions(step *Step, stepPath string, currentIdx int) {
+	loop := step.Loop
+	loopPath := fmt.Sprintf("%s.loop", stepPath)
+
+	// Validate MaxIterationsExpr if set
+	if loop.MaxIterationsExpr != "" {
+		v.ValidateTemplate(loop.MaxIterationsExpr, loopPath, "max_iterations", currentIdx, false)
+	}
+
+	// Validate Condition (for while loops)
+	if loop.Condition != "" {
+		v.ValidateTemplate(loop.Condition, loopPath, "condition", currentIdx, false)
+	}
+
+	// Validate Items (for for_each loops)
+	if loop.Items != "" {
+		v.ValidateTemplate(loop.Items, loopPath, "items", currentIdx, false)
+	}
+
+	// Validate BreakCondition if set
+	if loop.BreakCondition != "" {
+		v.ValidateTemplate(loop.BreakCondition, loopPath, "break_condition", currentIdx, false)
 	}
 }
 
@@ -197,10 +236,150 @@ func (v *TemplateValidator) ValidateReference(ref TemplateReference, stepName, f
 }
 
 func (v *TemplateValidator) validateInputRef(ref TemplateReference, stepName, fieldName string) {
+	// Check for arithmetic expressions (e.g., "limit * inputs.threshold")
+	// These need special handling to extract individual input references
+	if containsArithmeticOperator(ref.Path) || containsArithmeticOperator(ref.Raw) {
+		// Use the Raw field to get the full expression content
+		// Raw is like "{{inputs.limit * inputs.threshold}}"
+		expr := extractExpressionContent(ref.Raw)
+		v.validateArithmeticExpressionInputs(expr, stepName, fieldName)
+		return
+	}
 	if !v.inputNames[ref.Path] {
 		v.result.AddError(ErrUndefinedInput, stepName,
 			fmt.Sprintf("undefined input %q referenced in %s", ref.Path, fieldName))
 	}
+}
+
+// extractExpressionContent extracts the content between {{ and }}.
+func extractExpressionContent(raw string) string {
+	// Remove {{ and }} from raw
+	content := strings.TrimPrefix(raw, "{{")
+	content = strings.TrimSuffix(content, "}}")
+	return strings.TrimSpace(content)
+}
+
+// containsArithmeticOperator checks if a path contains arithmetic operators.
+func containsArithmeticOperator(path string) bool {
+	for _, c := range path {
+		switch c {
+		case '+', '-', '*', '/', '%', '(', ')':
+			return true
+		}
+	}
+	return false
+}
+
+// validateArithmeticExpressionInputs extracts and validates input references
+// from arithmetic expressions like "limit * inputs.threshold".
+// The expression format after parsing is: "firstVar operator inputs.secondVar..."
+// where the "inputs." prefix is parsed away from the first variable.
+func (v *TemplateValidator) validateArithmeticExpressionInputs(expr, stepName, fieldName string) {
+	// Extract input names from the expression
+	// The expression is in format: "limit * inputs.threshold" (first var has no prefix)
+	// We need to extract: "limit" and "threshold"
+	inputNames := extractInputNamesFromExpr(expr)
+
+	for _, inputName := range inputNames {
+		if !v.inputNames[inputName] {
+			v.result.AddError(ErrUndefinedInput, stepName,
+				fmt.Sprintf("undefined input %q referenced in %s", inputName, fieldName))
+		}
+	}
+}
+
+// extractInputNamesFromExpr extracts input variable names from an arithmetic expression.
+// Handles expressions like:
+// - "limit * inputs.threshold" -> ["limit", "threshold"]
+// - "a + b" -> ["a", "b"]
+// - "inputs.x * inputs.y" -> ["x", "y"]
+func extractInputNamesFromExpr(expr string) []string {
+	var names []string
+
+	// Split on arithmetic operators and whitespace
+	tokens := splitOnOperators(expr)
+
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		// Handle "inputs.varname" pattern
+		if strings.HasPrefix(token, "inputs.") {
+			name := strings.TrimPrefix(token, "inputs.")
+			if name != "" {
+				names = append(names, name)
+			}
+		} else if isValidIdentifier(token) && !isReservedNamespace(token) {
+			// Bare identifier (first var in expression)
+			// Skip reserved namespace names like "inputs", "states", etc.
+			names = append(names, token)
+		}
+	}
+
+	return names
+}
+
+// isReservedNamespace checks if the identifier is a reserved template namespace.
+// These can appear as fragments when parsing arithmetic expressions and should be skipped.
+func isReservedNamespace(name string) bool {
+	switch name {
+	case "inputs", "states", "workflow", "env", "error", "context":
+		return true
+	}
+	return false
+}
+
+// splitOnOperators splits an expression on arithmetic operators.
+func splitOnOperators(expr string) []string {
+	var tokens []string
+	var current strings.Builder
+
+	for _, c := range expr {
+		switch c {
+		case '+', '-', '*', '/', '%', '(', ')', ' ', '\t':
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(c)
+		}
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
+}
+
+// isValidIdentifier checks if a string is a valid Go-style identifier.
+func isValidIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, c := range s {
+		if i == 0 {
+			if !isLetter(c) && c != '_' {
+				return false
+			}
+		} else {
+			if !isLetter(c) && !isDigit(c) && c != '_' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isLetter(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isDigit(c rune) bool {
+	return c >= '0' && c <= '9'
 }
 
 func (v *TemplateValidator) validateStateRef(ref TemplateReference, stepName, fieldName string, currentStepIndex int) {

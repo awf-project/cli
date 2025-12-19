@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/expr-lang/expr"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -95,13 +97,23 @@ func (e *LoopExecutor) ExecuteForEach(
 		return nil, fmt.Errorf("parse items: %w", err)
 	}
 
-	// Check max iterations
-	if len(items) > step.Loop.MaxIterations {
-		return nil, fmt.Errorf("items count %d exceeds max_iterations %d",
-			len(items), step.Loop.MaxIterations)
+	// Determine max iterations: use dynamic expression if set, otherwise static value
+	// F037: Dynamic Variable Interpolation in Loops
+	maxIterations := step.Loop.MaxIterations
+	if step.Loop.IsMaxIterationsDynamic() {
+		maxIterations, err = e.ResolveMaxIterations(step.Loop.MaxIterationsExpr, intCtx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve max_iterations: %w", err)
+		}
 	}
 
-	// Execute loop body for each item
+	// F037: max_iterations limits execution to first N items (not a validation)
+	// Slice items to respect max_iterations limit
+	if len(items) > maxIterations {
+		items = items[:maxIterations]
+	}
+
+	// Execute loop body for each item (limited by max_iterations)
 	for i, item := range items {
 		// Check context cancellation before starting iteration
 		if ctx.Err() != nil {
@@ -186,7 +198,19 @@ func (e *LoopExecutor) ExecuteWhile(
 ) (*workflow.LoopResult, error) {
 	result := workflow.NewLoopResult()
 
-	for i := 0; i < step.Loop.MaxIterations; i++ {
+	// Determine max iterations: use dynamic expression if set, otherwise static value
+	// F037: Dynamic Variable Interpolation in Loops
+	intCtx := buildContext(execCtx)
+	maxIterations := step.Loop.MaxIterations
+	if step.Loop.IsMaxIterationsDynamic() {
+		var err error
+		maxIterations, err = e.ResolveMaxIterations(step.Loop.MaxIterationsExpr, intCtx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve max_iterations: %w", err)
+		}
+	}
+
+	for i := 0; i < maxIterations; i++ {
 		// Check context cancellation before starting iteration
 		if ctx.Err() != nil {
 			return result, ctx.Err()
@@ -262,13 +286,100 @@ func (e *LoopExecutor) ExecuteWhile(
 	}
 
 	// Check if we hit max iterations without condition becoming false
-	if result.TotalCount >= step.Loop.MaxIterations {
+	if result.TotalCount >= maxIterations {
 		e.logger.Warn("while loop hit max iterations",
-			"step", step.Name, "max", step.Loop.MaxIterations)
+			"step", step.Name, "max", maxIterations)
 	}
 
 	result.CompletedAt = time.Now()
 	return result, nil
+}
+
+// ResolveMaxIterations resolves a dynamic max_iterations expression to an integer.
+// It performs template interpolation first ({{var}} substitution), then evaluates
+// any arithmetic expressions, and finally validates the result is within bounds.
+// Returns error if the expression cannot be resolved, is not a valid integer,
+// or the value is outside the allowed range (1-10000).
+// F037: Dynamic Variable Interpolation in Loops
+func (e *LoopExecutor) ResolveMaxIterations(expr string, ctx *interpolation.Context) (int, error) {
+	// Step 1: Validate non-empty expression
+	if expr == "" {
+		return 0, fmt.Errorf("max_iterations expression is empty")
+	}
+
+	// Step 2: Resolve {{var}} placeholders using template resolver
+	resolved, err := e.resolver.Resolve(expr, ctx)
+	if err != nil {
+		return 0, fmt.Errorf("resolve max_iterations expression: %w", err)
+	}
+
+	// Step 3: Trim whitespace (command output often has trailing newlines)
+	resolved = strings.TrimSpace(resolved)
+
+	// Step 4: Try to parse as integer directly first
+	value, err := e.parseMaxIterationsValue(resolved)
+	if err != nil {
+		return 0, err
+	}
+
+	// Step 5: Validate bounds (1 ≤ n ≤ MaxAllowedIterations)
+	if value < 1 {
+		return 0, fmt.Errorf("max_iterations value %d must be at least 1", value)
+	}
+	if value > workflow.MaxAllowedIterations {
+		return 0, fmt.Errorf("max_iterations value %d exceeds maximum allowed limit of %d",
+			value, workflow.MaxAllowedIterations)
+	}
+
+	return value, nil
+}
+
+// parseMaxIterationsValue attempts to parse the resolved string as an integer.
+// If direct parsing fails, it evaluates it as an arithmetic expression.
+func (e *LoopExecutor) parseMaxIterationsValue(resolved string) (int, error) {
+	// Try direct integer parse first (most common case)
+	if i, err := strconv.Atoi(resolved); err == nil {
+		return i, nil
+	}
+
+	// Check for arithmetic operators - if present, evaluate as expression
+	if strings.ContainsAny(resolved, "+-*/") {
+		return e.evaluateArithmeticExpression(resolved)
+	}
+
+	// Not a valid integer and no arithmetic operators
+	return 0, fmt.Errorf("max_iterations value %q is invalid: must be an integer", resolved)
+}
+
+// evaluateArithmeticExpression evaluates a simple arithmetic expression
+// using the expr-lang/expr library.
+func (e *LoopExecutor) evaluateArithmeticExpression(exprStr string) (int, error) {
+	// Use expr-lang/expr for arithmetic evaluation
+	program, err := expr.Compile(exprStr)
+	if err != nil {
+		return 0, fmt.Errorf("max_iterations expression %q is invalid: %w", exprStr, err)
+	}
+
+	result, err := expr.Run(program, nil)
+	if err != nil {
+		return 0, fmt.Errorf("max_iterations expression %q evaluation failed: %w", exprStr, err)
+	}
+
+	// Convert result to int
+	switch v := result.(type) {
+	case int:
+		return v, nil
+	case int64:
+		return int(v), nil
+	case float64:
+		// Check if it's a whole number
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("max_iterations value %q is invalid: must be an integer, got %v", exprStr, v)
+		}
+		return int(v), nil
+	default:
+		return 0, fmt.Errorf("max_iterations expression %q returned unexpected type %T", exprStr, result)
+	}
 }
 
 // ParseItems converts items string to slice.

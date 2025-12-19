@@ -30,6 +30,9 @@ const (
 	ErrInvalidContextProperty   ValidationCode = "invalid_context_property"
 	ErrUnknownReferenceType     ValidationCode = "unknown_reference_type"
 	ErrErrorRefOutsideErrorHook ValidationCode = "error_ref_outside_error_hook"
+
+	// Loop expression validation codes
+	ErrUndefinedLoopVariable ValidationCode = "undefined_loop_variable"
 )
 
 // ValidationError represents a single validation issue.
