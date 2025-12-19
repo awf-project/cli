@@ -197,19 +197,32 @@ func mapLoopConfig(y yamlStep) *workflow.LoopConfig {
 		loopType = workflow.LoopTypeWhile
 	}
 
-	maxIter := y.MaxIterations
-	if maxIter == 0 {
+	var maxIter int
+	var maxIterExpr string
+	switch v := y.MaxIterations.(type) {
+	case int:
+		maxIter = v
+	case string:
+		// Dynamic expression - store for runtime resolution
+		maxIterExpr = v
+	case nil:
+		// Not set - use default
+	default:
+		// Unexpected type - use default (validation will catch invalid types)
+	}
+	if maxIter == 0 && maxIterExpr == "" {
 		maxIter = workflow.DefaultMaxIterations
 	}
 
 	return &workflow.LoopConfig{
-		Type:           loopType,
-		Items:          items,
-		Condition:      y.While,
-		Body:           y.Body,
-		MaxIterations:  maxIter,
-		BreakCondition: y.BreakWhen,
-		OnComplete:     y.OnComplete,
+		Type:              loopType,
+		Items:             items,
+		Condition:         y.While,
+		Body:              y.Body,
+		MaxIterations:     maxIter,
+		MaxIterationsExpr: maxIterExpr,
+		BreakCondition:    y.BreakWhen,
+		OnComplete:        y.OnComplete,
 	}
 }
 

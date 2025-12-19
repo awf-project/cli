@@ -25,13 +25,14 @@ const MaxAllowedIterations = 10000
 
 // LoopConfig holds configuration for loop execution.
 type LoopConfig struct {
-	Type           LoopType // for_each or while
-	Items          string   // template expression for items (for_each)
-	Condition      string   // expression to evaluate (while)
-	Body           []string // step names to execute each iteration
-	MaxIterations  int      // safety limit (default: 100, max: 10000)
-	BreakCondition string   // optional early exit expression
-	OnComplete     string   // next state after loop completes
+	Type              LoopType // for_each or while
+	Items             string   // template expression for items (for_each)
+	Condition         string   // expression to evaluate (while)
+	Body              []string // step names to execute each iteration
+	MaxIterations     int      // safety limit (default: 100, max: 10000)
+	MaxIterationsExpr string   // dynamic expression for max_iterations (e.g., "{{inputs.limit}}")
+	BreakCondition    string   // optional early exit expression
+	OnComplete        string   // next state after loop completes
 }
 
 // Validate checks if the loop configuration is valid.
@@ -55,15 +56,22 @@ func (c *LoopConfig) Validate() error {
 		return errors.New("body is required for loop steps")
 	}
 
-	// Validate max_iterations
-	if c.MaxIterations < 0 {
-		return errors.New("max_iterations must be non-negative")
-	}
-	if c.MaxIterations > MaxAllowedIterations {
-		return errors.New("max_iterations exceeds maximum allowed limit")
+	// Validate max_iterations (skip range check if dynamic expression is used)
+	if !c.IsMaxIterationsDynamic() {
+		if c.MaxIterations < 0 {
+			return errors.New("max_iterations must be non-negative")
+		}
+		if c.MaxIterations > MaxAllowedIterations {
+			return errors.New("max_iterations exceeds maximum allowed limit")
+		}
 	}
 
 	return nil
+}
+
+// IsMaxIterationsDynamic returns true if max_iterations uses a dynamic expression.
+func (c *LoopConfig) IsMaxIterationsDynamic() bool {
+	return c.MaxIterationsExpr != ""
 }
 
 // IterationResult holds the result of a single loop iteration.

@@ -1,0 +1,31 @@
+# F037 Test Fixture: Dynamic max_iterations from input
+# US1: Define Dynamic Max Iterations from Inputs
+name: test-loop-dynamic
+version: "1.0.0"
+description: Loop with dynamic max_iterations from input variable
+
+inputs:
+  - name: limit
+    type: integer
+    description: Maximum number of iterations
+    required: true
+    validation:
+      min: 1
+      max: 100
+
+states:
+  initial: count_loop
+  count_loop:
+    type: for_each
+    items: '["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]'
+    max_iterations: "{{.inputs.limit}}"
+    body:
+      - echo_item
+    on_complete: done
+  echo_item:
+    type: step
+    command: 'echo "Item {{.loop.Index}}: {{.loop.Item}}"'
+    on_success: count_loop
+  done:
+    type: terminal
+    status: success

@@ -193,7 +193,7 @@ process_single:
 |--------|------|---------|-------------|
 | `items` | string | - | Template expression or literal JSON array |
 | `body` | array | - | List of step names to execute each iteration |
-| `max_iterations` | int | 100 | Safety limit (max: 10000) |
+| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports interpolation. |
 | `break_when` | string | - | Expression to exit loop early |
 | `on_complete` | string | - | Next state after loop completes |
 
@@ -216,6 +216,29 @@ Items can come from a template expression:
 ```yaml
 items: "{{.inputs.files}}"
 ```
+
+### Dynamic Max Iterations
+
+The `max_iterations` field supports interpolation and arithmetic expressions:
+
+```yaml
+# From input parameter
+max_iterations: "{{.inputs.retry_count}}"
+
+# From environment variable
+max_iterations: "{{.env.MAX_RETRIES}}"
+
+# Arithmetic expression
+max_iterations: "{{.inputs.pages * .inputs.retries_per_page}}"
+```
+
+Supported arithmetic operators: `+`, `-`, `*`, `/`, `%`
+
+Dynamic values are resolved at loop initialization time. Validation ensures:
+- Result is a positive integer
+- Value does not exceed 10000 (safety limit)
+
+Use `awf validate` to detect undefined variables before runtime.
 
 ---
 
@@ -248,9 +271,9 @@ wait:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `while` | string | - | Condition expression (loop while true) |
+| `while` | string | - | Condition expression (loop while true). Supports interpolation. |
 | `body` | array | - | List of step names to execute each iteration |
-| `max_iterations` | int | 100 | Safety limit (max: 10000) |
+| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports interpolation. |
 | `break_when` | string | - | Expression to exit loop early |
 | `on_complete` | string | - | Next state after loop completes |
 

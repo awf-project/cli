@@ -215,6 +215,35 @@ Or literal JSON:
 items: '["a.txt", "b.txt", "c.txt"]'
 ```
 
+### Loop Bounds (max_iterations)
+
+Loop bounds support interpolation and arithmetic:
+
+```yaml
+# From input
+max_iterations: "{{.inputs.retry_limit}}"
+
+# From environment
+max_iterations: "{{.env.MAX_RETRIES}}"
+
+# Arithmetic expression
+max_iterations: "{{.inputs.pages * .inputs.retries_per_page}}"
+```
+
+Supported operators: `+`, `-`, `*`, `/`, `%`
+
+Dynamic values are resolved at loop initialization (before first iteration).
+Static validation warns about undefined variables during `awf validate`.
+
+### Loop Conditions
+
+The `while` and `until` conditions support interpolation:
+
+```yaml
+while: "{{.states.check.output}} != 'done'"
+until: "{{.states.counter.output}} >= {{.inputs.threshold}}"
+```
+
 ## Template Parameters
 
 Template parameters use a different syntax: `{{parameters.name}}`
