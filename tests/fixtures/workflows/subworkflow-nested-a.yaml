@@ -1,0 +1,40 @@
+# F023 Test Fixture: Nested workflow Level A (top-level parent)
+# Tests 3-level nesting: A → B → C (US4)
+name: subworkflow-nested-a
+version: "1.0.0"
+description: Top-level workflow that calls nested-b
+
+inputs:
+  - name: data
+    type: string
+    required: true
+    description: Data to pass through the chain
+
+outputs:
+  - name: final_result
+    from: states.call_b.output
+    description: Final result after passing through all levels
+
+states:
+  initial: start
+  start:
+    type: step
+    command: 'echo "Level A: Starting with {{.inputs.data}}"'
+    on_success: call_b
+    on_failure: error
+  call_b:
+    type: call_workflow
+    workflow: subworkflow-nested-b
+    inputs:
+      data: "{{.inputs.data}}-from-A"
+    outputs:
+      result: b_result
+    timeout: 120
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

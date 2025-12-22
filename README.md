@@ -10,6 +10,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 - **State Machine Execution** - Define workflows as state machines with conditional transitions
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
 - **Loop Constructs** - For-each and while loops with full context access
+- **Sub-Workflows** - Invoke workflows from other workflows with input/output mapping
 - **Retry with Backoff** - Automatic retry with exponential, linear, or constant backoff
 - **Workflow Templates** - Reusable step patterns with parameters
 - **Input Validation** - Type checking, patterns, enums, file validation

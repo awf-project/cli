@@ -33,6 +33,11 @@ const (
 
 	// Loop expression validation codes
 	ErrUndefinedLoopVariable ValidationCode = "undefined_loop_variable"
+
+	// Sub-workflow validation codes
+	ErrCircularWorkflowCall ValidationCode = "circular_workflow_call"
+	ErrUndefinedSubworkflow ValidationCode = "undefined_subworkflow"
+	ErrMaxNestingExceeded   ValidationCode = "max_nesting_exceeded"
 )
 
 // ValidationError represents a single validation issue.

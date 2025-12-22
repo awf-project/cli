@@ -198,7 +198,7 @@ func formatCyclePath(path []string) string {
 }
 
 // GetTransitions returns all outbound transitions from a step.
-// For command steps: on_success, on_failure
+// For command/operation/loop/call_workflow steps: on_success, on_failure
 // For parallel steps: on_success, on_failure, and all branches
 // For terminal steps: empty
 func GetTransitions(step *Step) []string {

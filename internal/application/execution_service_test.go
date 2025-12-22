@@ -2089,3 +2089,364 @@ func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 	assert.Equal(t, "current", exec.CurrentStep)
 	assert.Equal(t, now.Round(time.Second), exec.UpdatedAt.Round(time.Second))
 }
+
+// =============================================================================
+// Call Workflow Dispatcher Tests (F023: T013)
+// =============================================================================
+// These tests verify that the dispatcher correctly routes StepTypeCallWorkflow
+// steps to the executeCallWorkflowStep method in both Run() and Resume() paths.
+
+func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
+	// Test that the dispatcher correctly routes call_workflow steps
+	repo := newMockRepository()
+
+	// Simple child workflow
+	repo.workflows["child"] = &workflow.Workflow{
+		Name:    "child",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo child",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent workflow with call_workflow step
+	repo.workflows["parent"] = &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call_child",
+		Steps: map[string]*workflow.Step{
+			"call_child": {
+				Name: "call_child",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "child",
+				},
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Run(context.Background(), "parent", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify call_child step was executed (recorded in state)
+	state, ok := ctx.GetStepState("call_child")
+	require.True(t, ok, "call_child step should be recorded")
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
+}
+
+func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
+	// Test call_workflow step in a sequence with other step types
+	repo := newMockRepository()
+
+	// Child workflow
+	repo.workflows["helper"] = &workflow.Workflow{
+		Name:    "helper",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo helper",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent: command -> call_workflow -> command -> done
+	repo.workflows["sequence"] = &workflow.Workflow{
+		Name:    "sequence",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {
+				Name:      "step1",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo step1",
+				OnSuccess: "call_helper",
+			},
+			"call_helper": {
+				Name: "call_helper",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "helper",
+				},
+				OnSuccess: "step2",
+			},
+			"step2": {
+				Name:      "step2",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo step2",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Run(context.Background(), "sequence", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// All steps should be executed
+	_, hasStep1 := ctx.GetStepState("step1")
+	_, hasCallHelper := ctx.GetStepState("call_helper")
+	_, hasStep2 := ctx.GetStepState("step2")
+
+	assert.True(t, hasStep1, "step1 should be recorded")
+	assert.True(t, hasCallHelper, "call_helper should be recorded")
+	assert.True(t, hasStep2, "step2 should be recorded")
+}
+
+func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
+	// Test that call_workflow step follows on_failure transition when child fails
+	repo := newMockRepository()
+
+	// Failing child workflow
+	repo.workflows["failing-child"] = &workflow.Workflow{
+		Name:    "failing-child",
+		Initial: "fail",
+		Steps: map[string]*workflow.Step{
+			"fail": {
+				Name:      "fail",
+				Type:      workflow.StepTypeCommand,
+				Command:   "exit 1",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent with on_failure transition
+	repo.workflows["parent-with-handler"] = &workflow.Workflow{
+		Name:    "parent-with-handler",
+		Initial: "call_child",
+		Steps: map[string]*workflow.Step{
+			"call_child": {
+				Name: "call_child",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "failing-child",
+				},
+				OnSuccess: "success",
+				OnFailure: "error_handler",
+			},
+			"success":       {Name: "success", Type: workflow.StepTypeTerminal},
+			"error_handler": {Name: "error_handler", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	executor := newMockExecutor()
+	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Run(context.Background(), "parent-with-handler", nil)
+
+	require.NoError(t, err) // Workflow completes via error handler
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "error_handler", ctx.CurrentStep, "should follow on_failure transition")
+}
+
+func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
+	// Test that Resume correctly routes call_workflow steps
+	// This tests the executeFromStep dispatcher
+	repo := newMockRepository()
+
+	// Child workflow
+	repo.workflows["child"] = &workflow.Workflow{
+		Name:    "child",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo child",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent with call_workflow
+	repo.workflows["resume-parent"] = &workflow.Workflow{
+		Name:    "resume-parent",
+		Initial: "prep",
+		Steps: map[string]*workflow.Step{
+			"prep": {
+				Name:      "prep",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo prep",
+				OnSuccess: "call_child",
+			},
+			"call_child": {
+				Name: "call_child",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "child",
+				},
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Create persisted state at call_child step
+	store := newMockStateStore()
+	store.states["resume-test-id"] = &workflow.ExecutionContext{
+		WorkflowID:   "resume-test-id",
+		WorkflowName: "resume-parent",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "call_child", // Resuming at call_workflow step
+		Inputs:       make(map[string]any),
+		States: map[string]workflow.StepState{
+			"prep": {Name: "prep", Status: workflow.StatusCompleted},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Resume(context.Background(), "resume-test-id", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify call_child was executed via resume
+	state, ok := ctx.GetStepState("call_child")
+	require.True(t, ok, "call_child step should be recorded after resume")
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
+}
+
+func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
+	// Test dispatcher correctly handles workflow with mixed step types
+	// Testing: command -> call_workflow -> command sequence
+	repo := newMockRepository()
+
+	// Child workflow
+	repo.workflows["subflow"] = &workflow.Workflow{
+		Name:    "subflow",
+		Initial: "sub_work",
+		Steps: map[string]*workflow.Step{
+			"sub_work": {
+				Name:      "sub_work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo sub",
+				OnSuccess: "sub_done",
+			},
+			"sub_done": {Name: "sub_done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent with command and call_workflow steps interleaved
+	repo.workflows["mixed-types"] = &workflow.Workflow{
+		Name:    "mixed-types",
+		Initial: "first_step",
+		Steps: map[string]*workflow.Step{
+			"first_step": {
+				Name:      "first_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo first",
+				OnSuccess: "call_subflow",
+			},
+			"call_subflow": {
+				Name: "call_subflow",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "subflow",
+				},
+				OnSuccess: "final_step",
+			},
+			"final_step": {
+				Name:      "final_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo final",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Run(context.Background(), "mixed-types", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify all step types were dispatched correctly
+	_, hasFirst := ctx.GetStepState("first_step")
+	_, hasCallSubflow := ctx.GetStepState("call_subflow")
+	_, hasFinal := ctx.GetStepState("final_step")
+
+	assert.True(t, hasFirst, "first_step should be recorded")
+	assert.True(t, hasCallSubflow, "call_subflow should be recorded")
+	assert.True(t, hasFinal, "final_step should be recorded")
+}
+
+func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
+	// Ensure call_workflow doesn't fall through to default case
+	// This test verifies call_workflow is handled before the default case
+	repo := newMockRepository()
+
+	// Child workflow
+	repo.workflows["simple-child"] = &workflow.Workflow{
+		Name:    "simple-child",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo done",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Parent with only call_workflow step
+	repo.workflows["only-call"] = &workflow.Workflow{
+		Name:    "only-call",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name: "call",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "simple-child",
+				},
+				OnSuccess: "done",
+				// Note: No Command field - if dispatcher used default case,
+				// it would try to execute empty command and fail
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+	ctx, err := execSvc.Run(context.Background(), "only-call", nil)
+
+	// Should succeed without trying to execute empty command
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
