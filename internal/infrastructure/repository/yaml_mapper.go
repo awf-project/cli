@@ -80,6 +80,8 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Description:     y.Description,
 		Command:         y.Command,
 		Dir:             y.Dir,
+		Operation:       y.Operation,
+		OperationInputs: y.OperationInputs,
 		Branches:        y.Parallel,
 		Strategy:        y.Strategy,
 		MaxConcurrent:   y.MaxConcurrent,
@@ -94,6 +96,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Status:          workflow.TerminalStatus(y.Status),
 		Loop:            mapLoopConfig(y),
 		TemplateRef:     mapTemplateRef(y.UseTemplate, y.Parameters),
+		CallWorkflow:    mapCallWorkflowFlat(y),
 	}
 
 	// Parse timeout
@@ -121,6 +124,10 @@ func parseStepType(s string) (workflow.StepType, error) {
 		return workflow.StepTypeForEach, nil
 	case "while":
 		return workflow.StepTypeWhile, nil
+	case "operation":
+		return workflow.StepTypeOperation, nil
+	case "call_workflow":
+		return workflow.StepTypeCallWorkflow, nil
 	default:
 		return "", NewParseError("", "", "unknown step type: "+s)
 	}
@@ -344,5 +351,18 @@ func mapTemplateRef(useTemplate string, parameters map[string]any) *workflow.Wor
 	return &workflow.WorkflowTemplateRef{
 		TemplateName: useTemplate,
 		Parameters:   parameters,
+	}
+}
+
+// mapCallWorkflowFlat converts flat yamlStep fields to domain CallWorkflowConfig.
+func mapCallWorkflowFlat(y yamlStep) *workflow.CallWorkflowConfig {
+	if y.Workflow == "" {
+		return nil
+	}
+	return &workflow.CallWorkflowConfig{
+		Workflow: y.Workflow,
+		Inputs:   y.CallInputs,
+		Outputs:  y.CallOutputs,
+		// Timeout is handled separately via step.Timeout
 	}
 }

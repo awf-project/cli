@@ -52,6 +52,15 @@ type yamlStep struct {
 	// Template reference (for using templates in steps)
 	UseTemplate string         `yaml:"use_template"` // template name to use
 	Parameters  map[string]any `yaml:"parameters"`   // parameters to pass to template
+
+	// Operation configuration (for plugin operations - F021)
+	OperationInputs map[string]any `yaml:"operation_inputs"` // input parameters for operations
+
+	// Call workflow configuration (for sub-workflows - F023)
+	// Flat structure: workflow, call_inputs, call_outputs directly on step
+	Workflow    string            `yaml:"workflow"`     // workflow name to invoke
+	CallInputs  map[string]string `yaml:"inputs"`       // parent var → sub-workflow input
+	CallOutputs map[string]string `yaml:"outputs"`      // sub-workflow output → parent var
 }
 
 // yamlTransition is the YAML representation of a conditional transition.
