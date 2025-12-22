@@ -1,0 +1,30 @@
+# F023 Test Fixture: Nested workflow Level C (leaf level)
+# Tests 3-level nesting: A → B → C (US4)
+name: subworkflow-nested-c
+version: "1.0.0"
+description: Leaf-level workflow called by B, does actual work
+
+inputs:
+  - name: data
+    type: string
+    required: true
+    description: Data received through the chain
+
+outputs:
+  - name: result
+    from: states.work.output
+    description: Final processed result
+
+states:
+  initial: work
+  work:
+    type: step
+    command: 'echo "Level C: Final processing of {{.inputs.data}}"'
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

@@ -60,6 +60,7 @@ states:
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
 | `while` | Repeat until condition is false |
+| `call_workflow` | Invoke another workflow as a sub-workflow |
 
 ---
 
@@ -313,6 +314,111 @@ process:
 ```
 
 Parent chains support arbitrary depth: `{{.loop.parent.parent.item}}` for 3-level nesting.
+
+---
+
+## Call Workflow (Sub-Workflow)
+
+Invoke another workflow as a sub-workflow, passing inputs and capturing outputs.
+
+```yaml
+analyze_code:
+  type: call_workflow
+  call_workflow:
+    workflow: analyze-single-file
+    inputs:
+      file_path: "{{.inputs.target_file}}"
+      max_tokens: "{{.inputs.max_tokens}}"
+    outputs:
+      result: analysis_result
+    timeout: 300
+  on_success: aggregate_results
+  on_failure: handle_error
+```
+
+### Call Workflow Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `workflow` | string | - | Name of the workflow to invoke |
+| `inputs` | map | - | Input mappings (parent var → child input) |
+| `outputs` | map | - | Output mappings (child output → parent var) |
+| `timeout` | int | 0 | Sub-workflow timeout in seconds (0 = inherit) |
+
+### Child Workflow Definition
+
+The child workflow must define its inputs and outputs:
+
+```yaml
+# analyze-single-file.yaml
+name: analyze-single-file
+version: "1.0.0"
+
+inputs:
+  - name: file_path
+    type: string
+    required: true
+  - name: max_tokens
+    type: integer
+    default: 2000
+
+states:
+  initial: read
+  read:
+    type: step
+    command: cat "{{.inputs.file_path}}"
+    on_success: analyze
+    on_failure: error
+  analyze:
+    type: step
+    command: claude -c "Analyze: {{.states.read.output}}"
+    timeout: 120
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure
+
+outputs:
+  - name: analysis_result
+    from: states.analyze.output
+```
+
+### Accessing Sub-Workflow Results
+
+Outputs from the sub-workflow are accessible via the standard states interpolation:
+
+```yaml
+# In parent workflow, after analyze_code step
+aggregate_results:
+  type: step
+  command: echo "Analysis: {{.states.analyze_code.output}}"
+  on_success: done
+```
+
+### Nested Sub-Workflows
+
+Sub-workflows can call other sub-workflows. AWF tracks the call stack to detect circular references:
+
+```yaml
+# workflow-a.yaml calls workflow-b
+# workflow-b.yaml calls workflow-c
+# Supported: A → B → C (3-level nesting)
+# Blocked: A → B → A (circular reference)
+```
+
+Maximum nesting depth is 10 levels. Circular calls are detected at runtime with clear error messages showing the call stack.
+
+### Error Handling
+
+Sub-workflow errors propagate to the parent:
+
+- If sub-workflow reaches a `terminal` state with `status: failure`, parent follows `on_failure`
+- If sub-workflow times out, parent receives timeout error and follows `on_failure`
+- If sub-workflow definition is not found, execution fails with `undefined_subworkflow` error
 
 ---
 

@@ -53,6 +53,7 @@ type ExecutionContext struct {
 	UpdatedAt    time.Time
 	CompletedAt  time.Time
 	CurrentLoop  *LoopContext // current loop iteration context (nil when not in a loop)
+	CallStack    []string     // active workflow names for circular detection (F023)
 }
 
 // NewExecutionContext creates a new execution context.
@@ -92,4 +93,37 @@ func (c *ExecutionContext) SetStepState(stepName string, state StepState) {
 func (c *ExecutionContext) GetStepState(stepName string) (StepState, bool) {
 	state, ok := c.States[stepName]
 	return state, ok
+}
+
+// PushCallStack adds a workflow name to the call stack.
+// Used when entering a sub-workflow to track the call chain.
+func (c *ExecutionContext) PushCallStack(workflowName string) {
+	c.CallStack = append(c.CallStack, workflowName)
+	c.UpdatedAt = time.Now()
+}
+
+// PopCallStack removes the last workflow name from the call stack.
+// Used when exiting a sub-workflow. Does nothing if stack is empty.
+func (c *ExecutionContext) PopCallStack() {
+	if len(c.CallStack) > 0 {
+		c.CallStack = c.CallStack[:len(c.CallStack)-1]
+		c.UpdatedAt = time.Now()
+	}
+}
+
+// IsInCallStack checks if a workflow name is already in the call stack.
+// Used to detect circular workflow calls.
+func (c *ExecutionContext) IsInCallStack(workflowName string) bool {
+	for _, name := range c.CallStack {
+		if name == workflowName {
+			return true
+		}
+	}
+	return false
+}
+
+// CallStackDepth returns the current depth of the call stack.
+// Used to enforce maximum nesting depth for sub-workflows.
+func (c *ExecutionContext) CallStackDepth() int {
+	return len(c.CallStack)
 }

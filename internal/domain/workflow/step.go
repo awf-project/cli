@@ -9,12 +9,13 @@ import (
 type StepType string
 
 const (
-	StepTypeCommand   StepType = "command"
-	StepTypeParallel  StepType = "parallel"
-	StepTypeTerminal  StepType = "terminal"
-	StepTypeForEach   StepType = "for_each"
-	StepTypeWhile     StepType = "while"
-	StepTypeOperation StepType = "operation" // F021: plugin-provided operation
+	StepTypeCommand      StepType = "command"
+	StepTypeParallel     StepType = "parallel"
+	StepTypeTerminal     StepType = "terminal"
+	StepTypeForEach      StepType = "for_each"
+	StepTypeWhile        StepType = "while"
+	StepTypeOperation    StepType = "operation"     // F021: plugin-provided operation
+	StepTypeCallWorkflow StepType = "call_workflow" // F023: invoke another workflow
 )
 
 // TerminalStatus defines the outcome of a terminal state.
@@ -86,6 +87,7 @@ type Step struct {
 	Status          TerminalStatus       // for terminal type: success or failure
 	Loop            *LoopConfig          // for for_each and while types
 	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
+	CallWorkflow    *CallWorkflowConfig  // for call_workflow type: sub-workflow configuration
 }
 
 // Validate checks if the step configuration is valid.
@@ -139,6 +141,13 @@ func (s *Step) Validate() error {
 	case StepTypeOperation:
 		if s.Operation == "" {
 			return errors.New("operation is required for operation-type steps")
+		}
+	case StepTypeCallWorkflow:
+		if s.CallWorkflow == nil {
+			return errors.New("call_workflow config is required for call_workflow steps")
+		}
+		if err := s.CallWorkflow.Validate(); err != nil {
+			return fmt.Errorf("call_workflow config: %w", err)
 		}
 	default:
 		return errors.New("unknown step type")

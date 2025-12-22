@@ -689,6 +689,426 @@ func TestGetTransitions_ParallelStep(t *testing.T) {
 }
 
 // =============================================================================
+// GetTransitions call_workflow Tests (F023)
+// =============================================================================
+
+func TestGetTransitions_CallWorkflowStep(t *testing.T) {
+	// call_workflow steps should return on_success and on_failure like command steps
+	step := &workflow.Step{
+		Name:      "call_sub",
+		Type:      workflow.StepTypeCallWorkflow,
+		OnSuccess: "aggregate",
+		OnFailure: "handle_error",
+		CallWorkflow: &workflow.CallWorkflowConfig{
+			Workflow: "analyze-single",
+			Inputs:   map[string]string{"file": "{{inputs.file}}"},
+			Outputs:  map[string]string{"result": "analysis_result"},
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Contains(t, transitions, "aggregate")
+	assert.Contains(t, transitions, "handle_error")
+	assert.Len(t, transitions, 2)
+}
+
+func TestGetTransitions_CallWorkflowStepOnlySuccess(t *testing.T) {
+	// call_workflow with only on_success defined
+	step := &workflow.Step{
+		Name:      "call_sub",
+		Type:      workflow.StepTypeCallWorkflow,
+		OnSuccess: "next_step",
+		CallWorkflow: &workflow.CallWorkflowConfig{
+			Workflow: "child-workflow",
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Contains(t, transitions, "next_step")
+	assert.Len(t, transitions, 1)
+}
+
+func TestGetTransitions_CallWorkflowStepOnlyFailure(t *testing.T) {
+	// call_workflow with only on_failure defined (unusual but valid)
+	step := &workflow.Step{
+		Name:      "call_sub",
+		Type:      workflow.StepTypeCallWorkflow,
+		OnFailure: "error_handler",
+		CallWorkflow: &workflow.CallWorkflowConfig{
+			Workflow: "risky-workflow",
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Contains(t, transitions, "error_handler")
+	assert.Len(t, transitions, 1)
+}
+
+func TestGetTransitions_CallWorkflowStepNoTransitions(t *testing.T) {
+	// call_workflow with no explicit transitions (edge case)
+	step := &workflow.Step{
+		Name: "call_sub",
+		Type: workflow.StepTypeCallWorkflow,
+		CallWorkflow: &workflow.CallWorkflowConfig{
+			Workflow: "standalone-workflow",
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Empty(t, transitions)
+}
+
+func TestGetTransitions_NilStep(t *testing.T) {
+	transitions := workflow.GetTransitions(nil)
+
+	assert.Nil(t, transitions)
+}
+
+// =============================================================================
+// Graph validation with call_workflow (F023)
+// =============================================================================
+
+func TestValidateGraph_CallWorkflowReachable(t *testing.T) {
+	// Workflow with call_workflow step - should be reachable via transitions
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo prepare",
+			OnSuccess: "call_child",
+			OnFailure: "error",
+		},
+		"call_child": {
+			Name:      "call_child",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "done",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "child-workflow",
+			},
+		},
+		"done": {
+			Name:   "done",
+			Type:   workflow.StepTypeTerminal,
+			Status: workflow.TerminalSuccess,
+		},
+		"error": {
+			Name:   "error",
+			Type:   workflow.StepTypeTerminal,
+			Status: workflow.TerminalFailure,
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "start")
+
+	require.NotNil(t, result)
+	assert.False(t, result.HasErrors(), "call_workflow step should be reachable")
+	assert.False(t, result.HasWarnings())
+}
+
+func TestValidateGraph_CallWorkflowUnreachable(t *testing.T) {
+	// Orphan call_workflow step should be detected
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo start",
+			OnSuccess: "done",
+		},
+		"done": {
+			Name: "done",
+			Type: workflow.StepTypeTerminal,
+		},
+		"orphan_call": {
+			Name:      "orphan_call",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "done",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "some-workflow",
+			},
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "start")
+
+	require.NotNil(t, result)
+	assert.True(t, result.HasErrors(), "orphan call_workflow should be detected")
+
+	found := false
+	for _, err := range result.Errors {
+		if err.Code == workflow.ErrUnreachableState {
+			found = true
+			assert.Contains(t, err.Message, "orphan_call")
+		}
+	}
+	assert.True(t, found, "should have ErrUnreachableState for orphan_call")
+}
+
+func TestValidateGraph_CallWorkflowInvalidTransition(t *testing.T) {
+	// call_workflow with invalid on_success target
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "nonexistent",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "child-workflow",
+			},
+		},
+		"error": {
+			Name: "error",
+			Type: workflow.StepTypeTerminal,
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "start")
+
+	require.NotNil(t, result)
+	assert.True(t, result.HasErrors(), "invalid transition should be detected")
+
+	found := false
+	for _, err := range result.Errors {
+		if err.Code == workflow.ErrInvalidTransition {
+			found = true
+			assert.Contains(t, err.Message, "nonexistent")
+		}
+	}
+	assert.True(t, found, "should have ErrInvalidTransition for nonexistent target")
+}
+
+func TestValidateGraph_CallWorkflowCycle(t *testing.T) {
+	// Cycle: start -> call_child -> start
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo",
+			OnSuccess: "call_child",
+			OnFailure: "error",
+		},
+		"call_child": {
+			Name:      "call_child",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "start", // cycles back
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "child-workflow",
+			},
+		},
+		"error": {
+			Name: "error",
+			Type: workflow.StepTypeTerminal,
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "start")
+
+	require.NotNil(t, result)
+	assert.False(t, result.HasErrors(), "cycles should not be errors")
+	assert.True(t, result.HasWarnings(), "cycle should produce warning")
+
+	found := false
+	for _, warn := range result.Warnings {
+		if warn.Code == workflow.ErrCycleDetected {
+			found = true
+		}
+	}
+	assert.True(t, found, "should have ErrCycleDetected warning")
+}
+
+func TestFindReachableStates_WithCallWorkflow(t *testing.T) {
+	// call_workflow transitions should be followed for reachability
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo",
+			OnSuccess: "call_child",
+		},
+		"call_child": {
+			Name:      "call_child",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "process_result",
+			OnFailure: "handle_error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "child-workflow",
+			},
+		},
+		"process_result": {
+			Name:      "process_result",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo result",
+			OnSuccess: "done",
+		},
+		"handle_error": {
+			Name:      "handle_error",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo error",
+			OnSuccess: "error_terminal",
+		},
+		"done": {
+			Name: "done",
+			Type: workflow.StepTypeTerminal,
+		},
+		"error_terminal": {
+			Name: "error_terminal",
+			Type: workflow.StepTypeTerminal,
+		},
+	}
+
+	reachable := workflow.FindReachableStates(steps, "start")
+
+	assert.Len(t, reachable, 6)
+	assert.True(t, reachable["start"])
+	assert.True(t, reachable["call_child"])
+	assert.True(t, reachable["process_result"])
+	assert.True(t, reachable["handle_error"])
+	assert.True(t, reachable["done"])
+	assert.True(t, reachable["error_terminal"])
+}
+
+func TestDetectCycles_WithCallWorkflow(t *testing.T) {
+	// Cycle detection should work through call_workflow steps
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo",
+			OnSuccess: "call_child",
+		},
+		"call_child": {
+			Name:      "call_child",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "check",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "child",
+			},
+		},
+		"check": {
+			Name:      "check",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo",
+			OnSuccess: "start", // cycle back through call_workflow
+			OnFailure: "done",
+		},
+		"done": {
+			Name: "done",
+			Type: workflow.StepTypeTerminal,
+		},
+	}
+
+	cycles := workflow.DetectCycles(steps, "start")
+
+	assert.NotEmpty(t, cycles, "should detect cycle through call_workflow")
+}
+
+func TestValidateGraph_NestedCallWorkflows(t *testing.T) {
+	// Multiple sequential call_workflow steps (simulating nested calls)
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "level2",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "level1-workflow",
+			},
+		},
+		"level2": {
+			Name:      "level2",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "level3",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "level2-workflow",
+			},
+		},
+		"level3": {
+			Name:      "level3",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "done",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "level3-workflow",
+			},
+		},
+		"done": {
+			Name:   "done",
+			Type:   workflow.StepTypeTerminal,
+			Status: workflow.TerminalSuccess,
+		},
+		"error": {
+			Name:   "error",
+			Type:   workflow.StepTypeTerminal,
+			Status: workflow.TerminalFailure,
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "start")
+
+	require.NotNil(t, result)
+	assert.False(t, result.HasErrors(), "sequential call_workflow steps should be valid")
+}
+
+func TestValidateGraph_CallWorkflowMixedWithOtherTypes(t *testing.T) {
+	// Mix of command, parallel, and call_workflow steps
+	steps := map[string]*workflow.Step{
+		"prepare": {
+			Name:      "prepare",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo prepare",
+			OnSuccess: "parallel_fetch",
+		},
+		"parallel_fetch": {
+			Name:      "parallel_fetch",
+			Type:      workflow.StepTypeParallel,
+			Branches:  []string{"fetch_a", "fetch_b"},
+			OnSuccess: "call_processor",
+			OnFailure: "error",
+		},
+		"fetch_a": {
+			Name:      "fetch_a",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo a",
+			OnSuccess: "done",
+		},
+		"fetch_b": {
+			Name:      "fetch_b",
+			Type:      workflow.StepTypeCommand,
+			Command:   "echo b",
+			OnSuccess: "done",
+		},
+		"call_processor": {
+			Name:      "call_processor",
+			Type:      workflow.StepTypeCallWorkflow,
+			OnSuccess: "done",
+			OnFailure: "error",
+			CallWorkflow: &workflow.CallWorkflowConfig{
+				Workflow: "processor",
+			},
+		},
+		"done": {
+			Name: "done",
+			Type: workflow.StepTypeTerminal,
+		},
+		"error": {
+			Name: "error",
+			Type: workflow.StepTypeTerminal,
+		},
+	}
+
+	result := workflow.ValidateGraph(steps, "prepare")
+
+	require.NotNil(t, result)
+	assert.False(t, result.HasErrors(), "mixed step types should be valid")
+}
+
+// =============================================================================
 // ValidationResult Tests
 // =============================================================================
 

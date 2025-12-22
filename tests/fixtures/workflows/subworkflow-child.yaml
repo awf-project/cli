@@ -1,0 +1,35 @@
+# F023 Test Fixture: Simple child workflow for sub-workflow testing
+# This workflow is designed to be called from parent workflows
+name: subworkflow-child
+version: "1.0.0"
+description: Simple child workflow that receives input and produces output
+
+inputs:
+  - name: message
+    type: string
+    required: true
+    description: Message to process
+  - name: count
+    type: integer
+    required: false
+    default: 1
+    description: Number of times to echo
+
+outputs:
+  - name: result
+    from: states.process.output
+    description: The processed result
+
+states:
+  initial: process
+  process:
+    type: step
+    command: 'echo "Child processed: {{.inputs.message}} (count={{.inputs.count}})"'
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure
