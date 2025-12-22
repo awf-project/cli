@@ -113,6 +113,17 @@ func (s *ExecutionService) Run(
 	workflowName string,
 	inputs map[string]any,
 ) (*workflow.ExecutionContext, error) {
+	return s.runWithCallStack(ctx, workflowName, inputs, nil)
+}
+
+// runWithCallStack executes a workflow with an optional parent call stack.
+// This is used internally by executeCallWorkflowStep to preserve circular detection.
+func (s *ExecutionService) runWithCallStack(
+	ctx context.Context,
+	workflowName string,
+	inputs map[string]any,
+	parentCallStack []string,
+) (*workflow.ExecutionContext, error) {
 	// load workflow
 	wf, err := s.workflowSvc.GetWorkflow(ctx, workflowName)
 	if err != nil {
@@ -132,6 +143,12 @@ func (s *ExecutionService) Run(
 	// initialize execution context
 	execCtx := workflow.NewExecutionContext(uuid.New().String(), wf.Name)
 	execCtx.Status = workflow.StatusRunning
+
+	// Inherit parent call stack for circular detection in sub-workflows
+	if len(parentCallStack) > 0 {
+		execCtx.CallStack = make([]string, len(parentCallStack))
+		copy(execCtx.CallStack, parentCallStack)
+	}
 
 	// Apply default values for inputs not provided
 	for _, inp := range wf.Inputs {
@@ -193,6 +210,8 @@ func (s *ExecutionService) Run(
 			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeOperation:
 			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
+		case workflow.StepTypeCallWorkflow:
+			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -1063,6 +1082,8 @@ func (s *ExecutionService) executeFromStep(
 			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeOperation:
 			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
+		case workflow.StepTypeCallWorkflow:
+			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}

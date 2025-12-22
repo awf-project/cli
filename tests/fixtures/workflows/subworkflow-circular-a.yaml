@@ -1,0 +1,37 @@
+# F023 Test Fixture: Circular workflow A
+# Tests circular call detection: A → B → A (US3)
+# This should trigger ErrCircularWorkflowCall when executed
+name: subworkflow-circular-a
+version: "1.0.0"
+description: Workflow A that calls B, which calls back to A (circular)
+
+inputs:
+  - name: data
+    type: string
+    required: false
+    default: "start"
+    description: Data to pass
+
+states:
+  initial: start
+  start:
+    type: step
+    command: 'echo "Circular A: {{.inputs.data}}"'
+    on_success: call_b
+    on_failure: error
+  call_b:
+    type: call_workflow
+    workflow: subworkflow-circular-b
+    inputs:
+      data: "{{.inputs.data}}-A"
+    outputs:
+      result: b_result
+    timeout: 30
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

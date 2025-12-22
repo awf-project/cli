@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F023**: Workflow Composition with Sub-Workflows
+  - `call_workflow` step type invokes another workflow as a sub-workflow
+  - Input mapping passes parent variables to child workflow via `inputs:`
+  - Output mapping captures child results via `outputs:` for parent access
+  - Circular call detection prevents infinite recursion (A→B→A)
+  - Nested sub-workflows supported with depth tracking
 - **F035**: Workflow Arguments Help Command
   - `awf run <workflow> --help` displays workflow-specific input parameters
   - Shows input name, type, required/optional status, default values, and description
