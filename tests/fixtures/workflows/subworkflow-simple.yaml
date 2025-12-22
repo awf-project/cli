@@ -1,0 +1,46 @@
+# F023 Test Fixture: Simple parent workflow calling a sub-workflow
+# Tests basic call_workflow functionality (US1)
+name: subworkflow-simple
+version: "1.0.0"
+description: Parent workflow that invokes a child sub-workflow
+
+inputs:
+  - name: input_message
+    type: string
+    required: true
+    description: Message to pass to child workflow
+  - name: repeat_count
+    type: integer
+    required: false
+    default: 3
+    description: How many times child should repeat
+
+states:
+  initial: prepare
+  prepare:
+    type: step
+    command: 'echo "Preparing to call sub-workflow with: {{.inputs.input_message}}"'
+    on_success: call_child
+    on_failure: error
+  call_child:
+    type: call_workflow
+    workflow: subworkflow-child
+    inputs:
+      message: "{{.inputs.input_message}}"
+      count: "{{.inputs.repeat_count}}"
+    outputs:
+      result: child_result
+    timeout: 60
+    on_success: aggregate
+    on_failure: error
+  aggregate:
+    type: step
+    command: 'echo "Received from child: {{.states.call_child.output}}"'
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

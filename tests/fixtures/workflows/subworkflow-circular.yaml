@@ -1,0 +1,41 @@
+# F023 Test Fixture: Self-referencing circular workflow
+# Tests direct circular call detection: A → A (US3)
+# This should trigger ErrCircularWorkflowCall when executed
+#
+# Complements subworkflow-circular-a/b.yaml which test indirect circularity (A→B→A)
+name: subworkflow-circular
+version: "1.0.0"
+description: Workflow that calls itself (direct circular reference)
+
+inputs:
+  - name: counter
+    type: string
+    required: false
+    default: "0"
+    description: Counter to track recursion depth (for debugging)
+
+states:
+  initial: start
+  start:
+    type: step
+    command: 'echo "Circular self-call: counter={{.inputs.counter}}"'
+    on_success: call_self
+    on_failure: error
+  call_self:
+    # DIRECT CIRCULAR REFERENCE: workflow calls itself
+    # This should be detected by call stack checking
+    type: call_workflow
+    workflow: subworkflow-circular
+    inputs:
+      counter: "{{.inputs.counter}}-incremented"
+    outputs:
+      result: self_result
+    timeout: 30
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

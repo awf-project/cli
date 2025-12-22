@@ -1,0 +1,37 @@
+# F023 Test Fixture: Circular workflow B
+# Tests circular call detection: A → B → A (US3)
+# This creates the cycle by calling back to A
+name: subworkflow-circular-b
+version: "1.0.0"
+description: Workflow B that calls back to A (creates circular reference)
+
+inputs:
+  - name: data
+    type: string
+    required: true
+    description: Data received from A
+
+states:
+  initial: process
+  process:
+    type: step
+    command: 'echo "Circular B: {{.inputs.data}}"'
+    on_success: call_a
+    on_failure: error
+  call_a:
+    type: call_workflow
+    # THIS CREATES THE CIRCULAR REFERENCE: A → B → A
+    workflow: subworkflow-circular-a
+    inputs:
+      data: "{{.inputs.data}}-B"
+    outputs:
+      result: a_result
+    timeout: 30
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

@@ -453,3 +453,271 @@ func TestLoopContext_JSONSerialize_NilParent(t *testing.T) {
 		assert.Nil(t, parent)
 	}
 }
+
+// =============================================================================
+// F023: CallStack Tests for Sub-Workflow Circular Detection
+// =============================================================================
+
+func TestNewExecutionContext_CallStackInitialized(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-workflow")
+
+	// CallStack should be nil (not initialized) for new contexts
+	// This is fine - Go handles nil slices gracefully
+	assert.Equal(t, 0, ctx.CallStackDepth())
+	assert.False(t, ctx.IsInCallStack("any-workflow"))
+}
+
+func TestPushCallStack_SingleWorkflow(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "parent-workflow")
+
+	ctx.PushCallStack("child-workflow")
+
+	assert.Equal(t, 1, ctx.CallStackDepth())
+	assert.True(t, ctx.IsInCallStack("child-workflow"))
+	assert.False(t, ctx.IsInCallStack("other-workflow"))
+}
+
+func TestPushCallStack_MultipleWorkflows(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	ctx.PushCallStack("workflow-a")
+	ctx.PushCallStack("workflow-b")
+	ctx.PushCallStack("workflow-c")
+
+	assert.Equal(t, 3, ctx.CallStackDepth())
+	assert.True(t, ctx.IsInCallStack("workflow-a"))
+	assert.True(t, ctx.IsInCallStack("workflow-b"))
+	assert.True(t, ctx.IsInCallStack("workflow-c"))
+}
+
+func TestPushCallStack_UpdatesTimestamp(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "name")
+	initialUpdate := ctx.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+	ctx.PushCallStack("child-workflow")
+
+	assert.True(t, ctx.UpdatedAt.After(initialUpdate), "UpdatedAt should be updated after PushCallStack")
+}
+
+func TestPopCallStack_RemovesLastWorkflow(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+	ctx.PushCallStack("workflow-a")
+	ctx.PushCallStack("workflow-b")
+
+	ctx.PopCallStack()
+
+	assert.Equal(t, 1, ctx.CallStackDepth())
+	assert.True(t, ctx.IsInCallStack("workflow-a"))
+	assert.False(t, ctx.IsInCallStack("workflow-b"))
+}
+
+func TestPopCallStack_EmptyStackDoesNotPanic(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	// Should not panic when popping from empty stack
+	assert.NotPanics(t, func() {
+		ctx.PopCallStack()
+	})
+	assert.Equal(t, 0, ctx.CallStackDepth())
+}
+
+func TestPopCallStack_MultiplePopsTillEmpty(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+	ctx.PushCallStack("a")
+	ctx.PushCallStack("b")
+	ctx.PushCallStack("c")
+
+	ctx.PopCallStack()
+	assert.Equal(t, 2, ctx.CallStackDepth())
+
+	ctx.PopCallStack()
+	assert.Equal(t, 1, ctx.CallStackDepth())
+
+	ctx.PopCallStack()
+	assert.Equal(t, 0, ctx.CallStackDepth())
+
+	// Extra pop should be safe
+	ctx.PopCallStack()
+	assert.Equal(t, 0, ctx.CallStackDepth())
+}
+
+func TestPopCallStack_UpdatesTimestamp(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "name")
+	ctx.PushCallStack("child")
+
+	time.Sleep(time.Millisecond)
+	initialUpdate := ctx.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+	ctx.PopCallStack()
+
+	assert.True(t, ctx.UpdatedAt.After(initialUpdate), "UpdatedAt should be updated after PopCallStack")
+}
+
+func TestPopCallStack_EmptyStackDoesNotUpdateTimestamp(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "name")
+	initialUpdate := ctx.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+	ctx.PopCallStack() // no-op on empty stack
+
+	assert.Equal(t, initialUpdate, ctx.UpdatedAt, "UpdatedAt should not change when popping empty stack")
+}
+
+func TestIsInCallStack_EmptyStackReturnsFalse(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	assert.False(t, ctx.IsInCallStack("any-workflow"))
+	assert.False(t, ctx.IsInCallStack(""))
+}
+
+func TestIsInCallStack_ExactMatchRequired(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+	ctx.PushCallStack("my-workflow")
+
+	assert.True(t, ctx.IsInCallStack("my-workflow"))
+	assert.False(t, ctx.IsInCallStack("my-workflow-extended"))
+	assert.False(t, ctx.IsInCallStack("my"))
+	assert.False(t, ctx.IsInCallStack("MY-WORKFLOW")) // case sensitive
+}
+
+func TestIsInCallStack_FindsAnyPositionInStack(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+	ctx.PushCallStack("first")
+	ctx.PushCallStack("second")
+	ctx.PushCallStack("third")
+
+	// All positions should be found
+	assert.True(t, ctx.IsInCallStack("first"))
+	assert.True(t, ctx.IsInCallStack("second"))
+	assert.True(t, ctx.IsInCallStack("third"))
+}
+
+func TestCallStackDepth_EmptyStack(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+	assert.Equal(t, 0, ctx.CallStackDepth())
+}
+
+func TestCallStackDepth_AfterPushAndPop(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	ctx.PushCallStack("a")
+	assert.Equal(t, 1, ctx.CallStackDepth())
+
+	ctx.PushCallStack("b")
+	assert.Equal(t, 2, ctx.CallStackDepth())
+
+	ctx.PopCallStack()
+	assert.Equal(t, 1, ctx.CallStackDepth())
+
+	ctx.PopCallStack()
+	assert.Equal(t, 0, ctx.CallStackDepth())
+}
+
+func TestCallStackDepth_MaxDepthScenario(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	// Push up to MaxCallStackDepth
+	for i := 0; i < workflow.MaxCallStackDepth; i++ {
+		ctx.PushCallStack("workflow-" + string(rune('a'+i)))
+	}
+
+	assert.Equal(t, workflow.MaxCallStackDepth, ctx.CallStackDepth())
+}
+
+func TestCallStack_CircularDetectionWorkflow(t *testing.T) {
+	// Simulates: parent → child-a → child-b → (attempt to call parent again)
+	ctx := workflow.NewExecutionContext("id", "parent-workflow")
+
+	// Enter parent
+	ctx.PushCallStack("parent-workflow")
+	assert.Equal(t, 1, ctx.CallStackDepth())
+
+	// Enter child-a
+	ctx.PushCallStack("child-a")
+	assert.Equal(t, 2, ctx.CallStackDepth())
+
+	// Enter child-b
+	ctx.PushCallStack("child-b")
+	assert.Equal(t, 3, ctx.CallStackDepth())
+
+	// Attempt to call parent again - should detect circular reference
+	assert.True(t, ctx.IsInCallStack("parent-workflow"), "should detect circular call to parent-workflow")
+	assert.True(t, ctx.IsInCallStack("child-a"), "should detect circular call to child-a")
+
+	// child-c is not in stack, so it's safe to call
+	assert.False(t, ctx.IsInCallStack("child-c"))
+
+	// Unwind the stack
+	ctx.PopCallStack() // exit child-b
+	ctx.PopCallStack() // exit child-a
+	ctx.PopCallStack() // exit parent
+
+	assert.Equal(t, 0, ctx.CallStackDepth())
+	assert.False(t, ctx.IsInCallStack("parent-workflow"))
+}
+
+func TestCallStack_PushPopPushSameWorkflow(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	ctx.PushCallStack("workflow-a")
+	assert.True(t, ctx.IsInCallStack("workflow-a"))
+
+	ctx.PopCallStack()
+	assert.False(t, ctx.IsInCallStack("workflow-a"))
+
+	// Push again after pop - should work
+	ctx.PushCallStack("workflow-a")
+	assert.True(t, ctx.IsInCallStack("workflow-a"))
+	assert.Equal(t, 1, ctx.CallStackDepth())
+}
+
+func TestCallStack_JSONSerialize(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+	ctx.PushCallStack("parent")
+	ctx.PushCallStack("child-a")
+	ctx.PushCallStack("child-b")
+
+	data, err := json.Marshal(ctx)
+	require.NoError(t, err)
+
+	var decoded workflow.ExecutionContext
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	// Verify call stack is preserved
+	assert.Equal(t, 3, decoded.CallStackDepth())
+	assert.True(t, decoded.IsInCallStack("parent"))
+	assert.True(t, decoded.IsInCallStack("child-a"))
+	assert.True(t, decoded.IsInCallStack("child-b"))
+}
+
+func TestCallStack_JSONSerialize_EmptyStack(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	data, err := json.Marshal(ctx)
+	require.NoError(t, err)
+
+	var decoded workflow.ExecutionContext
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, decoded.CallStackDepth())
+}
+
+func TestCallStack_StackOrderPreserved(t *testing.T) {
+	ctx := workflow.NewExecutionContext("id", "root")
+
+	workflows := []string{"first", "second", "third", "fourth"}
+	for _, w := range workflows {
+		ctx.PushCallStack(w)
+	}
+
+	// Pop in reverse order and verify
+	for i := len(workflows) - 1; i >= 0; i-- {
+		assert.True(t, ctx.IsInCallStack(workflows[i]))
+		ctx.PopCallStack()
+		assert.False(t, ctx.IsInCallStack(workflows[i]))
+	}
+}
