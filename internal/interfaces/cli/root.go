@@ -94,6 +94,7 @@ Examples:
 	cmd.AddCommand(newHistoryCommand(cfg))
 	cmd.AddCommand(newPluginCommand(cfg))
 	cmd.AddCommand(newConfigCommand(cfg))
+	cmd.AddCommand(newDiagramCommand(cfg))
 
 	return cmd
 }

@@ -802,7 +802,7 @@ func (s *ExecutionService) executeLoopStep(
 		if !ok {
 			return fmt.Errorf("body step not found: %s", stepName)
 		}
-		// Handle nested loops: body steps can be for_each or while loops
+		// Handle nested loops and special step types in body
 		var nextStep string
 		var err error
 		switch bodyStep.Type {
@@ -810,6 +810,8 @@ func (s *ExecutionService) executeLoopStep(
 			nextStep, err = s.executeLoopStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeParallel:
 			nextStep, err = s.executeParallelStep(ctx, wf, bodyStep, execCtx)
+		case workflow.StepTypeCallWorkflow:
+			nextStep, err = s.executeCallWorkflowStep(ctx, wf, bodyStep, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
 		}

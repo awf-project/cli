@@ -58,9 +58,9 @@ type yamlStep struct {
 
 	// Call workflow configuration (for sub-workflows - F023)
 	// Flat structure: workflow, call_inputs, call_outputs directly on step
-	Workflow    string            `yaml:"workflow"`     // workflow name to invoke
-	CallInputs  map[string]string `yaml:"inputs"`       // parent var → sub-workflow input
-	CallOutputs map[string]string `yaml:"outputs"`      // sub-workflow output → parent var
+	Workflow    string            `yaml:"workflow"` // workflow name to invoke
+	CallInputs  map[string]string `yaml:"inputs"`   // parent var → sub-workflow input
+	CallOutputs map[string]string `yaml:"outputs"`  // sub-workflow output → parent var
 }
 
 // yamlTransition is the YAML representation of a conditional transition.

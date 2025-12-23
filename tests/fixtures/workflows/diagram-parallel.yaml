@@ -1,0 +1,55 @@
+# F045 Test Fixture: Workflow with parallel branches for diagram generation
+# Tests FR-004: Parallel branches are grouped in subgraph clusters
+name: diagram-parallel
+version: "1.0.0"
+description: Workflow with parallel execution for diagram testing
+
+states:
+  initial: setup
+  setup:
+    type: step
+    description: Setup before parallel execution
+    command: echo "Setting up"
+    on_success: parallel_tasks
+    on_failure: error
+
+  parallel_tasks:
+    type: parallel
+    description: Execute tasks in parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+    on_success: aggregate
+    on_failure: error
+
+  task_a:
+    type: step
+    description: First parallel task
+    command: echo "Task A"
+    on_success: aggregate
+    on_failure: error
+
+  task_b:
+    type: step
+    description: Second parallel task
+    command: echo "Task B"
+    on_success: aggregate
+    on_failure: error
+
+  aggregate:
+    type: step
+    description: Aggregate parallel results
+    command: echo "Aggregating results"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+    message: "Parallel workflow completed"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

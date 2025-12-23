@@ -88,8 +88,12 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	}
 
 	// 6. Apply timeout
+	// Prefer step-level timeout (from YAML timeout: field) over config.Timeout
 	subCtx := ctx
-	timeout := config.GetTimeout()
+	timeout := step.Timeout
+	if timeout <= 0 {
+		timeout = config.GetTimeout()
+	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		subCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
@@ -140,6 +144,15 @@ func (s *ExecutionService) executeCallWorkflowStep(
 			state.Error = execErr.Error()
 			execCtx.SetStepState(step.Name, state)
 			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
+		// Circular and max nesting errors are fatal - they must propagate immediately
+		// without going to on_failure, as they indicate a structural problem
+		if errors.Is(execErr, ErrCircularWorkflowCall) || errors.Is(execErr, ErrMaxNestingExceeded) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			execCtx.SetStepState(step.Name, state)
+			return "", execErr
 		}
 
 		state.Status = workflow.StatusFailed
