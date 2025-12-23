@@ -1,0 +1,28 @@
+# F045 Test Fixture: Simple linear workflow for diagram generation
+# Tests US1 basic DOT output with linear flow: start → process → done
+name: diagram-simple
+version: "1.0.0"
+description: Simple linear workflow for diagram generation testing
+
+states:
+  initial: start
+  start:
+    type: step
+    description: Initial step
+    command: echo "Starting workflow"
+    on_success: process
+    on_failure: error
+  process:
+    type: step
+    description: Main processing step
+    command: echo "Processing data"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+    message: "Workflow completed successfully"
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

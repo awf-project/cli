@@ -427,7 +427,7 @@ states:
     on_failure: error
   use_output:
     type: step
-    command: 'echo "Got from child: {{.states.call_child.output}}" >> ` + logFile + `'
+    command: 'echo "Got from child: {{.states.call_child.Output}}" >> ` + logFile + `'
     on_success: done
   done:
     type: terminal
@@ -752,7 +752,7 @@ states:
     status: success
 `
 		} else {
-			// Calls next level
+			// Calls next level - no on_failure so error propagates up
 			next := string(rune('a' + i))
 			yaml = `name: deep-` + string(rune('a'+i-1)) + `
 version: "1.0.0"
@@ -763,13 +763,9 @@ states:
     workflow: deep-` + next + `
     timeout: 60
     on_success: done
-    on_failure: error
   done:
     type: terminal
     status: success
-  error:
-    type: terminal
-    status: failure
 `
 		}
 		filename := "deep-" + string(rune('a'+i-1)) + ".yaml"

@@ -12,6 +12,7 @@
 | `awf list prompts` | List available prompt files |
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
+| `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
 | `awf history` | Show workflow execution history |
 | `awf plugin list` | List installed plugins |
 | `awf plugin enable <name>` | Enable a plugin |
@@ -390,6 +391,98 @@ awf validate deploy
 # Validate with verbose output
 awf validate deploy -v
 ```
+
+---
+
+## awf diagram
+
+Generate a visual diagram of a workflow in DOT format (Graphviz).
+
+```bash
+awf diagram <workflow> [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output, -o` | Output file path (format detected from extension: .dot, .png, .svg, .pdf) |
+| `--direction` | Graph layout direction: TB (top-bottom, default), LR (left-right), BT, RL |
+| `--highlight` | Step name to visually emphasize |
+
+### Output Formats
+
+| Extension | Description | Requires |
+|-----------|-------------|----------|
+| `.dot` | DOT source format | Nothing |
+| `.png` | PNG image | Graphviz |
+| `.svg` | SVG vector image | Graphviz |
+| `.pdf` | PDF document | Graphviz |
+
+Without `--output`, DOT format is printed to stdout.
+
+### Step Shapes
+
+Each step type renders with a distinct shape:
+
+| Step Type | Shape | Description |
+|-----------|-------|-------------|
+| `command` | Box | Standard command execution |
+| `parallel` | Diamond | Parallel branch point |
+| `terminal` | Oval | Workflow end (doubleoval for failure) |
+| `for_each` | Hexagon | Loop iteration |
+| `while` | Hexagon | Conditional loop |
+| `operation` | Box3D | Plugin operation |
+| `call_workflow` | Folder | Sub-workflow invocation |
+
+### Edge Styles
+
+| Transition | Style |
+|------------|-------|
+| `on_success` | Solid line |
+| `on_failure` | Dashed red line |
+
+### Examples
+
+```bash
+# Output DOT to stdout
+awf diagram deploy
+
+# Pipe to graphviz
+awf diagram deploy | dot -Tpng -o workflow.png
+
+# Direct image export (requires graphviz)
+awf diagram deploy --output workflow.png
+
+# Left-to-right layout
+awf diagram deploy --direction LR
+
+# Highlight a specific step
+awf diagram deploy --highlight build_step
+
+# Save DOT file
+awf diagram deploy --output workflow.dot
+
+# Combined flags
+awf diagram deploy -o diagram.svg --direction LR --highlight deploy
+```
+
+### Graphviz Installation
+
+For image export (PNG, SVG, PDF), install Graphviz:
+
+```bash
+# macOS
+brew install graphviz
+
+# Ubuntu/Debian
+apt install graphviz
+
+# Fedora
+dnf install graphviz
+```
+
+DOT format output works without Graphviz.
 
 ---
 
