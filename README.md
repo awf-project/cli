@@ -70,6 +70,7 @@ See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 | `awf init` | Initialize AWF in current directory |
 | `awf run <workflow>` | Execute a workflow |
 | `awf validate <workflow>` | Validate workflow syntax |
+| `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
 | `awf list` | List available workflows |
 | `awf resume` | Resume interrupted workflow |
 | `awf history` | Show execution history |

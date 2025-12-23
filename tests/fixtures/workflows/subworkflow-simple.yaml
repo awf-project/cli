@@ -35,7 +35,7 @@ states:
     on_failure: error
   aggregate:
     type: step
-    command: 'echo "Received from child: {{.states.call_child.output}}"'
+    command: 'echo "Sub-workflow completed successfully"'
     on_success: done
     on_failure: error
   done:

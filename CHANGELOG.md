@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F045**: Workflow Diagram Generation
+  - `awf diagram <workflow>` outputs DOT format to stdout for visualization
+  - `--output workflow.png` exports to image (PNG, SVG, PDF) via graphviz
+  - `--direction <TB|LR|BT|RL>` controls graph layout direction
+  - `--highlight <step>` emphasizes specific steps visually
+  - Step shapes: command→box, parallel→diamond, terminal→oval, loop→hexagon
 - **F023**: Workflow Composition with Sub-Workflows
   - `call_workflow` step type invokes another workflow as a sub-workflow
   - Input mapping passes parent variables to child workflow via `inputs:`

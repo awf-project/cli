@@ -37,7 +37,11 @@
       "mcp__plugin_common_serena__activate_project",
       "mcp__plugin_common_serena__initial_instructions",
       "mcp__plugin_common_serena__list_dir",
-      "mcp__plugin_common_serena__get_symbols_overview"
+      "mcp__plugin_common_serena__get_symbols_overview",
+      "Bash(make build:*)",
+      "Bash(./bin/awf diagram:*)",
+      "Skill(awf:awf)",
+      "mcp__plugin_common_serena__list_memories"
     ]
   }
 }
