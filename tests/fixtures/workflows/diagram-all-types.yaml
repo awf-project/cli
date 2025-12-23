@@ -1,0 +1,100 @@
+# F045 Test Fixture: Workflow with all step types for comprehensive diagram testing
+# Tests FR-002: All step types mapped to correct DOT shapes
+# Shapes per spec:
+#   - command     → box
+#   - parallel    → diamond
+#   - terminal    → oval (doubleoval for failure)
+#   - for_each    → hexagon
+#   - while       → hexagon
+#   - operation   → box3d
+#   - call_workflow → folder
+name: diagram-all-types
+version: "1.0.0"
+description: Workflow with all step types for diagram generation testing
+
+inputs:
+  - name: message
+    type: string
+    required: false
+    default: "test"
+
+states:
+  initial: cmd_step
+  # command step → box
+  cmd_step:
+    type: step
+    description: A command step
+    command: echo "Starting"
+    on_success: parallel_step
+    on_failure: error
+
+  # parallel step → diamond
+  parallel_step:
+    type: parallel
+    description: A parallel step
+    parallel:
+      - branch_a
+      - branch_b
+    strategy: all_succeed
+    on_success: loop_step
+    on_failure: error
+
+  branch_a:
+    type: step
+    command: echo "Branch A"
+    on_success: loop_step
+    on_failure: error
+
+  branch_b:
+    type: step
+    command: echo "Branch B"
+    on_success: loop_step
+    on_failure: error
+
+  # for_each loop → hexagon
+  loop_step:
+    type: for_each
+    description: A for_each loop step
+    items: '["x", "y"]'
+    max_iterations: 5
+    body:
+      - loop_body
+    on_complete: operation_step
+
+  loop_body:
+    type: step
+    command: echo "Looping {{.loop.Item}}"
+    on_success: loop_step
+    on_failure: error
+
+  # operation step → box3d
+  operation_step:
+    type: operation
+    description: An operation step
+    operation: noop
+    on_success: call_step
+    on_failure: error
+
+  # call_workflow step → folder
+  call_step:
+    type: call_workflow
+    description: A sub-workflow call step
+    workflow: subworkflow-child
+    inputs:
+      message: "{{.inputs.message}}"
+      count: "1"
+    timeout: 30
+    on_success: success
+    on_failure: error
+
+  # terminal success → oval
+  success:
+    type: terminal
+    status: success
+    message: "Workflow succeeded"
+
+  # terminal failure → doubleoval
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

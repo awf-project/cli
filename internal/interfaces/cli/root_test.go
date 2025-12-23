@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
@@ -102,7 +103,7 @@ func TestRootCommandHasVersionSubcommand(t *testing.T) {
 func TestRootCommand_HasAllSubcommands(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
-	expectedCommands := []string{"version", "list", "run", "status", "validate"}
+	expectedCommands := []string{"version", "list", "run", "status", "validate", "diagram"}
 
 	for _, expected := range expectedCommands {
 		found := false
@@ -114,6 +115,72 @@ func TestRootCommand_HasAllSubcommands(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("expected root command to have '%s' subcommand", expected)
+		}
+	}
+}
+
+func TestRootCommand_HasDiagramSubcommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var diagramCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "diagram" {
+			diagramCmd = sub
+			break
+		}
+	}
+
+	if diagramCmd == nil {
+		t.Fatal("expected root command to have 'diagram' subcommand")
+	}
+
+	// Verify diagram command has expected flags
+	flags := []struct {
+		name      string
+		shorthand string
+	}{
+		{"output", "o"},
+		{"direction", ""},
+		{"highlight", ""},
+	}
+
+	for _, f := range flags {
+		flag := diagramCmd.Flags().Lookup(f.name)
+		if flag == nil {
+			t.Errorf("expected diagram command to have '--%s' flag", f.name)
+		}
+		if f.shorthand != "" && flag.Shorthand != f.shorthand {
+			t.Errorf("expected '--%s' to have shorthand '-%s', got '-%s'", f.name, f.shorthand, flag.Shorthand)
+		}
+	}
+}
+
+func TestRootCommand_DiagramHelpAccessible(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"diagram", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify key elements are in help output
+	expectedPhrases := []string{
+		"diagram",
+		"DOT",
+		"--output",
+		"--direction",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(output, phrase) {
+			t.Errorf("expected diagram help to contain '%s', got:\n%s", phrase, output)
 		}
 	}
 }

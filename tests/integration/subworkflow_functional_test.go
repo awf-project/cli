@@ -252,7 +252,7 @@ states:
     on_failure: error
   use_outputs:
     type: step
-    command: 'echo "first={{.states.call_child.output}} second={{.states.call_child.output}}" >> ` + logFile + `'
+    command: 'echo "first={{.states.call_child.Output}} second={{.states.call_child.Output}}" >> ` + logFile + `'
     on_success: done
   done:
     type: terminal
@@ -884,7 +884,7 @@ states:
     type: call_workflow
     workflow: prev-child
     inputs:
-      from_prev: "{{.states.generate.output}}"
+      from_prev: "{{.states.generate.Output}}"
     timeout: 30
     on_success: done
     on_failure: error
