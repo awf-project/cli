@@ -1,0 +1,41 @@
+# F046: Optional input skipping test workflow
+# Tests optional input handling, default values, and skipping behavior
+name: input-optional-test
+description: Test workflow for optional input handling with mixed required and optional inputs
+
+inputs:
+  - name: required_name
+    type: string
+    required: true
+    description: Required name parameter
+
+  - name: optional_timeout
+    type: integer
+    required: false
+    default: 30
+    description: Optional timeout in seconds with default value
+
+  - name: optional_no_default
+    type: string
+    required: false
+    description: Optional parameter without default value
+
+states:
+  initial: test
+
+  test:
+    type: step
+    description: Test with mixed required and optional inputs
+    command: echo "Name={{.inputs.required_name}} Timeout={{.inputs.optional_timeout}}"
+    on_success: success
+    on_failure: error
+
+  success:
+    type: terminal
+    status: success
+    message: "Test completed"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Test failed"
