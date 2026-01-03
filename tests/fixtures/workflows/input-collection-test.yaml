@@ -1,0 +1,36 @@
+# F046: Basic input collection test workflow
+# Tests required string input and optional integer input with default
+name: input-collection-test
+description: Test workflow for basic input collection with required and optional inputs
+
+inputs:
+  - name: required_string
+    type: string
+    required: true
+    description: A required string input for testing
+
+  - name: optional_number
+    type: integer
+    required: false
+    default: 42
+    description: An optional integer input with default value
+
+states:
+  initial: echo_inputs
+
+  echo_inputs:
+    type: step
+    description: Echo the collected inputs
+    command: echo "{{.inputs.required_string}} {{.inputs.optional_number}}"
+    on_success: success
+    on_failure: error
+
+  success:
+    type: terminal
+    status: success
+    message: "Workflow completed with inputs"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

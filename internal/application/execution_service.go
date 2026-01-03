@@ -116,7 +116,17 @@ func (s *ExecutionService) Run(
 	return s.runWithCallStack(ctx, workflowName, inputs, nil)
 }
 
-// runWithCallStack executes a workflow with an optional parent call stack.
+// RunWithWorkflow executes a pre-loaded workflow with the given inputs.
+// This avoids double-loading when the workflow has already been loaded (e.g., for input validation).
+func (s *ExecutionService) RunWithWorkflow(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	inputs map[string]any,
+) (*workflow.ExecutionContext, error) {
+	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil)
+}
+
+// runWithCallStack executes a workflow by name with an optional parent call stack.
 // This is used internally by executeCallWorkflowStep to preserve circular detection.
 func (s *ExecutionService) runWithCallStack(
 	ctx context.Context,
@@ -124,13 +134,28 @@ func (s *ExecutionService) runWithCallStack(
 	inputs map[string]any,
 	parentCallStack []string,
 ) (*workflow.ExecutionContext, error) {
-	// load workflow
-	wf, err := s.workflowSvc.GetWorkflow(ctx, workflowName)
-	if err != nil {
-		return nil, fmt.Errorf("load workflow: %w", err)
-	}
+	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack)
+}
+
+// runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
+// If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
+func (s *ExecutionService) runWithCallStackAndWorkflow(
+	ctx context.Context,
+	workflowName string,
+	wf *workflow.Workflow,
+	inputs map[string]any,
+	parentCallStack []string,
+) (*workflow.ExecutionContext, error) {
+	// load workflow if not provided
 	if wf == nil {
-		return nil, fmt.Errorf("workflow not found: %s", workflowName)
+		var err error
+		wf, err = s.workflowSvc.GetWorkflow(ctx, workflowName)
+		if err != nil {
+			return nil, fmt.Errorf("load workflow: %w", err)
+		}
+		if wf == nil {
+			return nil, fmt.Errorf("workflow not found: %s", workflowName)
+		}
 	}
 
 	// expand template references in workflow steps

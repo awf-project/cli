@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
+	"golang.org/x/term"
 )
 
 // setupSignalHandler starts a goroutine that cancels ctx on SIGINT/SIGTERM.
@@ -235,6 +237,18 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Merge config inputs with CLI inputs (CLI wins)
 	inputs = mergeInputs(projectCfg.Inputs, inputs)
 
+	// Load workflow once for input collection check and later execution
+	wf, err := repo.Load(ctx, workflowName)
+	if err != nil {
+		return fmt.Errorf("workflow not found: %w", err)
+	}
+
+	// Collect missing inputs interactively if needed (F046)
+	inputs, err = collectMissingInputsIfNeeded(cmd, wf, inputs, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("input collection failed: %w", err)
+	}
+
 	// Create history store and service
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
@@ -281,8 +295,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	startTime := time.Now()
 
-	// Execute workflow
-	execCtx, execErr := execSvc.Run(ctx, workflowName, inputs)
+	// Execute workflow with pre-loaded workflow (avoids double I/O)
+	execCtx, execErr := execSvc.RunWithWorkflow(ctx, wf, inputs)
 
 	// Flush any remaining output from streaming writers
 	if stdoutWriter != nil {
@@ -928,6 +942,36 @@ func loadProjectConfig(logger ports.Logger) (*config.ProjectConfig, error) {
 	return loader.Load()
 }
 
+// hasMissingRequiredInputs checks if workflow has any required inputs that are not
+// present in the provided inputs map.
+//
+// This helper is used to determine if interactive input collection is needed.
+//
+// Parameters:
+//   - wf: Workflow definition
+//   - inputs: Input values already provided
+//
+// Returns:
+//   - true if any required input is missing
+//   - false if all required inputs are present
+func hasMissingRequiredInputs(wf *workflow.Workflow, inputs map[string]any) bool {
+	// Handle nil workflow or inputs
+	if wf == nil || wf.Inputs == nil {
+		return false
+	}
+
+	// Check each required input
+	for _, input := range wf.Inputs {
+		if input.Required {
+			if _, exists := inputs[input.Name]; !exists {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // mergeInputs merges config file inputs with CLI flag inputs.
 // CLI inputs take precedence over config inputs (CLI always wins).
 // Returns a new map containing all merged inputs.
@@ -949,4 +993,44 @@ func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
 	}
 
 	return result
+}
+
+// collectMissingInputsIfNeeded checks if required inputs are missing and
+// prompts the user interactively if stdin is a terminal.
+//
+// Returns:
+//   - Updated inputs map with collected values
+//   - Error if stdin is not a terminal and inputs are missing
+func collectMissingInputsIfNeeded(
+	cmd *cobra.Command,
+	wf *workflow.Workflow,
+	inputs map[string]any,
+	cfg *Config,
+	logger ports.Logger,
+) (map[string]any, error) {
+	// Check if any required inputs are missing
+	if !hasMissingRequiredInputs(wf, inputs) {
+		return inputs, nil
+	}
+
+	// Check if stdin is a terminal
+	if !isTerminal(cmd.InOrStdin()) {
+		return nil, fmt.Errorf("missing required inputs and stdin is not a terminal; provide inputs via --input flags")
+	}
+
+	// Create collector and service
+	colorizer := ui.NewColorizer(!cfg.NoColor)
+	collector := ui.NewCLIInputCollector(cmd.InOrStdin(), cmd.OutOrStdout(), colorizer)
+	service := application.NewInputCollectionService(collector, logger)
+
+	// Collect missing inputs
+	return service.CollectMissingInputs(wf, inputs)
+}
+
+// isTerminal checks if the given reader is connected to a terminal.
+func isTerminal(r io.Reader) bool {
+	if f, ok := r.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+	return false
 }

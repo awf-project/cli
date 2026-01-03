@@ -150,6 +150,10 @@ awf run deploy
 # With inputs
 awf run deploy --input env=prod --input version=1.2.3
 
+# Interactive input collection (prompted for missing required inputs)
+awf run deploy
+# Prompts: Enter value for 'env' (string, required): _
+
 # With streaming output
 awf run deploy -o streaming
 
@@ -168,6 +172,30 @@ awf run deploy --step deploy_step --mock states.build.output="build-123"
 # View workflow help with input parameters
 awf run deploy --help
 ```
+
+### Interactive Input Collection
+
+When required workflow inputs are missing and stdin is connected to a terminal, AWF automatically prompts for missing values:
+
+**Behavior:**
+- **Terminal environment**: Prompts interactively for each missing required input
+- **Non-terminal environment** (pipes, scripts): Returns error with message to use `--input` flags
+- **All inputs provided**: Executes immediately without prompts
+
+**Prompt display:**
+- Input name, type, and required/optional status
+- Description and help text from workflow definition
+- Enum options as numbered list (1-9) for constrained inputs
+- Default value shown for optional inputs
+
+**Validation:**
+- Type checking (string, integer, boolean)
+- Enum constraint validation
+- Pattern matching (regex)
+- Immediate error feedback with retry on invalid input
+- Empty input accepted for optional parameters (uses default)
+
+See [Interactive Input Collection Guide](interactive-inputs.md) for detailed examples.
 
 ### Workflow-Specific Help
 
@@ -213,6 +241,103 @@ Flags:
 awf run unknown-workflow --help
 # Error: workflow "unknown-workflow" not found
 # exit code 1
+```
+
+---
+
+### Interactive Input Collection
+
+When you run a workflow with missing required inputs **from a terminal**, AWF automatically prompts you for each missing value instead of failing immediately.
+
+#### How It Works
+
+1. **Detection**: AWF detects missing required inputs not provided via `--input` flags
+2. **Terminal Check**: If stdin is connected to a terminal, AWF enters interactive mode
+3. **Prompting**: You are prompted for each missing required input in order
+4. **Validation**: Invalid input values are rejected with error messages; you can retry
+5. **Execution**: Once all required inputs are provided, the workflow executes
+
+#### Examples
+
+**Without Interactive Input Collection (Non-Interactive Context):**
+
+```bash
+# In a script or piped context:
+awf run deploy < /dev/null
+# Error: required input "env" not provided
+# exit code 1
+```
+
+**With Interactive Input Collection (Terminal):**
+
+```bash
+# From your terminal:
+awf run deploy
+
+# Output:
+# env (string, required):
+# > prod
+#
+# version (string, required):
+# > 1.2.3
+#
+# Workflow started...
+```
+
+#### Enum Constraints
+
+When an input has enum constraints, AWF displays numbered options:
+
+```bash
+awf run deploy
+
+# Output:
+# env (string, required):
+# Available options:
+#   1) dev
+#   2) staging
+#   3) prod
+# Select option (1-3):
+# > 2
+#
+# Workflow started...
+```
+
+#### Optional Inputs
+
+Optional inputs can be skipped by pressing Enter without providing a value:
+
+```bash
+awf run deploy
+
+# Output:
+# env (string, required):
+# > prod
+#
+# timeout (integer, optional, default: 300):
+# >
+#
+# Using default value for timeout: 300
+# Workflow started...
+```
+
+#### When Interactive Mode Is NOT Available
+
+Interactive input collection requires:
+- ✅ Running in a terminal (stdin connected to TTY)
+- ✅ Workflow has required inputs
+- ❌ **Not available** in scripts (`< file`, pipes `|`)
+- ❌ **Not available** in CI/CD pipelines
+- ❌ **Not available** with `--input` providing all required values
+
+In non-interactive contexts, you must provide all required inputs via `--input` flags:
+
+```bash
+# Provide all required inputs explicitly
+awf run deploy --input env=prod --input version=1.2.3
+
+# Or in a script
+awf run deploy --input env=prod --input version=1.2.3 < /dev/null
 ```
 
 ---

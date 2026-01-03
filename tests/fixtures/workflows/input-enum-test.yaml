@@ -1,0 +1,47 @@
+# F046: Enum input collection test workflow
+# Tests enum constraint display, validation, and selection
+name: input-enum-test
+description: Test workflow for enum input collection with validation
+
+inputs:
+  - name: environment
+    type: string
+    required: true
+    description: Deployment environment selection
+    validation:
+      enum:
+        - dev
+        - staging
+        - prod
+
+  - name: log_level
+    type: string
+    required: false
+    default: info
+    description: Log level for the deployment
+    validation:
+      enum:
+        - debug
+        - info
+        - warn
+        - error
+
+states:
+  initial: deploy
+
+  deploy:
+    type: step
+    description: Deploy to selected environment
+    command: echo "Deploying to {{.inputs.environment}} with log level {{.inputs.log_level}}"
+    on_success: success
+    on_failure: error
+
+  success:
+    type: terminal
+    status: success
+    message: "Deployment completed"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Deployment failed"
