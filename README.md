@@ -16,6 +16,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 - **Input Validation** - Type checking, patterns, enums, file validation
 - **Dry-Run Mode** - Preview execution plan without running commands
 - **Interactive Mode** - Step-by-step execution with prompts
+- **Interactive Input Collection** - Automatically prompt for missing required inputs in terminal sessions
 - **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation

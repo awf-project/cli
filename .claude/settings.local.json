@@ -41,7 +41,8 @@
       "Bash(make build:*)",
       "Bash(./bin/awf diagram:*)",
       "Skill(awf:awf)",
-      "mcp__plugin_common_serena__list_memories"
+      "mcp__plugin_common_serena__list_memories",
+      "Bash(make test-race:*)"
     ]
   }
 }

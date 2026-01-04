@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+#### Interactive Input Collection
+- **F046**: Interactive Mode for Incomplete Command Inputs
+  - Automatically prompts for missing required workflow inputs when not provided via `--input` flags
+  - Displays enum options as numbered lists (1-9) for constrained inputs
+  - Validates input values against defined constraints (type, enum, pattern) with immediate error feedback
+  - Supports optional inputs with default values (press Enter to skip)
+  - Graceful error handling with retry on validation failure
+  - Only activates in terminal environments; provides clear error message for non-interactive contexts
+  - Seamless integration: runs interactively if stdin is terminal, fails fast otherwise
+
+#### Workflow Visualization
 - **F045**: Workflow Diagram Generation
   - `awf diagram <workflow>` outputs DOT format to stdout for visualization
   - `--output workflow.png` exports to image (PNG, SVG, PDF) via graphviz

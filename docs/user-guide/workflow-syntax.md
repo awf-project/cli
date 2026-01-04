@@ -570,6 +570,42 @@ input validation failed: 2 errors:
   - inputs.count: value 150 exceeds maximum 100
 ```
 
+### Interactive Input Collection
+
+When a workflow with required inputs is run from a terminal without providing all inputs via `--input` flags, AWF automatically prompts you for missing required values. This makes it easier to run workflows interactively without remembering all parameters upfront.
+
+**Example:**
+
+```bash
+awf run deploy
+# Output:
+# env (string, required):
+# > prod
+#
+# version (string, required):
+# > 1.2.3
+#
+# Workflow started...
+```
+
+If the input has enum constraints, AWF displays numbered options:
+
+```bash
+awf run deploy
+# Output:
+# env (string, required):
+# Available options:
+#   1) dev
+#   2) staging
+#   3) prod
+# Select option (1-3):
+# > 2
+```
+
+Optional inputs can be skipped by pressing Enter. Invalid values are rejected with error messages, allowing you to correct and retry.
+
+See [Interactive Input Collection](commands.md#interactive-input-collection) for more details.
+
 ---
 
 ## Variable Interpolation
