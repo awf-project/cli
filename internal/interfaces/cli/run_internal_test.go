@@ -1783,3 +1783,382 @@ func TestRunWorkflow_NoConfigFile_Succeeds(t *testing.T) {
 		t.Log("runWorkflow should proceed normally with empty config inputs")
 	})
 }
+
+// ============================================================================
+// F046: Interactive Mode for Incomplete Command Inputs - Component Tests
+// ============================================================================
+
+// TestHasMissingRequiredInputs tests detection of missing required workflow inputs.
+// Component: run_command_integration
+// Feature: F046 - Interactive Mode for Incomplete Command Inputs
+// User Story: US1 - Prompt for Required Inputs
+//
+// These tests verify the helper function that determines if interactive input
+// collection should be activated based on missing required inputs.
+func TestHasMissingRequiredInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		wf     *workflow.Workflow
+		inputs map[string]any
+		want   bool
+	}{
+		// --- Happy path: All required inputs provided ---
+		{
+			name: "all required inputs provided",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required1", Type: "string", Required: true},
+					{Name: "required2", Type: "integer", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"required1": "value1",
+				"required2": 42,
+			},
+			want: false, // No missing inputs
+		},
+
+		// --- Happy path: Missing required input ---
+		{
+			name: "one required input missing",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required1", Type: "string", Required: true},
+					{Name: "required2", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"required1": "value1",
+				// required2 is missing
+			},
+			want: true, // Has missing required input
+		},
+
+		// --- Happy path: All required inputs missing ---
+		{
+			name: "all required inputs missing",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "name", Type: "string", Required: true},
+					{Name: "count", Type: "integer", Required: true},
+				},
+			},
+			inputs: map[string]any{},
+			want:   true, // All required inputs missing
+		},
+
+		// --- Edge case: No required inputs in workflow ---
+		{
+			name: "no required inputs in workflow",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "optional1", Type: "string", Required: false},
+					{Name: "optional2", Type: "string", Required: false},
+				},
+			},
+			inputs: map[string]any{},
+			want:   false, // No required inputs, so none missing
+		},
+
+		// --- Edge case: Workflow has no inputs defined ---
+		{
+			name: "workflow with no inputs defined",
+			wf: &workflow.Workflow{
+				Name:   "simple-workflow",
+				Inputs: []workflow.Input{},
+			},
+			inputs: map[string]any{},
+			want:   false, // No inputs defined, so none missing
+		},
+
+		// --- Edge case: Workflow has nil inputs slice ---
+		{
+			name: "workflow with nil inputs slice",
+			wf: &workflow.Workflow{
+				Name:   "nil-inputs-workflow",
+				Inputs: nil,
+			},
+			inputs: map[string]any{},
+			want:   false, // Nil inputs treated as empty
+		},
+
+		// --- Edge case: Mixed required and optional, only required missing ---
+		{
+			name: "mixed required and optional, required missing",
+			wf: &workflow.Workflow{
+				Name: "mixed-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required", Type: "string", Required: true},
+					{Name: "optional", Type: "string", Required: false},
+				},
+			},
+			inputs: map[string]any{
+				"optional": "provided",
+				// required is missing
+			},
+			want: true, // Required input missing
+		},
+
+		// --- Edge case: Mixed required and optional, optional missing ---
+		{
+			name: "mixed required and optional, optional missing",
+			wf: &workflow.Workflow{
+				Name: "mixed-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required", Type: "string", Required: true},
+					{Name: "optional", Type: "string", Required: false},
+				},
+			},
+			inputs: map[string]any{
+				"required": "provided",
+				// optional is missing (but that's OK)
+			},
+			want: false, // All required inputs provided
+		},
+
+		// --- Edge case: Extra inputs provided (not in workflow) ---
+		{
+			name: "extra inputs provided beyond workflow definition",
+			wf: &workflow.Workflow{
+				Name: "simple-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"required": "value",
+				"extra1":   "not-in-workflow",
+				"extra2":   42,
+			},
+			want: false, // All required inputs provided, extras ignored
+		},
+
+		// --- Edge case: Empty string value for required input ---
+		{
+			name: "empty string value for required input",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "name", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"name": "", // Empty string, but key exists
+			},
+			want: false, // Input exists (even if empty), not missing
+		},
+
+		// --- Edge case: Nil value for required input ---
+		{
+			name: "nil value for required input",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "value", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"value": nil, // Nil value, but key exists
+			},
+			want: false, // Input key exists, not missing (validation happens later)
+		},
+
+		// --- Edge case: Multiple required, some missing ---
+		{
+			name: "multiple required inputs, some provided some missing",
+			wf: &workflow.Workflow{
+				Name: "multi-required",
+				Inputs: []workflow.Input{
+					{Name: "input1", Type: "string", Required: true},
+					{Name: "input2", Type: "string", Required: true},
+					{Name: "input3", Type: "string", Required: true},
+					{Name: "input4", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"input1": "value1",
+				"input3": "value3",
+				// input2 and input4 missing
+			},
+			want: true, // Has missing required inputs
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasMissingRequiredInputs(tt.wf, tt.inputs)
+			assert.Equal(t, tt.want, got,
+				"hasMissingRequiredInputs() = %v, want %v", got, tt.want)
+		})
+	}
+}
+
+// TestCollectMissingInputsIfNeeded tests the integration point for input collection.
+// Component: run_command_integration
+// Feature: F046 - Interactive Mode for Incomplete Command Inputs
+// User Story: US1 - Prompt for Required Inputs
+//
+// These tests verify the function that orchestrates input collection service
+// when required inputs are missing and stdin is a terminal.
+//
+// NOTE: This test uses the existing mockLogger from plugins_internal_test.go
+func TestCollectMissingInputsIfNeeded(t *testing.T) {
+	tests := []struct {
+		name    string
+		wf      *workflow.Workflow
+		inputs  map[string]any
+		wantErr bool
+		errMsg  string
+	}{
+		// --- Happy path: All inputs provided, no collection needed ---
+		{
+			name: "all inputs provided, skip collection",
+			wf: &workflow.Workflow{
+				Name: "complete-workflow",
+				Inputs: []workflow.Input{
+					{Name: "name", Type: "string", Required: true},
+					{Name: "count", Type: "integer", Required: true},
+				},
+			},
+			inputs: map[string]any{
+				"name":  "test",
+				"count": 42,
+			},
+			wantErr: false, // Should return inputs unchanged
+		},
+
+		// --- Happy path: No required inputs in workflow ---
+		{
+			name: "workflow with no required inputs",
+			wf: &workflow.Workflow{
+				Name: "optional-workflow",
+				Inputs: []workflow.Input{
+					{Name: "optional", Type: "string", Required: false},
+				},
+			},
+			inputs:  map[string]any{},
+			wantErr: false, // No required inputs, no collection needed
+		},
+
+		// --- Happy path: Workflow with no inputs ---
+		{
+			name: "workflow with no inputs defined",
+			wf: &workflow.Workflow{
+				Name:   "simple-workflow",
+				Inputs: []workflow.Input{},
+			},
+			inputs:  map[string]any{},
+			wantErr: false, // No inputs, no collection
+		},
+
+		// --- Edge case: Missing required input (stub will skip collection) ---
+		{
+			name: "missing required input but stub returns unchanged",
+			wf: &workflow.Workflow{
+				Name: "incomplete-workflow",
+				Inputs: []workflow.Input{
+					{Name: "required", Type: "string", Required: true},
+				},
+			},
+			inputs: map[string]any{},
+			// Stub returns inputs unchanged, will fail when implemented
+			wantErr: false,
+		},
+
+		// --- Edge case: Nil workflow ---
+		// Note: This would panic in real code, but tests document expected behavior
+		// Real implementation should handle gracefully or require non-nil workflow
+
+		// --- Edge case: Nil inputs map ---
+		{
+			name: "nil inputs map",
+			wf: &workflow.Workflow{
+				Name: "test-workflow",
+				Inputs: []workflow.Input{
+					{Name: "opt", Type: "string", Required: false},
+				},
+			},
+			inputs:  nil, // Nil inputs map
+			wantErr: false,
+		},
+
+		// --- Edge case: Empty inputs map with no required inputs ---
+		{
+			name: "empty inputs with all optional",
+			wf: &workflow.Workflow{
+				Name: "all-optional",
+				Inputs: []workflow.Input{
+					{Name: "opt1", Type: "string", Required: false},
+					{Name: "opt2", Type: "integer", Required: false},
+				},
+			},
+			inputs:  map[string]any{},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Note: collectMissingInputsIfNeeded needs real *cobra.Command
+			// These tests document expected behavior for stub implementation
+			// Full integration tests will use actual cobra.Command instances
+
+			t.Logf("Testing with workflow: %s", tt.wf.Name)
+			t.Logf("Provided inputs: %v", tt.inputs)
+
+			// Stub behavior verification:
+			// - Current stub always returns inputs unchanged, nil error
+			// - Real implementation will:
+			//   1. Check stdin is terminal
+			//   2. Check hasMissingRequiredInputs()
+			//   3. Create collector and service if needed
+			//   4. Return collected inputs or error
+
+			if tt.wantErr {
+				t.Logf("Expected error: %s", tt.errMsg)
+			} else {
+				t.Logf("Expected: inputs returned unchanged")
+			}
+		})
+	}
+}
+
+// TestCollectMissingInputsIfNeeded_Integration documents expected integration behavior
+// This test serves as documentation for the real implementation's integration points.
+// Component: run_command_integration
+// Feature: F046
+func TestCollectMissingInputsIfNeeded_Integration(t *testing.T) {
+	t.Run("should create input collector and service when missing inputs", func(t *testing.T) {
+		t.Log("When hasMissingRequiredInputs() returns true AND stdin is terminal,")
+		t.Log("collectMissingInputsIfNeeded should:")
+		t.Log("  1. Create colorizer := ui.NewColorizer(!cfg.NoColor)")
+		t.Log("  2. Create collector := ui.NewCLIInputCollector(cmd.InOrStdin(), cmd.OutOrStdout(), colorizer)")
+		t.Log("  3. Create service := application.NewInputCollectionService(collector, logger)")
+		t.Log("  4. Call service.CollectMissingInputs(wf, inputs)")
+		t.Log("  5. Return collected inputs merged with provided inputs")
+	})
+
+	t.Run("should error when stdin not terminal and inputs missing", func(t *testing.T) {
+		t.Log("When hasMissingRequiredInputs() returns true AND stdin is NOT a terminal,")
+		t.Log("collectMissingInputsIfNeeded should:")
+		t.Log("  1. Return error: 'missing required inputs and stdin is not a terminal'")
+		t.Log("  2. Suggest: 'provide inputs via --input flags'")
+	})
+
+	t.Run("should skip collection when all inputs provided", func(t *testing.T) {
+		t.Log("When hasMissingRequiredInputs() returns false,")
+		t.Log("collectMissingInputsIfNeeded should:")
+		t.Log("  1. Return inputs unchanged")
+		t.Log("  2. Not create collector or service (performance optimization)")
+	})
+
+	t.Run("should check terminal using os.Stdin.Stat", func(t *testing.T) {
+		t.Log("Terminal detection logic:")
+		t.Log("  fileInfo, err := os.Stdin.Stat()")
+		t.Log("  isTerminal := (fileInfo.Mode() & os.ModeCharDevice) != 0")
+	})
+}

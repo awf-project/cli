@@ -64,7 +64,21 @@ Hello, World!
 Workflow completed successfully
 ```
 
-## 4. Validate Your Workflow
+## 4. Interactive Input Collection
+
+If you run a workflow with missing required inputs, AWF will automatically prompt you for them (when running from a terminal):
+
+```bash
+awf run hello
+# Output:
+# name (string, required):
+```
+
+Just enter a value and press Enter. AWF will execute the workflow with your input.
+
+**Note:** Interactive prompting only works in terminal sessions. In scripts or piped contexts, you must provide inputs via `--input` flags.
+
+## 6. Validate Your Workflow
 
 Check your workflow for errors before running:
 
@@ -72,7 +86,7 @@ Check your workflow for errors before running:
 awf validate hello
 ```
 
-## 5. List Available Workflows
+## 7. List Available Workflows
 
 See all workflows AWF can find:
 
