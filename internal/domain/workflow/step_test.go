@@ -18,6 +18,7 @@ func TestStepTypeString(t *testing.T) {
 		{workflow.StepTypeWhile, "while"},
 		{workflow.StepTypeOperation, "operation"},
 		{workflow.StepTypeCallWorkflow, "call_workflow"},
+		{workflow.StepTypeAgent, "agent"},
 	}
 
 	for _, tt := range tests {
@@ -1045,5 +1046,570 @@ func TestCallWorkflowStepWithTemplateInterpolation(t *testing.T) {
 	err := step.Validate()
 	if err != nil {
 		t.Errorf("call_workflow step with template inputs should be valid: %v", err)
+	}
+}
+
+// Component: step_type_extension
+// Feature: 39 - AI Agent Step Type
+
+func TestStepTypeAgent_String(t *testing.T) {
+	if got := workflow.StepTypeAgent.String(); got != "agent" {
+		t.Errorf("StepTypeAgent.String() = %s, want %s", got, "agent")
+	}
+}
+
+func TestStep_Validate_AgentType_HappyPath(t *testing.T) {
+	tests := []struct {
+		name string
+		step workflow.Step
+	}{
+		{
+			name: "valid agent step with all fields",
+			step: workflow.Step{
+				Name: "ask_claude",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Analyze {{inputs.data}}",
+					Options: map[string]any{
+						"model":       "claude-3-5-sonnet-20241022",
+						"temperature": 0.7,
+						"max_tokens":  1000,
+					},
+					Timeout: 60,
+				},
+			},
+		},
+		{
+			name: "valid agent step with minimal fields",
+			step: workflow.Step{
+				Name: "simple_agent",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "codex",
+					Prompt:   "Generate code for {{inputs.task}}",
+				},
+			},
+		},
+		{
+			name: "valid agent step with custom provider",
+			step: workflow.Step{
+				Name: "custom_agent",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "custom",
+					Prompt:   "Process {{inputs.text}}",
+					Command:  "python3 custom_agent.py --prompt={{prompt}}",
+					Timeout:  120,
+				},
+			},
+		},
+		{
+			name: "valid agent step with gemini provider",
+			step: workflow.Step{
+				Name: "gemini_agent",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "gemini",
+					Prompt:   "Summarize {{inputs.article}}",
+					Options: map[string]any{
+						"model": "gemini-pro",
+					},
+				},
+			},
+		},
+		{
+			name: "valid agent step with zero timeout (uses default)",
+			step: workflow.Step{
+				Name: "default_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "opencode",
+					Prompt:   "Review {{inputs.code}}",
+					Timeout:  0,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.step.Validate()
+			if err != nil {
+				t.Errorf("Step.Validate() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestStep_Validate_AgentType_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		step    workflow.Step
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "agent step with empty options map",
+			step: workflow.Step{
+				Name: "agent_no_options",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Test prompt",
+					Options:  map[string]any{},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with nil options",
+			step: workflow.Step{
+				Name: "agent_nil_options",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Test prompt",
+					Options:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with very long prompt",
+			step: workflow.Step{
+				Name: "long_prompt",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   string(make([]byte, 10000)) + "{{inputs.data}}",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with complex nested options",
+			step: workflow.Step{
+				Name: "complex_options",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Process {{inputs.data}}",
+					Options: map[string]any{
+						"model":       "claude-3-5-sonnet-20241022",
+						"temperature": 0.7,
+						"max_tokens":  1000,
+						"metadata": map[string]any{
+							"user_id": "123",
+							"tags":    []string{"test", "ai"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with max timeout value",
+			step: workflow.Step{
+				Name: "max_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Long task {{inputs.data}}",
+					Timeout:  3600,
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.step.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if err.Error() != tt.errMsg {
+					t.Errorf("Step.Validate() error message = %q, want %q", err.Error(), tt.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestStep_Validate_AgentType_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name    string
+		step    workflow.Step
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "agent step without agent config",
+			step: workflow.Step{
+				Name:  "no_config",
+				Type:  workflow.StepTypeAgent,
+				Agent: nil,
+			},
+			wantErr: true,
+			errMsg:  "agent config is required for agent-type steps",
+		},
+		{
+			name: "agent step with missing provider",
+			step: workflow.Step{
+				Name: "no_provider",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "",
+					Prompt:   "Test prompt",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "agent step with missing prompt",
+			step: workflow.Step{
+				Name: "no_prompt",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "agent step with negative timeout",
+			step: workflow.Step{
+				Name: "negative_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Test prompt",
+					Timeout:  -60,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "agent step with empty name",
+			step: workflow.Step{
+				Name: "",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Test prompt",
+				},
+			},
+			wantErr: true,
+			errMsg:  "step name is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.step.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if err.Error() != tt.errMsg {
+					t.Errorf("Step.Validate() error message = %q, want %q", err.Error(), tt.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestStep_Validate_AgentType_WithTransitions(t *testing.T) {
+	step := workflow.Step{
+		Name: "agent_with_transitions",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Analyze {{inputs.data}}",
+		},
+		Transitions: workflow.Transitions{
+			{
+				When: "{{states.agent_with_transitions.output}} == 'success'",
+				Goto: "next_step",
+			},
+			{
+				When: "{{states.agent_with_transitions.output}} == 'failure'",
+				Goto: "error_handler",
+			},
+		},
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with transitions should be valid: %v", err)
+	}
+
+	if len(step.Transitions) != 2 {
+		t.Errorf("expected 2 transitions, got %d", len(step.Transitions))
+	}
+}
+
+func TestStep_Validate_AgentType_WithRetry(t *testing.T) {
+	step := workflow.Step{
+		Name: "agent_with_retry",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Analyze {{inputs.data}}",
+			Timeout:  30,
+		},
+		Retry: &workflow.RetryConfig{
+			MaxAttempts:    3,
+			InitialDelayMs: 1000,
+			MaxDelayMs:     10000,
+			Backoff:        "exponential",
+			Multiplier:     2.0,
+		},
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with retry config should be valid: %v", err)
+	}
+
+	if step.Retry.MaxAttempts != 3 {
+		t.Errorf("expected MaxAttempts 3, got %d", step.Retry.MaxAttempts)
+	}
+}
+
+func TestStep_Validate_AgentType_WithCapture(t *testing.T) {
+	step := workflow.Step{
+		Name: "agent_with_capture",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Generate report for {{inputs.data}}",
+		},
+		Capture: &workflow.CaptureConfig{
+			Stdout:   "agent_output",
+			Stderr:   "agent_errors",
+			MaxSize:  "5MB",
+			Encoding: "utf-8",
+		},
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with capture config should be valid: %v", err)
+	}
+
+	if step.Capture.Stdout != "agent_output" {
+		t.Errorf("expected Stdout 'agent_output', got %s", step.Capture.Stdout)
+	}
+}
+
+func TestStep_Validate_AgentType_WithHooks(t *testing.T) {
+	step := workflow.Step{
+		Name: "agent_with_hooks",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Process {{inputs.data}}",
+		},
+		Hooks: workflow.StepHooks{
+			Pre:  workflow.Hook{{Command: "echo 'Starting agent execution'"}},
+			Post: workflow.Hook{{Command: "echo 'Agent execution completed'"}},
+		},
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with hooks should be valid: %v", err)
+	}
+
+	if len(step.Hooks.Pre) != 1 {
+		t.Errorf("expected 1 pre hook, got %d", len(step.Hooks.Pre))
+	}
+}
+
+func TestStep_Validate_AgentType_WithTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		step    workflow.Step
+		wantErr bool
+	}{
+		{
+			name: "agent step with valid timeout",
+			step: workflow.Step{
+				Name: "agent_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Quick task",
+					Timeout:  30,
+				},
+				Timeout: 60, // step-level timeout
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with only agent timeout",
+			step: workflow.Step{
+				Name: "agent_only_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Quick task",
+					Timeout:  45,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "agent step with only step timeout",
+			step: workflow.Step{
+				Name: "step_only_timeout",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Quick task",
+				},
+				Timeout: 90,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.step.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestStep_Validate_AgentType_WithContinueOnError(t *testing.T) {
+	step := workflow.Step{
+		Name: "agent_continue_on_error",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Try to process {{inputs.data}}",
+		},
+		ContinueOnError: true,
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with continue_on_error should be valid: %v", err)
+	}
+
+	if !step.ContinueOnError {
+		t.Errorf("expected ContinueOnError true, got false")
+	}
+}
+
+func TestStep_Validate_AgentType_WithDependsOn(t *testing.T) {
+	step := workflow.Step{
+		Name: "dependent_agent",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Analyze results from {{states.step1.output}} and {{states.step2.output}}",
+		},
+		DependsOn: []string{"step1", "step2"},
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("agent step with dependencies should be valid: %v", err)
+	}
+
+	if len(step.DependsOn) != 2 {
+		t.Errorf("expected 2 dependencies, got %d", len(step.DependsOn))
+	}
+}
+
+func TestStep_Validate_AgentType_CompleteWorkflow(t *testing.T) {
+	// Test a complete agent step with all possible configurations
+	step := workflow.Step{
+		Name:        "comprehensive_agent",
+		Type:        workflow.StepTypeAgent,
+		Description: "Comprehensive AI agent with all features",
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Analyze and process {{inputs.data}} considering {{inputs.context}}",
+			Options: map[string]any{
+				"model":            "claude-3-5-sonnet-20241022",
+				"temperature":      0.7,
+				"max_tokens":       2000,
+				"top_p":            0.9,
+				"stop_sequences":   []string{"\n\nHuman:"},
+				"presence_penalty": 0.0,
+			},
+			Timeout: 120,
+		},
+		Timeout: 180,
+		Retry: &workflow.RetryConfig{
+			MaxAttempts:    3,
+			InitialDelayMs: 2000,
+			MaxDelayMs:     30000,
+			Backoff:        "exponential",
+			Multiplier:     2.0,
+			Jitter:         0.1,
+		},
+		Capture: &workflow.CaptureConfig{
+			Stdout:   "agent_response",
+			Stderr:   "agent_errors",
+			MaxSize:  "10MB",
+			Encoding: "utf-8",
+		},
+		Hooks: workflow.StepHooks{
+			Pre:  workflow.Hook{{Command: "echo 'Preparing agent execution'"}},
+			Post: workflow.Hook{{Command: "echo 'Agent execution finished'"}},
+		},
+		Transitions: workflow.Transitions{
+			{
+				When: "{{states.comprehensive_agent.output}} contains 'approved'",
+				Goto: "approval_step",
+			},
+			{
+				When: "{{states.comprehensive_agent.output}} contains 'rejected'",
+				Goto: "rejection_step",
+			},
+		},
+		DependsOn:       []string{"prepare_data", "load_context"},
+		ContinueOnError: false,
+	}
+
+	err := step.Validate()
+	if err != nil {
+		t.Errorf("comprehensive agent step should be valid: %v", err)
+	}
+
+	// Verify all configurations are set
+	if step.Agent.Provider != "claude" {
+		t.Errorf("expected provider 'claude', got %s", step.Agent.Provider)
+	}
+	if step.Agent.Timeout != 120 {
+		t.Errorf("expected agent timeout 120, got %d", step.Agent.Timeout)
+	}
+	if step.Timeout != 180 {
+		t.Errorf("expected step timeout 180, got %d", step.Timeout)
+	}
+	if step.Retry.MaxAttempts != 3 {
+		t.Errorf("expected 3 retry attempts, got %d", step.Retry.MaxAttempts)
+	}
+	if step.Capture.Stdout != "agent_response" {
+		t.Errorf("expected stdout capture 'agent_response', got %s", step.Capture.Stdout)
+	}
+	if len(step.Hooks.Pre) != 1 {
+		t.Errorf("expected 1 pre hook, got %d", len(step.Hooks.Pre))
+	}
+	if len(step.Transitions) != 2 {
+		t.Errorf("expected 2 transitions, got %d", len(step.Transitions))
+	}
+	if len(step.DependsOn) != 2 {
+		t.Errorf("expected 2 dependencies, got %d", len(step.DependsOn))
 	}
 }

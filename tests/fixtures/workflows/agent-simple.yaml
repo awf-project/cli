@@ -1,0 +1,34 @@
+# Feature: 39
+# Basic agent step with Claude provider
+name: agent-simple
+version: "1.0.0"
+
+inputs:
+  task:
+    type: string
+    required: true
+    description: "Task description for the agent"
+
+states:
+  initial: analyze
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt: |
+      Please help with this task:
+      {{inputs.task}}
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 1000
+    timeout: 30
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

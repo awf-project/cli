@@ -1,0 +1,30 @@
+# Feature: 39
+# Agent step with invalid provider for error testing
+name: agent-invalid-provider
+version: "1.0.0"
+
+inputs:
+  task:
+    type: string
+    required: true
+
+states:
+  initial: bad_provider
+
+  bad_provider:
+    type: agent
+    provider: nonexistent_provider  # Should trigger provider not found error
+    prompt: |
+      This should fail with provider not found:
+      {{inputs.task}}
+    timeout: 30
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

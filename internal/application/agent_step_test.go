@@ -1,0 +1,1234 @@
+package application_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/agents"
+)
+
+// Component: execution_service
+// Feature: 39 - Agent Step Type
+
+// mockAgentProvider implements ports.AgentProvider for testing.
+type mockAgentProvider struct {
+	name       string
+	results    map[string]*workflow.AgentResult
+	execError  error
+	validateOK bool
+}
+
+func newMockAgentProvider(name string) *mockAgentProvider {
+	return &mockAgentProvider{
+		name:       name,
+		results:    make(map[string]*workflow.AgentResult),
+		validateOK: true,
+	}
+}
+
+func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	if m.execError != nil {
+		return nil, m.execError
+	}
+	if result, ok := m.results[prompt]; ok {
+		return result, nil
+	}
+	// Default successful result
+	return &workflow.AgentResult{
+		Provider:    m.name,
+		Output:      "Agent response",
+		Response:    map[string]any{},
+		Tokens:      100,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockAgentProvider) Name() string {
+	return m.name
+}
+
+func (m *mockAgentProvider) Validate() error {
+	if !m.validateOK {
+		return errors.New("provider validation failed")
+	}
+	return nil
+}
+
+// ============================================================================
+// RED PHASE TESTS - Error Handling and Validation
+// ============================================================================
+
+// TestExecutionService_AgentStep_NoRegistryConfigured tests that agent steps fail
+// when no AgentRegistry is configured.
+func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-test"] = &workflow.Workflow{
+		Name:    "agent-test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	// Note: SetAgentRegistry is NOT called - registry is nil
+
+	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, application.ErrNoAgentRegistry)
+	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	assert.Equal(t, "ask", ctx.CurrentStep)
+}
+
+// TestExecutionService_AgentStep_MissingAgentConfig tests that agent steps fail
+// when the Agent configuration is missing.
+func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-test"] = &workflow.Workflow{
+		Name:    "agent-test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name:      "ask",
+				Type:      workflow.StepTypeAgent,
+				Agent:     nil, // Missing config
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent configuration missing")
+	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+}
+
+// TestExecutionService_AgentStep_ProviderNotFound tests that agent steps fail
+// when the specified provider doesn't exist in the registry.
+func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-test"] = &workflow.Workflow{
+		Name:    "agent-test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "nonexistent",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	// Don't register the provider
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "nonexistent")
+	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+}
+
+// ============================================================================
+// HAPPY PATH TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_BasicExecution tests that a basic agent step
+// executes successfully when the provider exists.
+// AC4: Response captured in states.step_name.output
+func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-test"] = &workflow.Workflow{
+		Name:    "agent-test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+					Options: map[string]any{
+						"model":       "claude-3-sonnet",
+						"temperature": 0.7,
+					},
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Summary: This is a summary of the text",
+		Response:    map[string]any{"summary": "This is a summary"},
+		Tokens:      150,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+
+	// Agent step should succeed
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify step state was recorded (AC4)
+	state, ok := ctx.GetStepState("ask")
+	require.True(t, ok, "agent step state should be recorded")
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
+	assert.Equal(t, "Summary: This is a summary of the text", state.Output)
+}
+
+// TestExecutionService_AgentStep_WithOnFailure tests that agent step failure
+// can transition to an OnFailure state.
+func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-test"] = &workflow.Workflow{
+		Name:    "agent-test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+				OnFailure: "error",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+			"error": {
+				Name: "error",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "",
+		Response:    nil,
+		Tokens:      0,
+		Error:       errors.New("API rate limit exceeded"),
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+
+	// Agent fails, but workflow should complete via OnFailure path
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "error", ctx.CurrentStep)
+
+	// Verify step state shows failure
+	state, ok := ctx.GetStepState("ask")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusFailed, state.Status)
+	assert.Contains(t, state.Error, "API rate limit exceeded")
+}
+
+// TestExecutionService_AgentStep_InMixedWorkflow tests an agent step
+// in a workflow that also has command steps.
+func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["mixed"] = &workflow.Workflow{
+		Name:    "mixed",
+		Initial: "prepare",
+		Steps: map[string]*workflow.Step{
+			"prepare": {
+				Name:      "prepare",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo 'preparing data'",
+				OnSuccess: "analyze",
+			},
+			"analyze": {
+				Name: "analyze",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Analyze the prepared data",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	executor := newMockExecutor()
+	executor.results["echo 'preparing data'"] = &ports.CommandResult{Stdout: "preparing data\n", ExitCode: 0}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Analyze the prepared data"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Analysis complete: Data looks good",
+		Response:    map[string]any{"status": "ok"},
+		Tokens:      75,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		executor,
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "mixed", nil)
+
+	// Both steps should succeed
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify command step was executed successfully
+	prepareState, ok := ctx.GetStepState("prepare")
+	require.True(t, ok, "prepare step should have been executed")
+	assert.Equal(t, workflow.StatusCompleted, prepareState.Status)
+	assert.Equal(t, "preparing data\n", prepareState.Output)
+
+	// Verify agent step was executed successfully
+	analyzeState, ok := ctx.GetStepState("analyze")
+	require.True(t, ok, "analyze step should have been executed")
+	assert.Equal(t, workflow.StatusCompleted, analyzeState.Status)
+	assert.Equal(t, "Analysis complete: Data looks good", analyzeState.Output)
+}
+
+// ============================================================================
+// TIMEOUT HANDLING TESTS - AC7
+// ============================================================================
+
+// TestExecutionService_AgentStep_StepTimeout tests that agent steps respect
+// the step-level timeout configuration.
+// AC7: Timeout handling
+func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-timeout"] = &workflow.Workflow{
+		Name:    "agent-timeout",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name:    "ask",
+				Type:    workflow.StepTypeAgent,
+				Timeout: 5, // 5 second timeout at step level
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+					Timeout:  10, // Agent-level timeout (should be overridden)
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Summary",
+		Response:    map[string]any{},
+		Tokens:      50,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-timeout", nil)
+
+	// Should succeed (mock doesn't actually timeout)
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// TestExecutionService_AgentStep_AgentTimeout tests that agent steps use
+// agent-level timeout when step timeout is not set.
+// AC7: Timeout handling
+func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-timeout"] = &workflow.Workflow{
+		Name:    "agent-timeout",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				// No step-level timeout
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+					Timeout:  3, // Agent-level timeout should be used
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Summary",
+		Response:    map[string]any{},
+		Tokens:      50,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-timeout", nil)
+
+	// Should succeed (mock doesn't actually timeout)
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// TestExecutionService_AgentStep_ContextCancellation tests that agent steps
+// handle context cancellation correctly.
+// AC7: Timeout handling
+func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-cancel"] = &workflow.Workflow{
+		Name:    "agent-cancel",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+				OnFailure: "error",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+			"error": {
+				Name: "error",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.execError = context.Canceled
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	execCtx, err := execSvc.Run(ctx, "agent-cancel", nil)
+
+	// Should fail with context canceled error
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
+}
+
+// ============================================================================
+// PARALLEL EXECUTION TESTS - AC10
+// ============================================================================
+
+// TestExecutionService_AgentStep_InParallelBranches tests that agent steps
+// work correctly within parallel execution branches.
+// AC10: Works with parallel steps
+func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["parallel-agents"] = &workflow.Workflow{
+		Name:    "parallel-agents",
+		Initial: "analyze_parallel",
+		Steps: map[string]*workflow.Step{
+			"analyze_parallel": {
+				Name:      "analyze_parallel",
+				Type:      workflow.StepTypeParallel,
+				Branches:  []string{"analyze_sentiment", "analyze_keywords"},
+				Strategy:  "all_succeed",
+				OnSuccess: "done",
+			},
+			"analyze_sentiment": {
+				Name: "analyze_sentiment",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Analyze sentiment",
+				},
+			},
+			"analyze_keywords": {
+				Name: "analyze_keywords",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "gemini",
+					Prompt:   "Extract keywords",
+				},
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+
+	claude := newMockAgentProvider("claude")
+	claude.results["Analyze sentiment"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Sentiment: Positive",
+		Response:    map[string]any{"sentiment": "positive"},
+		Tokens:      25,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	gemini := newMockAgentProvider("gemini")
+	gemini.results["Extract keywords"] = &workflow.AgentResult{
+		Provider:    "gemini",
+		Output:      "Keywords: AI, ML, Data",
+		Response:    map[string]any{"keywords": []string{"AI", "ML", "Data"}},
+		Tokens:      30,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(gemini)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "parallel-agents", nil)
+
+	// Should succeed
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify both agent steps were executed
+	sentimentState, ok := ctx.GetStepState("analyze_sentiment")
+	require.True(t, ok, "sentiment analysis step should be executed")
+	assert.Equal(t, workflow.StatusCompleted, sentimentState.Status)
+	assert.Equal(t, "Sentiment: Positive", sentimentState.Output)
+
+	keywordsState, ok := ctx.GetStepState("analyze_keywords")
+	require.True(t, ok, "keyword extraction step should be executed")
+	assert.Equal(t, workflow.StatusCompleted, keywordsState.Status)
+	assert.Equal(t, "Keywords: AI, ML, Data", keywordsState.Output)
+}
+
+// ============================================================================
+// PROMPT INTERPOLATION TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_PromptInterpolation tests that agent prompts
+// are interpolated with context variables.
+func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["agent-interpolate"] = &workflow.Workflow{
+		Name:    "agent-interpolate",
+		Initial: "ask",
+		Inputs: []workflow.Input{
+			{Name: "topic", Type: "string", Required: true},
+		},
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Explain {{inputs.topic}} in simple terms", // Should be interpolated
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	// Note: mock resolver doesn't interpolate, so prompt stays as-is
+	claude.results["Explain {{inputs.topic}} in simple terms"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Explanation of the topic",
+		Response:    map[string]any{},
+		Tokens:      100,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(), // Mock resolver passes through
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "agent-interpolate", map[string]any{
+		"topic": "quantum computing",
+	})
+
+	// Should succeed
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// ============================================================================
+// MULTIPLE PROVIDERS TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_MultipleProviders tests that different
+// agent providers can be used in the same workflow.
+func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["multi-provider"] = &workflow.Workflow{
+		Name:    "multi-provider",
+		Initial: "claude_analysis",
+		Steps: map[string]*workflow.Step{
+			"claude_analysis": {
+				Name: "claude_analysis",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Analyze this code",
+				},
+				OnSuccess: "gemini_review",
+			},
+			"gemini_review": {
+				Name: "gemini_review",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "gemini",
+					Prompt:   "Review the analysis",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+
+	claude := newMockAgentProvider("claude")
+	claude.results["Analyze this code"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Code analysis: Good structure",
+		Response:    map[string]any{"quality": "good"},
+		Tokens:      150,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	gemini := newMockAgentProvider("gemini")
+	gemini.results["Review the analysis"] = &workflow.AgentResult{
+		Provider:    "gemini",
+		Output:      "Review: Analysis is accurate",
+		Response:    map[string]any{"accuracy": "high"},
+		Tokens:      80,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(gemini)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "multi-provider", nil)
+
+	// Both steps should succeed
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify both agent steps executed
+	claudeState, ok := ctx.GetStepState("claude_analysis")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusCompleted, claudeState.Status)
+	assert.Equal(t, "Code analysis: Good structure", claudeState.Output)
+
+	geminiState, ok := ctx.GetStepState("gemini_review")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusCompleted, geminiState.Status)
+	assert.Equal(t, "Review: Analysis is accurate", geminiState.Output)
+}
+
+// ============================================================================
+// SETTER METHOD TEST
+// ============================================================================
+
+// TestExecutionService_SetAgentRegistry tests the setter method.
+func TestExecutionService_SetAgentRegistry(t *testing.T) {
+	wfSvc := application.NewWorkflowService(
+		newMockRepository(),
+		newMockStateStore(),
+		newMockExecutor(),
+		&mockLogger{},
+	)
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	_ = registry.Register(claude)
+
+	// Should not panic
+	execSvc.SetAgentRegistry(registry)
+
+	// Create a workflow with an agent step to verify the registry is set
+	repo := newMockRepository()
+	repo.workflows["test"] = &workflow.Workflow{
+		Name:    "test",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Test prompt",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc2 := application.NewExecutionService(
+		wfSvc2,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc2.SetAgentRegistry(registry)
+
+	ctx, err := execSvc2.Run(context.Background(), "test", nil)
+	// Should succeed (not ErrNoAgentRegistry)
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// ============================================================================
+// RESUME WORKFLOW TESTS
+// ============================================================================
+
+// TestExecutionService_Resume_WithAgentStep tests resuming a workflow
+// that has an agent step.
+func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["resume-agent"] = &workflow.Workflow{
+		Name:    "resume-agent",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	// Create a state store with an interrupted execution at the agent step
+	stateStore := newMockStateStore()
+	execCtx := workflow.NewExecutionContext("test-id", "resume-agent")
+	execCtx.CurrentStep = "ask"
+	execCtx.Status = workflow.StatusRunning
+	stateStore.states["test-id"] = execCtx
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "Summary: Brief summary",
+		Response:    map[string]any{"summary": "Brief summary"},
+		Tokens:      50,
+		Error:       nil,
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		stateStore,
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Resume(context.Background(), "test-id", nil)
+
+	// Should succeed after resuming at the agent step
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+}
+
+// ============================================================================
+// CONTINUE ON ERROR TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_ContinueOnError tests that agent steps
+// can continue on error when configured.
+func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["continue-on-error"] = &workflow.Workflow{
+		Name:    "continue-on-error",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				ContinueOnError: true,
+				OnSuccess:       "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.results["Summarize this text"] = &workflow.AgentResult{
+		Provider:    "claude",
+		Output:      "",
+		Response:    nil,
+		Tokens:      0,
+		Error:       errors.New("API error"),
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "continue-on-error", nil)
+
+	// Should continue despite error
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "done", ctx.CurrentStep)
+
+	// Verify step failed but workflow continued
+	state, ok := ctx.GetStepState("ask")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusFailed, state.Status)
+}
+
+// ============================================================================
+// ERROR MESSAGE TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_ErrorMessages tests that error messages
+// include helpful context.
+func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
+	tests := []struct {
+		name          string
+		stepName      string
+		provider      string
+		setupRegistry bool
+		addProvider   bool
+		agentConfig   bool
+		expectedParts []string
+	}{
+		{
+			name:          "no registry - includes step name",
+			stepName:      "my-agent-step",
+			provider:      "claude",
+			setupRegistry: false,
+			addProvider:   false,
+			agentConfig:   true,
+			expectedParts: []string{"my-agent-step", "agent registry not configured"},
+		},
+		{
+			name:          "provider not found - includes provider name",
+			stepName:      "analyze-step",
+			provider:      "custom-ai",
+			setupRegistry: true,
+			addProvider:   false,
+			agentConfig:   true,
+			expectedParts: []string{"analyze-step", "custom-ai", "not found"},
+		},
+		{
+			name:          "missing agent config - includes step name",
+			stepName:      "broken-step",
+			provider:      "claude",
+			setupRegistry: true,
+			addProvider:   true,
+			agentConfig:   false,
+			expectedParts: []string{"broken-step", "agent configuration missing"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newMockRepository()
+
+			var agentConfig *workflow.AgentConfig
+			if tt.agentConfig {
+				agentConfig = &workflow.AgentConfig{
+					Provider: tt.provider,
+					Prompt:   "Test prompt",
+				}
+			}
+
+			repo.workflows["test"] = &workflow.Workflow{
+				Name:    "test",
+				Initial: tt.stepName,
+				Steps: map[string]*workflow.Step{
+					tt.stepName: {
+						Name:      tt.stepName,
+						Type:      workflow.StepTypeAgent,
+						Agent:     agentConfig,
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			}
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+			execSvc := application.NewExecutionService(
+				wfSvc,
+				newMockExecutor(),
+				newMockParallelExecutor(),
+				newMockStateStore(),
+				&mockLogger{},
+				newMockResolver(),
+				nil,
+			)
+
+			if tt.setupRegistry {
+				registry := agents.NewAgentRegistry()
+				if tt.addProvider {
+					provider := newMockAgentProvider(tt.provider)
+					_ = registry.Register(provider)
+				}
+				execSvc.SetAgentRegistry(registry)
+			}
+
+			_, err := execSvc.Run(context.Background(), "test", nil)
+
+			require.Error(t, err)
+			errMsg := err.Error()
+			for _, part := range tt.expectedParts {
+				assert.Contains(t, errMsg, part, "error message should contain: %s", part)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// EXECUTION ERROR TESTS
+// ============================================================================
+
+// TestExecutionService_AgentStep_ExecutionError tests handling of
+// provider execution errors.
+func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
+	repo := newMockRepository()
+	repo.workflows["exec-error"] = &workflow.Workflow{
+		Name:    "exec-error",
+		Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "Summarize this text",
+				},
+				OnSuccess: "done",
+				OnFailure: "error",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+			"error": {
+				Name: "error",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	registry := agents.NewAgentRegistry()
+	claude := newMockAgentProvider("claude")
+	claude.execError = errors.New("network connection failed")
+	_ = registry.Register(claude)
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		newMockResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
+
+	// Should transition to error state
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "error", ctx.CurrentStep)
+
+	// Verify step state shows error
+	state, ok := ctx.GetStepState("ask")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusFailed, state.Status)
+	assert.Contains(t, state.Error, "network connection failed")
+}

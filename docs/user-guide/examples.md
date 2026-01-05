@@ -55,9 +55,9 @@ states:
 awf run greet-user --input name=Alice --input greeting=Hi
 ```
 
-## Code Analysis
+## Code Analysis with Agent Step
 
-Analyze code using AI:
+Analyze code using AI with the agent step type:
 
 ```yaml
 name: analyze-code
@@ -80,11 +80,16 @@ states:
     on_failure: error
 
   analyze:
-    type: step
-    command: |
-      claude -c "Review this code and suggest improvements:
+    type: agent
+    provider: claude
+    prompt: |
+      Review this code and suggest improvements:
 
-      {{.states.read_file.output}}"
+      {{.states.read_file.output}}
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 4096
+      output_format: json
     timeout: 120
     on_success: done
     on_failure: error
@@ -329,6 +334,162 @@ outer=A inner=2
 outer=A inner=3
 outer=B inner=1
 ...
+```
+
+## AI Agent Integration
+
+Invoke AI agents (Claude, Codex, Gemini) directly in workflows:
+
+```yaml
+name: code-review-with-agent
+version: "1.0.0"
+
+inputs:
+  - name: file
+    type: string
+    required: true
+    validation:
+      file_exists: true
+
+states:
+  initial: read_file
+
+  read_file:
+    type: step
+    command: cat "{{.inputs.file}}"
+    on_success: analyze
+    on_failure: error
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt: |
+      Review this code for issues and improvements:
+      {{.states.read_file.output}}
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 2048
+    timeout: 120
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal
+    status: failure
+```
+
+```bash
+awf run code-review-with-agent --input file=main.go
+```
+
+## Multi-Turn Agent Conversation
+
+Chain multiple agent steps for conversational workflows:
+
+```yaml
+name: code-conversation
+version: "1.0.0"
+
+inputs:
+  - name: code
+    type: string
+    required: true
+
+states:
+  initial: initial_review
+
+  initial_review:
+    type: agent
+    provider: claude
+    prompt: |
+      Review this code:
+      {{.inputs.code}}
+    on_success: ask_performance
+
+  ask_performance:
+    type: agent
+    provider: claude
+    prompt: |
+      Based on your previous review:
+      {{.states.initial_review.output}}
+
+      Now focus specifically on performance bottlenecks.
+    on_success: suggest_fixes
+
+  suggest_fixes:
+    type: agent
+    provider: claude
+    prompt: |
+      Using your analysis, suggest specific code improvements for:
+      {{.inputs.code}}
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+```bash
+awf run code-conversation --input code="$(cat main.py)"
+```
+
+## Parallel AI Analysis
+
+Run multiple agents concurrently for comprehensive analysis:
+
+```yaml
+name: parallel-code-analysis
+version: "1.0.0"
+
+inputs:
+  - name: code
+    type: string
+    required: true
+
+states:
+  initial: parallel_analysis
+
+  parallel_analysis:
+    type: parallel
+    strategy: all_succeed
+    steps:
+      - name: security_review
+        type: agent
+        provider: claude
+        prompt: |
+          Security review:
+          {{.inputs.code}}
+      - name: performance_review
+        type: agent
+        provider: codex
+        prompt: |
+          Performance analysis:
+          {{.inputs.code}}
+      - name: style_review
+        type: agent
+        provider: gemini
+        prompt: |
+          Code style review:
+          {{.inputs.code}}
+    on_success: aggregate
+
+  aggregate:
+    type: step
+    command: |
+      echo "Security: {{.states.security_review.output}}"
+      echo "Performance: {{.states.performance_review.output}}"
+      echo "Style: {{.states.style_review.output}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal
+    status: failure
 ```
 
 ## Built-in Workflows

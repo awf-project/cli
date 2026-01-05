@@ -38,6 +38,8 @@ type DryRunStep struct {
 	Loop *DryRunLoop // loop configuration (for for_each/while types)
 	// Terminal step fields
 	Status TerminalStatus // terminal status (success/failure)
+	// Agent step fields
+	Agent *DryRunAgent // agent configuration (for agent type)
 }
 
 // DryRunHooks represents hooks that would run for a step.
@@ -84,4 +86,13 @@ type DryRunLoop struct {
 	MaxIterations  int      // max iteration limit
 	BreakCondition string   // break condition expression
 	OnComplete     string   // next state after loop
+}
+
+// DryRunAgent represents agent configuration for display in dry-run.
+type DryRunAgent struct {
+	Provider       string         // agent provider name
+	ResolvedPrompt string         // prompt after interpolation
+	CLICommand     string         // CLI command that would be executed
+	Options        map[string]any // provider-specific options
+	Timeout        int            // timeout in seconds
 }
