@@ -24,6 +24,10 @@ func (m *mockProvider) Execute(ctx context.Context, prompt string, options map[s
 	}, nil
 }
 
+func (m *mockProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	return nil, nil
+}
+
 func (m *mockProvider) Name() string {
 	return m.name
 }

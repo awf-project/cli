@@ -1,0 +1,43 @@
+# Feature: F033
+# Basic conversation mode with single agent step
+name: conversation-simple
+version: "1.0.0"
+
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: "Task for the agent to work on"
+
+states:
+  initial: review
+
+  review:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: |
+      You are a helpful assistant. Provide clear and concise responses.
+      Say "COMPLETE" when the task is finished.
+    initial_prompt: |
+      Please help with this task:
+      {{inputs.task}}
+    options:
+      model: claude-haiku-4-5
+      max_tokens: 2000
+    conversation:
+      max_turns: 5
+      max_context_tokens: 50000
+      strategy: sliding_window
+      stop_condition: "response contains 'COMPLETE'"
+    timeout: 60
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

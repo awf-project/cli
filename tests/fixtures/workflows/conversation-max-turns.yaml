@@ -1,0 +1,84 @@
+# Feature: F033
+# Max turns limit edge cases and boundary testing
+name: conversation-max-turns
+version: "1.0.0"
+
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: "Task description for conversation"
+
+states:
+  initial: single_turn
+
+  single_turn:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "Answer briefly."
+    initial_prompt: "{{inputs.task}}"
+    options:
+      model: claude-haiku-4-5
+      max_tokens: 500
+    conversation:
+      max_turns: 1
+      strategy: sliding_window
+    timeout: 30
+    on_success: zero_max_turns
+    on_failure: error
+
+  zero_max_turns:
+    type: agent
+    provider: gemini
+    mode: conversation
+    system_prompt: "Provide insights."
+    initial_prompt: "Elaborate on: {{inputs.task}}"
+    options:
+      model: gemini-pro
+    conversation:
+      max_turns: 0  # Should use default or unlimited
+      strategy: sliding_window
+      stop_condition: "turn_count >= 2"
+    timeout: 45
+    on_success: high_turn_limit
+    on_failure: error
+
+  high_turn_limit:
+    type: agent
+    provider: codex
+    mode: conversation
+    system_prompt: "Discuss thoroughly."
+    initial_prompt: "Deep dive: {{inputs.task}}"
+    conversation:
+      max_turns: 100
+      max_context_tokens: 1000000
+      strategy: sliding_window
+      stop_condition: "response contains 'COMPREHENSIVE'"
+    timeout: 180
+    on_success: no_max_turns_specified
+    on_failure: error
+
+  no_max_turns_specified:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "Continue until satisfied."
+    initial_prompt: "Final thoughts: {{inputs.task}}"
+    options:
+      model: claude-haiku-4-5
+    conversation:
+      # max_turns omitted - should use default behavior
+      strategy: sliding_window
+      stop_condition: "turn_count >= 3"
+    timeout: 60
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

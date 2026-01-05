@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **39**: Agent Step Type
+### Agent
+- **F032**: Agent Step Type
 
 #### Interactive Input Collection
 - **F046**: Interactive Mode for Incomplete Command Inputs

@@ -101,6 +101,132 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	return result, nil
 }
 
+// ExecuteConversation invokes the Claude CLI with conversation history for multi-turn interactions.
+func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	startedAt := time.Now()
+
+	// Validate state
+	if state == nil {
+		return nil, errors.New("conversation state cannot be nil")
+	}
+
+	// Validate prompt
+	if strings.TrimSpace(prompt) == "" {
+		return nil, errors.New("prompt cannot be empty")
+	}
+
+	// Validate options
+	if err := validateOptions(options); err != nil {
+		return nil, err
+	}
+
+	// Check context before execution
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Clone state to avoid modifying original
+	workingState := cloneState(state)
+
+	// Add user turn to conversation history
+	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
+	workingState.AddTurn(userTurn)
+
+	// Build command arguments
+	args := []string{"-p", prompt}
+
+	// Apply options (only those supported by Claude CLI)
+	if options != nil {
+		if model, ok := options["model"].(string); ok {
+			args = append(args, "--model", model)
+		}
+		if outputFormat, ok := options["output_format"].(string); ok {
+			if outputFormat == "json" {
+				args = append(args, "--output-format", "json")
+			}
+		}
+		// allowedTools - pass tool list to Claude CLI for agentic workflows
+		if allowedTools, ok := options["allowedTools"].(string); ok && allowedTools != "" {
+			args = append(args, "--allowedTools", allowedTools)
+		}
+		// dangerouslySkipPermissions - skip permission prompts for automated execution
+		if skipPerms, ok := options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
+			args = append(args, "--dangerously-skip-permissions")
+			// Audit log for security compliance
+			log.Printf("[SECURITY AUDIT] dangerouslySkipPermissions=true enabled at %s", time.Now().Format(time.RFC3339))
+		}
+	}
+
+	// Execute command
+	cmd := exec.CommandContext(ctx, "claude", args...)
+	output, err := cmd.CombinedOutput()
+	completedAt := time.Now()
+
+	if err != nil {
+		return nil, fmt.Errorf("claude execution failed: %w", err)
+	}
+
+	outputStr := string(output)
+
+	// Add assistant turn to conversation history
+	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
+	assistantTurn.Tokens = estimateTokens(outputStr)
+	workingState.AddTurn(assistantTurn)
+
+	// Estimate input tokens (all previous turns)
+	inputTokens := 0
+	for i := 0; i < len(workingState.Turns)-1; i++ {
+		if workingState.Turns[i].Tokens == 0 {
+			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
+		}
+		inputTokens += workingState.Turns[i].Tokens
+	}
+
+	// Create result
+	result := &workflow.ConversationResult{
+		Provider:        "claude",
+		State:           workingState,
+		Output:          outputStr,
+		TokensInput:     inputTokens,
+		TokensOutput:    assistantTurn.Tokens,
+		TokensTotal:     inputTokens + assistantTurn.Tokens,
+		TokensEstimated: true,
+		StartedAt:       startedAt,
+		CompletedAt:     completedAt,
+	}
+
+	// Parse JSON response if output format is JSON
+	if options != nil {
+		if format, ok := options["output_format"].(string); ok && format == "json" {
+			var jsonResp map[string]any
+			if err := json.Unmarshal(output, &jsonResp); err != nil {
+				return nil, fmt.Errorf("failed to parse JSON output: %w", err)
+			}
+			result.Response = jsonResp
+		}
+	}
+
+	return result, nil
+}
+
+// cloneState creates a shallow copy of ConversationState.
+func cloneState(state *workflow.ConversationState) *workflow.ConversationState {
+	if state == nil {
+		return nil
+	}
+
+	// Create new state with copied turns slice
+	turns := make([]workflow.Turn, len(state.Turns))
+	copy(turns, state.Turns)
+
+	return &workflow.ConversationState{
+		Turns:       turns,
+		TotalTurns:  state.TotalTurns,
+		TotalTokens: state.TotalTokens,
+		StoppedBy:   state.StoppedBy,
+	}
+}
+
 // Name returns the provider identifier.
 func (p *ClaudeProvider) Name() string {
 	return "claude"
@@ -121,15 +247,23 @@ func validateOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate max_tokens
-	if maxTokens, ok := options["max_tokens"].(int); ok {
+	// Validate max_tokens type and value
+	if val, exists := options["max_tokens"]; exists {
+		maxTokens, ok := val.(int)
+		if !ok {
+			return errors.New("max_tokens must be an integer")
+		}
 		if maxTokens < 0 {
 			return errors.New("max_tokens must be non-negative")
 		}
 	}
 
-	// Validate temperature
-	if temp, ok := options["temperature"].(float64); ok {
+	// Validate temperature type and value
+	if val, exists := options["temperature"]; exists {
+		temp, ok := val.(float64)
+		if !ok {
+			return errors.New("temperature must be a number")
+		}
 		if temp < 0 || temp > 1 {
 			return errors.New("temperature must be between 0 and 1")
 		}

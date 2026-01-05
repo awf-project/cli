@@ -19,7 +19,7 @@ states:
       Please help with this task:
       {{inputs.task}}
     options:
-      model: claude-sonnet-4-20250514
+      model: claude-haiku-4-5
       max_tokens: 1000
     timeout: 30
     on_success: done

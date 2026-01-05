@@ -19,7 +19,7 @@ states:
 
       Provide initial analysis.
     options:
-      model: claude-sonnet-4-20250514
+      model: claude-haiku-4-5
       max_tokens: 1000
     timeout: 30
     on_success: second_turn
@@ -34,7 +34,7 @@ states:
 
       Now provide detailed recommendations.
     options:
-      model: claude-sonnet-4-20250514
+      model: claude-haiku-4-5
       max_tokens: 1500
     timeout: 30
     on_success: third_turn
@@ -50,7 +50,7 @@ states:
 
       Summarize key action items.
     options:
-      model: claude-sonnet-4-20250514
+      model: claude-haiku-4-5
       max_tokens: 500
     timeout: 30
     on_success: done

@@ -1,0 +1,86 @@
+# Feature: F033
+# Stop conditions testing with various expression types
+name: conversation-stop-condition
+version: "1.0.0"
+
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: "Task description for conversation"
+
+states:
+  initial: keyword_match
+
+  keyword_match:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: |
+      You are a task executor. Complete the task and respond with "COMPLETE" when done.
+    initial_prompt: "Execute: {{inputs.task}}"
+    options:
+      model: claude-haiku-4-5
+      max_tokens: 1500
+    conversation:
+      max_turns: 10
+      strategy: sliding_window
+      stop_condition: "response contains 'COMPLETE'"
+    timeout: 60
+    on_success: turn_count_limit
+    on_failure: error
+
+  turn_count_limit:
+    type: agent
+    provider: gemini
+    mode: conversation
+    system_prompt: "Provide brief answers."
+    initial_prompt: "Continue task: {{inputs.task}}"
+    options:
+      model: gemini-pro
+    conversation:
+      max_turns: 5
+      strategy: sliding_window
+      stop_condition: "turn_count >= 3"
+    timeout: 60
+    on_success: token_budget
+    on_failure: error
+
+  token_budget:
+    type: agent
+    provider: codex
+    mode: conversation
+    system_prompt: "Be concise."
+    initial_prompt: "Finalize: {{inputs.task}}"
+    conversation:
+      max_turns: 20
+      max_context_tokens: 5000
+      strategy: sliding_window
+      stop_condition: "total_tokens >= 4500"
+    timeout: 60
+    on_success: complex_expression
+    on_failure: error
+
+  complex_expression:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "Respond thoughtfully."
+    initial_prompt: "Analyze: {{inputs.task}}"
+    options:
+      model: claude-haiku-4-5
+    conversation:
+      max_turns: 15
+      strategy: sliding_window
+      stop_condition: "(turn_count >= 5 && response contains 'DONE') || total_tokens >= 10000"
+    timeout: 90
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

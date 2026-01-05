@@ -112,6 +112,11 @@ func (p *CustomProvider) Execute(ctx context.Context, prompt string, options map
 	return result, nil
 }
 
+// ExecuteConversation invokes the custom command with conversation history for multi-turn interactions.
+func (p *CustomProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	return nil, errors.New("not implemented")
+}
+
 // Name returns the provider identifier.
 func (p *CustomProvider) Name() string {
 	return p.name

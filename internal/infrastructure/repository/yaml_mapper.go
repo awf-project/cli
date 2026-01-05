@@ -387,10 +387,43 @@ func mapAgentConfigFlat(y yamlStep) *workflow.AgentConfig {
 		return nil
 	}
 	return &workflow.AgentConfig{
-		Provider: y.Provider,
-		Prompt:   y.Prompt,
-		Options:  y.Options,
+		Provider:      y.Provider,
+		Prompt:        y.Prompt,
+		Options:       y.Options,
+		Mode:          y.Mode,
+		SystemPrompt:  y.SystemPrompt,
+		InitialPrompt: y.InitialPrompt,
+		Conversation:  mapConversationConfig(y.Conversation),
 		// Timeout is handled separately via step.Timeout
 		Command: "", // Not supported in flat structure - stub
+	}
+}
+
+// mapConversationConfig converts yamlConversationConfig to domain ConversationConfig.
+func mapConversationConfig(y *yamlConversationConfig) *workflow.ConversationConfig {
+	if y == nil {
+		return nil
+	}
+
+	// Parse strategy string to domain ContextWindowStrategy
+	var strategy workflow.ContextWindowStrategy
+	switch y.Strategy {
+	case "sliding_window":
+		strategy = workflow.StrategySlidingWindow
+	case "summarize":
+		strategy = workflow.StrategySummarize
+	case "truncate_middle":
+		strategy = workflow.StrategyTruncateMiddle
+	default:
+		strategy = workflow.StrategyNone
+	}
+
+	return &workflow.ConversationConfig{
+		MaxTurns:         y.MaxTurns,
+		MaxContextTokens: y.MaxContextTokens,
+		Strategy:         strategy,
+		StopCondition:    y.StopCondition,
+		ContinueFrom:     y.ContinueFrom,
+		InjectContext:    y.InjectContext,
 	}
 }

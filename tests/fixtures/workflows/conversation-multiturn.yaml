@@ -1,0 +1,54 @@
+# Feature: F033
+# Multi-turn conversation with conversation continuation across steps
+name: conversation-multiturn
+version: "1.0.0"
+
+inputs:
+  - name: initial_request
+    type: string
+    required: true
+    description: "Initial request for the agent"
+
+states:
+  initial: first_turn
+
+  first_turn:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: |
+      You are a helpful assistant. Provide clear responses.
+    initial_prompt: |
+      {{inputs.initial_request}}
+    options:
+      model: claude-haiku-4-5
+      max_tokens: 2000
+    conversation:
+      max_turns: 3
+      max_context_tokens: 80000
+      strategy: sliding_window
+    timeout: 60
+    on_success: second_turn
+    on_failure: error
+
+  second_turn:
+    type: agent
+    provider: claude
+    mode: conversation
+    continue_from: first_turn
+    prompt: |
+      Can you elaborate on that response?
+    conversation:
+      max_turns: 2
+      stop_condition: "turn_count >= 5"
+    timeout: 60
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

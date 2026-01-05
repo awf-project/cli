@@ -86,6 +86,11 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	return result, nil
 }
 
+// ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
+func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	return nil, errors.New("not implemented")
+}
+
 // Name returns the provider identifier.
 func (p *OpenCodeProvider) Name() string {
 	return "opencode"

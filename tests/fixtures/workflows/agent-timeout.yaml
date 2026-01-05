@@ -18,7 +18,7 @@ states:
       Quick task (should complete within timeout):
       {{inputs.task}}
     options:
-      model: claude-sonnet-4-20250514
+      model: claude-haiku-4-5
       max_tokens: 100
     timeout: 5  # Short timeout for testing
     on_success: done
