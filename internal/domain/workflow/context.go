@@ -28,6 +28,8 @@ type StepState struct {
 	Error       string
 	StartedAt   time.Time
 	CompletedAt time.Time
+	Response    map[string]any // parsed JSON response from agent steps
+	Tokens      int            // token usage from agent steps
 }
 
 // LoopContext holds the current loop iteration state.

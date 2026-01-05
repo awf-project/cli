@@ -61,6 +61,12 @@ type yamlStep struct {
 	Workflow    string            `yaml:"workflow"` // workflow name to invoke
 	CallInputs  map[string]string `yaml:"inputs"`   // parent var → sub-workflow input
 	CallOutputs map[string]string `yaml:"outputs"`  // sub-workflow output → parent var
+
+	// Agent configuration (for AI agent steps - F039)
+	// Flat structure: provider, prompt, options directly on step
+	Provider string         `yaml:"provider"` // agent provider: claude, codex, gemini, opencode, custom
+	Prompt   string         `yaml:"prompt"`   // prompt template with {{inputs.*}} and {{states.*}}
+	Options  map[string]any `yaml:"options"`  // provider-specific options (model, temperature, max_tokens, etc.)
 }
 
 // yamlTransition is the YAML representation of a conditional transition.

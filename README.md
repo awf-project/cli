@@ -8,6 +8,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 ## Features
 
 - **State Machine Execution** - Define workflows as state machines with conditional transitions
+- **Agent Steps** - Invoke AI CLI agents (Claude, Codex, Gemini) with prompt templates and response parsing
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
 - **Loop Constructs** - For-each and while loops with full context access
 - **Sub-Workflows** - Invoke workflows from other workflows with input/output mapping

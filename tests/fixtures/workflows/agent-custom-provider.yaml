@@ -1,0 +1,29 @@
+# Feature: 39
+# Agent step with custom provider
+name: agent-custom-provider
+version: "1.0.0"
+
+inputs:
+  prompt_text:
+    type: string
+    required: true
+
+states:
+  initial: custom_agent
+
+  custom_agent:
+    type: agent
+    provider: custom
+    command: 'echo "Mock response to: {{prompt}}"'  # Custom command template
+    prompt: "{{inputs.prompt_text}}"
+    timeout: 10
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

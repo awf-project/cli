@@ -1,0 +1,280 @@
+package agents
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Component: agent_providers
+// Feature: 39
+
+func TestClaudeProvider_Name(t *testing.T) {
+	provider := NewClaudeProvider()
+
+	assert.Equal(t, "claude", provider.Name())
+}
+
+func TestClaudeProvider_Execute_HappyPath(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	tests := []struct {
+		name    string
+		prompt  string
+		options map[string]any
+	}{
+		{
+			name:    "simple prompt",
+			prompt:  "What is 2+2?",
+			options: nil,
+		},
+		{
+			name:   "prompt with model alias",
+			prompt: "Explain Go interfaces briefly",
+			options: map[string]any{
+				"model": "sonnet",
+			},
+		},
+		{
+			name:   "prompt with output format",
+			prompt: "List 3 programming languages as JSON array",
+			options: map[string]any{
+				"output_format": "json",
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, "claude", result.Provider)
+			assert.NotEmpty(t, result.Output)
+			assert.False(t, result.StartedAt.IsZero())
+			assert.False(t, result.CompletedAt.IsZero())
+			assert.True(t, result.CompletedAt.After(result.StartedAt))
+		})
+	}
+}
+
+func TestClaudeProvider_Execute_JSONResponse(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+
+	options := map[string]any{
+		"output_format": "json",
+	}
+
+	result, err := provider.Execute(ctx, "List 3 colors", options)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotNil(t, result.Response, "JSON response should be parsed")
+	assert.IsType(t, map[string]any{}, result.Response)
+}
+
+func TestClaudeProvider_Execute_TokenUsage(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+
+	result, err := provider.Execute(ctx, "Hello", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Greater(t, result.Tokens, 0, "Should capture token usage")
+}
+
+func TestClaudeProvider_Execute_EmptyPrompt(t *testing.T) {
+	provider := NewClaudeProvider()
+	ctx := context.Background()
+
+	result, err := provider.Execute(ctx, "", nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "prompt")
+}
+
+func TestClaudeProvider_Execute_Timeout(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	time.Sleep(5 * time.Millisecond) // Ensure timeout
+
+	result, err := provider.Execute(ctx, "This should timeout", nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+func TestClaudeProvider_Execute_ContextCancellation(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	result, err := provider.Execute(ctx, "This should be cancelled", nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestClaudeProvider_Execute_InvalidOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+		wantErr string
+	}{
+		{
+			name: "negative max_tokens",
+			options: map[string]any{
+				"max_tokens": -1,
+			},
+			wantErr: "max_tokens",
+		},
+		{
+			name: "invalid temperature",
+			options: map[string]any{
+				"temperature": 2.5, // Should be 0-1
+			},
+			wantErr: "temperature",
+		},
+		{
+			name: "unknown model",
+			options: map[string]any{
+				"model": "invalid-model",
+			},
+			wantErr: "model",
+		},
+	}
+
+	provider := NewClaudeProvider()
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := provider.Execute(ctx, "Test prompt", tt.options)
+
+			assert.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestClaudeProvider_Validate_CLINotInstalled(t *testing.T) {
+	provider := NewClaudeProvider()
+
+	err := provider.Validate()
+
+	// Should fail if claude CLI is not in PATH
+	// In CI environments without Claude installed, this should error
+	if err != nil {
+		assert.Contains(t, err.Error(), "claude")
+	}
+}
+
+func TestClaudeProvider_Validate_CLIInstalled(t *testing.T) {
+	// Skip if Claude CLI not available
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	err := provider.Validate()
+	assert.NoError(t, err)
+}
+
+func TestClaudeProvider_Execute_LargePrompt(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+
+	// Generate large prompt (simulate real-world use case)
+	largePrompt := ""
+	for i := 0; i < 1000; i++ {
+		largePrompt += "This is a test sentence. "
+	}
+
+	result, err := provider.Execute(ctx, largePrompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestClaudeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
+	provider := NewClaudeProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Claude CLI not installed, skipping")
+	}
+
+	tests := []struct {
+		name   string
+		prompt string
+	}{
+		{
+			name:   "quotes",
+			prompt: `He said "Hello World"`,
+		},
+		{
+			name:   "backticks",
+			prompt: "Use `code` blocks",
+		},
+		{
+			name:   "newlines",
+			prompt: "Line 1\nLine 2\nLine 3",
+		},
+		{
+			name:   "unicode",
+			prompt: "Émojis: 🚀 and unicode: 你好",
+		},
+		{
+			name:   "shell metacharacters",
+			prompt: "Test $VAR && echo 'danger' || rm -rf /",
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := provider.Execute(ctx, tt.prompt, nil)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.NotEmpty(t, result.Output)
+		})
+	}
+}

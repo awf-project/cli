@@ -1,0 +1,67 @@
+# Feature: 39
+# Parallel agent steps with multiple providers
+name: agent-parallel
+version: "1.0.0"
+
+inputs:
+  question:
+    type: string
+    required: true
+
+states:
+  initial: parallel_agents
+
+  parallel_agents:
+    type: parallel
+    strategy: all_succeed
+    branches:
+      - name: claude_analysis
+        steps:
+          - name: analyze_claude
+            type: agent
+            provider: claude
+            prompt: "Analyze: {{inputs.question}}"
+            options:
+              model: claude-sonnet-4-20250514
+              max_tokens: 500
+            timeout: 30
+            on_success: done
+
+      - name: codex_analysis
+        steps:
+          - name: analyze_codex
+            type: agent
+            provider: codex
+            prompt: "Analyze: {{inputs.question}}"
+            timeout: 30
+            on_success: done
+
+      - name: gemini_analysis
+        steps:
+          - name: analyze_gemini
+            type: agent
+            provider: gemini
+            prompt: "Analyze: {{inputs.question}}"
+            options:
+              model: gemini-pro
+            timeout: 30
+            on_success: done
+    on_success: compare
+    on_failure: error
+
+  compare:
+    type: step
+    command: |
+      echo "Claude: {{states.parallel_agents.branches.claude_analysis.steps.analyze_claude.output}}"
+      echo "Codex: {{states.parallel_agents.branches.codex_analysis.steps.analyze_codex.output}}"
+      echo "Gemini: {{states.parallel_agents.branches.gemini_analysis.steps.analyze_gemini.output}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

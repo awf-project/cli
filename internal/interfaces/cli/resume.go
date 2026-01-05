@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
@@ -207,6 +208,13 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
+
+	// Setup agent registry for F039 agent step execution
+	agentRegistry := agents.NewAgentRegistry()
+	if err := agentRegistry.RegisterDefaults(); err != nil {
+		return fmt.Errorf("failed to register agent providers: %w", err)
+	}
+	execSvc.SetAgentRegistry(agentRegistry)
 
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)

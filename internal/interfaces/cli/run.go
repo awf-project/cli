@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/internal/infrastructure/config"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
@@ -274,6 +275,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
+
+	// Setup agent registry for F039 agent step execution
+	agentRegistry := agents.NewAgentRegistry()
+	if err := agentRegistry.RegisterDefaults(); err != nil {
+		return fmt.Errorf("failed to register agent providers: %w", err)
+	}
+	execSvc.SetAgentRegistry(agentRegistry)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -861,6 +869,13 @@ func runSingleStep(
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
+
+	// Setup agent registry for F039 agent step execution
+	agentRegistry := agents.NewAgentRegistry()
+	if err := agentRegistry.RegisterDefaults(); err != nil {
+		return fmt.Errorf("failed to register agent providers: %w", err)
+	}
+	execSvc.SetAgentRegistry(agentRegistry)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{

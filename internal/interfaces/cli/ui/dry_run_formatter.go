@@ -138,6 +138,10 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 		if fmtErr := f.formatLoopStep(step); fmtErr != nil {
 			return fmtErr
 		}
+	case workflow.StepTypeAgent:
+		if fmtErr := f.formatAgentStep(step); fmtErr != nil {
+			return fmtErr
+		}
 	case workflow.StepTypeCommand:
 		// Command
 		if step.Command != "" {
@@ -363,6 +367,69 @@ func (f *DryRunFormatter) formatParallelStep(step *workflow.DryRunStep) error {
 	return nil
 }
 
+// formatAgentStep renders agent-specific step information.
+func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
+	if step.Agent == nil {
+		return nil
+	}
+
+	// Provider
+	if step.Agent.Provider != "" {
+		_, err := fmt.Fprintf(f.out, "    Provider: %s\n", step.Agent.Provider)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Resolved prompt
+	if step.Agent.ResolvedPrompt != "" {
+		_, err := fmt.Fprintf(f.out, "    Prompt: %s\n", step.Agent.ResolvedPrompt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// CLI command
+	if step.Agent.CLICommand != "" {
+		_, err := fmt.Fprintf(f.out, "    CLI: %s\n", step.Agent.CLICommand)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Options
+	if len(step.Agent.Options) > 0 {
+		_, err := fmt.Fprintln(f.out, "    Options:")
+		if err != nil {
+			return err
+		}
+		// Sort option keys for consistent output
+		var optionKeys []string
+		for key := range step.Agent.Options {
+			optionKeys = append(optionKeys, key)
+		}
+		sort.Strings(optionKeys)
+
+		for _, key := range optionKeys {
+			value := step.Agent.Options[key]
+			_, err = fmt.Fprintf(f.out, "      %s: %v\n", key, value)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Agent-specific timeout (if different from step timeout)
+	if step.Agent.Timeout > 0 {
+		_, err := fmt.Fprintf(f.out, "    Agent timeout: %ds\n", step.Agent.Timeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // formatFooter renders the plan footer.
 func (f *DryRunFormatter) formatFooter() error {
 	_, err := fmt.Fprintf(f.out, "\n%s No commands will be executed (dry-run mode).\n",
@@ -383,6 +450,8 @@ func stepTypeLabel(stepType workflow.StepType) string {
 		return "[LOOP:for_each]"
 	case workflow.StepTypeWhile:
 		return "[LOOP:while]"
+	case workflow.StepTypeAgent:
+		return "[AGENT]"
 	default:
 		return "[?]"
 	}
