@@ -1,0 +1,45 @@
+# Feature: 39
+# Agent step with JSON response parsing
+name: agent-json-parse
+version: "1.0.0"
+
+inputs:
+  code:
+    type: string
+    required: true
+
+states:
+  initial: analyze
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt: |
+      Analyze this code and return JSON with format:
+      {"issues": ["issue1", "issue2"], "score": 85}
+
+      Code:
+      {{inputs.code}}
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 2000
+      output_format: json
+    timeout: 30
+    on_success: verify
+    on_failure: error
+
+  verify:
+    type: step
+    command: |
+      # Verify JSON parsing populated states.analyze.response
+      test -n "{{states.analyze.response}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

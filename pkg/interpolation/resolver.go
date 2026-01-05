@@ -39,6 +39,8 @@ type StepStateData struct {
 	Stderr   string
 	ExitCode int
 	Status   string
+	Response map[string]any // parsed JSON response from agent steps
+	Tokens   int            // token usage from agent steps
 }
 
 // WorkflowData holds workflow metadata for interpolation.

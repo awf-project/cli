@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/pkg/interpolation"
 	"github.com/vanoix/awf/pkg/retry"
 	"github.com/vanoix/awf/pkg/validation"
@@ -33,6 +34,7 @@ type ExecutionService struct {
 	historySvc        *HistoryService
 	templateSvc       *TemplateService
 	operationProvider ports.OperationProvider // F021: plugin operations
+	agentRegistry     *agents.AgentRegistry
 }
 
 // ExpressionEvaluator evaluates conditional expressions.
@@ -55,6 +57,12 @@ func (s *ExecutionService) SetTemplateService(svc *TemplateService) {
 // When set, operation-type steps can execute plugin-provided operations.
 func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider) {
 	s.operationProvider = provider
+}
+
+// SetAgentRegistry configures the agent registry for F039 agent step execution.
+// When set, agent-type steps can execute AI provider operations.
+func (s *ExecutionService) SetAgentRegistry(registry *agents.AgentRegistry) {
+	s.agentRegistry = registry
 }
 
 // NewExecutionService creates a new execution service.
@@ -237,6 +245,8 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
+		case workflow.StepTypeAgent:
+			nextStep, err = s.executeAgentStep(ctx, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -559,6 +569,8 @@ func (s *ExecutionService) buildInterpolationContext(
 			Stderr:   state.Stderr,
 			ExitCode: state.ExitCode,
 			Status:   state.Status.String(),
+			Response: state.Response,
+			Tokens:   state.Tokens,
 		}
 	}
 
@@ -837,6 +849,8 @@ func (s *ExecutionService) executeLoopStep(
 			nextStep, err = s.executeParallelStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, bodyStep, execCtx)
+		case workflow.StepTypeAgent:
+			nextStep, err = s.executeAgentStep(ctx, bodyStep, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
 		}
@@ -942,12 +956,26 @@ func (a *stepExecutorAdapter) ExecuteStep(
 		StartedAt: startTime,
 	}
 
-	// Execute the step using the existing executeStep method
-	_, err := a.execSvc.executeStep(ctx, wf, step, execCtx)
+	// Execute the step using the appropriate execution method based on step type
+	var err error
+	switch step.Type {
+	case workflow.StepTypeAgent:
+		_, err = a.execSvc.executeAgentStep(ctx, step, execCtx)
+	case workflow.StepTypeParallel:
+		_, err = a.execSvc.executeParallelStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeForEach, workflow.StepTypeWhile:
+		_, err = a.execSvc.executeLoopStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeOperation:
+		_, err = a.execSvc.executePluginOperation(ctx, step, execCtx)
+	case workflow.StepTypeCallWorkflow:
+		_, err = a.execSvc.executeCallWorkflowStep(ctx, wf, step, execCtx)
+	default:
+		_, err = a.execSvc.executeStep(ctx, wf, step, execCtx)
+	}
 
 	result.CompletedAt = time.Now()
 
-	// Get the step state that was recorded by executeStep
+	// Get the step state that was recorded by the execution method
 	if state, exists := execCtx.States[stepName]; exists {
 		result.Output = state.Output
 		result.Stderr = state.Stderr
@@ -1111,6 +1139,8 @@ func (s *ExecutionService) executeFromStep(
 			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
+		case workflow.StepTypeAgent:
+			nextStep, err = s.executeAgentStep(ctx, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -1287,6 +1317,175 @@ func (s *ExecutionService) executePluginOperation(
 			errMsg = result.Error
 		}
 		return "", fmt.Errorf("step %s: %s", step.Name, errMsg)
+	}
+
+	// Success
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	// Execute post-hooks on success
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	// Resolve next step using transitions or OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
+}
+
+// ErrNoAgentRegistry is returned when an agent step is executed without a configured registry.
+var ErrNoAgentRegistry = errors.New("agent registry not configured")
+
+// executeAgentStep executes an AI agent step.
+// F039: Agent Step Type - Executes AI provider operations via CLI interfaces.
+// Returns ErrNoAgentRegistry if no agent registry is configured.
+func (s *ExecutionService) executeAgentStep(
+	ctx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	startTime := time.Now()
+
+	// Validate registry is configured
+	if s.agentRegistry == nil {
+		// Record failed state before returning error to maintain consistent state tracking
+		state := workflow.StepState{
+			Name:        step.Name,
+			StartedAt:   startTime,
+			CompletedAt: time.Now(),
+			Status:      workflow.StatusFailed,
+			Error:       ErrNoAgentRegistry.Error(),
+			Attempt:     1,
+		}
+		execCtx.SetStepState(step.Name, state)
+		return "", fmt.Errorf("step %s: %w", step.Name, ErrNoAgentRegistry)
+	}
+
+	// Validate agent config exists
+	if step.Agent == nil {
+		return "", fmt.Errorf("step %s: agent configuration missing", step.Name)
+	}
+
+	// Apply step timeout (use agent timeout if step timeout not set)
+	stepCtx := ctx
+	timeout := step.Timeout
+	if timeout == 0 && step.Agent.Timeout > 0 {
+		timeout = step.Agent.Timeout
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		defer cancel()
+	}
+
+	// Build interpolation context
+	intCtx := s.buildInterpolationContext(execCtx)
+
+	// Execute pre-hooks
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Resolve prompt via interpolation
+	resolvedPrompt, err := s.resolver.Resolve(step.Agent.Prompt, intCtx)
+	if err != nil {
+		return "", fmt.Errorf("step %s: resolve prompt: %w", step.Name, err)
+	}
+
+	// Get provider from registry
+	provider, err := s.agentRegistry.Get(step.Agent.Provider)
+	if err != nil {
+		return "", fmt.Errorf("step %s: %w", step.Name, err)
+	}
+
+	// Audit log if dangerouslySkipPermissions is enabled
+	if step.Agent.Options != nil {
+		if skipPerms, ok := step.Agent.Options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
+			s.logger.Warn("dangerouslySkipPermissions enabled",
+				"workflow", execCtx.WorkflowName,
+				"step", step.Name,
+				"provider", step.Agent.Provider,
+				"timestamp", time.Now().Format(time.RFC3339))
+		}
+	}
+
+	// Execute the agent
+	s.logger.Debug("executing agent step", "step", step.Name, "provider", step.Agent.Provider)
+	result, execErr := provider.Execute(stepCtx, resolvedPrompt, step.Agent.Options)
+
+	// Record step state
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Attempt:     1,
+	}
+
+	// Populate state from result
+	if result != nil {
+		state.Output = result.Output
+		// AC5: JSON auto-parsed to states.step_name.response
+		state.Response = result.Response
+		// AC6: Token usage in states.step_name.tokens
+		state.Tokens = result.Tokens
+	}
+
+	// Handle execution error (e.g., context cancelled, provider error)
+	if execErr != nil {
+		// Check if parent context was cancelled (workflow-level cancellation)
+		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			if result != nil {
+				state.Response = result.Response
+				state.Tokens = result.Tokens
+			}
+			execCtx.SetStepState(step.Name, state)
+			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
+		state.Status = workflow.StatusFailed
+		state.Error = execErr.Error()
+		if result != nil {
+			state.Response = result.Response
+			state.Tokens = result.Tokens
+		}
+		execCtx.SetStepState(step.Name, state)
+
+		// Execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+	}
+
+	// Handle agent result error
+	if result != nil && result.Error != nil {
+		state.Status = workflow.StatusFailed
+		state.Error = result.Error.Error()
+		execCtx.SetStepState(step.Name, state)
+
+		// Execute post-hooks even on failure
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("step %s: agent error: %w", step.Name, result.Error)
 	}
 
 	// Success

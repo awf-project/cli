@@ -97,6 +97,7 @@ func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
 		Loop:            mapLoopConfig(y),
 		TemplateRef:     mapTemplateRef(y.UseTemplate, y.Parameters),
 		CallWorkflow:    mapCallWorkflowFlat(y),
+		Agent:           mapAgentConfigFlat(y),
 	}
 
 	// Parse timeout
@@ -128,6 +129,8 @@ func parseStepType(s string) (workflow.StepType, error) {
 		return workflow.StepTypeOperation, nil
 	case "call_workflow":
 		return workflow.StepTypeCallWorkflow, nil
+	case "agent":
+		return workflow.StepTypeAgent, nil
 	default:
 		return "", NewParseError("", "", "unknown step type: "+s)
 	}
@@ -364,5 +367,20 @@ func mapCallWorkflowFlat(y yamlStep) *workflow.CallWorkflowConfig {
 		Inputs:   y.CallInputs,
 		Outputs:  y.CallOutputs,
 		// Timeout is handled separately via step.Timeout
+	}
+}
+
+// mapAgentConfigFlat maps flat agent fields from yamlStep to AgentConfig.
+// Returns nil if no agent provider is specified.
+func mapAgentConfigFlat(y yamlStep) *workflow.AgentConfig {
+	if y.Provider == "" {
+		return nil
+	}
+	return &workflow.AgentConfig{
+		Provider: y.Provider,
+		Prompt:   y.Prompt,
+		Options:  y.Options,
+		// Timeout is handled separately via step.Timeout
+		Command: "", // Not supported in flat structure - stub
 	}
 }

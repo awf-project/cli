@@ -1,0 +1,33 @@
+# Feature: 39
+# Agent step with timeout handling
+name: agent-timeout
+version: "1.0.0"
+
+inputs:
+  task:
+    type: string
+    required: true
+
+states:
+  initial: quick_task
+
+  quick_task:
+    type: agent
+    provider: claude
+    prompt: |
+      Quick task (should complete within timeout):
+      {{inputs.task}}
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 100
+    timeout: 5  # Short timeout for testing
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

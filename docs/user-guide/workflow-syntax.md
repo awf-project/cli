@@ -56,6 +56,7 @@ states:
 | Type | Description |
 |------|-------------|
 | `step` | Execute a command |
+| `agent` | Invoke an AI agent (Claude, Codex, Gemini, etc.) |
 | `terminal` | End state with success/failure status |
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
@@ -95,6 +96,105 @@ my_step:
 | `continue_on_error` | bool | false | Always follow `on_success` regardless of exit code |
 | `retry` | object | - | Retry configuration |
 | `transitions` | array | - | Conditional transitions |
+
+---
+
+## Agent State
+
+Invoke an AI agent (Claude, Codex, Gemini, OpenCode) with a prompt template.
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: |
+    Analyze this code for issues:
+    {{.inputs.code}}
+  options:
+    model: claude-sonnet-4-20250514
+    max_tokens: 2048
+  timeout: 120
+  on_success: review
+  on_failure: error
+```
+
+### Agent Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `custom` |
+| `prompt` | string | Yes | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
+| `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
+| `timeout` | int | No | Execution timeout in seconds (0 = no timeout) |
+| `on_success` | string | No | Next state on success |
+| `on_failure` | string | No | Next state on failure |
+| `retry` | object | No | Retry configuration (same as step retry) |
+
+### Available Providers
+
+| Provider | Binary | Description |
+|----------|--------|-------------|
+| `claude` | `claude` | Anthropic Claude CLI |
+| `codex` | `codex` | OpenAI Codex CLI |
+| `gemini` | `gemini` | Google Gemini CLI |
+| `opencode` | `opencode` | OpenCode CLI |
+| `custom` | user-defined | Custom command template |
+
+### Agent Output
+
+Agent responses are captured in the step state:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `{{.states.step_name.output}}` | string | Raw response text |
+| `{{.states.step_name.response}}` | object | Parsed JSON (if response is valid JSON) |
+| `{{.states.step_name.tokens}}` | object | Token usage (if provider supports it) |
+
+### Multi-Turn Conversations
+
+For multi-turn agent conversations, chain multiple agent steps with state passing:
+
+```yaml
+states:
+  initial: ask_question
+
+  ask_question:
+    type: agent
+    provider: claude
+    prompt: "Initial question here"
+    on_success: follow_up
+
+  follow_up:
+    type: agent
+    provider: claude
+    prompt: |
+      Based on your previous response:
+      {{.states.ask_question.output}}
+
+      Please elaborate on point 3.
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+### Custom Provider
+
+For AI CLIs not natively supported, use the `custom` provider with a command template:
+
+```yaml
+analyze:
+  type: agent
+  provider: custom
+  command: "my-ai-tool --prompt {{prompt}} --json"
+  prompt: "Analyze: {{.inputs.data}}"
+  timeout: 60
+  on_success: next
+```
+
+The `{{prompt}}` placeholder is replaced with the resolved prompt. Note that prompt text is automatically shell-escaped to prevent injection.
+
+**See Also:** [Agent Steps Guide](agent-steps.md) for detailed examples and best practices.
 
 ---
 

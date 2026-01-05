@@ -16,6 +16,7 @@ const (
 	StepTypeWhile        StepType = "while"
 	StepTypeOperation    StepType = "operation"     // F021: plugin-provided operation
 	StepTypeCallWorkflow StepType = "call_workflow" // F023: invoke another workflow
+	StepTypeAgent        StepType = "agent"         // F039: AI agent invocation
 )
 
 // TerminalStatus defines the outcome of a terminal state.
@@ -88,6 +89,7 @@ type Step struct {
 	Loop            *LoopConfig          // for for_each and while types
 	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
 	CallWorkflow    *CallWorkflowConfig  // for call_workflow type: sub-workflow configuration
+	Agent           *AgentConfig         // for agent type: AI agent configuration
 }
 
 // Validate checks if the step configuration is valid.
@@ -148,6 +150,13 @@ func (s *Step) Validate() error {
 		}
 		if err := s.CallWorkflow.Validate(); err != nil {
 			return fmt.Errorf("call_workflow config: %w", err)
+		}
+	case StepTypeAgent:
+		if s.Agent == nil {
+			return errors.New("agent config is required for agent-type steps")
+		}
+		if err := s.Agent.Validate(); err != nil {
+			return fmt.Errorf("agent config: %w", err)
 		}
 	default:
 		return errors.New("unknown step type")

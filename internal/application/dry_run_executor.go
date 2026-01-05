@@ -228,6 +228,11 @@ func (e *DryRunExecutor) buildStepPlan(step *workflow.Step, interpCtx *interpola
 		}
 	}
 
+	// Build agent config (AC8: --dry-run shows resolved prompt without invoking)
+	if step.Agent != nil {
+		dryRunStep.Agent = e.buildAgentConfig(step.Agent, interpCtx)
+	}
+
 	return dryRunStep, nil
 }
 
@@ -377,4 +382,30 @@ func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Con
 		return cmd
 	}
 	return resolved
+}
+
+// buildAgentConfig builds dry-run agent configuration showing resolved prompt and CLI command.
+func (e *DryRunExecutor) buildAgentConfig(agent *workflow.AgentConfig, interpCtx *interpolation.Context) *workflow.DryRunAgent {
+	dryRunAgent := &workflow.DryRunAgent{
+		Provider: agent.Provider,
+		Timeout:  agent.Timeout,
+		Options:  make(map[string]any),
+	}
+
+	// Resolve prompt template
+	if agent.Prompt != "" {
+		dryRunAgent.ResolvedPrompt = e.resolveCommand(agent.Prompt, interpCtx)
+	}
+
+	// Copy options
+	for key, value := range agent.Options {
+		dryRunAgent.Options[key] = value
+	}
+
+	// Build CLI command based on provider
+	if agent.Command != "" {
+		dryRunAgent.CLICommand = e.resolveCommand(agent.Command, interpCtx)
+	}
+
+	return dryRunAgent
 }

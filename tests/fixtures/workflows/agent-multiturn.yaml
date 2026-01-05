@@ -1,0 +1,65 @@
+# Feature: 39
+# Multi-turn conversation using state passing
+name: agent-multiturn
+version: "1.0.0"
+
+inputs:
+  initial_request:
+    type: string
+    required: true
+
+states:
+  initial: first_turn
+
+  first_turn:
+    type: agent
+    provider: claude
+    prompt: |
+      User request: {{inputs.initial_request}}
+
+      Provide initial analysis.
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 1000
+    timeout: 30
+    on_success: second_turn
+    on_failure: error
+
+  second_turn:
+    type: agent
+    provider: claude
+    prompt: |
+      Based on previous analysis:
+      {{states.first_turn.output}}
+
+      Now provide detailed recommendations.
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 1500
+    timeout: 30
+    on_success: third_turn
+    on_failure: error
+
+  third_turn:
+    type: agent
+    provider: claude
+    prompt: |
+      Previous context:
+      Analysis: {{states.first_turn.output}}
+      Recommendations: {{states.second_turn.output}}
+
+      Summarize key action items.
+    options:
+      model: claude-sonnet-4-20250514
+      max_tokens: 500
+    timeout: 30
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
