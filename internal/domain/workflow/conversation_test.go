@@ -715,9 +715,9 @@ func TestConversationResult_Duration_ZeroTime(t *testing.T) {
 
 func TestConversationResult_Duration_NotCompleted(t *testing.T) {
 	result := NewConversationResult("claude")
-	// CompletedAt is zero, so duration is negative
+	// CompletedAt is zero, so duration should be 0
 	duration := result.Duration()
-	assert.Less(t, duration, time.Duration(0))
+	assert.Equal(t, time.Duration(0), duration)
 }
 
 func TestConversationResult_Duration_Instant(t *testing.T) {

@@ -221,7 +221,7 @@ func NewConversationResult(provider string) *ConversationResult {
 // Duration returns the total execution time of the conversation.
 func (r *ConversationResult) Duration() time.Duration {
 	if r.StartedAt.IsZero() || r.CompletedAt.IsZero() {
-		return r.CompletedAt.Sub(r.StartedAt)
+		return 0
 	}
 	return r.CompletedAt.Sub(r.StartedAt)
 }
