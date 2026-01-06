@@ -143,22 +143,21 @@ func (s *SlidingWindowStrategy) Apply(turns []Turn, maxTokens int) ([]Turn, bool
 		currentTokens = systemTurn.Tokens
 	}
 
-	// Collect turns that fit, starting from most recent
-	recentTurns := make([]Turn, 0, len(otherTurns))
-	for i := len(otherTurns) - 1; i >= 0; i-- {
-		if currentTokens+otherTurns[i].Tokens <= maxTokens {
-			recentTurns = append(recentTurns, otherTurns[i])
-			currentTokens += otherTurns[i].Tokens
+	// Find starting index where remaining turns fit in budget
+	startIdx := 0
+	for i := 0; i < len(otherTurns); i++ {
+		totalTokens := currentTokens
+		for j := i; j < len(otherTurns); j++ {
+			totalTokens += otherTurns[j].Tokens
+		}
+		if totalTokens <= maxTokens {
+			startIdx = i
+			break
 		}
 	}
 
-	// Reverse recentTurns to restore chronological order
-	for i, j := 0, len(recentTurns)-1; i < j; i, j = i+1, j-1 {
-		recentTurns[i], recentTurns[j] = recentTurns[j], recentTurns[i]
-	}
-
-	// Append in chronological order
-	result = append(result, recentTurns...)
+	// Append turns from startIdx onward (already in chronological order)
+	result = append(result, otherTurns[startIdx:]...)
 
 	wasTruncated := len(result) < len(turns)
 	return result, wasTruncated, nil

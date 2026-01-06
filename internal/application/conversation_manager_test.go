@@ -149,6 +149,10 @@ func TestNewConversationManager(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
 
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
+
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
 	assert.NotNil(t, manager)
@@ -164,6 +168,10 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -191,10 +199,9 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -207,6 +214,10 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -234,10 +245,9 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -250,6 +260,10 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -278,10 +292,9 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -295,6 +308,10 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -323,10 +340,9 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
@@ -336,6 +352,10 @@ func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -364,10 +384,9 @@ func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -380,6 +399,10 @@ func TestConversationManager_MaxTurns_Reached(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -407,10 +430,9 @@ func TestConversationManager_MaxTurns_Reached(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 func TestConversationManager_MaxTurns_One(t *testing.T) {
@@ -419,6 +441,10 @@ func TestConversationManager_MaxTurns_One(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -446,10 +472,9 @@ func TestConversationManager_MaxTurns_One(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -463,6 +488,10 @@ func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	tokenizer.counts["Very long response"] = 3000
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -490,10 +519,9 @@ func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -506,6 +534,10 @@ func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -533,10 +565,9 @@ func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 func TestConversationManager_Strategy_None(t *testing.T) {
@@ -545,6 +576,10 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -572,10 +607,9 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -589,6 +623,10 @@ func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 	resolver.results["Explain {{inputs.topic}}"] = "Explain quantum computing"
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -619,10 +657,9 @@ func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 func TestConversationManager_Interpolation_States(t *testing.T) {
@@ -632,6 +669,10 @@ func TestConversationManager_Interpolation_States(t *testing.T) {
 	resolver.results["Review: {{states.analyze.output}}"] = "Review: Data is clean"
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -672,10 +713,9 @@ func TestConversationManager_Interpolation_States(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -688,6 +728,10 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 	// Don't register any providers
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -716,9 +760,9 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
+	// GREEN PHASE: expect provider not found error
 	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
+	assert.Contains(t, err.Error(), "not found")
 	assert.Nil(t, result)
 }
 
@@ -732,6 +776,10 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	provider := newMockConversationProvider("claude")
 	provider.execError = errors.New("API rate limit exceeded")
@@ -763,10 +811,9 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -780,6 +827,10 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	tokenizer.err = errors.New("tokenizer service unavailable")
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -807,10 +858,9 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -824,6 +874,10 @@ func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 	resolver.err = errors.New("undefined variable: missing_var")
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -851,9 +905,9 @@ func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
+	// GREEN PHASE: expect template resolution error
 	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
+	assert.Contains(t, err.Error(), "variable")
 	assert.Nil(t, result)
 }
 
@@ -868,6 +922,10 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -896,10 +954,9 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -912,6 +969,10 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -942,9 +1003,9 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(ctx, step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
+	// GREEN PHASE: expect context cancellation error
 	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
+	assert.Equal(t, context.Canceled, err)
 	assert.Nil(t, result)
 }
 
@@ -958,6 +1019,10 @@ func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -979,9 +1044,9 @@ func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
+	// GREEN PHASE: expect nil config error
 	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
+	assert.Contains(t, err.Error(), "config")
 	assert.Nil(t, result)
 }
 
@@ -995,6 +1060,10 @@ func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -1022,10 +1091,9 @@ func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // =============================================================================
@@ -1038,6 +1106,10 @@ func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := newMockAgentRegistry()
+
+	// GREEN PHASE: Register mock provider
+	mockProvider := agents.NewMockProvider("claude")
+	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
 
@@ -1066,8 +1138,7 @@ func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 
 	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// RED PHASE: expect stub error
-	require.Error(t, err)
-	assert.Equal(t, "not implemented", err.Error())
-	assert.Nil(t, result)
+	// GREEN PHASE: expect successful execution
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }

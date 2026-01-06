@@ -5,21 +5,33 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/logger"
 )
 
 // ClaudeProvider implements AgentProvider for Claude CLI.
 // Invokes: claude -p "prompt" --output-format json
-type ClaudeProvider struct{}
+type ClaudeProvider struct {
+	logger ports.Logger
+}
 
 // NewClaudeProvider creates a new ClaudeProvider.
-func NewClaudeProvider() *ClaudeProvider {
-	return &ClaudeProvider{}
+// If logger is nil, a NopLogger is used.
+func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
+	var log ports.Logger
+	if len(l) > 0 && l[0] != nil {
+		log = l[0]
+	} else {
+		log = logger.NopLogger{}
+	}
+	return &ClaudeProvider{
+		logger: log,
+	}
 }
 
 // Execute invokes the Claude CLI with the given prompt and options.
@@ -62,7 +74,10 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		if skipPerms, ok := options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
 			args = append(args, "--dangerously-skip-permissions")
 			// Audit log for security compliance
-			log.Printf("[SECURITY AUDIT] dangerouslySkipPermissions=true enabled at %s", time.Now().Format(time.RFC3339))
+			p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
+				"timestamp", time.Now().Format(time.RFC3339),
+				"workflow", getWorkflowID(options),
+				"step", getStepName(options))
 		}
 		// Note: temperature and max_tokens are validated but not passed to CLI
 		// as the Claude CLI does not support these options directly
@@ -130,7 +145,9 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	workingState.AddTurn(userTurn)
+	if err := workingState.AddTurn(userTurn); err != nil {
+		return nil, fmt.Errorf("failed to add user turn: %w", err)
+	}
 
 	// Build command arguments
 	args := []string{"-p", prompt}
@@ -153,7 +170,10 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		if skipPerms, ok := options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
 			args = append(args, "--dangerously-skip-permissions")
 			// Audit log for security compliance
-			log.Printf("[SECURITY AUDIT] dangerouslySkipPermissions=true enabled at %s", time.Now().Format(time.RFC3339))
+			p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
+				"timestamp", time.Now().Format(time.RFC3339),
+				"workflow", getWorkflowID(options),
+				"step", getStepName(options))
 		}
 	}
 
@@ -171,7 +191,9 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
-	workingState.AddTurn(assistantTurn)
+	if err := workingState.AddTurn(assistantTurn); err != nil {
+		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
+	}
 
 	// Estimate input tokens (all previous turns)
 	inputTokens := 0
@@ -296,4 +318,26 @@ func validateOptions(options map[string]any) error {
 func estimateTokens(output string) int {
 	// Rough estimation: ~4 characters per token
 	return len(output) / 4
+}
+
+// getWorkflowID extracts workflow ID from options for structured logging.
+func getWorkflowID(options map[string]any) string {
+	if options == nil {
+		return "unknown"
+	}
+	if id, ok := options["workflowID"].(string); ok {
+		return id
+	}
+	return "unknown"
+}
+
+// getStepName extracts step name from options for structured logging.
+func getStepName(options map[string]any) string {
+	if options == nil {
+		return "unknown"
+	}
+	if name, ok := options["stepName"].(string); ok {
+		return name
+	}
+	return "unknown"
 }

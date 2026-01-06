@@ -15,9 +15,10 @@ help:
 	@echo "  clean            Remove build artifacts"
 	@echo ""
 	@echo "Test:"
-	@echo "  test             Run all tests"
+	@echo "  test             Run fast tests (excludes real CLI calls)"
 	@echo "  test-unit        Run unit tests only"
-	@echo "  test-integration Run integration tests"
+	@echo "  test-integration Run integration tests (real CLI calls - slow)"
+	@echo "  test-all         Run all tests including integration"
 	@echo "  test-coverage    Generate coverage report"
 	@echo "  test-race        Run tests with race detector"
 	@echo ""
@@ -55,17 +56,21 @@ install: build
 dev:
 	go run $(LDFLAGS) $(CMD_DIR)
 
-# All tests
+# All tests (fast - excludes integration tests with real CLI calls)
 test:
 	go test -v ./...
 
-# Unit tests only
+# Unit tests only (excludes integration and tests/integration)
 test-unit:
 	go test -v ./internal/... ./pkg/...
 
-# Integration tests
+# Integration tests (real CLI calls - slow)
 test-integration:
-	go test -v -tags=integration ./tests/integration/...
+	go test -v -tags=integration ./internal/infrastructure/agents/... ./tests/integration/...
+
+# All tests including integration (slow - requires CLI tools installed)
+test-all:
+	go test -v -tags=integration ./...
 
 # Coverage report
 test-coverage:

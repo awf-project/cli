@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Agent
 - **F032**: Agent Step Type
+  - `type: agent` invokes AI CLI tools (Claude, Codex, Gemini, OpenCode) as workflow steps
+  - Provider registry with configurable `model`, `max_tokens`, `temperature`, and `timeout`
+  - `custom` provider for unsupported CLIs via command template with `{{prompt}}` placeholder
+  - Prompt templates with full variable interpolation (`{{.inputs.*}}`, `{{.states.*}}`, `{{.env.*}}`)
+  - Automatic JSON response parsing stored in `{{.states.step_name.response}}`
+  - Token usage tracking accessible via `{{.states.step_name.tokens}}`
+  - Dry-run mode displays resolved prompts without execution
+- **F033**: Multi-turn Conversation Mode with Context Window Management
+  - `mode: conversation` enables iterative agent interactions within a single step
+  - Automatic context window management with `sliding_window` strategy (drops oldest turns, preserves system prompt)
+  - `max_turns` and `max_context_tokens` configuration to control conversation bounds
+  - Stop conditions with expression syntax: `response contains 'text'`, `response matches 'regex'`, `turn_count >= N`, `tokens_used > N`
+  - Token tracking per turn with total consumption metrics in conversation state
+  - Conversation state accessible in subsequent steps via `{{.states.step_name.conversation.*}}`
+  - Provider support: Claude, Gemini, Codex with mock provider for testing
 
 #### Interactive Input Collection
 - **F046**: Interactive Mode for Incomplete Command Inputs

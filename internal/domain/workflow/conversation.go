@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// Conversation errors
+var (
+	ErrNilTurn = errors.New("cannot add nil turn")
+)
+
 // TurnRole represents the role of a conversation turn participant.
 type TurnRole string
 
@@ -148,13 +153,15 @@ func NewConversationState(systemPrompt string) *ConversationState {
 }
 
 // AddTurn appends a turn to the conversation history.
-func (s *ConversationState) AddTurn(turn *Turn) {
+// Returns an error if the turn is nil.
+func (s *ConversationState) AddTurn(turn *Turn) error {
 	if turn == nil {
-		return
+		return ErrNilTurn
 	}
 	s.Turns = append(s.Turns, *turn)
 	s.TotalTurns++
 	s.TotalTokens += turn.Tokens
+	return nil
 }
 
 // GetTotalTokens returns the sum of tokens across all turns.

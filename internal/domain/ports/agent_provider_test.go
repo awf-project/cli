@@ -662,8 +662,8 @@ func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T)
 	state := workflow.NewConversationState("You are a helpful assistant")
 
 	// Add existing turns to conversation history
-	state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "What is Go?"))
-	state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Go is a programming language."))
+	_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "What is Go?"))
+	_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Go is a programming language."))
 
 	prompt := "Tell me more about it"
 	options := map[string]any{}
@@ -883,9 +883,9 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 	// Add 99 turns (simulating a long conversation)
 	for i := 0; i < 99; i++ {
 		if i%2 == 0 {
-			state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "Question"))
+			_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "Question"))
 		} else {
-			state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Answer"))
+			_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Answer"))
 		}
 	}
 

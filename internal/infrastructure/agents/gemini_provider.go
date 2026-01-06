@@ -115,7 +115,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	workingState.AddTurn(userTurn)
+	if err := workingState.AddTurn(userTurn); err != nil {
+		return nil, fmt.Errorf("failed to add user turn: %w", err)
+	}
 
 	// Build command arguments
 	args := []string{prompt}
@@ -144,7 +146,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateGeminiTokens(outputStr)
-	workingState.AddTurn(assistantTurn)
+	if err := workingState.AddTurn(assistantTurn); err != nil {
+		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
+	}
 
 	// Estimate input tokens (all previous turns)
 	inputTokens := 0

@@ -504,7 +504,8 @@ func TestConversationState_AddTurn(t *testing.T) {
 		Content: "Hello",
 		Tokens:  5,
 	}
-	state.AddTurn(userTurn)
+	err := state.AddTurn(userTurn)
+	assert.NoError(t, err)
 
 	// Add assistant turn
 	assistantTurn := &Turn{
@@ -512,7 +513,8 @@ func TestConversationState_AddTurn(t *testing.T) {
 		Content: "Hi there!",
 		Tokens:  10,
 	}
-	state.AddTurn(assistantTurn)
+	err = state.AddTurn(assistantTurn)
+	assert.NoError(t, err)
 
 	// Verify turns are added
 	assert.GreaterOrEqual(t, len(state.Turns), 2)
@@ -523,8 +525,10 @@ func TestConversationState_AddTurn(t *testing.T) {
 func TestConversationState_AddTurn_NilTurn(t *testing.T) {
 	state := NewConversationState("")
 
-	// Adding nil turn should not panic
-	state.AddTurn(nil)
+	// Adding nil turn should return error
+	err := state.AddTurn(nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot add nil turn")
 
 	// State should be unchanged
 	assert.Equal(t, 0, len(state.Turns))
@@ -915,7 +919,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 		Content: "Review this code",
 		Tokens:  50,
 	}
-	result.State.AddTurn(userTurn1)
+	_ = result.State.AddTurn(userTurn1)
 
 	// Simulate turn 2 (assistant)
 	assistantTurn1 := &Turn{
@@ -923,7 +927,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 		Content: "I found 3 issues",
 		Tokens:  100,
 	}
-	result.State.AddTurn(assistantTurn1)
+	_ = result.State.AddTurn(assistantTurn1)
 
 	// Simulate turn 3 (user)
 	userTurn2 := &Turn{
@@ -931,7 +935,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 		Content: "Fix them",
 		Tokens:  20,
 	}
-	result.State.AddTurn(userTurn2)
+	_ = result.State.AddTurn(userTurn2)
 
 	// Simulate turn 4 (assistant - final)
 	assistantTurn2 := &Turn{
@@ -939,7 +943,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 		Content: "Fixed. APPROVED",
 		Tokens:  80,
 	}
-	result.State.AddTurn(assistantTurn2)
+	_ = result.State.AddTurn(assistantTurn2)
 
 	// Mark conversation as stopped
 	result.State.StoppedBy = StopReasonCondition
@@ -997,12 +1001,12 @@ func TestConversationResult_JSONParseSuccess(t *testing.T) {
 	result.State = NewConversationState("System")
 
 	// Add turns
-	result.State.AddTurn(&Turn{
+	_ = result.State.AddTurn(&Turn{
 		Role:    TurnRoleUser,
 		Content: "Analyze",
 		Tokens:  10,
 	})
-	result.State.AddTurn(&Turn{
+	_ = result.State.AddTurn(&Turn{
 		Role:    TurnRoleAssistant,
 		Content: `{"analysis": "complete", "score": 95}`,
 		Tokens:  20,
@@ -1036,12 +1040,12 @@ func TestConversationResult_TextOnlyResponse(t *testing.T) {
 
 	// Initialize state
 	result.State = NewConversationState("System")
-	result.State.AddTurn(&Turn{
+	_ = result.State.AddTurn(&Turn{
 		Role:    TurnRoleUser,
 		Content: "Review",
 		Tokens:  5,
 	})
-	result.State.AddTurn(&Turn{
+	_ = result.State.AddTurn(&Turn{
 		Role:    TurnRoleAssistant,
 		Content: "Looks good. No issues.",
 		Tokens:  15,
@@ -1132,13 +1136,13 @@ func TestConversationState_LargeConversation(t *testing.T) {
 	// Add many turns
 	for i := 0; i < 50; i++ {
 		if i%2 == 0 {
-			state.AddTurn(&Turn{
+			_ = state.AddTurn(&Turn{
 				Role:    TurnRoleUser,
 				Content: "Question",
 				Tokens:  10,
 			})
 		} else {
-			state.AddTurn(&Turn{
+			_ = state.AddTurn(&Turn{
 				Role:    TurnRoleAssistant,
 				Content: "Answer",
 				Tokens:  20,
