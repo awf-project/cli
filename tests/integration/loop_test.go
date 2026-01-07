@@ -6,12 +6,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
@@ -824,6 +826,76 @@ func (e *loopContextEvaluator) Evaluate(expr string, ctx *interpolation.Context)
 	}
 
 	return false, nil
+}
+
+// f048TransitionsEvaluator evaluates expressions for F048 transition tests
+// Supports "contains" pattern for checking step outputs
+type f048TransitionsEvaluator struct{}
+
+func newF048TransitionsEvaluator() *f048TransitionsEvaluator {
+	return &f048TransitionsEvaluator{}
+}
+
+func (e *f048TransitionsEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+	// Handle static expressions
+	switch expr {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+
+	// Handle "states.X.Output contains Y" pattern
+	if ctx != nil && ctx.States != nil {
+		for stepName, state := range ctx.States {
+			// Pattern: states.step_name.Output contains "value"
+			containsPrefix := "states." + stepName + ".Output contains \""
+			if len(expr) > len(containsPrefix)+1 && expr[:len(containsPrefix)] == containsPrefix {
+				// Extract the value between quotes
+				endQuote := len(expr) - 1
+				if expr[endQuote] == '"' {
+					searchValue := expr[len(containsPrefix):endQuote]
+					// Check if state.Output contains searchValue
+					return contains(state.Output, searchValue), nil
+				}
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// contains checks if haystack contains needle
+func contains(haystack, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	if len(haystack) < len(needle) {
+		return false
+	}
+	for i := 0; i <= len(haystack)-len(needle); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// mockLoggerWithCapture captures warnings for testing
+type mockLoggerWithCapture struct {
+	warns *[]string
+}
+
+func (m *mockLoggerWithCapture) Debug(msg string, fields ...any) {}
+func (m *mockLoggerWithCapture) Info(msg string, fields ...any)  {}
+func (m *mockLoggerWithCapture) Warn(msg string, fields ...any) {
+	if m.warns != nil {
+		*m.warns = append(*m.warns, msg)
+	}
+}
+func (m *mockLoggerWithCapture) Error(msg string, fields ...any) {}
+func (m *mockLoggerWithCapture) WithContext(ctx map[string]any) ports.Logger {
+	return m
 }
 
 // TestF042_LoopAllVariables_Integration verifies all loop context variables
@@ -3484,4 +3556,562 @@ BEFORE outer=Y idx=1
 AFTER outer=Y idx=1 (restored)
 `
 	assert.Equal(t, expected, string(data))
+}
+
+// =============================================================================
+// F048: Loop Body Transitions Integration Tests (T012)
+// =============================================================================
+
+// TestF048_WhileLoop_BodyTransitions_SkipSteps tests transitions within while loop body
+// GIVEN a while loop with body steps containing transitions
+// WHEN a transition condition is met within the body
+// THEN subsequent steps should be skipped according to the transition target
+func TestF048_WhileLoop_BodyTransitions_SkipSteps(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Item: T012
+	// Feature: F048
+	// Test happy path: Transitions within while loop body should skip subsequent steps
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "execution.log")
+
+	wfYAML := `name: test-while-transitions-skip
+version: "1.0.0"
+states:
+  initial: green_loop
+  green_loop:
+    type: while
+    while: 'true'
+    break_when: 'states.run_fmt.Output contains "STOP_LOOP"'
+    max_iterations: 3
+    body:
+      - run_tests_green
+      - check_tests_passed
+      - prepare_impl_prompt
+      - implement_item
+      - run_fmt
+    on_complete: done
+  run_tests_green:
+    type: step
+    command: echo "TEST_EXIT_CODE=0" > /tmp/awf-test-output.txt && echo "Running tests..." >> ` + logFile + `
+    on_success: green_loop
+  check_tests_passed:
+    type: step
+    command: |
+      if grep -q "TEST_EXIT_CODE=0" /tmp/awf-test-output.txt 2>/dev/null; then
+        echo "TESTS_PASSED"
+      else
+        echo "TESTS_FAILED"
+      fi
+    transitions:
+      - when: 'states.check_tests_passed.Output contains "TESTS_PASSED"'
+        goto: run_fmt
+      - goto: prepare_impl_prompt
+    on_success: green_loop
+  prepare_impl_prompt:
+    type: step
+    command: echo "Preparing implementation prompt..." >> ` + logFile + `
+    on_success: green_loop
+  implement_item:
+    type: step
+    command: echo "Implementing..." >> ` + logFile + `
+    on_success: green_loop
+  run_fmt:
+    type: step
+    command: echo "STOP_LOOP" && echo "Running formatter..." >> ` + logFile + `
+    on_success: green_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "test-while-transitions-skip.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newF048TransitionsEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "test-while-transitions-skip", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify execution log
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	logContent := string(data)
+
+	// Assertions:
+	// 1. run_tests_green should execute
+	assert.Contains(t, logContent, "Running tests...")
+
+	// 2. prepare_impl_prompt and implement_item should NOT execute (skipped via transition)
+	assert.NotContains(t, logContent, "Preparing implementation prompt...")
+	assert.NotContains(t, logContent, "Implementing...")
+
+	// 3. run_fmt should execute (transition target)
+	assert.Contains(t, logContent, "Running formatter...")
+
+	// Edge case: Verify state was saved for check_tests_passed
+	assert.Contains(t, execCtx.States, "check_tests_passed")
+	assert.Equal(t, "TESTS_PASSED\n", execCtx.States["check_tests_passed"].Output)
+}
+
+// TestF048_WhileLoop_BodyTransitions_EarlyExit tests early exit from loop via transition
+// GIVEN a while loop with a transition to a step outside the loop body
+// WHEN that transition condition is met
+// THEN the loop should exit early and continue to the external target step
+func TestF048_WhileLoop_BodyTransitions_EarlyExit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Item: T012
+	// Feature: F048
+	// Test edge case: Transition to external step should exit loop early
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "execution.log")
+
+	wfYAML := `name: test-while-early-exit
+version: "1.0.0"
+states:
+  initial: loop_with_exit
+  loop_with_exit:
+    type: while
+    while: 'true'
+    max_iterations: 5
+    body:
+      - step1
+      - step2_with_exit
+      - step3
+    on_complete: normal_done
+  step1:
+    type: step
+    command: echo "Step 1 executed" >> ` + logFile + `
+    on_success: loop_with_exit
+  step2_with_exit:
+    type: step
+    command: echo "EARLY_EXIT" && echo "Step 2 executed" >> ` + logFile + `
+    transitions:
+      - when: 'states.step2_with_exit.Output contains "EARLY_EXIT"'
+        goto: early_exit_done
+    on_success: loop_with_exit
+  step3:
+    type: step
+    command: echo "Step 3 executed" >> ` + logFile + `
+    on_success: loop_with_exit
+  early_exit_done:
+    type: terminal
+    status: success
+    message: "Early exit from loop"
+  normal_done:
+    type: terminal
+    status: success
+    message: "Normal completion"
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "test-while-early-exit.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newF048TransitionsEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "test-while-early-exit", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.Equal(t, "early_exit_done", execCtx.CurrentStep)
+
+	// Verify execution log
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	logContent := string(data)
+
+	// Assertions:
+	// 1. step1 should execute once
+	assert.Contains(t, logContent, "Step 1 executed")
+
+	// 2. step2_with_exit should execute once
+	assert.Contains(t, logContent, "Step 2 executed")
+
+	// 3. step3 should NOT execute (loop exited early)
+	assert.NotContains(t, logContent, "Step 3 executed")
+
+	// Edge case: Verify only one iteration happened (early exit)
+	// Count occurrences of "Step 1 executed" - should be exactly 1
+	count := strings.Count(logContent, "Step 1 executed")
+	assert.Equal(t, 1, count, "Expected exactly one iteration before early exit")
+}
+
+// TestF048_ForEachLoop_BodyTransitions_SkipSteps tests transitions within foreach loop body
+// GIVEN a for_each loop with body steps containing transitions
+// WHEN a transition condition is met within the body
+// THEN subsequent steps should be skipped according to the transition target
+func TestF048_ForEachLoop_BodyTransitions_SkipSteps(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Item: T012
+	// Feature: F048
+	// Test happy path: Transitions within foreach loop body should work like while
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "foreach-execution.log")
+
+	wfYAML := `name: test-foreach-transitions
+version: "1.0.0"
+states:
+  initial: process_items
+  process_items:
+    type: for_each
+    items: '["item1", "item2", "item3"]'
+    max_iterations: 10
+    body:
+      - validate_item
+      - check_validation
+      - process_heavy
+      - finalize
+    on_complete: done
+  validate_item:
+    type: step
+    command: echo "Validating {{.loop.Item}}..." >> ` + logFile + `
+    on_success: process_items
+  check_validation:
+    type: step
+    command: |
+      if [ "{{.loop.Item}}" = "item1" ] || [ "{{.loop.Item}}" = "item3" ]; then
+        echo "PASSED"
+      else
+        echo "FAILED"
+      fi
+    transitions:
+      - when: 'states.check_validation.Output contains "PASSED"'
+        goto: finalize
+      - goto: process_heavy
+    on_success: process_items
+  process_heavy:
+    type: step
+    command: echo "Heavy processing {{.loop.Item}}..." >> ` + logFile + `
+    on_success: process_items
+  finalize:
+    type: step
+    command: echo "Finalizing {{.loop.Item}}" >> ` + logFile + `
+    on_success: process_items
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "test-foreach-transitions.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newF048TransitionsEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "test-foreach-transitions", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify execution log
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	logContent := string(data)
+
+	// Assertions:
+	// 1. All items should be validated
+	assert.Contains(t, logContent, "Validating item1...")
+	assert.Contains(t, logContent, "Validating item2...")
+	assert.Contains(t, logContent, "Validating item3...")
+
+	// 2. item1 and item3 are PASSED, so process_heavy should be skipped for them
+	// Only item2 should go through heavy processing
+	assert.Contains(t, logContent, "Heavy processing item2...")
+	assert.NotContains(t, logContent, "Heavy processing item1...")
+	assert.NotContains(t, logContent, "Heavy processing item3...")
+
+	// 3. All items should be finalized
+	assert.Contains(t, logContent, "Finalizing item1")
+	assert.Contains(t, logContent, "Finalizing item2")
+	assert.Contains(t, logContent, "Finalizing item3")
+
+	// Edge case: Verify transition logic worked per-iteration
+	// Count heavy processing - should be exactly 1 (only item2)
+	heavyCount := 0
+	searchStr := "Heavy processing"
+	for i := 0; i <= len(logContent)-len(searchStr); i++ {
+		if logContent[i:i+len(searchStr)] == searchStr {
+			heavyCount++
+		}
+	}
+	assert.Equal(t, 1, heavyCount, "Expected heavy processing only for item2")
+}
+
+// TestF048_WhileLoop_BodyTransitions_InvalidTarget tests graceful degradation for invalid targets
+// GIVEN a while loop with a transition to a non-existent step
+// WHEN that transition is evaluated
+// THEN it should log a warning and continue sequential execution (graceful degradation)
+func TestF048_WhileLoop_BodyTransitions_InvalidTarget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Item: T012
+	// Feature: F048
+	// Test error handling: Invalid transition target should degrade gracefully
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "invalid-target.log")
+
+	wfYAML := `name: test-invalid-target
+version: "1.0.0"
+states:
+  initial: loop_with_invalid
+  loop_with_invalid:
+    type: while
+    while: 'true'
+    max_iterations: 2
+    body:
+      - step1
+      - step2_invalid
+      - step3
+    on_complete: done
+  step1:
+    type: step
+    command: echo "Step 1" >> ` + logFile + `
+    on_success: loop_with_invalid
+  step2_invalid:
+    type: step
+    command: echo "TRIGGER_INVALID" && echo "Step 2" >> ` + logFile + `
+    transitions:
+      - when: 'states.step2_invalid.Output contains "TRIGGER_INVALID"'
+        goto: non_existent_step
+      - goto: loop_with_invalid
+    on_success: loop_with_invalid
+  step3:
+    type: step
+    command: echo "Step 3" >> ` + logFile + `
+    on_success: loop_with_invalid
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "test-invalid-target.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newF048TransitionsEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "test-invalid-target", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify execution log - graceful degradation means sequential execution continues
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	logContent := string(data)
+
+	// Assertions:
+	// 1. All steps should execute (graceful degradation)
+	assert.Contains(t, logContent, "Step 1")
+	assert.Contains(t, logContent, "Step 2")
+	assert.Contains(t, logContent, "Step 3")
+
+	// 2. Should complete max_iterations (2 iterations)
+	// Count "Step 1" occurrences - should be 2
+	count := 0
+	searchStr := "Step 1"
+	for i := 0; i <= len(logContent)-len(searchStr); i++ {
+		if logContent[i:i+len(searchStr)] == searchStr {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "Expected 2 iterations with graceful degradation")
+
+	// Edge case: Warning should be logged (implementation will verify this)
+	// Note: Actual warning logging will be implemented in the feature
+	// This test verifies graceful continuation despite invalid target
+}
+
+// TestF048_WhileLoop_BodyTransitions_BackwardCompatibility tests loops without transitions
+// GIVEN a while loop without any transitions in body steps
+// WHEN the loop executes
+// THEN it should work exactly as before (sequential execution)
+func TestF048_WhileLoop_BodyTransitions_BackwardCompatibility(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Item: T012
+	// Feature: F048
+	// Test backward compatibility: Loops without transitions should work unchanged
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "compat.log")
+
+	wfYAML := `name: test-backward-compat
+version: "1.0.0"
+states:
+  initial: simple_loop
+  simple_loop:
+    type: while
+    while: 'true'
+    break_when: 'states.counter.Output contains "stop"'
+    max_iterations: 3
+    body:
+      - step_a
+      - step_b
+      - counter
+    on_complete: done
+  step_a:
+    type: step
+    command: echo "A" >> ` + logFile + `
+    on_success: simple_loop
+  step_b:
+    type: step
+    command: echo "B" >> ` + logFile + `
+    on_success: simple_loop
+  counter:
+    type: step
+    command: |
+      COUNT=$(grep -c "A" ` + logFile + ` 2>/dev/null || echo "0")
+      if [ "$COUNT" -lt "2" ]; then
+        echo "continue"
+      else
+        echo "stop"
+      fi
+    on_success: simple_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "test-backward-compat.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newF048TransitionsEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "test-backward-compat", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// Verify execution log
+	data, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	logContent := string(data)
+
+	// Assertions:
+	// 1. Sequential execution - all steps in order
+	assert.Contains(t, logContent, "A")
+	assert.Contains(t, logContent, "B")
+
+	// 2. Count iterations - should be 2 (counter stops at 2)
+	countA := 0
+	for i := 0; i < len(logContent); i++ {
+		if logContent[i] == 'A' && (i == 0 || logContent[i-1] == '\n') {
+			countA++
+		}
+	}
+	assert.Equal(t, 2, countA, "Expected 2 iterations")
+
+	// Edge case: Verify no transitions were applied (sequential order preserved)
+	// Expected pattern: A\nB\n (repeated)
+	lines := make([]string, 0)
+	for _, line := range []string{"A", "B", "A", "B"} {
+		if len(logContent) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	// Simple check: first line should be A, second should be B
+	logLines := make([]string, 0)
+	currentLine := ""
+	for i := 0; i < len(logContent); i++ {
+		if logContent[i] == '\n' {
+			if currentLine != "" {
+				logLines = append(logLines, currentLine)
+				currentLine = ""
+			}
+		} else {
+			currentLine += string(logContent[i])
+		}
+	}
+	if currentLine != "" {
+		logLines = append(logLines, currentLine)
+	}
+
+	if len(logLines) >= 4 {
+		assert.Equal(t, "A", logLines[0])
+		assert.Equal(t, "B", logLines[1])
+		assert.Equal(t, "A", logLines[2])
+		assert.Equal(t, "B", logLines[3])
+	}
 }

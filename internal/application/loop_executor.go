@@ -15,10 +15,19 @@ import (
 )
 
 // StepExecutorFunc executes a step by name within the current loop context.
-type StepExecutorFunc func(ctx context.Context, stepName string, intCtx *interpolation.Context) error
+// Returns the next step name (if transition matched) and any error encountered.
+// F048: Support transitions within loop body
+type StepExecutorFunc func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error)
 
 // ContextBuilderFunc builds an interpolation context from execution context.
 type ContextBuilderFunc func(execCtx *workflow.ExecutionContext) *interpolation.Context
+
+// loopExitState tracks loop exit state with target step.
+// Used internally by ExecuteForEach and ExecuteWhile to manage transitions.
+type loopExitState struct {
+	shouldExit bool
+	targetStep string
+}
 
 // LoopExecutor executes for_each and while loop constructs.
 type LoopExecutor struct {
@@ -82,6 +91,12 @@ func (e *LoopExecutor) ExecuteForEach(
 	stepExecutor StepExecutorFunc,
 	buildContext ContextBuilderFunc,
 ) (*workflow.LoopResult, error) {
+	// Validate loop body for duplicates before starting execution
+	// F048 PR-67: Reject duplicate step names to prevent configuration errors
+	if _, err := e.BuildBodyStepIndices(step.Loop.Body); err != nil {
+		return nil, fmt.Errorf("invalid loop body: %w", err)
+	}
+
 	result := workflow.NewLoopResult()
 
 	// Resolve items expression
@@ -105,6 +120,13 @@ func (e *LoopExecutor) ExecuteForEach(
 		if err != nil {
 			return nil, fmt.Errorf("resolve max_iterations: %w", err)
 		}
+	}
+	// F048 T006: Use default if MaxIterations is 0
+	if maxIterations == 0 {
+		if step.Loop.MaxIterationsExplicitlySet {
+			return nil, fmt.Errorf("max_iterations cannot be zero")
+		}
+		maxIterations = workflow.DefaultMaxIterations
 	}
 
 	// F037: max_iterations limits execution to first N items (not a validation)
@@ -142,16 +164,51 @@ func (e *LoopExecutor) ExecuteForEach(
 		}
 
 		// Execute body steps
+		// F048 T004: Build step name → index map for transition support
+		// Note: body already validated for duplicates at function start
+		bodyStepIndices, err := e.BuildBodyStepIndices(step.Loop.Body)
+		if err != nil {
+			// Should never happen since we validated at function start
+			// But handle defensively to prevent panic
+			e.PopLoopContext(execCtx)
+			return result, fmt.Errorf("build body step indices: %w", err)
+		}
+
 		var iterErr error
-		for _, bodyStepName := range step.Loop.Body {
-			if err := stepExecutor(ctx, bodyStepName, intCtx); err != nil {
+		exitState := loopExitState{} // F048 T006/T007: Track loop exit state
+		for bodyIdx := 0; bodyIdx < len(step.Loop.Body); bodyIdx++ {
+			bodyStepName := step.Loop.Body[bodyIdx]
+
+			// F048: StepExecutorFunc now returns (nextStep, error)
+			nextStep, err := stepExecutor(ctx, bodyStepName, intCtx)
+			if err != nil {
 				iterErr = err
 				break
 			}
+
+			// F048 T005: Evaluate transition after step execution
+			shouldBreak, newIdx := e.evaluateBodyTransition(nextStep, bodyStepIndices, step.Loop.Body, bodyIdx, step.Name, wf.Steps)
+
 			// Capture step state
 			if state, ok := execCtx.GetStepState(bodyStepName); ok {
 				stateCopy := state
 				iterResult.StepResults[bodyStepName] = &stateCopy
+			}
+
+			// F048 T005: Handle transition result
+			if shouldBreak {
+				// Early exit from loop body (transition to step outside loop)
+				// F048 T006: Set flag to exit entire foreach loop, not just this iteration
+				// F048 T007: Capture nextStep for early exit transition
+				exitState.targetStep = nextStep
+				exitState.shouldExit = true
+				break
+			}
+
+			// F048 T006: Handle intra-body jump (only when newIdx >= 0, meaning jump detected)
+			if newIdx >= 0 {
+				adjustedIdx := e.handleIntraBodyJump(newIdx, bodyIdx)
+				bodyIdx = adjustedIdx
 			}
 		}
 
@@ -159,6 +216,15 @@ func (e *LoopExecutor) ExecuteForEach(
 		iterResult.CompletedAt = time.Now()
 		result.Iterations = append(result.Iterations, iterResult)
 		result.TotalCount++
+
+		// F048 T006: Check if we should exit the loop due to external transition
+		if exitState.shouldExit {
+			// F048 T007: Set nextStep in result for early exit
+			result.NextStep = exitState.targetStep
+			// Pop context before breaking to restore parent
+			e.PopLoopContext(execCtx)
+			break
+		}
 
 		// Check break condition after iteration completes
 		if step.Loop.BreakCondition != "" && e.evaluator != nil {
@@ -196,6 +262,12 @@ func (e *LoopExecutor) ExecuteWhile(
 	stepExecutor StepExecutorFunc,
 	buildContext ContextBuilderFunc,
 ) (*workflow.LoopResult, error) {
+	// Validate loop body for duplicates before starting execution
+	// F048 PR-67: Reject duplicate step names to prevent configuration errors
+	if _, err := e.BuildBodyStepIndices(step.Loop.Body); err != nil {
+		return nil, fmt.Errorf("invalid loop body: %w", err)
+	}
+
 	result := workflow.NewLoopResult()
 
 	// Determine max iterations: use dynamic expression if set, otherwise static value
@@ -208,6 +280,13 @@ func (e *LoopExecutor) ExecuteWhile(
 		if err != nil {
 			return nil, fmt.Errorf("resolve max_iterations: %w", err)
 		}
+	}
+	// F048 T006: Use default if MaxIterations is 0
+	if maxIterations == 0 {
+		if step.Loop.MaxIterationsExplicitlySet {
+			return nil, fmt.Errorf("max_iterations cannot be zero")
+		}
+		maxIterations = workflow.DefaultMaxIterations
 	}
 
 	for i := 0; i < maxIterations; i++ {
@@ -244,16 +323,51 @@ func (e *LoopExecutor) ExecuteWhile(
 		}
 
 		// Execute body steps
+		// F048 T004: Build step name → index map for transition support
+		// Note: body already validated for duplicates at function start
+		bodyStepIndices, err := e.BuildBodyStepIndices(step.Loop.Body)
+		if err != nil {
+			// Should never happen since we validated at function start
+			// But handle defensively to prevent panic
+			e.PopLoopContext(execCtx)
+			return result, fmt.Errorf("build body step indices: %w", err)
+		}
+
 		var iterErr error
-		for _, bodyStepName := range step.Loop.Body {
-			if err := stepExecutor(ctx, bodyStepName, intCtx); err != nil {
+		exitState := loopExitState{} // F048 T006/T007: Track loop exit state
+		for bodyIdx := 0; bodyIdx < len(step.Loop.Body); bodyIdx++ {
+			bodyStepName := step.Loop.Body[bodyIdx]
+
+			// F048: StepExecutorFunc now returns (nextStep, error)
+			nextStep, err := stepExecutor(ctx, bodyStepName, intCtx)
+			if err != nil {
 				iterErr = err
 				break
 			}
+
+			// F048 T005: Evaluate transition after step execution
+			shouldBreak, newIdx := e.evaluateBodyTransition(nextStep, bodyStepIndices, step.Loop.Body, bodyIdx, step.Name, wf.Steps)
+
 			// Capture step state
 			if state, ok := execCtx.GetStepState(bodyStepName); ok {
 				stateCopy := state
 				iterResult.StepResults[bodyStepName] = &stateCopy
+			}
+
+			// F048 T005: Handle transition result
+			if shouldBreak {
+				// Early exit from loop body (transition to step outside loop)
+				// F048 T006: Set flag to exit entire while loop, not just this iteration
+				// F048 T007: Capture nextStep for early exit transition
+				exitState.targetStep = nextStep
+				exitState.shouldExit = true
+				break
+			}
+
+			// F048 T006: Handle intra-body jump (only when newIdx >= 0, meaning jump detected)
+			if newIdx >= 0 {
+				adjustedIdx := e.handleIntraBodyJump(newIdx, bodyIdx)
+				bodyIdx = adjustedIdx
 			}
 		}
 
@@ -261,6 +375,15 @@ func (e *LoopExecutor) ExecuteWhile(
 		iterResult.CompletedAt = time.Now()
 		result.Iterations = append(result.Iterations, iterResult)
 		result.TotalCount++
+
+		// F048 T006: Check if we should exit the loop due to external transition
+		if exitState.shouldExit {
+			// F048 T007: Set nextStep in result for early exit
+			result.NextStep = exitState.targetStep
+			// Pop context before breaking to restore parent
+			e.PopLoopContext(execCtx)
+			break
+		}
 
 		// Check break condition after iteration completes
 		if step.Loop.BreakCondition != "" && e.evaluator != nil {
@@ -399,4 +522,101 @@ func (e *LoopExecutor) ParseItems(itemsStr string) ([]any, error) {
 		items[i] = strings.TrimSpace(p)
 	}
 	return items, nil
+}
+
+// BuildBodyStepIndices creates a map from step name to index in the body slice.
+// Used by F048 to support transitions within loop bodies by enabling jump-to-index logic.
+// Returns a map where keys are step names and values are their positions in the body array,
+// or an error if duplicate step names are detected (to prevent silent configuration errors).
+// F048 T004: Body Step Index Mapping
+//
+// INTERNAL: This method is exported for testing purposes only.
+func (e *LoopExecutor) BuildBodyStepIndices(body []string) (map[string]int, error) {
+	indices := make(map[string]int)
+	seen := make(map[string]int)
+	for i, stepName := range body {
+		if prevIdx, exists := seen[stepName]; exists {
+			return nil, fmt.Errorf("duplicate step '%s' in loop body at indices %d and %d", stepName, prevIdx, i)
+		}
+		indices[stepName] = i
+		seen[stepName] = i
+	}
+	return indices, nil
+}
+
+// evaluateBodyTransition evaluates the transition result after a loop body step execution.
+// Returns (shouldBreak, newIdx) where:
+//   - shouldBreak: true if transition targets step outside loop body (early exit)
+//   - newIdx: target step index if transition targets step within body, -1 if no transition or sequential
+//
+// F048 T005: Transition Evaluation in Loop Body
+func (e *LoopExecutor) evaluateBodyTransition(
+	nextStep string,
+	bodyStepIndices map[string]int,
+	body []string,
+	currentIdx int,
+	loopStepName string,
+	workflowSteps map[string]*workflow.Step,
+) (shouldBreak bool, newIdx int) {
+	// Case 1: No transition - sequential execution (most common case)
+	if nextStep == "" {
+		return false, -1
+	}
+
+	// Case 2: Intra-body jump - transition to step within loop body
+	if targetIdx, exists := bodyStepIndices[nextStep]; exists {
+		e.logger.Info("loop intra-body transition",
+			"target", nextStep,
+			"target_index", targetIdx)
+		return false, targetIdx
+	}
+
+	// Case 3: Retry pattern - transition to loop step itself (ADR-004)
+	if nextStep == loopStepName {
+		e.logger.Info("loop retry pattern detected",
+			"loop", loopStepName,
+			"current_index", currentIdx)
+		return false, -1
+	}
+
+	// Case 4: Invalid target - target doesn't exist in workflow (ADR-005)
+	if _, exists := workflowSteps[nextStep]; !exists {
+		e.logger.Warn("transition target not found in workflow, continuing sequential",
+			"target", nextStep,
+			"current_index", currentIdx)
+		return false, -1
+	}
+
+	// Case 5: Early exit - target exists in workflow but not in body (ADR-003)
+	e.logger.Info("loop early exit",
+		"target", nextStep,
+		"current_index", currentIdx,
+		"body_size", len(body))
+	return true, -1
+}
+
+// handleIntraBodyJump adjusts the loop body index to jump to a target step within the loop body.
+// Returns the new index value that should be assigned to bodyIdx in the loop.
+// The returned value accounts for the loop's increment by subtracting 1.
+//
+// Parameters:
+//   - newIdx: target step index within body (must be >= 0, caller ensures this)
+//   - currentIdx: current position in the loop body
+//
+// Returns:
+//   - adjustedIdx: the index to assign to bodyIdx (can be -1 for jump to index 0)
+//
+// F048 T006: Intra-Body Jump Handling in ExecuteWhile
+func (e *LoopExecutor) handleIntraBodyJump(newIdx int, currentIdx int) int {
+	// Intra-body jump - adjust index to compensate for loop increment
+	// The for loop will increment bodyIdx after this assignment, so we subtract 1
+	// to land on the target index after the increment.
+	// Example: To jump to index 3, we return 2, then loop increments to 3
+	// Special case: To jump to index 0, we return -1, then loop increments to 0
+	adjustedIdx := newIdx - 1
+	e.logger.Info("loop intra-body jump",
+		"from_index", currentIdx,
+		"to_index", newIdx,
+		"adjusted_index", adjustedIdx)
+	return adjustedIdx
 }

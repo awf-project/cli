@@ -138,6 +138,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **F048**: Loop body transitions now honored (while and foreach loops)
+  - Loop executor now evaluates transitions after each body step execution
+  - Transitions with `goto` targets within loop body skip intermediate steps
+  - Transitions to steps outside loop body trigger early loop exit
+  - Modified `StepExecutorFunc` signature to propagate transition results
+  - Fixes workflows where conditional transitions should skip unnecessary steps
 - **F047**: ForEach loop items serialize using Go's default format instead of JSON
   - Template interpolation now uses JSON marshalling for complex types in `{{.loop.Item}}`
   - Primitive values (string, int, float, bool) pass through unchanged for backward compatibility
