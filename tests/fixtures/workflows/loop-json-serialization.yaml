@@ -1,0 +1,48 @@
+# F047 Test Fixture: for_each validating JSON serialization of loop items
+name: loop-json-serialization
+version: "1.0.0"
+
+inputs:
+  - name: items_json
+    type: string
+    required: false
+    default: '[{"name":"S1","type":"fix","files":["a.go","b.go"]},{"name":"S2","type":"feat","files":["c.go"]}]'
+
+states:
+  initial: loop_items
+  loop_items:
+    type: for_each
+    items: "{{.inputs.items_json}}"
+    body:
+      - validate_item
+    on_complete: done
+  validate_item:
+    type: step
+    command: |
+      item='{{.loop.Item}}'
+      index={{.loop.Index}}
+
+      # Check if item starts with "map[" (Go map format - FAIL)
+      case "$item" in
+        map\[*)
+          echo "VALIDATION_FAILED: Item at index $index is Go map format: $item" >&2
+          exit 1
+          ;;
+      esac
+
+      # Validate JSON syntax using jq
+      if ! echo "$item" | jq empty 2>/dev/null; then
+        echo "VALIDATION_FAILED: Item at index $index is not valid JSON: $item" >&2
+        exit 1
+      fi
+
+      # Extract fields to verify structure
+      name=$(echo "$item" | jq -r '.name // empty')
+      type=$(echo "$item" | jq -r '.type // empty')
+      files_count=$(echo "$item" | jq -r '.files | length // 0')
+
+      echo "VALIDATION_SUCCESS: Item $index is valid JSON - name=$name, type=$type, files_count=$files_count"
+    on_success: loop_items
+  done:
+    type: terminal
+    status: success

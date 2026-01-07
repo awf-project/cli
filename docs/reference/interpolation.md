@@ -122,6 +122,46 @@ process_single:
     echo "First: {{.loop.first}}, Last: {{.loop.last}}"
 ```
 
+#### Loop Item JSON Serialization
+
+When `{{.loop.item}}` contains complex types (objects, arrays), it is automatically serialized to JSON:
+
+- **Objects** → JSON object: `{"name":"value","nested":{"key":"data"}}`
+- **Arrays** → JSON array: `[1,2,3]` or `["a","b","c"]`
+- **Strings** → Pass through unchanged: `"main.go"` stays as `main.go` (not quoted)
+- **Numbers** → Converted to string: `42` becomes `"42"`, `3.14` becomes `"3.14"`
+- **Booleans** → Converted to string: `true` becomes `"true"`, `false` becomes `"false"`
+
+This is especially useful when passing loop items to `call_workflow`:
+
+```yaml
+# Parent workflow with objects
+process_reviews:
+  type: step
+  command: |
+    echo '[{"file":"main.go","type":"fix"},{"file":"test.go","type":"chore"}]'
+  capture:
+    stdout: reviews_json
+  on_success: loop_reviews
+
+loop_reviews:
+  type: for_each
+  items: "{{.states.process_reviews.output}}"
+  body:
+    - call_child_workflow
+
+call_child_workflow:
+  type: call_workflow
+  workflow: review-file
+  inputs:
+    review: "{{.loop.item}}"  # Passed as valid JSON object to child
+
+# Child workflow receives properly formatted JSON
+# {{.inputs.review}} = {"file":"main.go","type":"fix"}
+```
+
+**Note**: String items pass through unchanged without JSON quoting. Numbers and booleans are converted to their string representations.
+
 ### Nested Loop Parent Access
 
 For nested loops, access outer loop context via `{{.loop.parent}}`:

@@ -1,0 +1,54 @@
+# F047 Test Fixture: Child workflow for loop JSON serialization testing
+name: loop-json-child
+version: "1.0.0"
+
+inputs:
+  - name: item
+    type: string
+    required: true
+  - name: index
+    type: integer
+    required: false
+    default: 0
+
+outputs:
+  - name: validation_result
+    from: states.validate.output
+
+states:
+  initial: validate
+  validate:
+    type: step
+    command: |
+      set -e
+      item='{{.inputs.item}}'
+      index={{.inputs.index}}
+
+      # Check if item starts with "map[" (Go map format - FAIL)
+      case "$item" in
+        map\[*)
+          echo "VALIDATION_FAILED: Item at index $index is Go map format: $item"
+          exit 1
+          ;;
+      esac
+
+      # Validate JSON syntax using jq
+      if ! echo "$item" | jq empty 2>/dev/null; then
+        echo "VALIDATION_FAILED: Item at index $index is not valid JSON: $item"
+        exit 1
+      fi
+
+      # Extract fields to verify structure
+      name=$(echo "$item" | jq -r '.name // empty')
+      type=$(echo "$item" | jq -r '.type // empty')
+      files=$(echo "$item" | jq -r '.files // empty')
+
+      echo "VALIDATION_SUCCESS: Item $index is valid JSON - name=$name, type=$type, files_count=$(echo "$files" | jq 'length')"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure

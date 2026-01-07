@@ -2,6 +2,8 @@ package interpolation
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"text/template"
 )
@@ -27,7 +29,8 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 	tmpl := template.New("cmd").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
-			"escape": ShellEscape,
+			"escape": escapeTemplateFunc,
+			"json":   jsonTemplateFunc,
 		})
 
 	// Parse template
@@ -57,7 +60,9 @@ func (r *TemplateResolver) buildTemplateData(ctx *Context) map[string]any {
 		data["error"] = ctx.Error
 	}
 	if ctx.Loop != nil {
-		data["loop"] = ctx.Loop
+		// Serialize loop item using SerializeLoopItem for proper JSON representation
+		serializedLoop := r.serializeLoopData(ctx.Loop)
+		data["loop"] = serializedLoop
 	}
 	return data
 }
@@ -90,4 +95,74 @@ func (r *TemplateResolver) wrapExecutionError(err error, tmpl string) error {
 	}
 
 	return &ParseError{Template: tmpl, Cause: err}
+}
+
+// escapeTemplateFunc wraps ShellEscape to handle both strings and serializableItem.
+// This function is used in templates via {{escape .var}} syntax.
+func escapeTemplateFunc(v any) string {
+	// Handle serializableItem by extracting its serialized string
+	if item, ok := v.(serializableItem); ok {
+		return ShellEscape(item.String())
+	}
+	// Handle regular strings
+	if s, ok := v.(string); ok {
+		return ShellEscape(s)
+	}
+	// Fallback for other types: convert to string first
+	return ShellEscape(fmt.Sprintf("%v", v))
+}
+
+// jsonTemplateFunc serializes a value to JSON format.
+// This function is used in templates via {{json .var}} syntax.
+func jsonTemplateFunc(v any) (string, error) {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonBytes), nil
+}
+
+// serializableItem wraps a loop item value and provides automatic JSON serialization
+// when printed in templates, while preserving the original value for the {{json}} function.
+type serializableItem struct {
+	original   any
+	serialized string
+}
+
+// String implements fmt.Stringer, which Go templates use for {{.value}} printing.
+// This ensures loop items are serialized to JSON automatically.
+func (s serializableItem) String() string {
+	return s.serialized
+}
+
+// MarshalJSON implements json.Marshaler to ensure the original value is used
+// when the {{json}} function is applied, avoiding double-encoding.
+func (s serializableItem) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.original)
+}
+
+// serializeLoopData creates a copy of LoopData with the Item field wrapped
+// in serializableItem for proper JSON representation in templates.
+func (r *TemplateResolver) serializeLoopData(loop *LoopData) *LoopData {
+	// Serialize the item using SerializeLoopItem
+	// SerializeLoopItem never returns an error (it handles failures internally via graceful degradation)
+	// nolint:errcheck // SerializeLoopItem always returns nil error
+	serialized, _ := SerializeLoopItem(loop.Item)
+
+	// Wrap the item in serializableItem to provide both automatic serialization
+	// via String() and correct JSON encoding via MarshalJSON()
+	wrappedItem := serializableItem{
+		original:   loop.Item,
+		serialized: serialized,
+	}
+
+	// Create a copy of LoopData with all fields preserved
+	return &LoopData{
+		Item:   wrappedItem,
+		Index:  loop.Index,
+		First:  loop.First,
+		Last:   loop.Last,
+		Length: loop.Length,
+		Parent: loop.Parent,
+	}
 }

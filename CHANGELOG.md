@@ -138,6 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **F047**: ForEach loop items serialize using Go's default format instead of JSON
+  - Template interpolation now uses JSON marshalling for complex types in `{{.loop.Item}}`
+  - Primitive values (string, int, float, bool) pass through unchanged for backward compatibility
+  - Added `SerializeLoopItem()` helper in `pkg/interpolation` for type-aware serialization
+  - Fixes workflows using `for_each` with `call_workflow` receiving malformed data format
 - **Bug-48**: Cannot run two workflows simultaneously
   - Replaced BadgerDB with SQLite WAL mode for concurrent access
   - Multiple `awf` processes can now execute workflows in parallel

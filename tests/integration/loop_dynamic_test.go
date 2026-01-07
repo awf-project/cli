@@ -1594,3 +1594,326 @@ states:
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	assert.Len(t, lines, 2, "should process exactly 2 items with batch_count=2")
 }
+
+// =============================================================================
+// F047: Loop JSON Serialization - Integration Tests
+// =============================================================================
+
+// TestForEachLoop_WithObjectItems_Integration tests US3: for_each loop with JSON objects
+// AC1: {{.loop.Item}} passed to call_workflow produces valid JSON
+// AC2: Nested objects and arrays properly serialized
+func TestForEachLoop_WithObjectItems_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: A parent workflow that iterates over JSON objects and passes them to a child workflow
+	fixturesDir := "../fixtures/workflows"
+
+	repo := repository.NewYAMLRepository(fixturesDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: The workflow executes with default JSON objects containing nested arrays
+	// Default items: [{"name":"S1","type":"fix","files":["a.go","b.go"]},{"name":"S2","type":"feat","files":["c.go"]}]
+	execCtx, err := execSvc.Run(ctx, "loop-json-serialization", nil)
+
+	// Then: Workflow should complete successfully
+	require.NoError(t, err, "workflow execution should not error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete successfully")
+	assert.Equal(t, "done", execCtx.CurrentStep, "workflow should end at done state")
+
+	// Then: Validation step should exist and pass (no Go map format)
+	validateState, ok := execCtx.GetStepState("validate_item")
+	require.True(t, ok, "validate_item state should exist")
+	assert.Equal(t, 0, validateState.ExitCode, "validate_item should succeed")
+
+	// Verify validation output confirms JSON format
+	validationOutput := validateState.Output
+	assert.Contains(t, validationOutput, "VALIDATION_SUCCESS", "validation should confirm JSON format")
+	assert.NotContains(t, validationOutput, "map[", "output should not contain Go map format")
+	assert.NotContains(t, validationOutput, "VALIDATION_FAILED", "validation should not fail")
+}
+
+// TestForEachLoop_WithNestedStructures tests AC2: nested objects and arrays properly serialized
+func TestForEachLoop_WithNestedStructures(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: A workflow with deeply nested JSON structures
+	fixturesDir := "../fixtures/workflows"
+
+	repo := repository.NewYAMLRepository(fixturesDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: Items contain nested objects and arrays
+	nestedJSON := `[{"name":"Task1","metadata":{"priority":"high","tags":["urgent","bug"]},"assignees":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]}]`
+	inputs := map[string]any{"items_json": nestedJSON}
+
+	execCtx, err := execSvc.Run(ctx, "loop-json-serialization", inputs)
+
+	// Then: Workflow should complete and child validates nested JSON
+	require.NoError(t, err, "workflow with nested structures should not error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+
+	// Verify nested structures are valid JSON
+	validateState, ok := execCtx.GetStepState("validate_item")
+	require.True(t, ok, "validate_item state should exist")
+	assert.Equal(t, 0, validateState.ExitCode, "should validate nested JSON")
+	assert.Contains(t, validateState.Output, "VALIDATION_SUCCESS", "nested JSON should validate")
+}
+
+// TestForEachLoop_MixedPrimitiveAndComplex tests mixed primitive and complex types in loop
+func TestForEachLoop_MixedPrimitiveAndComplex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: A workflow that can handle both primitive and complex types
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "results.txt")
+
+	// Create a simple workflow that echoes loop items to a file
+	wfYAML := `name: mixed-types
+version: "1.0.0"
+inputs:
+  - name: items_json
+    type: string
+    required: true
+states:
+  initial: loop_items
+  loop_items:
+    type: for_each
+    items: "{{.inputs.items_json}}"
+    body:
+      - echo_item
+    on_complete: done
+  echo_item:
+    type: step
+    command: |
+      item='{{.loop.Item}}'
+      printf '%s\n' "$item" >> ` + outputFile + `
+    on_success: loop_items
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "mixed-types.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: Mix of primitives and objects in the array
+	mixedJSON := `["string",42,{"key":"value"},[1,2,3],true,null]`
+	inputs := map[string]any{"items_json": mixedJSON}
+
+	execCtx, err := execSvc.Run(ctx, "mixed-types", inputs)
+
+	// Then: All items should be serialized appropriately
+	require.NoError(t, err, "workflow with mixed types should not error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+
+	// Verify output file contains properly serialized items
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	output := string(data)
+
+	// Primitives should pass through unchanged
+	assert.Contains(t, output, "string", "string primitive should be preserved")
+	assert.Contains(t, output, "42", "number primitive should be preserved")
+	assert.Contains(t, output, "true", "boolean primitive should be preserved")
+
+	// Complex types should be JSON
+	assert.Contains(t, output, `{"key":"value"}`, "object should be JSON")
+	assert.Contains(t, output, "[1,2,3]", "array should be JSON")
+
+	// Should NOT contain Go map format
+	assert.NotContains(t, output, "map[", "should not have Go map format")
+}
+
+// TestForEachLoop_EmptyObjectsAndArrays tests edge case: empty objects and arrays
+func TestForEachLoop_EmptyObjectsAndArrays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: Workflow with empty objects and arrays
+	fixturesDir := "../fixtures/workflows"
+
+	repo := repository.NewYAMLRepository(fixturesDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: Items include empty objects and arrays
+	emptyJSON := `[{},{"name":"test","data":[]},{"items":[]}]`
+	inputs := map[string]any{"items_json": emptyJSON}
+
+	execCtx, err := execSvc.Run(ctx, "loop-json-serialization", inputs)
+
+	// Then: Empty structures should serialize as valid JSON
+	require.NoError(t, err, "workflow with empty structures should not error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+
+	validateState, ok := execCtx.GetStepState("validate_item")
+	require.True(t, ok, "validate_item state should exist")
+	assert.Equal(t, 0, validateState.ExitCode, "empty structures should validate as JSON")
+}
+
+// TestForEachLoop_UnicodeAndSpecialChars tests edge case: unicode and special characters
+func TestForEachLoop_UnicodeAndSpecialChars(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: Workflow with unicode and special characters
+	fixturesDir := "../fixtures/workflows"
+
+	repo := repository.NewYAMLRepository(fixturesDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: Items contain unicode, emojis, and special characters
+	unicodeJSON := `[{"name":"测试","emoji":"🚀","special":"quote:\"value\""}]`
+	inputs := map[string]any{"items_json": unicodeJSON}
+
+	execCtx, err := execSvc.Run(ctx, "loop-json-serialization", inputs)
+
+	// Then: Unicode and special chars should be properly escaped in JSON
+	require.NoError(t, err, "workflow with unicode should not error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+
+	validateState, ok := execCtx.GetStepState("validate_item")
+	require.True(t, ok, "validate_item state should exist")
+	assert.Equal(t, 0, validateState.ExitCode, "unicode JSON should validate")
+}
+
+// TestForEachLoop_BackwardCompatibility_StringItems tests AC4: existing workflows work unchanged
+func TestForEachLoop_BackwardCompatibility_StringItems(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Given: A workflow with simple string items (existing behavior)
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "output.txt")
+
+	wfYAML := `name: string-items
+version: "1.0.0"
+states:
+  initial: loop
+  loop:
+    type: for_each
+    items: '["item1", "item2", "item3"]'
+    body:
+      - echo_item
+    on_complete: done
+  echo_item:
+    type: step
+    command: 'echo "{{.loop.Item}}" >> ` + outputFile + `'
+    on_success: loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "string-items.yaml"), []byte(wfYAML), 0644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := newSimpleExpressionEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// When: Running workflow with string items (pre-F047 behavior)
+	execCtx, err := execSvc.Run(ctx, "string-items", nil)
+
+	// Then: String items should pass through unchanged (backward compatibility)
+	require.NoError(t, err, "string items workflow should work")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+
+	assert.Len(t, lines, 3, "should have 3 items")
+	assert.Equal(t, "item1", lines[0], "string should not be quoted")
+	assert.Equal(t, "item2", lines[1], "string should not be quoted")
+	assert.Equal(t, "item3", lines[2], "string should not be quoted")
+
+	// Strings should NOT be JSON-quoted (backward compatibility)
+	assert.NotContains(t, string(data), `"item1"`, "strings should not be JSON-encoded")
+}

@@ -520,6 +520,69 @@ Sub-workflow errors propagate to the parent:
 - If sub-workflow times out, parent receives timeout error and follows `on_failure`
 - If sub-workflow definition is not found, execution fails with `undefined_subworkflow` error
 
+### Using Call Workflow in Loops
+
+Combine `for_each` with `call_workflow` to process multiple items in parallel sub-workflows. Loop items (especially complex objects) are automatically serialized to JSON:
+
+```yaml
+# Example: Process multiple files across sub-workflows
+prepare_items:
+  type: step
+  command: |
+    echo '[
+      {"file":"main.go","language":"Go"},
+      {"file":"app.py","language":"Python"},
+      {"file":"index.js","language":"JavaScript"}
+    ]'
+  capture:
+    stdout: items_json
+  on_success: process_files
+
+process_files:
+  type: for_each
+  items: "{{.states.prepare_items.output}}"
+  body:
+    - analyze_file
+
+analyze_file:
+  type: call_workflow
+  call_workflow:
+    workflow: analyze-source-file
+    inputs:
+      # {{.loop.item}} is automatically JSON-serialized for complex types
+      file_info: "{{.loop.item}}"
+    outputs:
+      analysis: file_analysis
+  on_success: next
+
+next:
+  type: terminal
+```
+
+Child workflow receives properly formatted JSON input:
+```yaml
+name: analyze-source-file
+
+inputs:
+  - name: file_info
+    type: string  # Receives JSON string
+
+states:
+  initial: parse
+  parse:
+    type: step
+    command: |
+      # Parse JSON input safely
+      echo '{{.inputs.file_info}}' | jq -r '.file'
+    on_success: done
+  done:
+    type: terminal
+
+outputs:
+  - name: file_analysis
+    from: states.parse.output
+```
+
 ---
 
 ## Retry Configuration
