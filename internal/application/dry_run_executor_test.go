@@ -184,7 +184,7 @@ func TestDryRunExecutor_Execute_WhileLoop(t *testing.T) {
 				Name:      "check",
 				Type:      workflow.StepTypeCommand,
 				Command:   "check-status",
-				OnSuccess: "poll",
+				OnSuccess: "", // No explicit transition - continue loop body
 			},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
@@ -888,7 +888,7 @@ func TestDryRunExecutor_Execute_LoopBreakCondition(t *testing.T) {
 					OnComplete:     "done",
 				},
 			},
-			"check": {Name: "check", Type: workflow.StepTypeCommand, Command: "check", OnSuccess: "poll"},
+			"check": {Name: "check", Type: workflow.StepTypeCommand, Command: "check", OnSuccess: ""},
 			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}

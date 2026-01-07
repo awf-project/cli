@@ -695,21 +695,24 @@ func (e *InteractiveExecutor) executeLoopStep(
 	}
 
 	// Create step executor callback
-	stepExecutor := func(ctx context.Context, stepName string, loopIntCtx *interpolation.Context) error {
+	// F048: Updated to return (nextStep, error) to support transitions within loop body
+	stepExecutor := func(ctx context.Context, stepName string, loopIntCtx *interpolation.Context) (string, error) {
 		bodyStep, ok := wf.Steps[stepName]
 		if !ok {
-			return fmt.Errorf("body step not found: %s", stepName)
+			return "", fmt.Errorf("body step not found: %s", stepName)
 		}
+		var nextStep string
 		var err error
 		switch bodyStep.Type {
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
-			_, err = e.executeLoopStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = e.executeLoopStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeParallel:
-			_, err = e.executeParallelStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = e.executeParallelStep(ctx, wf, bodyStep, execCtx)
 		default:
-			_, err = e.executeStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = e.executeStep(ctx, wf, bodyStep, execCtx)
 		}
-		return err
+		// F048: Return nextStep to enable transition handling in loop executor
+		return nextStep, err
 	}
 
 	// Execute loop

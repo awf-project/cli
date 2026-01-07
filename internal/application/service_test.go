@@ -105,12 +105,25 @@ func (m *capturingMockExecutor) Execute(ctx context.Context, cmd ports.Command) 
 	return &ports.CommandResult{ExitCode: 0, Stdout: "ok"}, nil
 }
 
-type mockLogger struct{}
+type mockLogger struct {
+	warnings []string
+	errors   []string
+}
 
 func (m *mockLogger) Debug(msg string, fields ...any) {}
 func (m *mockLogger) Info(msg string, fields ...any)  {}
-func (m *mockLogger) Warn(msg string, fields ...any)  {}
-func (m *mockLogger) Error(msg string, fields ...any) {}
+func (m *mockLogger) Warn(msg string, fields ...any) {
+	if m.warnings == nil {
+		m.warnings = []string{}
+	}
+	m.warnings = append(m.warnings, msg)
+}
+func (m *mockLogger) Error(msg string, fields ...any) {
+	if m.errors == nil {
+		m.errors = []string{}
+	}
+	m.errors = append(m.errors, msg)
+}
 func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }

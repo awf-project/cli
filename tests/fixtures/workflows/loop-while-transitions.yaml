@@ -1,0 +1,65 @@
+name: test-while-transitions
+version: "1.0.0"
+description: While loop with transitions in body steps - F048 test fixture
+
+states:
+  initial: green_loop
+
+  # Main test: while loop with transitions in body
+  green_loop:
+    type: while
+    while: 'true'
+    break_when: 'states.run_fmt.Output contains "STOP_LOOP"'
+    max_iterations: 3
+    body:
+      - run_tests_green
+      - check_tests_passed
+      - prepare_impl_prompt
+      - implement_item
+      - run_fmt
+    on_complete: done
+
+  # Step 1: Simulate running tests
+  run_tests_green:
+    type: step
+    command: echo "TEST_EXIT_CODE=0" > /tmp/awf-test-output.txt && echo "Running tests..."
+    on_success: green_loop
+
+  # Step 2: Check test results with transitions
+  # When tests pass: skip to run_fmt (skipping prepare_impl_prompt and implement_item)
+  # When tests fail: continue to prepare_impl_prompt
+  check_tests_passed:
+    type: step
+    command: |
+      if grep -q "TEST_EXIT_CODE=0" /tmp/awf-test-output.txt 2>/dev/null; then
+        echo "TESTS_PASSED"
+      else
+        echo "TESTS_FAILED"
+      fi
+    transitions:
+      - when: 'states.check_tests_passed.Output contains "TESTS_PASSED"'
+        goto: run_fmt
+      - goto: prepare_impl_prompt
+
+  # Step 3: Should be skipped when tests pass
+  prepare_impl_prompt:
+    type: step
+    command: echo "CONTINUE_LOOP" && echo "Preparing implementation prompt..."
+    on_success: green_loop
+
+  # Step 4: Should be skipped when tests pass
+  implement_item:
+    type: step
+    command: echo "CONTINUE_LOOP" && echo "Implementing..."
+    on_success: green_loop
+
+  # Step 5: Target of successful transition
+  run_fmt:
+    type: step
+    command: echo "STOP_LOOP" && echo "Running formatter..."
+    on_success: green_loop
+
+  done:
+    type: terminal
+    status: success
+    message: "Workflow completed - transitions honored"

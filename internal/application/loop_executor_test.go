@@ -70,9 +70,11 @@ func (m *configurableMockResolver) Resolve(template string, ctx *interpolation.C
 }
 
 // stepExecutorRecorder records step executions for verification
+// F048: Updated to support new StepExecutorFunc signature
 type stepExecutorRecorder struct {
-	executions []stepExecution
-	results    map[string]error
+	executions  []stepExecution
+	results     map[string]error
+	transitions map[string]string // F048: Map of stepName -> nextStep for transition testing
 }
 
 type stepExecution struct {
@@ -82,12 +84,14 @@ type stepExecution struct {
 
 func newStepExecutorRecorder() *stepExecutorRecorder {
 	return &stepExecutorRecorder{
-		executions: make([]stepExecution, 0),
-		results:    make(map[string]error),
+		executions:  make([]stepExecution, 0),
+		results:     make(map[string]error),
+		transitions: make(map[string]string),
 	}
 }
 
-func (r *stepExecutorRecorder) execute(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+// F048: Updated to return (nextStep, error)
+func (r *stepExecutorRecorder) execute(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 	exec := stepExecution{stepName: stepName}
 	if intCtx.Loop != nil {
 		exec.loopData = &interpolation.LoopData{
@@ -101,9 +105,15 @@ func (r *stepExecutorRecorder) execute(ctx context.Context, stepName string, int
 	r.executions = append(r.executions, exec)
 
 	if err, ok := r.results[stepName]; ok {
-		return err
+		return "", err
 	}
-	return nil
+
+	// F048: Return transition if configured for this step
+	if nextStep, ok := r.transitions[stepName]; ok {
+		return nextStep, nil
+	}
+
+	return "", nil
 }
 
 // =============================================================================
@@ -275,11 +285,11 @@ func TestLoopExecutor_ExecuteForEach_MaxIterationsLimitsExecution(t *testing.T) 
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			if intCtx.Loop != nil {
 				processedItems = append(processedItems, fmt.Sprintf("%v", intCtx.Loop.Item))
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -330,12 +340,12 @@ func TestLoopExecutor_ExecuteForEach_StepError(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount == 2 {
-				return stepErr
+				return "", stepErr
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -380,12 +390,12 @@ func TestLoopExecutor_ExecuteForEach_ContextCancellation(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount == 2 {
 				cancel() // Cancel after second iteration
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -427,9 +437,9 @@ func TestLoopExecutor_ExecuteForEach_EmptyItems(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute with empty items")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -541,13 +551,13 @@ func TestLoopExecutor_ExecuteWhile_Simple(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			// After 3 calls, make condition false
 			if callCount >= 3 {
 				evaluator.results["states.check.output != 'ready'"] = false
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -594,9 +604,9 @@ func TestLoopExecutor_ExecuteWhile_MaxIterations(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -640,8 +650,8 @@ func TestLoopExecutor_ExecuteWhile_ConditionError(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
-			return nil
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -685,13 +695,13 @@ func TestLoopExecutor_ExecuteWhile_WithBreakCondition(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			// After 2 iterations, trigger break
 			if callCount >= 2 {
 				evaluator.results["states.work.exit_code != 0"] = true
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -737,12 +747,12 @@ func TestLoopExecutor_ExecuteWhile_StepError(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount == 3 {
-				return stepErr
+				return "", stepErr
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -907,7 +917,7 @@ func TestExecutionService_Run_ForEachStep(t *testing.T) {
 				Name:      "echo_file",
 				Type:      workflow.StepTypeCommand,
 				Command:   "echo processing",
-				OnSuccess: "process_files", // Returns to loop
+				OnSuccess: "", // No explicit transition - continue loop body
 			},
 			"done": {
 				Name:   "done",
@@ -955,7 +965,7 @@ func TestExecutionService_Run_WhileStep(t *testing.T) {
 				Name:      "check",
 				Type:      workflow.StepTypeCommand,
 				Command:   "check_status",
-				OnSuccess: "poll",
+				OnSuccess: "", // No explicit transition - continue loop body
 			},
 			"done": {
 				Name:   "done",
@@ -1887,11 +1897,11 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_LimitsToResolvedValue(
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			if intCtx.Loop != nil {
 				processedItems = append(processedItems, fmt.Sprintf("%v", intCtx.Loop.Item))
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -1944,9 +1954,9 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ResolverError(t *testi
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when resolver fails")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -1991,9 +2001,9 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_InvalidValue(t *testin
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations is invalid")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2040,9 +2050,9 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ZeroValue(t *testing.T
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations is zero")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2089,9 +2099,9 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ExceedsLimit(t *testin
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations exceeds limit")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2418,9 +2428,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromInput(t *testing.T) 
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2470,9 +2480,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromEnv(t *testing.T) {
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2522,9 +2532,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromStepOutput(t *testin
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2579,9 +2589,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_Arithmetic(t *testing.T)
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2634,12 +2644,12 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ConditionExitsEarly(t *t
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount >= 3 {
 				evaluator.results["states.check.output != 'done'"] = false
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2689,9 +2699,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ResolverError(t *testing
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when resolver fails")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -2736,9 +2746,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_InvalidValue(t *testing.
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations is invalid")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2785,9 +2795,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ZeroValue(t *testing.T) 
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations is zero")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2834,9 +2844,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_NegativeValue(t *testing
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations is negative")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2883,9 +2893,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ExceedsLimit(t *testing.
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			t.Error("should not execute when max_iterations exceeds limit")
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -2932,9 +2942,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StaticStillWorks(t *test
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			return interpolation.NewContext()
@@ -2982,9 +2992,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_BoundaryMin(t *testing.T
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -3035,8 +3045,8 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_BoundaryMax(t *testing.T
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
-			return nil
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -3087,13 +3097,13 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WithBreakCondition(t *te
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			// Trigger break after 3 iterations
 			if callCount >= 3 {
 				evaluator.results["states.work.output == 'stop'"] = true
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -3144,9 +3154,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WhitespaceInValue(t *tes
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -3201,12 +3211,12 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StepError(t *testing.T) 
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount == 3 {
-				return stepErr
+				return "", stepErr
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			ctx := interpolation.NewContext()
@@ -3258,12 +3268,12 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ContextCancellation(t *t
 		wf,
 		step,
 		execCtx,
-		func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount == 3 {
 				cancel() // Cancel after 3rd iteration
 			}
-			return nil
+			return "", nil
 		},
 		func(ec *workflow.ExecutionContext) *interpolation.Context {
 			intCtx := interpolation.NewContext()
@@ -3386,9 +3396,9 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_TableDriven(t *testing.T
 				wf,
 				step,
 				execCtx,
-				func(ctx context.Context, stepName string, intCtx *interpolation.Context) error {
+				func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 					callCount++
-					return nil
+					return "", nil
 				},
 				func(ec *workflow.ExecutionContext) *interpolation.Context {
 					return interpolation.NewContext()
@@ -3523,4 +3533,650 @@ func TestLoopExecutor_ResolveMaxIterations_TableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Component T001: StepExecutorFunc Type Signature Update (F048)
+// =============================================================================
+
+// =============================================================================
+// Component T001: StepExecutorFunc Type Signature Update
+// Feature: F048 - While Loop Transitions Support
+// =============================================================================
+
+// TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError verifies the
+// StepExecutorFunc type signature includes nextStep return value.
+// This is the foundational change required for F048 transition support.
+func TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError(t *testing.T) {
+	// Arrange: Create a step executor that returns nextStep
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// Return a transition to another step
+		return "target_step", nil
+	}
+
+	// Act: Execute the function
+	ctx := context.Background()
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
+
+	// Assert: Verify both return values
+	assert.NoError(t, err)
+	assert.Equal(t, "target_step", nextStep, "should return nextStep value")
+}
+
+// TestStepExecutorFunc_NoTransition_ReturnsEmptyString tests that when no
+// transition occurs, the executor returns empty string for nextStep.
+func TestStepExecutorFunc_NoTransition_ReturnsEmptyString(t *testing.T) {
+	// Arrange: Create executor with no transition
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// No transition - return empty nextStep
+		return "", nil
+	}
+
+	// Act
+	ctx := context.Background()
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "", nextStep, "should return empty string when no transition")
+}
+
+// TestStepExecutorFunc_ErrorWithoutTransition tests error handling when
+// step execution fails without a transition.
+func TestStepExecutorFunc_ErrorWithoutTransition(t *testing.T) {
+	// Arrange: Create executor that fails
+	expectedErr := errors.New("step execution failed")
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// Error case - return empty nextStep with error
+		return "", expectedErr
+	}
+
+	// Act
+	ctx := context.Background()
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, expectedErr, err)
+	assert.Equal(t, "", nextStep, "should return empty nextStep on error")
+}
+
+// TestStepExecutorFunc_ErrorWithTransition tests edge case where both
+// error and nextStep are returned (error takes precedence).
+func TestStepExecutorFunc_ErrorWithTransition(t *testing.T) {
+	// Arrange: Executor returns both error and nextStep
+	expectedErr := errors.New("step failed but has on_failure transition")
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// On-failure transition case
+		return "error_handler_step", expectedErr
+	}
+
+	// Act
+	ctx := context.Background()
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
+
+	// Assert: Both values should be returned
+	assert.Error(t, err)
+	assert.Equal(t, expectedErr, err)
+	assert.Equal(t, "error_handler_step", nextStep, "should return nextStep even on error")
+}
+
+// =============================================================================
+// ExecuteForEach Integration with New StepExecutorFunc Signature
+// =============================================================================
+
+// TestExecuteForEach_StepExecutorReturnsNextStep_CurrentlyIgnored verifies
+// that ExecuteForEach receives nextStep from stepExecutor but currently
+// ignores it (stub implementation). This test will FAIL in RED phase and
+// PASS after T003 implements transition logic.
+func TestExecuteForEach_StepExecutorReturnsNextStep_CurrentlyIgnored(t *testing.T) {
+	// Arrange
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-foreach-transition",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo 1"},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand, Command: "echo 2"},
+			"step3": {Name: "step3", Type: workflow.StepTypeCommand, Command: "echo 3"},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["a", "b"]`,
+			Body:          []string{"step1", "step2", "step3"},
+			MaxIterations: 100,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-foreach-transition")
+
+	// Create step executor that returns nextStep from step1 to step3 (skip step2)
+	executionOrder := []string{}
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		executionOrder = append(executionOrder, stepName)
+		// Step1 transitions to step3 (should skip step2)
+		if stepName == "step1" {
+			return "step3", nil
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Current behavior (stub): All steps execute sequentially, transition ignored
+	// Expected: ["step1", "step2", "step3", "step1", "step2", "step3"] for 2 items
+	// After T003: ["step1", "step3", "step1", "step3"] - step2 should be skipped
+
+	// For RED phase: This assertion will FAIL because stub ignores nextStep
+	t.Log("Current execution order:", executionOrder)
+	// assert.Equal(t, []string{"step1", "step2", "step3", "step1", "step2", "step3"},
+	// 	executionOrder,
+	// 	"Stub implementation executes all steps sequentially")
+
+	// GREEN phase (T005): After implementing transition logic
+	assert.Equal(t, []string{"step1", "step3", "step1", "step3"}, executionOrder,
+		"GREEN phase: step2 skipped due to step1 -> step3 transition")
+}
+
+// TestExecuteForEach_MultipleStepsReturnTransitions verifies behavior when
+// multiple steps in body return different nextStep values.
+func TestExecuteForEach_MultipleStepsReturnTransitions(t *testing.T) {
+	// Arrange
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-foreach-multi-transition",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo 1"},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand, Command: "echo 2"},
+			"step3": {Name: "step3", Type: workflow.StepTypeCommand, Command: "echo 3"},
+			"step4": {Name: "step4", Type: workflow.StepTypeCommand, Command: "echo 4"},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["item1"]`,
+			Body:          []string{"step1", "step2", "step3", "step4"},
+			MaxIterations: 100,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-foreach-multi-transition")
+
+	transitions := map[string]string{
+		"step1": "step3", // step1 -> step3 (skip step2)
+		"step3": "step4", // step3 -> step4 (no skip)
+	}
+
+	executionOrder := []string{}
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		executionOrder = append(executionOrder, stepName)
+		if nextStep, ok := transitions[stepName]; ok {
+			return nextStep, nil
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Current stub behavior: All steps execute
+	t.Log("Current execution order:", executionOrder)
+	// assert.Equal(t, []string{"step1", "step2", "step3", "step4"},
+	// 	executionOrder,
+	// 	"Stub executes all steps sequentially")
+
+	// GREEN phase (T005): After transition logic implemented
+	assert.Equal(t, []string{"step1", "step3", "step4"}, executionOrder,
+		"GREEN phase: step2 skipped due to step1 -> step3 transition")
+}
+
+// =============================================================================
+// ExecuteWhile Integration with New StepExecutorFunc Signature
+// =============================================================================
+
+// TestExecuteWhile_StepExecutorReturnsNextStep_CurrentlyIgnored verifies
+// that ExecuteWhile receives nextStep from stepExecutor but currently
+// ignores it. This is the primary use case from F048 spec.
+func TestExecuteWhile_StepExecutorReturnsNextStep_CurrentlyIgnored(t *testing.T) {
+	// Arrange: Recreate spec scenario
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	// Condition true for first iteration, false for second
+	evaluator.results["loop.index < 1"] = true
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-while-transition",
+		Steps: map[string]*workflow.Step{
+			"run_tests_green":     {Name: "run_tests_green", Type: workflow.StepTypeCommand},
+			"check_tests_passed":  {Name: "check_tests_passed", Type: workflow.StepTypeCommand},
+			"prepare_impl_prompt": {Name: "prepare_impl_prompt", Type: workflow.StepTypeCommand},
+			"implement_item":      {Name: "implement_item", Type: workflow.StepTypeCommand},
+			"run_fmt":             {Name: "run_fmt", Type: workflow.StepTypeCommand},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "green_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Condition:     "loop.index < 1",
+			Body:          []string{"run_tests_green", "check_tests_passed", "prepare_impl_prompt", "implement_item", "run_fmt"},
+			MaxIterations: 2,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-transition")
+
+	// Executor simulates: check_tests_passed returns transition to run_fmt (skip 2 steps)
+	executionOrder := []string{}
+	callCount := 0
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		executionOrder = append(executionOrder, stepName)
+		callCount++
+		// GREEN phase: After first iteration (3 steps), make condition false
+		// RED phase would be 5 steps
+		if callCount >= 3 {
+			evaluator.results["loop.index < 1"] = false
+		}
+		// check_tests_passed should transition to run_fmt (skip prepare_impl_prompt, implement_item)
+		if stepName == "check_tests_passed" {
+			return "run_fmt", nil
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Current stub behavior: All 5 steps execute despite transition
+	t.Log("Current execution order:", executionOrder)
+	// assert.Equal(t,
+	// 	[]string{"run_tests_green", "check_tests_passed", "prepare_impl_prompt", "implement_item", "run_fmt"},
+	// 	executionOrder,
+	// 	"Stub implementation ignores transition from check_tests_passed")
+
+	// GREEN phase (T005): After implementing transition logic
+	assert.Equal(t, []string{"run_tests_green", "check_tests_passed", "run_fmt"}, executionOrder,
+		"GREEN phase: prepare_impl_prompt and implement_item skipped due to transition")
+}
+
+// TestExecuteWhile_TransitionOutsideLoopBody verifies that when a step
+// returns nextStep pointing outside the loop body, the behavior is defined.
+// Current stub: ignores it. Expected after T003: breaks loop early.
+func TestExecuteWhile_TransitionOutsideLoopBody(t *testing.T) {
+	// Arrange
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	// Condition always true (would loop forever without transition)
+	evaluator.results["true"] = true
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-while-exit-transition",
+		Steps: map[string]*workflow.Step{
+			"step1":       {Name: "step1", Type: workflow.StepTypeCommand},
+			"step2":       {Name: "step2", Type: workflow.StepTypeCommand},
+			"step3":       {Name: "step3", Type: workflow.StepTypeCommand},
+			"exit_target": {Name: "exit_target", Type: workflow.StepTypeCommand},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Condition:     "true",
+			Body:          []string{"step1", "step2", "step3"},
+			MaxIterations: 10,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-exit-transition")
+
+	iterationCount := 0
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// step2 transitions to exit_target (outside loop body)
+		if stepName == "step2" {
+			return "exit_target", nil
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			iterationCount++
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// RED phase (stub behavior): Loops until max_iterations (10)
+	// assert.Equal(t, 10, result.TotalCount, "Stub ignores early exit transition")
+
+	// GREEN phase (T005+T006 implemented): Early exit logic works
+	assert.Equal(t, 1, result.TotalCount, "Should exit loop on first iteration when step2 transitions outside")
+}
+
+// TestExecuteWhile_ErrorPropagationWithNextStep verifies that errors are
+// properly propagated even when nextStep is returned (on_failure transition case).
+func TestExecuteWhile_ErrorPropagationWithNextStep(t *testing.T) {
+	// Arrange
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	evaluator.results["true"] = true
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-while-error-transition",
+		Steps: map[string]*workflow.Step{
+			"step1":         {Name: "step1", Type: workflow.StepTypeCommand},
+			"step2":         {Name: "step2", Type: workflow.StepTypeCommand},
+			"error_handler": {Name: "error_handler", Type: workflow.StepTypeCommand},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Condition:     "true",
+			Body:          []string{"step1", "step2"},
+			MaxIterations: 5,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-while-error-transition")
+
+	expectedErr := errors.New("step1 failed")
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// step1 fails with on_failure transition
+		if stepName == "step1" {
+			return "error_handler", expectedErr
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteWhile(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert: Error should be propagated, loop should stop
+	assert.Error(t, err)
+	assert.Equal(t, expectedErr, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, result.TotalCount, "Loop should stop on first error")
+}
+
+// =============================================================================
+// Edge Cases and Boundary Conditions
+// =============================================================================
+
+// TestStepExecutorFunc_ContextCancellation tests that context cancellation
+// is properly handled with the new signature.
+func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// Check context
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "next_step", nil
+	}
+
+	// Act
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+	assert.Equal(t, "", nextStep, "Should return empty nextStep on cancellation")
+}
+
+// TestStepExecutorFunc_NilInterpolationContext tests graceful handling
+// of nil interpolation context.
+func TestStepExecutorFunc_NilInterpolationContext(t *testing.T) {
+	// Arrange
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		// Verify nil is handled (executor should validate)
+		if intCtx == nil {
+			return "", errors.New("interpolation context is nil")
+		}
+		return "", nil
+	}
+
+	// Act
+	ctx := context.Background()
+	nextStep, err := stepExecutor(ctx, "test_step", nil)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+	assert.Equal(t, "", nextStep)
+}
+
+// TestStepExecutorFunc_EmptyStepName tests behavior with empty step name.
+func TestStepExecutorFunc_EmptyStepName(t *testing.T) {
+	// Arrange
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		if stepName == "" {
+			return "", errors.New("step name cannot be empty")
+		}
+		return "", nil
+	}
+
+	// Act
+	ctx := context.Background()
+	intCtx := interpolation.NewContext()
+	nextStep, err := stepExecutor(ctx, "", intCtx)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty")
+	assert.Equal(t, "", nextStep)
+}
+
+// TestExecuteForEach_StepExecutorReturnsNextStepToItself tests self-transition
+// (retry pattern) - should this continue or be treated specially?
+func TestExecuteForEach_StepExecutorReturnsNextStepToItself(t *testing.T) {
+	// Arrange
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-foreach-self-transition",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand},
+			"step2": {Name: "step2", Type: workflow.StepTypeCommand},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "loop_step",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["item1"]`,
+			Body:          []string{"step1", "step2"},
+			MaxIterations: 100,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-foreach-self-transition")
+
+	executionOrder := []string{}
+	var stepExecutor application.StepExecutorFunc = func(
+		ctx context.Context,
+		stepName string,
+		intCtx *interpolation.Context,
+	) (string, error) {
+		executionOrder = append(executionOrder, stepName)
+		// step1 transitions to itself (retry pattern)
+		if stepName == "step1" && len(executionOrder) == 1 {
+			return "step1", nil
+		}
+		return "", nil
+	}
+
+	// Act
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		stepExecutor,
+		func(ec *workflow.ExecutionContext) *interpolation.Context {
+			return interpolation.NewContext()
+		},
+	)
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Current behavior: Sequential execution ignores self-transition
+	t.Log("Current execution order:", executionOrder)
+	// assert.Equal(t, []string{"step1", "step2"}, executionOrder, "Stub ignores self-transition")
+
+	// GREEN phase (T005): Allow self-transition (step executes twice)
+	// Per T005 test expectations and transition logic
+	assert.Equal(t, []string{"step1", "step1", "step2"}, executionOrder,
+		"GREEN phase: step1 executes twice due to self-transition")
 }

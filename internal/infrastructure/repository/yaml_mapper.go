@@ -209,30 +209,40 @@ func mapLoopConfig(y yamlStep) *workflow.LoopConfig {
 
 	var maxIter int
 	var maxIterExpr string
+	var maxIterExplicitlySet bool
 	switch v := y.MaxIterations.(type) {
 	case int:
 		maxIter = v
+		// Zero is treated as "use default", so don't mark as explicitly set
+		if v != 0 {
+			maxIterExplicitlySet = true
+		}
 	case string:
 		// Dynamic expression - store for runtime resolution
-		maxIterExpr = v
+		// Empty string is treated as unset
+		if v != "" {
+			maxIterExpr = v
+			maxIterExplicitlySet = true
+		}
 	case nil:
 		// Not set - use default
 	default:
 		// Unexpected type - use default (validation will catch invalid types)
 	}
-	if maxIter == 0 && maxIterExpr == "" {
+	if maxIter == 0 && maxIterExpr == "" && !maxIterExplicitlySet {
 		maxIter = workflow.DefaultMaxIterations
 	}
 
 	return &workflow.LoopConfig{
-		Type:              loopType,
-		Items:             items,
-		Condition:         y.While,
-		Body:              y.Body,
-		MaxIterations:     maxIter,
-		MaxIterationsExpr: maxIterExpr,
-		BreakCondition:    y.BreakWhen,
-		OnComplete:        y.OnComplete,
+		Type:                       loopType,
+		Items:                      items,
+		Condition:                  y.While,
+		Body:                       y.Body,
+		MaxIterations:              maxIter,
+		MaxIterationsExpr:          maxIterExpr,
+		MaxIterationsExplicitlySet: maxIterExplicitlySet,
+		BreakCondition:             y.BreakWhen,
+		OnComplete:                 y.OnComplete,
 	}
 }
 

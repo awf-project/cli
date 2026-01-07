@@ -61,6 +61,18 @@ func (w *Workflow) Validate() error {
 		return errors.New("at least one terminal state is required")
 	}
 
+	// Build set of steps that are part of loop bodies
+	// F048: Loop body steps can have transitions to targets outside the workflow
+	// (will be validated at runtime by loop executor per ADR-005)
+	loopBodySteps := make(map[string]bool)
+	for _, step := range w.Steps {
+		if step.Loop != nil {
+			for _, bodyStepName := range step.Loop.Body {
+				loopBodySteps[bodyStepName] = true
+			}
+		}
+	}
+
 	// Validate each step
 	for name, step := range w.Steps {
 		if err := step.Validate(); err != nil {
@@ -78,12 +90,18 @@ func (w *Workflow) Validate() error {
 		}
 
 		// Validate Transitions targets exist
+		// F048: Skip validation for loop body steps (runtime validation per ADR-005)
+		isLoopBodyStep := loopBodySteps[name]
 		for i, tr := range step.Transitions {
 			if err := tr.Validate(); err != nil {
 				return fmt.Errorf("step '%s': transition %d: %w", name, i, err)
 			}
-			if _, ok := w.Steps[tr.Goto]; !ok {
-				return fmt.Errorf("step '%s': transition %d references unknown state '%s'", name, i, tr.Goto)
+			// F048: Loop body steps can transition to targets not in workflow
+			// (will be handled gracefully at runtime per ADR-005)
+			if !isLoopBodyStep {
+				if _, ok := w.Steps[tr.Goto]; !ok {
+					return fmt.Errorf("step '%s': transition %d references unknown state '%s'", name, i, tr.Goto)
+				}
 			}
 		}
 

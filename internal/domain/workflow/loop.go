@@ -25,14 +25,15 @@ const MaxAllowedIterations = 10000
 
 // LoopConfig holds configuration for loop execution.
 type LoopConfig struct {
-	Type              LoopType // for_each or while
-	Items             string   // template expression for items (for_each)
-	Condition         string   // expression to evaluate (while)
-	Body              []string // step names to execute each iteration
-	MaxIterations     int      // safety limit (default: 100, max: 10000)
-	MaxIterationsExpr string   // dynamic expression for max_iterations (e.g., "{{inputs.limit}}")
-	BreakCondition    string   // optional early exit expression
-	OnComplete        string   // next state after loop completes
+	Type                       LoopType // for_each or while
+	Items                      string   // template expression for items (for_each)
+	Condition                  string   // expression to evaluate (while)
+	Body                       []string // step names to execute each iteration
+	MaxIterations              int      // safety limit (default: 100, max: 10000)
+	MaxIterationsExpr          string   // dynamic expression for max_iterations (e.g., "{{inputs.limit}}")
+	MaxIterationsExplicitlySet bool     // true if max_iterations was explicitly set in YAML (even if zero)
+	BreakCondition             string   // optional early exit expression
+	OnComplete                 string   // next state after loop completes
 }
 
 // Validate checks if the loop configuration is valid.
@@ -98,7 +99,8 @@ func (r *IterationResult) Success() bool {
 type LoopResult struct {
 	Iterations  []IterationResult
 	TotalCount  int
-	BrokeAt     int // -1 if completed normally, index if break triggered
+	BrokeAt     int    // -1 if completed normally, index if break triggered
+	NextStep    string // F048 T007: Target step when loop exits early via transition
 	StartedAt   time.Time
 	CompletedAt time.Time
 }
