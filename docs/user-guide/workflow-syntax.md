@@ -103,6 +103,8 @@ my_step:
 
 Invoke an AI agent (Claude, Codex, Gemini, OpenCode) with a prompt template.
 
+### Basic Agent Step
+
 ```yaml
 analyze:
   type: agent
@@ -118,17 +120,59 @@ analyze:
   on_failure: error
 ```
 
+### Conversation Mode
+
+Enable multi-turn conversations with automatic context management:
+
+```yaml
+refine_code:
+  type: agent
+  provider: claude
+  mode: conversation
+  system_prompt: |
+    You are a code reviewer. Iterate until code is approved.
+    Say "APPROVED" when done.
+  initial_prompt: |
+    Review this code:
+    {{.inputs.code}}
+  options:
+    model: claude-sonnet-4-20250514
+    max_tokens: 4096
+  conversation:
+    max_turns: 10
+    max_context_tokens: 100000
+    strategy: sliding_window
+    stop_condition: "response contains 'APPROVED'"
+  on_success: deploy
+  on_failure: error
+```
+
 ### Agent Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `custom` |
-| `prompt` | string | Yes | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
+| `mode` | string | No | Set to `conversation` for multi-turn mode |
+| `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
+| `system_prompt` | string | No | System message (for conversation mode, preserved across turns) |
+| `initial_prompt` | string | No* | First user message (for conversation mode) |
+| `conversation` | object | No | Conversation configuration (required if mode=conversation) |
 | `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
 | `timeout` | int | No | Execution timeout in seconds (0 = no timeout) |
 | `on_success` | string | No | Next state on success |
 | `on_failure` | string | No | Next state on failure |
 | `retry` | object | No | Retry configuration (same as step retry) |
+
+\* Use `prompt` for single-turn mode, `initial_prompt` for conversation mode.
+
+### Conversation Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_turns` | int | 10 | Maximum conversation turns |
+| `max_context_tokens` | int | model limit | Token budget for conversation |
+| `strategy` | string | `sliding_window` | Context window strategy |
+| `stop_condition` | string | - | Expression to exit early |
 
 ### Available Providers
 
@@ -152,7 +196,22 @@ Agent responses are captured in the step state:
 
 ### Multi-Turn Conversations
 
-For multi-turn agent conversations, chain multiple agent steps with state passing:
+**Recommended**: Use conversation mode for iterative workflows:
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  mode: conversation
+  system_prompt: "You are a code reviewer."
+  initial_prompt: "Review: {{.inputs.code}}"
+  conversation:
+    max_turns: 10
+    stop_condition: "response contains 'APPROVED'"
+  on_success: done
+```
+
+**Legacy**: Chain multiple agent steps with state passing:
 
 ```yaml
 states:
@@ -177,6 +236,8 @@ states:
   done:
     type: terminal
 ```
+
+**See Also:** [Conversation Mode Guide](conversation-steps.md) for detailed examples and best practices.
 
 ### Custom Provider
 

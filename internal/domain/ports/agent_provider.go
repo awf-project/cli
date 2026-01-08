@@ -14,6 +14,11 @@ type AgentProvider interface {
 	// Returns AgentResult containing output, parsed response, token usage, and any errors.
 	Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
 
+	// ExecuteConversation invokes the agent with conversation history for multi-turn interactions.
+	// The state parameter contains the conversation history (turns) to send to the agent.
+	// Returns ConversationResult containing the updated conversation state, final output, and token usage.
+	ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+
 	// Name returns the provider identifier (e.g., "claude", "codex", "gemini").
 	Name() string
 

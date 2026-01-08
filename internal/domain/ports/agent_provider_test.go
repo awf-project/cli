@@ -19,10 +19,12 @@ import (
 
 // mockAgentProvider is a test implementation of AgentProvider interface
 type mockAgentProvider struct {
-	name          string
-	executeFunc   func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
-	validateFunc  func() error
-	executeCalled int
+	name                      string
+	executeFunc               func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
+	executeConversationFunc   func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	validateFunc              func() error
+	executeCalled             int
+	executeConversationCalled int
 }
 
 func newMockAgentProvider(name string) *mockAgentProvider {
@@ -34,6 +36,9 @@ func newMockAgentProvider(name string) *mockAgentProvider {
 			result.CompletedAt = time.Now()
 			return result, nil
 		},
+		executeConversationFunc: func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+			return nil, errors.New("not implemented")
+		},
 		validateFunc: func() error {
 			return nil
 		},
@@ -43,6 +48,11 @@ func newMockAgentProvider(name string) *mockAgentProvider {
 func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 	m.executeCalled++
 	return m.executeFunc(ctx, prompt, options)
+}
+
+func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	m.executeConversationCalled++
+	return m.executeConversationFunc(ctx, state, prompt, options)
 }
 
 func (m *mockAgentProvider) Name() string {
@@ -574,5 +584,688 @@ func TestAgentProvider_FullWorkflow(t *testing.T) {
 		if result.Provider != name {
 			t.Errorf("expected provider '%s', got '%s'", name, result.Provider)
 		}
+	}
+}
+
+// ============================================================================
+// AgentProvider.ExecuteConversation Tests - Feature F033
+// ============================================================================
+
+// Component: agent_provider_extension
+// Feature: F033
+
+// TestAgentProvider_ExecuteConversation_HappyPath tests normal conversation execution
+func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.Output = "Assistant response"
+		result.TokensInput = 100
+		result.TokensOutput = 50
+		result.TokensTotal = 150
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful assistant")
+	prompt := "What is Go?"
+	options := map[string]any{
+		"model":      "claude-sonnet-4",
+		"max_tokens": 4096,
+	}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Provider != "claude" {
+		t.Errorf("expected provider 'claude', got '%s'", result.Provider)
+	}
+	if result.Output != "Assistant response" {
+		t.Errorf("expected output 'Assistant response', got '%s'", result.Output)
+	}
+	if result.TokensInput != 100 {
+		t.Errorf("expected tokens_input 100, got %d", result.TokensInput)
+	}
+	if result.TokensOutput != 50 {
+		t.Errorf("expected tokens_output 50, got %d", result.TokensOutput)
+	}
+	if result.TokensTotal != 150 {
+		t.Errorf("expected tokens_total 150, got %d", result.TokensTotal)
+	}
+	if provider.executeConversationCalled != 1 {
+		t.Errorf("expected ExecuteConversation to be called once, got %d", provider.executeConversationCalled)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_WithConversationHistory tests execution with existing turns
+func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		result.Output = "Response based on history"
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful assistant")
+
+	// Add existing turns to conversation history
+	_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "What is Go?"))
+	_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Go is a programming language."))
+
+	prompt := "Tell me more about it"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.State == nil {
+		t.Error("expected state to be preserved, got nil")
+	}
+	if result.Output != "Response based on history" {
+		t.Errorf("expected contextual response, got '%s'", result.Output)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_WithOptions tests conversation with various options
+func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+	}{
+		{
+			name: "with model option",
+			options: map[string]any{
+				"model": "claude-opus-4",
+			},
+		},
+		{
+			name: "with max_tokens option",
+			options: map[string]any{
+				"max_tokens": 2048,
+			},
+		},
+		{
+			name: "with temperature option",
+			options: map[string]any{
+				"temperature": 0.7,
+			},
+		},
+		{
+			name: "with multiple options",
+			options: map[string]any{
+				"model":       "claude-sonnet-4",
+				"max_tokens":  4096,
+				"temperature": 0.5,
+			},
+		},
+		{
+			name:    "with empty options",
+			options: map[string]any{},
+		},
+		{
+			name:    "with nil options",
+			options: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			provider := newMockAgentProvider("claude")
+			var capturedOptions map[string]any
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				capturedOptions = options
+				result := workflow.NewConversationResult("claude")
+				result.Output = "Response"
+				result.CompletedAt = time.Now()
+				return result, nil
+			}
+
+			ctx := context.Background()
+			state := workflow.NewConversationState("System prompt")
+			prompt := "Test prompt"
+
+			// Act
+			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
+
+			// Assert
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected result, got nil")
+			}
+			// Verify options were passed through
+			if tt.options == nil && capturedOptions != nil {
+				t.Error("expected nil options, got non-nil")
+			}
+			if tt.options != nil && len(tt.options) != len(capturedOptions) {
+				t.Errorf("expected %d options, got %d", len(tt.options), len(capturedOptions))
+			}
+		})
+	}
+}
+
+// ============================================================================
+// AgentProvider.ExecuteConversation Tests - Edge Cases
+// ============================================================================
+
+// TestAgentProvider_ExecuteConversation_EmptyPrompt tests conversation with empty prompt
+func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		if prompt == "" {
+			return nil, errors.New("prompt cannot be empty")
+		}
+		result := workflow.NewConversationResult("claude")
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	prompt := ""
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected error for empty prompt")
+	}
+	if result != nil {
+		t.Error("expected nil result for empty prompt")
+	}
+	if err != nil && err.Error() != "prompt cannot be empty" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_NilState tests conversation with nil state
+func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		if state == nil {
+			return nil, errors.New("conversation state cannot be nil")
+		}
+		result := workflow.NewConversationResult("claude")
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	var state *workflow.ConversationState // nil
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected error for nil conversation state")
+	}
+	if result != nil {
+		t.Error("expected nil result for nil state")
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_EmptyState tests conversation with empty state (no turns)
+func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.Output = "First response"
+		result.State = state
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("") // Empty system prompt, no turns
+	prompt := "Hello"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Output != "First response" {
+		t.Errorf("expected output 'First response', got '%s'", result.Output)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_LargeConversationHistory tests with many turns
+func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		result.Output = "Response to turn 100"
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+
+	// Add 99 turns (simulating a long conversation)
+	for i := 0; i < 99; i++ {
+		if i%2 == 0 {
+			_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "Question"))
+		} else {
+			_ = state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Answer"))
+		}
+	}
+
+	prompt := "100th question"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.State == nil {
+		t.Error("expected state to be preserved")
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_LongPrompt tests with very long prompt
+func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.Output = "Response to long prompt"
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+
+	// Create a very long prompt (10KB)
+	longPrompt := ""
+	for i := 0; i < 1000; i++ {
+		longPrompt += "This is a very long prompt. "
+	}
+
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, longPrompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+}
+
+// ============================================================================
+// AgentProvider.ExecuteConversation Tests - Error Handling
+// ============================================================================
+
+// TestAgentProvider_ExecuteConversation_ProviderError tests error from provider
+func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	expectedError := errors.New("provider execution failed")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		return nil, expectedError
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected error from provider")
+	}
+	if result != nil {
+		t.Error("expected nil result on error")
+	}
+	if err != expectedError {
+		t.Errorf("expected error '%v', got '%v'", expectedError, err)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_ContextCanceled tests canceled context
+func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		// Check for context cancellation
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		result := workflow.NewConversationResult("claude")
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected error for canceled context")
+	}
+	if result != nil {
+		t.Error("expected nil result for canceled context")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled error, got %v", err)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_ContextTimeout tests timeout
+func TestAgentProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		// Simulate work that respects context
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+			result := workflow.NewConversationResult("claude")
+			result.CompletedAt = time.Now()
+			return result, nil
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+	if result != nil {
+		t.Error("expected nil result on timeout")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded error, got %v", err)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_InvalidOptions tests with invalid options
+func TestAgentProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     map[string]any
+		expectedErr string
+	}{
+		{
+			name: "negative max_tokens",
+			options: map[string]any{
+				"max_tokens": -100,
+			},
+			expectedErr: "max_tokens must be non-negative",
+		},
+		{
+			name: "temperature out of range",
+			options: map[string]any{
+				"temperature": 2.0,
+			},
+			expectedErr: "temperature must be between 0 and 1",
+		},
+		{
+			name: "invalid model",
+			options: map[string]any{
+				"model": "",
+			},
+			expectedErr: "model cannot be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			provider := newMockAgentProvider("claude")
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				// Validate options
+				if maxTokens, ok := options["max_tokens"].(int); ok && maxTokens < 0 {
+					return nil, errors.New("max_tokens must be non-negative")
+				}
+				if temp, ok := options["temperature"].(float64); ok && (temp < 0 || temp > 1) {
+					return nil, errors.New("temperature must be between 0 and 1")
+				}
+				if model, ok := options["model"].(string); ok && model == "" {
+					return nil, errors.New("model cannot be empty")
+				}
+				result := workflow.NewConversationResult("claude")
+				result.CompletedAt = time.Now()
+				return result, nil
+			}
+
+			ctx := context.Background()
+			state := workflow.NewConversationState("System prompt")
+			prompt := "What is Go?"
+
+			// Act
+			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
+
+			// Assert
+			if err == nil {
+				t.Errorf("expected error for %s", tt.name)
+			}
+			if result != nil {
+				t.Error("expected nil result on validation error")
+			}
+			if err != nil && err.Error() != tt.expectedErr {
+				t.Errorf("expected error '%s', got '%v'", tt.expectedErr, err)
+			}
+		})
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_MultipleProviders tests different providers
+func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
+	providers := []string{"claude", "codex", "gemini", "opencode"}
+
+	for _, name := range providers {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			provider := newMockAgentProvider(name)
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				result := workflow.NewConversationResult(name)
+				result.Output = "Response from " + name
+				result.CompletedAt = time.Now()
+				return result, nil
+			}
+
+			ctx := context.Background()
+			state := workflow.NewConversationState("System prompt")
+			prompt := "Test"
+			options := map[string]any{}
+
+			// Act
+			result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+			// Assert
+			if err != nil {
+				t.Errorf("unexpected error for %s: %v", name, err)
+			}
+			if result == nil {
+				t.Fatalf("expected result for %s, got nil", name)
+			}
+			if result.Provider != name {
+				t.Errorf("expected provider '%s', got '%s'", name, result.Provider)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Integration Tests - ExecuteConversation with Registry
+// ============================================================================
+
+// TestAgentProvider_ExecuteConversation_WithRegistry tests conversation through registry
+func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
+	// Arrange
+	registry := newMockAgentRegistry()
+
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.Output = "Response"
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	registry.Register(provider)
+
+	// Act
+	retrieved, err := registry.Get("claude")
+	if err != nil {
+		t.Fatalf("failed to get provider: %v", err)
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	result, err := retrieved.ExecuteConversation(ctx, state, "Test", nil)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Provider != "claude" {
+		t.Errorf("expected provider 'claude', got '%s'", result.Provider)
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_TokenCounting tests token usage tracking
+func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
+	// Arrange
+	provider := newMockAgentProvider("claude")
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.Output = "Response"
+		result.TokensInput = 250
+		result.TokensOutput = 100
+		result.TokensTotal = 350
+		result.TokensEstimated = false
+		result.CompletedAt = time.Now()
+		return result, nil
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.TokensInput != 250 {
+		t.Errorf("expected tokens_input 250, got %d", result.TokensInput)
+	}
+	if result.TokensOutput != 100 {
+		t.Errorf("expected tokens_output 100, got %d", result.TokensOutput)
+	}
+	if result.TokensTotal != 350 {
+		t.Errorf("expected tokens_total 350, got %d", result.TokensTotal)
+	}
+	if result.TokensEstimated {
+		t.Error("expected TokensEstimated to be false")
+	}
+}
+
+// TestAgentProvider_ExecuteConversation_NotImplementedError tests stub behavior
+func TestAgentProvider_ExecuteConversation_NotImplementedError(t *testing.T) {
+	// Arrange - Use default stub that returns "not implemented"
+	provider := newMockAgentProvider("claude")
+	// Don't override executeConversationFunc - use default stub
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is Go?"
+	options := map[string]any{}
+
+	// Act
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	// Assert
+	if err == nil {
+		t.Error("expected 'not implemented' error from stub")
+	}
+	if result != nil {
+		t.Error("expected nil result from stub")
+	}
+	if err != nil && err.Error() != "not implemented" {
+		t.Errorf("expected 'not implemented' error, got '%v'", err)
+	}
+	if provider.executeConversationCalled != 1 {
+		t.Errorf("expected method to be called once, got %d", provider.executeConversationCalled)
 	}
 }

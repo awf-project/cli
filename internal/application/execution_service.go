@@ -33,8 +33,9 @@ type ExecutionService struct {
 	stderrWriter      io.Writer
 	historySvc        *HistoryService
 	templateSvc       *TemplateService
-	operationProvider ports.OperationProvider // F021: plugin operations
+	operationProvider ports.OperationProvider
 	agentRegistry     *agents.AgentRegistry
+	conversationMgr   *ConversationManager // F033: Multi-turn conversation orchestration
 }
 
 // ExpressionEvaluator evaluates conditional expressions.
@@ -63,6 +64,12 @@ func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider
 // When set, agent-type steps can execute AI provider operations.
 func (s *ExecutionService) SetAgentRegistry(registry *agents.AgentRegistry) {
 	s.agentRegistry = registry
+}
+
+// SetConversationManager configures the conversation manager for F033 multi-turn conversations.
+// When set, agent-type steps with mode: conversation can execute managed conversations.
+func (s *ExecutionService) SetConversationManager(mgr *ConversationManager) {
+	s.conversationMgr = mgr
 }
 
 // NewExecutionService creates a new execution service.
@@ -1505,6 +1512,11 @@ func (s *ExecutionService) executeAgentStep(
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
+	// F033: Route to conversation execution if mode is "conversation"
+	if step.Agent.Mode == "conversation" {
+		return s.executeConversationStep(stepCtx, step, execCtx)
+	}
+
 	// Resolve prompt via interpolation
 	resolvedPrompt, err := s.resolver.Resolve(step.Agent.Prompt, intCtx)
 	if err != nil {
@@ -1619,6 +1631,31 @@ func (s *ExecutionService) executeAgentStep(
 
 	// Resolve next step using transitions or OnSuccess
 	return s.resolveNextStep(step, intCtx, true)
+}
+
+// executeConversationStep orchestrates a multi-turn agent conversation following F033 spec.
+// It delegates to ConversationManager which handles:
+// - Turn iteration with conversation history
+// - Context window management (token counting, truncation strategies)
+// - Stop condition evaluation (expression-based or max limits)
+// - Conversation state persistence in step state
+//
+// Flow:
+//  1. Validate conversation manager is configured
+//  2. Extract conversation config from step.Agent.Conversation
+//  3. Delegate to ConversationManager.ExecuteConversation
+//  4. Map ConversationResult to StepState
+//  5. Execute hooks and resolve next step
+//
+// Stub: Returns error until ConversationManager implementation is complete.
+func (s *ExecutionService) executeConversationStep(
+	ctx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	// F033: Component 8/14 - Stub implementation
+	// This method will be implemented after ConversationManager tests pass (GREEN phase)
+	return "", errors.New("executeConversationStep: not implemented")
 }
 
 // resolveOperationInputs resolves all string values in operation inputs via interpolation.

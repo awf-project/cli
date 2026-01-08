@@ -52,6 +52,10 @@ func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options 
 	}, nil
 }
 
+func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockAgentProvider) Name() string {
 	return m.name
 }

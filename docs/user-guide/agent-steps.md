@@ -202,7 +202,11 @@ process_response:
 
 ## Multi-Turn Conversations
 
-For conversational workflows, chain multiple agent steps with state passing:
+There are two approaches for multi-turn conversations:
+
+### Chaining Steps (Manual State Passing)
+
+For simple multi-turn workflows, chain agent steps with state passing:
 
 ```yaml
 name: code-review-conversation
@@ -247,6 +251,34 @@ states:
 ```
 
 Each step can reference previous agent outputs and build on the conversation without maintaining session state.
+
+### Conversation Mode (Built-In Multi-Turn)
+
+For iterative refinement within a single step, use **conversation mode** with automatic context window management:
+
+```yaml
+refine_code:
+  type: agent
+  provider: claude
+  mode: conversation
+  system_prompt: "You are a code reviewer. Iterate until code is approved."
+  initial_prompt: |
+    Review this code:
+    {{.inputs.code}}
+  conversation:
+    max_turns: 10
+    max_context_tokens: 100000
+    stop_condition: "response contains 'APPROVED'"
+  on_success: done
+```
+
+**Key differences:**
+- **Automatic turn management** — No need to manually chain steps
+- **Context window handling** — Automatically truncates old turns when token limit approached
+- **Stop conditions** — Exit conversation early when specific condition met
+- **Single step** — Simpler workflows for iterative refinement
+
+See [Conversation Mode Guide](conversation-steps.md) for detailed documentation, examples, and best practices.
 
 ## Error Handling
 

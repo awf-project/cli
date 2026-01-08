@@ -1,9 +1,13 @@
+//go:build integration
+
 package agents
 
 import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/vanoix/awf/internal/domain/workflow"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -199,4 +203,283 @@ func TestCodexProvider_Execute_MultilinePrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.NotEmpty(t, result.Output)
+}
+
+// Component: provider_conversation_support
+// Feature: F033
+
+func TestCodexProvider_ExecuteConversation_HappyPath(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful coding assistant.")
+	prompt := "Explain what a for loop is."
+	options := map[string]any{
+		"model": "gpt-4",
+	}
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "codex", result.Provider)
+	assert.NotEmpty(t, result.Output)
+	assert.NotNil(t, result.State)
+	assert.False(t, result.StartedAt.IsZero())
+	assert.False(t, result.CompletedAt.IsZero())
+	assert.True(t, result.CompletedAt.After(result.StartedAt))
+}
+
+func TestCodexProvider_ExecuteConversation_EmptyState(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := &workflow.ConversationState{}
+	prompt := "Hello"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotNil(t, result.State)
+}
+
+func TestCodexProvider_ExecuteConversation_NilState(t *testing.T) {
+	provider := NewCodexProvider()
+
+	ctx := context.Background()
+	prompt := "Hello"
+
+	result, err := provider.ExecuteConversation(ctx, nil, prompt, nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "state")
+}
+
+func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
+	provider := NewCodexProvider()
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+
+	result, err := provider.ExecuteConversation(ctx, state, "", nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "prompt")
+}
+
+func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful coding assistant.")
+
+	// Add previous turns to conversation history
+	state.Turns = []workflow.Turn{
+		*workflow.NewTurn(workflow.TurnRoleSystem, "You are a helpful coding assistant."),
+		*workflow.NewTurn(workflow.TurnRoleUser, "What is recursion?"),
+		*workflow.NewTurn(workflow.TurnRoleAssistant, "Recursion is when a function calls itself."),
+	}
+	state.TotalTurns = 3
+	state.TotalTokens = 100
+
+	prompt := "Give me an example in Python"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Output)
+	assert.NotNil(t, result.State)
+	assert.GreaterOrEqual(t, result.State.TotalTurns, 3)
+}
+
+func TestCodexProvider_ExecuteConversation_CodeGeneration(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a code generator.")
+	prompt := "Write a function to calculate factorial in Go"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Output)
+	assert.Contains(t, result.Output, "func", "should contain Go function")
+}
+
+func TestCodexProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	state := workflow.NewConversationState("System prompt")
+	prompt := "What is a variable?"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestCodexProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
+	provider := NewCodexProvider()
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("System prompt")
+	prompt := "Hello"
+
+	tests := []struct {
+		name    string
+		options map[string]any
+		errMsg  string
+	}{
+		{
+			name: "invalid temperature type",
+			options: map[string]any{
+				"temperature": "invalid",
+			},
+			errMsg: "temperature",
+		},
+		{
+			name: "negative temperature",
+			options: map[string]any{
+				"temperature": -0.5,
+			},
+			errMsg: "temperature",
+		},
+		{
+			name: "temperature too high",
+			options: map[string]any{
+				"temperature": 2.5,
+			},
+			errMsg: "temperature",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
+
+			assert.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
+}
+
+func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful coding assistant.")
+	prompt := "Explain variables"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Greater(t, result.TokensTotal, 0, "should have token count")
+	assert.Equal(t, result.TokensInput+result.TokensOutput, result.TokensTotal)
+	assert.True(t, result.TokensEstimated, "should be estimated for CLI provider")
+}
+
+func TestCodexProvider_ExecuteConversation_LargeHistory(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a helpful coding assistant.")
+
+	// Add many turns to test large conversation history
+	for i := 0; i < 15; i++ {
+		state.Turns = append(state.Turns,
+			*workflow.NewTurn(workflow.TurnRoleUser, "Question about topic "+string(rune(i+'A'))),
+			*workflow.NewTurn(workflow.TurnRoleAssistant, "Answer about topic "+string(rune(i+'A'))),
+		)
+	}
+	state.TotalTurns = 30
+	state.TotalTokens = 3000
+
+	prompt := "Summarize everything"
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestCodexProvider_ExecuteConversation_MultilineCode(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	state := workflow.NewConversationState("You are a code reviewer.")
+	prompt := `Review this Go code:
+func fibonacci(n int) int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n-1) + fibonacci(n-2)
+}`
+
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
+	provider := NewCodexProvider()
+	if err := provider.Validate(); err != nil {
+		t.Skip("Codex CLI not installed, skipping")
+	}
+
+	ctx := context.Background()
+	initialState := workflow.NewConversationState("You are a helpful coding assistant.")
+	initialState.Turns = []workflow.Turn{
+		*workflow.NewTurn(workflow.TurnRoleSystem, "You are a helpful coding assistant."),
+	}
+	initialState.TotalTurns = 1
+	initialState.TotalTokens = 50
+
+	prompt := "Hello"
+
+	result, err := provider.ExecuteConversation(ctx, initialState, prompt, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.State)
+
+	// State should have additional turns
+	assert.GreaterOrEqual(t, result.State.TotalTurns, initialState.TotalTurns)
+	assert.GreaterOrEqual(t, result.State.TotalTokens, initialState.TotalTokens)
 }
