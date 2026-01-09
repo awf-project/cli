@@ -14,7 +14,6 @@
   ],
   "schedule": ["before 3am on sunday"],
   "automerge": true,
-  "autoMergeType": "pr",
-  "prConcurrentLimit": 3,
-  "ignoreDeps": []
+  "automergeType": "pr",
+  "prConcurrentLimit": 3
 }
