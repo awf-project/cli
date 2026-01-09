@@ -1,5 +1,8 @@
 # Feature: F033
-# Context window management with different strategies
+# Context window management testing
+#
+# NOTE: Only `sliding_window` strategy is currently implemented.
+# Strategies `summarize` and `truncate_middle` are NOT YET IMPLEMENTED.
 name: conversation-window
 version: "1.0.0"
 
@@ -12,49 +15,40 @@ inputs:
 states:
   initial: sliding_window_test
 
+  # Test: sliding_window strategy (IMPLEMENTED)
+  # When max_context_tokens is reached, oldest turns are dropped
   sliding_window_test:
     type: agent
     provider: claude
     mode: conversation
     system_prompt: "You are a helpful assistant. Engage in detailed conversation."
-    initial_prompt: "Let's discuss: {{inputs.task}}"
+    prompt: "Let's discuss: {{.inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 1000
     conversation:
-      max_turns: 20
+      max_turns: 10
       max_context_tokens: 10000
       strategy: sliding_window
+      stop_condition: "inputs.turn_count >= 3"
     timeout: 120
-    on_success: summarize_test
+    on_success: small_window_test
     on_failure: error
 
-  summarize_test:
+  # Test: Very small context window to trigger truncation
+  small_window_test:
     type: agent
-    provider: gemini
+    provider: claude
     mode: conversation
-    system_prompt: "You are a concise summarizer."
-    initial_prompt: "Summarize previous discussion on {{inputs.task}}"
+    system_prompt: "Be concise."
+    prompt: "Brief summary of: {{.inputs.task}}"
     options:
-      model: gemini-pro
+      model: claude-sonnet-4-20250514
     conversation:
       max_turns: 5
-      max_context_tokens: 50000
-      strategy: summarize
-    timeout: 60
-    on_success: truncate_middle_test
-    on_failure: error
-
-  truncate_middle_test:
-    type: agent
-    provider: codex
-    mode: conversation
-    system_prompt: "You are a technical expert."
-    initial_prompt: "Final analysis of {{inputs.task}}"
-    conversation:
-      max_turns: 10
-      max_context_tokens: 20000
-      strategy: truncate_middle
+      max_context_tokens: 2000  # Small window to force truncation
+      strategy: sliding_window
+      stop_condition: "inputs.turn_count >= 2"
     timeout: 60
     on_success: done
     on_failure: error

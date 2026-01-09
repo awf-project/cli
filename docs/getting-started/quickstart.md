@@ -15,10 +15,7 @@ This creates the following structure:
 .awf/
 ├── workflows/
 │   └── example.yaml   # Sample workflow
-├── templates/         # Reusable workflow templates
-└── storage/
-    ├── states/        # State persistence
-    └── logs/          # Log files
+└── prompts/           # Prompt templates
 ```
 
 ## 2. Run the Example Workflow
@@ -130,6 +127,18 @@ awf run my-workflow --input prompt=@prompts/system.md
 ```
 
 The `@prompts/` prefix loads the file content and passes it as the input value.
+
+## Runtime Data Storage
+
+AWF stores runtime data following the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/):
+
+| Data | Default Location |
+|------|------------------|
+| States | `~/.local/share/awf/states/` |
+| History | `~/.local/share/awf/history.db` |
+| Plugins | `~/.local/share/awf/plugins/` |
+
+These paths can be customized via `XDG_DATA_HOME` environment variable.
 
 ## Common Flags
 

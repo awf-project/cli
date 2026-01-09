@@ -1,5 +1,8 @@
 # Feature: F033
 # Error handling in conversation mode with hooks and retry
+#
+# NOTE: `on_error` mapping is NOT YET IMPLEMENTED.
+# Only on_success and on_failure transitions are supported.
 name: conversation-error
 version: "1.0.0"
 
@@ -12,20 +15,21 @@ inputs:
 states:
   initial: conversation_with_retry
 
+  # Test: Conversation with retry on failure
   conversation_with_retry:
     type: agent
     provider: claude
     mode: conversation
-    system_prompt: "You are a reliable assistant. Complete tasks thoroughly."
-    initial_prompt: "Execute: {{inputs.task}}"
+    system_prompt: "You are a reliable assistant. Say SUCCESS when task is complete."
+    prompt: "Execute: {{.inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 1500
     conversation:
       max_turns: 5
       max_context_tokens: 40000
       strategy: sliding_window
-      stop_condition: "response contains 'SUCCESS'"
+      stop_condition: "inputs.response contains 'SUCCESS'"
     timeout: 45
     retry:
       max_attempts: 3
@@ -37,54 +41,23 @@ states:
       post:
         - command: echo "Conversation completed"
       error:
-        - command: echo "Conversation failed: {{error.message}}"
-        - log: "Error occurred in conversation step"
-    on_success: conversation_with_error_transition
+        - command: echo "Conversation failed"
+    on_success: conversation_chained
     on_failure: handle_failure
 
-  conversation_with_error_transition:
-    type: agent
-    provider: gemini
-    mode: conversation
-    system_prompt: "Process with caution."
-    initial_prompt: "Continue from: {{states.conversation_with_retry.output}}"
-    options:
-      model: gemini-pro
-    conversation:
-      max_turns: 3
-      strategy: sliding_window
-    timeout: 30
-    on_success: done
-    on_failure: handle_failure
-    on_error:
-      provider_timeout: timeout_recovery
-      invalid_response: response_recovery
-
-  timeout_recovery:
-    type: agent
-    provider: codex
-    mode: conversation
-    system_prompt: "Provide quick response."
-    initial_prompt: "Recover from timeout for: {{inputs.task}}"
-    conversation:
-      max_turns: 2
-      strategy: sliding_window
-    timeout: 20
-    on_success: done
-    on_failure: handle_failure
-
-  response_recovery:
+  # Test: Chained conversation using previous output
+  conversation_chained:
     type: agent
     provider: claude
     mode: conversation
-    system_prompt: "Handle invalid responses gracefully."
-    initial_prompt: "Retry with: {{inputs.task}}"
+    system_prompt: "Process carefully."
+    prompt: "Continue from: {{.states.conversation_with_retry.Output}}"
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
     conversation:
       max_turns: 3
       strategy: sliding_window
-      stop_condition: "turn_count >= 2"
+      stop_condition: "inputs.turn_count >= 2"
     timeout: 30
     on_success: done
     on_failure: handle_failure
@@ -93,7 +66,6 @@ states:
     type: step
     command: |
       echo "Workflow failed at conversation step"
-      echo "Error details: {{error.message}}"
       exit 1
     on_success: error
     on_failure: error

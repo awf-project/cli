@@ -1,5 +1,9 @@
 # Feature: F033
-# Multi-turn conversation with conversation continuation across steps
+# Multi-turn conversation demonstration
+#
+# NOTE: This fixture tests basic multi-turn execution.
+# The `continue_from` feature is NOT YET IMPLEMENTED - it's documented for future use.
+# Currently each conversation step starts fresh without inheriting history.
 name: conversation-multiturn
 version: "1.0.0"
 
@@ -18,10 +22,10 @@ states:
     mode: conversation
     system_prompt: |
       You are a helpful assistant. Provide clear responses.
-    initial_prompt: |
-      {{inputs.initial_request}}
+    prompt: |
+      {{.inputs.initial_request}}
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 2000
     conversation:
       max_turns: 3
@@ -31,16 +35,20 @@ states:
     on_success: second_turn
     on_failure: error
 
+  # NOTE: continue_from is NOT IMPLEMENTED yet
+  # This step currently starts a new conversation, not continuing from first_turn
   second_turn:
     type: agent
     provider: claude
     mode: conversation
-    continue_from: first_turn
+    # continue_from: first_turn  # NOT IMPLEMENTED - commented out
+    system_prompt: |
+      You are a helpful assistant. Continue the conversation.
     prompt: |
-      Can you elaborate on that response?
+      Can you elaborate on your previous response?
     conversation:
       max_turns: 2
-      stop_condition: "turn_count >= 5"
+      stop_condition: "inputs.turn_count >= 2"
     timeout: 60
     on_success: done
     on_failure: error

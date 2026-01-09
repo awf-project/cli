@@ -1,5 +1,8 @@
 # Feature: F033
 # Parallel conversation steps with multiple providers
+#
+# NOTE: Each parallel branch runs an independent conversation.
+# Conversation history is NOT shared between branches.
 name: conversation-parallel
 version: "1.0.0"
 
@@ -22,51 +25,37 @@ states:
             type: agent
             provider: claude
             mode: conversation
-            system_prompt: "You are a research assistant specializing in technical analysis."
-            initial_prompt: "Research: {{inputs.task}}"
+            system_prompt: "You are a research assistant. Say RESEARCH COMPLETE when done."
+            prompt: "Research: {{.inputs.task}}"
             options:
-              model: claude-haiku-4-5
+              model: claude-sonnet-4-20250514
               max_tokens: 2000
             conversation:
               max_turns: 5
               max_context_tokens: 60000
               strategy: sliding_window
-              stop_condition: "response contains 'RESEARCH COMPLETE'"
+              stop_condition: "inputs.response contains 'RESEARCH COMPLETE'"
             timeout: 90
             on_success: done
 
-      - name: gemini_research
+      - name: analysis_branch
         steps:
-          - name: gemini_convo
+          - name: analysis_convo
             type: agent
-            provider: gemini
+            provider: claude
             mode: conversation
-            system_prompt: "You are a research assistant focusing on practical applications."
-            initial_prompt: "Investigate: {{inputs.task}}"
+            system_prompt: "You are an analyst. Provide detailed analysis."
+            prompt: "Analyze: {{.inputs.task}}"
             options:
-              model: gemini-pro
+              model: claude-sonnet-4-20250514
             conversation:
               max_turns: 5
               max_context_tokens: 50000
               strategy: sliding_window
-              stop_condition: "turn_count >= 4"
+              stop_condition: "inputs.turn_count >= 3"
             timeout: 90
             on_success: done
 
-      - name: codex_research
-        steps:
-          - name: codex_convo
-            type: agent
-            provider: codex
-            mode: conversation
-            system_prompt: "You are a research assistant emphasizing code examples."
-            initial_prompt: "Analyze: {{inputs.task}}"
-            conversation:
-              max_turns: 6
-              strategy: sliding_window
-              stop_condition: "response contains 'ANALYSIS DONE'"
-            timeout: 90
-            on_success: done
     on_success: synthesize
     on_failure: error
 
@@ -74,22 +63,20 @@ states:
     type: agent
     provider: claude
     mode: conversation
-    system_prompt: "You are a synthesis expert. Combine insights from multiple sources."
-    initial_prompt: |
+    system_prompt: "You are a synthesis expert. Say SYNTHESIS COMPLETE when done."
+    prompt: |
       Synthesize these research findings:
 
-      Claude findings: {{states.parallel_conversations.branches.claude_research.steps.claude_convo.output}}
+      Research: {{.states.parallel_conversations.branches.claude_research.steps.claude_convo.output}}
 
-      Gemini findings: {{states.parallel_conversations.branches.gemini_research.steps.gemini_convo.output}}
-
-      Codex findings: {{states.parallel_conversations.branches.codex_research.steps.codex_convo.output}}
+      Analysis: {{.states.parallel_conversations.branches.analysis_branch.steps.analysis_convo.output}}
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 3000
     conversation:
       max_turns: 3
       strategy: sliding_window
-      stop_condition: "response contains 'SYNTHESIS COMPLETE'"
+      stop_condition: "inputs.response contains 'SYNTHESIS COMPLETE'"
     timeout: 60
     on_success: done
     on_failure: error

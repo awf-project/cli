@@ -12,14 +12,15 @@ inputs:
 states:
   initial: single_turn
 
+  # Test: Single turn conversation
   single_turn:
     type: agent
     provider: claude
     mode: conversation
     system_prompt: "Answer briefly."
-    initial_prompt: "{{inputs.task}}"
+    prompt: "{{.inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 500
     conversation:
       max_turns: 1
@@ -28,49 +29,54 @@ states:
     on_success: zero_max_turns
     on_failure: error
 
+  # Test: Zero max_turns uses default (10)
   zero_max_turns:
     type: agent
-    provider: gemini
+    provider: claude
     mode: conversation
     system_prompt: "Provide insights."
-    initial_prompt: "Elaborate on: {{inputs.task}}"
+    prompt: "Elaborate on: {{.inputs.task}}"
     options:
-      model: gemini-pro
+      model: claude-sonnet-4-20250514
     conversation:
-      max_turns: 0  # Should use default or unlimited
+      max_turns: 0  # Should use default (10)
       strategy: sliding_window
-      stop_condition: "turn_count >= 2"
+      stop_condition: "inputs.turn_count >= 2"
     timeout: 45
     on_success: high_turn_limit
     on_failure: error
 
+  # Test: High turn limit with stop condition
   high_turn_limit:
     type: agent
-    provider: codex
+    provider: claude
     mode: conversation
-    system_prompt: "Discuss thoroughly."
-    initial_prompt: "Deep dive: {{inputs.task}}"
+    system_prompt: "Discuss thoroughly. Say COMPREHENSIVE when done."
+    prompt: "Deep dive: {{.inputs.task}}"
+    options:
+      model: claude-sonnet-4-20250514
     conversation:
       max_turns: 100
-      max_context_tokens: 1000000
+      max_context_tokens: 100000
       strategy: sliding_window
-      stop_condition: "response contains 'COMPREHENSIVE'"
+      stop_condition: "inputs.response contains 'COMPREHENSIVE'"
     timeout: 180
     on_success: no_max_turns_specified
     on_failure: error
 
+  # Test: No max_turns specified uses default (10)
   no_max_turns_specified:
     type: agent
     provider: claude
     mode: conversation
     system_prompt: "Continue until satisfied."
-    initial_prompt: "Final thoughts: {{inputs.task}}"
+    prompt: "Final thoughts: {{.inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
     conversation:
-      # max_turns omitted - should use default behavior
+      # max_turns omitted - uses default (10)
       strategy: sliding_window
-      stop_condition: "turn_count >= 3"
+      stop_condition: "inputs.turn_count >= 3"
     timeout: 60
     on_success: done
     on_failure: error

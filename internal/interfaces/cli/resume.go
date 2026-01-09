@@ -15,6 +15,7 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/store"
+	"github.com/vanoix/awf/internal/infrastructure/tokenizer"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -215,6 +216,11 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+
+	// Setup conversation manager for F033 multi-turn agent conversations
+	tok := tokenizer.NewApproximationTokenizer()
+	convMgr := application.NewConversationManager(logger, exprEvaluator, resolver, tok, agentRegistry)
+	execSvc.SetConversationManager(convMgr)
 
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)

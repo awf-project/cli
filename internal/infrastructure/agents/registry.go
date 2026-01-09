@@ -61,6 +61,14 @@ func (r *AgentRegistry) List() []string {
 	return names
 }
 
+// Has checks if a provider with the given name is registered.
+func (r *AgentRegistry) Has(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, exists := r.providers[name]
+	return exists
+}
+
 // RegisterDefaults registers all default providers.
 // It continues registering even if individual providers fail,
 // collecting all errors and returning them aggregated.

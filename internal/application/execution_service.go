@@ -1646,16 +1646,125 @@ func (s *ExecutionService) executeAgentStep(
 //  3. Delegate to ConversationManager.ExecuteConversation
 //  4. Map ConversationResult to StepState
 //  5. Execute hooks and resolve next step
-//
-// Stub: Returns error until ConversationManager implementation is complete.
 func (s *ExecutionService) executeConversationStep(
 	ctx context.Context,
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
-	// F033: Component 8/14 - Stub implementation
-	// This method will be implemented after ConversationManager tests pass (GREEN phase)
-	return "", errors.New("executeConversationStep: not implemented")
+	startTime := time.Now()
+
+	// 1. Validate conversation manager is configured
+	if s.conversationMgr == nil {
+		state := workflow.StepState{
+			Name:        step.Name,
+			StartedAt:   startTime,
+			CompletedAt: time.Now(),
+			Status:      workflow.StatusFailed,
+			Error:       "conversation manager not configured",
+			Attempt:     1,
+		}
+		execCtx.SetStepState(step.Name, state)
+		return "", fmt.Errorf("step %s: conversation manager not configured", step.Name)
+	}
+
+	// 2. Get conversation config (use empty defaults if not set)
+	config := step.Agent.Conversation
+	if config == nil {
+		config = &workflow.ConversationConfig{}
+	}
+
+	// 3. Execute conversation via ConversationManager
+	s.logger.Debug("executing conversation step",
+		"step", step.Name,
+		"provider", step.Agent.Provider,
+		"max_turns", config.GetMaxTurns())
+
+	result, execErr := s.conversationMgr.ExecuteConversation(
+		ctx,
+		step,
+		config,
+		execCtx,
+		s.buildInterpolationContext,
+	)
+
+	// 4. Create base step state
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Attempt:     1,
+	}
+
+	// 5. Populate state from result (if available)
+	if result != nil {
+		state.Output = result.Output
+		state.Response = result.Response
+		state.Tokens = result.TokensTotal
+		state.Conversation = result.State
+		state.TokensUsed = result.TokensTotal
+	}
+
+	// 6. Handle execution error
+	if execErr != nil {
+		// Check if parent context was cancelled (workflow-level cancellation)
+		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			execCtx.SetStepState(step.Name, state)
+			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
+		state.Status = workflow.StatusFailed
+		state.Error = execErr.Error()
+		execCtx.SetStepState(step.Name, state)
+
+		// Execute post-hooks even on failure
+		intCtx := s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+	}
+
+	// 7. Handle result-level error
+	if result != nil && result.Error != nil {
+		state.Status = workflow.StatusFailed
+		state.Error = result.Error.Error()
+		execCtx.SetStepState(step.Name, state)
+
+		intCtx := s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		if step.ContinueOnError {
+			return step.OnSuccess, nil
+		}
+		if step.OnFailure != "" {
+			return step.OnFailure, nil
+		}
+		return "", fmt.Errorf("step %s: conversation error: %w", step.Name, result.Error)
+	}
+
+	// 8. Success path
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	// Execute post-hooks on success
+	intCtx := s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	// 9. Resolve next step using transitions or OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
 }
 
 // resolveOperationInputs resolves all string values in operation inputs via interpolation.

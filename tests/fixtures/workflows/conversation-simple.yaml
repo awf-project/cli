@@ -1,5 +1,8 @@
 # Feature: F033
 # Basic conversation mode with single agent step
+#
+# NOTE: Conversation mode executes the same prompt repeatedly until stop condition.
+# It does NOT support interactive back-and-forth with user input between turns.
 name: conversation-simple
 version: "1.0.0"
 
@@ -19,17 +22,17 @@ states:
     system_prompt: |
       You are a helpful assistant. Provide clear and concise responses.
       Say "COMPLETE" when the task is finished.
-    initial_prompt: |
+    prompt: |
       Please help with this task:
-      {{inputs.task}}
+      {{.inputs.task}}
     options:
-      model: claude-haiku-4-5
+      model: claude-sonnet-4-20250514
       max_tokens: 2000
     conversation:
       max_turns: 5
       max_context_tokens: 50000
       strategy: sliding_window
-      stop_condition: "response contains 'COMPLETE'"
+      stop_condition: "inputs.response contains 'COMPLETE'"
     timeout: 60
     on_success: done
     on_failure: error

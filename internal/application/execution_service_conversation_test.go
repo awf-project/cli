@@ -467,9 +467,9 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 
 	ctx, err := execSvc.Run(context.Background(), "no-mgr", nil)
 
-	// Should fail (stub implementation will still error even if manager is nil)
+	// Should fail with clear error when conversation manager is not configured
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
+	assert.Contains(t, err.Error(), "conversation manager not configured")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
 	assert.Equal(t, "chat", ctx.CurrentStep)
 }
@@ -531,10 +531,11 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 
 	ctx, err := execSvc.Run(context.Background(), "conv-failure", nil)
 
-	// STUB: Should fail and NOT follow OnFailure (stub returns error directly)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	// Should follow OnFailure transition when conversation fails
+	// Mock provider returns error, implementation catches it and follows OnFailure
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, "error_handler", ctx.CurrentStep)
 }
 
 // TestExecutionService_ConversationStep_ContextCancellation tests that

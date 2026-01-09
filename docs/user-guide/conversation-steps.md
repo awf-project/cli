@@ -1,32 +1,21 @@
 # Agent Conversation Mode
 
-Enable multi-turn conversations with AI agents, featuring automatic context window management, token counting, and stop conditions.
+Enable multi-turn agent execution with automatic stop conditions and token tracking.
 
 ## Overview
 
-While [agent steps](agent-steps.md) invoke agents once per step, **conversation mode** maintains conversation history across multiple turns within a single step. This allows iterative refinement, clarification loops, and complex reasoning without chaining multiple workflow steps.
+While [agent steps](agent-steps.md) invoke agents once per step, **conversation mode** executes the same prompt repeatedly until a stop condition is met. This is useful for:
 
-**Key features:**
-- **Automatic turn management** - Maintain conversation history without explicit state passing
-- **Context window handling** - Automatically truncate old turns when reaching token limits
-- **Stop conditions** - Exit conversation early when a condition is met
-- **Token tracking** - Monitor input/output token usage across turns
-- **System prompt preservation** - Protect system instructions during truncation
+- **Iterative generation** - Agent refines output over multiple turns
+- **Autonomous reasoning** - Chain-of-thought across turns until completion signal
+- **Controlled execution** - Stop after N turns or when specific output detected
 
-## When to Use
-
-Use conversation mode when:
-- **Iterative refinement** — Multiple rounds of feedback on generated content
-- **Clarification loops** — Agent asks questions, workflow provides answers
-- **Complex reasoning** — Chain-of-thought across multiple turns
-- **Interactive workflows** — Step-by-step problem solving with the agent
-
-For simple single-turn interactions, use standard [agent steps](agent-steps.md) instead.
+> **Important**: Conversation mode does NOT support interactive back-and-forth with user input between turns. Each turn executes the same prompt. For interactive workflows, use multiple separate agent steps.
 
 ## Basic Syntax
 
 ```yaml
-name: code-review-conversation
+name: autonomous-review
 version: "1.0.0"
 
 inputs:
@@ -35,16 +24,16 @@ inputs:
     required: true
 
 states:
-  initial: refine_code
+  initial: review
 
-  refine_code:
+  review:
     type: agent
     provider: claude
     mode: conversation
     system_prompt: |
-      You are a code reviewer. Iterate on the code until it meets quality standards.
-      Say "APPROVED" when done.
-    initial_prompt: |
+      You are a code reviewer. Iterate on improvements.
+      Say "APPROVED" when the code meets quality standards.
+    prompt: |
       Review this code:
       {{.inputs.code}}
     options:
@@ -54,7 +43,7 @@ states:
       max_turns: 10
       max_context_tokens: 100000
       strategy: sliding_window
-      stop_condition: "response contains 'APPROVED'"
+      stop_condition: "inputs.response contains 'APPROVED'"
     on_success: done
 
   done:
@@ -68,228 +57,159 @@ states:
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `type` | string | Yes | — | Must be `agent` |
-| `mode` | string | No | `step` | Set to `conversation` to enable multi-turn mode |
-| `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `custom` |
-| `system_prompt` | string | No | — | System message for the entire conversation (preserved during truncation) |
-| `initial_prompt` | string | Yes | — | Initial user message to start the conversation |
-| `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context)) |
-| `options` | object | No | — | Provider-specific options (model, max_tokens, temperature, etc.) |
-| `timeout` | duration | No | `300s` | Timeout for each turn |
-| `on_success` | string | Yes | — | Next state on successful completion |
+| `mode` | string | No | `single` | Set to `conversation` for multi-turn |
+| `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode` |
+| `system_prompt` | string | No | — | System message preserved across turns |
+| `prompt` | string | Yes | — | User message (executed each turn) |
+| `options` | object | No | — | Provider-specific options |
+| `timeout` | int | No | `300` | Timeout per turn in seconds |
+| `on_success` | string | Yes | — | Next state on completion |
 | `on_failure` | string | No | — | Next state on error |
 
 ### Conversation Configuration
 
 ```yaml
 conversation:
-  max_turns: 10                    # Maximum number of turns (default: 10)
-  max_context_tokens: 100000       # Token budget for conversation (default: model limit)
-  strategy: sliding_window         # Context window strategy (only sliding_window supported)
+  max_turns: 10                    # Maximum turns (default: 10)
+  max_context_tokens: 100000       # Token budget (default: unlimited)
+  strategy: sliding_window         # Only supported strategy
   stop_condition: "expression"     # Exit condition (optional)
 ```
 
 #### max_turns
 
-Maximum number of conversation turns before automatic termination.
+Maximum conversation turns before automatic termination. Default is 10.
 
 ```yaml
 conversation:
-  max_turns: 5  # Conversation stops after 5 turns
+  max_turns: 5  # Stop after 5 turns regardless of stop_condition
 ```
-
-Useful for preventing runaway conversations and controlling costs.
 
 #### max_context_tokens
 
-Token budget for the entire conversation. When approaching this limit, context window strategy applies.
+Token budget for the conversation. When exceeded, oldest turns are dropped (sliding window).
 
 ```yaml
 conversation:
-  max_context_tokens: 100000  # Limit total tokens to 100k
+  max_context_tokens: 50000
 ```
-
-Prevents exceeding model token limits. When exceeded, old turns are dropped using the configured strategy.
 
 #### strategy
 
 Context window strategy when token limit is reached:
 
-- **`sliding_window`** (default) - Drop oldest turns, preserving system prompt and most recent context
+- **`sliding_window`** (only implemented) - Drop oldest turns, preserve system prompt
 
 ```yaml
 strategy: sliding_window
-# Conversation with 5 turns reaches token limit
-# Drop: Turn 1, Keep: System prompt, Turn 2, Turn 3, Turn 4, Turn 5
 ```
 
-Future strategies: `summarize` (compress old turns), `truncate_middle` (keep first and last turns).
+> **Not Yet Implemented**: `summarize`, `truncate_middle`
 
 #### stop_condition
 
-Expression to evaluate after each turn. When true, conversation exits.
+Expression evaluated after each turn. When true, conversation exits early.
 
 ```yaml
-stop_condition: "response contains 'APPROVED'"
-```
-
-**Expression Syntax**: Supports comparison operators and string functions:
-- `response contains 'text'` — Check if response contains substring
-- `response matches 'regex'` — Match against regex pattern
-- `turn_count >= 5` — Check number of turns
-- `tokens_used > 50000` — Check token consumption
-
-See [Stop Condition Expressions](#stop-condition-expressions) for examples.
-
-## Accessing Conversation State
-
-Conversation state is stored in the step state and accessible in subsequent steps:
-
-```yaml
-analyze_conversation:
-  type: agent
-  provider: claude
-  mode: conversation
-  initial_prompt: "Start conversation"
-  on_success: review_conversation
-
-review_conversation:
-  type: step
-  command: |
-    echo "Conversation lasted {{.states.analyze_conversation.conversation.total_turns}} turns"
-    echo "Total tokens: {{.states.analyze_conversation.conversation.total_tokens}}"
-  on_success: done
-```
-
-### Conversation State Structure
-
-```yaml
-states:
-  analyze_conversation:
-    output: "Final response text"
-    conversation:
-      turns:
-        - role: system
-          content: "You are a code reviewer..."
-          tokens: 50
-        - role: user
-          content: "Review this code..."
-          tokens: 500
-        - role: assistant
-          content: "I found these issues..."
-          tokens: 800
-        - role: user
-          content: "Fix the issues"
-          tokens: 20
-        - role: assistant
-          content: "Here's the fixed code... APPROVED"
-          tokens: 600
-      total_turns: 5
-      total_tokens: 1970
-      stopped_by: "condition"  # or "max_turns", "max_tokens"
+stop_condition: "inputs.response contains 'APPROVED'"
 ```
 
 ## Stop Condition Expressions
 
-Exit conversations early with programmatic conditions.
+Stop conditions use the expression evaluator with these variables:
 
-### String Matching
+| Variable | Type | Description |
+|----------|------|-------------|
+| `inputs.response` | string | Last assistant response |
+| `inputs.turn_count` | int | Number of completed turns |
 
-```yaml
-# Exit when response contains exact text
-stop_condition: "response contains 'DONE'"
-
-# Exit when response matches pattern
-stop_condition: "response matches 'APPROVED|COMPLETE'"
-
-# Case-insensitive matching
-stop_condition: "response contains 'done' || response contains 'finished'"
-```
-
-### Token-Based Conditions
+### Examples
 
 ```yaml
-# Exit when token count reaches threshold
-stop_condition: "tokens_used > 80000"
+# Exit when response contains keyword
+stop_condition: "inputs.response contains 'DONE'"
 
-# Exit when approaching context limit
-stop_condition: "tokens_used > max_context_tokens * 0.9"
+# Exit after N turns
+stop_condition: "inputs.turn_count >= 5"
+
+# Complex: exit on keyword OR turn limit
+stop_condition: "inputs.response contains 'APPROVED' || inputs.turn_count >= 10"
+
+# Multiple keywords
+stop_condition: "inputs.response contains 'COMPLETE' || inputs.response contains 'FINISHED'"
 ```
 
-### Turn-Based Conditions
+> **Important**: Variables must be prefixed with `inputs.` (e.g., `inputs.response`, not just `response`).
+
+## Accessing Conversation State
+
+After execution, conversation state is available in step state:
 
 ```yaml
-# Exit after specific number of turns
-stop_condition: "turn_count >= 5"
-
-# Complex: exit after 5 turns OR if done
-stop_condition: "turn_count >= 5 || response contains 'APPROVED'"
+show_result:
+  type: step
+  command: |
+    echo "Final response: {{.states.review.Output}}"
+    echo "Turns: {{.states.review.Conversation.TotalTurns}}"
+    echo "Tokens: {{.states.review.TokensUsed}}"
+  on_success: done
 ```
 
-### Advanced Examples
-
-```yaml
-# Code review: approve after syntax fixes
-stop_condition: "response contains 'All issues fixed' && turn_count >= 2"
-
-# Research loop: gather enough sources
-stop_condition: "response contains 'sufficient sources' || turn_count >= 10"
-
-# Conversation: stop on topic completion or token budget
-stop_condition: "response contains 'Summary:' || tokens_used > 90000"
-```
-
-## Injecting Context Mid-Conversation
-
-Continue a conversation from a previous step:
+### State Structure
 
 ```yaml
 states:
-  initial: refine_code
-
-  refine_code:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: "You are a code reviewer."
-    initial_prompt: |
-      Review this code:
-      {{.inputs.code}}
-    conversation:
-      max_turns: 5
-    on_success: add_requirements
-
-  # Continue previous conversation
-  add_requirements:
-    type: agent
-    provider: claude
-    mode: conversation
-    continue_from: refine_code
-    prompt: |
-      Also consider these requirements:
-      {{.inputs.additional_requirements}}
-    conversation:
-      max_turns: 3
-    on_success: done
-
-  done:
-    type: terminal
+  review:
+    Output: "Final response text..."
+    Status: completed
+    Conversation:
+      Turns:
+        - Role: system
+          Content: "You are a code reviewer..."
+          Tokens: 50
+        - Role: user
+          Content: "Review this code..."
+          Tokens: 500
+        - Role: assistant
+          Content: "I found issues... APPROVED"
+          Tokens: 800
+      TotalTurns: 3
+      TotalTokens: 1350
+      StoppedBy: condition  # or "max_turns", "max_tokens"
+    TokensUsed: 1350
 ```
 
-The `continue_from` field loads the conversation history from the previous step and continues with the new prompt.
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Conversation Loop                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Turn 1: Execute prompt → Response A                         │
+│          Check stop_condition → false                        │
+│                                                              │
+│  Turn 2: Execute prompt → Response B                         │
+│          Check stop_condition → false                        │
+│                                                              │
+│  Turn 3: Execute prompt → Response C (contains "APPROVED")   │
+│          Check stop_condition → true → EXIT                  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key point**: The same `prompt` is sent each turn. The conversation history accumulates in `state`, but the provider CLI is invoked with the same prompt repeatedly.
 
 ## Examples
 
-### Iterative Code Review
+### Autonomous Code Review
 
 ```yaml
-name: iterative-code-review
+name: code-review
 version: "1.0.0"
 
 inputs:
   - name: code
-    type: string
-    required: true
-  - name: requirements
     type: string
     required: true
 
@@ -301,239 +221,151 @@ states:
     provider: claude
     mode: conversation
     system_prompt: |
-      You are an expert code reviewer. Help improve the code quality step by step.
-      After each suggestion, wait for the user's response or revision.
-      Say "Code review complete!" when satisfied.
-    initial_prompt: |
-      Review this code and suggest the first improvement:
-
+      You are a code reviewer. Analyze the code and suggest improvements.
+      After each review iteration, either:
+      - Suggest another improvement
+      - Say "APPROVED" if the code is good
+    prompt: |
+      Review this code:
       {{.inputs.code}}
-
-      Requirements to consider:
-      {{.inputs.requirements}}
     options:
       model: claude-sonnet-4-20250514
-      max_tokens: 2048
-    conversation:
-      max_turns: 10
-      max_context_tokens: 100000
-      strategy: sliding_window
-      stop_condition: "response contains 'Code review complete!'"
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-### Multi-Stage Problem Solving
-
-```yaml
-name: problem-solver
-version: "1.0.0"
-
-inputs:
-  - name: problem
-    type: string
-    required: true
-
-states:
-  initial: analyze
-
-  analyze:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: |
-      You are a problem-solving expert. Work through problems systematically.
-      Use the following stages:
-      1. ANALYZE: Break down the problem
-      2. PLAN: Outline approach
-      3. IMPLEMENT: Provide solution
-      4. VERIFY: Check solution
-
-      End with "COMPLETE" when done.
-    initial_prompt: |
-      {{.inputs.problem}}
-    conversation:
-      max_turns: 8
-      max_context_tokens: 50000
-      stop_condition: "response contains 'COMPLETE'"
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-### Document Refinement Loop
-
-```yaml
-name: document-refinement
-version: "1.0.0"
-
-inputs:
-  - name: document
-    type: string
-    required: true
-
-states:
-  initial: refine
-
-  refine:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: |
-      You are a professional editor. Improve the document iteratively.
-      Respond with the refined version and ask what specific improvements to focus on next.
-    initial_prompt: |
-      {{.inputs.document}}
     conversation:
       max_turns: 5
-      max_context_tokens: 80000
-      stop_condition: "turn_count >= 3"
-    on_success: summary
-
-  summary:
-    type: step
-    command: |
-      echo "Refinement complete."
-      echo "Turns: {{.states.refine.conversation.total_turns}}"
-      echo "Tokens: {{.states.refine.conversation.total_tokens}}"
+      stop_condition: "inputs.response contains 'APPROVED'"
     on_success: done
 
   done:
     type: terminal
 ```
 
-## Best Practices
-
-### 1. Set Reasonable Turn Limits
-
-Always set `max_turns` to prevent runaway conversations:
+### Turn-Limited Generation
 
 ```yaml
-conversation:
-  max_turns: 10  # Prevent infinite loops
+name: brainstorm
+version: "1.0.0"
+
+inputs:
+  - name: topic
+    type: string
+    required: true
+
+states:
+  initial: generate
+
+  generate:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "Generate creative ideas. One idea per turn."
+    prompt: "Generate ideas about: {{.inputs.topic}}"
+    conversation:
+      max_turns: 5
+      stop_condition: "inputs.turn_count >= 3"
+    on_success: done
+
+  done:
+    type: terminal
 ```
-
-### 2. Define Clear Stop Conditions
-
-Use specific, unambiguous conditions:
-
-```yaml
-# ✅ Good: Specific completion signal
-stop_condition: "response contains 'APPROVED'"
-
-# ❌ Vague: Could match unintended text
-stop_condition: "response contains 'done'"
-```
-
-### 3. Monitor Token Usage
-
-Set appropriate `max_context_tokens`:
-
-```yaml
-conversation:
-  max_context_tokens: 100000  # Model limit for Claude 3 Sonnet
-```
-
-Check token usage in subsequent steps:
-
-```yaml
-log_tokens:
-  type: step
-  command: echo "Tokens used: {{.states.analyze.conversation.total_tokens}}"
-  on_success: done
-```
-
-### 4. Use System Prompt Effectively
-
-System prompt guides the agent's behavior across all turns:
-
-```yaml
-system_prompt: |
-  You are a code reviewer.
-  Focus on security, performance, and readability.
-  Keep responses concise.
-  Use JSON format for structured feedback.
-```
-
-### 5. Test Stop Conditions
-
-Verify stop conditions work as expected:
-
-```bash
-awf run workflow --dry-run
-# Review the prompt and stop condition
-```
-
-### 6. Handle Errors Gracefully
-
-Add error handling for conversation failures:
-
-```yaml
-refine:
-  type: agent
-  mode: conversation
-  initial_prompt: "Review this code"
-  on_success: done
-  on_failure: error
-  timeout: 120
-
-error:
-  type: terminal
-  status: failure
-```
-
-## Troubleshooting
-
-### Conversation Runs Longer Than Expected
-
-**Problem**: Conversation continues past expected point
-
-**Solutions**:
-- Review stop condition: `awf run workflow --dry-run`
-- Lower `max_turns` if using as fallback
-- Make stop condition more specific (avoid ambiguous phrases)
-- Check provider CLI is matching expected output
-
-### Token Count Exceeds Limit
-
-**Problem**: Context window strategy truncates important turns
-
-**Solutions**:
-- Increase `max_context_tokens` if model supports it
-- Reduce initial prompt size
-- Use shorter system prompt
-- Lower `max_turns` to reduce conversation length
-
-### Provider Not Supporting Conversation
-
-**Problem**: Agent doesn't maintain history across turns
-
-**Note**: Conversation mode serializes history in prompts for all providers, but not all CLIs may handle multi-turn naturally. If experiencing issues:
-- Check provider CLI documentation
-- Test with a single-turn agent step as fallback
-- File an issue with provider details
 
 ## Limitations
 
 ### Current Implementation
 
-- Only `sliding_window` strategy implemented (dropping oldest turns)
-- Stop conditions limited to string/token/turn expressions
-- No branching conversations (single linear path)
+- **Single prompt per conversation** - Same prompt executed each turn
+- **No interactive input** - Cannot inject user messages between turns
+- **Only `sliding_window` strategy** - Other strategies not implemented
+- **No conversation continuation** - `continue_from` not implemented
+- **No branching** - Single linear path only
 
-### Future Enhancements
+### Not Yet Implemented
 
-- `summarize` strategy (LLM-based compression of old turns)
-- `truncate_middle` strategy (keep first and last turns)
-- Conversation branching (explore multiple paths)
-- Pause/resume conversations across workflow runs
+| Feature | Status | Description |
+|---------|--------|-------------|
+| `continue_from` | Not implemented | Resume conversation from previous step |
+| `summarize` strategy | Not implemented | LLM-based compression of old turns |
+| `truncate_middle` strategy | Not implemented | Keep first and last turns |
+| `on_error` mapping | Not implemented | Route to specific states by error type |
+| Interactive input | Not implemented | User input between turns |
+
+## Best Practices
+
+### 1. Always Set Turn Limits
+
+Prevent runaway conversations:
+
+```yaml
+conversation:
+  max_turns: 10  # Hard limit
+  stop_condition: "inputs.response contains 'DONE'"
+```
+
+### 2. Use Specific Stop Keywords
+
+Make stop conditions unambiguous:
+
+```yaml
+# Good: Specific signal
+stop_condition: "inputs.response contains 'TASK_COMPLETE'"
+
+# Bad: Could match unintended text
+stop_condition: "inputs.response contains 'done'"
+```
+
+### 3. Instruct Agent About Completion
+
+Include completion signal in system prompt:
+
+```yaml
+system_prompt: |
+  Complete the task step by step.
+  Say "FINISHED" when you're done.
+```
+
+### 4. Use Fallback Turn Limits
+
+Combine keyword and turn limit:
+
+```yaml
+stop_condition: "inputs.response contains 'DONE' || inputs.turn_count >= 10"
+```
+
+## Troubleshooting
+
+### Stop Condition Not Triggering
+
+**Problem**: Conversation runs to max_turns
+
+**Check**:
+1. Expression syntax uses `inputs.` prefix
+2. Keyword matches exactly (case-sensitive)
+3. Agent system prompt instructs completion signal
+
+```yaml
+# Wrong
+stop_condition: "response contains 'DONE'"
+
+# Correct
+stop_condition: "inputs.response contains 'DONE'"
+```
+
+### Same Response Each Turn
+
+**Expected behavior**: Conversation mode executes the same prompt each turn. The response may vary due to model non-determinism, but input is identical.
+
+For different inputs each turn, use multiple agent steps instead.
+
+### Context Window Exceeded
+
+**Problem**: Old turns dropped, losing context
+
+**Solutions**:
+- Increase `max_context_tokens`
+- Reduce `max_turns`
+- Use shorter system prompt
 
 ## See Also
 
-- [Agent Steps Guide](agent-steps.md) - Standard single-turn agent invocation
-- [Workflow Syntax Reference](workflow-syntax.md#agent-state) - Complete agent step options
-- [Template Variables](../reference/interpolation.md) - Available variables in prompts
-- [Examples](examples.md) - More workflow examples
+- [Agent Steps Guide](agent-steps.md) - Single-turn agent execution
+- [Workflow Syntax Reference](workflow-syntax.md#agent-state) - Complete options
+- [Template Variables](../reference/interpolation.md) - Variable interpolation
