@@ -13,12 +13,11 @@ This creates the following structure:
 ```
 .awf.yaml              # Configuration file
 .awf/
+├── config.yaml        # Project configuration with input templates
 ├── workflows/
 │   └── example.yaml   # Sample workflow
-├── templates/         # Reusable workflow templates
-└── storage/
-    ├── states/        # State persistence
-    └── logs/          # Log files
+└── prompts/
+    └── example.md     # Sample prompt template
 ```
 
 ## 2. Run the Example Workflow
@@ -130,6 +129,23 @@ awf run my-workflow --input prompt=@prompts/system.md
 ```
 
 The `@prompts/` prefix loads the file content and passes it as the input value.
+
+## Storage Locations
+
+AWF follows the XDG Base Directory Specification for storing runtime data:
+
+| Data Type | Default Location | Environment Variable | Override Flag |
+|-----------|------------------|----------------------|---------------|
+| State files | `~/.local/share/awf/states/` | `$XDG_DATA_HOME/awf/` | `--storage-path` |
+| Configuration | `~/.config/awf/` | `$XDG_CONFIG_HOME/awf/` | N/A |
+| History database | `~/.local/share/awf/history.db` | `$XDG_DATA_HOME/awf/` | `--storage-path` |
+
+**Custom storage path:**
+```bash
+awf run example --storage-path /custom/path
+```
+
+This will store state files in `/custom/path/states/` and history in `/custom/path/history.db`.
 
 ## Common Flags
 
