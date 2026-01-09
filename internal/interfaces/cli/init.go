@@ -14,9 +14,6 @@ const (
 	awfDir            = ".awf"
 	workflowsDir      = "workflows"
 	promptsDir        = "prompts"
-	storageDir        = "storage"
-	statesDir         = "states"
-	logsDir           = "logs"
 	configFileName    = ".awf.yaml"
 	projectConfigFile = "config.yaml"
 	exampleFile       = "example.yaml"
@@ -39,8 +36,8 @@ This creates:
   .awf/workflows/example.yaml  Example workflow file
   .awf/prompts/                Prompt templates directory
   .awf/prompts/example.md      Example prompt file
-  .awf/storage/states/         State persistence directory
-  .awf/storage/logs/           Log files directory
+
+State persistence uses XDG directories ($XDG_DATA_HOME/awf/ or ~/.local/share/awf/).
 
 Use --global to initialize the global prompts directory at $XDG_CONFIG_HOME/awf/prompts/.
 
@@ -86,8 +83,6 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	dirs := []string{
 		filepath.Join(awfPath, workflowsDir),
 		filepath.Join(awfPath, promptsDir),
-		filepath.Join(awfPath, storageDir, statesDir),
-		filepath.Join(awfPath, storageDir, logsDir),
 	}
 
 	for _, dir := range dirs {

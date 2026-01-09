@@ -193,9 +193,10 @@ import "github.com/vanoix/awf/pkg/interpolation"
 |----------|----------|-------------|
 | Binary | `bin/awf` | Compiled binary |
 | Coverage | `coverage.html` | Test coverage report |
-| Logs | `.awf/storage/logs/` | Runtime logs |
-| State | `.awf/storage/states/` | Workflow state files |
-| History | `.awf/storage/history.db` | SQLite history database |
+| State | `$XDG_DATA_HOME/awf/states/` or `~/.local/share/awf/states/` | Workflow state files |
+| History | `$XDG_DATA_HOME/awf/history.db` or `~/.local/share/awf/history.db` | SQLite history database |
+
+**Note:** Logs are written to stdout/stderr only. Use `--storage-path` flag to override default state location.
 
 ## See Also
 

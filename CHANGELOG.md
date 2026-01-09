@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **F049**: Storage Directory Documentation Mismatch
+  - Removed unused `.awf/storage/states/` and `.awf/storage/logs/` directory creation from `awf init` command
+  - Updated documentation to accurately reflect XDG-compliant storage paths (`~/.local/share/awf/` or `$XDG_DATA_HOME/awf/`)
+  - `awf init` now creates only `workflows/` and `prompts/` directories as intended
+  - State persistence continues to use XDG directories with `--storage-path` flag available for custom locations
+
 ### Agent
 - **F032**: Agent Step Type
   - `type: agent` invokes AI CLI tools (Claude, Codex, Gemini, OpenCode) as workflow steps

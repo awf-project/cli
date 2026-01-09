@@ -64,39 +64,6 @@ func TestInitCommand(t *testing.T) {
 		assert.Contains(t, string(content), "name: example")
 	})
 
-	t.Run("creates .awf/storage directory with subdirs", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		defer func() { _ = os.Chdir(origDir) }()
-		_ = os.Chdir(tmpDir)
-
-		cmd := cli.NewRootCommand()
-		cmd.SetArgs([]string{"init"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-		cmd.SetErr(&out)
-
-		err := cmd.Execute()
-		require.NoError(t, err)
-
-		// Verify storage directory was created with subdirs
-		storageDir := filepath.Join(tmpDir, ".awf", "storage")
-		info, err := os.Stat(storageDir)
-		require.NoError(t, err)
-		assert.True(t, info.IsDir())
-
-		statesDir := filepath.Join(storageDir, "states")
-		info, err = os.Stat(statesDir)
-		require.NoError(t, err)
-		assert.True(t, info.IsDir())
-
-		logsDir := filepath.Join(storageDir, "logs")
-		info, err = os.Stat(logsDir)
-		require.NoError(t, err)
-		assert.True(t, info.IsDir())
-	})
-
 	t.Run("creates .awf.yaml config file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		origDir, _ := os.Getwd()
@@ -276,6 +243,17 @@ func TestInitCommand(t *testing.T) {
 		longDesc := initCmd.Long
 		assert.Contains(t, longDesc, "prompts")
 		assert.Contains(t, longDesc, ".awf/prompts/")
+	})
+
+	t.Run("help text does not mention storage directories", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		initCmd, _, err := cmd.Find([]string{"init"})
+		require.NoError(t, err)
+
+		longDesc := initCmd.Long
+		assert.NotContains(t, longDesc, "storage/states")
+		assert.NotContains(t, longDesc, "storage/logs")
+		assert.Contains(t, longDesc, "XDG directories")
 	})
 }
 
