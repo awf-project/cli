@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **F052**: Renovate Dependency Management
+  - Automated dependency updates via Renovate bot for Go modules and GitHub Actions
+  - Weekly update schedule (Sunday early morning UTC) to minimize workflow disruption
+  - Automerge enabled for minor and patch updates with passing CI tests
+  - Manual review required for major version updates with breaking changes
+  - Configuration in `renovate.json` with `config:recommended` base preset
+  - Comprehensive documentation in `docs/development/dependency-management.md`
+  - PR limit of 5 concurrent updates to prevent overwhelming maintainers
+  - Dependency grouping by type to reduce noise and improve update coherence
+
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch
   - Removed unused `.awf/storage/states/` and `.awf/storage/logs/` directory creation from `awf init` command

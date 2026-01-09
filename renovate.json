@@ -1,0 +1,20 @@
+{
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "go dependencies",
+      "separateMajorMinor": true
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "separateMajorMinor": true
+    }
+  ],
+  "schedule": ["before 3am on sunday"],
+  "automerge": true,
+  "autoMergeType": "pr",
+  "prConcurrentLimit": 3,
+  "ignoreDeps": []
+}

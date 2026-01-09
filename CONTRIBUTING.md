@@ -142,6 +142,17 @@ pkg/               # Public packages
 tests/             # Integration tests
 ```
 
+## Dependency Updates
+
+AWF uses [Renovate](https://www.renovatebot.com/) for automated dependency updates. When reviewing Renovate pull requests:
+
+1. **Automerge-eligible PRs** (minor/patch with passing CI): These merge automatically
+2. **Major version updates**: Review the changelog and test locally before approving
+3. **CI failures**: Investigate if the failure is dependency-related or a flaky test
+4. **Questions**: See [Dependency Management](docs/development/dependency-management.md) for more details
+
+To temporarily stop updates, comment `@renovatebot stop` on a Renovate PR. To resume, comment `@renovatebot start`.
+
 ## Review Process
 
 1. Maintainers review within 1-2 weeks
