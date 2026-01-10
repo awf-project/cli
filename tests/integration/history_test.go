@@ -476,7 +476,7 @@ func TestWorkflowExecution_RecordsHistory_Integration(t *testing.T) {
 	historyPath := filepath.Join(tmpDir, "history.db")
 
 	// Create workflow directory and file
-	require.NoError(t, os.MkdirAll(workflowDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowDir, 0o755))
 
 	wfYAML := `name: history-test
 version: "1.0.0"
@@ -489,7 +489,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(workflowDir, "history-test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(workflowDir, "history-test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	// Setup components

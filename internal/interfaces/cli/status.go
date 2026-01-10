@@ -55,7 +55,8 @@ func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 
 	// JSON/quiet/table format: use OutputWriter
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet || cfg.OutputFormat == ui.FormatTable {
-		return writer.WriteExecution(toExecutionInfo(execCtx))
+		execInfo := toExecutionInfo(execCtx)
+		return writer.WriteExecution(&execInfo)
 	}
 
 	// Text format: use formatter
@@ -144,6 +145,8 @@ func displayStatus(formatter *ui.Formatter, execCtx *workflow.ExecutionContext, 
 			completed++
 		case workflow.StatusFailed:
 			failed++
+		case workflow.StatusPending, workflow.StatusRunning, workflow.StatusCancelled:
+			// Not counted in completed or failed
 		}
 	}
 

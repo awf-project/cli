@@ -118,7 +118,7 @@ states:
     type: command
     command: "echo test"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "temp-template.yaml"), []byte(templateContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "temp-template.yaml"), []byte(templateContent), 0o644)
 	require.NoError(t, err)
 
 	// Use temp dir first, then fixtures
@@ -238,7 +238,7 @@ states:
     type: command
     command: "echo extra"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "extra-template.yaml"), []byte(templateContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "extra-template.yaml"), []byte(templateContent), 0o644)
 	require.NoError(t, err)
 
 	repo := NewYAMLTemplateRepository([]string{tmpDir, templateFixturesPath})
@@ -263,7 +263,7 @@ states:
     type: command
     command: "echo override"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "simple-echo.yaml"), []byte(templateContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "simple-echo.yaml"), []byte(templateContent), 0o644)
 	require.NoError(t, err)
 
 	repo := NewYAMLTemplateRepository([]string{tmpDir, templateFixturesPath})
@@ -285,7 +285,7 @@ func TestYAMLTemplateRepository_ListTemplates_IgnoresDirectories(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a subdirectory
-	err := os.Mkdir(filepath.Join(tmpDir, "subdir.yaml"), 0755)
+	err := os.Mkdir(filepath.Join(tmpDir, "subdir.yaml"), 0o755)
 	require.NoError(t, err)
 
 	// Create a valid template
@@ -298,7 +298,7 @@ states:
     type: command
     command: "echo test"
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "valid.yaml"), []byte(templateContent), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "valid.yaml"), []byte(templateContent), 0o644)
 	require.NoError(t, err)
 
 	repo := NewYAMLTemplateRepository([]string{tmpDir})
@@ -314,13 +314,13 @@ func TestYAMLTemplateRepository_ListTemplates_OnlyYAMLFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create various files
-	err := os.WriteFile(filepath.Join(tmpDir, "template.yaml"), []byte("name: yaml\nparameters: []\nstates:\n  initial: run\n  run:\n    type: command\n    command: echo"), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "template.yaml"), []byte("name: yaml\nparameters: []\nstates:\n  initial: run\n  run:\n    type: command\n    command: echo"), 0o644)
 	require.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0o644)
 	require.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(tmpDir, "script.sh"), []byte("#!/bin/bash"), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "script.sh"), []byte("#!/bin/bash"), 0o644)
 	require.NoError(t, err)
 
 	repo := NewYAMLTemplateRepository([]string{tmpDir})
@@ -376,7 +376,7 @@ states:
     type: command
     command: "echo test"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "temp-only.yaml"), []byte(templateContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "temp-only.yaml"), []byte(templateContent), 0o644)
 	require.NoError(t, err)
 
 	repo := NewYAMLTemplateRepository([]string{tmpDir, templateFixturesPath})

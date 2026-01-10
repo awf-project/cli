@@ -71,7 +71,7 @@ func (s *TemplateService) expandStep(
 	// Load template
 	tmpl, err := s.repo.GetTemplate(ctx, ref.TemplateName)
 	if err != nil {
-		return err
+		return fmt.Errorf("load template %s: %w", ref.TemplateName, err)
 	}
 
 	// Validate and merge parameters
@@ -196,7 +196,7 @@ func (s *TemplateService) substituteParams(template string, params map[string]an
 func (s *TemplateService) ValidateTemplateRef(ctx context.Context, ref *workflow.WorkflowTemplateRef) error {
 	tmpl, err := s.repo.GetTemplate(ctx, ref.TemplateName)
 	if err != nil {
-		return err
+		return fmt.Errorf("load template %s: %w", ref.TemplateName, err)
 	}
 
 	_, err = s.mergeParameters(tmpl, ref.Parameters)

@@ -84,6 +84,33 @@ Domain → Application → Infrastructure → Interfaces
 - All other layers depend inward toward domain
 - Use ports (interfaces) for external dependencies
 
+### Code Quality Requirements
+
+All pull requests must pass code quality checks before merge. See [Code Quality Documentation](docs/development/code-quality.md) for detailed explanations.
+
+**Required checks:**
+
+1. **Linting**: `make lint` must pass with zero issues
+   - 17 linters enforce Go best practices, security, and architecture rules
+   - Use `make fix` to auto-fix issues where possible
+
+2. **Formatting**: `make fmt` must pass
+   - Uses gofumpt (stricter than gofmt) for consistent formatting
+
+3. **Vetting**: `make vet` must pass
+   - Official Go analyzer catches suspicious constructs
+
+4. **Testing**: `make test` must pass
+   - All unit tests pass with no failures
+
+**PR Expectations:**
+- CI pipeline shows all checks passing (green checkmarks)
+- No linter warnings or errors
+- Code formatted with gofumpt
+- New code includes tests
+
+If a linter rule is legitimately inappropriate for specific code, use `//nolint:lintername` with a comment explaining why.
+
 ### Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

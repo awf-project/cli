@@ -301,7 +301,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "template-wf.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "template-wf.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -558,7 +558,7 @@ states:
     type: command
     command: "OVERRIDE: {{parameters.message}}"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "simple-echo.yaml"), []byte(overrideContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "simple-echo.yaml"), []byte(overrideContent), 0o644)
 	require.NoError(t, err)
 
 	// First path takes priority

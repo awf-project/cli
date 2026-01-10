@@ -80,7 +80,7 @@ type EvaluatorFunc func(expr string) (bool, error)
 // EvaluateFirstMatch evaluates transitions in order and returns the first matching goto target.
 // Returns (goto, found, error). If no match is found and there's a default, returns the default.
 // If no match and no default, returns ("", false, nil).
-func (t Transitions) EvaluateFirstMatch(eval EvaluatorFunc) (string, bool, error) {
+func (t Transitions) EvaluateFirstMatch(eval EvaluatorFunc) (nextStep string, found bool, err error) {
 	for _, tr := range t {
 		// Default transition (no condition) always matches
 		if tr.When == "" {

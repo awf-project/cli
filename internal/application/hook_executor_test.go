@@ -47,7 +47,7 @@ type MockExecutor struct {
 	mock.Mock
 }
 
-func (m *MockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *MockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	args := m.Called(ctx, cmd)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -108,15 +108,16 @@ func TestHookExecutor_ExecuteHooks_CommandAction(t *testing.T) {
 	}
 
 	resolver.On("Resolve", "mkdir -p output", mock.Anything).Return("mkdir -p output", nil)
-	executor.On("Execute", mock.Anything, ports.Command{Program: "mkdir -p output"}).
-		Return(&ports.CommandResult{ExitCode: 0}, nil)
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "mkdir -p output"
+	})).Return(&ports.CommandResult{ExitCode: 0}, nil)
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
 	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
 
 	require.NoError(t, err)
-	executor.AssertCalled(t, "Execute", mock.Anything, ports.Command{Program: "mkdir -p output"})
+	executor.AssertExpectations(t)
 }
 
 func TestHookExecutor_ExecuteHooks_MultipleActions(t *testing.T) {
@@ -136,8 +137,9 @@ func TestHookExecutor_ExecuteHooks_MultipleActions(t *testing.T) {
 	logger.On("Info", "Step 1", mock.Anything).Return()
 	logger.On("Info", "Step 2", mock.Anything).Return()
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
-	executor.On("Execute", mock.Anything, ports.Command{Program: "echo hello"}).
-		Return(&ports.CommandResult{ExitCode: 0}, nil)
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "echo hello"
+	})).Return(&ports.CommandResult{ExitCode: 0}, nil)
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
 	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
@@ -145,7 +147,7 @@ func TestHookExecutor_ExecuteHooks_MultipleActions(t *testing.T) {
 	require.NoError(t, err)
 	logger.AssertCalled(t, "Info", "Step 1", mock.Anything)
 	logger.AssertCalled(t, "Info", "Step 2", mock.Anything)
-	executor.AssertCalled(t, "Execute", mock.Anything, ports.Command{Program: "echo hello"})
+	executor.AssertExpectations(t)
 }
 
 func TestHookExecutor_ExecuteHooks_VariableInterpolation(t *testing.T) {
@@ -184,8 +186,9 @@ func TestHookExecutor_ExecuteHooks_CommandFailure_ContinueByDefault(t *testing.T
 
 	resolver.On("Resolve", "failing-command", mock.Anything).Return("failing-command", nil)
 	resolver.On("Resolve", "After failure", mock.Anything).Return("After failure", nil)
-	executor.On("Execute", mock.Anything, ports.Command{Program: "failing-command"}).
-		Return(nil, errors.New("command failed"))
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "failing-command"
+	})).Return(nil, errors.New("command failed"))
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 	logger.On("Warn", mock.Anything, mock.Anything).Return()
 	logger.On("Info", "After failure", mock.Anything).Return()
@@ -209,8 +212,9 @@ func TestHookExecutor_ExecuteHooks_CommandFailure_FailOnError(t *testing.T) {
 	}
 
 	resolver.On("Resolve", "failing-command", mock.Anything).Return("failing-command", nil)
-	executor.On("Execute", mock.Anything, ports.Command{Program: "failing-command"}).
-		Return(nil, errors.New("command failed"))
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "failing-command"
+	})).Return(nil, errors.New("command failed"))
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
@@ -233,8 +237,9 @@ func TestHookExecutor_ExecuteHooks_NonZeroExitCode(t *testing.T) {
 	}
 
 	resolver.On("Resolve", "exit 1", mock.Anything).Return("exit 1", nil)
-	executor.On("Execute", mock.Anything, ports.Command{Program: "exit 1"}).
-		Return(&ports.CommandResult{ExitCode: 1, Stderr: "error"}, nil)
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "exit 1"
+	})).Return(&ports.CommandResult{ExitCode: 1, Stderr: "error"}, nil)
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 	logger.On("Warn", mock.Anything, mock.Anything).Return()
 
@@ -278,8 +283,9 @@ func TestHookExecutor_ExecuteHooks_ContextCancellation(t *testing.T) {
 	cancel() // cancel immediately
 
 	resolver.On("Resolve", "long-running", mock.Anything).Return("long-running", nil)
-	executor.On("Execute", mock.Anything, ports.Command{Program: "long-running"}).
-		Return(nil, context.Canceled)
+	executor.On("Execute", mock.Anything, mock.MatchedBy(func(cmd *ports.Command) bool {
+		return cmd.Program == "long-running"
+	})).Return(nil, context.Canceled)
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)

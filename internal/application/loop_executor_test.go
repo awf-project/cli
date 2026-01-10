@@ -403,7 +403,7 @@ func TestLoopExecutor_ExecuteForEach_ContextCancellation(t *testing.T) {
 	)
 
 	require.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Less(t, result.TotalCount, 5) // Should not complete all iterations
 }
 
@@ -3283,7 +3283,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ContextCancellation(t *t
 	)
 
 	require.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Less(t, result.TotalCount, 100) // Should not complete all iterations
 }
 
@@ -3709,19 +3709,10 @@ func TestExecuteForEach_StepExecutorReturnsNextStep_CurrentlyIgnored(t *testing.
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Current behavior (stub): All steps execute sequentially, transition ignored
-	// Expected: ["step1", "step2", "step3", "step1", "step2", "step3"] for 2 items
-	// After T003: ["step1", "step3", "step1", "step3"] - step2 should be skipped
-
-	// For RED phase: This assertion will FAIL because stub ignores nextStep
+	// Verify transition logic: step1 transitions to step3, skipping step2
 	t.Log("Current execution order:", executionOrder)
-	// assert.Equal(t, []string{"step1", "step2", "step3", "step1", "step2", "step3"},
-	// 	executionOrder,
-	// 	"Stub implementation executes all steps sequentially")
-
-	// GREEN phase (T005): After implementing transition logic
 	assert.Equal(t, []string{"step1", "step3", "step1", "step3"}, executionOrder,
-		"GREEN phase: step2 skipped due to step1 -> step3 transition")
+		"step2 skipped due to step1 -> step3 transition")
 }
 
 // TestExecuteForEach_MultipleStepsReturnTransitions verifies behavior when
@@ -3790,15 +3781,10 @@ func TestExecuteForEach_MultipleStepsReturnTransitions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Current stub behavior: All steps execute
+	// Verify transition logic: step2 skipped due to step1 -> step3 transition
 	t.Log("Current execution order:", executionOrder)
-	// assert.Equal(t, []string{"step1", "step2", "step3", "step4"},
-	// 	executionOrder,
-	// 	"Stub executes all steps sequentially")
-
-	// GREEN phase (T005): After transition logic implemented
 	assert.Equal(t, []string{"step1", "step3", "step4"}, executionOrder,
-		"GREEN phase: step2 skipped due to step1 -> step3 transition")
+		"step2 skipped due to step1 -> step3 transition")
 }
 
 // =============================================================================
@@ -3879,16 +3865,10 @@ func TestExecuteWhile_StepExecutorReturnsNextStep_CurrentlyIgnored(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Current stub behavior: All 5 steps execute despite transition
+	// Verify transition logic: prepare_impl_prompt and implement_item skipped due to transition
 	t.Log("Current execution order:", executionOrder)
-	// assert.Equal(t,
-	// 	[]string{"run_tests_green", "check_tests_passed", "prepare_impl_prompt", "implement_item", "run_fmt"},
-	// 	executionOrder,
-	// 	"Stub implementation ignores transition from check_tests_passed")
-
-	// GREEN phase (T005): After implementing transition logic
 	assert.Equal(t, []string{"run_tests_green", "check_tests_passed", "run_fmt"}, executionOrder,
-		"GREEN phase: prepare_impl_prompt and implement_item skipped due to transition")
+		"prepare_impl_prompt and implement_item skipped due to transition")
 }
 
 // TestExecuteWhile_TransitionOutsideLoopBody verifies that when a step
@@ -4056,7 +4036,7 @@ func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, "", nextStep, "Should return empty nextStep on cancellation")
 }
 
@@ -4171,12 +4151,8 @@ func TestExecuteForEach_StepExecutorReturnsNextStepToItself(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Current behavior: Sequential execution ignores self-transition
+	// Verify self-transition: step1 executes twice due to self-transition
 	t.Log("Current execution order:", executionOrder)
-	// assert.Equal(t, []string{"step1", "step2"}, executionOrder, "Stub ignores self-transition")
-
-	// GREEN phase (T005): Allow self-transition (step executes twice)
-	// Per T005 test expectations and transition logic
 	assert.Equal(t, []string{"step1", "step1", "step2"}, executionOrder,
-		"GREEN phase: step1 executes twice due to self-transition")
+		"step1 executes twice due to self-transition")
 }

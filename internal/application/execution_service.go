@@ -154,6 +154,8 @@ func (s *ExecutionService) runWithCallStack(
 
 // runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
 // If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
+//
+//nolint:gocognit // Complexity 35: main execution loop handles state machine transitions, error handling, and hook execution. Refactoring would split tightly-coupled state management.
 func (s *ExecutionService) runWithCallStackAndWorkflow(
 	ctx context.Context,
 	workflowName string,
@@ -364,10 +366,10 @@ func (s *ExecutionService) executeStep(
 	var attempt int
 
 	if step.Retry != nil && step.Retry.MaxAttempts > 1 {
-		result, attempt, execErr = s.executeWithRetry(stepCtx, step, cmd)
+		result, attempt, execErr = s.executeWithRetry(stepCtx, step, &cmd)
 	} else {
 		attempt = 1
-		result, execErr = s.executor.Execute(stepCtx, cmd)
+		result, execErr = s.executor.Execute(stepCtx, &cmd)
 	}
 
 	// record step state
@@ -524,10 +526,10 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 	// Find last executed step for exit code and error
 	if len(execCtx.States) > 0 {
 		var lastState *workflow.StepState
-		for _, state := range execCtx.States {
-			stateCopy := state
+		for name := range execCtx.States {
+			state := execCtx.States[name]
 			if lastState == nil || state.CompletedAt.After(lastState.CompletedAt) {
-				lastState = &stateCopy
+				lastState = &state
 			}
 		}
 		if lastState != nil {
@@ -570,7 +572,8 @@ func (s *ExecutionService) buildInterpolationContext(
 ) *interpolation.Context {
 	// Convert step states
 	states := make(map[string]interpolation.StepStateData, len(execCtx.States))
-	for name, state := range execCtx.States {
+	for name := range execCtx.States {
+		state := execCtx.States[name]
 		states[name] = interpolation.StepStateData{
 			Output:   state.Output,
 			Stderr:   state.Stderr,
@@ -625,7 +628,7 @@ func (s *ExecutionService) buildInterpolationContext(
 func (s *ExecutionService) executeWithRetry(
 	ctx context.Context,
 	step *workflow.Step,
-	cmd ports.Command,
+	cmd *ports.Command,
 ) (*ports.CommandResult, int, error) {
 	// Convert domain RetryConfig to retry.Config
 	retryCfg := retry.Config{
@@ -639,7 +642,7 @@ func (s *ExecutionService) executeWithRetry(
 	}
 
 	// Create retryer with current time as seed for random jitter
-	retryer := retry.NewRetryer(retryCfg, &retryLoggerAdapter{s.logger}, time.Now().UnixNano())
+	retryer := retry.NewRetryer(&retryCfg, &retryLoggerAdapter{s.logger}, time.Now().UnixNano())
 
 	var result *ports.CommandResult
 	var execErr error
@@ -759,12 +762,13 @@ func (s *ExecutionService) executeParallelStep(
 				Stderr:      branchResult.Stderr,
 				ExitCode:    branchResult.ExitCode,
 			}
-			if branchResult.Error != nil {
+			switch {
+			case branchResult.Error != nil:
 				state.Status = workflow.StatusFailed
 				state.Error = branchResult.Error.Error()
-			} else if branchResult.ExitCode != 0 {
+			case branchResult.ExitCode != 0:
 				state.Status = workflow.StatusFailed
-			} else {
+			default:
 				state.Status = workflow.StatusCompleted
 			}
 			execCtx.SetStepState(branchName, state)
@@ -817,6 +821,8 @@ func (s *ExecutionService) executeParallelStep(
 }
 
 // executeLoopStep executes a for_each or while loop step.
+//
+//nolint:gocognit // Complexity 35: loop executor handles iteration, loop state, break/continue, and error cases. Complexity inherent to loop semantics.
 func (s *ExecutionService) executeLoopStep(
 	ctx context.Context,
 	wf *workflow.Workflow,
@@ -1326,12 +1332,15 @@ func (s *ExecutionService) executeFromStep(
 var ErrNoOperationProvider = errors.New("operation provider not configured")
 
 // ErrOperationNotImplemented is kept for backward compatibility with tests.
+//
 // Deprecated: This error is no longer returned by the implementation.
 var ErrOperationNotImplemented = errors.New("plugin operation execution: not implemented")
 
 // executePluginOperation executes a plugin-provided operation step.
 // F021: Plugin System - Executes operations registered by plugins.
 // Returns ErrNoOperationProvider if no operation provider is configured.
+//
+//nolint:gocognit // Complexity 31: plugin operation executor handles validation, resolution, state management. Plugin interface requires comprehensive error handling.
 func (s *ExecutionService) executePluginOperation(
 	ctx context.Context,
 	step *workflow.Step,
@@ -1465,6 +1474,8 @@ var ErrNoAgentRegistry = errors.New("agent registry not configured")
 // executeAgentStep executes an AI agent step.
 // F039: Agent Step Type - Executes AI provider operations via CLI interfaces.
 // Returns ErrNoAgentRegistry if no agent registry is configured.
+//
+//nolint:gocognit // Complexity 39: agent step execution handles conversation/single modes, retries, context windows, token management. Inherent to agent orchestration.
 func (s *ExecutionService) executeAgentStep(
 	ctx context.Context,
 	step *workflow.Step,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -22,7 +23,7 @@ func NewShellExecutor() *ShellExecutor {
 }
 
 // Execute runs a command and returns the result.
-func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	// apply command-level timeout if specified
 	if cmd.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -83,7 +84,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 	// handle context cancellation (process group already killed by Cancel func)
 	if ctx.Err() != nil {
 		result.ExitCode = -1
-		return result, ctx.Err()
+		return result, fmt.Errorf("command execution: %w", ctx.Err())
 	}
 
 	// extract exit code from ExitError
@@ -94,7 +95,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.
 	}
 
 	if err != nil {
-		return result, err // actual error (command not found, etc.)
+		return result, fmt.Errorf("command execution: %w", err) // actual error (command not found, etc.)
 	}
 
 	result.ExitCode = 0

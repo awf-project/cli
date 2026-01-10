@@ -692,7 +692,7 @@ func TestPluginLoad_NotDirectory_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "not-a-dir")
-	os.WriteFile(filePath, []byte("content"), 0644)
+	os.WriteFile(filePath, []byte("content"), 0o644)
 
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
@@ -1053,7 +1053,7 @@ func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
-	os.MkdirAll(pluginsDir, 0755)
+	os.MkdirAll(pluginsDir, 0o755)
 
 	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 	defer os.Unsetenv("AWF_PLUGINS_PATH")

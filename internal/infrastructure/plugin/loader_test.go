@@ -180,20 +180,20 @@ func TestFileSystemLoader_DiscoverPlugins_SubdirectoriesOnly(t *testing.T) {
 version: 1.0.0
 awf_version: ">=0.4.0"
 capabilities: [operations]`
-	if err := os.WriteFile(filepath.Join(tmpDir, "plugin.yaml"), []byte(rootManifest), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "plugin.yaml"), []byte(rootManifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create valid subdirectory plugin
 	subDir := filepath.Join(tmpDir, "my-plugin")
-	if err := os.MkdirAll(subDir, 0755); err != nil {
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	subManifest := `name: my-plugin
 version: 1.0.0
 awf_version: ">=0.4.0"
 capabilities: [operations]`
-	if err := os.WriteFile(filepath.Join(subDir, "plugin.yaml"), []byte(subManifest), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(subDir, "plugin.yaml"), []byte(subManifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

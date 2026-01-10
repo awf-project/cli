@@ -248,13 +248,13 @@ func GetIntDefault(inputs map[string]any, key string, defaultValue int) int {
 }
 
 // GetBool extracts a boolean value from inputs.
-func GetBool(inputs map[string]any, key string) (bool, bool) {
-	v, ok := inputs[key]
-	if !ok {
+func GetBool(inputs map[string]any, key string) (value, ok bool) {
+	v, exists := inputs[key]
+	if !exists {
 		return false, false
 	}
-	b, ok := v.(bool)
-	return b, ok
+	value, ok = v.(bool)
+	return value, ok
 }
 
 // GetBoolDefault extracts a boolean value with default.

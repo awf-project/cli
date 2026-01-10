@@ -10,7 +10,7 @@ import (
 
 type mockExecutor struct{}
 
-func (m *mockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *mockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	return &ports.CommandResult{
 		Stdout:   "mock output",
 		ExitCode: 0,
@@ -70,7 +70,7 @@ func TestCommandResultStruct(t *testing.T) {
 
 func TestMockExecutorExecute(t *testing.T) {
 	mock := &mockExecutor{}
-	cmd := ports.Command{Program: "test"}
+	cmd := &ports.Command{Program: "test"}
 
 	result, err := mock.Execute(context.Background(), cmd)
 	if err != nil {

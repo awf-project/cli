@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +93,7 @@ func (m *MockProvider) Execute(ctx context.Context, prompt string, options map[s
 	// Simulate processing delay
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("mock provider: %w", ctx.Err())
 	case <-time.After(m.delay):
 	}
 
@@ -132,7 +133,7 @@ func (m *MockProvider) ExecuteConversation(ctx context.Context, state *workflow.
 	// Simulate processing delay
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("mock provider: %w", ctx.Err())
 	case <-time.After(m.delay):
 	}
 
@@ -154,16 +155,16 @@ func (m *MockProvider) ExecuteConversation(ctx context.Context, state *workflow.
 		// Copy existing turns
 		for i := range state.Turns {
 			if err := newState.AddTurn(&state.Turns[i]); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("mock provider add turn: %w", err)
 			}
 		}
 	}
 	// Add user message and assistant response
 	if err := newState.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt)); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mock provider add turn: %w", err)
 	}
 	if err := newState.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "mock conversation response")); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mock provider add turn: %w", err)
 	}
 
 	return &workflow.ConversationResult{
@@ -245,9 +246,9 @@ func (m *MockProvider) cloneResult(r *workflow.AgentResult) *workflow.AgentResul
 	}
 }
 
-func truncate(s string, max int) string {
-	if len(s) <= max {
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
 		return s
 	}
-	return s[:max] + "..."
+	return s[:maxLen] + "..."
 }

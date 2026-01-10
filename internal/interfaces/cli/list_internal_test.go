@@ -17,11 +17,11 @@ func TestCollectPromptsFromPaths(t *testing.T) {
 	// Helper to create a temp directory structure with prompts
 	createPromptDir := func(t *testing.T, basePath string, prompts map[string]string) {
 		t.Helper()
-		require.NoError(t, os.MkdirAll(basePath, 0755))
+		require.NoError(t, os.MkdirAll(basePath, 0o755))
 		for name, content := range prompts {
 			fullPath := filepath.Join(basePath, name)
-			require.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0755))
-			require.NoError(t, os.WriteFile(fullPath, []byte(content), 0644))
+			require.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0o755))
+			require.NoError(t, os.WriteFile(fullPath, []byte(content), 0o644))
 		}
 	}
 
@@ -198,8 +198,8 @@ func TestCollectPromptsFromPaths(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "local", "prompts")
 		globalPath := filepath.Join(tmpDir, "global", "prompts")
-		require.NoError(t, os.MkdirAll(localPath, 0755))
-		require.NoError(t, os.MkdirAll(globalPath, 0755))
+		require.NoError(t, os.MkdirAll(localPath, 0o755))
+		require.NoError(t, os.MkdirAll(globalPath, 0o755))
 
 		paths := []repository.SourcedPath{
 			{Path: localPath, Source: repository.SourceLocal},
@@ -218,7 +218,7 @@ func TestCollectPromptsFromPaths(t *testing.T) {
 			"actual-prompt.md": "This is a prompt",
 		})
 		// Create an empty subdirectory (should not appear in results)
-		require.NoError(t, os.MkdirAll(filepath.Join(localPath, "subdir"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(localPath, "subdir"), 0o755))
 
 		paths := []repository.SourcedPath{
 			{Path: localPath, Source: repository.SourceLocal},
@@ -411,8 +411,8 @@ func TestCollectPromptsFromPaths_EdgeCases(t *testing.T) {
 	t.Run("path with trailing slash", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "prompts")
-		require.NoError(t, os.MkdirAll(localPath, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(localPath, "test.md"), []byte("test"), 0644))
+		require.NoError(t, os.MkdirAll(localPath, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(localPath, "test.md"), []byte("test"), 0o644))
 
 		// Path with trailing slash
 		paths := []repository.SourcedPath{
@@ -427,11 +427,11 @@ func TestCollectPromptsFromPaths_EdgeCases(t *testing.T) {
 	t.Run("symlinked prompt file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "prompts")
-		require.NoError(t, os.MkdirAll(localPath, 0755))
+		require.NoError(t, os.MkdirAll(localPath, 0o755))
 
 		// Create actual file
 		actualFile := filepath.Join(tmpDir, "actual.md")
-		require.NoError(t, os.WriteFile(actualFile, []byte("actual content"), 0644))
+		require.NoError(t, os.WriteFile(actualFile, []byte("actual content"), 0o644))
 
 		// Create symlink in prompts directory
 		symlink := filepath.Join(localPath, "linked.md")
@@ -454,9 +454,9 @@ func TestCollectPromptsFromPaths_EdgeCases(t *testing.T) {
 	t.Run("hidden files are included", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "prompts")
-		require.NoError(t, os.MkdirAll(localPath, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(localPath, ".hidden.md"), []byte("hidden"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(localPath, "visible.md"), []byte("visible"), 0644))
+		require.NoError(t, os.MkdirAll(localPath, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(localPath, ".hidden.md"), []byte("hidden"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(localPath, "visible.md"), []byte("visible"), 0o644))
 
 		paths := []repository.SourcedPath{
 			{Path: localPath, Source: repository.SourceLocal},
@@ -478,7 +478,7 @@ func TestCollectPromptsFromPaths_EdgeCases(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "prompts")
 		nestedPath := filepath.Join(localPath, "subdir")
-		require.NoError(t, os.MkdirAll(nestedPath, 0755))
+		require.NoError(t, os.MkdirAll(nestedPath, 0o755))
 		// Just create the directory structure, no files
 		// This tests that we don't create entries for directories
 
@@ -494,9 +494,9 @@ func TestCollectPromptsFromPaths_EdgeCases(t *testing.T) {
 	t.Run("unicode filenames", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		localPath := filepath.Join(tmpDir, "prompts")
-		require.NoError(t, os.MkdirAll(localPath, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(localPath, "日本語.md"), []byte("Japanese"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(localPath, "émoji-🚀.md"), []byte("Emoji"), 0644))
+		require.NoError(t, os.MkdirAll(localPath, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(localPath, "日本語.md"), []byte("Japanese"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(localPath, "émoji-🚀.md"), []byte("Emoji"), 0o644))
 
 		paths := []repository.SourcedPath{
 			{Path: localPath, Source: repository.SourceLocal},
@@ -522,8 +522,8 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 		localPrompts := filepath.Join(projectDir, ".awf", "prompts")
 		globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
 
-		require.NoError(t, os.MkdirAll(localPrompts, 0755))
-		require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+		require.NoError(t, os.MkdirAll(localPrompts, 0o755))
+		require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 		// Save and set environment
 		origDir, _ := os.Getwd()
@@ -544,8 +544,8 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 		localDir, globalDir, cleanup := setupMultiPathEnv(t)
 		defer cleanup()
 
-		require.NoError(t, os.WriteFile(filepath.Join(localDir, "local.md"), []byte("local"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global.md"), []byte("global"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(localDir, "local.md"), []byte("local"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global.md"), []byte("global"), 0o644))
 
 		// This would test via CLI if stub wasn't panicking
 		// For now, just verify the setup is correct
@@ -559,8 +559,8 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 		localDir, globalDir, cleanup := setupMultiPathEnv(t)
 		defer cleanup()
 
-		require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared.md"), []byte("local version"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared.md"), []byte("global version"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared.md"), []byte("local version"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared.md"), []byte("global version"), 0o644))
 
 		// Verify paths are correctly configured for priority
 		paths := BuildPromptPaths()
@@ -574,11 +574,11 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 
 		localNested := filepath.Join(localDir, "agents")
 		globalNested := filepath.Join(globalDir, "agents")
-		require.NoError(t, os.MkdirAll(localNested, 0755))
-		require.NoError(t, os.MkdirAll(globalNested, 0755))
+		require.NoError(t, os.MkdirAll(localNested, 0o755))
+		require.NoError(t, os.MkdirAll(globalNested, 0o755))
 
-		require.NoError(t, os.WriteFile(filepath.Join(localNested, "claude.md"), []byte("local claude"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(globalNested, "gpt.md"), []byte("global gpt"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(localNested, "claude.md"), []byte("local claude"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(globalNested, "gpt.md"), []byte("global gpt"), 0o644))
 
 		// Test would verify nested paths work correctly
 		paths := BuildPromptPaths()
@@ -589,8 +589,8 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 		localDir, globalDir, cleanup := setupMultiPathEnv(t)
 		defer cleanup()
 
-		require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-only.md"), []byte("local"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-only.md"), []byte("global"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-only.md"), []byte("local"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-only.md"), []byte("global"), 0o644))
 
 		// Would verify SOURCE column in output
 		// Source field was added to PromptInfo in T003

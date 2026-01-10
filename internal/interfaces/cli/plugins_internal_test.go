@@ -39,7 +39,7 @@ func TestInitPluginSystem_WithEmptyPluginsDirectory(t *testing.T) {
 	// Test with existing but empty plugins directory
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(pluginsDir, 0755))
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
 
 	cfg := &Config{
 		StoragePath: tmpDir,
@@ -62,7 +62,7 @@ func TestInitPluginSystem_WithValidPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	// Create a valid plugin.yaml manifest
 	manifestContent := `name: test-plugin
@@ -73,7 +73,7 @@ capabilities:
   - operations
 `
 	manifestPath := filepath.Join(testPluginDir, "plugin.yaml")
-	require.NoError(t, os.WriteFile(manifestPath, []byte(manifestContent), 0644))
+	require.NoError(t, os.WriteFile(manifestPath, []byte(manifestContent), 0o644))
 
 	cfg := &Config{
 		StoragePath: tmpDir,
@@ -132,7 +132,7 @@ func TestInitPluginSystem_ContextCancellation(t *testing.T) {
 	// Test behavior with cancelled context
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(pluginsDir, 0755))
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
 
 	cfg := &Config{
 		StoragePath: tmpDir,
@@ -256,7 +256,7 @@ func TestGetPluginSearchPaths_EmptyStringOverride(t *testing.T) {
 func TestFindFirstExistingDir_FirstExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "existing")
-	require.NoError(t, os.MkdirAll(existingDir, 0755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o755))
 
 	paths := []string{
 		existingDir,
@@ -272,7 +272,7 @@ func TestFindFirstExistingDir_FirstExists(t *testing.T) {
 func TestFindFirstExistingDir_MiddleExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "existing")
-	require.NoError(t, os.MkdirAll(existingDir, 0755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o755))
 
 	paths := []string{
 		filepath.Join(tmpDir, "nonexistent1"),
@@ -288,7 +288,7 @@ func TestFindFirstExistingDir_MiddleExists(t *testing.T) {
 func TestFindFirstExistingDir_LastExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "existing")
-	require.NoError(t, os.MkdirAll(existingDir, 0755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o755))
 
 	paths := []string{
 		filepath.Join(tmpDir, "nonexistent1"),
@@ -326,10 +326,10 @@ func TestFindFirstExistingDir_EmptyPaths(t *testing.T) {
 func TestFindFirstExistingDir_FileNotDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "file.txt")
-	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
 
 	dirPath := filepath.Join(tmpDir, "dir")
-	require.NoError(t, os.MkdirAll(dirPath, 0755))
+	require.NoError(t, os.MkdirAll(dirPath, 0o755))
 
 	paths := []string{
 		filePath, // File, not directory
@@ -345,7 +345,7 @@ func TestFindFirstExistingDir_FileNotDirectory(t *testing.T) {
 func TestFindFirstExistingDir_OnlyFileNoDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "file.txt")
-	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
 
 	paths := []string{
 		filePath, // File, not directory
@@ -361,8 +361,8 @@ func TestFindFirstExistingDir_MultipleExisting(t *testing.T) {
 	tmpDir := t.TempDir()
 	dir1 := filepath.Join(tmpDir, "dir1")
 	dir2 := filepath.Join(tmpDir, "dir2")
-	require.NoError(t, os.MkdirAll(dir1, 0755))
-	require.NoError(t, os.MkdirAll(dir2, 0755))
+	require.NoError(t, os.MkdirAll(dir1, 0o755))
+	require.NoError(t, os.MkdirAll(dir2, 0o755))
 
 	paths := []string{dir1, dir2}
 
@@ -419,7 +419,7 @@ func TestInitPluginSystem_IntegrationScenario(t *testing.T) {
 	// Setup storage structure like a real AWF installation
 	statesDir := filepath.Join(tmpDir, "states")
 	pluginsStateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 	// Don't create plugins dir - test graceful degradation
 
 	cfg := &Config{
@@ -451,12 +451,12 @@ func TestInitPluginSystem_WithInvalidPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	invalidPluginDir := filepath.Join(pluginsDir, "invalid-plugin")
-	require.NoError(t, os.MkdirAll(invalidPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(invalidPluginDir, 0o755))
 
 	// Create an invalid plugin.yaml
 	invalidManifest := `invalid yaml content: [[[`
 	manifestPath := filepath.Join(invalidPluginDir, "plugin.yaml")
-	require.NoError(t, os.WriteFile(manifestPath, []byte(invalidManifest), 0644))
+	require.NoError(t, os.WriteFile(manifestPath, []byte(invalidManifest), 0o644))
 
 	cfg := &Config{
 		StoragePath: tmpDir,
@@ -479,7 +479,7 @@ func TestInitPluginSystem_PluginStatesPersistence(t *testing.T) {
 	// Test that plugin states are loaded from disk
 	tmpDir := t.TempDir()
 	pluginsStateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(pluginsStateDir, 0755))
+	require.NoError(t, os.MkdirAll(pluginsStateDir, 0o755))
 
 	// Pre-create a plugins.json with some state
 	stateContent := `{
@@ -491,7 +491,7 @@ func TestInitPluginSystem_PluginStatesPersistence(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(pluginsStateDir, "plugins.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	cfg := &Config{
@@ -573,7 +573,7 @@ func TestInitPluginSystemReadOnly_NoPluginsDirectory(t *testing.T) {
 func TestInitPluginSystemReadOnly_WithEmptyPluginsDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(pluginsDir, 0755))
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
 
 	cfg := &Config{
 		StoragePath: tmpDir,
@@ -594,7 +594,7 @@ func TestInitPluginSystemReadOnly_DoesNotStartPlugins(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: test-plugin
 version: 1.0.0
@@ -605,7 +605,7 @@ capabilities:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	cfg := &Config{
@@ -635,7 +635,7 @@ func TestInitPluginSystemReadOnly_LoadsStateStore(t *testing.T) {
 
 	// Pre-create state with disabled plugin
 	stateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
 	stateContent := `{
 		"disabled-plugin": {
 			"enabled": false,
@@ -645,7 +645,7 @@ func TestInitPluginSystemReadOnly_LoadsStateStore(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(stateDir, "plugins.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	cfg := &Config{
@@ -747,7 +747,7 @@ func TestInitPluginSystemReadOnly_DiscoverWithValidPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "discovered-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: discovered-plugin
 version: 2.5.0
@@ -760,7 +760,7 @@ capabilities:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	cfg := &Config{
@@ -778,13 +778,14 @@ capabilities:
 	plugins := result.Service.ListPlugins()
 	var found bool
 	for _, p := range plugins {
-		if p.Manifest != nil && p.Manifest.Name == "discovered-plugin" {
-			found = true
-			assert.Equal(t, "2.5.0", p.Manifest.Version)
-			assert.Contains(t, p.Manifest.Capabilities, "operations")
-			assert.Contains(t, p.Manifest.Capabilities, "commands")
-			break
+		if p.Manifest == nil || p.Manifest.Name != "discovered-plugin" {
+			continue
 		}
+		found = true
+		assert.Equal(t, "2.5.0", p.Manifest.Version)
+		assert.Contains(t, p.Manifest.Capabilities, "operations")
+		assert.Contains(t, p.Manifest.Capabilities, "commands")
+		break
 	}
 	assert.True(t, found, "Plugin should be discovered")
 
@@ -795,14 +796,14 @@ func TestInitPluginSystemReadOnly_HandlesInvalidManifest(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	invalidPluginDir := filepath.Join(pluginsDir, "invalid-plugin")
-	require.NoError(t, os.MkdirAll(invalidPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(invalidPluginDir, 0o755))
 
 	// Create invalid manifest
 	invalidManifest := `invalid yaml: [[[[`
 	require.NoError(t, os.WriteFile(
 		filepath.Join(invalidPluginDir, "plugin.yaml"),
 		[]byte(invalidManifest),
-		0644,
+		0o644,
 	))
 
 	cfg := &Config{
@@ -834,7 +835,7 @@ func TestInitPluginSystemReadOnly_UsesBuildPluginPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "env-plugins")
 	testPluginDir := filepath.Join(pluginsDir, "env-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: env-test-plugin
 version: 1.0.0
@@ -843,7 +844,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
@@ -880,7 +881,7 @@ func TestInitPluginSystemReadOnly_MultiplePlugins(t *testing.T) {
 	// Create multiple plugins
 	for _, name := range []string{"plugin-a", "plugin-b", "plugin-c"} {
 		pluginDir := filepath.Join(pluginsDir, name)
-		require.NoError(t, os.MkdirAll(pluginDir, 0755))
+		require.NoError(t, os.MkdirAll(pluginDir, 0o755))
 
 		manifestContent := "name: " + name + `
 version: 1.0.0
@@ -889,7 +890,7 @@ awf_version: ">=0.1.0"
 		require.NoError(t, os.WriteFile(
 			filepath.Join(pluginDir, "plugin.yaml"),
 			[]byte(manifestContent),
-			0644,
+			0o644,
 		))
 	}
 

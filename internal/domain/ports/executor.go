@@ -27,5 +27,5 @@ type CommandResult struct {
 
 // CommandExecutor defines the contract for executing shell commands.
 type CommandExecutor interface {
-	Execute(ctx context.Context, cmd Command) (*CommandResult, error)
+	Execute(ctx context.Context, cmd *Command) (*CommandResult, error)
 }

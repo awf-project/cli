@@ -271,7 +271,7 @@ func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
 
 	// Create .awf directory but no workflow
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -292,7 +292,7 @@ func TestRunCommand_SingleStep_StepNotFound(t *testing.T) {
 
 	// Create a workflow without the requested step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 	workflowContent := `name: test
 version: "1.0.0"
 states:
@@ -304,7 +304,7 @@ states:
   done:
     type: terminal
 `
-	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0644)
+	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0o644)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -324,12 +324,12 @@ func TestRunCommand_SingleStep_Success(t *testing.T) {
 	_ = os.Chdir(tmpDir)
 
 	// Create storage directories (states and history for Badger)
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	// Create a simple workflow
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 	workflowContent := `name: test
 version: "1.0.0"
 states:
@@ -341,7 +341,7 @@ states:
   done:
     type: terminal
 `
-	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0644)
+	_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0o644)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -361,12 +361,12 @@ func TestRunCommand_SingleStep_WithInputs(t *testing.T) {
 	_ = os.Chdir(tmpDir)
 
 	// Create storage directories (states and history for Badger)
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	// Create a workflow with inputs
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 	workflowContent := `name: input-test
 version: "1.0.0"
 inputs:
@@ -381,7 +381,7 @@ states:
   done:
     type: terminal
 `
-	_ = os.WriteFile(filepath.Join(workflowsDir, "input-test.yaml"), []byte(workflowContent), 0644)
+	_ = os.WriteFile(filepath.Join(workflowsDir, "input-test.yaml"), []byte(workflowContent), 0o644)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -400,12 +400,12 @@ func TestRunCommand_SingleStep_WithMocks(t *testing.T) {
 	_ = os.Chdir(tmpDir)
 
 	// Create storage directories (states and history for Badger)
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	// Create a workflow where process depends on fetch output
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 	workflowContent := `name: mock-test
 version: "1.0.0"
 states:
@@ -421,7 +421,7 @@ states:
   done:
     type: terminal
 `
-	_ = os.WriteFile(filepath.Join(workflowsDir, "mock-test.yaml"), []byte(workflowContent), 0644)
+	_ = os.WriteFile(filepath.Join(workflowsDir, "mock-test.yaml"), []byte(workflowContent), 0o644)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -446,12 +446,12 @@ func TestRunCommand_SingleStep_TerminalStepError(t *testing.T) {
 	_ = os.Chdir(tmpDir)
 
 	// Create storage directories (states and history for Badger)
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	// Create a workflow with a terminal step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	_ = os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0o755)
 	workflowContent := `name: terminal-test
 version: "1.0.0"
 states:
@@ -459,7 +459,7 @@ states:
   done:
     type: terminal
 `
-	_ = os.WriteFile(filepath.Join(workflowsDir, "terminal-test.yaml"), []byte(workflowContent), 0644)
+	_ = os.WriteFile(filepath.Join(workflowsDir, "terminal-test.yaml"), []byte(workflowContent), 0o644)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -487,7 +487,7 @@ func TestRunCommand_DryRun(t *testing.T) {
 			name: "basic dry-run shows execution plan",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: simple
 version: "1.0.0"
 states:
@@ -499,7 +499,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "simple.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "simple.yaml"), []byte(content), 0o644))
 			},
 			args:    []string{"run", "simple", "--dry-run"},
 			wantErr: false,
@@ -513,7 +513,7 @@ states:
 			name: "dry-run with inputs shows interpolated values",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: with-inputs
 version: "1.0.0"
 inputs:
@@ -528,7 +528,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "with-inputs.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "with-inputs.yaml"), []byte(content), 0o644))
 			},
 			args:    []string{"run", "with-inputs", "--dry-run", "--input=msg=hello world"},
 			wantErr: false,
@@ -540,7 +540,7 @@ states:
 			name: "dry-run with parallel states",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: parallel
 version: "1.0.0"
 states:
@@ -563,7 +563,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "parallel.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "parallel.yaml"), []byte(content), 0o644))
 			},
 			args:    []string{"run", "parallel", "--dry-run"},
 			wantErr: false,
@@ -575,7 +575,7 @@ states:
 			name: "dry-run with nonexistent workflow",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 			},
 			args:        []string{"run", "nonexistent", "--dry-run"},
 			wantErr:     true,
@@ -585,7 +585,7 @@ states:
 			name: "dry-run with invalid input format",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: test
 version: "1.0.0"
 states:
@@ -597,7 +597,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0o644))
 			},
 			args:        []string{"run", "test", "--dry-run", "--input=invalid"},
 			wantErr:     true,
@@ -607,7 +607,7 @@ states:
 			name: "dry-run with JSON output format",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: json-test
 version: "1.0.0"
 states:
@@ -619,7 +619,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "json-test.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "json-test.yaml"), []byte(content), 0o644))
 			},
 			args:    []string{"--format=json", "run", "json-test", "--dry-run"},
 			wantErr: false,
@@ -676,10 +676,10 @@ func TestRunCommand_Interactive(t *testing.T) {
 			name: "interactive mode with simple workflow",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				// Create storage directories for state and history
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755))
 				content := `name: interactive-test
 version: "1.0.0"
 states:
@@ -691,7 +691,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "interactive-test.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "interactive-test.yaml"), []byte(content), 0o644))
 			},
 			args:      []string{"run", "interactive-test", "--interactive"},
 			mockInput: "y\n", // Proceed with step
@@ -701,9 +701,9 @@ states:
 			name: "interactive mode with breakpoints",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755))
 				content := `name: breakpoint-test
 version: "1.0.0"
 states:
@@ -719,7 +719,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "breakpoint-test.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "breakpoint-test.yaml"), []byte(content), 0o644))
 			},
 			args:      []string{"run", "breakpoint-test", "--interactive", "--breakpoint=process"},
 			mockInput: "y\n", // Proceed
@@ -729,9 +729,9 @@ states:
 			name: "interactive mode with comma-separated breakpoints",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755))
 				content := `name: multi-breakpoint
 version: "1.0.0"
 states:
@@ -751,7 +751,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "multi-breakpoint.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "multi-breakpoint.yaml"), []byte(content), 0o644))
 			},
 			args:      []string{"run", "multi-breakpoint", "--interactive", "--breakpoint=step1,step3"},
 			mockInput: "y\ny\n", // Proceed for each breakpoint
@@ -761,9 +761,9 @@ states:
 			name: "interactive mode with inputs",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755))
 				content := `name: input-interactive
 version: "1.0.0"
 inputs:
@@ -778,7 +778,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "input-interactive.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "input-interactive.yaml"), []byte(content), 0o644))
 			},
 			args:      []string{"run", "input-interactive", "--interactive", "--input=msg=test"},
 			mockInput: "y\n",
@@ -788,7 +788,7 @@ states:
 			name: "interactive mode with nonexistent workflow",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 			},
 			args:        []string{"run", "nonexistent", "--interactive"},
 			mockInput:   "",
@@ -799,7 +799,7 @@ states:
 			name: "interactive mode with invalid input format",
 			setupWorkflow: func(t *testing.T, tmpDir string) {
 				workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-				require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+				require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 				content := `name: test
 version: "1.0.0"
 states:
@@ -811,7 +811,7 @@ states:
   done:
     type: terminal
 `
-				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(content), 0o644))
 			},
 			args:        []string{"run", "test", "--interactive", "--input=invalid"},
 			mockInput:   "",
@@ -929,8 +929,8 @@ func TestRunCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 
 			// Setup workflow and directories
 			workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-			require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-			require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+			require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
 
 			workflowContent := `name: sqlite-test
 version: "1.0.0"
@@ -943,7 +943,7 @@ states:
   done:
     type: terminal
 `
-			require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "sqlite-test.yaml"), []byte(workflowContent), 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "sqlite-test.yaml"), []byte(workflowContent), 0o644))
 
 			cmd := cli.NewRootCommand()
 			var out bytes.Buffer
@@ -985,8 +985,8 @@ func TestRunCommand_ConcurrentWorkflows(t *testing.T) {
 
 	// Setup workflow and directories
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
 
 	// Create a workflow that takes a bit of time
 	workflowContent := `name: concurrent-test
@@ -1000,7 +1000,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "concurrent-test.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "concurrent-test.yaml"), []byte(workflowContent), 0o644))
 
 	// Run multiple workflows concurrently
 	const numConcurrent = 3
@@ -1031,7 +1031,8 @@ states:
 	close(errChan)
 
 	// Check if any worker failed
-	var errors []error
+	// Preallocate for potential errors
+	errors := make([]error, 0, numConcurrent)
 	for err := range errChan {
 		errors = append(errors, err)
 	}
@@ -1055,8 +1056,8 @@ func TestRunCommand_SingleStep_SQLiteHistory(t *testing.T) {
 
 	// Setup
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
 
 	workflowContent := `name: step-test
 version: "1.0.0"
@@ -1069,7 +1070,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "step-test.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "step-test.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1098,11 +1099,11 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "resolves @prompts/ prefix to file content",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(promptsDir, "test.md"),
 					[]byte("This is prompt content"),
-					0644,
+					0o644,
 				))
 			},
 			inputFlag: "prompt=@prompts/test.md",
@@ -1112,11 +1113,11 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "trims whitespace from prompt content",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(promptsDir, "whitespace.txt"),
 					[]byte("\n  content with whitespace  \n\n"),
-					0644,
+					0o644,
 				))
 			},
 			inputFlag: "msg=@prompts/whitespace.txt",
@@ -1126,11 +1127,11 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "supports nested directories",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				nestedDir := filepath.Join(tmpDir, ".awf", "prompts", "ai", "agents")
-				require.NoError(t, os.MkdirAll(nestedDir, 0755))
+				require.NoError(t, os.MkdirAll(nestedDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(nestedDir, "system.md"),
 					[]byte("You are an AI assistant"),
-					0644,
+					0o644,
 				))
 			},
 			inputFlag: "system=@prompts/ai/agents/system.md",
@@ -1140,7 +1141,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "error when prompt file does not exist",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				// No file created
 			},
 			inputFlag:   "prompt=@prompts/nonexistent.md",
@@ -1151,7 +1152,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "error when .awf/prompts directory does not exist",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				// Create .awf but not prompts subdirectory
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf"), 0755))
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf"), 0o755))
 			},
 			inputFlag:   "prompt=@prompts/test.md",
 			wantErr:     true,
@@ -1161,10 +1162,10 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "blocks path traversal attack",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				// Create a sensitive file outside prompts dir
 				sensitiveFile := filepath.Join(tmpDir, "secret.txt")
-				require.NoError(t, os.WriteFile(sensitiveFile, []byte("secret"), 0644))
+				require.NoError(t, os.WriteFile(sensitiveFile, []byte("secret"), 0o644))
 			},
 			inputFlag:   "data=@prompts/../secret.txt",
 			wantErr:     true,
@@ -1174,7 +1175,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "blocks absolute path in prompt reference",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 			},
 			inputFlag:   "data=@prompts//etc/passwd",
 			wantErr:     true,
@@ -1184,7 +1185,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "regular value without @prompts/ prefix is unchanged",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 			},
 			inputFlag: "name=plain-value",
 			wantErr:   false,
@@ -1193,11 +1194,11 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 			name: "supports .txt extension",
 			setupPrompt: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(promptsDir, "note.txt"),
 					[]byte("Plain text content"),
-					0644,
+					0o644,
 				))
 			},
 			inputFlag: "note=@prompts/note.txt",
@@ -1217,7 +1218,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 
 			// Create a minimal workflow for the test
 			workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-			_ = os.MkdirAll(workflowsDir, 0755)
+			_ = os.MkdirAll(workflowsDir, 0o755)
 			workflowContent := `name: test
 version: "1.0.0"
 states:
@@ -1229,7 +1230,7 @@ states:
   done:
     type: terminal
 `
-			_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0644)
+			_ = os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(workflowContent), 0o644)
 
 			cmd := cli.NewRootCommand()
 			var out bytes.Buffer
@@ -1269,7 +1270,7 @@ func TestRunCommand_WorkflowHelp_WithInputs(t *testing.T) {
 
 	// Create a workflow with multiple inputs of varying types
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: commit
 version: "1.0.0"
@@ -1297,7 +1298,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "commit.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "commit.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1350,7 +1351,7 @@ func TestRunCommand_WorkflowHelp_NoInputs(t *testing.T) {
 
 	// Create a workflow with no inputs
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: deploy
 version: "1.0.0"
@@ -1363,7 +1364,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "deploy.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "deploy.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1392,7 +1393,7 @@ func TestRunCommand_WorkflowHelp_WorkflowNotFound(t *testing.T) {
 
 	// Create .awf directory but no workflow
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1423,7 +1424,7 @@ func TestRunCommand_WorkflowHelp_WithDescription(t *testing.T) {
 
 	// Create a workflow with a description
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: analyze
 version: "1.0.0"
@@ -1441,7 +1442,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "analyze.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "analyze.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1473,7 +1474,7 @@ func TestRunCommand_WorkflowHelp_WithoutDescription(t *testing.T) {
 
 	// Create a workflow without a description
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: simple
 version: "1.0.0"
@@ -1490,7 +1491,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "simple.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "simple.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1520,7 +1521,7 @@ func TestRunCommand_WorkflowHelp_InputWithoutDescription(t *testing.T) {
 
 	// Create a workflow with inputs that have no descriptions
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: nodesc
 version: "1.0.0"
@@ -1541,7 +1542,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "nodesc.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "nodesc.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1570,7 +1571,7 @@ func TestRunCommand_WorkflowHelp_DefaultValues(t *testing.T) {
 
 	// Create a workflow with various default values
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: defaults
 version: "1.0.0"
@@ -1602,7 +1603,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "defaults.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "defaults.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1661,7 +1662,7 @@ func TestRunCommand_WorkflowHelp_HelpTakesPrecedence(t *testing.T) {
 
 	// Create a workflow that would fail if executed
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: would-fail
 version: "1.0.0"
@@ -1678,7 +1679,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "would-fail.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "would-fail.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1707,7 +1708,7 @@ func TestRunCommand_WorkflowHelp_TableFormat(t *testing.T) {
 
 	// Create a workflow with inputs
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: formatted
 version: "1.0.0"
@@ -1729,7 +1730,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "formatted.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "formatted.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1759,7 +1760,7 @@ func TestRunCommand_WorkflowHelp_AllInputTypes(t *testing.T) {
 
 	// Create a workflow with all input types
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: alltypes
 version: "1.0.0"
@@ -1788,7 +1789,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "alltypes.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "alltypes.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1823,7 +1824,7 @@ func TestRunCommand_DryRun_AgentStep_Basic(t *testing.T) {
 
 	// Create a workflow with a simple agent step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-simple
 version: "1.0.0"
@@ -1846,7 +1847,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-simple.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-simple.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1876,7 +1877,7 @@ func TestRunCommand_DryRun_AgentStep_ResolvedPrompt(t *testing.T) {
 
 	// Create a workflow with agent step using input interpolation
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-interpolation
 version: "1.0.0"
@@ -1898,7 +1899,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-interpolation.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-interpolation.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1933,7 +1934,7 @@ func TestRunCommand_DryRun_AgentStep_CLICommand(t *testing.T) {
 
 	// Create a workflow with agent step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-cli
 version: "1.0.0"
@@ -1949,7 +1950,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-cli.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-cli.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -1978,7 +1979,7 @@ func TestRunCommand_DryRun_AgentStep_WithOptions(t *testing.T) {
 
 	// Create a workflow with agent step with multiple options
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-options
 version: "1.0.0"
@@ -1998,7 +1999,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-options.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-options.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2027,7 +2028,7 @@ func TestRunCommand_DryRun_AgentStep_CustomProvider(t *testing.T) {
 
 	// Create a workflow with custom provider
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-custom
 version: "1.0.0"
@@ -2042,7 +2043,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-custom.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-custom.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2070,7 +2071,7 @@ func TestRunCommand_DryRun_AgentStep_Parallel(t *testing.T) {
 
 	// Create a workflow with parallel agent steps
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-parallel
 version: "1.0.0"
@@ -2100,7 +2101,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-parallel.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-parallel.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2130,7 +2131,7 @@ func TestRunCommand_DryRun_AgentStep_MultiTurn(t *testing.T) {
 
 	// Create a workflow with multi-turn agent conversation
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-multiturn
 version: "1.0.0"
@@ -2157,7 +2158,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-multiturn.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-multiturn.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2186,7 +2187,7 @@ func TestRunCommand_DryRun_AgentStep_WithTimeout(t *testing.T) {
 
 	// Create a workflow with agent step with custom timeout
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-timeout
 version: "1.0.0"
@@ -2201,7 +2202,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-timeout.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-timeout.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2229,7 +2230,7 @@ func TestRunCommand_DryRun_AgentStep_MixedSteps(t *testing.T) {
 
 	// Create a workflow with mixed step types
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-mixed
 version: "1.0.0"
@@ -2251,7 +2252,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-mixed.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-mixed.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2281,7 +2282,7 @@ func TestRunCommand_DryRun_AgentStep_JSONOutput(t *testing.T) {
 
 	// Create a workflow with agent step
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-json
 version: "1.0.0"
@@ -2295,7 +2296,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-json.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-json.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2322,7 +2323,7 @@ func TestRunCommand_DryRun_AgentStep_InvalidPromptSyntax(t *testing.T) {
 
 	// Create a workflow with invalid template syntax in prompt
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-invalid
 version: "1.0.0"
@@ -2336,7 +2337,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-invalid.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-invalid.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2365,7 +2366,7 @@ func TestRunCommand_DryRun_AgentStep_EmptyPrompt(t *testing.T) {
 
 	// Create a workflow with empty prompt
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	workflowContent := `name: agent-empty
 version: "1.0.0"
@@ -2379,7 +2380,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-empty.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-empty.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -2404,7 +2405,7 @@ func TestRunCommand_DryRun_AgentStep_LongPrompt(t *testing.T) {
 
 	// Create a workflow with a very long prompt
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	longPrompt := strings.Repeat("This is a very long prompt. ", 100)
 	workflowContent := fmt.Sprintf(`name: agent-long
@@ -2419,7 +2420,7 @@ states:
   done:
     type: terminal
 `, longPrompt)
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-long.yaml"), []byte(workflowContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "agent-long.yaml"), []byte(workflowContent), 0o644))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer

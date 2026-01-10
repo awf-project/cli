@@ -188,7 +188,7 @@ func TestApplyJitter_ZeroJitter(t *testing.T) {
 }
 
 func TestShouldRetry_EmptyCodesRetriesAll(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts:        5,
 		RetryableExitCodes: []int{}, // empty = retry any non-zero
 	}, nil, 42)
@@ -213,7 +213,7 @@ func TestShouldRetry_EmptyCodesRetriesAll(t *testing.T) {
 }
 
 func TestShouldRetry_SpecificCodes(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts:        5,
 		RetryableExitCodes: []int{1, 2, 130},
 	}, nil, 42)
@@ -241,7 +241,7 @@ func TestShouldRetry_SpecificCodes(t *testing.T) {
 }
 
 func TestShouldRetry_ExceedsMaxAttempts(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts: 3,
 	}, nil, 42)
 
@@ -288,7 +288,7 @@ func TestNextDelay_UsesStrategy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			retryer := NewRetryer(tt.config, nil, 42)
+			retryer := NewRetryer(&tt.config, nil, 42)
 			got := retryer.NextDelay(tt.attempt)
 
 			assert.GreaterOrEqual(t, got, tt.wantMin)
@@ -298,7 +298,7 @@ func TestNextDelay_UsesStrategy(t *testing.T) {
 }
 
 func TestWait_RespectsContextCancellation(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		Strategy:     StrategyConstant,
 		InitialDelay: 10 * time.Second, // long delay
 		MaxDelay:     30 * time.Second,
@@ -336,7 +336,7 @@ func TestIsRetryableExitCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			retryer := NewRetryer(Config{
+			retryer := NewRetryer(&Config{
 				RetryableExitCodes: tt.codes,
 				MaxAttempts:        5,
 			}, nil, 42)
@@ -561,7 +561,7 @@ func TestApplyJitter_DeterministicWithSameSeed(t *testing.T) {
 
 func TestNewRetryer_WithNilLogger(t *testing.T) {
 	// Should work without panicking when logger is nil
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts:  3,
 		InitialDelay: 1 * time.Second,
 		MaxDelay:     30 * time.Second,
@@ -589,8 +589,8 @@ func TestNewRetryer_DeterministicJitter(t *testing.T) {
 		Jitter:       0.2,
 	}
 
-	r1 := NewRetryer(config, nil, 12345)
-	r2 := NewRetryer(config, nil, 12345)
+	r1 := NewRetryer(&config, nil, 12345)
+	r2 := NewRetryer(&config, nil, 12345)
 
 	for attempt := 2; attempt <= 5; attempt++ {
 		d1 := r1.NextDelay(attempt)
@@ -600,7 +600,7 @@ func TestNewRetryer_DeterministicJitter(t *testing.T) {
 }
 
 func TestWait_CompletesNormally(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		Strategy:     StrategyConstant,
 		InitialDelay: 10 * time.Millisecond, // short delay for test
 		MaxDelay:     30 * time.Second,
@@ -616,7 +616,7 @@ func TestWait_CompletesNormally(t *testing.T) {
 }
 
 func TestWait_WithTimeout(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		Strategy:     StrategyConstant,
 		InitialDelay: 5 * time.Second, // long delay
 		MaxDelay:     30 * time.Second,
@@ -646,7 +646,7 @@ func TestShouldRetry_ZeroExitCodeNeverRetries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			retryer := NewRetryer(Config{
+			retryer := NewRetryer(&Config{
 				MaxAttempts:        5,
 				RetryableExitCodes: tt.codes,
 			}, nil, 42)
@@ -658,7 +658,7 @@ func TestShouldRetry_ZeroExitCodeNeverRetries(t *testing.T) {
 }
 
 func TestShouldRetry_AttemptBoundary(t *testing.T) {
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts: 5,
 	}, nil, 42)
 
@@ -699,7 +699,7 @@ func TestNextDelay_WithAllStrategies(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			retryer := NewRetryer(Config{
+			retryer := NewRetryer(&Config{
 				Strategy:     tt.strategy,
 				InitialDelay: 1 * time.Second,
 				MaxDelay:     30 * time.Second,
@@ -750,7 +750,7 @@ func (l *recordingLogger) Info(msg string, keysAndValues ...any) {
 
 func TestRetryer_LogsAttempts(t *testing.T) {
 	logger := &recordingLogger{}
-	retryer := NewRetryer(Config{
+	retryer := NewRetryer(&Config{
 		MaxAttempts:  3,
 		InitialDelay: 1 * time.Millisecond,
 		MaxDelay:     30 * time.Second,

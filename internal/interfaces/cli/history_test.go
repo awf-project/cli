@@ -340,7 +340,7 @@ func TestRunHistory_NoHistory(t *testing.T) {
 
 	// Create empty history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -387,7 +387,7 @@ func TestRunHistory_InvalidSinceFormat(t *testing.T) {
 
 			// Create history directory
 			historyDir := filepath.Join(tmpDir, "history")
-			require.NoError(t, os.MkdirAll(historyDir, 0755))
+			require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 			cmd := cli.NewRootCommand()
 			var out bytes.Buffer
@@ -417,7 +417,7 @@ func TestRunHistory_ValidSinceFormat(t *testing.T) {
 
 	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -438,7 +438,7 @@ func TestRunHistory_Stats(t *testing.T) {
 
 	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	t.Run("text format shows statistics", func(t *testing.T) {
 		cmd := cli.NewRootCommand()
@@ -489,7 +489,7 @@ func TestRunHistory_JSONFormat(t *testing.T) {
 
 	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -515,7 +515,7 @@ func TestRunHistory_Filters(t *testing.T) {
 
 	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	tests := []struct {
 		name string
@@ -570,7 +570,7 @@ func TestRunHistory_TextOutput(t *testing.T) {
 
 	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
-	require.NoError(t, os.MkdirAll(historyDir, 0755))
+	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -660,7 +660,8 @@ func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
 	close(errChan)
 
 	// Check if any worker failed
-	var errors []error
+	// Preallocate for potential errors
+	errors := make([]error, 0, numConcurrent)
 	for err := range errChan {
 		errors = append(errors, err)
 	}

@@ -32,7 +32,7 @@ func TestConfigShow_Integration(t *testing.T) {
 	t.Run("displays config values when config exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   project: "my-project"
@@ -42,7 +42,7 @@ func TestConfigShow_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		// Change to temp dir so config is discovered
@@ -92,7 +92,7 @@ func TestConfigShow_Integration(t *testing.T) {
 	t.Run("displays error for invalid YAML", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Invalid YAML: unclosed bracket
 		invalidYAML := `inputs: [
@@ -101,7 +101,7 @@ func TestConfigShow_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(invalidYAML),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -122,7 +122,7 @@ func TestConfigShow_Integration(t *testing.T) {
 	t.Run("outputs JSON format correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   project: "json-test"
@@ -131,7 +131,7 @@ func TestConfigShow_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -157,7 +157,7 @@ func TestConfigShow_Integration(t *testing.T) {
 	t.Run("outputs quiet format correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   alpha: "first"
@@ -167,7 +167,7 @@ func TestConfigShow_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -204,7 +204,7 @@ func TestConfigInputsInWorkflow_Integration(t *testing.T) {
 
 		// Create .awf/config.yaml with inputs
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   message: "hello from config"
@@ -212,7 +212,7 @@ func TestConfigInputsInWorkflow_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		// Create a workflow that uses the input
@@ -232,11 +232,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "config-input-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -270,7 +270,7 @@ states:
 
 		// Create .awf/config.yaml with inputs
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   env: "staging"
@@ -278,7 +278,7 @@ states:
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		// Create a workflow that uses the input
@@ -298,11 +298,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "override-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -353,11 +353,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "no-config-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -396,7 +396,7 @@ func TestConfigValidation_Integration(t *testing.T) {
 	t.Run("invalid YAML produces error on workflow run", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Invalid YAML
 		invalidYAML := `inputs: [
@@ -405,7 +405,7 @@ func TestConfigValidation_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(invalidYAML),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: simple-test
@@ -420,11 +420,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "simple-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -451,7 +451,7 @@ states:
 	t.Run("unknown keys trigger warning but workflow proceeds", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Config with unknown keys - should warn but not fail
 		configContent := `inputs:
@@ -463,7 +463,7 @@ deprecated_setting: true
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: unknown-key-test
@@ -482,11 +482,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "unknown-key-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -556,7 +556,7 @@ func TestConfigInit_Integration(t *testing.T) {
 	t.Run("init does not overwrite existing config", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Create existing config with custom content
 		customContent := `# My custom config
@@ -564,7 +564,7 @@ inputs:
   custom_key: "custom_value"
 `
 		configPath := filepath.Join(awfDir, "config.yaml")
-		require.NoError(t, os.WriteFile(configPath, []byte(customContent), 0644))
+		require.NoError(t, os.WriteFile(configPath, []byte(customContent), 0o644))
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -596,7 +596,7 @@ func TestConfigMultipleInputTypes_Integration(t *testing.T) {
 	t.Run("supports string, number, and boolean inputs", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   name: "test-project"
@@ -607,7 +607,7 @@ func TestConfigMultipleInputTypes_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -648,13 +648,13 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 	t.Run("empty config file is valid", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Empty file is valid YAML - should not error
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(""),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -677,7 +677,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 	t.Run("config with only comments is valid", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		commentOnlyConfig := `# This is a comment
 # Another comment
@@ -687,7 +687,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(commentOnlyConfig),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -707,7 +707,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 	t.Run("config with empty inputs section is valid", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		emptyInputsConfig := `inputs:
 # No inputs defined yet
@@ -715,7 +715,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(emptyInputsConfig),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -737,7 +737,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 		// They are explicitly set (not unset), so workflow defaults don't apply
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		nullValueConfig := `inputs:
   project: "my-project"
@@ -746,7 +746,7 @@ func TestConfigEdgeCases_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(nullValueConfig),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: null-test
@@ -768,11 +768,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "null-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -861,7 +861,7 @@ func TestConfigMultipleOverrides_Integration(t *testing.T) {
 	t.Run("multiple CLI inputs override multiple config values", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   name: "config-name"
@@ -871,7 +871,7 @@ func TestConfigMultipleOverrides_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: multi-override-test
@@ -896,11 +896,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "multi-override-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -937,7 +937,7 @@ states:
 	t.Run("CLI input with equals sign in value works correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   query: "default"
@@ -945,7 +945,7 @@ states:
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: equals-test
@@ -964,11 +964,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "equals-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -1007,7 +1007,7 @@ func TestConfigResume_Integration(t *testing.T) {
 	t.Run("resume uses config inputs for new inputs", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   project: "resumed-project"
@@ -1015,7 +1015,7 @@ func TestConfigResume_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		// Create a simple workflow
@@ -1035,11 +1035,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "resume-config-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -1083,14 +1083,14 @@ func TestConfigPermissions_Integration(t *testing.T) {
 	t.Run("unreadable config file produces error", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configPath := filepath.Join(awfDir, "config.yaml")
-		require.NoError(t, os.WriteFile(configPath, []byte("inputs:\n  key: value\n"), 0644))
+		require.NoError(t, os.WriteFile(configPath, []byte("inputs:\n  key: value\n"), 0o644))
 
 		// Make file unreadable
-		require.NoError(t, os.Chmod(configPath, 0000))
-		defer os.Chmod(configPath, 0644) // Restore for cleanup
+		require.NoError(t, os.Chmod(configPath, 0o000))
+		defer os.Chmod(configPath, 0o644) // Restore for cleanup
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -1117,7 +1117,7 @@ func TestConfigWithSpecialCharacters_Integration(t *testing.T) {
 	t.Run("config values with special characters are preserved", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		configContent := `inputs:
   url: "https://example.com/path?foo=bar&baz=qux"
@@ -1128,7 +1128,7 @@ func TestConfigWithSpecialCharacters_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		originalDir, _ := os.Getwd()
@@ -1155,7 +1155,7 @@ func TestConfigWithSpecialCharacters_Integration(t *testing.T) {
 	t.Run("config values with shell metacharacters work in workflow", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		// Values with shell metacharacters that need proper escaping
 		configContent := `inputs:
@@ -1164,7 +1164,7 @@ func TestConfigWithSpecialCharacters_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(awfDir, "config.yaml"),
 			[]byte(configContent),
-			0644,
+			0o644,
 		))
 
 		wfYAML := `name: special-chars-test
@@ -1183,11 +1183,11 @@ states:
     type: terminal
 `
 		wfDir := filepath.Join(tmpDir, "workflows")
-		require.NoError(t, os.MkdirAll(wfDir, 0755))
+		require.NoError(t, os.MkdirAll(wfDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(wfDir, "special-chars-test.yaml"),
 			[]byte(wfYAML),
-			0644,
+			0o644,
 		))
 
 		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)

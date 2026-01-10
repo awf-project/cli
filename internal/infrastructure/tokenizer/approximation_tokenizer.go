@@ -40,7 +40,7 @@ func (a *ApproximationTokenizer) CountTokens(text string) (int, error) {
 	}
 
 	// Empty text = 0 tokens
-	if len(text) == 0 {
+	if text == "" {
 		return 0, nil
 	}
 

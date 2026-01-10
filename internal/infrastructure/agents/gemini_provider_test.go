@@ -146,7 +146,6 @@ func TestGeminiProvider_Validate_CLINotInstalled(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	err := provider.Validate()
-
 	if err != nil {
 		assert.Contains(t, err.Error(), "gemini")
 	}

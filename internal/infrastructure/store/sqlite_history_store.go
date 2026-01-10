@@ -34,7 +34,7 @@ type SQLiteHistoryStore struct {
 func NewSQLiteHistoryStore(path string) (*SQLiteHistoryStore, error) {
 	// Create parent directory if needed
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create history directory: %w", err)
 	}
 
@@ -60,6 +60,7 @@ func NewSQLiteHistoryStore(path string) (*SQLiteHistoryStore, error) {
 		}
 
 		// Ping to ensure connection works
+		//nolint:noctx // NewSQLiteHistoryStore doesn't have context parameter
 		if err := db.Ping(); err != nil {
 			lastErr = fmt.Errorf("ping sqlite: %w", err)
 			continue
@@ -97,8 +98,12 @@ func createSchema(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_status ON execution_records(status);
 		CREATE INDEX IF NOT EXISTS idx_completed_at ON execution_records(completed_at);
 	`
+	//nolint:noctx // createSchema is internal function without context parameter
 	_, err := db.Exec(schema)
-	return err
+	if err != nil {
+		return fmt.Errorf("initialize schema: %w", err)
+	}
+	return nil
 }
 
 // Record stores a workflow execution record.
@@ -112,7 +117,7 @@ func (s *SQLiteHistoryStore) Record(ctx context.Context, record *workflow.Execut
 
 	// Check context cancellation
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	query := `
@@ -319,5 +324,8 @@ func (s *SQLiteHistoryStore) Close() error {
 		s.mu.Unlock()
 		closeErr = s.db.Close()
 	})
-	return closeErr
+	if closeErr != nil {
+		return fmt.Errorf("close database: %w", closeErr)
+	}
+	return nil
 }

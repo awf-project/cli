@@ -81,7 +81,6 @@ func TestTokenizer_CountTokens_HappyPath(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTokens(text)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -105,7 +104,6 @@ func TestTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -180,7 +178,6 @@ func TestTokenizer_CountTokens_EmptyString(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTokens("")
-
 	// Assert - should handle empty string gracefully
 	if err != nil {
 		t.Errorf("unexpected error for empty string: %v", err)
@@ -198,7 +195,6 @@ func TestTokenizer_CountTokens_LargeText(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTokens(largeText)
-
 	// Assert - should handle large text
 	if err != nil {
 		t.Errorf("unexpected error for large text: %v", err)
@@ -215,7 +211,6 @@ func TestTokenizer_CountTokens_UnicodeText(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTokens(unicodeText)
-
 	// Assert - should handle unicode text
 	if err != nil {
 		t.Errorf("unexpected error for unicode text: %v", err)
@@ -232,7 +227,6 @@ func TestTokenizer_CountTokens_SpecialCharacters(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTokens(specialText)
-
 	// Assert - should handle special characters and code
 	if err != nil {
 		t.Errorf("unexpected error for special characters: %v", err)
@@ -248,7 +242,6 @@ func TestTokenizer_CountTurnsTokens_EmptyArray(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens([]string{})
-
 	// Assert - should handle empty array
 	if err != nil {
 		t.Errorf("unexpected error for empty array: %v", err)
@@ -264,7 +257,6 @@ func TestTokenizer_CountTurnsTokens_NilArray(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens(nil)
-
 	// Assert - should handle nil array gracefully
 	if err != nil {
 		t.Errorf("unexpected error for nil array: %v", err)
@@ -281,7 +273,6 @@ func TestTokenizer_CountTurnsTokens_SingleTurn(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-
 	// Assert - should handle single turn
 	if err != nil {
 		t.Errorf("unexpected error for single turn: %v", err)
@@ -302,7 +293,6 @@ func TestTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-
 	// Assert - should handle many turns
 	if err != nil {
 		t.Errorf("unexpected error for many turns: %v", err)
@@ -325,7 +315,6 @@ func TestTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
 
 	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-
 	// Assert - should handle mixed empty/non-empty turns
 	if err != nil {
 		t.Errorf("unexpected error for mixed turns: %v", err)
@@ -484,7 +473,6 @@ func TestTokenizer_DifferentModels(t *testing.T) {
 
 			// Act
 			count, err := tokenizer.CountTokens(text)
-
 			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for model %s: %v", tt.modelName, err)
@@ -517,7 +505,6 @@ func TestTokenizer_CountTurnsTokens_Performance(t *testing.T) {
 
 	// Act
 	_, err := tokenizer.CountTurnsTokens(turns)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

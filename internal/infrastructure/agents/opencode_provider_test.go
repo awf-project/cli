@@ -152,7 +152,6 @@ func TestOpenCodeProvider_Validate_CLINotInstalled(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	err := provider.Validate()
-
 	if err != nil {
 		assert.Contains(t, err.Error(), "opencode")
 	}

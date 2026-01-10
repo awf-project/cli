@@ -266,7 +266,7 @@ func (w *OutputWriter) WriteWorkflows(workflows []WorkflowInfo) error {
 }
 
 // WriteExecution outputs execution status.
-func (w *OutputWriter) WriteExecution(exec ExecutionInfo) error {
+func (w *OutputWriter) WriteExecution(exec *ExecutionInfo) error {
 	switch w.format {
 	case FormatJSON:
 		return w.writeJSON(exec)
@@ -281,7 +281,7 @@ func (w *OutputWriter) WriteExecution(exec ExecutionInfo) error {
 }
 
 // WriteRunResult outputs run command result.
-func (w *OutputWriter) WriteRunResult(result RunResult) error {
+func (w *OutputWriter) WriteRunResult(result *RunResult) error {
 	switch w.format {
 	case FormatJSON:
 		return w.writeJSON(result)
@@ -315,7 +315,7 @@ func (w *OutputWriter) WriteValidation(result ValidationResult) error {
 }
 
 // WriteValidationTable outputs validation result with detailed table.
-func (w *OutputWriter) WriteValidationTable(result ValidationResultTable) error {
+func (w *OutputWriter) WriteValidationTable(result *ValidationResultTable) error {
 	if w.format == FormatJSON {
 		return w.writeJSON(result)
 	}
@@ -420,7 +420,10 @@ func (w *OutputWriter) writeResumableTable(infos []ResumableInfo) error {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			info.WorkflowID, info.WorkflowName, info.Status, info.CurrentStep, info.Progress, info.UpdatedAt)
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
 }
 
 func (w *OutputWriter) writeResumableBorderedTable(infos []ResumableInfo) error {
@@ -450,7 +453,10 @@ func (w *OutputWriter) writePromptsTable(prompts []PromptInfo) error {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%d B\t%s\n", p.Name, p.Source, p.Size, p.ModTime)
 	}
 
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
 }
 
 func (w *OutputWriter) writePromptsBorderedTable(prompts []PromptInfo) error {
@@ -491,7 +497,10 @@ func (w *OutputWriter) writePluginsTable(plugins []PluginInfo) error {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Name, p.Version, p.Status, enabled, caps)
 	}
 
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
 }
 
 func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
@@ -525,7 +534,10 @@ func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
 func (w *OutputWriter) writeJSON(v any) error {
 	enc := json.NewEncoder(w.out)
 	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encoding JSON: %w", err)
+	}
+	return nil
 }
 
 func (w *OutputWriter) writeWorkflowsTable(workflows []WorkflowInfo) error {
@@ -542,7 +554,10 @@ func (w *OutputWriter) writeWorkflowsTable(workflows []WorkflowInfo) error {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", wf.Name, wf.Source, wf.Version, desc)
 	}
 
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
 }
 
 func (w *OutputWriter) writeWorkflowsBorderedTable(workflows []WorkflowInfo) error {
@@ -564,7 +579,7 @@ func (w *OutputWriter) writeWorkflowsBorderedTable(workflows []WorkflowInfo) err
 	return nil
 }
 
-func (w *OutputWriter) writeExecutionText(exec ExecutionInfo) error {
+func (w *OutputWriter) writeExecutionText(exec *ExecutionInfo) error {
 	_, _ = fmt.Fprintf(w.out, "Workflow: %s\n", exec.WorkflowName)
 	_, _ = fmt.Fprintf(w.out, "ID: %s\n", exec.WorkflowID)
 	_, _ = fmt.Fprintf(w.out, "Status: %s\n", w.colorizer.Status(exec.Status, exec.Status))
@@ -590,7 +605,7 @@ func (w *OutputWriter) writeExecutionText(exec ExecutionInfo) error {
 	return nil
 }
 
-func (w *OutputWriter) writeRunResultText(result RunResult) error {
+func (w *OutputWriter) writeRunResultText(result *RunResult) error {
 	status := w.colorizer.Status(result.Status, result.Status)
 	_, _ = fmt.Fprintf(w.out, "Workflow %s in %dms\n", status, result.DurationMs)
 	_, _ = fmt.Fprintf(w.out, "Workflow ID: %s\n", result.WorkflowID)
@@ -614,7 +629,7 @@ func (w *OutputWriter) writeValidationText(result ValidationResult) error {
 	return nil
 }
 
-func (w *OutputWriter) writeExecutionTable(exec ExecutionInfo) error {
+func (w *OutputWriter) writeExecutionTable(exec *ExecutionInfo) error {
 	tw := newTableWriter(w.out, 12, 10, 10, 30)
 
 	// Header section
@@ -644,7 +659,7 @@ func (w *OutputWriter) writeExecutionTable(exec ExecutionInfo) error {
 	return nil
 }
 
-func (w *OutputWriter) writeRunResultTable(result RunResult) error {
+func (w *OutputWriter) writeRunResultTable(result *RunResult) error {
 	tw := newTableWriter(w.out, 12, 10, 10, 30)
 
 	// Header section
@@ -709,7 +724,7 @@ func (w *OutputWriter) writeValidationTable(result ValidationResult) error {
 	return nil
 }
 
-func (w *OutputWriter) writeValidationResultTable(result ValidationResultTable) error {
+func (w *OutputWriter) writeValidationResultTable(result *ValidationResultTable) error {
 	// Inputs table
 	if len(result.Inputs) > 0 {
 		tw := newTableWriter(w.out, 15, 10, 10, 20)

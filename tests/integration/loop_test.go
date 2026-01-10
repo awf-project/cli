@@ -51,7 +51,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -109,7 +109,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-index.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-index.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -169,7 +169,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-break.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-break.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -237,7 +237,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-multi.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-multi.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -281,7 +281,7 @@ func TestWhileLoop_Simple_Integration(t *testing.T) {
 	counterFile := filepath.Join(tmpDir, "counter")
 
 	// Create initial counter
-	err := os.WriteFile(counterFile, []byte("0"), 0644)
+	err := os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	wfYAML := `name: while-simple
@@ -309,7 +309,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "while.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "while.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -367,7 +367,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "while-max.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "while-max.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -434,10 +434,10 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "while-break.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "while-break.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 	// Create empty log file
-	err = os.WriteFile(logFile, []byte{}, 0644)
+	err = os.WriteFile(logFile, []byte{}, 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -505,7 +505,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-error.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-error.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -619,7 +619,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-index1.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-index1.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -676,7 +676,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-progress.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-progress.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -928,7 +928,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-all-vars.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-all-vars.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -998,7 +998,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-first.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-first.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1069,7 +1069,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-last.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-last.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1135,7 +1135,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-progress.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-progress.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1206,7 +1206,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-cleared.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-cleared.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1273,7 +1273,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-single.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-single.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1317,7 +1317,7 @@ func TestF042_WhileLoopIndex_Integration(t *testing.T) {
 	counterFile := filepath.Join(tmpDir, "counter")
 
 	// Initialize counter
-	err := os.WriteFile(counterFile, []byte("0"), 0644)
+	err := os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	// While loop that uses loop.Index
@@ -1347,7 +1347,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "while-index.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "while-index.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1412,7 +1412,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-numeric.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-numeric.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1480,7 +1480,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-input.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-input.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1556,7 +1556,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-states.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-states.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1605,7 +1605,7 @@ func TestF042_EmptyLoop_EdgeCase_Integration(t *testing.T) {
 	logFile := filepath.Join(tmpDir, "empty.log")
 
 	// Create log file to ensure it exists after test
-	err := os.WriteFile(logFile, []byte("START\n"), 0644)
+	err := os.WriteFile(logFile, []byte("START\n"), 0o644)
 	require.NoError(t, err)
 
 	// Empty items should complete immediately without executing body
@@ -1632,7 +1632,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "foreach-empty.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "foreach-empty.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1720,7 +1720,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-foreach.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-foreach.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1809,7 +1809,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-context-restore.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-context-restore.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1903,7 +1903,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-while-foreach.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-while-foreach.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1998,7 +1998,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "triple-nested.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "triple-nested.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2074,7 +2074,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "foreach-compare-idx.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "foreach-compare-idx.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2155,7 +2155,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-access.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-access.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2230,7 +2230,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-index.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-index.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2313,7 +2313,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "triple-nested-parent.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "triple-nested-parent.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2392,7 +2392,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-first-last.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-first-last.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2478,7 +2478,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "while-in-foreach-parent.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "while-in-foreach-parent.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2548,7 +2548,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "single-loop-parent.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "single-loop-parent.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2636,7 +2636,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-empty-inner.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-empty-inner.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2709,7 +2709,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-inner-break.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-inner-break.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2794,7 +2794,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-error-propagate.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-error-propagate.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2881,7 +2881,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "four-level-nested.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "four-level-nested.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -2958,7 +2958,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-arithmetic.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-arithmetic.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3034,9 +3034,9 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "mixed-while-foreach.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "mixed-while-foreach.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
-	err = os.WriteFile(counterFile, []byte("0"), 0644)
+	err = os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3124,7 +3124,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-dynamic-items.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-dynamic-items.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3198,7 +3198,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-length.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-parent-length.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3272,7 +3272,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-max-iter-inner.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-max-iter-inner.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3345,7 +3345,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-single-both.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-single-both.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3425,7 +3425,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-multi-body-parent.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-multi-body-parent.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3516,7 +3516,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-after-inner.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-after-inner.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3627,7 +3627,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test-while-transitions-skip.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test-while-transitions-skip.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3725,7 +3725,7 @@ states:
     status: success
     message: "Normal completion"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test-while-early-exit.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test-while-early-exit.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3830,7 +3830,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test-foreach-transitions.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test-foreach-transitions.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -3937,7 +3937,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test-invalid-target.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test-invalid-target.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -4040,7 +4040,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test-backward-compat.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test-backward-compat.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

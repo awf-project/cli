@@ -106,7 +106,7 @@ func (s *ExecutionService) ExecuteSingleStep(
 	}
 
 	// Build and execute command
-	cmd := ports.Command{
+	cmd := &ports.Command{
 		Program: resolvedCmd,
 		Dir:     resolvedDir,
 		Timeout: step.Timeout,

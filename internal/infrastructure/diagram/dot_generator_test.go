@@ -3404,6 +3404,8 @@ func TestGenerator_Generate_EdgeStyles_TableDriven(t *testing.T) {
 }
 
 // TestGenerator_Generate_NodeAttributes_TableDriven tests node attribute generation.
+//
+//nolint:gocognit // Table-driven test with comprehensive node attribute verification.
 func TestGenerator_Generate_NodeAttributes_TableDriven(t *testing.T) {
 	tests := []struct {
 		name            string

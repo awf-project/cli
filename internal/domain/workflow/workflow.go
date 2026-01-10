@@ -36,6 +36,8 @@ func (w *Workflow) GetStep(name string) (*Step, bool) {
 }
 
 // Validate checks if the workflow configuration is valid.
+//
+//nolint:gocognit // Complexity 62: workflow validation is comprehensive, checking inputs, steps, graph, templates, parallel strategies. Central validation requires thorough checking.
 func (w *Workflow) Validate() error {
 	if w.Name == "" {
 		return errors.New("workflow name is required")

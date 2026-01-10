@@ -171,9 +171,9 @@ func TestJSONPluginStateStore_Save_PermissionDenied(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	require.NoError(t, os.MkdirAll(readOnlyDir, 0755))
-	require.NoError(t, os.Chmod(readOnlyDir, 0444))
-	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0755) })
+	require.NoError(t, os.MkdirAll(readOnlyDir, 0o755))
+	require.NoError(t, os.Chmod(readOnlyDir, 0o444))
+	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0o755) })
 
 	store := NewJSONPluginStateStore(readOnlyDir)
 	ctx := context.Background()
@@ -210,7 +210,7 @@ func TestJSONPluginStateStore_Load_ExistingFile(t *testing.T) {
 	// Create a valid plugins.json file
 	data := `{"plugin-a":{"enabled":false,"disabled_at":1234567890},"plugin-b":{"enabled":true,"config":{"key":"value"}}}`
 	filePath := filepath.Join(tmpDir, "plugins.json")
-	require.NoError(t, os.WriteFile(filePath, []byte(data), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte(data), 0o600))
 
 	err := store.Load(ctx)
 	if errors.Is(err, ErrStateStoreNotImplemented) {
@@ -245,7 +245,7 @@ func TestJSONPluginStateStore_Load_InvalidJSON(t *testing.T) {
 
 	// Create invalid JSON
 	filePath := filepath.Join(tmpDir, "plugins.json")
-	require.NoError(t, os.WriteFile(filePath, []byte("not valid json{"), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte("not valid json{"), 0o600))
 
 	err := store.Load(ctx)
 	if errors.Is(err, ErrStateStoreNotImplemented) {
@@ -261,7 +261,7 @@ func TestJSONPluginStateStore_Load_EmptyFile(t *testing.T) {
 
 	// Create empty file
 	filePath := filepath.Join(tmpDir, "plugins.json")
-	require.NoError(t, os.WriteFile(filePath, []byte(""), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte(""), 0o600))
 
 	err := store.Load(ctx)
 	if errors.Is(err, ErrStateStoreNotImplemented) {
@@ -282,9 +282,9 @@ func TestJSONPluginStateStore_Load_PermissionDenied(t *testing.T) {
 
 	// Create unreadable file
 	filePath := filepath.Join(tmpDir, "plugins.json")
-	require.NoError(t, os.WriteFile(filePath, []byte("{}"), 0600))
-	require.NoError(t, os.Chmod(filePath, 0000))
-	t.Cleanup(func() { _ = os.Chmod(filePath, 0644) })
+	require.NoError(t, os.WriteFile(filePath, []byte("{}"), 0o600))
+	require.NoError(t, os.Chmod(filePath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0o644) })
 
 	err := store.Load(ctx)
 	if errors.Is(err, ErrStateStoreNotImplemented) {

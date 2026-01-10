@@ -73,7 +73,7 @@ func (r *YAMLRepository) List(ctx context.Context) ([]string, error) {
 	pattern := filepath.Join(r.basePath, "*.yaml")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("globbing workflow files: %w", err)
 	}
 
 	names := make([]string, 0, len(matches))
@@ -95,13 +95,13 @@ func (r *YAMLRepository) Exists(ctx context.Context, name string) (bool, error) 
 	if os.IsNotExist(err) {
 		return false, nil
 	}
-	return false, err
+	return false, fmt.Errorf("checking workflow file: %w", err)
 }
 
 // resolvePath converts workflow name to file path.
 func (r *YAMLRepository) resolvePath(name string) string {
 	if !strings.HasSuffix(name, ".yaml") {
-		name = name + ".yaml"
+		name += ".yaml"
 	}
 	return filepath.Join(r.basePath, name)
 }
@@ -118,7 +118,7 @@ func (r *YAMLRepository) parseStates(data []byte, wf *yamlWorkflow) error {
 	// Parse into generic map to extract steps
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("unmarshaling YAML: %w", err)
 	}
 
 	statesRaw, ok := raw["states"].(map[string]any)

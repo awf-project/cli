@@ -98,7 +98,7 @@ func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagra
 	if opts.Output == "" {
 		// Output to stdout
 		_, err = fmt.Fprint(cmd.OutOrStdout(), dotOutput)
-		return err
+		return fmt.Errorf("write DOT output: %w", err)
 	}
 
 	// Output to file - check extension for format
@@ -106,7 +106,10 @@ func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagra
 
 	if ext == ".dot" {
 		// Write DOT directly to file
-		return os.WriteFile(opts.Output, []byte(dotOutput), 0600)
+		if err := os.WriteFile(opts.Output, []byte(dotOutput), 0o600); err != nil {
+			return fmt.Errorf("write output file: %w", err)
+		}
+		return nil
 	}
 
 	// Image export requires graphviz
@@ -114,5 +117,8 @@ func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagra
 		return fmt.Errorf("graphviz not installed: 'dot' command not found in PATH. Install graphviz to export to %s format", ext)
 	}
 
-	return diagram.Export(dotOutput, opts.Output)
+	if err := diagram.Export(dotOutput, opts.Output); err != nil {
+		return fmt.Errorf("export diagram: %w", err)
+	}
+	return nil
 }

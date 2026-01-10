@@ -86,7 +86,7 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
@@ -148,7 +148,7 @@ func runInitGlobal(cmd *cobra.Command, cfg *Config, force bool) error {
 	}
 
 	// Create global prompts directory
-	if err := os.MkdirAll(globalPromptsDir, 0755); err != nil {
+	if err := os.MkdirAll(globalPromptsDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", globalPromptsDir, err)
 	}
 	formatter.Success(fmt.Sprintf("Created %s", globalPromptsDir))
@@ -181,7 +181,10 @@ log_level: info
 # Output format: text, json, table, quiet
 output_format: text
 `
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
 
 func createExampleWorkflow(path string, force bool) error {
@@ -206,7 +209,10 @@ states:
   done:
     type: terminal
 `
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
 
 // createProjectConfigFile creates the project configuration file at .awf/config.yaml
@@ -234,7 +240,10 @@ inputs:
   # environment: staging
   # debug: false
 `
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
 
 func createExamplePrompt(path string, force bool) error {
@@ -268,5 +277,8 @@ You can use template variables in your workflow commands:
 - Use .md for markdown or .txt for plain text
 - Organize complex prompts in subdirectories (e.g., ai/agents/)
 `
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }

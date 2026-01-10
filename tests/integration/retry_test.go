@@ -105,7 +105,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-counter.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-counter.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	// Wire up real components
@@ -171,7 +171,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-exhaust.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-exhaust.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -243,7 +243,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-exit-codes.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-exit-codes.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -313,7 +313,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-exponential.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-exponential.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -378,7 +378,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-linear.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-linear.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -444,7 +444,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-jitter.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-jitter.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -507,7 +507,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-max-cap.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-max-cap.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -567,7 +567,7 @@ states:
   error:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "retry-success.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-success.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

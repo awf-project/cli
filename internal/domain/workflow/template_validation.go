@@ -208,13 +208,13 @@ func (v *TemplateValidator) ValidateTemplate(template, stepName, fieldName strin
 		return
 	}
 
-	for _, ref := range refs {
-		v.ValidateReference(ref, stepName, fieldName, currentStepIndex, isErrorHook)
+	for i := range refs {
+		v.ValidateReference(&refs[i], stepName, fieldName, currentStepIndex, isErrorHook)
 	}
 }
 
 // ValidateReference validates a single reference against the workflow context.
-func (v *TemplateValidator) ValidateReference(ref TemplateReference, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
+func (v *TemplateValidator) ValidateReference(ref *TemplateReference, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
 	switch ref.Type {
 	case TypeInputs:
 		v.validateInputRef(ref, stepName, fieldName)
@@ -238,7 +238,7 @@ func (v *TemplateValidator) ValidateReference(ref TemplateReference, stepName, f
 	}
 }
 
-func (v *TemplateValidator) validateInputRef(ref TemplateReference, stepName, fieldName string) {
+func (v *TemplateValidator) validateInputRef(ref *TemplateReference, stepName, fieldName string) {
 	// Check for arithmetic expressions (e.g., "limit * inputs.threshold")
 	// These need special handling to extract individual input references
 	if containsArithmeticOperator(ref.Path) || containsArithmeticOperator(ref.Raw) {
@@ -385,7 +385,7 @@ func isDigit(c rune) bool {
 	return c >= '0' && c <= '9'
 }
 
-func (v *TemplateValidator) validateStateRef(ref TemplateReference, stepName, fieldName string, currentStepIndex int) {
+func (v *TemplateValidator) validateStateRef(ref *TemplateReference, stepName, fieldName string, currentStepIndex int) {
 	referencedStep := ref.Path
 
 	// Check if the step exists
@@ -462,14 +462,14 @@ func (v *TemplateValidator) getStepNameFromPath(path string) string {
 	return path
 }
 
-func (v *TemplateValidator) validateWorkflowRef(ref TemplateReference, stepName, fieldName string) {
+func (v *TemplateValidator) validateWorkflowRef(ref *TemplateReference, stepName, fieldName string) {
 	if !ValidWorkflowProperties[ref.Path] {
 		v.result.AddError(ErrInvalidWorkflowProperty, stepName,
 			fmt.Sprintf("invalid workflow property %q in %s", ref.Path, fieldName))
 	}
 }
 
-func (v *TemplateValidator) validateErrorRef(ref TemplateReference, stepName, fieldName string, isErrorHook bool) {
+func (v *TemplateValidator) validateErrorRef(ref *TemplateReference, stepName, fieldName string, isErrorHook bool) {
 	// Error references are only valid in error hook contexts
 	if !isErrorHook {
 		v.result.AddError(ErrErrorRefOutsideErrorHook, stepName,
@@ -484,7 +484,7 @@ func (v *TemplateValidator) validateErrorRef(ref TemplateReference, stepName, fi
 	}
 }
 
-func (v *TemplateValidator) validateContextRef(ref TemplateReference, stepName, fieldName string) {
+func (v *TemplateValidator) validateContextRef(ref *TemplateReference, stepName, fieldName string) {
 	if !ValidContextProperties[ref.Path] {
 		v.result.AddError(ErrInvalidContextProperty, stepName,
 			fmt.Sprintf("invalid context property %q in %s", ref.Path, fieldName))

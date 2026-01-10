@@ -149,7 +149,7 @@ func TestPluginListCommand_WithPlugins(t *testing.T) {
 	// Create plugin directory with a plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	// Create valid plugin manifest
 	manifestContent := `name: test-plugin
@@ -162,7 +162,7 @@ capabilities:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	// Isolate from other plugins
@@ -196,7 +196,7 @@ func TestPluginListCommand_JSONFormat(t *testing.T) {
 	// Create plugin directory with a plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "json-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: json-test-plugin
 version: 2.0.0
@@ -209,7 +209,7 @@ capabilities:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -268,7 +268,7 @@ func TestPluginListCommand_TableFormat(t *testing.T) {
 	// Create plugins dir with plugin
 	pluginsDir := filepath.Join(tmpDir, ".awf", "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "table-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: table-plugin
 version: 1.0.0
@@ -279,7 +279,7 @@ capabilities:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -306,8 +306,8 @@ func TestPluginListCommand_QuietFormat(t *testing.T) {
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	plugin1Dir := filepath.Join(pluginsDir, "plugin-one")
 	plugin2Dir := filepath.Join(pluginsDir, "plugin-two")
-	require.NoError(t, os.MkdirAll(plugin1Dir, 0755))
-	require.NoError(t, os.MkdirAll(plugin2Dir, 0755))
+	require.NoError(t, os.MkdirAll(plugin1Dir, 0o755))
+	require.NoError(t, os.MkdirAll(plugin2Dir, 0o755))
 
 	manifest1 := `name: plugin-one
 version: 1.0.0
@@ -317,8 +317,8 @@ awf_version: ">=0.1.0"
 version: 1.0.0
 awf_version: ">=0.1.0"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(plugin1Dir, "plugin.yaml"), []byte(manifest1), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(plugin2Dir, "plugin.yaml"), []byte(manifest2), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(plugin1Dir, "plugin.yaml"), []byte(manifest1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plugin2Dir, "plugin.yaml"), []byte(manifest2), 0o644))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
 	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
@@ -354,7 +354,7 @@ func TestPluginListCommand_ShowsDisabledPlugins(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "disabled-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: disabled-test-plugin
 version: 1.0.0
@@ -363,12 +363,12 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	// Create state with disabled plugin
 	pluginsStateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(pluginsStateDir, 0755))
+	require.NoError(t, os.MkdirAll(pluginsStateDir, 0o755))
 	stateContent := `{
 		"disabled-test-plugin": {
 			"enabled": false,
@@ -378,7 +378,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(pluginsStateDir, "plugins.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -429,7 +429,7 @@ func TestPluginEnableCommand_EnablesPlugin(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "enable-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: enable-test-plugin
 version: 1.0.0
@@ -438,7 +438,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -471,7 +471,7 @@ func TestPluginEnableCommand_JSONOutput(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "json-enable-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: json-enable-plugin
 version: 1.0.0
@@ -480,7 +480,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -519,7 +519,7 @@ func TestPluginEnableCommand_PersistsState(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "persist-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: persist-test-plugin
 version: 1.0.0
@@ -528,12 +528,12 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	// Pre-create disabled state
 	stateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
 	stateContent := `{
 		"persist-test-plugin": {
 			"enabled": false,
@@ -543,7 +543,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(stateDir, "plugins.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -598,7 +598,7 @@ func TestPluginDisableCommand_DisablesPlugin(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "disable-test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: disable-test-plugin
 version: 1.0.0
@@ -607,7 +607,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -640,7 +640,7 @@ func TestPluginDisableCommand_JSONOutput(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "json-disable-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: json-disable-plugin
 version: 1.0.0
@@ -649,7 +649,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -688,7 +688,7 @@ func TestPluginDisableCommand_PersistsState(t *testing.T) {
 	// Create plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	testPluginDir := filepath.Join(pluginsDir, "persist-disable-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 	manifestContent := `name: persist-disable-plugin
 version: 1.0.0
@@ -697,7 +697,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
 		[]byte(manifestContent),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -793,14 +793,14 @@ func TestPluginListCommand_WithInvalidPluginManifest(t *testing.T) {
 	// Create plugin with invalid manifest
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	invalidPluginDir := filepath.Join(pluginsDir, "invalid-plugin")
-	require.NoError(t, os.MkdirAll(invalidPluginDir, 0755))
+	require.NoError(t, os.MkdirAll(invalidPluginDir, 0o755))
 
 	// Invalid YAML
 	invalidManifest := `invalid yaml: [[[`
 	require.NoError(t, os.WriteFile(
 		filepath.Join(invalidPluginDir, "plugin.yaml"),
 		[]byte(invalidManifest),
-		0644,
+		0o644,
 	))
 
 	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
@@ -893,7 +893,7 @@ func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
 
 	// Create state with a plugin that no longer exists on disk
 	stateDir := filepath.Join(tmpDir, "plugins")
-	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
 	stateContent := `{
 		"removed-plugin": {
 			"enabled": false,
@@ -903,7 +903,7 @@ func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(stateDir, "plugins.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	// No plugins directory
@@ -981,7 +981,7 @@ func TestPluginListCommand_OutputFormats(t *testing.T) {
 			// Create a plugin
 			pluginsDir := filepath.Join(tmpDir, "plugins")
 			testPluginDir := filepath.Join(pluginsDir, "format-test-plugin")
-			require.NoError(t, os.MkdirAll(testPluginDir, 0755))
+			require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
 
 			manifestContent := `name: format-test-plugin
 version: 1.0.0
@@ -990,7 +990,7 @@ awf_version: ">=0.1.0"
 			require.NoError(t, os.WriteFile(
 				filepath.Join(testPluginDir, "plugin.yaml"),
 				[]byte(manifestContent),
-				0644,
+				0o644,
 			))
 
 			originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")

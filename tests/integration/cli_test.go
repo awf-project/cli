@@ -202,8 +202,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "input-test.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "input-test.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -295,8 +295,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "failing-test.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "failing-test.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -348,8 +348,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "invalid-strategy.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "invalid-strategy.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -386,8 +386,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "output-test.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "output-test.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -419,7 +419,7 @@ states:
 		t.Run(tt.name, func(t *testing.T) {
 			// Use unique storage per test to avoid conflicts
 			testDir := filepath.Join(tmpDir, tt.name)
-			os.MkdirAll(testDir, 0755)
+			os.MkdirAll(testDir, 0o755)
 
 			cmd := cli.NewRootCommand()
 			buf := new(bytes.Buffer)
@@ -484,8 +484,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "multi-step.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "multi-step.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -528,15 +528,15 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "silent-step.yaml"), []byte(wfYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "silent-step.yaml"), []byte(wfYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
 
 	t.Run("shows success message for silent step", func(t *testing.T) {
 		testDir := filepath.Join(tmpDir, "default")
-		os.MkdirAll(testDir, 0755)
+		os.MkdirAll(testDir, 0o755)
 
 		cmd := cli.NewRootCommand()
 		buf := new(bytes.Buffer)
@@ -554,7 +554,7 @@ states:
 
 	t.Run("quiet mode hides success message", func(t *testing.T) {
 		testDir := filepath.Join(tmpDir, "quiet")
-		os.MkdirAll(testDir, 0755)
+		os.MkdirAll(testDir, 0o755)
 
 		cmd := cli.NewRootCommand()
 		buf := new(bytes.Buffer)
@@ -586,10 +586,10 @@ states:
   error:
     type: terminal
 `
-		os.WriteFile(filepath.Join(wfDir, "output-step.yaml"), []byte(wfYAMLWithOutput), 0644)
+		os.WriteFile(filepath.Join(wfDir, "output-step.yaml"), []byte(wfYAMLWithOutput), 0o644)
 
 		testDir := filepath.Join(tmpDir, "output")
-		os.MkdirAll(testDir, 0755)
+		os.MkdirAll(testDir, 0o755)
 
 		cmd := cli.NewRootCommand()
 		buf := new(bytes.Buffer)

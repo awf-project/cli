@@ -220,7 +220,7 @@ states:
 			// Setup temp directory for workflow file
 			tmpDir := t.TempDir()
 			workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-			err := os.WriteFile(workflowPath, []byte(tt.workflow), 0644)
+			err := os.WriteFile(workflowPath, []byte(tt.workflow), 0o644)
 			require.NoError(t, err)
 
 			// Create dependencies
@@ -343,7 +343,7 @@ states:
     status: success
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -417,7 +417,7 @@ states:
     status: failure
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -469,7 +469,7 @@ states:
     status: success
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -552,7 +552,7 @@ states:
     status: failure
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -613,7 +613,7 @@ states:
     status: failure
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -696,7 +696,7 @@ states:
     status: failure
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}
@@ -769,7 +769,7 @@ states:
     status: success
 `
 	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
-	err := os.WriteFile(workflowPath, []byte(workflow), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
 	require.NoError(t, err)
 
 	log := &conditionsMockLogger{}

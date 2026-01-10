@@ -739,16 +739,18 @@ func TestContextWindowManager_ApplyStrategy_LargeConversation(t *testing.T) {
 	}
 
 	for i := 0; i < 50; i++ {
-		turns = append(turns, Turn{
-			Role:    TurnRoleUser,
-			Content: "User message",
-			Tokens:  50,
-		})
-		turns = append(turns, Turn{
-			Role:    TurnRoleAssistant,
-			Content: "Assistant response",
-			Tokens:  100,
-		})
+		turns = append(turns,
+			Turn{
+				Role:    TurnRoleUser,
+				Content: "User message",
+				Tokens:  50,
+			},
+			Turn{
+				Role:    TurnRoleAssistant,
+				Content: "Assistant response",
+				Tokens:  100,
+			},
+		)
 	}
 
 	maxTokens := 1000

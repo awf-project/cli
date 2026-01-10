@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -50,7 +51,7 @@ func (m *mockStepExecutor) ExecuteStep(
 	if m.delay > 0 {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("step execution cancelled: %w", ctx.Err())
 		case <-time.After(m.delay):
 		}
 	}

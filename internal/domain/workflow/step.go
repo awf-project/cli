@@ -93,6 +93,8 @@ type Step struct {
 }
 
 // Validate checks if the step configuration is valid.
+//
+//nolint:gocognit // Complexity 37: step validation checks all step types (command, agent, parallel, loop, operation, subworkflow) and their type-specific constraints. Comprehensive validation required.
 func (s *Step) Validate() error {
 	if s.Name == "" {
 		return errors.New("step name is required")

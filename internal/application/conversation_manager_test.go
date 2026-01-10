@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,11 +81,18 @@ func newMockAgentRegistry() *mockAgentRegistry {
 }
 
 func (m *mockAgentRegistry) Register(provider ports.AgentProvider) error {
-	return m.registry.Register(provider)
+	if err := m.registry.Register(provider); err != nil {
+		return fmt.Errorf("register provider: %w", err)
+	}
+	return nil
 }
 
 func (m *mockAgentRegistry) Get(name string) (ports.AgentProvider, error) {
-	return m.registry.Get(name)
+	provider, err := m.registry.Get(name)
+	if err != nil {
+		return nil, fmt.Errorf("get provider %s: %w", name, err)
+	}
+	return provider, nil
 }
 
 func (m *mockAgentRegistry) List() []string {
@@ -1005,7 +1013,7 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 
 	// GREEN PHASE: expect context cancellation error
 	require.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, result)
 }
 

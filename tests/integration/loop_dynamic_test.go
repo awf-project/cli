@@ -56,7 +56,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "dynamic-input.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "dynamic-input.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -135,7 +135,7 @@ states:
     type: terminal
     status: success
 `
-			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)
@@ -198,7 +198,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "env-test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "env-test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	// Set environment variable
@@ -282,7 +282,7 @@ states:
     type: terminal
     status: success
 `
-			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)
@@ -342,7 +342,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -399,7 +399,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -461,7 +461,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -523,7 +523,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -585,7 +585,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -647,7 +647,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "static.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "static.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -713,7 +713,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "while.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "while.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -832,7 +832,7 @@ func TestDynamicLoopCondition_WithStepOutput(t *testing.T) {
 	counterFile := filepath.Join(tmpDir, "counter")
 
 	// Initialize counter
-	err := os.WriteFile(counterFile, []byte("0"), 0644)
+	err := os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	// Workflow with loop condition referencing step output
@@ -875,7 +875,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "condition.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "condition.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -919,7 +919,7 @@ func TestDynamicLoopCondition_UntilCondition(t *testing.T) {
 	statusFile := filepath.Join(tmpDir, "status")
 
 	// Start with "pending" status
-	err := os.WriteFile(statusFile, []byte("pending"), 0644)
+	err := os.WriteFile(statusFile, []byte("pending"), 0o644)
 	require.NoError(t, err)
 
 	// Workflow with until condition that checks for "done" status
@@ -953,7 +953,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "until.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "until.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1021,7 +1021,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1086,7 +1086,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1196,7 +1196,7 @@ states:
     type: terminal
     status: success
 `
-			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)
@@ -1262,7 +1262,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1326,7 +1326,6 @@ func TestDynamicMaxIterations_ValidationWarning(t *testing.T) {
 
 	// Validate should produce a warning or error about undefined_var
 	err = wfSvc.ValidateWorkflow(ctx, "loop-dynamic-invalid")
-
 	// Either produces error at validation time (strict) or passes (lenient with runtime check)
 	// The spec says "warns" so it may be a warning, not a hard error
 	if err != nil {
@@ -1427,7 +1426,7 @@ states:
     type: terminal
     status: success
 `
-			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)
@@ -1494,7 +1493,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1564,7 +1563,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1724,7 +1723,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "mixed-types.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "mixed-types.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1879,7 +1878,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "string-items.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "string-items.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

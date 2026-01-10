@@ -100,7 +100,7 @@ func TestInitCommand(t *testing.T) {
 
 		// Create .awf directory first
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init"})
@@ -125,15 +125,15 @@ func TestInitCommand(t *testing.T) {
 		// Create existing .awf directory with custom content
 		awfDir := filepath.Join(tmpDir, ".awf")
 		workflowsDir := filepath.Join(awfDir, "workflows")
-		require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+		require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 		// Create a custom workflow file
 		customFile := filepath.Join(workflowsDir, "custom.yaml")
-		require.NoError(t, os.WriteFile(customFile, []byte("custom: true"), 0644))
+		require.NoError(t, os.WriteFile(customFile, []byte("custom: true"), 0o644))
 
 		// Create existing config
 		configFile := filepath.Join(tmpDir, ".awf.yaml")
-		require.NoError(t, os.WriteFile(configFile, []byte("old: config"), 0644))
+		require.NoError(t, os.WriteFile(configFile, []byte("old: config"), 0o644))
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--force"})
@@ -515,12 +515,12 @@ func TestInitCommand_GlobalFlag_CreatesExamplePrompt(t *testing.T) {
 			name: "skips example.md if already exists without force",
 			setup: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				existingContent := "# My Custom Prompt\n\nDo not overwrite me!"
 				require.NoError(t, os.WriteFile(
 					filepath.Join(promptsDir, "example.md"),
 					[]byte(existingContent),
-					0644,
+					0o644,
 				))
 			},
 			force:    false,
@@ -537,12 +537,12 @@ func TestInitCommand_GlobalFlag_CreatesExamplePrompt(t *testing.T) {
 			name: "overwrites example.md with force flag",
 			setup: func(t *testing.T, tmpDir string) {
 				promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-				require.NoError(t, os.MkdirAll(promptsDir, 0755))
+				require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 				existingContent := "# Old Content\n\nThis will be replaced."
 				require.NoError(t, os.WriteFile(
 					filepath.Join(promptsDir, "example.md"),
 					[]byte(existingContent),
-					0644,
+					0o644,
 				))
 			},
 			force:    true,
@@ -676,11 +676,11 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 
 		// Pre-create the prompts directory with a custom example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		customContent := "# My Custom Prompt\n\nThis content must be preserved!\n"
 		examplePath := filepath.Join(promptsDir, "example.md")
-		require.NoError(t, os.WriteFile(examplePath, []byte(customContent), 0644))
+		require.NoError(t, os.WriteFile(examplePath, []byte(customContent), 0o644))
 
 		// Run init --global WITHOUT --force
 		cmd := cli.NewRootCommand()
@@ -715,11 +715,11 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 
 		// Pre-create prompts directory with user files
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		userPrompt := "# User's Custom Prompt\n\nDo not touch this!\n"
 		userPromptPath := filepath.Join(promptsDir, "my-prompt.md")
-		require.NoError(t, os.WriteFile(userPromptPath, []byte(userPrompt), 0644))
+		require.NoError(t, os.WriteFile(userPromptPath, []byte(userPrompt), 0o644))
 
 		// Run init --global
 		cmd := cli.NewRootCommand()
@@ -754,11 +754,11 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 
 		// Pre-create the prompts directory with example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "example.md"),
 			[]byte("existing"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -798,11 +798,11 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 
 		// Pre-create prompts directory with custom example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		oldContent := "# Old Custom Content\n\nThis should be replaced with --force.\n"
 		examplePath := filepath.Join(promptsDir, "example.md")
-		require.NoError(t, os.WriteFile(examplePath, []byte(oldContent), 0644))
+		require.NoError(t, os.WriteFile(examplePath, []byte(oldContent), 0o644))
 
 		// Run init --global --force
 		cmd := cli.NewRootCommand()
@@ -843,16 +843,16 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 
 		// Pre-create prompts directory with user files
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		// Create user's custom prompt (not example.md)
 		userPromptContent := "# My Important Prompt\n\nDo not delete this!\n"
 		userPromptPath := filepath.Join(promptsDir, "my-important-prompt.md")
-		require.NoError(t, os.WriteFile(userPromptPath, []byte(userPromptContent), 0644))
+		require.NoError(t, os.WriteFile(userPromptPath, []byte(userPromptContent), 0o644))
 
 		// Create a custom example.md that will be overwritten
 		oldExample := "# Custom Example\n"
-		require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "example.md"), []byte(oldExample), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "example.md"), []byte(oldExample), 0o644))
 
 		// Run init --global --force
 		cmd := cli.NewRootCommand()
@@ -887,7 +887,7 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 
 		// Pre-create empty prompts directory (simulating partial manual setup)
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		// Run init --global --force on empty directory
 		cmd := cli.NewRootCommand()
@@ -1159,7 +1159,7 @@ func TestInitCommand_ProjectConfigFile(t *testing.T) {
 		awfDir := filepath.Join(tmpDir, ".awf")
 		existingContent := "# My custom project config\ninputs:\n  myvar: myvalue\n"
 		projectConfigPath := filepath.Join(awfDir, "config.yaml")
-		require.NoError(t, os.WriteFile(projectConfigPath, []byte(existingContent), 0644))
+		require.NoError(t, os.WriteFile(projectConfigPath, []byte(existingContent), 0o644))
 
 		// Run init again WITHOUT --force (should skip since .awf exists)
 		cmd2 := cli.NewRootCommand()
@@ -1192,11 +1192,11 @@ func TestInitCommand_ProjectConfigFile(t *testing.T) {
 
 		// Pre-create .awf directory and config.yaml
 		awfDir := filepath.Join(tmpDir, ".awf")
-		require.NoError(t, os.MkdirAll(awfDir, 0755))
+		require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 		oldContent := "# Old config that should be replaced\nold: content\n"
 		projectConfigPath := filepath.Join(awfDir, "config.yaml")
-		require.NoError(t, os.WriteFile(projectConfigPath, []byte(oldContent), 0644))
+		require.NoError(t, os.WriteFile(projectConfigPath, []byte(oldContent), 0o644))
 
 		// Run init --force
 		cmd := cli.NewRootCommand()
@@ -1304,8 +1304,8 @@ func TestInitCommand_ProjectConfigFile_Permissions(t *testing.T) {
 
 	// Should be 0644 (readable by owner/group, writable by owner)
 	mode := info.Mode().Perm()
-	assert.True(t, mode&0400 != 0, "file should be readable by owner")
-	assert.True(t, mode&0200 != 0, "file should be writable by owner")
+	assert.True(t, mode&0o400 != 0, "file should be readable by owner")
+	assert.True(t, mode&0o200 != 0, "file should be writable by owner")
 }
 
 // parseYAML is a helper for YAML parsing in tests.
@@ -1344,6 +1344,6 @@ func TestInitCommand_GlobalFlag_ExamplePromptPermissions(t *testing.T) {
 
 	// On Unix, check that file is readable by owner and group
 	mode := info.Mode().Perm()
-	assert.True(t, mode&0400 != 0, "file should be readable by owner")
-	assert.True(t, mode&0200 != 0, "file should be writable by owner")
+	assert.True(t, mode&0o400 != 0, "file should be readable by owner")
+	assert.True(t, mode&0o200 != 0, "file should be writable by owner")
 }

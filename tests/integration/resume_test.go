@@ -32,8 +32,8 @@ func TestResumeWorkflow_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a workflow with 3 steps
 	logFile := filepath.Join(tmpDir, "execution.log")
@@ -56,7 +56,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "resume-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "resume-test.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)
@@ -94,8 +94,8 @@ func TestResumeWorkflow_FromInterruptedState_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow
 	logFile := filepath.Join(tmpDir, "resume.log")
@@ -118,7 +118,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "interrupt-resume.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "interrupt-resume.yaml"), []byte(wfYAML), 0o644))
 
 	// Manually create an "interrupted" state (step1 completed, at step2)
 	now := time.Now()
@@ -155,7 +155,7 @@ states:
 	require.NoError(t, err)
 
 	// Also write what step1 would have written (simulating it ran before interrupt)
-	require.NoError(t, os.WriteFile(logFile, []byte("STEP1\n"), 0644))
+	require.NoError(t, os.WriteFile(logFile, []byte("STEP1\n"), 0o644))
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -186,8 +186,8 @@ func TestResumeList_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow definition
 	wfYAML := `name: list-test
@@ -201,7 +201,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "list-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "list-test.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)
@@ -308,8 +308,8 @@ func TestResumeWithOverrides_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow with input
 	outputFile := filepath.Join(tmpDir, "output.txt")
@@ -327,7 +327,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "override-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "override-test.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)
@@ -386,8 +386,8 @@ func TestResumeFailedWorkflow_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow
 	wfYAML := `name: failed-resume
@@ -401,7 +401,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "failed-resume.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "failed-resume.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)
@@ -457,8 +457,8 @@ func TestResumeWorkflow_WorkflowDefinitionChanged_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow WITHOUT step2 (simulating it was removed)
 	wfYAML := `name: changed-workflow
@@ -472,7 +472,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "changed-workflow.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "changed-workflow.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)
@@ -524,8 +524,8 @@ func TestResumeWorkflow_ParallelStep_E2E(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create workflow with parallel step
 	logFile := filepath.Join(tmpDir, "parallel.log")
@@ -551,7 +551,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "parallel-resume.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "parallel-resume.yaml"), []byte(wfYAML), 0o644))
 
 	// Wire up components
 	repo := repository.NewYAMLRepository(workflowsDir)

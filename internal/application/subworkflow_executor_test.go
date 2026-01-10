@@ -934,7 +934,6 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 	defer cancel()
 
 	_, err := execSvc.Run(ctx, "timeout-parent", nil)
-
 	// Should timeout or error
 	if err != nil {
 		assert.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled),
@@ -947,7 +946,7 @@ type slowMockExecutor struct {
 	delay time.Duration
 }
 
-func (m *slowMockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *slowMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	select {
 	case <-time.After(m.delay):
 		return &ports.CommandResult{ExitCode: 0, Stdout: "done"}, nil

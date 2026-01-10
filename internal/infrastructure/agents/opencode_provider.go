@@ -37,7 +37,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("opencode provider: %w", err)
 	}
 
 	// Build command arguments

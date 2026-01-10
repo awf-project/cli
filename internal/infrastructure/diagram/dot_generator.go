@@ -262,33 +262,36 @@ func (g *Generator) generateParallelSubgraph(step *workflow.Step, wf *workflow.W
 
 	// Add branch nodes to the cluster
 	for _, branchName := range step.Branches {
-		if branchStep, ok := wf.Steps[branchName]; ok {
-			shape := stepTypeToShape[branchStep.Type]
-			if shape == "" {
-				shape = "box"
-			}
-			if branchStep.Type == workflow.StepTypeTerminal && branchStep.Status == workflow.TerminalFailure {
-				shape = "doubleoval"
-			}
-			branchStyle := NodeStyle{Shape: shape}
-			branchStyle = g.applyHighlight(branchName, branchStyle)
-
-			// Format with extra indent for subgraph
-			attrs := []string{
-				fmt.Sprintf("label=%q", branchName),
-				fmt.Sprintf("shape=%s", branchStyle.Shape),
-			}
-			if branchStyle.Color != "" {
-				attrs = append(attrs, fmt.Sprintf("color=%q", branchStyle.Color))
-			}
-			if branchStyle.FillColor != "" {
-				attrs = append(attrs, fmt.Sprintf("fillcolor=%q", branchStyle.FillColor))
-			}
-			if branchStyle.Style != "" {
-				attrs = append(attrs, fmt.Sprintf("style=%q", branchStyle.Style))
-			}
-			sb.WriteString(fmt.Sprintf("        %s [%s];\n", escapeDOTID(branchName), strings.Join(attrs, ", ")))
+		branchStep, ok := wf.Steps[branchName]
+		if !ok {
+			continue
 		}
+
+		shape := stepTypeToShape[branchStep.Type]
+		if shape == "" {
+			shape = "box"
+		}
+		if branchStep.Type == workflow.StepTypeTerminal && branchStep.Status == workflow.TerminalFailure {
+			shape = "doubleoval"
+		}
+		branchStyle := NodeStyle{Shape: shape}
+		branchStyle = g.applyHighlight(branchName, branchStyle)
+
+		// Format with extra indent for subgraph
+		attrs := []string{
+			fmt.Sprintf("label=%q", branchName),
+			fmt.Sprintf("shape=%s", branchStyle.Shape),
+		}
+		if branchStyle.Color != "" {
+			attrs = append(attrs, fmt.Sprintf("color=%q", branchStyle.Color))
+		}
+		if branchStyle.FillColor != "" {
+			attrs = append(attrs, fmt.Sprintf("fillcolor=%q", branchStyle.FillColor))
+		}
+		if branchStyle.Style != "" {
+			attrs = append(attrs, fmt.Sprintf("style=%q", branchStyle.Style))
+		}
+		sb.WriteString(fmt.Sprintf("        %s [%s];\n", escapeDOTID(branchName), strings.Join(attrs, ", ")))
 	}
 
 	sb.WriteString("    }\n")
@@ -350,7 +353,7 @@ func escapeDOTID(s string) string {
 		}
 	}
 
-	if safe && len(s) > 0 && (s[0] < '0' || s[0] > '9') {
+	if safe && s != "" && (s[0] < '0' || s[0] > '9') {
 		return s
 	}
 

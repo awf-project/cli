@@ -87,17 +87,17 @@ func BuildWorkflowPaths() []repository.SourcedPath {
 		})
 	}
 
-	// 2. Local project directory
-	paths = append(paths, repository.SourcedPath{
-		Path:   xdg.LocalWorkflowsDir(),
-		Source: repository.SourceLocal,
-	})
-
-	// 3. Global XDG directory (lowest priority)
-	paths = append(paths, repository.SourcedPath{
-		Path:   xdg.AWFWorkflowsDir(),
-		Source: repository.SourceGlobal,
-	})
+	// 2. Local project directory and 3. Global XDG directory (lowest priority)
+	paths = append(paths,
+		repository.SourcedPath{
+			Path:   xdg.LocalWorkflowsDir(),
+			Source: repository.SourceLocal,
+		},
+		repository.SourcedPath{
+			Path:   xdg.AWFWorkflowsDir(),
+			Source: repository.SourceGlobal,
+		},
+	)
 
 	return paths
 }
@@ -138,17 +138,17 @@ func BuildPluginPaths() []repository.SourcedPath {
 		})
 	}
 
-	// 2. Local project directory
-	paths = append(paths, repository.SourcedPath{
-		Path:   xdg.LocalPluginsDir(),
-		Source: repository.SourceLocal,
-	})
-
-	// 3. Global XDG data directory (lowest priority)
-	paths = append(paths, repository.SourcedPath{
-		Path:   xdg.AWFPluginsDir(),
-		Source: repository.SourceGlobal,
-	})
+	// 2. Local project directory and 3. Global XDG data directory (lowest priority)
+	paths = append(paths,
+		repository.SourcedPath{
+			Path:   xdg.LocalPluginsDir(),
+			Source: repository.SourceLocal,
+		},
+		repository.SourcedPath{
+			Path:   xdg.AWFPluginsDir(),
+			Source: repository.SourceGlobal,
+		},
+	)
 
 	return paths
 }

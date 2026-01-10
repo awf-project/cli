@@ -16,8 +16,8 @@ func TestCompositeRepository_Load(t *testing.T) {
 	localDir := filepath.Join(tmpDir, ".awf", "workflows")
 	globalDir := filepath.Join(tmpDir, "global", "workflows")
 
-	require.NoError(t, os.MkdirAll(localDir, 0755))
-	require.NoError(t, os.MkdirAll(globalDir, 0755))
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalDir, 0o755))
 
 	// Create same workflow in multiple locations
 	localWorkflow := `name: test-workflow
@@ -36,8 +36,8 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "test-workflow.yaml"), []byte(localWorkflow), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "test-workflow.yaml"), []byte(globalWorkflow), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "test-workflow.yaml"), []byte(localWorkflow), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "test-workflow.yaml"), []byte(globalWorkflow), 0o644))
 
 	// Only global workflow
 	globalOnlyWorkflow := `name: global-only
@@ -47,7 +47,7 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-only.yaml"), []byte(globalOnlyWorkflow), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-only.yaml"), []byte(globalOnlyWorkflow), 0o644))
 
 	// Create composite repository
 	repo := NewCompositeRepository([]SourcedPath{
@@ -84,8 +84,8 @@ func TestCompositeRepository_List(t *testing.T) {
 	localDir := filepath.Join(tmpDir, ".awf", "workflows")
 	globalDir := filepath.Join(tmpDir, "global", "workflows")
 
-	require.NoError(t, os.MkdirAll(localDir, 0755))
-	require.NoError(t, os.MkdirAll(globalDir, 0755))
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalDir, 0o755))
 
 	// Local workflows
 	localWf := `name: local-wf
@@ -95,7 +95,7 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-wf.yaml"), []byte(localWf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-wf.yaml"), []byte(localWf), 0o644))
 
 	// Global workflows
 	globalWf := `name: global-wf
@@ -112,10 +112,10 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-wf.yaml"), []byte(globalWf), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared-wf.yaml"), []byte(sharedWf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-wf.yaml"), []byte(globalWf), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared-wf.yaml"), []byte(sharedWf), 0o644))
 	// Same workflow also in local
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared-wf.yaml"), []byte(sharedWf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared-wf.yaml"), []byte(sharedWf), 0o644))
 
 	repo := NewCompositeRepository([]SourcedPath{
 		{Path: localDir, Source: SourceLocal},
@@ -141,8 +141,8 @@ func TestCompositeRepository_ListWithSource(t *testing.T) {
 	localDir := filepath.Join(tmpDir, ".awf", "workflows")
 	globalDir := filepath.Join(tmpDir, "global", "workflows")
 
-	require.NoError(t, os.MkdirAll(localDir, 0755))
-	require.NoError(t, os.MkdirAll(globalDir, 0755))
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalDir, 0o755))
 
 	localWf := `name: local-wf
 version: "1.0.0"
@@ -165,10 +165,10 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-wf.yaml"), []byte(localWf), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared-wf.yaml"), []byte(sharedWf), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-wf.yaml"), []byte(globalWf), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared-wf.yaml"), []byte(sharedWf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "local-wf.yaml"), []byte(localWf), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "shared-wf.yaml"), []byte(sharedWf), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global-wf.yaml"), []byte(globalWf), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "shared-wf.yaml"), []byte(sharedWf), 0o644))
 
 	repo := NewCompositeRepository([]SourcedPath{
 		{Path: localDir, Source: SourceLocal},
@@ -198,7 +198,7 @@ func TestCompositeRepository_Exists(t *testing.T) {
 	tmpDir := t.TempDir()
 	localDir := filepath.Join(tmpDir, ".awf", "workflows")
 
-	require.NoError(t, os.MkdirAll(localDir, 0755))
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
 
 	localWf := `name: exists-wf
 version: "1.0.0"
@@ -207,7 +207,7 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(localDir, "exists-wf.yaml"), []byte(localWf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "exists-wf.yaml"), []byte(localWf), 0o644))
 
 	repo := NewCompositeRepository([]SourcedPath{
 		{Path: localDir, Source: SourceLocal},
@@ -250,7 +250,7 @@ func TestCompositeRepository_SkipsMissingDirectories(t *testing.T) {
 	existingDir := filepath.Join(tmpDir, "existing")
 	missingDir := filepath.Join(tmpDir, "missing")
 
-	require.NoError(t, os.MkdirAll(existingDir, 0755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o755))
 
 	wf := `name: test-wf
 version: "1.0.0"
@@ -259,7 +259,7 @@ states:
   start:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(existingDir, "test-wf.yaml"), []byte(wf), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(existingDir, "test-wf.yaml"), []byte(wf), 0o644))
 
 	repo := NewCompositeRepository([]SourcedPath{
 		{Path: missingDir, Source: SourceLocal},

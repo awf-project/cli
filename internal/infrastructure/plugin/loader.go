@@ -63,10 +63,10 @@ const ManifestFileName = "plugin.yaml"
 var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
 // versionPattern validates semver-like versions: X.Y.Z with optional prerelease.
-var versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$`)
+var versionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$`)
 
 // awfVersionPattern validates AWF version constraints.
-var awfVersionPattern = regexp.MustCompile(`^([<>=!]+)?[0-9]+\.[0-9]+\.[0-9]+(\s+[<>=!]+[0-9]+\.[0-9]+\.[0-9]+)*$`)
+var awfVersionPattern = regexp.MustCompile(`^([<>=!]+)?\d+\.\d+\.\d+(\s+[<>=!]+\d+\.\d+\.\d+)*$`)
 
 // FileSystemLoader implements PluginLoader for filesystem-based plugin discovery.
 type FileSystemLoader struct {
@@ -85,7 +85,7 @@ func NewFileSystemLoader(parser *ManifestParser) *FileSystemLoader {
 func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir string) ([]*plugin.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discover plugins: %w", err)
 	}
 
 	// Verify the directory exists and is a directory
@@ -103,12 +103,13 @@ func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir strin
 		return nil, WrapLoaderError("discover", pluginsDir, err)
 	}
 
-	var plugins []*plugin.PluginInfo
+	// Preallocate for expected number of plugins
+	plugins := make([]*plugin.PluginInfo, 0, len(entries))
 
 	for _, entry := range entries {
 		// Check context on each iteration
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("discover plugins: %w", err)
 		}
 
 		// Skip non-directories
@@ -142,7 +143,7 @@ func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir strin
 func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*plugin.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load plugin: %w", err)
 	}
 
 	// Verify the directory exists and is a directory
@@ -221,9 +222,9 @@ func (l *FileSystemLoader) ValidatePlugin(info *plugin.PluginInfo) error {
 	if len(m.Capabilities) == 0 {
 		return NewLoaderError("validate", info.Path, "at least one capability is required")
 	}
-	for _, cap := range m.Capabilities {
-		if !isValidCapability(cap) {
-			return NewLoaderError("validate", info.Path, fmt.Sprintf("invalid capability %q", cap))
+	for _, capability := range m.Capabilities {
+		if !isValidCapability(capability) {
+			return NewLoaderError("validate", info.Path, fmt.Sprintf("invalid capability %q", capability))
 		}
 	}
 
@@ -231,9 +232,9 @@ func (l *FileSystemLoader) ValidatePlugin(info *plugin.PluginInfo) error {
 }
 
 // isValidCapability checks if a capability string is valid.
-func isValidCapability(cap string) bool {
+func isValidCapability(capability string) bool {
 	for _, valid := range plugin.ValidCapabilities {
-		if cap == valid {
+		if capability == valid {
 			return true
 		}
 	}

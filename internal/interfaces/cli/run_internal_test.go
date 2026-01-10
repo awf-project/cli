@@ -751,14 +751,14 @@ func TestResolvePromptFromPaths_ContentTrimming(t *testing.T) {
 	// Create temp directory with a prompt file containing whitespace
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Write file with leading/trailing whitespace
 	content := "\n\n  content with whitespace  \n\n"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(promptsDir, "whitespace.md"),
 		[]byte(content),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -777,13 +777,13 @@ func TestResolvePromptFromPaths_ContentTrimming(t *testing.T) {
 func TestResolvePromptFromPaths_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Write empty file
 	require.NoError(t, os.WriteFile(
 		filepath.Join(promptsDir, "empty.md"),
 		[]byte(""),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -799,13 +799,13 @@ func TestResolvePromptFromPaths_EmptyFile(t *testing.T) {
 func TestResolvePromptFromPaths_WhitespaceOnlyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Write file with only whitespace
 	require.NoError(t, os.WriteFile(
 		filepath.Join(promptsDir, "spaces.md"),
 		[]byte("   \n\t\n   "),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -821,14 +821,14 @@ func TestResolvePromptFromPaths_WhitespaceOnlyFile(t *testing.T) {
 func TestResolvePromptFromPaths_LargeFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Write a large file (1MB of content)
 	largeContent := strings.Repeat("This is a line of content.\n", 40000)
 	require.NoError(t, os.WriteFile(
 		filepath.Join(promptsDir, "large.md"),
 		[]byte(largeContent),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -845,7 +845,7 @@ func TestResolvePromptFromPaths_LargeFile(t *testing.T) {
 func TestResolvePromptFromPaths_SpecialCharactersInFilename(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	tests := []struct {
 		name     string
@@ -863,7 +863,7 @@ func TestResolvePromptFromPaths_SpecialCharactersInFilename(t *testing.T) {
 			require.NoError(t, os.WriteFile(
 				filepath.Join(promptsDir, tt.filename),
 				[]byte("special char content"),
-				0644,
+				0o644,
 			))
 
 			paths := []repository.SourcedPath{
@@ -881,7 +881,7 @@ func TestResolvePromptFromPaths_SpecialCharactersInFilename(t *testing.T) {
 func TestResolvePromptFromPaths_DifferentFileExtensions(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	extensions := []string{".md", ".txt", ".prompt", ".yaml", ""}
 
@@ -892,7 +892,7 @@ func TestResolvePromptFromPaths_DifferentFileExtensions(t *testing.T) {
 			require.NoError(t, os.WriteFile(
 				filepath.Join(promptsDir, filename),
 				[]byte(expectedContent),
-				0644,
+				0o644,
 			))
 
 			paths := []repository.SourcedPath{
@@ -910,12 +910,12 @@ func TestResolvePromptFromPaths_DifferentFileExtensions(t *testing.T) {
 func TestResolvePromptFromPaths_DeeplyNested(t *testing.T) {
 	tmpDir := t.TempDir()
 	deepPath := filepath.Join(tmpDir, "prompts", "a", "b", "c", "d", "e")
-	require.NoError(t, os.MkdirAll(deepPath, 0755))
+	require.NoError(t, os.MkdirAll(deepPath, 0o755))
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(deepPath, "deep.md"),
 		[]byte("deeply nested content"),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -933,14 +933,14 @@ func TestResolvePromptFromPaths_SymlinkHandling(t *testing.T) {
 	promptsDir := filepath.Join(tmpDir, "prompts")
 	targetDir := filepath.Join(tmpDir, "target")
 
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
-	require.NoError(t, os.MkdirAll(targetDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	require.NoError(t, os.MkdirAll(targetDir, 0o755))
 
 	// Create actual file in target directory
 	require.NoError(t, os.WriteFile(
 		filepath.Join(targetDir, "actual.md"),
 		[]byte("symlinked content"),
-		0644,
+		0o644,
 	))
 
 	// Create symlink in prompts directory
@@ -963,12 +963,12 @@ func TestResolvePromptFromPaths_SymlinkHandling(t *testing.T) {
 func TestResolvePromptFromPaths_MultiplePathsWithPartialExistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "existing")
-	require.NoError(t, os.MkdirAll(existingDir, 0755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o755))
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(existingDir, "test.md"),
 		[]byte("found in existing path"),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -987,10 +987,10 @@ func TestResolvePromptFromPaths_MultiplePathsWithPartialExistence(t *testing.T) 
 func TestResolvePromptFromPaths_FileInDirectoryNotFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Create a directory with the same name as what we're looking for
-	require.NoError(t, os.MkdirAll(filepath.Join(promptsDir, "notafile.md"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(promptsDir, "notafile.md"), 0o755))
 
 	paths := []repository.SourcedPath{
 		{Path: promptsDir, Source: repository.SourceLocal},
@@ -1005,14 +1005,14 @@ func TestResolvePromptFromPaths_FileInDirectoryNotFile(t *testing.T) {
 func TestResolvePromptFromPaths_UTF8Content(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	// Content with various Unicode characters
 	utf8Content := "Hello 世界! Émoji: 🚀 Symbols: ∑∫∂ Greek: αβγδ"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(promptsDir, "unicode.md"),
 		[]byte(utf8Content),
-		0644,
+		0o644,
 	))
 
 	paths := []repository.SourcedPath{
@@ -1411,7 +1411,7 @@ func TestLoadProjectConfig(t *testing.T) {
 
 				// Create .awf/config.yaml
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				configContent := `inputs:
   project: my-project
   env: staging
@@ -1420,7 +1420,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(configContent),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1442,11 +1442,11 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, err)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(""),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1464,7 +1464,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, err)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				// Invalid YAML: bad indentation
 				invalidYAML := `inputs:
   project: value
@@ -1473,7 +1473,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(invalidYAML),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1491,7 +1491,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, err)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				configContent := `# This is a comment
 # inputs:
 #   project: my-project
@@ -1499,7 +1499,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(configContent),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1517,13 +1517,13 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, err)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				configContent := `inputs:
 `
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(configContent),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1541,7 +1541,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, err)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				configContent := `inputs:
   string_val: "hello"
   int_val: 42
@@ -1552,7 +1552,7 @@ func TestLoadProjectConfig(t *testing.T) {
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(configContent),
-					0644,
+					0o644,
 				))
 
 				require.NoError(t, os.Chdir(tmpDir))
@@ -1615,14 +1615,14 @@ func TestLoadProjectConfig_UsesCorrectPath(t *testing.T) {
 
 	// Create .awf/config.yaml at the expected path
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 	configContent := `inputs:
   path_test: correct_path
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	require.NoError(t, os.Chdir(tmpDir))

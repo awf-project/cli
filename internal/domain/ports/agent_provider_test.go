@@ -131,7 +131,6 @@ func TestAgentProvider_Execute_HappyPath(t *testing.T) {
 
 	// Act
 	result, err := provider.Execute(ctx, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -184,7 +183,6 @@ func TestAgentProvider_Validate_HappyPath(t *testing.T) {
 
 	// Act
 	err := provider.Validate()
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -204,7 +202,6 @@ func TestAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 
 	// Act
 	result, err := provider.Execute(ctx, prompt, options)
-
 	// Assert - should handle empty prompt gracefully
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -222,7 +219,6 @@ func TestAgentProvider_Execute_NilOptions(t *testing.T) {
 
 	// Act
 	result, err := provider.Execute(ctx, prompt, nil)
-
 	// Assert - should handle nil options
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -242,7 +238,6 @@ func TestAgentProvider_Execute_LargePrompt(t *testing.T) {
 
 	// Act
 	result, err := provider.Execute(ctx, largePrompt, options)
-
 	// Assert - should handle large prompts
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -369,7 +364,6 @@ func TestAgentRegistry_Register_HappyPath(t *testing.T) {
 
 	// Act
 	err := registry.Register(provider)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -387,7 +381,6 @@ func TestAgentRegistry_Get_HappyPath(t *testing.T) {
 
 	// Act
 	retrieved, err := registry.Get("claude")
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -533,7 +526,6 @@ func TestAgentRegistry_Get_AfterRegisterError(t *testing.T) {
 
 	// Act - Get should still work for the first registered provider
 	retrieved, err := registry.Get("claude")
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -618,7 +610,6 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -670,7 +661,6 @@ func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T)
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -747,7 +737,6 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 
 			// Act
 			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
-
 			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -852,7 +841,6 @@ func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -894,7 +882,6 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -931,7 +918,6 @@ func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, longPrompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -1141,7 +1127,6 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 
 			// Act
 			result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for %s: %v", name, err)
@@ -1184,7 +1169,6 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
 	result, err := retrieved.ExecuteConversation(ctx, state, "Test", nil)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -1219,7 +1203,6 @@ func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 
 	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-
 	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

@@ -125,7 +125,6 @@ func TestExport_DOTFormat_NoConversion(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "test.dot")
 
 	err := Export(dot, outputPath)
-
 	// .dot format should just write the raw DOT content (no graphviz needed)
 	if err != nil {
 		t.Errorf("Export() to .dot should not require graphviz, got error: %v", err)
@@ -188,7 +187,6 @@ func TestExport_EmptyDOT(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "empty.dot")
 
 	err := Export("", outputPath)
-
 	// Empty DOT should still be written to .dot file
 	if err != nil {
 		t.Errorf("Export() with empty DOT should not error for .dot format: %v", err)
@@ -265,12 +263,11 @@ func TestExport_OutputPathWithSpaces(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "path with spaces", "test.dot")
 
 	// Create parent directory
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		t.Fatalf("failed to create test directory: %v", err)
 	}
 
 	err := Export(dot, outputPath)
-
 	if err != nil {
 		t.Errorf("Export() should handle paths with spaces: %v", err)
 	}
@@ -290,7 +287,6 @@ func TestExport_OutputPathWithSpecialChars(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "test-file_v1.2.dot")
 
 	err := Export(dot, outputPath)
-
 	if err != nil {
 		t.Errorf("Export() should handle special chars in filename: %v", err)
 	}
@@ -315,7 +311,6 @@ func TestExport_DOTWithUnicodeLabels(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "unicode.dot")
 
 	err := Export(dot, outputPath)
-
 	if err != nil {
 		t.Errorf("Export() should handle unicode in DOT: %v", err)
 	}
@@ -354,7 +349,6 @@ func TestExport_LargeDOT(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "large.dot")
 
 	err := Export(dot, outputPath)
-
 	if err != nil {
 		t.Errorf("Export() should handle large DOT files: %v", err)
 	}
@@ -477,7 +471,6 @@ func TestExport_ComplexDOTStructure(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "complex.dot")
 
 	err := Export(dot, outputPath)
-
 	if err != nil {
 		t.Errorf("Export() should handle complex DOT structure: %v", err)
 	}

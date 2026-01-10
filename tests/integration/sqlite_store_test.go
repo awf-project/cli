@@ -651,7 +651,7 @@ func TestSQLiteHistoryStore_GetStats_AllStatuses(t *testing.T) {
 	assert.Equal(t, 2, stats.FailedCount)
 	assert.Equal(t, 1, stats.CancelledCount)
 
-	// Average: (1000+2000+3000+500+1500+250) / 6 = 1375
+	// Expected average duration: (1000+2000+3000+500+1500+250) / 6 = 1375ms
 	expectedAvg := int64(1375)
 	assert.Equal(t, expectedAvg, stats.AvgDurationMs)
 }
@@ -1632,11 +1632,11 @@ func TestSQLiteHistoryStore_MultiProcessConcurrency(t *testing.T) {
 	close(errChan)
 
 	// Check for errors
-	var errors []error
+	errs := make([]error, 0, numProcesses)
 	for err := range errChan {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
-	require.Empty(t, errors, "all processes should complete without error: %v", errors)
+	require.Empty(t, errs, "all processes should complete without error: %v", errs)
 
 	// Verify all records exist
 	verifyConn, err := store.NewSQLiteHistoryStore(dbPath)
@@ -1705,7 +1705,7 @@ func TestSQLiteHistoryStore_SimulateWorkflowExecution(t *testing.T) {
 			defer wg.Done()
 
 			// Each workflow execution opens the store, does work, records, closes
-			store, err := store.NewSQLiteHistoryStore(dbPath)
+			histStore, err := store.NewSQLiteHistoryStore(dbPath)
 			if err != nil {
 				errChan <- fmt.Errorf("workflow %d: open failed: %w", workflowNum, err)
 				return
@@ -1725,13 +1725,13 @@ func TestSQLiteHistoryStore_SimulateWorkflowExecution(t *testing.T) {
 				DurationMs:   int64(10 + workflowNum),
 			}
 
-			if err := store.Record(ctx, record); err != nil {
+			if err := histStore.Record(ctx, record); err != nil {
 				errChan <- fmt.Errorf("workflow %d: record failed: %w", workflowNum, err)
-				_ = store.Close()
+				_ = histStore.Close()
 				return
 			}
 
-			if err := store.Close(); err != nil {
+			if err := histStore.Close(); err != nil {
 				errChan <- fmt.Errorf("workflow %d: close failed: %w", workflowNum, err)
 				return
 			}
@@ -1741,11 +1741,11 @@ func TestSQLiteHistoryStore_SimulateWorkflowExecution(t *testing.T) {
 	wg.Wait()
 	close(errChan)
 
-	var errors []error
+	errs := make([]error, 0, numWorkflows)
 	for err := range errChan {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
-	require.Empty(t, errors, "all simulated workflows should complete successfully")
+	require.Empty(t, errs, "all simulated workflows should complete successfully")
 
 	// Verify final state
 	verifyStore, err := store.NewSQLiteHistoryStore(dbPath)

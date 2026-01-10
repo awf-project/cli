@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/vanoix/awf/internal/application"
@@ -80,7 +81,7 @@ func newMockExecutor() *mockExecutor {
 	return &mockExecutor{results: make(map[string]*ports.CommandResult)}
 }
 
-func (m *mockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *mockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	if result, ok := m.results[cmd.Program]; ok {
 		return result, nil
 	}
@@ -97,8 +98,8 @@ func newCapturingMockExecutor() *capturingMockExecutor {
 	return &capturingMockExecutor{results: make(map[string]*ports.CommandResult)}
 }
 
-func (m *capturingMockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
-	m.lastCmd = &cmd
+func (m *capturingMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	m.lastCmd = cmd
 	if result, ok := m.results[cmd.Program]; ok {
 		return result, nil
 	}
@@ -118,12 +119,14 @@ func (m *mockLogger) Warn(msg string, fields ...any) {
 	}
 	m.warnings = append(m.warnings, msg)
 }
+
 func (m *mockLogger) Error(msg string, fields ...any) {
 	if m.errors == nil {
 		m.errors = []string{}
 	}
 	m.errors = append(m.errors, msg)
 }
+
 func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
@@ -161,7 +164,7 @@ func (m *mockParallelExecutor) Execute(
 			result.AddResult(branchResult)
 		}
 		if err != nil && config.Strategy == workflow.StrategyAllSucceed {
-			return result, err
+			return result, fmt.Errorf("branch %s failed: %w", branch, err)
 		}
 	}
 	return result, nil

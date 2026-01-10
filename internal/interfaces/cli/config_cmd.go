@@ -61,7 +61,7 @@ func runConfigShow(cmd *cobra.Command, cfg *Config) error {
 	if err != nil {
 		// Invalid YAML or read error
 		if writer.IsJSONFormat() {
-			return writer.WriteError(err, ExitUser)
+			return fmt.Errorf("write error: %w", writer.WriteError(err, ExitUser))
 		}
 		return fmt.Errorf("config error: %w", err)
 	}

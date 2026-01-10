@@ -39,7 +39,7 @@ func NewJSONPluginStateStore(basePath string) *JSONPluginStateStore {
 // Save persists all plugin states to storage with atomic write.
 func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("save: %w", err)
 	}
 
 	s.mu.RLock()
@@ -49,8 +49,8 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 	}
 	s.mu.RUnlock()
 
-	if err := os.MkdirAll(s.basePath, 0750); err != nil {
-		return err
+	if err := os.MkdirAll(s.basePath, 0o750); err != nil {
+		return fmt.Errorf("create directory: %w", err)
 	}
 
 	finalPath := s.filePath()
@@ -58,44 +58,47 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 
 	data, err := json.MarshalIndent(statesToSave, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal state: %w", err)
 	}
 
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
-		return err
+		return fmt.Errorf("open temp file: %w", err)
 	}
 
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
-		return err
+		return fmt.Errorf("lock file: %w", err)
 	}
 
 	if _, err := f.Write(data); err != nil {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
-		return err
+		return fmt.Errorf("write temp file: %w", err)
 	}
 
 	if err := f.Sync(); err != nil {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
-		return err
+		return fmt.Errorf("sync temp file: %w", err)
 	}
 
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	_ = f.Close()
 
-	return os.Rename(tmpPath, finalPath)
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		return fmt.Errorf("rename to final: %w", err)
+	}
+	return nil
 }
 
 // Load reads plugin states from storage.
 func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("load: %w", err)
 	}
 
 	filePath := s.filePath()
@@ -109,7 +112,7 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 			s.mu.Unlock()
 			return nil
 		}
-		return err
+		return fmt.Errorf("read state file: %w", err)
 	}
 
 	// Handle empty file
@@ -122,7 +125,7 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 
 	var loadedStates map[string]*plugin.PluginState
 	if err := json.Unmarshal(data, &loadedStates); err != nil {
-		return err
+		return fmt.Errorf("unmarshal state: %w", err)
 	}
 
 	s.mu.Lock()
@@ -138,7 +141,7 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 // SetEnabled enables or disables a plugin by name.
 func (s *JSONPluginStateStore) SetEnabled(ctx context.Context, name string, enabled bool) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("set enabled: %w", err)
 	}
 
 	s.mu.Lock()
@@ -190,7 +193,7 @@ func (s *JSONPluginStateStore) GetConfig(name string) map[string]any {
 // SetConfig stores configuration for a plugin.
 func (s *JSONPluginStateStore) SetConfig(ctx context.Context, name string, config map[string]any) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("set config: %w", err)
 	}
 
 	s.mu.Lock()

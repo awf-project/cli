@@ -91,7 +91,7 @@ func (c *ExecutionContext) GetInput(key string) (any, bool) {
 }
 
 // SetStepState sets the state of a step.
-func (c *ExecutionContext) SetStepState(stepName string, state StepState) {
+func (c *ExecutionContext) SetStepState(stepName string, state StepState) { //nolint:gocritic // hugeParam: StepState passed by value to avoid pointer indirection overhead
 	c.States[stepName] = state
 	c.UpdatedAt = time.Now()
 }

@@ -83,6 +83,8 @@ func (e *LoopExecutor) PopLoopContext(execCtx *workflow.ExecutionContext) *workf
 }
 
 // ExecuteForEach iterates over items and executes body steps for each.
+//
+//nolint:gocognit // Complexity 40: forEach executor manages iteration over collections, loop state, break/continue jumps, parallel execution. Loop semantics require comprehensive handling.
 func (e *LoopExecutor) ExecuteForEach(
 	ctx context.Context,
 	wf *workflow.Workflow,
@@ -139,7 +141,7 @@ func (e *LoopExecutor) ExecuteForEach(
 	for i, item := range items {
 		// Check context cancellation before starting iteration
 		if ctx.Err() != nil {
-			return result, ctx.Err()
+			return result, fmt.Errorf("loop cancelled: %w", ctx.Err())
 		}
 
 		iterResult := workflow.IterationResult{
@@ -254,6 +256,8 @@ func (e *LoopExecutor) ExecuteForEach(
 }
 
 // ExecuteWhile repeats body steps while condition is true.
+//
+//nolint:gocognit // Complexity 42: while loop executor handles condition evaluation, iteration limits, break/continue, loop state tracking. Inherent to while loop semantics.
 func (e *LoopExecutor) ExecuteWhile(
 	ctx context.Context,
 	wf *workflow.Workflow,
@@ -292,7 +296,7 @@ func (e *LoopExecutor) ExecuteWhile(
 	for i := 0; i < maxIterations; i++ {
 		// Check context cancellation before starting iteration
 		if ctx.Err() != nil {
-			return result, ctx.Err()
+			return result, fmt.Errorf("loop cancelled: %w", ctx.Err())
 		}
 
 		// Set loop context on execCtx so executeStep can access it
@@ -424,14 +428,14 @@ func (e *LoopExecutor) ExecuteWhile(
 // Returns error if the expression cannot be resolved, is not a valid integer,
 // or the value is outside the allowed range (1-10000).
 // F037: Dynamic Variable Interpolation in Loops
-func (e *LoopExecutor) ResolveMaxIterations(expr string, ctx *interpolation.Context) (int, error) {
+func (e *LoopExecutor) ResolveMaxIterations(maxIterExpr string, ctx *interpolation.Context) (int, error) {
 	// Step 1: Validate non-empty expression
-	if expr == "" {
+	if maxIterExpr == "" {
 		return 0, fmt.Errorf("max_iterations expression is empty")
 	}
 
 	// Step 2: Resolve {{var}} placeholders using template resolver
-	resolved, err := e.resolver.Resolve(expr, ctx)
+	resolved, err := e.resolver.Resolve(maxIterExpr, ctx)
 	if err != nil {
 		return 0, fmt.Errorf("resolve max_iterations expression: %w", err)
 	}
@@ -607,7 +611,7 @@ func (e *LoopExecutor) evaluateBodyTransition(
 //   - adjustedIdx: the index to assign to bodyIdx (can be -1 for jump to index 0)
 //
 // F048 T006: Intra-Body Jump Handling in ExecuteWhile
-func (e *LoopExecutor) handleIntraBodyJump(newIdx int, currentIdx int) int {
+func (e *LoopExecutor) handleIntraBodyJump(newIdx, currentIdx int) int {
 	// Intra-body jump - adjust index to compensate for loop increment
 	// The for loop will increment bodyIdx after this assignment, so we subtract 1
 	// to land on the target index after the increment.

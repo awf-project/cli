@@ -30,6 +30,14 @@ linters:
     # Architecture
     - depguard      # Dependency constraints
 
+    # Modern Go quality
+    - gocognit      # Cognitive complexity
+    - gocritic      # Advanced static analysis
+    - exhaustive    # Enum switch exhaustiveness
+    - noctx         # HTTP requests require context
+    - prealloc      # Slice capacity optimization
+    - wrapcheck     # Error wrapping at boundaries
+
   settings:
     errcheck:
       check-type-assertions: true
@@ -116,17 +124,90 @@ linters:
         - cancelled  # Used in API: StatusCancelled, CancelledCount
         - cancelling # User-facing messages
 
+    gocognit:
+      min-complexity: 30  # Default 30, catches extreme complexity
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+
+    wrapcheck:
+      ignore-package-globs:
+        - "**/internal/**"
+        - "gopkg.in/yaml.v3"
+        - "path/filepath"
+        - "os"
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
   exclusions:
     generated: lax
     presets:
       - comments
       - std-error-handling
     rules:
-      # CLI commands can be complex
+      # CLI commands can be complex - entry points orchestrate many components
       - path: internal/interfaces/cli/
         linters:
           - funlen
           - gocyclo
+          - wrapcheck  # CLI returns formatted errors directly to users
+
+      # Application layer delegates to ports without adding context
+      # Errors from ports are already descriptive
+      - path: internal/application/
+        linters:
+          - wrapcheck
+
+      # Infrastructure store layer - os.* errors must remain unwrapped
+      # for os.IsNotExist/os.IsPermission checks to work
+      - path: internal/infrastructure/store/
+        linters:
+          - wrapcheck
+
+      # CLI run/resume/validate commands have high cyclomatic complexity by design
+      # They orchestrate input collection, validation, execution, and output formatting
+      - path: internal/interfaces/cli/(run|resume|validate)\.go
+        linters:
+          - gocognit
+
+      # Test helper functions in CLI tests use simple error propagation
+      - path: internal/interfaces/cli/.*_test\.go
+        linters:
+          - wrapcheck
+
+      # gocritic filepathJoin false positives - test fixture paths are not portable anyway
+      - path: _test\.go
+        text: "filepathJoin"
+        linters:
+          - gocritic
+
+      # gocritic appendAssign - acceptable in tests for clarity
+      - path: _test\.go
+        text: "appendAssign"
+        linters:
+          - gocritic
+
+      # gocritic elseif - acceptable in tests for clarity
+      - path: _test\.go
+        text: "elseif"
+        linters:
+          - gocritic
+
+      # gocritic commentedOutCode - test files use "Item: Txxx" comments for traceability
+      - path: _test\.go
+        text: "commentedOutCode"
+        linters:
+          - gocritic
+
+      # gocritic rangeValCopy - performance is not critical in CLI display functions
+      - path: internal/interfaces/cli/(run|status)\.go
+        text: "rangeValCopy"
+        linters:
+          - gocritic
 
       # Table-driven tests get long
       - path: _test\.go
@@ -188,7 +269,7 @@ linters:
 
 formatters:
   enable:
-    - gofmt
+    - gofumpt     # Stricter formatting than gofmt (replaces gofmt)
     - goimports
 
 output:

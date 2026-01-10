@@ -791,7 +791,6 @@ func TestDryRunExecutor_Execute_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	_, err := executor.Execute(ctx, "cancel", nil)
-
 	// Either returns an error or completes (dry-run should be fast)
 	// The important thing is it doesn't hang
 	if err != nil {

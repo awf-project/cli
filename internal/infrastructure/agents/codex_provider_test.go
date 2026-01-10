@@ -152,7 +152,6 @@ func TestCodexProvider_Validate_CLINotInstalled(t *testing.T) {
 	provider := NewCodexProvider()
 
 	err := provider.Validate()
-
 	if err != nil {
 		assert.Contains(t, err.Error(), "codex")
 	}

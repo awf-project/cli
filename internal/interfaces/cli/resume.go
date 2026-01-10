@@ -76,7 +76,8 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 		return fmt.Errorf("list states: %w", err)
 	}
 
-	var infos []ui.ResumableInfo
+	// Preallocate for expected resumable workflows
+	infos := make([]ui.ResumableInfo, 0, len(ids))
 	for _, id := range ids {
 		execCtx, err := stateStore.Load(ctx, id)
 		if err != nil || execCtx == nil {
@@ -88,8 +89,8 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 
 		// Calculate progress
 		completed := 0
-		for _, state := range execCtx.States {
-			if state.Status == workflow.StatusCompleted {
+		for i := range execCtx.States {
+			if execCtx.States[i].Status == workflow.StatusCompleted {
 				completed++
 			}
 		}
@@ -257,7 +258,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 			result.Status = "failed"
 			result.Error = execErr.Error()
 		}
-		if err := writer.WriteRunResult(result); err != nil {
+		if err := writer.WriteRunResult(&result); err != nil {
 			return err
 		}
 		if execErr != nil {
@@ -281,7 +282,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 			result.Status = "failed"
 			result.Error = execErr.Error()
 		}
-		if err := writer.WriteRunResult(result); err != nil {
+		if err := writer.WriteRunResult(&result); err != nil {
 			return err
 		}
 		if execErr != nil {

@@ -52,7 +52,7 @@ func (h *HookExecutor) ExecuteHooks(
 		if err := h.executeAction(ctx, action, intCtx); err != nil {
 			// Context cancellation should propagate immediately
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return fmt.Errorf("hook cancelled: %w", ctx.Err())
 			}
 
 			if h.failOnError {
@@ -109,7 +109,7 @@ func (h *HookExecutor) executeCommandAction(
 
 	h.logger.Debug("executing hook command", "command", resolved)
 
-	cmd := ports.Command{
+	cmd := &ports.Command{
 		Program: resolved,
 	}
 

@@ -79,7 +79,7 @@ func (m *mockInteractivePrompt) ShowAborted() {
 	m.abortCalled = true
 }
 
-func (m *mockInteractivePrompt) ShowSkipped(stepName string, nextStep string) {
+func (m *mockInteractivePrompt) ShowSkipped(stepName, nextStep string) {
 	m.skipCalls = append(m.skipCalls, stepName)
 }
 
@@ -362,7 +362,7 @@ func TestInteractiveExecutor_Run_ContextCancelled(t *testing.T) {
 	_, err := exec.Run(ctx, "simple", nil)
 
 	require.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestInteractiveExecutor_Run_ShowsStepDetails(t *testing.T) {

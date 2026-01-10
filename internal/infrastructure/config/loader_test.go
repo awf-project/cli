@@ -134,7 +134,6 @@ func TestYAMLConfigLoader_Load_NonExistent(t *testing.T) {
 	loader := NewYAMLConfigLoader(path)
 
 	cfg, err := loader.Load()
-
 	// Missing config file should not be an error (FR-004)
 	if err != nil {
 		t.Errorf("Load() error = %v, want nil for missing file", err)
@@ -226,7 +225,6 @@ func TestYAMLConfigLoader_Load_UnknownKeys(t *testing.T) {
 	loader := NewYAMLConfigLoader(path)
 
 	cfg, err := loader.Load()
-
 	// Unknown keys should not produce an error (warnings only, per spec)
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil for unknown keys", err)
@@ -333,7 +331,6 @@ inputs:
 
 	loader := NewYAMLConfigLoader(path)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -362,7 +359,6 @@ func TestYAMLConfigLoader_Load_SpecialCharacters(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -412,7 +408,6 @@ func TestYAMLConfigLoader_Load_LargeInputs(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -431,7 +426,6 @@ func TestYAMLConfigLoader_Load_AbsolutePath(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(absPath)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -444,7 +438,6 @@ func TestYAMLConfigLoader_Load_RelativePath(t *testing.T) {
 	// Use relative path
 	loader := NewYAMLConfigLoader(filepath.Join(fixturesPath, "valid.yaml"))
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -478,7 +471,6 @@ func TestYAMLConfigLoader_Load_UnknownKeys_WarningCalled(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	// Should succeed (unknown keys don't cause error)
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
@@ -510,7 +502,6 @@ func TestYAMLConfigLoader_Load_UnknownKeys_WarningContent(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	_, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -535,7 +526,6 @@ func TestYAMLConfigLoader_Load_NoUnknownKeys_NoWarning(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -555,7 +545,6 @@ func TestYAMLConfigLoader_Load_UnknownKeys_NoWarningFunc(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path) // No WithWarningFunc call
 	cfg, err := loader.Load()
-
 	// Should not panic or error
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
@@ -593,7 +582,6 @@ inputs:
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -627,7 +615,6 @@ typo_key: should_warn
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -653,7 +640,6 @@ func TestYAMLConfigLoader_Load_EmptyConfig_NoWarning(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
@@ -677,7 +663,6 @@ func TestYAMLConfigLoader_Load_NonExistentFile_NoWarning(t *testing.T) {
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	// Missing file is not an error
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
@@ -732,7 +717,6 @@ unknown2: value2
 
 	loader := NewYAMLConfigLoader(path).WithWarningFunc(warnFn)
 	cfg, err := loader.Load()
-
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}

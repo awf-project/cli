@@ -17,9 +17,9 @@ func setupWorkflows(t *testing.T, workflows map[string]string) func() {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 	for name, content := range workflows {
-		require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0o644))
 	}
 	require.NoError(t, os.Chdir(tmpDir))
 	return func() { _ = os.Chdir(origDir) }
@@ -118,8 +118,8 @@ func TestList_BrokenWorkflow(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "broken.yaml"), []byte("name: broken\nstates:\n  bad: [[["), 0644))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "broken.yaml"), []byte("name: broken\nstates:\n  bad: [[["), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -163,7 +163,7 @@ func TestListPrompts_EmptyDirectory(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -179,8 +179,8 @@ func TestListPrompts_WithFiles(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test content"), 0644))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test content"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -196,8 +196,8 @@ func TestListPrompts_JSONFormat(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0644))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -213,8 +213,8 @@ func TestListPrompts_TableFormat(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0644))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -230,8 +230,8 @@ func TestListPrompts_QuietFormat(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0644))
+	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -247,8 +247,8 @@ func TestListPrompts_NestedFiles(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	nestedDir := filepath.Join(tmpDir, ".awf", "prompts", "sub", "nested")
-	require.NoError(t, os.MkdirAll(nestedDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(nestedDir, "test.md"), []byte("test"), 0644))
+	require.NoError(t, os.MkdirAll(nestedDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(nestedDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})

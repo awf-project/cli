@@ -374,8 +374,8 @@ func TestRenderWorkflowHelp_ColorEnabled(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(buf)
 
-	// Test with color enabled
-	err := RenderWorkflowHelp(cmd, wf, buf, false) // noColor = false means color enabled
+	// Test with color enabled (noColor: false)
+	err := RenderWorkflowHelp(cmd, wf, buf, false)
 	require.NoError(t, err, "should render help without error")
 
 	output := buf.String()
@@ -394,8 +394,8 @@ func TestRenderWorkflowHelp_ColorDisabled(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(buf)
 
-	// Test with color disabled
-	err := RenderWorkflowHelp(cmd, wf, buf, true) // noColor = true
+	// Test with color disabled (noColor: true)
+	err := RenderWorkflowHelp(cmd, wf, buf, true)
 	require.NoError(t, err, "should render help without error")
 
 	output := buf.String()

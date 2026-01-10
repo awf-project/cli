@@ -23,7 +23,7 @@ type CustomProvider struct {
 }
 
 // NewCustomProvider creates a new CustomProvider with the given name and command template.
-func NewCustomProvider(name string, commandTemplate string) *CustomProvider {
+func NewCustomProvider(name, commandTemplate string) *CustomProvider {
 	return &CustomProvider{
 		name:            name,
 		commandTemplate: commandTemplate,
@@ -46,7 +46,7 @@ func (p *CustomProvider) Execute(ctx context.Context, prompt string, options map
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("custom provider: %w", err)
 	}
 
 	// Parse and execute template

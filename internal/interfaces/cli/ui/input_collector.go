@@ -52,6 +52,8 @@ func NewCLIInputCollector(reader io.Reader, writer io.Writer, colorizer *Coloriz
 //   - Handle empty input: error for required, default/nil for optional
 //   - Apply type coercion based on input.Type (string/integer/boolean)
 //   - Detect EOF (Ctrl+D) and return cancellation error
+//
+//nolint:gocognit // Complexity 36: input prompt handles all input types (string, int, bool, choice, file) with validation. Type-specific prompting requires this.
 func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 	for {
 		// Display prompt
@@ -63,7 +65,7 @@ func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 			if err == io.EOF {
 				return nil, fmt.Errorf("input cancelled")
 			}
-			return nil, err
+			return nil, fmt.Errorf("reading input: %w", err)
 		}
 
 		value := strings.TrimSpace(line)
@@ -91,12 +93,10 @@ func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 					continue
 				}
 				value = input.Validation.Enum[idx-1]
-			} else {
+			} else if !containsString(input.Validation.Enum, value) {
 				// Freetext validation for large enums
-				if !containsString(input.Validation.Enum, value) {
-					c.displayError("Error: invalid value, must be one of the available values")
-					continue
-				}
+				c.displayError("Error: invalid value, must be one of the available values")
+				continue
 			}
 		}
 
@@ -159,10 +159,14 @@ func (c *CLIInputCollector) displayPrompt(input *workflow.Input) {
 }
 
 // coerceType converts a string value to the appropriate type.
-func (c *CLIInputCollector) coerceType(value string, inputType string) (any, error) {
+func (c *CLIInputCollector) coerceType(value, inputType string) (any, error) {
 	switch inputType {
 	case "integer":
-		return strconv.Atoi(value)
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, fmt.Errorf("converting to integer: %w", err)
+		}
+		return v, nil
 	case "boolean":
 		switch strings.ToLower(value) {
 		case "true", "yes", "1":
@@ -178,6 +182,8 @@ func (c *CLIInputCollector) coerceType(value string, inputType string) (any, err
 }
 
 // validate checks the value against input validation constraints.
+//
+//nolint:gocognit // Complexity 72: input validation checks type, pattern, enum, min/max, file existence, extensions. Comprehensive validation logic required.
 func (c *CLIInputCollector) validate(value any, input *workflow.Input) error {
 	v := input.Validation
 	if v == nil {

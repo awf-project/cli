@@ -68,6 +68,7 @@ func TestManifestParser_ParseFile_ValidSimple(t *testing.T) {
 	}
 }
 
+//nolint:gocognit // Comprehensive manifest validation test covers all fields.
 func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	parser := NewManifestParser()
 	path := filepath.Join(fixturesPath, "valid-full", "plugin.yaml")

@@ -37,7 +37,7 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
 
 	// Build command arguments
@@ -107,7 +107,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
 
 	// Clone state to avoid modifying original

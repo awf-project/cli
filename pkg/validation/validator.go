@@ -96,6 +96,8 @@ func ValidateInputs(inputs map[string]any, definitions []Input) error {
 }
 
 // validateRules applies validation rules to a value.
+//
+//nolint:gocognit // Complexity 31: input validator checks all constraint types (type, required, pattern, enum, min/max, file rules). Comprehensive validation required.
 func validateRules(name string, value any, inputType string, rules *Rules) []string {
 	var errs []string
 
@@ -245,7 +247,7 @@ func coerceToBool(name string, value any) (bool, error) {
 }
 
 // validatePattern checks if a string value matches the regex pattern.
-func validatePattern(name string, value string, pattern string) error {
+func validatePattern(name, value, pattern string) error {
 	if pattern == "" {
 		return nil
 	}
@@ -263,7 +265,7 @@ func validatePattern(name string, value string, pattern string) error {
 }
 
 // validateEnum checks if a string value is in the allowed list.
-func validateEnum(name string, value string, allowed []string) error {
+func validateEnum(name, value string, allowed []string) error {
 	if len(allowed) == 0 {
 		return nil
 	}
@@ -278,13 +280,13 @@ func validateEnum(name string, value string, allowed []string) error {
 }
 
 // validateRange checks if an integer value is within min/max bounds.
-func validateRange(name string, value int, min, max *int) error {
-	if min != nil && value < *min {
-		return fmt.Errorf("inputs.%s: value %d is below minimum %d", name, value, *min)
+func validateRange(name string, value int, minVal, maxVal *int) error {
+	if minVal != nil && value < *minVal {
+		return fmt.Errorf("inputs.%s: value %d is below minimum %d", name, value, *minVal)
 	}
 
-	if max != nil && value > *max {
-		return fmt.Errorf("inputs.%s: value %d exceeds maximum %d", name, value, *max)
+	if maxVal != nil && value > *maxVal {
+		return fmt.Errorf("inputs.%s: value %d exceeds maximum %d", name, value, *maxVal)
 	}
 
 	return nil
@@ -292,7 +294,7 @@ func validateRange(name string, value int, min, max *int) error {
 
 // validateFileExists checks if the file at the given path exists.
 // Empty paths are skipped (valid for optional file inputs).
-func validateFileExists(name string, path string) error {
+func validateFileExists(name, path string) error {
 	if path == "" {
 		return nil // skip validation for empty optional paths
 	}
@@ -310,7 +312,7 @@ func validateFileExists(name string, path string) error {
 
 // validateFileExtension checks if the file has an allowed extension.
 // Empty paths are skipped (valid for optional file inputs).
-func validateFileExtension(name string, path string, allowed []string) error {
+func validateFileExtension(name, path string, allowed []string) error {
 	if len(allowed) == 0 || path == "" {
 		return nil
 	}
@@ -322,7 +324,7 @@ func validateFileExtension(name string, path string, allowed []string) error {
 
 	extLower := strings.ToLower(ext)
 	for _, a := range allowed {
-		if extLower == strings.ToLower(a) {
+		if strings.EqualFold(extLower, a) {
 			return nil
 		}
 	}

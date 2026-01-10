@@ -320,7 +320,6 @@ func TestCustomProvider_Validate_InvalidCommand(t *testing.T) {
 	provider := NewCustomProvider("custom", "nonexistent-binary-xyz")
 
 	err := provider.Validate()
-
 	// Should validate that command exists
 	if err != nil {
 		assert.Contains(t, err.Error(), "command")

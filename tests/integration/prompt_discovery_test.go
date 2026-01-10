@@ -31,18 +31,18 @@ func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	// Create local prompt files
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "system.md"),
 		[]byte("# System Prompt\nLocal system prompt content"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "task.md"),
 		[]byte("# Task Prompt\nLocal task content"),
-		0644,
+		0o644,
 	))
 
 	// Set XDG to non-existent directory to isolate local-only test
@@ -84,17 +84,17 @@ func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
 	// Setup: Create temp directory with global prompts only
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 
 	// Create global prompts directory
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "global-system.md"),
 		[]byte("# Global System\nGlobal system prompt content"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -134,24 +134,24 @@ func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Create local prompts
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "local-only.md"),
 		[]byte("Local only content"),
-		0644,
+		0o644,
 	))
 
 	// Create global prompts
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "global-only.md"),
 		[]byte("Global only content"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -197,22 +197,22 @@ func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Same filename in both directories
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "shared.md"),
 		[]byte("LOCAL VERSION"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "shared.md"),
 		[]byte("GLOBAL VERSION"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -266,18 +266,18 @@ func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
 
 	// Create nested structure
-	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "agents", "claude"), 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "tasks"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "agents", "claude"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "tasks"), 0o755))
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "agents", "claude", "system.md"),
 		[]byte("Claude system prompt"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "tasks", "code-review.md"),
 		[]byte("Code review task"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -317,28 +317,28 @@ func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "nested"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "nested"), 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(filepath.Join(globalPrompts, "nested"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(globalPrompts, "nested"), 0o755))
 
 	// Same nested path in both
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "nested", "deep.md"),
 		[]byte("LOCAL NESTED"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "nested", "deep.md"),
 		[]byte("GLOBAL NESTED"),
-		0644,
+		0o644,
 	))
 	// Additional global-only nested prompt
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "nested", "global-only.md"),
 		[]byte("GLOBAL ONLY NESTED"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -389,11 +389,11 @@ func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Both directories exist but are empty
 
@@ -431,7 +431,7 @@ func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 	// Don't create .awf/prompts
 
 	origDir, _ := os.Getwd()
@@ -469,7 +469,7 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	// Create prompts with various extensions
 	extensions := map[string]string{
@@ -484,7 +484,7 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(localPrompts, name),
 			[]byte(content),
-			0644,
+			0o644,
 		))
 	}
 
@@ -529,21 +529,21 @@ func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "local.md"),
 		[]byte("Local content"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "global.md"),
 		[]byte("Global content"),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -590,14 +590,14 @@ func TestPromptResolution_LocalPrompt_Integration(t *testing.T) {
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create prompt file
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "test-prompt.md"),
 		[]byte("RESOLVED_PROMPT_CONTENT"),
-		0644,
+		0o644,
 	))
 
 	// Create workflow that uses the prompt
@@ -616,7 +616,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "prompt-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "prompt-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -665,17 +665,17 @@ func TestPromptResolution_GlobalPrompt_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Create global prompt file
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "global-prompt.md"),
 		[]byte("GLOBAL_PROMPT_CONTENT"),
-		0644,
+		0o644,
 	))
 
 	// Create workflow
@@ -694,7 +694,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "global-prompt-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "global-prompt-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -744,23 +744,23 @@ func TestPromptResolution_LocalOverridesGlobal_Integration(t *testing.T) {
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Same name in both - local should win
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "shared.md"),
 		[]byte("LOCAL_WINS"),
-		0644,
+		0o644,
 	))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "shared.md"),
 		[]byte("GLOBAL_LOSES"),
-		0644,
+		0o644,
 	))
 
 	// Create workflow
@@ -779,7 +779,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "override-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "override-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -830,14 +830,14 @@ func TestPromptResolution_NestedPath_Integration(t *testing.T) {
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "agents", "claude"), 0755))
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(localPrompts, "agents", "claude"), 0o755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create nested prompt
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localPrompts, "agents", "claude", "system.md"),
 		[]byte("NESTED_CLAUDE_SYSTEM"),
-		0644,
+		0o644,
 	))
 
 	// Create workflow
@@ -856,7 +856,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "nested-prompt-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "nested-prompt-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -909,7 +909,7 @@ func TestPromptResolution_NotFound_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow but no prompts
 	wfYAML := `name: missing-prompt-test
@@ -927,7 +927,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "missing-prompt-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "missing-prompt-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -973,7 +973,7 @@ func TestPromptResolution_PathTraversal_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow
 	wfYAML := `name: traversal-test
@@ -991,7 +991,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "traversal-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "traversal-test.yaml"), []byte(wfYAML), 0o644))
 
 	origDir, _ := os.Getwd()
 	origWF := os.Getenv("AWF_WORKFLOWS_PATH")
@@ -1045,7 +1045,7 @@ func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	// Don't create the directory - init should create it
@@ -1092,18 +1092,18 @@ func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 
 	xdgDir := filepath.Join(tmpDir, "xdg-config")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Create existing prompt
 	existingContent := "EXISTING_PROMPT_CONTENT"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(globalPrompts, "my-prompt.md"),
 		[]byte(existingContent),
-		0644,
+		0o644,
 	))
 
 	origDir, _ := os.Getwd()
@@ -1142,7 +1142,7 @@ func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 
 	// Set custom XDG_CONFIG_HOME
 	customXDG := filepath.Join(tmpDir, "custom-config-home")
@@ -1197,7 +1197,7 @@ func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(localPrompts, 0755))
+	require.NoError(t, os.MkdirAll(localPrompts, 0o755))
 
 	// Symlink or copy fixture files to local prompts
 	// For simplicity, let's copy the files
@@ -1206,7 +1206,7 @@ func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dst, content, 0644)
+		return os.WriteFile(dst, content, 0o644)
 	}
 
 	// Copy local fixtures
@@ -1226,7 +1226,7 @@ func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 	// Create XDG with global fixtures
 	xdgDir := filepath.Join(tmpDir, "xdg")
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
-	require.NoError(t, os.MkdirAll(globalPrompts, 0755))
+	require.NoError(t, os.MkdirAll(globalPrompts, 0o755))
 
 	// Copy global fixtures
 	entries, err = os.ReadDir(fixtureGlobal)

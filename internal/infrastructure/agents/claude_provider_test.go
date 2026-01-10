@@ -198,7 +198,6 @@ func TestClaudeProvider_Validate_CLINotInstalled(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	err := provider.Validate()
-
 	// Should fail if claude CLI is not in PATH
 	// In CI environments without Claude installed, this should error
 	if err != nil {
