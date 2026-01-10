@@ -1,0 +1,21 @@
+# Note: This workflow tests if hooks are validated (they may not be in current implementation)
+name: hook-lowercase
+version: "1.0.0"
+
+states:
+  initial: risky_operation
+
+  risky_operation:
+    type: step
+    command: |
+      echo "operation result: {{states.risky_operation.stderr}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

@@ -167,7 +167,7 @@ awf run deploy --interactive
 awf run deploy --interactive --breakpoint build,deploy
 
 # Execute single step with mocked dependencies
-awf run deploy --step deploy_step --mock states.build.output="build-123"
+awf run deploy --step deploy_step --mock states.build.Output="build-123"
 
 # View workflow help with input parameters
 awf run deploy --help

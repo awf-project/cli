@@ -18,6 +18,8 @@ const (
 	TypeError ReferenceType = "error"
 	// TypeContext references runtime context ({{context.working_dir}}).
 	TypeContext ReferenceType = "context"
+	// TypeLoop references loop runtime data ({{loop.Index}}).
+	TypeLoop ReferenceType = "loop"
 	// TypeUnknown for unrecognized namespaces.
 	TypeUnknown ReferenceType = "unknown"
 )
@@ -42,10 +44,10 @@ var ValidWorkflowProperties = map[string]bool{
 
 // ValidStateProperties lists known step state properties that can be referenced.
 var ValidStateProperties = map[string]bool{
-	"output":    true,
-	"stderr":    true,
-	"exit_code": true,
-	"status":    true,
+	"Output":   true,
+	"Stderr":   true,
+	"ExitCode": true,
+	"Status":   true,
 }
 
 // ValidErrorProperties lists known error properties in error hooks.
@@ -113,10 +115,14 @@ func ExtractReferences(template string) ([]Reference, error) {
 
 // ParseReference parses a single reference path (without braces) into a Reference struct.
 // For example, "inputs.name" or "states.step.output".
+// Also handles Go template syntax with leading dot: ".states.step.output" -> "states.step.output".
 func ParseReference(path string) Reference {
 	if path == "" {
 		return Reference{Type: TypeUnknown}
 	}
+
+	// Handle Go template syntax with leading dot (.states.X -> states.X)
+	path = strings.TrimPrefix(path, ".")
 
 	parts := strings.Split(path, ".")
 	if len(parts) < 2 {
@@ -156,6 +162,9 @@ func ParseReference(path string) Reference {
 	case TypeContext:
 		// {{context.working_dir}} -> Path = "working_dir"
 		ref.Path = parts[1]
+	case TypeLoop:
+		// {{loop.Index}} -> Path = "Index"
+		ref.Path = parts[1]
 	default:
 		// Unknown namespace, store entire remaining path
 		ref.Path = strings.Join(parts[1:], ".")
@@ -179,6 +188,8 @@ func CategorizeNamespace(namespace string) ReferenceType {
 		return TypeError
 	case "context":
 		return TypeContext
+	case "loop":
+		return TypeLoop
 	default:
 		return TypeUnknown
 	}

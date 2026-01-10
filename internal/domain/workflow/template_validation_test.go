@@ -49,6 +49,8 @@ func convertRefType(t interpolation.ReferenceType) workflow.ReferenceType {
 		return workflow.TypeError
 	case interpolation.TypeContext:
 		return workflow.TypeContext
+	case interpolation.TypeLoop:
+		return workflow.TypeLoop
 	default:
 		return workflow.TypeUnknown
 	}
@@ -204,7 +206,7 @@ func TestTemplateValidator_ValidStateReference(t *testing.T) {
 			"step2": {
 				Name:      "step2",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo result: {{states.step1.output}}", // valid: step1 runs before step2
+				Command:   "echo result: {{states.step1.Output}}", // valid: step1 runs before step2
 				OnSuccess: "done",
 				OnFailure: "error",
 			},
@@ -242,7 +244,7 @@ func TestTemplateValidator_ValidStateReferenceAllProperties(t *testing.T) {
 			"step2": {
 				Name:      "step2",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{states.step1.output}} {{states.step1.stderr}} {{states.step1.exit_code}} {{states.step1.status}}",
+				Command:   "echo {{states.step1.Output}} {{states.step1.Stderr}} {{states.step1.ExitCode}} {{states.step1.Status}}",
 				OnSuccess: "done",
 				OnFailure: "error",
 			},
@@ -396,7 +398,7 @@ func TestTemplateValidator_UndefinedInputInMultipleSteps(t *testing.T) {
 
 func TestTemplateValidator_UndefinedStep(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo {{states.nonexistent.output}}"
+	w.Steps["start"].Command = "echo {{states.nonexistent.Output}}"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -460,7 +462,7 @@ func TestTemplateValidator_ForwardReferenceMultipleStepsAhead(t *testing.T) {
 func TestTemplateValidator_SelfReference(t *testing.T) {
 	// A step referencing its own output (which doesn't exist yet)
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo {{states.start.output}}"
+	w.Steps["start"].Command = "echo {{states.start.Output}}"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -550,6 +552,67 @@ func TestTemplateValidator_InvalidStatePropertyCommonMistakes(t *testing.T) {
 
 			require.True(t, result.HasErrors())
 			assert.Equal(t, workflow.ErrInvalidStateProperty, result.Errors[0].Code)
+		})
+	}
+}
+
+// TestValidateStateRef_CasingErrors verifies that lowercase state property references
+// are detected and emit errors with uppercase suggestions (F050).
+func TestValidateStateRef_CasingErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		property       string
+		wantError      bool
+		wantSuggestion string
+	}{
+		{"lowercase output errors", "output", true, "Output"},
+		{"lowercase stderr errors", "stderr", true, "Stderr"},
+		{"lowercase exit_code errors", "exit_code", true, "ExitCode"},
+		{"lowercase status errors", "status", true, "Status"},
+		{"uppercase Output passes", "Output", false, ""},
+		{"uppercase Stderr passes", "Stderr", false, ""},
+		{"uppercase ExitCode passes", "ExitCode", false, ""},
+		{"uppercase Status passes", "Status", false, ""},
+		{"invalid property no suggestion", "stdout", true, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &workflow.Workflow{
+				Name:    "test",
+				Initial: "step1",
+				Steps: map[string]*workflow.Step{
+					"step1": {
+						Name:      "step1",
+						Type:      workflow.StepTypeCommand,
+						Command:   "echo",
+						OnSuccess: "step2",
+					},
+					"step2": {
+						Name:      "step2",
+						Type:      workflow.StepTypeCommand,
+						Command:   "echo {{states.step1." + tt.property + "}}",
+						OnSuccess: "done",
+					},
+					"done": {
+						Name:   "done",
+						Type:   workflow.StepTypeTerminal,
+						Status: workflow.TerminalSuccess,
+					},
+				},
+			}
+
+			validator := workflow.NewTemplateValidator(w, newTestAnalyzer())
+			result := validator.Validate()
+
+			if tt.wantError {
+				require.True(t, result.HasErrors(), "expected error for property: %s", tt.property)
+				if tt.wantSuggestion != "" {
+					assert.Contains(t, result.Errors[0].Message, tt.wantSuggestion)
+				}
+			} else {
+				assert.False(t, result.HasErrors(), "unexpected error for property: %s", tt.property)
+			}
 		})
 	}
 }
@@ -777,7 +840,7 @@ func TestTemplateValidator_ValidStepPostHook(t *testing.T) {
 	w := newLinearWorkflow()
 	w.Steps["step2"].Hooks = workflow.StepHooks{
 		Post: workflow.Hook{
-			{Command: "echo Completed with {{states.step1.output}}"},
+			{Command: "echo Completed with {{states.step1.Output}}"},
 		},
 	}
 
@@ -885,7 +948,7 @@ func TestTemplateValidator_AggregatesAllErrors(t *testing.T) {
 			"step1": {
 				Name:      "step1",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{inputs.undefined}} {{states.nonexistent.output}} {{workflow.bad}}",
+				Command:   "echo {{inputs.undefined}} {{states.nonexistent.Output}} {{workflow.bad}}",
 				OnSuccess: "done",
 				OnFailure: "error",
 			},
@@ -1112,7 +1175,7 @@ func TestTemplateValidator_ParallelStepBranchRefs(t *testing.T) {
 			"merge": {
 				Name:      "merge",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{states.branch1.output}} {{states.branch2.output}}", // Valid: branches run before merge
+				Command:   "echo {{states.branch1.Output}} {{states.branch2.Output}}", // Valid: branches run before merge
 				OnSuccess: "done",
 				OnFailure: "error",
 			},
@@ -1553,7 +1616,7 @@ func TestTemplateValidator_LoopExpressions_StateReferenceInCondition(t *testing.
 				OnFailure: "error",
 				Loop: &workflow.LoopConfig{
 					Type:          workflow.LoopTypeWhile,
-					Condition:     "{{states.setup.output}} < {{inputs.target}}",
+					Condition:     "{{states.setup.Output}} < {{inputs.target}}",
 					Body:          []string{"loop_body"},
 					MaxIterations: 100,
 					OnComplete:    "done",
@@ -1592,7 +1655,7 @@ func TestTemplateValidator_LoopExpressions_ForwardStateReferenceInCondition(t *t
 				OnFailure: "error",
 				Loop: &workflow.LoopConfig{
 					Type:          workflow.LoopTypeWhile,
-					Condition:     "{{states.after_loop.output}} != 'done'", // Forward reference!
+					Condition:     "{{states.after_loop.Output}} != 'done'", // Forward reference!
 					Body:          []string{"loop_body"},
 					MaxIterations: 10,
 					OnComplete:    "after_loop",

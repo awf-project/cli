@@ -159,7 +159,7 @@ review:
 
 **Available Variables:**
 - `{{.inputs.*}}` - Workflow input values
-- `{{.states.step_name.output}}` - Previous step raw output
+- `{{.states.step_name.Output}}` - Previous step raw output
 - `{{.states.step_name.response}}` - Previous step parsed JSON
 - `{{.env.VAR_NAME}}` - Environment variables
 - `{{.workflow.id}}` - Workflow execution ID
@@ -173,17 +173,17 @@ Agent responses are automatically captured in the execution state:
 
 | Field | Type | Example |
 |-------|------|---------|
-| `{{.states.step_name.output}}` | string | Raw response text |
+| `{{.states.step_name.Output}}` | string | Raw response text |
 | `{{.states.step_name.response}}` | object | Parsed JSON (if valid) |
 | `{{.states.step_name.tokens}}` | object | Token usage metadata |
-| `{{.states.step_name.exit_code}}` | int | 0 for success, non-zero for failure |
+| `{{.states.step_name.ExitCode}}` | int | 0 for success, non-zero for failure |
 
 ### Accessing Raw Output
 
 ```yaml
 report_results:
   type: step
-  command: echo "Agent said: {{.states.analyze.output}}"
+  command: echo "Agent said: {{.states.analyze.Output}}"
   on_success: done
 ```
 
@@ -233,7 +233,7 @@ states:
     provider: claude
     prompt: |
       Based on your previous analysis:
-      {{.states.initial_review.output}}
+      {{.states.initial_review.Output}}
 
       Can you elaborate on performance concerns?
     on_success: suggest_improvements
@@ -345,7 +345,7 @@ parallel_analysis:
 
 aggregate:
   type: step
-  command: echo "Claude: {{.states.claude_review.output}}\nCodex: {{.states.codex_suggest.output}}"
+  command: echo "Claude: {{.states.claude_review.Output}}\nCodex: {{.states.codex_suggest.Output}}"
   on_success: done
 ```
 
@@ -397,7 +397,7 @@ performance_review:
   provider: claude
   prompt: |
     After this security review:
-    {{.states.security_review.output}}
+    {{.states.security_review.Output}}
 
     Now analyze performance: {{.inputs.code}}
   on_success: done

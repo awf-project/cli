@@ -30,7 +30,7 @@ states:
     provider: claude
     prompt: |
       Based on previous analysis:
-      {{states.first_turn.output}}
+      {{states.first_turn.Output}}
 
       Now provide detailed recommendations.
     options:
@@ -45,8 +45,8 @@ states:
     provider: claude
     prompt: |
       Previous context:
-      Analysis: {{states.first_turn.output}}
-      Recommendations: {{states.second_turn.output}}
+      Analysis: {{states.first_turn.Output}}
+      Recommendations: {{states.second_turn.Output}}
 
       Summarize key action items.
     options:

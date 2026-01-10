@@ -12,7 +12,7 @@ inputs:
 
 outputs:
   - name: final_result
-    from: states.call_b.output
+    from: states.call_b.Output
     description: Final result after passing through all levels
 
 states:

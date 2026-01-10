@@ -47,7 +47,7 @@ states:
     provider: gemini
     mode: conversation
     system_prompt: "Process with caution."
-    initial_prompt: "Continue from: {{states.conversation_with_retry.output}}"
+    initial_prompt: "Continue from: {{states.conversation_with_retry.Output}}"
     options:
       model: gemini-pro
     conversation:

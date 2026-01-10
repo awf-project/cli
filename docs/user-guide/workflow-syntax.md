@@ -190,7 +190,7 @@ Agent responses are captured in the step state:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `{{.states.step_name.output}}` | string | Raw response text |
+| `{{.states.step_name.Output}}` | string | Raw response text |
 | `{{.states.step_name.response}}` | object | Parsed JSON (if response is valid JSON) |
 | `{{.states.step_name.tokens}}` | object | Token usage (if provider supports it) |
 
@@ -228,7 +228,7 @@ states:
     provider: claude
     prompt: |
       Based on your previous response:
-      {{.states.ask_question.output}}
+      {{.states.ask_question.Output}}
 
       Please elaborate on point 3.
     on_success: done
@@ -323,7 +323,7 @@ parallel_build:
 
 ```yaml
 # Access individual step outputs
-command: echo "{{.states.parallel_build.steps.lint.output}}"
+command: echo "{{.states.parallel_build.steps.lint.Output}}"
 ```
 
 ---
@@ -337,7 +337,7 @@ process_files:
   type: for_each
   items: '["a.txt", "b.txt", "c.txt"]'
   max_iterations: 100
-  break_when: "states.process_single.exit_code != 0"
+  break_when: "states.process_single.ExitCode != 0"
   body:
     - process_single
   on_complete: aggregate
@@ -411,7 +411,7 @@ Repeat until condition becomes false.
 ```yaml
 poll_status:
   type: while
-  while: "states.check.output != 'ready'"
+  while: "states.check.Output != 'ready'"
   max_iterations: 60
   body:
     - check
@@ -532,7 +532,7 @@ states:
     on_failure: error
   analyze:
     type: step
-    command: claude -c "Analyze: {{.states.read.output}}"
+    command: claude -c "Analyze: {{.states.read.Output}}"
     timeout: 120
     on_success: done
     on_failure: error
@@ -545,7 +545,7 @@ states:
 
 outputs:
   - name: analysis_result
-    from: states.analyze.output
+    from: states.analyze.Output
 ```
 
 ### Accessing Sub-Workflow Results
@@ -556,7 +556,7 @@ Outputs from the sub-workflow are accessible via the standard states interpolati
 # In parent workflow, after analyze_code step
 aggregate_results:
   type: step
-  command: echo "Analysis: {{.states.analyze_code.output}}"
+  command: echo "Analysis: {{.states.analyze_code.Output}}"
   on_success: done
 ```
 
@@ -601,7 +601,7 @@ prepare_items:
 
 process_files:
   type: for_each
-  items: "{{.states.prepare_items.output}}"
+  items: "{{.states.prepare_items.Output}}"
   body:
     - analyze_file
 
@@ -641,7 +641,7 @@ states:
 
 outputs:
   - name: file_analysis
-    from: states.parse.output
+    from: states.parse.Output
 ```
 
 ---
@@ -697,9 +697,9 @@ process:
   type: step
   command: analyze.sh
   transitions:
-    - when: "states.process.exit_code == 0 and inputs.mode == 'full'"
+    - when: "states.process.ExitCode == 0 and inputs.mode == 'full'"
       goto: full_report
-    - when: "states.process.exit_code == 0"
+    - when: "states.process.ExitCode == 0"
       goto: summary_report
     - goto: error  # default fallback (no when clause)
 ```
@@ -724,8 +724,8 @@ process:
 | Variable | Description |
 |----------|-------------|
 | `inputs.name` | Input values |
-| `states.step_name.exit_code` | Step exit code |
-| `states.step_name.output` | Step output |
+| `states.step_name.ExitCode` | Step exit code |
+| `states.step_name.Output` | Step output |
 | `env.VAR_NAME` | Environment variables |
 
 Transitions are evaluated in order; first match wins. A transition without `when` acts as default fallback.
@@ -841,7 +841,7 @@ AWF uses `{{.var}}` syntax (Go template style with dot prefix).
 command: echo "{{.inputs.variable_name}}"
 
 # Previous step outputs
-command: echo "{{.states.step_name.output}}"
+command: echo "{{.states.step_name.Output}}"
 
 # Workflow metadata
 command: echo "Workflow ID: {{.workflow.id}}"

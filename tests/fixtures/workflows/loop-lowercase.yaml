@@ -1,0 +1,27 @@
+name: loop-lowercase
+version: "1.0.0"
+
+inputs:
+  - name: max_retries
+    type: number
+    required: true
+
+states:
+  initial: check_service
+
+  check_service:
+    type: step
+    command: echo "checking"
+    loop:
+      while: "{{states.check_service.exit_code}} != 0"
+      max_iterations: "{{inputs.max_retries}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

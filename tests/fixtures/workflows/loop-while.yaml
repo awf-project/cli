@@ -6,7 +6,7 @@ states:
   initial: countdown
   countdown:
     type: while
-    while: "states.decrement.exit_code == 0"
+    while: "states.decrement.ExitCode == 0"
     max_iterations: 10
     body:
       - decrement

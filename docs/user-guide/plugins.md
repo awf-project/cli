@@ -118,7 +118,7 @@ states:
     operation: slack.send_message    # Plugin operation
     inputs:
       channel: "#deployments"
-      message: "Deploy completed: {{.states.deploy.output}}"
+      message: "Deploy completed: {{.states.deploy.Output}}"
     on_success: done
     on_failure: error
 

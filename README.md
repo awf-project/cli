@@ -106,7 +106,7 @@ states:
     on_failure: error
   analyze:
     type: step
-    command: claude -c "Review: {{.states.read.output}}"
+    command: claude -c "Review: {{.states.read.Output}}"
     timeout: 120
     on_success: done
     on_failure: error

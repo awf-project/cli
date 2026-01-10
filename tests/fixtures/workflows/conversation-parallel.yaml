@@ -78,11 +78,11 @@ states:
     initial_prompt: |
       Synthesize these research findings:
 
-      Claude findings: {{states.parallel_conversations.branches.claude_research.steps.claude_convo.output}}
+      Claude findings: {{states.parallel_conversations.branches.claude_research.steps.claude_convo.Output}}
 
-      Gemini findings: {{states.parallel_conversations.branches.gemini_research.steps.gemini_convo.output}}
+      Gemini findings: {{states.parallel_conversations.branches.gemini_research.steps.gemini_convo.Output}}
 
-      Codex findings: {{states.parallel_conversations.branches.codex_research.steps.codex_convo.output}}
+      Codex findings: {{states.parallel_conversations.branches.codex_research.steps.codex_convo.Output}}
     options:
       model: claude-haiku-4-5
       max_tokens: 3000

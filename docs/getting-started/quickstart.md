@@ -180,7 +180,7 @@ states:
     type: step
     command: |
       claude -c "Review this code:
-      {{.states.read_file.output}}"
+      {{.states.read_file.Output}}"
     timeout: 120
     on_success: done
     on_failure: error

@@ -52,9 +52,9 @@ states:
   compare:
     type: step
     command: |
-      echo "Claude: {{states.parallel_agents.branches.claude_analysis.steps.analyze_claude.output}}"
-      echo "Codex: {{states.parallel_agents.branches.codex_analysis.steps.analyze_codex.output}}"
-      echo "Gemini: {{states.parallel_agents.branches.gemini_analysis.steps.analyze_gemini.output}}"
+      echo "Claude: {{states.parallel_agents.branches.claude_analysis.steps.analyze_claude.Output}}"
+      echo "Codex: {{states.parallel_agents.branches.codex_analysis.steps.analyze_codex.Output}}"
+      echo "Gemini: {{states.parallel_agents.branches.gemini_analysis.steps.analyze_gemini.Output}}"
     on_success: done
     on_failure: error
 

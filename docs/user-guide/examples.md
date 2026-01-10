@@ -85,7 +85,7 @@ states:
     prompt: |
       Review this code and suggest improvements:
 
-      {{.states.read_file.output}}
+      {{.states.read_file.Output}}
     options:
       model: claude-sonnet-4-20250514
       max_tokens: 4096
@@ -365,7 +365,7 @@ states:
     provider: claude
     prompt: |
       Review this code for issues and improvements:
-      {{.states.read_file.output}}
+      {{.states.read_file.Output}}
     options:
       model: claude-sonnet-4-20250514
       max_tokens: 2048
@@ -414,7 +414,7 @@ states:
     provider: claude
     prompt: |
       Based on your previous review:
-      {{.states.initial_review.output}}
+      {{.states.initial_review.Output}}
 
       Now focus specifically on performance bottlenecks.
     on_success: suggest_fixes
@@ -478,9 +478,9 @@ states:
   aggregate:
     type: step
     command: |
-      echo "Security: {{.states.security_review.output}}"
-      echo "Performance: {{.states.performance_review.output}}"
-      echo "Style: {{.states.style_review.output}}"
+      echo "Security: {{.states.security_review.Output}}"
+      echo "Performance: {{.states.performance_review.Output}}"
+      echo "Style: {{.states.style_review.Output}}"
     on_success: done
     on_failure: error
 

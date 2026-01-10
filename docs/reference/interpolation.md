@@ -41,8 +41,8 @@ states:
 Access output and exit code from previous steps:
 
 ```yaml
-{{.states.step_name.output}}
-{{.states.step_name.exit_code}}
+{{.states.step_name.Output}}
+{{.states.step_name.ExitCode}}
 ```
 
 Example:
@@ -55,7 +55,7 @@ read_file:
 analyze:
   type: step
   command: |
-    claude -c "Analyze: {{.states.read_file.output}}"
+    claude -c "Analyze: {{.states.read_file.Output}}"
 ```
 
 ### Workflow Metadata
@@ -146,7 +146,7 @@ process_reviews:
 
 loop_reviews:
   type: for_each
-  items: "{{.states.process_reviews.output}}"
+  items: "{{.states.process_reviews.Output}}"
   body:
     - call_child_workflow
 
@@ -280,8 +280,8 @@ Static validation warns about undefined variables during `awf validate`.
 The `while` and `until` conditions support interpolation:
 
 ```yaml
-while: "{{.states.check.output}} != 'done'"
-until: "{{.states.counter.output}} >= {{.inputs.threshold}}"
+while: "{{.states.check.Output}} != 'done'"
+until: "{{.states.counter.Output}} >= {{.inputs.threshold}}"
 ```
 
 ## Template Parameters
@@ -306,7 +306,7 @@ command: |
   echo "Step 1: Process {{.inputs.file}}"
   process-file "{{.inputs.file}}"
   echo "Step 2: Analyze output"
-  analyze "{{.states.process.output}}"
+  analyze "{{.states.process.Output}}"
 ```
 
 ### Conditional Values

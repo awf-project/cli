@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/analyzer"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
@@ -63,6 +66,27 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 
 	// Validate workflow structure
 	validationErr := svc.ValidateWorkflow(ctx, workflowName)
+
+	// If workflow structure is valid, validate template interpolation references
+	if validationErr == nil {
+		templateAnalyzer := analyzer.NewInterpolationAnalyzer()
+		templateValidator := workflow.NewTemplateValidator(wf, templateAnalyzer)
+		result := templateValidator.Validate()
+		if result != nil && result.HasErrors() {
+			// Format all errors for display
+			if len(result.Errors) == 1 {
+				validationErr = result.Errors[0]
+			} else {
+				// Create a multi-line error with all validation errors
+				var sb strings.Builder
+				sb.WriteString(fmt.Sprintf("validation failed with %d errors:", len(result.Errors)))
+				for _, err := range result.Errors {
+					sb.WriteString(fmt.Sprintf("\n  %s", err.Error()))
+				}
+				validationErr = fmt.Errorf("%s", sb.String())
+			}
+		}
+	}
 
 	// If workflow is valid, also validate template references
 	if validationErr == nil {
