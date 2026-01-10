@@ -50,7 +50,7 @@ states:
   code_analysis:
     use_template: ai-analyze
     parameters:
-      prompt: "Analyze this code: {{.states.extract.output}}"
+      prompt: "Analyze this code: {{.states.extract.Output}}"
       model: gemini
     on_success: format
     on_failure: error

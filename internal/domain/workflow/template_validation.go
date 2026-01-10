@@ -229,6 +229,9 @@ func (v *TemplateValidator) ValidateReference(ref TemplateReference, stepName, f
 		v.validateErrorRef(ref, stepName, fieldName, isErrorHook)
 	case TypeContext:
 		v.validateContextRef(ref, stepName, fieldName)
+	case TypeLoop:
+		// Loop references are validated at runtime, not statically
+		// No validation needed (e.g., {{loop.Index}}, {{loop.Item}})
 	case TypeUnknown:
 		v.result.AddError(ErrUnknownReferenceType, stepName,
 			fmt.Sprintf("unknown reference type %q in %s", ref.Raw, fieldName))
@@ -424,6 +427,14 @@ func (v *TemplateValidator) validateStateRef(ref TemplateReference, stepName, fi
 		// Missing property - state refs require a property like .output, .stderr, etc.
 		v.result.AddError(ErrInvalidStateProperty, stepName,
 			fmt.Sprintf("missing property for state reference %q in %s (expected .output, .stderr, .exit_code, or .status)", referencedStep, fieldName))
+		return
+	}
+
+	// Check for lowercase casing and suggest uppercase
+	if suggestion, isLowercase := lowercaseToUppercase[ref.Property]; isLowercase {
+		v.result.AddError(ErrInvalidStateProperty, stepName,
+			fmt.Sprintf("invalid state property %q for step %q in %s, use '%s' instead",
+				ref.Property, referencedStep, fieldName, suggestion))
 		return
 	}
 

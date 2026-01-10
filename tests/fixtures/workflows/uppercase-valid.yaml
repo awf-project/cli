@@ -1,0 +1,34 @@
+name: uppercase-valid
+version: "1.0.0"
+
+inputs:
+  - name: cmd
+    type: string
+    required: true
+
+states:
+  initial: execute
+
+  execute:
+    type: step
+    command: |
+      {{inputs.cmd}}
+    on_success: check_status
+    on_failure: error
+
+  check_status:
+    type: step
+    command: |
+      echo "Output: {{states.execute.Output}}"
+      echo "Stderr: {{states.execute.Stderr}}"
+      echo "Exit code: {{states.execute.ExitCode}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

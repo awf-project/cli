@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **[F050] Standardize state property casing to uppercase**
+  - State property references in templates now require uppercase: `.Output`, `.Stderr`, `.ExitCode`, `.Status`
+  - Previous lowercase syntax (`.output`, `.stderr`, etc.) was never functional with Go templates
+  - **Migration:** Update all workflow YAML files to use uppercase property names
+  - Validation errors now include suggested uppercase corrections
+  - Affects: Template interpolation, workflow validation, all state references
+
 ### Added
+
 - **F052**: Renovate Dependency Management
   - Automated dependency updates via Renovate bot for Go modules and GitHub Actions
   - Weekly update schedule (Sunday early morning UTC) to minimize workflow disruption

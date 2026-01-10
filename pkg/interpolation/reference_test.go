@@ -24,15 +24,15 @@ func TestExtractReferences_SingleInput(t *testing.T) {
 }
 
 func TestExtractReferences_StateOutput(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("result: {{states.build.output}}")
+	refs, err := interpolation.ExtractReferences("result: {{states.build.Output}}")
 
 	require.NoError(t, err)
 	require.Len(t, refs, 1)
 	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
 	assert.Equal(t, "states", refs[0].Namespace)
 	assert.Equal(t, "build", refs[0].Path)
-	assert.Equal(t, "output", refs[0].Property)
-	assert.Equal(t, "{{states.build.output}}", refs[0].Raw)
+	assert.Equal(t, "Output", refs[0].Property)
+	assert.Equal(t, "{{states.build.Output}}", refs[0].Raw)
 }
 
 func TestExtractReferences_WorkflowProperty(t *testing.T) {
@@ -236,10 +236,10 @@ func TestExtractReferences_AllStateProperties(t *testing.T) {
 	tests := []struct {
 		property string
 	}{
-		{"output"},
-		{"stderr"},
-		{"exit_code"},
-		{"status"},
+		{"Output"},
+		{"Stderr"},
+		{"ExitCode"},
+		{"Status"},
 	}
 
 	for _, tt := range tests {
@@ -349,20 +349,20 @@ func TestParseReference_InputsSimple(t *testing.T) {
 }
 
 func TestParseReference_StatesWithProperty(t *testing.T) {
-	ref := interpolation.ParseReference("states.build.output")
+	ref := interpolation.ParseReference("states.build.Output")
 
 	assert.Equal(t, interpolation.TypeStates, ref.Type)
 	assert.Equal(t, "states", ref.Namespace)
 	assert.Equal(t, "build", ref.Path)
-	assert.Equal(t, "output", ref.Property)
+	assert.Equal(t, "Output", ref.Property)
 }
 
 func TestParseReference_StatesWithStderr(t *testing.T) {
-	ref := interpolation.ParseReference("states.compile.stderr")
+	ref := interpolation.ParseReference("states.compile.Stderr")
 
 	assert.Equal(t, interpolation.TypeStates, ref.Type)
 	assert.Equal(t, "compile", ref.Path)
-	assert.Equal(t, "stderr", ref.Property)
+	assert.Equal(t, "Stderr", ref.Property)
 }
 
 func TestParseReference_WorkflowDuration(t *testing.T) {
@@ -406,19 +406,19 @@ func TestParseReference_SingleSegment(t *testing.T) {
 }
 
 func TestParseReference_StatesWithExitCode(t *testing.T) {
-	ref := interpolation.ParseReference("states.validate.exit_code")
+	ref := interpolation.ParseReference("states.validate.ExitCode")
 
 	assert.Equal(t, interpolation.TypeStates, ref.Type)
 	assert.Equal(t, "validate", ref.Path)
-	assert.Equal(t, "exit_code", ref.Property)
+	assert.Equal(t, "ExitCode", ref.Property)
 }
 
 func TestParseReference_StatesWithStatus(t *testing.T) {
-	ref := interpolation.ParseReference("states.deploy.status")
+	ref := interpolation.ParseReference("states.deploy.Status")
 
 	assert.Equal(t, interpolation.TypeStates, ref.Type)
 	assert.Equal(t, "deploy", ref.Path)
-	assert.Equal(t, "status", ref.Property)
+	assert.Equal(t, "Status", ref.Property)
 }
 
 // =============================================================================
@@ -468,7 +468,7 @@ func TestValidWorkflowProperties(t *testing.T) {
 }
 
 func TestValidStateProperties(t *testing.T) {
-	expected := []string{"output", "stderr", "exit_code", "status"}
+	expected := []string{"Output", "Stderr", "ExitCode", "Status"}
 	for _, prop := range expected {
 		assert.True(t, interpolation.ValidStateProperties[prop],
 			"expected %q to be a valid state property", prop)
@@ -477,6 +477,11 @@ func TestValidStateProperties(t *testing.T) {
 	assert.False(t, interpolation.ValidStateProperties["stdout"]) // common mistake
 	assert.False(t, interpolation.ValidStateProperties["result"])
 	assert.False(t, interpolation.ValidStateProperties[""])
+	// F050: Verify lowercase keys are now invalid (breaking change)
+	assert.False(t, interpolation.ValidStateProperties["output"])
+	assert.False(t, interpolation.ValidStateProperties["stderr"])
+	assert.False(t, interpolation.ValidStateProperties["exit_code"])
+	assert.False(t, interpolation.ValidStateProperties["status"])
 }
 
 func TestValidErrorProperties(t *testing.T) {
@@ -654,4 +659,153 @@ func TestExtractReferences_Comprehensive(t *testing.T) {
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Leading Dot Syntax Tests (Go template compatibility)
+// =============================================================================
+
+func TestParseReference_LeadingDotStates(t *testing.T) {
+	// Go template syntax: {{.states.step.Output}} should work like {{states.step.Output}}
+	ref := interpolation.ParseReference(".states.build.Output")
+
+	assert.Equal(t, interpolation.TypeStates, ref.Type)
+	assert.Equal(t, "states", ref.Namespace)
+	assert.Equal(t, "build", ref.Path)
+	assert.Equal(t, "Output", ref.Property)
+}
+
+func TestParseReference_LeadingDotInputs(t *testing.T) {
+	ref := interpolation.ParseReference(".inputs.pr_base")
+
+	assert.Equal(t, interpolation.TypeInputs, ref.Type)
+	assert.Equal(t, "inputs", ref.Namespace)
+	assert.Equal(t, "pr_base", ref.Path)
+}
+
+func TestParseReference_LeadingDotWorkflow(t *testing.T) {
+	ref := interpolation.ParseReference(".workflow.Duration")
+
+	assert.Equal(t, interpolation.TypeWorkflow, ref.Type)
+	assert.Equal(t, "workflow", ref.Namespace)
+	assert.Equal(t, "Duration", ref.Path)
+}
+
+func TestParseReference_LeadingDotError(t *testing.T) {
+	ref := interpolation.ParseReference(".error.Message")
+
+	assert.Equal(t, interpolation.TypeError, ref.Type)
+	assert.Equal(t, "error", ref.Namespace)
+	assert.Equal(t, "Message", ref.Path)
+}
+
+func TestParseReference_LeadingDotLoop(t *testing.T) {
+	ref := interpolation.ParseReference(".loop.Index")
+
+	assert.Equal(t, interpolation.TypeLoop, ref.Type)
+	assert.Equal(t, "loop", ref.Namespace)
+	assert.Equal(t, "Index", ref.Path)
+}
+
+func TestParseReference_LeadingDotEnv(t *testing.T) {
+	ref := interpolation.ParseReference(".env.HOME")
+
+	assert.Equal(t, interpolation.TypeEnv, ref.Type)
+	assert.Equal(t, "env", ref.Namespace)
+	assert.Equal(t, "HOME", ref.Path)
+}
+
+func TestParseReference_LeadingDotContext(t *testing.T) {
+	ref := interpolation.ParseReference(".context.working_dir")
+
+	assert.Equal(t, interpolation.TypeContext, ref.Type)
+	assert.Equal(t, "context", ref.Namespace)
+	assert.Equal(t, "working_dir", ref.Path)
+}
+
+func TestExtractReferences_LeadingDotSyntax(t *testing.T) {
+	// Full extraction test with leading dot in braces
+	tests := []struct {
+		name     string
+		template string
+		wantType interpolation.ReferenceType
+		wantPath string
+	}{
+		{
+			name:     "states with leading dot",
+			template: "{{.states.step.Output}}",
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+		},
+		{
+			name:     "inputs with leading dot",
+			template: "{{.inputs.name}}",
+			wantType: interpolation.TypeInputs,
+			wantPath: "name",
+		},
+		{
+			name:     "workflow with leading dot",
+			template: "{{.workflow.Duration}}",
+			wantType: interpolation.TypeWorkflow,
+			wantPath: "Duration",
+		},
+		{
+			name:     "error with leading dot",
+			template: "{{.error.Message}}",
+			wantType: interpolation.TypeError,
+			wantPath: "Message",
+		},
+		{
+			name:     "env with leading dot",
+			template: "{{.env.API_KEY}}",
+			wantType: interpolation.TypeEnv,
+			wantPath: "API_KEY",
+		},
+		{
+			name:     "loop with leading dot",
+			template: "{{.loop.Index}}",
+			wantType: interpolation.TypeLoop,
+			wantPath: "Index",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs, err := interpolation.ExtractReferences(tt.template)
+			require.NoError(t, err)
+			require.Len(t, refs, 1)
+			assert.Equal(t, tt.wantType, refs[0].Type)
+			assert.Equal(t, tt.wantPath, refs[0].Path)
+		})
+	}
+}
+
+func TestExtractReferences_MixedLeadingDotSyntax(t *testing.T) {
+	// Test mixing both syntaxes in the same template
+	template := "{{.states.step1.Output}} and {{states.step2.Output}}"
+	refs, err := interpolation.ExtractReferences(template)
+
+	require.NoError(t, err)
+	require.Len(t, refs, 2)
+	// Both should be TypeStates
+	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
+	assert.Equal(t, interpolation.TypeStates, refs[1].Type)
+	// Paths should be correctly extracted
+	assert.Equal(t, "step1", refs[0].Path)
+	assert.Equal(t, "step2", refs[1].Path)
+}
+
+func TestExtractReferences_RealWorldLeadingDot(t *testing.T) {
+	// Test based on actual user workflow that was failing
+	template := `git commit -m "$(cat << 'COMMITEOF'
+      {{.states.generate_commit.Output}}
+      COMMITEOF
+      )"`
+
+	refs, err := interpolation.ExtractReferences(template)
+	require.NoError(t, err)
+	require.Len(t, refs, 1)
+	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
+	assert.Equal(t, "generate_commit", refs[0].Path)
+	assert.Equal(t, "Output", refs[0].Property)
 }

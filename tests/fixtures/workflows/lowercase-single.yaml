@@ -1,0 +1,32 @@
+name: lowercase-single
+version: "1.0.0"
+
+inputs:
+  - name: message
+    type: string
+    required: true
+
+states:
+  initial: echo_step
+
+  echo_step:
+    type: step
+    command: |
+      echo "test message"
+    on_success: use_output
+    on_failure: error
+
+  use_output:
+    type: step
+    command: |
+      echo "Previous output: {{states.echo_step.output}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

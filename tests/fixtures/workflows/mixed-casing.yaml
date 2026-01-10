@@ -1,0 +1,33 @@
+name: mixed-casing
+version: "1.0.0"
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "test"
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    command: |
+      echo "{{states.step1.Output}}"
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    command: |
+      echo "{{states.step1.output}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

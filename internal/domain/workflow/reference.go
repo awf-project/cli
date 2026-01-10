@@ -16,6 +16,8 @@ const (
 	TypeError ReferenceType = "error"
 	// TypeContext references runtime context ({{context.working_dir}}).
 	TypeContext ReferenceType = "context"
+	// TypeLoop references loop runtime data ({{loop.Index}}).
+	TypeLoop ReferenceType = "loop"
 	// TypeUnknown for unrecognized namespaces.
 	TypeUnknown ReferenceType = "unknown"
 )
@@ -40,10 +42,19 @@ var ValidWorkflowProperties = map[string]bool{
 
 // ValidStateProperties lists known step state properties that can be referenced.
 var ValidStateProperties = map[string]bool{
-	"output":    true,
-	"stderr":    true,
-	"exit_code": true,
-	"status":    true,
+	"Output":   true,
+	"Stderr":   true,
+	"ExitCode": true,
+	"Status":   true,
+}
+
+// lowercaseToUppercase maps lowercase property names to their correct uppercase equivalents.
+// Used to provide actionable error messages when users use incorrect casing.
+var lowercaseToUppercase = map[string]string{
+	"output":    "Output",
+	"stderr":    "Stderr",
+	"exit_code": "ExitCode",
+	"status":    "Status",
 }
 
 // ValidErrorProperties lists known error properties in error hooks.

@@ -13,7 +13,7 @@ inputs:
 
 outputs:
   - name: validation_result
-    from: states.validate.output
+    from: states.validate.Output
 
 states:
   initial: validate
