@@ -734,7 +734,7 @@ func TestDryRun_NoCommandExecution_Integration(t *testing.T) {
 
 	// Create a marker file that the workflow would delete if it ran
 	markerFile := filepath.Join(tmpDir, "should_exist.txt")
-	err := os.WriteFile(markerFile, []byte("test"), 0644)
+	err := os.WriteFile(markerFile, []byte("test"), 0o644)
 	require.NoError(t, err)
 
 	cmd := cli.NewRootCommand()

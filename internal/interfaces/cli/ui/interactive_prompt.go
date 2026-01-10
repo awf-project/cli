@@ -191,7 +191,7 @@ func (p *CLIPrompt) ShowAborted() {
 }
 
 // ShowSkipped displays a message indicating step was skipped.
-func (p *CLIPrompt) ShowSkipped(stepName string, nextStep string) {
+func (p *CLIPrompt) ShowSkipped(stepName, nextStep string) {
 	_, _ = fmt.Fprintf(p.writer, "\n%s Skipped step '%s'\n", p.colorizer.Warning("↷"), stepName)
 	if nextStep != "" {
 		_, _ = fmt.Fprintf(p.writer, "→ Next: %s\n\n", nextStep)

@@ -174,7 +174,7 @@ func setupF048Test(t *testing.T, workflowYAML string) (*application.ExecutionSer
 
 	// Write workflow to temp directory
 	workflowFile := filepath.Join(tmpDir, workflowName+".yaml")
-	err := os.WriteFile(workflowFile, []byte(workflowYAML), 0644)
+	err := os.WriteFile(workflowFile, []byte(workflowYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create dependencies
@@ -871,7 +871,7 @@ func TestF048_Integration_FixtureWorkflow(t *testing.T) {
 	testOutputFile := filepath.Join(tmpDir, "awf-test-output.txt")
 
 	// Create test output file with passing test status
-	err := os.WriteFile(testOutputFile, []byte("TEST_EXIT_CODE=0\n"), 0644)
+	err := os.WriteFile(testOutputFile, []byte("TEST_EXIT_CODE=0\n"), 0o644)
 	require.NoError(t, err)
 
 	// Read and modify fixture
@@ -882,7 +882,7 @@ func TestF048_Integration_FixtureWorkflow(t *testing.T) {
 
 	workflowName := "test-while-transitions"
 	workflowFile := filepath.Join(tmpDir, workflowName+".yaml")
-	err = os.WriteFile(workflowFile, []byte(modifiedContent), 0644)
+	err = os.WriteFile(workflowFile, []byte(modifiedContent), 0o644)
 	require.NoError(t, err)
 
 	// Setup services
@@ -997,7 +997,7 @@ func TestF048_Integration_ConditionalTransitions(t *testing.T) {
 	counterFile := filepath.Join(tmpDir, "counter")
 
 	// Initialize counter
-	err := os.WriteFile(counterFile, []byte("0"), 0644)
+	err := os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	workflowYAML := `name: test-conditional
@@ -1249,7 +1249,7 @@ func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
 	testOutputFile := filepath.Join(tmpDir, "awf-test-output.txt")
 
 	// Create test output file with passing test status
-	err := os.WriteFile(testOutputFile, []byte("TEST_EXIT_CODE=0\n"), 0644)
+	err := os.WriteFile(testOutputFile, []byte("TEST_EXIT_CODE=0\n"), 0o644)
 	require.NoError(t, err)
 
 	// Update fixture to use our temp file
@@ -1260,7 +1260,7 @@ func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
 	modifiedContent := strings.ReplaceAll(string(fixtureContent), "/tmp/awf-test-output.txt", testOutputFile)
 
 	workflowFile := filepath.Join(tmpDir, "test-while-transitions.yaml")
-	err = os.WriteFile(workflowFile, []byte(modifiedContent), 0644)
+	err = os.WriteFile(workflowFile, []byte(modifiedContent), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1343,7 +1343,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "skip-to-end.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "skip-to-end.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1421,7 +1421,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "early.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "early.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1470,7 +1470,7 @@ func TestF048_WhileLoopBodyTransition_EdgeCase_ConditionalSkip(t *testing.T) {
 	counterFile := filepath.Join(tmpDir, "counter")
 
 	// Initialize counter
-	err := os.WriteFile(counterFile, []byte("0"), 0644)
+	err := os.WriteFile(counterFile, []byte("0"), 0o644)
 	require.NoError(t, err)
 
 	wfYAML := `name: conditional-skip
@@ -1524,7 +1524,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "conditional-skip.yaml"), []byte(wfYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "conditional-skip.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1615,7 +1615,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "invalid-target.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "invalid-target.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1691,7 +1691,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "single.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "single.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -1770,7 +1770,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "no-transitions.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "no-transitions.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"fmt"
+
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -17,7 +19,7 @@ func NewInterpolationAnalyzer() *InterpolationAnalyzer {
 func (a *InterpolationAnalyzer) ExtractReferences(template string) ([]workflow.TemplateReference, error) {
 	refs, err := interpolation.ExtractReferences(template)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extracting references: %w", err)
 	}
 
 	result := make([]workflow.TemplateReference, len(refs))

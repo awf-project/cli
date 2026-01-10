@@ -25,7 +25,7 @@ func TestRunHelp_WorkflowWithInputs_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with multiple inputs of varying types
 	wfYAML := `name: inputs-test
@@ -47,7 +47,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "inputs-test.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "inputs-test.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -93,7 +93,7 @@ func TestRunHelp_WorkflowNoInputs_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow without inputs
 	wfYAML := `name: no-inputs
@@ -103,7 +103,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-inputs.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-inputs.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -131,7 +131,7 @@ func TestRunHelp_NonExistentWorkflow_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -177,7 +177,7 @@ func TestRunHelp_InputDescriptions_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with described inputs
 	wfYAML := `name: described-inputs
@@ -197,7 +197,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-inputs.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-inputs.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -229,7 +229,7 @@ func TestRunHelp_InputMissingDescriptions_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with inputs missing descriptions
 	wfYAML := `name: undescribed-inputs
@@ -243,7 +243,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "undescribed-inputs.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "undescribed-inputs.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -271,7 +271,7 @@ func TestRunHelp_DefaultValues_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with various default values
 	wfYAML := `name: default-values
@@ -294,7 +294,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "default-values.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "default-values.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -327,7 +327,7 @@ func TestRunHelp_OptionalWithoutDefault_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with optional input without default
 	wfYAML := `name: optional-no-default
@@ -341,7 +341,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "optional-no-default.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "optional-no-default.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -381,7 +381,7 @@ func TestRunHelp_WorkflowDescription_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with description
 	wfYAML := `name: described-workflow
@@ -396,7 +396,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-workflow.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-workflow.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -432,7 +432,7 @@ func TestRunHelp_WorkflowNoDescription_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow without description
 	wfYAML := `name: no-description
@@ -446,7 +446,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-description.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-description.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -620,7 +620,7 @@ func TestRunHelp_HelpTakesPrecedence_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create a workflow that would fail if executed
 	wfYAML := `name: would-fail
@@ -641,7 +641,7 @@ states:
   error:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "would-fail.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "would-fail.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -725,8 +725,8 @@ states:
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			wfDir := filepath.Join(tmpDir, "workflows")
-			require.NoError(t, os.MkdirAll(wfDir, 0755))
-			require.NoError(t, os.WriteFile(filepath.Join(wfDir, "test.yaml"), []byte(tt.workflowYAML), 0644))
+			require.NoError(t, os.MkdirAll(wfDir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(wfDir, "test.yaml"), []byte(tt.workflowYAML), 0o644))
 
 			os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 			defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -757,7 +757,7 @@ func TestRunHelp_TerminalWidth_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with long description to test wrapping
 	wfYAML := `name: long-content
@@ -773,7 +773,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-content.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-content.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -812,7 +812,7 @@ func TestRunHelp_SpecialCharactersInInputs_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with special characters in descriptions
 	wfYAML := `name: special-chars
@@ -833,7 +833,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -865,7 +865,7 @@ func TestRunHelp_InvalidYAMLWorkflow_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with invalid YAML
 	invalidYAML := `name: invalid-yaml
@@ -876,7 +876,7 @@ inputs:
 states:
   initial: done
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "invalid-yaml.yaml"), []byte(invalidYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "invalid-yaml.yaml"), []byte(invalidYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -913,7 +913,7 @@ func TestRunHelp_EmptyInputName_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow with inputs that have edge case names
 	wfYAML := `name: edge-case-names
@@ -932,7 +932,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "edge-case-names.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "edge-case-names.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -962,7 +962,7 @@ func TestRunHelp_ExitCode_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -974,7 +974,6 @@ func TestRunHelp_ExitCode_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "nonexistent", "--help"})
 
 	err := cmd.Execute()
-
 	// Error should be returned for non-existent workflow
 	// FR-004: exit code 1 for user error
 	if err != nil {
@@ -997,7 +996,7 @@ func TestRunHelp_EnvPathOverride_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "custom-workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	// Create workflow in custom directory
 	wfYAML := `name: env-path-workflow
@@ -1013,7 +1012,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "env-path-workflow.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "env-path-workflow.yaml"), []byte(wfYAML), 0o644))
 
 	// Set custom workflow path via environment variable
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
@@ -1042,7 +1041,7 @@ func TestRunHelp_AllInputTypes_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	wfYAML := `name: all-input-types
 version: "1.0.0"
@@ -1072,7 +1071,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-input-types.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-input-types.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -1114,7 +1113,7 @@ func TestRunHelp_LongDescription_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	longDesc := strings.Repeat("This is a very long description. ", 10)
 	wfYAML := `name: long-descriptions
@@ -1130,7 +1129,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-descriptions.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-descriptions.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -1160,7 +1159,7 @@ func TestRunHelp_UnicodeContent_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	wfYAML := `name: unicode-workflow
 version: "1.0.0"
@@ -1175,7 +1174,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "unicode-workflow.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "unicode-workflow.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -1206,7 +1205,7 @@ func TestRunHelp_OnlyRequiredInputs_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	wfYAML := `name: all-required
 version: "1.0.0"
@@ -1225,7 +1224,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-required.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-required.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -1260,7 +1259,7 @@ func TestRunHelp_OnlyOptionalInputs_Integration(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0755))
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
 	wfYAML := `name: all-optional
 version: "1.0.0"
@@ -1282,7 +1281,7 @@ states:
   done:
     type: terminal
 `
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-optional.yaml"), []byte(wfYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-optional.yaml"), []byte(wfYAML), 0o644))
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")

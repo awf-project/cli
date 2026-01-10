@@ -335,7 +335,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 			result.Status = "failed"
 			result.Error = execErr.Error()
 		}
-		if err := writer.WriteRunResult(result); err != nil {
+		if err := writer.WriteRunResult(&result); err != nil {
 			return err
 		}
 		if execErr != nil {
@@ -359,7 +359,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 			result.Status = "failed"
 			result.Error = execErr.Error()
 		}
-		if err := writer.WriteRunResult(result); err != nil {
+		if err := writer.WriteRunResult(&result); err != nil {
 			return err
 		}
 		if execErr != nil {
@@ -458,7 +458,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 }
 
 // runInteractive executes the workflow in interactive step-by-step mode.
-func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, breakpointFlags []string) error {
+func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -593,7 +593,8 @@ func resolvePromptInput(value string) (string, error) {
 // resolvePromptFromPaths searches for a prompt file across multiple paths in priority order.
 // Returns the content of the first found prompt file.
 func resolvePromptFromPaths(relativePath string, paths []repository.SourcedPath) (string, error) {
-	var searchedPaths []string
+	// Preallocate for all search paths
+	searchedPaths := make([]string, 0, len(paths))
 
 	for _, sp := range paths {
 		fullPath := filepath.Join(sp.Path, relativePath)
@@ -632,14 +633,16 @@ func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionCo
 	formatter.Printf("Status: %s\n", execCtx.Status)
 	formatter.Printf("Steps executed:\n")
 
-	for name, state := range execCtx.States {
+	for name := range execCtx.States {
+		state := execCtx.States[name]
 		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
 		formatter.StatusLine("  "+name, string(state.Status), fmt.Sprintf("(%s)", duration))
 	}
 }
 
 func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
-	for name, state := range execCtx.States {
+	for name := range execCtx.States {
+		state := execCtx.States[name]
 		if state.Output != "" {
 			formatter.Printf("\n--- [%s] stdout ---\n", name)
 			formatter.Printf("%s", state.Output)
@@ -668,7 +671,8 @@ func showEmptyStepFeedback(formatter *ui.Formatter, execCtx *workflow.ExecutionC
 }
 
 func buildStepInfos(execCtx *workflow.ExecutionContext) []ui.StepInfo {
-	var steps []ui.StepInfo
+	// Preallocate for all steps
+	steps := make([]ui.StepInfo, 0, len(execCtx.States))
 	for name, state := range execCtx.States {
 		steps = append(steps, ui.StepInfo{
 			Name:        name,

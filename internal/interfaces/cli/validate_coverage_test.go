@@ -17,8 +17,8 @@ func setupWorkflow(t *testing.T, name, content string) func() {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0644))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0o644))
 	require.NoError(t, os.Chdir(tmpDir))
 	return func() { _ = os.Chdir(origDir) }
 }

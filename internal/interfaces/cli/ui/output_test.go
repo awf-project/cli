@@ -95,7 +95,7 @@ func TestOutputWriter_WriteExecution_JSON(t *testing.T) {
 		},
 	}
 
-	err := w.WriteExecution(exec)
+	err := w.WriteExecution(&exec)
 	require.NoError(t, err)
 
 	var got ui.ExecutionInfo
@@ -115,7 +115,7 @@ func TestOutputWriter_WriteExecution_Quiet(t *testing.T) {
 		Status:     "running",
 	}
 
-	err := w.WriteExecution(exec)
+	err := w.WriteExecution(&exec)
 	require.NoError(t, err)
 
 	assert.Equal(t, "running\n", buf.String())
@@ -135,7 +135,7 @@ func TestOutputWriter_WriteExecution_Table(t *testing.T) {
 		},
 	}
 
-	err := w.WriteExecution(exec)
+	err := w.WriteExecution(&exec)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -158,7 +158,7 @@ func TestOutputWriter_WriteRunResult_JSON(t *testing.T) {
 		DurationMs: 2000,
 	}
 
-	err := w.WriteRunResult(result)
+	err := w.WriteRunResult(&result)
 	require.NoError(t, err)
 
 	var got ui.RunResult
@@ -177,7 +177,7 @@ func TestOutputWriter_WriteRunResult_Quiet(t *testing.T) {
 		Status:     "completed",
 	}
 
-	err := w.WriteRunResult(result)
+	err := w.WriteRunResult(&result)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc123\n", buf.String())
@@ -197,7 +197,7 @@ func TestOutputWriter_WriteRunResult_Table(t *testing.T) {
 		},
 	}
 
-	err := w.WriteRunResult(result)
+	err := w.WriteRunResult(&result)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -290,7 +290,7 @@ func TestOutputWriter_WriteValidationTable(t *testing.T) {
 		},
 	}
 
-	err := w.WriteValidationTable(result)
+	err := w.WriteValidationTable(&result)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -411,7 +411,7 @@ func TestOutputWriter_WriteExecution_Text(t *testing.T) {
 			buf := new(bytes.Buffer)
 			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
 
-			err := w.WriteExecution(tt.exec)
+			err := w.WriteExecution(&tt.exec)
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -454,7 +454,7 @@ func TestOutputWriter_WriteRunResult_Text(t *testing.T) {
 			buf := new(bytes.Buffer)
 			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
 
-			err := w.WriteRunResult(tt.result)
+			err := w.WriteRunResult(&tt.result)
 			require.NoError(t, err)
 
 			output := buf.String()

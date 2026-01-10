@@ -66,7 +66,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "simple-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "simple-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent workflow
@@ -105,7 +105,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "simple-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "simple-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	// Wire up services
@@ -254,7 +254,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "slow-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "slow-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with short timeout
@@ -279,7 +279,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "timeout-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "timeout-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -329,7 +329,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "failing-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "failing-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent
@@ -354,7 +354,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "error-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "error-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -409,7 +409,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "output-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "output-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that uses child output
@@ -436,7 +436,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "output-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "output-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -491,7 +491,7 @@ states:
     type: terminal
     status: failure
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "missing-child-parent.yaml"), []byte(parentYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "missing-child-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -543,7 +543,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "cancel-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "cancel-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent
@@ -560,7 +560,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "cancel-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "cancel-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -630,7 +630,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "inputs-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "inputs-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with input mappings
@@ -663,7 +663,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "inputs-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "inputs-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -769,7 +769,7 @@ states:
 `
 		}
 		filename := "deep-" + string(rune('a'+i-1)) + ".yaml"
-		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(yaml), 0644)
+		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(yaml), 0o644)
 		require.NoError(t, err)
 	}
 

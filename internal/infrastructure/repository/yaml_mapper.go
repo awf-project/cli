@@ -2,6 +2,7 @@ package repository
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -25,8 +26,9 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 	}
 
 	// Map steps
-	for name, step := range y.States.Steps {
-		domainStep, err := mapStep(filePath, name, step)
+	for name := range y.States.Steps {
+		step := y.States.Steps[name]
+		domainStep, err := mapStep(filePath, name, &step)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +70,7 @@ func mapInputValidation(v *yamlInputValidation) *workflow.InputValidation {
 }
 
 // mapStep converts yamlStep to domain Step.
-func mapStep(filePath, name string, y yamlStep) (*workflow.Step, error) {
+func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 	stepType, err := parseStepType(y.Type)
 	if err != nil {
 		return nil, NewParseError(filePath, "states."+name+".type", err.Error())
@@ -181,7 +183,7 @@ func mapCapture(y *yamlCapture) *workflow.CaptureConfig {
 }
 
 // mapLoopConfig converts yamlStep loop fields to domain LoopConfig.
-func mapLoopConfig(y yamlStep) *workflow.LoopConfig {
+func mapLoopConfig(y *yamlStep) *workflow.LoopConfig {
 	// Check if this is a loop step
 	hasItems := y.Items != nil
 	hasWhile := y.While != ""
@@ -315,7 +317,7 @@ func parseDuration(s string) (time.Duration, error) {
 		return time.Duration(secs) * time.Second, nil
 	}
 
-	return 0, parseErr
+	return 0, fmt.Errorf("parsing duration %q: %w", s, parseErr)
 }
 
 // mapTemplate converts yamlTemplate to domain Template.
@@ -327,8 +329,9 @@ func mapTemplate(filePath string, y *yamlTemplate) (*workflow.Template, error) {
 	}
 
 	// Map states
-	for name, step := range y.States.Steps {
-		domainStep, err := mapStep(filePath, name, step)
+	for name := range y.States.Steps {
+		step := y.States.Steps[name]
+		domainStep, err := mapStep(filePath, name, &step)
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +371,7 @@ func mapTemplateRef(useTemplate string, parameters map[string]any) *workflow.Wor
 }
 
 // mapCallWorkflowFlat converts flat yamlStep fields to domain CallWorkflowConfig.
-func mapCallWorkflowFlat(y yamlStep) *workflow.CallWorkflowConfig {
+func mapCallWorkflowFlat(y *yamlStep) *workflow.CallWorkflowConfig {
 	if y.Workflow == "" {
 		return nil
 	}
@@ -382,7 +385,7 @@ func mapCallWorkflowFlat(y yamlStep) *workflow.CallWorkflowConfig {
 
 // mapAgentConfigFlat maps flat agent fields from yamlStep to AgentConfig.
 // Returns nil if no agent provider is specified.
-func mapAgentConfigFlat(y yamlStep) *workflow.AgentConfig {
+func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 	if y.Provider == "" {
 		return nil
 	}

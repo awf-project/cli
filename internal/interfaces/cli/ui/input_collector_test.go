@@ -159,8 +159,10 @@ func TestCLIInputCollector_PromptForInput_EnumLarge(t *testing.T) {
 		Type:     "string",
 		Required: true,
 		Validation: &workflow.InputValidation{
-			Enum: []string{"us-east-1", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1",
-				"ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "option5", "option10", "option11", "option12"},
+			Enum: []string{
+				"us-east-1", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1",
+				"ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "option5", "option10", "option11", "option12",
+			},
 		},
 	}
 
@@ -320,8 +322,8 @@ func TestCLIInputCollector_PromptForInput_ValidationPattern(t *testing.T) {
 // Feature: F046
 // User Story: US3-AC1 - Validation with error messages
 func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
-	min := 1
-	max := 100
+	minVal := 1
+	maxVal := 100
 
 	// Arrange: Value below min, then above max, then valid
 	stdin := strings.NewReader("0\n150\n50\n")
@@ -334,8 +336,8 @@ func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
 		Type:     "integer",
 		Required: true,
 		Validation: &workflow.InputValidation{
-			Min: &min,
-			Max: &max,
+			Min: &minVal,
+			Max: &maxVal,
 		},
 	}
 

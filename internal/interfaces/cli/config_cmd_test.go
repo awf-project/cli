@@ -90,7 +90,7 @@ func TestConfigShow_ValidConfig_DisplaysAllInputs(t *testing.T) {
 
 	// Create .awf/config.yaml with 3 inputs (per spec independent test)
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   project: "my-project"
@@ -100,7 +100,7 @@ func TestConfigShow_ValidConfig_DisplaysAllInputs(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -163,7 +163,7 @@ func TestConfigShow_EmptyInputs_DisplaysPath(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `# Empty config
 inputs: {}
@@ -171,7 +171,7 @@ inputs: {}
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -199,7 +199,7 @@ func TestConfigShow_JSONFormat(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   project: "test"
@@ -208,7 +208,7 @@ func TestConfigShow_JSONFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -266,7 +266,7 @@ func TestConfigShow_QuietFormat(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   key1: "value1"
@@ -275,7 +275,7 @@ func TestConfigShow_QuietFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -300,7 +300,7 @@ func TestConfigShow_TableFormat(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   project: "test"
@@ -308,7 +308,7 @@ func TestConfigShow_TableFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -344,7 +344,7 @@ func TestConfigShow_AllInputTypes(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   string_val: "hello"
@@ -356,7 +356,7 @@ func TestConfigShow_AllInputTypes(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -389,7 +389,7 @@ func TestConfigShow_InvalidYAML_ReturnsError(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	// Invalid YAML syntax
 	invalidContent := `inputs:
@@ -401,7 +401,7 @@ func TestConfigShow_InvalidYAML_ReturnsError(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(invalidContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -435,7 +435,7 @@ func TestConfigShow_ConfigPathDisplayed(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	awfDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(awfDir, 0755))
+	require.NoError(t, os.MkdirAll(awfDir, 0o755))
 
 	configContent := `inputs:
   test: "value"
@@ -443,7 +443,7 @@ func TestConfigShow_ConfigPathDisplayed(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(awfDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -534,11 +534,11 @@ func TestConfigShow_TableDriven(t *testing.T) {
 
 			if tt.createConfig {
 				awfDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(awfDir, 0755))
+				require.NoError(t, os.MkdirAll(awfDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(awfDir, "config.yaml"),
 					[]byte(tt.configContent),
-					0644,
+					0o644,
 				))
 			}
 

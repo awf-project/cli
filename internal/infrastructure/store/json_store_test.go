@@ -152,7 +152,7 @@ func TestJSONStore_Load_InvalidJSON(t *testing.T) {
 
 	// Create invalid JSON file
 	invalidPath := filepath.Join(tmpDir, "invalid.json")
-	err := os.WriteFile(invalidPath, []byte("not valid json{"), 0600)
+	err := os.WriteFile(invalidPath, []byte("not valid json{"), 0o600)
 	require.NoError(t, err)
 
 	s := store.NewJSONStore(tmpDir)
@@ -308,9 +308,9 @@ func TestJSONStore_Save_PermissionDenied(t *testing.T) {
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
 
 	// Create directory and make it read-only
-	require.NoError(t, os.MkdirAll(readOnlyDir, 0755))
-	require.NoError(t, os.Chmod(readOnlyDir, 0444))
-	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0755) })
+	require.NoError(t, os.MkdirAll(readOnlyDir, 0o755))
+	require.NoError(t, os.Chmod(readOnlyDir, 0o444))
+	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0o755) })
 
 	s := store.NewJSONStore(readOnlyDir)
 	ctx := context.Background()
@@ -338,8 +338,8 @@ func TestJSONStore_Load_PermissionDenied(t *testing.T) {
 
 	// Make file unreadable
 	filePath := filepath.Join(tmpDir, "unreadable.json")
-	require.NoError(t, os.Chmod(filePath, 0000))
-	t.Cleanup(func() { _ = os.Chmod(filePath, 0644) })
+	require.NoError(t, os.Chmod(filePath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0o644) })
 
 	_, err := s.Load(ctx, "unreadable")
 	assert.Error(t, err, "Load should fail on unreadable file")
@@ -357,9 +357,9 @@ func TestJSONStore_List_IgnoresNonJSONFiles(t *testing.T) {
 	require.NoError(t, s.Save(ctx, execCtx))
 
 	// Create non-JSON files that should be ignored
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "random.txt"), []byte("text"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "backup.json.bak"), []byte("{}"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden.json"), []byte("{}"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "random.txt"), []byte("text"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "backup.json.bak"), []byte("{}"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden.json"), []byte("{}"), 0o644))
 
 	ids, err := s.List(ctx)
 	require.NoError(t, err)
@@ -407,8 +407,8 @@ func TestJSONStore_Delete_PermissionDenied(t *testing.T) {
 	require.NoError(t, s.Save(ctx, execCtx))
 
 	// Make directory read-only (can't delete files)
-	require.NoError(t, os.Chmod(tmpDir, 0555))
-	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0755) })
+	require.NoError(t, os.Chmod(tmpDir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0o755) })
 
 	err := s.Delete(ctx, "delete-perm")
 	assert.Error(t, err, "Delete should fail on read-only directory")

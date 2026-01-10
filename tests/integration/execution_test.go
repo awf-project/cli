@@ -88,7 +88,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	// wire up real components
@@ -150,7 +150,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "failure.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "failure.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -209,7 +209,7 @@ states:
     command: echo "timeout occurred"
     on_success: done
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "timeout.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "timeout.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -300,7 +300,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "hooks.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "hooks.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -357,7 +357,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "error_hooks.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "error_hooks.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -427,7 +427,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "multi_hooks.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "multi_hooks.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -487,7 +487,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "log_hooks.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "log_hooks.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -531,7 +531,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "streaming.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "streaming.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

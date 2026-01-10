@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
@@ -32,27 +33,42 @@ func NewWorkflowService(
 
 // ListWorkflows returns all available workflow names.
 func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
-	return s.repo.List(ctx)
+	workflows, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list workflows: %w", err)
+	}
+	return workflows, nil
 }
 
 // GetWorkflow retrieves a workflow by name.
 func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workflow.Workflow, error) {
-	return s.repo.Load(ctx, name)
+	wf, err := s.repo.Load(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("load workflow %s: %w", name, err)
+	}
+	return wf, nil
 }
 
 // ValidateWorkflow validates a workflow definition.
 func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) error {
 	wf, err := s.repo.Load(ctx, name)
 	if err != nil {
-		return err
+		return fmt.Errorf("load workflow %s: %w", name, err)
 	}
 	if wf == nil {
 		return nil
 	}
-	return wf.Validate()
+	if err := wf.Validate(); err != nil {
+		return fmt.Errorf("validate workflow %s: %w", name, err)
+	}
+	return nil
 }
 
 // WorkflowExists checks if a workflow exists.
 func (s *WorkflowService) WorkflowExists(ctx context.Context, name string) (bool, error) {
-	return s.repo.Exists(ctx, name)
+	exists, err := s.repo.Exists(ctx, name)
+	if err != nil {
+		return false, fmt.Errorf("check workflow exists %s: %w", name, err)
+	}
+	return exists, nil
 }

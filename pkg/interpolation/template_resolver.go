@@ -1,4 +1,4 @@
-package interpolation
+package interpolation //nolint:wrapcheck // Template resolver returns errors from text/template directly as they are already descriptive
 
 import (
 	"bytes"
@@ -117,7 +117,7 @@ func escapeTemplateFunc(v any) string {
 func jsonTemplateFunc(v any) (string, error) {
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("marshal JSON: %w", err)
 	}
 	return string(jsonBytes), nil
 }
@@ -138,7 +138,11 @@ func (s serializableItem) String() string {
 // MarshalJSON implements json.Marshaler to ensure the original value is used
 // when the {{json}} function is applied, avoiding double-encoding.
 func (s serializableItem) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.original)
+	data, err := json.Marshal(s.original)
+	if err != nil {
+		return nil, fmt.Errorf("marshal JSON: %w", err)
+	}
+	return data, nil
 }
 
 // serializeLoopData creates a copy of LoopData with the Item field wrapped

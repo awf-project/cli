@@ -74,7 +74,9 @@ func (l *ConsoleLogger) WithContext(ctx map[string]any) ports.Logger {
 func (l *ConsoleLogger) log(levelStr string, levelColor color.Attribute, msg string, fields []any) {
 	timestamp := time.Now().Format("15:04:05")
 
-	allFields := append(l.ctxFields, fields...)
+	allFields := make([]any, 0, len(l.ctxFields)+len(fields))
+	allFields = append(allFields, l.ctxFields...)
+	allFields = append(allFields, fields...)
 	masked := l.masker.MaskFields(allFields)
 	fieldStr := l.formatFields(masked)
 

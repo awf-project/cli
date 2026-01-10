@@ -46,7 +46,7 @@ func (e *DryRunExecutor) Execute(ctx context.Context, workflowName string, input
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("dry run cancelled: %w", ctx.Err())
 	default:
 	}
 
@@ -100,7 +100,7 @@ func (e *DryRunExecutor) buildPlan(ctx context.Context, wf *workflow.Workflow, i
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("dry run cancelled: %w", ctx.Err())
 		default:
 		}
 
@@ -248,17 +248,18 @@ func (e *DryRunExecutor) resolveInputs(wf *workflow.Workflow, inputs map[string]
 		}
 
 		// Check if value was provided
-		if value, ok := inputs[inputDef.Name]; ok {
-			dryRunInput.Value = value
+		switch {
+		case inputs[inputDef.Name] != nil:
+			dryRunInput.Value = inputs[inputDef.Name]
 			dryRunInput.Default = false
-		} else if inputDef.Default != nil {
+		case inputDef.Default != nil:
 			// Use default value
 			dryRunInput.Value = inputDef.Default
 			dryRunInput.Default = true
-		} else if inputDef.Required {
+		case inputDef.Required:
 			// Missing required input
 			return nil, fmt.Errorf("missing required input: %s", inputDef.Name)
-		} else {
+		default:
 			// Optional with no default - skip
 			continue
 		}
@@ -283,7 +284,8 @@ func (e *DryRunExecutor) resolveInputs(wf *workflow.Workflow, inputs map[string]
 
 // buildTransitions collects all possible transitions from a step.
 func (e *DryRunExecutor) buildTransitions(step *workflow.Step) []workflow.DryRunTransition {
-	var transitions []workflow.DryRunTransition
+	// Preallocate: conditional transitions + legacy transitions (success/error)
+	transitions := make([]workflow.DryRunTransition, 0, len(step.Transitions)+2)
 
 	// Add conditional transitions first
 	for _, tr := range step.Transitions {

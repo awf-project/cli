@@ -52,7 +52,7 @@ func (m *contextWindowManager) ApplyStrategy(turns []Turn, maxTokens int, strate
 
 // PreserveSystemPrompt extracts system prompt from turns.
 // Returns the first system turn found and all other turns.
-func (m *contextWindowManager) PreserveSystemPrompt(turns []Turn) (*Turn, []Turn) {
+func (m *contextWindowManager) PreserveSystemPrompt(turns []Turn) (systemPrompt *Turn, remaining []Turn) {
 	if len(turns) == 0 {
 		return nil, []Turn{}
 	}
@@ -208,7 +208,7 @@ func NewContextWindowState(strategy ContextWindowStrategy) *ContextWindowState {
 }
 
 // RecordTruncation updates state after truncation is applied.
-func (s *ContextWindowState) RecordTruncation(turnsDropped int, tokensDropped int, currentTurn int) {
+func (s *ContextWindowState) RecordTruncation(turnsDropped, tokensDropped, currentTurn int) {
 	s.TruncationCount++
 	s.TurnsDropped += turnsDropped
 	s.TokensDropped += tokensDropped

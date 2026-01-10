@@ -87,7 +87,7 @@ func TestJSONLogger_LogLevels(t *testing.T) {
 			_ = logger.Sync()
 
 			content, _ := os.ReadFile(logPath)
-			hasContent := len(strings.TrimSpace(string(content))) > 0
+			hasContent := strings.TrimSpace(string(content)) != ""
 
 			assert.Equal(t, tt.shouldLog, hasContent)
 		})

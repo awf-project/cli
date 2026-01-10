@@ -39,7 +39,7 @@ func (e *ParallelExecutor) Execute(
 	// Check for already cancelled context
 	if err := ctx.Err(); err != nil {
 		result.CompletedAt = time.Now()
-		return result, err
+		return result, fmt.Errorf("parallel execution cancelled: %w", err)
 	}
 
 	// Handle empty branches
@@ -127,7 +127,10 @@ func (e *ParallelExecutor) executeAllSucceed(
 		})
 	}
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("parallel execution: %w", err)
+	}
+	return nil
 }
 
 // executeAnySucceed runs all branches, returns success when first one succeeds.

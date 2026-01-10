@@ -85,11 +85,13 @@ func (e *InteractiveExecutor) SetOutputWriters(stdout, stderr io.Writer) {
 
 // Run executes the workflow in interactive mode.
 // It returns the final execution context and any error.
+//
+//nolint:gocognit // Complexity 40: interactive execution loop handles user prompts, breakpoints, step inspection, state persistence. Interactive debugging requires this complexity.
 func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inputs map[string]any) (*workflow.ExecutionContext, error) {
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("interactive execution cancelled: %w", ctx.Err())
 	default:
 	}
 
@@ -141,7 +143,7 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
-			return execCtx, ctx.Err()
+			return execCtx, fmt.Errorf("interactive execution cancelled: %w", ctx.Err())
 		default:
 		}
 
@@ -201,6 +203,10 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 				}
 
 			case workflow.ActionContinue:
+				// Fall through to execute
+
+			case workflow.ActionInspect, workflow.ActionEdit:
+				// Not yet implemented - treated as continue
 				// Fall through to execute
 			}
 		}
@@ -284,7 +290,8 @@ func (e *InteractiveExecutor) resolveCommand(cmd string, interpCtx *interpolatio
 
 // formatTransitions creates human-readable transition descriptions.
 func (e *InteractiveExecutor) formatTransitions(step *workflow.Step) []string {
-	var transitions []string
+	// Preallocate: conditional transitions + legacy transitions (success/error)
+	transitions := make([]string, 0, len(step.Transitions)+2)
 
 	// Add conditional transitions first
 	for _, tr := range step.Transitions {
@@ -357,7 +364,7 @@ func (e *InteractiveExecutor) handleEditInput(
 	for name, current := range execCtx.Inputs {
 		newValue, err := e.prompt.EditInput(name, current)
 		if err != nil {
-			return err
+			return fmt.Errorf("edit input %s: %w", name, err)
 		}
 		execCtx.SetInput(name, newValue)
 		interpCtx.Inputs[name] = newValue
@@ -380,7 +387,8 @@ func (e *InteractiveExecutor) buildInterpolationContext(
 ) *interpolation.Context {
 	// Convert step states
 	states := make(map[string]interpolation.StepStateData, len(execCtx.States))
-	for name, state := range execCtx.States {
+	for name := range execCtx.States {
+		state := execCtx.States[name]
 		states[name] = interpolation.StepStateData{
 			Output:   state.Output,
 			Stderr:   state.Stderr,
@@ -468,7 +476,7 @@ func (e *InteractiveExecutor) executeStep(
 	}
 
 	// Build command
-	cmd := ports.Command{
+	cmd := &ports.Command{
 		Program: resolvedCmd,
 		Dir:     resolvedDir,
 		Timeout: step.Timeout,
@@ -623,12 +631,13 @@ func (e *InteractiveExecutor) executeParallelStep(
 				Stderr:      branchResult.Stderr,
 				ExitCode:    branchResult.ExitCode,
 			}
-			if branchResult.Error != nil {
+			switch {
+			case branchResult.Error != nil:
 				state.Status = workflow.StatusFailed
 				state.Error = branchResult.Error.Error()
-			} else if branchResult.ExitCode != 0 {
+			case branchResult.ExitCode != 0:
 				state.Status = workflow.StatusFailed
-			} else {
+			default:
 				state.Status = workflow.StatusCompleted
 			}
 			execCtx.SetStepState(branchName, state)

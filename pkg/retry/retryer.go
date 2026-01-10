@@ -2,6 +2,7 @@ package retry
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 )
@@ -33,9 +34,9 @@ type Retryer struct {
 // NewRetryer creates a Retryer with the given configuration.
 // If logger is nil, retry attempts are not logged.
 // Uses a seeded random source for jitter; pass a fixed seed for deterministic tests.
-func NewRetryer(config Config, logger Logger, seed int64) *Retryer {
+func NewRetryer(config *Config, logger Logger, seed int64) *Retryer {
 	return &Retryer{
-		config: config,
+		config: *config,
 		logger: logger,
 		rng:    rand.New(rand.NewSource(seed)),
 	}
@@ -44,7 +45,7 @@ func NewRetryer(config Config, logger Logger, seed int64) *Retryer {
 // ShouldRetry returns true if the operation should be retried.
 // exitCode is the exit code from the failed operation.
 // attempt is the current attempt number (1-indexed).
-func (r *Retryer) ShouldRetry(exitCode int, attempt int) bool {
+func (r *Retryer) ShouldRetry(exitCode, attempt int) bool {
 	// Success never retries
 	if exitCode == 0 {
 		return false
@@ -90,7 +91,7 @@ func (r *Retryer) Wait(ctx context.Context, attempt int) error {
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("retry wait interrupted: %w", ctx.Err())
 	case <-timer.C:
 		return nil
 	}

@@ -28,6 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - PR limit of 5 concurrent updates to prevent overwhelming maintainers
   - Dependency grouping by type to reduce noise and improve update coherence
 
+- **F053**: Go Quality Tooling Modernization
+  - Added 7 modern linters to golangci-lint configuration:
+    - gofumpt: Stricter formatting than gofmt
+    - gocognit: Cognitive complexity thresholds (limit 15)
+    - gocritic: Advanced static analysis (diagnostic, style, performance checks)
+    - exhaustive: Enum switch exhaustiveness verification
+    - noctx: HTTP requests require context propagation
+    - prealloc: Slice capacity optimization hints
+    - wrapcheck: Error wrapping discipline at package boundaries
+  - Makefile now uses gofumpt instead of gofmt for stricter formatting
+  - New `make quality` target runs all quality checks (lint+fmt+vet+test)
+  - New `make fix` target auto-fixes linter issues
+  - Comprehensive code quality documentation in `docs/development/code-quality.md`
+  - Updated CONTRIBUTING.md with code quality requirements for PRs
+
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch
   - Removed unused `.awf/storage/states/` and `.awf/storage/logs/` directory creation from `awf init` command

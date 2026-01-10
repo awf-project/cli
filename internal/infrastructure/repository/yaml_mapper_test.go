@@ -193,7 +193,7 @@ func TestMapAgentConfigFlat_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapAgentConfigFlat(tt.yamlStep)
+			got := mapAgentConfigFlat(&tt.yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.want.Provider, got.Provider)
@@ -364,7 +364,7 @@ And more text explaining the task in great detail.`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapAgentConfigFlat(tt.yamlStep)
+			got := mapAgentConfigFlat(&tt.yamlStep)
 
 			if tt.want == nil {
 				assert.Nil(t, got)
@@ -560,7 +560,7 @@ func TestMapStep_AgentStep(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			step, err := mapStep("test.yaml", "test_step", tt.yamlStep)
+			step, err := mapStep("test.yaml", "test_step", &tt.yamlStep)
 
 			require.NoError(t, err)
 			require.NotNil(t, step)
@@ -591,7 +591,7 @@ func TestMapStep_AgentPreservesOtherFields(t *testing.T) {
 		DependsOn:       []string{"step1", "step2"},
 	}
 
-	step, err := mapStep("test.yaml", "agent_step", yamlStep)
+	step, err := mapStep("test.yaml", "agent_step", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -625,7 +625,7 @@ func TestMapStep_AgentStep_InvalidTimeout(t *testing.T) {
 		Timeout:  "invalid",
 	}
 
-	step, err := mapStep("test.yaml", "test_step", yamlStep)
+	step, err := mapStep("test.yaml", "test_step", &yamlStep)
 
 	require.Error(t, err)
 	assert.Nil(t, step)
@@ -640,7 +640,7 @@ func TestMapStep_AgentStep_NoProvider(t *testing.T) {
 		Options:  map[string]any{"model": "claude-3-5-sonnet-20241022"},
 	}
 
-	step, err := mapStep("test.yaml", "test_step", yamlStep)
+	step, err := mapStep("test.yaml", "test_step", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -1048,7 +1048,7 @@ func TestMapAgentConfigFlat_ConversationMode_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapAgentConfigFlat(tt.yamlStep)
+			got := mapAgentConfigFlat(&tt.yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.want.Provider, got.Provider)
@@ -1217,7 +1217,7 @@ Say "APPROVED" when satisfied.`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapAgentConfigFlat(tt.yamlStep)
+			got := mapAgentConfigFlat(&tt.yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.want.Provider, got.Provider)
@@ -1384,7 +1384,7 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			step, err := mapStep("test.yaml", "test_step", tt.yamlStep)
+			step, err := mapStep("test.yaml", "test_step", &tt.yamlStep)
 
 			require.NoError(t, err)
 			require.NotNil(t, step)

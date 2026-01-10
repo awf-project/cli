@@ -247,15 +247,15 @@ func TestWorkflowWithEnv(t *testing.T) {
 }
 
 func TestInputWithValidation(t *testing.T) {
-	min := 1
-	max := 100
+	minVal := 1
+	maxVal := 100
 	input := workflow.Input{
 		Name:     "count",
 		Type:     "integer",
 		Required: true,
 		Validation: &workflow.InputValidation{
-			Min: &min,
-			Max: &max,
+			Min: &minVal,
+			Max: &maxVal,
 		},
 	}
 

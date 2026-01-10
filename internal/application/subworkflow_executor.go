@@ -36,6 +36,8 @@ var (
 //  10. Returns next step based on success/failure
 //
 // This is a stub implementation for TDD - returns "not implemented" error.
+//
+//nolint:gocognit // Complexity 43: subworkflow execution handles input mapping, nested workflow loading, execution, output capture, error propagation. Subworkflow orchestration requires this.
 func (s *ExecutionService) executeCallWorkflowStep(
 	ctx context.Context,
 	wf *workflow.Workflow,

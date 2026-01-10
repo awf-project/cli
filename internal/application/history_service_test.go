@@ -141,9 +141,11 @@ func (m *mockHistoryLogger) Info(msg string, fields ...any)  {}
 func (m *mockHistoryLogger) Warn(msg string, fields ...any) {
 	m.warnCalls = append(m.warnCalls, msg)
 }
+
 func (m *mockHistoryLogger) Error(msg string, fields ...any) {
 	m.errorCalls = append(m.errorCalls, msg)
 }
+
 func (m *mockHistoryLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
@@ -603,7 +605,7 @@ func TestHistoryService_GetStats_CalculatesAverage(t *testing.T) {
 	stats, err := svc.GetStats(ctx, &workflow.HistoryFilter{Limit: 100})
 	require.NoError(t, err)
 
-	// Average: (1000 + 2000 + 3000) / 3 = 2000
+	// Expected average: (1000 + 2000 + 3000) / 3 = 2000ms
 	assert.Equal(t, int64(2000), stats.AvgDurationMs)
 	assert.Equal(t, 3, stats.TotalExecutions)
 	assert.Equal(t, 2, stats.SuccessCount)

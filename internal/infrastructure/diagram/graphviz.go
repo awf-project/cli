@@ -24,12 +24,15 @@ func CheckGraphviz() bool {
 //   - .dot → raw DOT file (no conversion)
 //
 // Returns an error if graphviz is not installed or conversion fails.
-func Export(dot string, outputPath string) error {
+func Export(dot, outputPath string) error {
 	ext := strings.ToLower(filepath.Ext(outputPath))
 
 	// For .dot files, just write the DOT content directly
 	if ext == ".dot" {
-		return os.WriteFile(outputPath, []byte(dot), 0600)
+		if err := os.WriteFile(outputPath, []byte(dot), 0o600); err != nil {
+			return fmt.Errorf("writing DOT file: %w", err)
+		}
+		return nil
 	}
 
 	// Determine output format from extension
@@ -46,6 +49,7 @@ func Export(dot string, outputPath string) error {
 	}
 
 	// Run graphviz dot command
+	//nolint:noctx // Export function doesn't have context parameter, would be breaking change
 	cmd := exec.Command("dot", "-T"+format, "-o", outputPath)
 	cmd.Stdin = strings.NewReader(dot)
 

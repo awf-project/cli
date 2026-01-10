@@ -42,7 +42,7 @@ func TestShellExecutor_Execute_SimpleCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := ports.Command{Program: tt.command}
-			result, err := executor.Execute(context.Background(), cmd)
+			result, err := executor.Execute(context.Background(), &cmd)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStdout, result.Stdout)
@@ -55,7 +55,7 @@ func TestShellExecutor_Execute_CapturesStderr(t *testing.T) {
 	executor := NewShellExecutor()
 	cmd := ports.Command{Program: "echo error >&2"}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "error\n", result.Stderr)
@@ -67,7 +67,7 @@ func TestShellExecutor_Execute_BothStdoutAndStderr(t *testing.T) {
 	executor := NewShellExecutor()
 	cmd := ports.Command{Program: "echo out; echo err >&2"}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "out\n", result.Stdout)
@@ -102,7 +102,7 @@ func TestShellExecutor_Execute_NonZeroExitCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := ports.Command{Program: tt.command}
-			result, err := executor.Execute(context.Background(), cmd)
+			result, err := executor.Execute(context.Background(), &cmd)
 
 			// non-zero exit code is not an error
 			require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestShellExecutor_Execute_Timeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 	elapsed := time.Since(start)
 
 	// should complete within ~2 seconds (1s timeout + overhead)
@@ -139,7 +139,7 @@ func TestShellExecutor_Execute_ContextTimeout(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	result, err := executor.Execute(ctx, cmd)
+	result, err := executor.Execute(ctx, &cmd)
 	elapsed := time.Since(start)
 
 	assert.Less(t, elapsed, 3*time.Second)
@@ -160,7 +160,7 @@ func TestShellExecutor_Execute_ContextCancellation(t *testing.T) {
 	}()
 
 	start := time.Now()
-	result, err := executor.Execute(ctx, cmd)
+	result, err := executor.Execute(ctx, &cmd)
 	elapsed := time.Since(start)
 
 	assert.Less(t, elapsed, 2*time.Second)
@@ -177,7 +177,7 @@ func TestShellExecutor_Execute_WorkingDirectory(t *testing.T) {
 		Dir:     tmpDir,
 	}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, tmpDir+"\n", result.Stdout)
@@ -219,7 +219,7 @@ func TestShellExecutor_Execute_Environment(t *testing.T) {
 				Env:     tt.env,
 			}
 
-			result, err := executor.Execute(context.Background(), cmd)
+			result, err := executor.Execute(context.Background(), &cmd)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStdout, result.Stdout)
@@ -240,7 +240,7 @@ func TestShellExecutor_Execute_StreamsStdout(t *testing.T) {
 		Stdout:  &streamBuf,
 	}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "hello\n", result.Stdout, "captured stdout")
@@ -256,7 +256,7 @@ func TestShellExecutor_Execute_StreamsStderr(t *testing.T) {
 		Stderr:  &streamBuf,
 	}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "error\n", result.Stderr, "captured stderr")
@@ -273,7 +273,7 @@ func TestShellExecutor_Execute_StreamsBoth(t *testing.T) {
 		Stderr:  &errBuf,
 	}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "out\n", result.Stdout)
@@ -286,7 +286,7 @@ func TestShellExecutor_Execute_NilWriters_BackwardCompatible(t *testing.T) {
 	executor := NewShellExecutor()
 	cmd := ports.Command{Program: "echo hello"}
 
-	result, err := executor.Execute(context.Background(), cmd)
+	result, err := executor.Execute(context.Background(), &cmd)
 
 	require.NoError(t, err)
 	assert.Equal(t, "hello\n", result.Stdout)

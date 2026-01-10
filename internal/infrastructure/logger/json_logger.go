@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,13 +76,13 @@ type JSONLogger struct {
 
 // NewJSONLogger creates a JSON logger that writes to a file.
 func NewJSONLogger(path string, level Level) (*JSONLogger, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, err
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open log file: %w", err)
 	}
 
 	encoderConfig := zapcore.EncoderConfig{
@@ -136,14 +137,20 @@ func (l *JSONLogger) WithContext(ctx map[string]any) ports.Logger {
 
 // Sync flushes buffered logs.
 func (l *JSONLogger) Sync() error {
-	return l.logger.Sync()
+	if err := l.logger.Sync(); err != nil {
+		return fmt.Errorf("sync logger: %w", err)
+	}
+	return nil
 }
 
 // Close closes the log file.
 func (l *JSONLogger) Close() error {
 	_ = l.logger.Sync()
 	if l.file != nil {
-		return l.file.Close()
+		if err := l.file.Close(); err != nil {
+			return fmt.Errorf("close log file: %w", err)
+		}
+		return nil
 	}
 	return nil
 }

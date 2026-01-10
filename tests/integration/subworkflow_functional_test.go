@@ -60,7 +60,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "state-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "state-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent
@@ -83,7 +83,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "state-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "state-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -140,7 +140,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "loop-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "loop-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with loop calling child for each item
@@ -170,7 +170,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "loop-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "loop-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -233,7 +233,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "multi-output-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "multi-output-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that uses both outputs
@@ -261,7 +261,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "multi-output-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "multi-output-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -314,7 +314,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "requires-input-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "requires-input-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that doesn't provide the required input
@@ -336,7 +336,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "missing-input-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "missing-input-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -395,7 +395,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "default-input-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "default-input-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that doesn't provide the optional input
@@ -417,7 +417,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "default-input-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "default-input-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -471,7 +471,7 @@ states:
     type: terminal
     status: failure
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "stack-a.yaml"), []byte(aYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "stack-a.yaml"), []byte(aYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create B that calls back to A (circular)
@@ -492,7 +492,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "stack-b.yaml"), []byte(bYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "stack-b.yaml"), []byte(bYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -549,7 +549,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "pass-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "pass-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that passes its input to child
@@ -576,7 +576,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "pass-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "pass-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -627,7 +627,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "failing-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "failing-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with continue_on_error
@@ -653,7 +653,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "continue-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "continue-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -703,7 +703,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "hooks-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "hooks-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with hooks on call_workflow step
@@ -729,7 +729,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "hooks-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "hooks-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -792,7 +792,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "empty-io-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "empty-io-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent with minimal call_workflow config
@@ -813,7 +813,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "empty-io-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "empty-io-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -867,7 +867,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "prev-child.yaml"), []byte(childYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "prev-child.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent that uses previous step output as child input
@@ -895,7 +895,7 @@ states:
     type: terminal
     status: failure
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "prev-parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "prev-parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)

@@ -404,7 +404,7 @@ func TestTerminalStepWithStatus(t *testing.T) {
 
 // Helper function for string containment check
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
+	return len(s) >= len(substr) && (s == substr || s != "" && containsSubstring(s, substr))
 }
 
 func containsSubstring(s, substr string) bool {

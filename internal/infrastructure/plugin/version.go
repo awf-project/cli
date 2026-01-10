@@ -270,7 +270,8 @@ func ParseConstraints(s string) (Constraints, error) {
 		return nil, errors.New("constraints: no valid constraints found")
 	}
 
-	var constraints Constraints
+	// Preallocate for expected constraints
+	constraints := make(Constraints, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {

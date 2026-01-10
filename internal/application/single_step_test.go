@@ -273,7 +273,7 @@ type hookTrackingExecutor struct {
 	executedCommands []string
 }
 
-func (h *hookTrackingExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (h *hookTrackingExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	h.executedCommands = append(h.executedCommands, cmd.Program)
 	return &ports.CommandResult{ExitCode: 0, Stdout: "ok"}, nil
 }

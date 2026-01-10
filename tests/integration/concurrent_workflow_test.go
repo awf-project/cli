@@ -95,7 +95,7 @@ func TestConcurrentWorkflowExecution_SharedHistoryStore(t *testing.T) {
 	workflowDir := filepath.Join(tmpDir, "workflows")
 	historyPath := filepath.Join(tmpDir, "history.db")
 
-	require.NoError(t, os.MkdirAll(workflowDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowDir, 0o755))
 
 	// Create multiple workflow files that can run concurrently
 	workflowNames := []string{"workflow-a", "workflow-b", "workflow-c"}
@@ -111,7 +111,7 @@ states:
   done:
     type: terminal
 `, name, name)
-		err := os.WriteFile(filepath.Join(workflowDir, name+".yaml"), []byte(wfYAML), 0644)
+		err := os.WriteFile(filepath.Join(workflowDir, name+".yaml"), []byte(wfYAML), 0o644)
 		require.NoError(t, err)
 	}
 
@@ -193,7 +193,7 @@ func TestConcurrentWorkflowExecution_HistoryIntegrity(t *testing.T) {
 	workflowDir := filepath.Join(tmpDir, "workflows")
 	historyPath := filepath.Join(tmpDir, "history.db")
 
-	require.NoError(t, os.MkdirAll(workflowDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowDir, 0o755))
 
 	// Create a simple workflow
 	wfYAML := `name: integrity-test
@@ -207,7 +207,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(workflowDir, "integrity-test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(workflowDir, "integrity-test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
@@ -418,7 +418,7 @@ func TestConcurrentWorkflowExecution_NoLockContention(t *testing.T) {
 	workflowDir := filepath.Join(tmpDir, "workflows")
 	historyPath := filepath.Join(tmpDir, "history.db")
 
-	require.NoError(t, os.MkdirAll(workflowDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowDir, 0o755))
 
 	// Create workflows with varying execution times
 	tests := []struct {
@@ -443,7 +443,7 @@ states:
   done:
     type: terminal
 `, tc.name, tc.sleepMs)
-		err := os.WriteFile(filepath.Join(workflowDir, tc.name+".yaml"), []byte(wfYAML), 0644)
+		err := os.WriteFile(filepath.Join(workflowDir, tc.name+".yaml"), []byte(wfYAML), 0o644)
 		require.NoError(t, err)
 	}
 
@@ -626,7 +626,7 @@ func TestConcurrentWorkflowExecution_RapidSuccession(t *testing.T) {
 	workflowDir := filepath.Join(tmpDir, "workflows")
 	historyPath := filepath.Join(tmpDir, "history.db")
 
-	require.NoError(t, os.MkdirAll(workflowDir, 0755))
+	require.NoError(t, os.MkdirAll(workflowDir, 0o755))
 
 	// Create a quick workflow
 	wfYAML := `name: rapid-test
@@ -640,7 +640,7 @@ states:
   done:
     type: terminal
 `
-	err := os.WriteFile(filepath.Join(workflowDir, "rapid-test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(workflowDir, "rapid-test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	historyStore, err := store.NewSQLiteHistoryStore(historyPath)

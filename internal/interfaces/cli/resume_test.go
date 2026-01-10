@@ -113,7 +113,7 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 
 	// Create empty states directory
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -133,7 +133,7 @@ func TestResumeCommand_ListFlag_ShowsResumableWorkflows(t *testing.T) {
 
 	// Create states directory with a resumable state file
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a state file for a running workflow
 	// Note: JSON uses Go field names (PascalCase) since no json tags are defined
@@ -152,7 +152,7 @@ func TestResumeCommand_ListFlag_ShowsResumableWorkflows(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "test-id-123.json"),
 		[]byte(stateContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -175,7 +175,7 @@ func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a completed workflow state (should be filtered out)
 	completedState := `{
@@ -191,7 +191,7 @@ func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "completed-id.json"),
 		[]byte(completedState),
-		0644,
+		0o644,
 	))
 
 	// Create a running workflow state (should be shown)
@@ -208,7 +208,7 @@ func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "running-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -229,7 +229,7 @@ func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a running workflow state
 	runningState := `{
@@ -245,7 +245,7 @@ func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "json-test-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -271,7 +271,7 @@ func TestResumeCommand_WorkflowNotFound(t *testing.T) {
 
 	// Create empty states directory
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -293,8 +293,8 @@ func TestResumeCommand_AlreadyCompleted(t *testing.T) {
 	// Create states and workflows directories
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a completed workflow state
 	completedState := `{
@@ -310,7 +310,7 @@ func TestResumeCommand_AlreadyCompleted(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "completed-id.json"),
 		[]byte(completedState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -328,7 +328,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "test-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -351,8 +351,8 @@ func TestResumeCommand_InputOverrides(t *testing.T) {
 	// Create states and workflows directories
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a running workflow state
 	runningState := `{
@@ -369,7 +369,7 @@ func TestResumeCommand_InputOverrides(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "override-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -387,7 +387,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "override-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -411,8 +411,8 @@ func TestResumeCommand_WorkflowDefinitionDeleted(t *testing.T) {
 	// Create states directory but NOT workflows directory with the definition
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a running workflow state (but workflow definition doesn't exist)
 	runningState := `{
@@ -428,7 +428,7 @@ func TestResumeCommand_WorkflowDefinitionDeleted(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "orphan-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 	// Note: No workflow file created for "deleted-workflow"
 
@@ -452,8 +452,8 @@ func TestResumeCommand_Success(t *testing.T) {
 	// Create states and workflows directories
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a running workflow state (step1 completed, at step2)
 	now := time.Now().Format(time.RFC3339)
@@ -477,7 +477,7 @@ func TestResumeCommand_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "success-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -499,7 +499,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "success-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -520,7 +520,7 @@ func TestResumeCommand_QuietFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a running workflow state
 	runningState := `{
@@ -536,7 +536,7 @@ func TestResumeCommand_QuietFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "quiet-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -557,7 +557,7 @@ func TestResumeCommand_TableFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create a running workflow state
 	runningState := `{
@@ -573,7 +573,7 @@ func TestResumeCommand_TableFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "table-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -624,8 +624,8 @@ func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	// Create states and workflows directories
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a running workflow state
 	now := time.Now().Format(time.RFC3339)
@@ -649,7 +649,7 @@ func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "sqlite-test-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -671,7 +671,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "sqlite-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -701,7 +701,7 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 
 	// Create states directory with resumable workflows
 	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	// Create multiple running workflow states
 	for i := 0; i < 3; i++ {
@@ -718,7 +718,7 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(statesDir, "concurrent-"+string(rune('a'+i))+".json"),
 			[]byte(state),
-			0644,
+			0o644,
 		))
 	}
 
@@ -812,17 +812,17 @@ func TestResumeCommand_ConfigIntegration(t *testing.T) {
 			// Create directories
 			statesDir := filepath.Join(tmpDir, "states")
 			workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-			require.NoError(t, os.MkdirAll(statesDir, 0755))
-			require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+			require.NoError(t, os.MkdirAll(statesDir, 0o755))
+			require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 			// Create .awf/config.yaml if content provided
 			if tt.configContent != "" {
 				configDir := filepath.Join(tmpDir, ".awf")
-				require.NoError(t, os.MkdirAll(configDir, 0755))
+				require.NoError(t, os.MkdirAll(configDir, 0o755))
 				require.NoError(t, os.WriteFile(
 					filepath.Join(configDir, "config.yaml"),
 					[]byte(tt.configContent),
-					0644,
+					0o644,
 				))
 			}
 
@@ -848,7 +848,7 @@ func TestResumeCommand_ConfigIntegration(t *testing.T) {
 			require.NoError(t, os.WriteFile(
 				filepath.Join(statesDir, "config-test-id.json"),
 				[]byte(runningState),
-				0644,
+				0o644,
 			))
 
 			// Create the workflow definition (simple echo without interpolation)
@@ -872,7 +872,7 @@ states:
 			require.NoError(t, os.WriteFile(
 				filepath.Join(workflowsDir, "config-workflow.yaml"),
 				[]byte(workflowContent),
-				0644,
+				0o644,
 			))
 
 			// Build command args
@@ -911,15 +911,15 @@ func TestResumeCommand_ConfigError_Propagates(t *testing.T) {
 		// Create directories
 		statesDir := filepath.Join(tmpDir, "states")
 		workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-		require.NoError(t, os.MkdirAll(statesDir, 0755))
-		require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+		require.NoError(t, os.MkdirAll(statesDir, 0o755))
+		require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 		// Create invalid config file
 		configDir := filepath.Join(tmpDir, ".awf")
 		require.NoError(t, os.WriteFile(
 			filepath.Join(configDir, "config.yaml"),
 			[]byte("invalid: yaml: content: [unclosed"),
-			0644,
+			0o644,
 		))
 
 		// Create a running workflow state
@@ -938,7 +938,7 @@ func TestResumeCommand_ConfigError_Propagates(t *testing.T) {
 		require.NoError(t, os.WriteFile(
 			filepath.Join(statesDir, "error-test-id.json"),
 			[]byte(runningState),
-			0644,
+			0o644,
 		))
 
 		// Create the workflow definition
@@ -956,7 +956,7 @@ states:
 		require.NoError(t, os.WriteFile(
 			filepath.Join(workflowsDir, "error-workflow.yaml"),
 			[]byte(workflowContent),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -985,8 +985,8 @@ func TestResumeCommand_NoConfigFile_Succeeds(t *testing.T) {
 	// Create directories (no .awf/config.yaml)
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
 	// Create a running workflow state at step2
 	now := time.Now().Format(time.RFC3339)
@@ -1010,7 +1010,7 @@ func TestResumeCommand_NoConfigFile_Succeeds(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "no-config-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -1032,7 +1032,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "no-config-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -1060,9 +1060,9 @@ func TestResumeCommand_ConfigWithCLIInputMerge(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
 	configDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
 
 	// Create config with inputs
 	configContent := `inputs:
@@ -1072,7 +1072,7 @@ func TestResumeCommand_ConfigWithCLIInputMerge(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(configDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	// Create a running workflow state at step2
@@ -1097,7 +1097,7 @@ func TestResumeCommand_ConfigWithCLIInputMerge(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "merge-test-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition (simple echo without interpolation)
@@ -1120,7 +1120,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "merge-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	// CLI overrides 'shared' and adds 'cli_only'
@@ -1154,9 +1154,9 @@ func TestResumeCommand_ConfigYAMLComments(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
 	configDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
 
 	// Create config with comments
 	configContent := `# Project configuration
@@ -1171,7 +1171,7 @@ inputs:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(configDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	// Create a running workflow state
@@ -1196,7 +1196,7 @@ inputs:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "comments-test-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -1218,7 +1218,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "comments-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()
@@ -1243,9 +1243,9 @@ func TestResumeCommand_ConfigEmptyInputs(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
 	configDir := filepath.Join(tmpDir, ".awf")
-	require.NoError(t, os.MkdirAll(statesDir, 0755))
-	require.NoError(t, os.MkdirAll(workflowsDir, 0755))
-	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
 
 	// Create config with empty inputs
 	configContent := `inputs:
@@ -1253,7 +1253,7 @@ func TestResumeCommand_ConfigEmptyInputs(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(configDir, "config.yaml"),
 		[]byte(configContent),
-		0644,
+		0o644,
 	))
 
 	// Create a running workflow state
@@ -1278,7 +1278,7 @@ func TestResumeCommand_ConfigEmptyInputs(t *testing.T) {
 	require.NoError(t, os.WriteFile(
 		filepath.Join(statesDir, "empty-inputs-id.json"),
 		[]byte(runningState),
-		0644,
+		0o644,
 	))
 
 	// Create the workflow definition
@@ -1300,7 +1300,7 @@ states:
 	require.NoError(t, os.WriteFile(
 		filepath.Join(workflowsDir, "empty-inputs-workflow.yaml"),
 		[]byte(workflowContent),
-		0644,
+		0o644,
 	))
 
 	cmd := cli.NewRootCommand()

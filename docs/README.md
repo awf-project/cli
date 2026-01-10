@@ -47,6 +47,7 @@ For contributors and developers:
 
 - [Architecture](development/architecture.md) - Hexagonal architecture overview
 - [Project Structure](development/project-structure.md) - Codebase organization
+- [Code Quality](development/code-quality.md) - Linters, formatters, and quality tooling
 - [Testing](development/testing.md) - Testing conventions and commands
 
 ## Additional Resources

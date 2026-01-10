@@ -163,7 +163,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 				Next: next,
 			})
 		}
-		if err := writer.WriteValidationTable(result); err != nil {
+		if err := writer.WriteValidationTable(&result); err != nil {
 			return err
 		}
 		if validationErr != nil {

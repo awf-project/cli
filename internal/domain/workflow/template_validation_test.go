@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ func newTestAnalyzer() *testAnalyzer {
 func (a *testAnalyzer) ExtractReferences(template string) ([]workflow.TemplateReference, error) {
 	refs, err := interpolation.ExtractReferences(template)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extracting references from %q: %w", template, err)
 	}
 
 	result := make([]workflow.TemplateReference, len(refs))
@@ -1518,7 +1519,7 @@ func TestTemplateValidator_LoopExpressions_UndefinedInputInCondition(t *testing.
 	for _, issue := range issues {
 		if issue.Code == workflow.ErrUndefinedLoopVariable || issue.Code == workflow.ErrUndefinedInput {
 			if issue.Message != "" && (issue.Message == "undefined_count" ||
-				len(issue.Message) > 0 && issue.Message[0:1] != "") {
+				issue.Message != "" && issue.Message[0:1] != "") {
 				hasUndefinedCountIssue = true
 			}
 		}

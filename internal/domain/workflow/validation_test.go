@@ -27,8 +27,8 @@ func TestInputValidation_Enum(t *testing.T) {
 }
 
 func TestInputValidation_MinMax(t *testing.T) {
-	min, max := 1, 100
-	v := InputValidation{Min: &min, Max: &max}
+	minVal, maxVal := 1, 100
+	v := InputValidation{Min: &minVal, Max: &maxVal}
 	assert.Equal(t, 1, *v.Min)
 	assert.Equal(t, 100, *v.Max)
 }
@@ -44,11 +44,11 @@ func TestInputValidation_FileExtension(t *testing.T) {
 }
 
 func TestInputValidation_Full(t *testing.T) {
-	min := 0
+	minVal := 0
 	v := InputValidation{
 		Pattern:       `^[a-zA-Z0-9_]+$`,
 		Enum:          []string{"alpha", "beta"},
-		Min:           &min,
+		Min:           &minVal,
 		FileExists:    true,
 		FileExtension: []string{".txt"},
 	}

@@ -89,7 +89,10 @@ func formatInputsTable(inputs []ui.InputInfo, out io.Writer, noColor bool) error
 		)
 	}
 
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flush table writer: %w", err)
+	}
+	return nil
 }
 
 // formatDefaultValue formats the default value for display.

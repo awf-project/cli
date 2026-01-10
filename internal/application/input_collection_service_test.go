@@ -498,7 +498,6 @@ func TestInputCollectionService_CollectMissingInputs_CollectorError(t *testing.T
 	})
 
 	result, err := svc.CollectMissingInputs(wf, map[string]any{})
-
 	// Stub returns nil error, but real implementation should propagate collector error
 	// For now, just verify the call was made (stub behavior)
 	if err != nil {
@@ -524,7 +523,6 @@ func TestInputCollectionService_CollectMissingInputs_CollectorErrorOnSecondInput
 	})
 
 	result, err := svc.CollectMissingInputs(wf, map[string]any{})
-
 	// Stub returns nil error, but real implementation should propagate error
 	if err != nil {
 		assert.Contains(t, err.Error(), "failed", "error should mention failure")

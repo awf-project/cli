@@ -30,8 +30,8 @@ func (f *DryRunFormatter) Format(plan *workflow.DryRunPlan) error {
 	}
 
 	// Format each step
-	for i, step := range plan.Steps {
-		if err := f.formatStep(&step, i+1); err != nil {
+	for i := range plan.Steps {
+		if err := f.formatStep(&plan.Steps[i], i+1); err != nil {
 			return err
 		}
 	}
@@ -45,18 +45,18 @@ func (f *DryRunFormatter) formatHeader(plan *workflow.DryRunPlan) error {
 	title := fmt.Sprintf("Dry Run: %s", plan.WorkflowName)
 	_, err := fmt.Fprintln(f.out, f.colorizer.Bold(title))
 	if err != nil {
-		return err
+		return fmt.Errorf("writing header: %w", err)
 	}
 	_, err = fmt.Fprintln(f.out, strings.Repeat("=", len(title)))
 	if err != nil {
-		return err
+		return fmt.Errorf("writing header: %w", err)
 	}
 
 	// Description
 	if plan.Description != "" {
 		_, err = fmt.Fprintf(f.out, "\n%s\n", plan.Description)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing description: %w", err)
 		}
 	}
 
@@ -64,7 +64,7 @@ func (f *DryRunFormatter) formatHeader(plan *workflow.DryRunPlan) error {
 	if len(plan.Inputs) > 0 {
 		_, err = fmt.Fprintln(f.out, "\nInputs:")
 		if err != nil {
-			return err
+			return fmt.Errorf("writing inputs: %w", err)
 		}
 
 		// Sort inputs for consistent output
@@ -82,7 +82,7 @@ func (f *DryRunFormatter) formatHeader(plan *workflow.DryRunPlan) error {
 			}
 			_, err = fmt.Fprintf(f.out, "  %s: %s\n", name, valueStr)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing input %s: %w", name, err)
 			}
 		}
 	}
@@ -90,13 +90,18 @@ func (f *DryRunFormatter) formatHeader(plan *workflow.DryRunPlan) error {
 	// Execution plan header
 	_, err = fmt.Fprintln(f.out, "\nExecution Plan:")
 	if err != nil {
-		return err
+		return fmt.Errorf("writing plan header: %w", err)
 	}
 	_, err = fmt.Fprintln(f.out, strings.Repeat("-", 15))
-	return err
+	if err != nil {
+		return fmt.Errorf("writing plan header: %w", err)
+	}
+	return nil
 }
 
 // formatStep renders a single step in the plan.
+//
+//nolint:gocognit // Complexity 42: step formatter handles all step types with type-specific formatting (command, agent, parallel, loop, plugin, subworkflow). Comprehensive formatting required.
 func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error {
 	// Step header with type indicator
 	label := stepTypeLabel(step.Type)
@@ -117,14 +122,14 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	}
 	_, err := fmt.Fprintln(f.out, f.colorizer.Bold(header))
 	if err != nil {
-		return err
+		return fmt.Errorf("writing step header: %w", err)
 	}
 
 	// Description
 	if step.Description != "" {
 		_, err = fmt.Fprintf(f.out, "    %s\n", step.Description)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing step description: %w", err)
 		}
 	}
 
@@ -142,12 +147,16 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 		if fmtErr := f.formatAgentStep(step); fmtErr != nil {
 			return fmtErr
 		}
+	case workflow.StepTypeOperation:
+		// Plugin operations - formatted in detail section
+	case workflow.StepTypeCallWorkflow:
+		// Subworkflow calls - formatted in detail section
 	case workflow.StepTypeCommand:
 		// Command
 		if step.Command != "" {
 			_, err = fmt.Fprintf(f.out, "    Command: %s\n", step.Command)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing command: %w", err)
 			}
 		}
 	case workflow.StepTypeTerminal:
@@ -158,7 +167,7 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	if step.Dir != "" {
 		_, err = fmt.Fprintf(f.out, "    Dir: %s\n", step.Dir)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing dir: %w", err)
 		}
 	}
 
@@ -171,7 +180,7 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	if step.Timeout > 0 {
 		_, err = fmt.Fprintf(f.out, "    Timeout: %ds\n", step.Timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing timeout: %w", err)
 		}
 	}
 
@@ -180,7 +189,7 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 		_, err = fmt.Fprintf(f.out, "    Retry: %d attempts, %s backoff\n",
 			step.Retry.MaxAttempts, step.Retry.Backoff)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing retry: %w", err)
 		}
 	}
 
@@ -196,7 +205,7 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 		if len(parts) > 0 {
 			_, err = fmt.Fprintf(f.out, "    Capture: %s\n", strings.Join(parts, ", "))
 			if err != nil {
-				return err
+				return fmt.Errorf("writing capture: %w", err)
 			}
 		}
 	}
@@ -205,7 +214,7 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	if step.ContinueOnError {
 		_, err = fmt.Fprintln(f.out, "    Continue on error: yes")
 		if err != nil {
-			return err
+			return fmt.Errorf("writing continue on error: %w", err)
 		}
 	}
 
@@ -221,12 +230,12 @@ func (f *DryRunFormatter) formatHooks(hooks workflow.DryRunHooks) error {
 		if hook.Type == "log" {
 			_, err := fmt.Fprintf(f.out, "    Hook (%s): log %q\n", hookType, hook.Content)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing pre hook: %w", err)
 			}
 		} else {
 			_, err := fmt.Fprintf(f.out, "    Hook (%s): %s\n", hookType, hook.Content)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing pre hook: %w", err)
 			}
 		}
 	}
@@ -237,12 +246,12 @@ func (f *DryRunFormatter) formatHooks(hooks workflow.DryRunHooks) error {
 		if hook.Type == "log" {
 			_, err := fmt.Fprintf(f.out, "    Hook (%s): log %q\n", hookType, hook.Content)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing post hook: %w", err)
 			}
 		} else {
 			_, err := fmt.Fprintf(f.out, "    Hook (%s): %s\n", hookType, hook.Content)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing post hook: %w", err)
 			}
 		}
 	}
@@ -261,7 +270,7 @@ func (f *DryRunFormatter) formatTransitions(transitions []workflow.DryRunTransit
 		if tr.Condition != "" {
 			_, err := fmt.Fprintf(f.out, "    %s when %q: %s\n", arrow, tr.Condition, tr.Target)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing transition: %w", err)
 			}
 		} else {
 			label := tr.Type
@@ -270,7 +279,7 @@ func (f *DryRunFormatter) formatTransitions(transitions []workflow.DryRunTransit
 			}
 			_, err := fmt.Fprintf(f.out, "    %s on_%s: %s\n", arrow, label, tr.Target)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing transition: %w", err)
 			}
 		}
 	}
@@ -286,20 +295,20 @@ func (f *DryRunFormatter) formatLoopStep(step *workflow.DryRunStep) error {
 	// Loop type
 	_, err := fmt.Fprintf(f.out, "    Type: %s\n", step.Loop.Type)
 	if err != nil {
-		return err
+		return fmt.Errorf("writing loop type: %w", err)
 	}
 
 	// Items or condition
 	if step.Loop.Items != "" {
 		_, err = fmt.Fprintf(f.out, "    Items: %s\n", step.Loop.Items)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop items: %w", err)
 		}
 	}
 	if step.Loop.Condition != "" {
 		_, err = fmt.Fprintf(f.out, "    Condition: %s\n", step.Loop.Condition)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop condition: %w", err)
 		}
 	}
 
@@ -307,7 +316,7 @@ func (f *DryRunFormatter) formatLoopStep(step *workflow.DryRunStep) error {
 	if len(step.Loop.Body) > 0 {
 		_, err = fmt.Fprintf(f.out, "    Body: %s\n", strings.Join(step.Loop.Body, ", "))
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop body: %w", err)
 		}
 	}
 
@@ -315,7 +324,7 @@ func (f *DryRunFormatter) formatLoopStep(step *workflow.DryRunStep) error {
 	if step.Loop.MaxIterations > 0 {
 		_, err = fmt.Fprintf(f.out, "    Max iterations: %d\n", step.Loop.MaxIterations)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop max iterations: %w", err)
 		}
 	}
 
@@ -323,7 +332,7 @@ func (f *DryRunFormatter) formatLoopStep(step *workflow.DryRunStep) error {
 	if step.Loop.BreakCondition != "" {
 		_, err = fmt.Fprintf(f.out, "    Break when: %s\n", step.Loop.BreakCondition)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop break condition: %w", err)
 		}
 	}
 
@@ -331,7 +340,7 @@ func (f *DryRunFormatter) formatLoopStep(step *workflow.DryRunStep) error {
 	if step.Loop.OnComplete != "" {
 		_, err = fmt.Fprintf(f.out, "    On complete: %s\n", step.Loop.OnComplete)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing loop on complete: %w", err)
 		}
 	}
 
@@ -344,7 +353,7 @@ func (f *DryRunFormatter) formatParallelStep(step *workflow.DryRunStep) error {
 	if len(step.Branches) > 0 {
 		_, err := fmt.Fprintf(f.out, "    Branches: %s\n", strings.Join(step.Branches, ", "))
 		if err != nil {
-			return err
+			return fmt.Errorf("writing parallel branches: %w", err)
 		}
 	}
 
@@ -352,7 +361,7 @@ func (f *DryRunFormatter) formatParallelStep(step *workflow.DryRunStep) error {
 	if step.Strategy != "" {
 		_, err := fmt.Fprintf(f.out, "    Strategy: %s\n", step.Strategy)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing parallel strategy: %w", err)
 		}
 	}
 
@@ -360,7 +369,7 @@ func (f *DryRunFormatter) formatParallelStep(step *workflow.DryRunStep) error {
 	if step.MaxConcurrent > 0 {
 		_, err := fmt.Fprintf(f.out, "    Max concurrent: %d\n", step.MaxConcurrent)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing parallel max concurrent: %w", err)
 		}
 	}
 
@@ -377,7 +386,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 	if step.Agent.Provider != "" {
 		_, err := fmt.Fprintf(f.out, "    Provider: %s\n", step.Agent.Provider)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing agent provider: %w", err)
 		}
 	}
 
@@ -385,7 +394,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 	if step.Agent.ResolvedPrompt != "" {
 		_, err := fmt.Fprintf(f.out, "    Prompt: %s\n", step.Agent.ResolvedPrompt)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing agent prompt: %w", err)
 		}
 	}
 
@@ -393,7 +402,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 	if step.Agent.CLICommand != "" {
 		_, err := fmt.Fprintf(f.out, "    CLI: %s\n", step.Agent.CLICommand)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing agent CLI: %w", err)
 		}
 	}
 
@@ -401,7 +410,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 	if len(step.Agent.Options) > 0 {
 		_, err := fmt.Fprintln(f.out, "    Options:")
 		if err != nil {
-			return err
+			return fmt.Errorf("writing agent options header: %w", err)
 		}
 		// Sort option keys for consistent output
 		var optionKeys []string
@@ -414,7 +423,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 			value := step.Agent.Options[key]
 			_, err = fmt.Fprintf(f.out, "      %s: %v\n", key, value)
 			if err != nil {
-				return err
+				return fmt.Errorf("writing agent option %s: %w", key, err)
 			}
 		}
 	}
@@ -423,7 +432,7 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 	if step.Agent.Timeout > 0 {
 		_, err := fmt.Fprintf(f.out, "    Agent timeout: %ds\n", step.Agent.Timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing agent timeout: %w", err)
 		}
 	}
 
@@ -434,7 +443,10 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 func (f *DryRunFormatter) formatFooter() error {
 	_, err := fmt.Fprintf(f.out, "\n%s No commands will be executed (dry-run mode).\n",
 		f.colorizer.Success("OK"))
-	return err
+	if err != nil {
+		return fmt.Errorf("writing footer: %w", err)
+	}
+	return nil
 }
 
 // stepTypeLabel returns a display label for the step type.

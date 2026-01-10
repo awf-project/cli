@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/vanoix/awf/internal/domain/ports"
@@ -43,22 +44,36 @@ func (s *HistoryService) List(ctx context.Context, filter *workflow.HistoryFilte
 	if filter.Limit == 0 {
 		filter.Limit = defaultHistoryLimit
 	}
-
-	return s.store.List(ctx, filter)
+	records, err := s.store.List(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("list history records: %w", err)
+	}
+	return records, nil
 }
 
 // GetStats returns aggregated statistics for executions matching the filter.
 func (s *HistoryService) GetStats(ctx context.Context, filter *workflow.HistoryFilter) (*workflow.HistoryStats, error) {
-	return s.store.GetStats(ctx, filter)
+	stats, err := s.store.GetStats(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get history stats: %w", err)
+	}
+	return stats, nil
 }
 
 // Cleanup removes execution records older than 30 days.
 // Returns the number of records deleted.
 func (s *HistoryService) Cleanup(ctx context.Context) (int, error) {
-	return s.store.Cleanup(ctx, retentionPeriod)
+	count, err := s.store.Cleanup(ctx, retentionPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup history: %w", err)
+	}
+	return count, nil
 }
 
 // Close gracefully shuts down the history store.
 func (s *HistoryService) Close() error {
-	return s.store.Close()
+	if err := s.store.Close(); err != nil {
+		return fmt.Errorf("close history store: %w", err)
+	}
+	return nil
 }

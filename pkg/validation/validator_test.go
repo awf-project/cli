@@ -1070,7 +1070,7 @@ func TestValidateFileExists_Symlink(t *testing.T) {
 	realFile := filepath.Join(tmpDir, "real.txt")
 	linkFile := filepath.Join(tmpDir, "link.txt")
 
-	err := os.WriteFile(realFile, []byte("content"), 0644)
+	err := os.WriteFile(realFile, []byte("content"), 0o644)
 	require.NoError(t, err)
 
 	err = os.Symlink(realFile, linkFile)
@@ -1167,11 +1167,11 @@ func TestValidateInputs_CombinedValidationRules(t *testing.T) {
 	// but test combined file_exists + file_extension
 	tmpDir := t.TempDir()
 	validFile := filepath.Join(tmpDir, "script.py")
-	err := os.WriteFile(validFile, []byte("# python"), 0644)
+	err := os.WriteFile(validFile, []byte("# python"), 0o644)
 	require.NoError(t, err)
 
 	invalidExtFile := filepath.Join(tmpDir, "script.rb")
-	err = os.WriteFile(invalidExtFile, []byte("# ruby"), 0644)
+	err = os.WriteFile(invalidExtFile, []byte("# ruby"), 0o644)
 	require.NoError(t, err)
 
 	tests := []struct {

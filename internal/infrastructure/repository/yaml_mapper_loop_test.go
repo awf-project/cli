@@ -102,7 +102,7 @@ func TestMapLoopConfig_ForEach(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapLoopConfig(tt.yamlStep)
+			got := mapLoopConfig(&tt.yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.want.Type, got.Type)
@@ -188,7 +188,7 @@ func TestMapLoopConfig_While(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapLoopConfig(tt.yamlStep)
+			got := mapLoopConfig(&tt.yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.want.Type, got.Type)
@@ -234,7 +234,7 @@ func TestMapLoopConfig_NoLoop(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapLoopConfig(tt.yamlStep)
+			got := mapLoopConfig(&tt.yamlStep)
 			assert.Nil(t, got)
 		})
 	}
@@ -289,7 +289,7 @@ func TestMapStep_ForEachStep(t *testing.T) {
 		Timeout:       "5m",
 	}
 
-	step, err := mapStep("test.yaml", "process_files", yamlStep)
+	step, err := mapStep("test.yaml", "process_files", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -318,7 +318,7 @@ func TestMapStep_WhileStep(t *testing.T) {
 		Timeout:       "10m",
 	}
 
-	step, err := mapStep("test.yaml", "poll_status", yamlStep)
+	step, err := mapStep("test.yaml", "poll_status", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -347,7 +347,7 @@ func TestMapStep_LoopWithHooks(t *testing.T) {
 		},
 	}
 
-	step, err := mapStep("test.yaml", "loop_with_hooks", yamlStep)
+	step, err := mapStep("test.yaml", "loop_with_hooks", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -398,7 +398,7 @@ func TestMapLoopConfig_ItemsTypes(t *testing.T) {
 				Body:  []string{"process"},
 			}
 
-			got := mapLoopConfig(yamlStep)
+			got := mapLoopConfig(&yamlStep)
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantJSON, got.Items)
 		})
@@ -417,7 +417,7 @@ func TestMapStep_LoopPreservesOtherFields(t *testing.T) {
 		ContinueOnError: true,
 	}
 
-	step, err := mapStep("test.yaml", "resilient_loop", yamlStep)
+	step, err := mapStep("test.yaml", "resilient_loop", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -498,7 +498,7 @@ func TestMapLoopConfig_DynamicMaxIterations(t *testing.T) {
 				MaxIterations: tt.maxIterations,
 			}
 
-			got := mapLoopConfig(yamlStep)
+			got := mapLoopConfig(&yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantMaxIter, got.MaxIterations, "MaxIterations mismatch")
@@ -538,7 +538,7 @@ func TestMapLoopConfig_DynamicMaxIterations_While(t *testing.T) {
 				MaxIterations: tt.maxIterations,
 			}
 
-			got := mapLoopConfig(yamlStep)
+			got := mapLoopConfig(&yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, workflow.LoopTypeWhile, got.Type)
@@ -584,7 +584,7 @@ func TestMapLoopConfig_MaxIterationsEdgeCases(t *testing.T) {
 				MaxIterations: tt.maxIterations,
 			}
 
-			got := mapLoopConfig(yamlStep)
+			got := mapLoopConfig(&yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantMaxIter, got.MaxIterations, "MaxIterations")
@@ -632,7 +632,7 @@ func TestMapLoopConfig_MaxIterationsInvalidTypes(t *testing.T) {
 				MaxIterations: tt.maxIterations,
 			}
 
-			got := mapLoopConfig(yamlStep)
+			got := mapLoopConfig(&yamlStep)
 
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantMaxIter, got.MaxIterations)
@@ -651,7 +651,7 @@ func TestMapStep_DynamicMaxIterations(t *testing.T) {
 		OnComplete:    "done",
 	}
 
-	step, err := mapStep("test.yaml", "dynamic_loop", yamlStep)
+	step, err := mapStep("test.yaml", "dynamic_loop", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)
@@ -672,7 +672,7 @@ func TestMapStep_DynamicMaxIterations_WithArithmetic(t *testing.T) {
 		OnComplete:    "aggregate",
 	}
 
-	step, err := mapStep("test.yaml", "paginated_loop", yamlStep)
+	step, err := mapStep("test.yaml", "paginated_loop", &yamlStep)
 
 	require.NoError(t, err)
 	require.NotNil(t, step)

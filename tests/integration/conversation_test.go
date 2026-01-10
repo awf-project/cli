@@ -40,14 +40,7 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// skipInCI skips the test if running in a CI environment where external
-// dependencies (like AI provider API keys) may not be available.
-func skipInCI(t *testing.T) {
-	t.Helper()
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping integration test in CI environment")
-	}
-}
+// Note: skipInCI helper is defined in agent_test.go to avoid duplication
 
 // =============================================================================
 // AC1: Conversation Mode Recognition - Validation

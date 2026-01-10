@@ -23,6 +23,7 @@ func (m *mockPlugin) Version() string { return m.version }
 func (m *mockPlugin) Init(_ context.Context, _ map[string]any) error {
 	return errNotImplemented
 }
+
 func (m *mockPlugin) Shutdown(_ context.Context) error {
 	return errNotImplemented
 }

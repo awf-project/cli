@@ -314,6 +314,8 @@ func TestBuildPromptPaths_MirrorsWorkflowPathsPattern(t *testing.T) {
 			workflowLocalIdx = i
 		case repository.SourceGlobal:
 			workflowGlobalIdx = i
+		case repository.SourceEnv:
+			// SourceEnv not used in workflow paths in this test
 		}
 	}
 

@@ -85,7 +85,7 @@ func (m *RPCPluginManager) SetPluginsDir(dir string) {
 func (m *RPCPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discover: %w", err)
 	}
 
 	// Check if loader is configured
@@ -127,7 +127,7 @@ func (m *RPCPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo, 
 func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("load: %w", err)
 	}
 
 	// Validate name
@@ -187,7 +187,7 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[string]any) error {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("init: %w", err)
 	}
 
 	// Validate name
@@ -234,7 +234,7 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("shutdown: %w", err)
 	}
 
 	// Validate name
@@ -276,7 +276,7 @@ func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
 func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
 	// Check context first
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("shutdown all: %w", err)
 	}
 
 	// Check if loader is configured (required for full functionality)

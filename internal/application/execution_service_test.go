@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -279,13 +280,13 @@ type timeoutMockExecutor struct {
 	timeout time.Duration
 }
 
-func (m *timeoutMockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *timeoutMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	// simulate slow execution that gets cancelled
 	select {
 	case <-time.After(m.timeout):
 		return &ports.CommandResult{ExitCode: -1}, context.DeadlineExceeded
 	case <-ctx.Done():
-		return &ports.CommandResult{ExitCode: -1}, ctx.Err()
+		return &ports.CommandResult{ExitCode: -1}, fmt.Errorf("execution cancelled: %w", ctx.Err())
 	}
 }
 
@@ -294,7 +295,7 @@ type errorMockExecutor struct {
 	err error
 }
 
-func (m *errorMockExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *errorMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	return &ports.CommandResult{ExitCode: -1}, m.err
 }
 
@@ -638,7 +639,7 @@ func newRetryCountingExecutor() *retryCountingExecutor {
 	}
 }
 
-func (m *retryCountingExecutor) Execute(ctx context.Context, cmd ports.Command) (*ports.CommandResult, error) {
+func (m *retryCountingExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
 	m.calls[cmd.Program]++
 	m.callHistory = append(m.callHistory, cmd.Program)
 

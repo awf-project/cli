@@ -50,7 +50,7 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("claude provider: %w", err)
 	}
 
 	// Build command arguments
@@ -117,6 +117,8 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 }
 
 // ExecuteConversation invokes the Claude CLI with conversation history for multi-turn interactions.
+//
+//nolint:gocognit // Complexity 31: conversation executor manages multi-turn state, context windows, token limits, retries, streaming. Conversation orchestration requires this.
 func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
@@ -137,7 +139,7 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("claude provider: %w", err)
 	}
 
 	// Clone state to avoid modifying original

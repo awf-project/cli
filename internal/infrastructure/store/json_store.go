@@ -26,7 +26,7 @@ func NewJSONStore(basePath string) *JSONStore {
 // Save persists execution state to a JSON file with atomic write.
 // Uses unique temp file names to prevent concurrent write corruption.
 func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) error {
-	if err := os.MkdirAll(s.basePath, 0755); err != nil {
+	if err := os.MkdirAll(s.basePath, 0o755); err != nil {
 		return err
 	}
 
@@ -39,7 +39,7 @@ func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) 
 		return err
 	}
 
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

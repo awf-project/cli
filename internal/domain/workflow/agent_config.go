@@ -53,11 +53,9 @@ func (c *AgentConfig) Validate() error {
 				return err
 			}
 		}
-	} else {
+	} else if c.Prompt == "" {
 		// In single mode, require Prompt
-		if c.Prompt == "" {
-			return errors.New("prompt is required")
-		}
+		return errors.New("prompt is required")
 	}
 
 	// Validate timeout (must be non-negative)

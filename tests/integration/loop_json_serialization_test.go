@@ -43,7 +43,7 @@ func TestF047_HappyPath_CallWorkflowWithJSONObjects(t *testing.T) {
 	// Given: Parent workflow iterates over JSON objects and calls child workflow
 	tmpDir := t.TempDir()
 	outputDir := filepath.Join(tmpDir, "output")
-	err := os.MkdirAll(outputDir, 0755)
+	err := os.MkdirAll(outputDir, 0o755)
 	require.NoError(t, err)
 
 	// Create child workflow that validates and processes JSON item
@@ -76,7 +76,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "process-item.yaml"), []byte(childYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "process-item.yaml"), []byte(childYAML), 0o644)
 	require.NoError(t, err)
 
 	// Create parent workflow with for_each calling child
@@ -104,7 +104,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "parent.yaml"), []byte(parentYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "parent.yaml"), []byte(parentYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -190,7 +190,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "nested-json.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "nested-json.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -256,7 +256,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "empty-structures.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "empty-structures.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -339,7 +339,7 @@ states:
     type: terminal
     status: success
 `
-			err := os.WriteFile(filepath.Join(tmpDir, "primitive-items.yaml"), []byte(wfYAML), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "primitive-items.yaml"), []byte(wfYAML), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)
@@ -415,7 +415,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "unicode-test.yaml"), []byte(wfYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "unicode-test.yaml"), []byte(wfYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -483,7 +483,7 @@ states:
     type: terminal
     status: success
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "review-file.yaml"), []byte(reviewFileYAML), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "review-file.yaml"), []byte(reviewFileYAML), 0o644)
 	require.NoError(t, err)
 
 	// Parent workflow: PR review orchestrator
@@ -511,7 +511,7 @@ states:
     type: terminal
     status: success
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "pr-review.yaml"), []byte(prReviewYAML), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "pr-review.yaml"), []byte(prReviewYAML), 0o644)
 	require.NoError(t, err)
 
 	repo := repository.NewYAMLRepository(tmpDir)
@@ -628,7 +628,7 @@ states:
 			// Clean output file
 			_ = os.Remove(outputFile)
 
-			err := os.WriteFile(filepath.Join(tmpDir, tt.name+".yaml"), []byte(tt.workflow), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, tt.name+".yaml"), []byte(tt.workflow), 0o644)
 			require.NoError(t, err)
 
 			repo := repository.NewYAMLRepository(tmpDir)

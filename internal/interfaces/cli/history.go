@@ -173,7 +173,8 @@ func writeHistoryRecords(writer *ui.OutputWriter, cfg *Config, records []*workfl
 	// Text/table output
 	_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n", "ID", "WORKFLOW", "STATUS", "DURATION", "COMPLETED")
 	_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n", "--------------------", "---------------", "----------", "------------", "---------")
-	for _, info := range infos {
+	for i := range infos {
+		info := &infos[i]
 		completedAt, _ := time.Parse(time.RFC3339, info.CompletedAt)
 		duration := formatDuration(info.DurationMs)
 		_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n",

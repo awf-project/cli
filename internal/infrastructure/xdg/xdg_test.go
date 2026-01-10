@@ -353,7 +353,7 @@ func TestPluginsDirs_TableDriven(t *testing.T) {
 			name:        "XDG with trailing slash",
 			xdgDataHome: "/custom/data/",
 			wantGlobal: func() string {
-				return filepath.Join("/custom/data/", "awf", "plugins")
+				return filepath.Join("/custom", "data", "awf", "plugins")
 			},
 			wantLocal: ".awf/plugins",
 		},

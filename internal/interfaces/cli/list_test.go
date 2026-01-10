@@ -101,7 +101,7 @@ func TestListPromptsCommand(t *testing.T) {
 
 		// Create empty prompts directory
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		cmd := cli.NewRootCommand()
 		var out bytes.Buffer
@@ -151,18 +151,18 @@ func TestListPromptsCommand(t *testing.T) {
 
 		// Create prompts directory with files
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		// Create test prompt files
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "system.md"),
 			[]byte("You are an AI assistant"),
-			0644,
+			0o644,
 		))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "task.txt"),
 			[]byte("Analyze the code"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -187,12 +187,12 @@ func TestListPromptsCommand(t *testing.T) {
 
 		// Create nested prompt structure
 		nestedDir := filepath.Join(tmpDir, ".awf", "prompts", "ai", "agents")
-		require.NoError(t, os.MkdirAll(nestedDir, 0755))
+		require.NoError(t, os.MkdirAll(nestedDir, 0o755))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(nestedDir, "claude.md"),
 			[]byte("Claude system prompt"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -216,12 +216,12 @@ func TestListPromptsCommand(t *testing.T) {
 		_ = os.Chdir(tmpDir)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "test.md"),
 			[]byte("Test content"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -247,12 +247,12 @@ func TestListPromptsCommand(t *testing.T) {
 		_ = os.Chdir(tmpDir)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "prompt.md"),
 			[]byte("Content"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()
@@ -282,17 +282,17 @@ func TestListPromptsCommand(t *testing.T) {
 		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-		require.NoError(t, os.MkdirAll(promptsDir, 0755))
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "first.md"),
 			[]byte("First"),
-			0644,
+			0o644,
 		))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(promptsDir, "second.txt"),
 			[]byte("Second"),
-			0644,
+			0o644,
 		))
 
 		cmd := cli.NewRootCommand()

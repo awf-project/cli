@@ -301,7 +301,7 @@ steps:
     command: echo "{{states.step1.OUTPUT}}"
 `
 
-	err := os.WriteFile(workflowPath, []byte(workflowContent), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflowContent), 0o644)
 	require.NoError(t, err)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
@@ -395,7 +395,7 @@ steps:
     command: echo "hello"
 `
 
-	err := os.WriteFile(workflowPath, []byte(workflowContent), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflowContent), 0o644)
 	require.NoError(t, err)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
@@ -442,7 +442,7 @@ steps:
 		workflowContent.WriteString("\n    command: echo \"{{states.step0.Output}}\"")
 	}
 
-	err := os.WriteFile(workflowPath, []byte(workflowContent.String()), 0644)
+	err := os.WriteFile(workflowPath, []byte(workflowContent.String()), 0o644)
 	require.NoError(t, err)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)

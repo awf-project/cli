@@ -4,6 +4,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
@@ -44,7 +45,7 @@ func NewPluginService(
 // It filters out disabled plugins based on the state store.
 func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*plugin.PluginInfo, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.manager == nil {
@@ -53,7 +54,7 @@ func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*plugin.PluginIn
 
 	discovered, err := s.manager.Discover(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discover plugins: %w", err)
 	}
 
 	// Filter out disabled plugins
@@ -75,7 +76,7 @@ func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*plugin.PluginIn
 // Returns an error if the plugin is disabled.
 func (s *PluginService) LoadPlugin(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if name == "" {
@@ -91,14 +92,17 @@ func (s *PluginService) LoadPlugin(ctx context.Context, name string) error {
 		return nil
 	}
 
-	return s.manager.Load(ctx, name)
+	if err := s.manager.Load(ctx, name); err != nil {
+		return fmt.Errorf("load plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // InitPlugin initializes a loaded plugin with stored configuration.
 // The configuration is retrieved from the state store.
 func (s *PluginService) InitPlugin(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if name == "" {
@@ -115,7 +119,10 @@ func (s *PluginService) InitPlugin(ctx context.Context, name string) error {
 		config = s.stateStore.GetConfig(name)
 	}
 
-	return s.manager.Init(ctx, name, config)
+	if err := s.manager.Init(ctx, name, config); err != nil {
+		return fmt.Errorf("init plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // LoadAndInitPlugin loads and initializes a plugin in one operation.
@@ -130,47 +137,56 @@ func (s *PluginService) LoadAndInitPlugin(ctx context.Context, name string) erro
 // ShutdownPlugin gracefully stops a running plugin.
 func (s *PluginService) ShutdownPlugin(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.manager == nil {
 		return nil
 	}
 
-	return s.manager.Shutdown(ctx, name)
+	if err := s.manager.Shutdown(ctx, name); err != nil {
+		return fmt.Errorf("shutdown plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // ShutdownAll gracefully stops all running plugins.
 func (s *PluginService) ShutdownAll(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.manager == nil {
 		return nil
 	}
 
-	return s.manager.ShutdownAll(ctx)
+	if err := s.manager.ShutdownAll(ctx); err != nil {
+		return fmt.Errorf("shutdown all plugins: %w", err)
+	}
+	return nil
 }
 
 // EnablePlugin enables a plugin and persists the state.
 // Does not automatically load or initialize the plugin.
 func (s *PluginService) EnablePlugin(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.stateStore == nil {
 		return nil
 	}
 
-	return s.stateStore.SetEnabled(ctx, name, true)
+	if err := s.stateStore.SetEnabled(ctx, name, true); err != nil {
+		return fmt.Errorf("enable plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // DisablePlugin disables a plugin, shuts it down if running, and persists the state.
 func (s *PluginService) DisablePlugin(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	// Shutdown the plugin if it's running
@@ -178,7 +194,7 @@ func (s *PluginService) DisablePlugin(ctx context.Context, name string) error {
 		if info, found := s.manager.Get(name); found {
 			if info.Status == plugin.StatusRunning || info.Status == plugin.StatusInitialized {
 				if err := s.manager.Shutdown(ctx, name); err != nil {
-					return err
+					return fmt.Errorf("shutdown plugin %s: %w", name, err)
 				}
 			}
 		}
@@ -189,20 +205,26 @@ func (s *PluginService) DisablePlugin(ctx context.Context, name string) error {
 		return nil
 	}
 
-	return s.stateStore.SetEnabled(ctx, name, false)
+	if err := s.stateStore.SetEnabled(ctx, name, false); err != nil {
+		return fmt.Errorf("disable plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // SetPluginConfig stores configuration for a plugin.
 func (s *PluginService) SetPluginConfig(ctx context.Context, name string, config map[string]any) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.stateStore == nil {
 		return nil
 	}
 
-	return s.stateStore.SetConfig(ctx, name, config)
+	if err := s.stateStore.SetConfig(ctx, name, config); err != nil {
+		return fmt.Errorf("set config for plugin %s: %w", name, err)
+	}
+	return nil
 }
 
 // GetPluginConfig retrieves stored configuration for a plugin.
@@ -269,40 +291,46 @@ func (s *PluginService) IsPluginEnabled(name string) bool {
 // SaveState persists all plugin states to storage.
 func (s *PluginService) SaveState(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.stateStore == nil {
 		return nil
 	}
 
-	return s.stateStore.Save(ctx)
+	if err := s.stateStore.Save(ctx); err != nil {
+		return fmt.Errorf("save plugin state: %w", err)
+	}
+	return nil
 }
 
 // LoadState loads plugin states from storage.
 func (s *PluginService) LoadState(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	if s.stateStore == nil {
 		return nil
 	}
 
-	return s.stateStore.Load(ctx)
+	if err := s.stateStore.Load(ctx); err != nil {
+		return fmt.Errorf("load plugin state: %w", err)
+	}
+	return nil
 }
 
 // StartupEnabledPlugins discovers, loads, and initializes all enabled plugins.
 // Typically called at application startup.
 func (s *PluginService) StartupEnabledPlugins(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	// Discover plugins
 	discovered, err := s.DiscoverPlugins(ctx)
 	if err != nil {
-		return err
+		return err // Already wrapped in DiscoverPlugins
 	}
 
 	// Load and init each enabled plugin, collecting errors

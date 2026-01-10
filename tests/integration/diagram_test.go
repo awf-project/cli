@@ -601,8 +601,8 @@ states:
     on_success: [invalid list here
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "malformed.yaml"), []byte(malformedYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "malformed.yaml"), []byte(malformedYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -702,8 +702,8 @@ states:
     message: 'Done with "special" chars'
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(specialCharsYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(specialCharsYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -744,8 +744,8 @@ states:
     status: success
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "minimal.yaml"), []byte(minimalYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "minimal.yaml"), []byte(minimalYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -807,8 +807,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "nested-parallel.yaml"), []byte(nestedYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "nested-parallel.yaml"), []byte(nestedYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
@@ -852,8 +852,8 @@ states:
     type: terminal
 `
 	wfDir := filepath.Join(tmpDir, "workflows")
-	os.MkdirAll(wfDir, 0755)
-	os.WriteFile(filepath.Join(wfDir, "long-names.yaml"), []byte(longNameYAML), 0644)
+	os.MkdirAll(wfDir, 0o755)
+	os.WriteFile(filepath.Join(wfDir, "long-names.yaml"), []byte(longNameYAML), 0o644)
 
 	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	defer os.Unsetenv("AWF_WORKFLOWS_PATH")

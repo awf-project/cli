@@ -123,7 +123,7 @@ func (r *YAMLTemplateRepository) loadTemplate(path string) (*workflow.Template, 
 func (r *YAMLTemplateRepository) parseStates(data []byte, t *yamlTemplate) error {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("unmarshaling YAML: %w", err)
 	}
 
 	statesRaw, ok := raw["states"].(map[string]any)

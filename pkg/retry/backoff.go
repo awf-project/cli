@@ -36,10 +36,10 @@ func CalculateDelay(strategy Strategy, attempt int, initialDelay, maxDelay time.
 
 	switch strategy {
 	case StrategyLinear:
-		// delay = initialDelay * attempt
+		// Linear backoff formula: initialDelay * attempt
 		delay = time.Duration(int64(initialDelay) * int64(attempt))
 	case StrategyExponential:
-		// delay = initialDelay * multiplier^(attempt-1)
+		// Exponential backoff formula: initialDelay * multiplier^(attempt-1)
 		factor := 1.0
 		for i := 1; i < attempt; i++ {
 			factor *= multiplier

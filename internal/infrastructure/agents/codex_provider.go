@@ -36,7 +36,7 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("codex provider: %w", err)
 	}
 
 	// Build command arguments
@@ -97,7 +97,7 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 
 	// Check context before execution
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("codex provider: %w", err)
 	}
 
 	// Clone state to avoid modifying original

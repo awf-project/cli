@@ -37,7 +37,6 @@ func TestWriteDryRun_AllFormats(t *testing.T) {
 
 			formatter := ui.NewDryRunFormatter(buf, false)
 			err := w.WriteDryRun(plan, formatter)
-
 			if err != nil {
 				t.Errorf("WriteDryRun() error = %v", err)
 			}
@@ -86,7 +85,6 @@ func TestWriteResumableList_AllFormats(t *testing.T) {
 			w := ui.NewOutputWriter(buf, buf, tt.format, false)
 
 			err := w.WriteResumableList(infos)
-
 			if err != nil {
 				t.Errorf("WriteResumableList() error = %v", err)
 			}
@@ -109,7 +107,6 @@ func TestWriteResumableList_EmptyList(t *testing.T) {
 		w := ui.NewOutputWriter(buf, buf, format, false)
 
 		err := w.WriteResumableList(infos)
-
 		if err != nil {
 			t.Errorf("WriteResumableList() with empty list error = %v", err)
 		}
@@ -192,7 +189,6 @@ func TestDryRunFormatter_WithHooks(t *testing.T) {
 	formatter := ui.NewDryRunFormatter(buf, false)
 
 	err := formatter.Format(plan)
-
 	if err != nil {
 		t.Errorf("Format() with hooks error = %v", err)
 	}
@@ -224,7 +220,6 @@ func TestDryRunFormatter_LoopStep(t *testing.T) {
 	formatter := ui.NewDryRunFormatter(buf, false)
 
 	err := formatter.Format(plan)
-
 	if err != nil {
 		t.Errorf("Format() with loop error = %v", err)
 	}
@@ -253,7 +248,6 @@ func TestDryRunFormatter_ParallelStep(t *testing.T) {
 	formatter := ui.NewDryRunFormatter(buf, false)
 
 	err := formatter.Format(plan)
-
 	if err != nil {
 		t.Errorf("Format() with parallel error = %v", err)
 	}
@@ -289,7 +283,6 @@ func TestDryRunFormatter_ComplexTransitions(t *testing.T) {
 	formatter := ui.NewDryRunFormatter(buf, false)
 
 	err := formatter.Format(plan)
-
 	if err != nil {
 		t.Errorf("Format() with transitions error = %v", err)
 	}
@@ -316,7 +309,6 @@ func TestDryRunFormatter_AllStepTypes(t *testing.T) {
 	formatter := ui.NewDryRunFormatter(buf, false)
 
 	err := formatter.Format(plan)
-
 	if err != nil {
 		t.Errorf("Format() with all step types error = %v", err)
 	}
