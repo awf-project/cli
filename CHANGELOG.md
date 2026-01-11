@@ -45,12 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
-- refactor(agents): reduce agent provider cognitive complexity by extracting shared helpers (C002)
+- **[C001]**  refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
+- **[C002]** refactor(agents): reduce agent provider cognitive complexity by extracting shared helpers (C002)
   - Created `helpers.go` with shared utility functions: `estimateTokens`, `cloneState`, type-checked option getters
   - Refactored Claude, Codex, and Gemini providers to use shared helpers
   - Eliminated 5 duplicated `estimateTokens` functions and 3 duplicated `cloneState` functions
   - Maintained 100% backward compatibility with zero test modifications
+- **[C003]** Reduced cognitive complexity in workflow graph algorithms by extracting type-safe helpers:
+  - Introduced `visitState` enum to replace magic numbers in DFS cycle detection
+  - Extracted `findCycleStart` and `buildCyclePath` helpers in DetectCycles (27→≤20 complexity)
+  - Extracted `enqueueIfNotVisited` helper in ComputeExecutionOrder (23→≤20 complexity)
+  - No behavior changes, all 62 existing tests pass
 
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch

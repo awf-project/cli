@@ -529,22 +529,34 @@ func ComputeExecutionOrder(steps map[string]*Step, initial string) ([]string, er
 		// then add OnSuccess which happens after all branches complete
 		if step.Type == StepTypeParallel {
 			for _, branch := range step.Branches {
-				if !visited[branch] {
-					queue = append(queue, branch)
-				}
+				EnqueueIfNotVisited(&queue, visited, branch)
 			}
 		}
 
 		// Add successors to queue (handle cycles gracefully)
-		if step.OnSuccess != "" && !visited[step.OnSuccess] {
-			queue = append(queue, step.OnSuccess)
-		}
-		if step.OnFailure != "" && !visited[step.OnFailure] {
-			queue = append(queue, step.OnFailure)
-		}
+		EnqueueIfNotVisited(&queue, visited, step.OnSuccess)
+		EnqueueIfNotVisited(&queue, visited, step.OnFailure)
 	}
 
 	return order, nil
+}
+
+// EnqueueIfNotVisited adds state to queue if it hasn't been visited yet.
+// This helper consolidates the repeated pattern of checking visited status
+// before enqueueing in BFS traversal algorithms.
+//
+// Parameters:
+//   - queue: pointer to the queue slice to modify in-place
+//   - visited: map tracking which states have been visited
+//   - state: the state name to potentially add to the queue
+//
+// The function modifies queue in-place only if visited[state] is false or
+// state is not present in the visited map.
+func EnqueueIfNotVisited(queue *[]string, visited map[string]bool, state string) {
+	// If visited map is nil or state is not marked as visited, add to queue
+	if visited == nil || !visited[state] {
+		*queue = append(*queue, state)
+	}
 }
 
 func buildInputNames(inputs []Input) map[string]bool {

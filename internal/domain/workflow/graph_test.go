@@ -1189,3 +1189,286 @@ func TestValidationError_Error(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// visitState Enum Tests (C003: Phase 1)
+// =============================================================================
+
+// TestVisitState_String verifies the String() method returns correct values
+// for each visit state enum constant.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestVisitState_String(t *testing.T) {
+	tests := []struct {
+		state workflow.VisitState
+		want  string
+	}{
+		{workflow.VisitStateUnvisited, "unvisited"},
+		{workflow.VisitStateVisiting, "visiting"},
+		{workflow.VisitStateVisited, "visited"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := tt.state.String()
+			assert.Equal(t, tt.want, got, "VisitState.String() should return correct value")
+		})
+	}
+}
+
+// TestVisitState_TypeSafety verifies visitState is a distinct type
+// and cannot be confused with regular strings at compile time.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestVisitState_TypeSafety(t *testing.T) {
+	// This test verifies type safety at compile time
+	state := workflow.VisitStateUnvisited
+
+	assert.Equal(t, workflow.VisitStateUnvisited, state)
+	assert.NotEqual(t, workflow.VisitStateVisiting, state)
+	assert.NotEqual(t, workflow.VisitStateVisited, state)
+}
+
+// TestVisitState_EdgeCases verifies edge cases for visit state enum.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestVisitState_EdgeCases(t *testing.T) {
+	t.Run("zero value is empty string", func(t *testing.T) {
+		var state workflow.VisitState
+		assert.Equal(t, "", string(state), "zero value should be empty string")
+	})
+
+	t.Run("all constants are distinct", func(t *testing.T) {
+		states := map[workflow.VisitState]bool{
+			workflow.VisitStateUnvisited: true,
+			workflow.VisitStateVisiting:  true,
+			workflow.VisitStateVisited:   true,
+		}
+		assert.Len(t, states, 3, "all three constants should be distinct")
+	})
+}
+
+// TestFindCycleStart_HappyPath verifies finding cycle start in path.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestFindCycleStart_HappyPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     []string
+		target   string
+		expected int
+	}{
+		{
+			name:     "target at beginning",
+			path:     []string{"start", "middle", "end"},
+			target:   "start",
+			expected: 0,
+		},
+		{
+			name:     "target in middle",
+			path:     []string{"start", "middle", "end"},
+			target:   "middle",
+			expected: 1,
+		},
+		{
+			name:     "target at end",
+			path:     []string{"start", "middle", "end"},
+			target:   "end",
+			expected: 2,
+		},
+		{
+			name:     "single element path found",
+			path:     []string{"only"},
+			target:   "only",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := workflow.FindCycleStart(tt.path, tt.target)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestFindCycleStart_EdgeCases verifies edge cases for cycle start detection.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestFindCycleStart_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     []string
+		target   string
+		expected int
+	}{
+		{
+			name:     "empty path",
+			path:     []string{},
+			target:   "anything",
+			expected: -1,
+		},
+		{
+			name:     "target not found",
+			path:     []string{"start", "middle", "end"},
+			target:   "nothere",
+			expected: -1,
+		},
+		{
+			name:     "empty target not found",
+			path:     []string{"start", "middle", "end"},
+			target:   "",
+			expected: -1,
+		},
+		{
+			name:     "nil path",
+			path:     nil,
+			target:   "anything",
+			expected: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := workflow.FindCycleStart(tt.path, tt.target)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestFindCycleStart_ErrorHandling verifies error conditions.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestFindCycleStart_ErrorHandling(t *testing.T) {
+	t.Run("duplicate states in path returns first occurrence", func(t *testing.T) {
+		path := []string{"start", "middle", "start", "end"}
+		target := "start"
+		result := workflow.FindCycleStart(path, target)
+		assert.Equal(t, 0, result, "should return first occurrence")
+	})
+
+	t.Run("case sensitive matching", func(t *testing.T) {
+		path := []string{"Start", "MIDDLE", "end"}
+		result := workflow.FindCycleStart(path, "start")
+		assert.Equal(t, -1, result, "should be case sensitive")
+	})
+}
+
+// TestBuildCyclePath_HappyPath verifies building cycle path from start index.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestBuildCyclePath_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       []string
+		startIndex int
+		target     string
+		expected   []string
+	}{
+		{
+			name:       "cycle from beginning",
+			path:       []string{"start", "middle", "end"},
+			startIndex: 0,
+			target:     "start",
+			expected:   []string{"start", "middle", "end", "start"},
+		},
+		{
+			name:       "cycle from middle",
+			path:       []string{"start", "middle", "end"},
+			startIndex: 1,
+			target:     "middle",
+			expected:   []string{"middle", "end", "middle"},
+		},
+		{
+			name:       "cycle from end",
+			path:       []string{"start", "middle", "end"},
+			startIndex: 2,
+			target:     "end",
+			expected:   []string{"end", "end"},
+		},
+		{
+			name:       "self-loop",
+			path:       []string{"retry"},
+			startIndex: 0,
+			target:     "retry",
+			expected:   []string{"retry", "retry"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := workflow.BuildCyclePath(tt.path, tt.startIndex, tt.target)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestBuildCyclePath_EdgeCases verifies edge cases for cycle path building.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestBuildCyclePath_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       []string
+		startIndex int
+		target     string
+		expected   []string
+	}{
+		{
+			name:       "empty path",
+			path:       []string{},
+			startIndex: 0,
+			target:     "target",
+			expected:   []string{"target"},
+		},
+		{
+			name:       "nil path",
+			path:       nil,
+			startIndex: 0,
+			target:     "target",
+			expected:   []string{"target"},
+		},
+		{
+			name:       "start index beyond path length",
+			path:       []string{"start", "middle"},
+			startIndex: 5,
+			target:     "target",
+			expected:   []string{"target"},
+		},
+		{
+			name:       "negative start index",
+			path:       []string{"start", "middle", "end"},
+			startIndex: -1,
+			target:     "target",
+			expected:   []string{"target"},
+		},
+		{
+			name:       "empty target",
+			path:       []string{"start", "middle"},
+			startIndex: 0,
+			target:     "",
+			expected:   []string{"start", "middle", ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := workflow.BuildCyclePath(tt.path, tt.startIndex, tt.target)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestBuildCyclePath_ErrorHandling verifies error conditions.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestBuildCyclePath_ErrorHandling(t *testing.T) {
+	t.Run("creates independent slice", func(t *testing.T) {
+		path := []string{"start", "middle", "end"}
+		result := workflow.BuildCyclePath(path, 1, "middle")
+
+		// Modify original path
+		path[1] = "modified"
+
+		// Result should be unaffected
+		assert.Equal(t, []string{"middle", "end", "middle"}, result)
+		assert.NotEqual(t, "modified", result[0])
+	})
+
+	t.Run("handles single element path", func(t *testing.T) {
+		path := []string{"only"}
+		result := workflow.BuildCyclePath(path, 0, "only")
+		assert.Equal(t, []string{"only", "only"}, result)
+	})
+}

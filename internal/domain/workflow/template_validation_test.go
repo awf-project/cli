@@ -1881,3 +1881,183 @@ func indexOf(slice []string, item string) int {
 	}
 	return -1
 }
+
+// =============================================================================
+// enqueueIfNotVisited Helper Tests (C003: Phase 3)
+// =============================================================================
+
+// TestEnqueueIfNotVisited_NotVisited verifies that unvisited states are added to queue.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestEnqueueIfNotVisited_NotVisited(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialQueue  []string
+		visited       map[string]bool
+		state         string
+		expectedQueue []string
+	}{
+		{
+			name:          "add to empty queue",
+			initialQueue:  []string{},
+			visited:       map[string]bool{},
+			state:         "step1",
+			expectedQueue: []string{"step1"},
+		},
+		{
+			name:          "add to non-empty queue",
+			initialQueue:  []string{"existing"},
+			visited:       map[string]bool{"existing": false},
+			state:         "step2",
+			expectedQueue: []string{"existing", "step2"},
+		},
+		{
+			name:          "add when state not in visited map",
+			initialQueue:  []string{"step1"},
+			visited:       map[string]bool{"other": true},
+			state:         "step2",
+			expectedQueue: []string{"step1", "step2"},
+		},
+		{
+			name:          "add when visited is false",
+			initialQueue:  []string{"step1"},
+			visited:       map[string]bool{"step2": false},
+			state:         "step2",
+			expectedQueue: []string{"step1", "step2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queue := make([]string, len(tt.initialQueue))
+			copy(queue, tt.initialQueue)
+
+			workflow.EnqueueIfNotVisited(&queue, tt.visited, tt.state)
+
+			assert.Equal(t, tt.expectedQueue, queue, "queue should contain expected states")
+		})
+	}
+}
+
+// TestEnqueueIfNotVisited_AlreadyVisited verifies that visited states are not added to queue.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestEnqueueIfNotVisited_AlreadyVisited(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialQueue  []string
+		visited       map[string]bool
+		state         string
+		expectedQueue []string
+	}{
+		{
+			name:          "skip already visited state",
+			initialQueue:  []string{"step1"},
+			visited:       map[string]bool{"step2": true},
+			state:         "step2",
+			expectedQueue: []string{"step1"},
+		},
+		{
+			name:          "skip when queue would be empty",
+			initialQueue:  []string{},
+			visited:       map[string]bool{"step1": true},
+			state:         "step1",
+			expectedQueue: []string{},
+		},
+		{
+			name:          "skip with multiple visited states",
+			initialQueue:  []string{"step1", "step2"},
+			visited:       map[string]bool{"step3": true, "step4": true},
+			state:         "step3",
+			expectedQueue: []string{"step1", "step2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queue := make([]string, len(tt.initialQueue))
+			copy(queue, tt.initialQueue)
+
+			workflow.EnqueueIfNotVisited(&queue, tt.visited, tt.state)
+
+			assert.Equal(t, tt.expectedQueue, queue, "queue should remain unchanged for visited states")
+		})
+	}
+}
+
+// TestEnqueueIfNotVisited_EdgeCases verifies edge cases and boundary conditions.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestEnqueueIfNotVisited_EdgeCases(t *testing.T) {
+	t.Run("empty state name", func(t *testing.T) {
+		queue := []string{"step1"}
+		visited := map[string]bool{}
+
+		workflow.EnqueueIfNotVisited(&queue, visited, "")
+
+		// Empty state should still be added if not visited
+		assert.Equal(t, []string{"step1", ""}, queue)
+	})
+
+	t.Run("nil visited map", func(t *testing.T) {
+		queue := []string{"step1"}
+
+		workflow.EnqueueIfNotVisited(&queue, nil, "step2")
+
+		// With nil map, should treat as not visited and add
+		assert.Equal(t, []string{"step1", "step2"}, queue)
+	})
+
+	t.Run("state with special characters", func(t *testing.T) {
+		queue := []string{}
+		visited := map[string]bool{}
+		state := "step-with-dashes_and_underscores.123"
+
+		workflow.EnqueueIfNotVisited(&queue, visited, state)
+
+		assert.Equal(t, []string{state}, queue)
+	})
+
+	t.Run("multiple calls with same state alternating visited flag", func(t *testing.T) {
+		queue := []string{}
+		visited := map[string]bool{}
+
+		// First call: not visited, should add
+		workflow.EnqueueIfNotVisited(&queue, visited, "step1")
+		assert.Equal(t, []string{"step1"}, queue)
+
+		// Mark as visited
+		visited["step1"] = true
+
+		// Second call: visited, should not add
+		workflow.EnqueueIfNotVisited(&queue, visited, "step1")
+		assert.Equal(t, []string{"step1"}, queue, "should not add duplicate when visited")
+	})
+}
+
+// TestEnqueueIfNotVisited_QueueModification verifies queue is modified in-place correctly.
+// Feature: C003 - Reduce Graph Algorithm Cognitive Complexity
+func TestEnqueueIfNotVisited_QueueModification(t *testing.T) {
+	t.Run("queue pointer is modified", func(t *testing.T) {
+		queue := []string{"initial"}
+		visited := map[string]bool{}
+
+		// Keep reference to original pointer
+		queuePtr := &queue
+
+		workflow.EnqueueIfNotVisited(queuePtr, visited, "new")
+
+		// Verify the pointer was updated
+		assert.Equal(t, []string{"initial", "new"}, *queuePtr)
+		assert.Equal(t, []string{"initial", "new"}, queue)
+	})
+
+	t.Run("queue capacity grows as needed", func(t *testing.T) {
+		queue := make([]string, 0, 2) // capacity of 2
+		visited := map[string]bool{}
+
+		workflow.EnqueueIfNotVisited(&queue, visited, "step1")
+		workflow.EnqueueIfNotVisited(&queue, visited, "step2")
+		workflow.EnqueueIfNotVisited(&queue, visited, "step3") // should grow capacity
+
+		assert.Equal(t, []string{"step1", "step2", "step3"}, queue)
+		assert.GreaterOrEqual(t, cap(queue), 3, "capacity should have grown")
+	})
+}
