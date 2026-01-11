@@ -2,6 +2,59 @@ package workflow
 
 import "strconv"
 
+// VisitState represents the DFS visit state of a node during graph traversal.
+// Used for three-color marking in cycle detection:
+// - Unvisited: node has not been encountered yet
+// - Visiting: node is currently in the DFS path (on stack)
+// - Visited: node has been fully processed (all descendants explored)
+type VisitState string
+
+const (
+	// VisitStateUnvisited indicates a node has not been encountered yet (white in DFS).
+	VisitStateUnvisited VisitState = "unvisited"
+	// VisitStateVisiting indicates a node is currently in the DFS path (gray in DFS).
+	VisitStateVisiting VisitState = "visiting"
+	// VisitStateVisited indicates a node has been fully processed (black in DFS).
+	VisitStateVisited VisitState = "visited"
+)
+
+// String returns the string representation of the VisitState.
+func (v VisitState) String() string {
+	return string(v)
+}
+
+// FindCycleStart finds the index of target in path, returning -1 if not found.
+// Used for locating where a cycle begins in a DFS path during cycle detection.
+func FindCycleStart(path []string, target string) int {
+	for i, state := range path {
+		if state == target {
+			return i
+		}
+	}
+	return -1
+}
+
+// BuildCyclePath constructs the cycle path from startIndex to the end of path,
+// appending target to close the cycle loop.
+func BuildCyclePath(path []string, startIndex int, target string) []string {
+	// Handle edge cases: invalid index or empty path
+	if len(path) == 0 || startIndex < 0 || startIndex >= len(path) {
+		return []string{target}
+	}
+
+	// Build cycle: elements from startIndex to end, plus target to close the loop
+	cycleLen := len(path) - startIndex + 1
+	cycle := make([]string, cycleLen)
+
+	// Copy elements from startIndex to end
+	copy(cycle, path[startIndex:])
+
+	// Append target to close the cycle
+	cycle[cycleLen-1] = target
+
+	return cycle
+}
+
 // ValidateGraph performs graph validation on a workflow's state machine.
 // It checks for:
 // - All referenced states exist (on_success, on_failure targets)
@@ -123,19 +176,12 @@ func FindReachableStates(steps map[string]*Step, initial string) map[string]bool
 // DetectCycles uses DFS with color marking to detect cycles in the state graph.
 // Returns a list of cycle paths found (e.g., ["A -> B -> C -> A"]).
 func DetectCycles(steps map[string]*Step, initial string) []string {
-	// Color states for DFS: white (0) = unvisited, gray (1) = in stack, black (2) = done
-	const (
-		white = 0
-		gray  = 1
-		black = 2
-	)
-
-	color := make(map[string]int)
+	color := make(map[string]VisitState)
 	var cycles []string
 
-	// Initialize all states as white
+	// Initialize all states as unvisited
 	for name := range steps {
-		color[name] = white
+		color[name] = VisitStateUnvisited
 	}
 
 	// DFS from initial state
@@ -146,7 +192,7 @@ func DetectCycles(steps map[string]*Step, initial string) []string {
 			return false
 		}
 
-		color[name] = gray
+		color[name] = VisitStateVisiting
 		path = append(path, name)
 
 		for _, next := range GetTransitions(step) {
@@ -154,28 +200,25 @@ func DetectCycles(steps map[string]*Step, initial string) []string {
 				continue // Skip invalid transitions (handled elsewhere)
 			}
 
-			if color[next] == gray {
+			switch color[next] {
+			case VisitStateVisiting:
 				// Found a cycle - build the cycle path
-				cycleStart := -1
-				for i, n := range path {
-					if n == next {
-						cycleStart = i
-						break
-					}
-				}
+				cycleStart := FindCycleStart(path, next)
 				if cycleStart >= 0 {
-					cyclePath := append(path[cycleStart:], next) //nolint:gocritic // appendAssign: intentionally creates new slice for cycle path
+					cyclePath := BuildCyclePath(path, cycleStart, next)
 					cycles = append(cycles, formatCyclePath(cyclePath))
 				} else {
 					// Self-loop
 					cycles = append(cycles, formatCyclePath([]string{next, next}))
 				}
-			} else if color[next] == white {
+			case VisitStateUnvisited:
 				dfs(next, path)
+			case VisitStateVisited:
+				// Skip already fully explored nodes
 			}
 		}
 
-		color[name] = black
+		color[name] = VisitStateVisited
 		return false
 	}
 
