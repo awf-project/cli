@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,16 +46,13 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	args := []string{prompt}
 
 	// Apply options (only those supported by Gemini CLI)
-	if options != nil {
-		if model, ok := options["model"].(string); ok {
-			args = append([]string{"--model", model}, args...)
-		}
-		if outputFormat, ok := options["output_format"].(string); ok {
-			args = append([]string{"--output-format", outputFormat}, args...)
-		}
-		// Note: temperature and safety_settings are validated but not passed to CLI
-		// as the Gemini CLI does not support these options directly
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append([]string{"--model", model}, args...)
 	}
+	if outputFormat, ok := getStringOption(options, "output_format"); ok {
+		args = append([]string{"--output-format", outputFormat}, args...)
+	}
+	// Note: temperature and safety_settings are validated but not passed to CLI
 
 	// Execute command
 	cmd := exec.CommandContext(ctx, "gemini", args...)
@@ -71,16 +69,12 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		Output:      outputStr,
 		StartedAt:   startedAt,
 		CompletedAt: completedAt,
-		Tokens:      estimateGeminiTokens(outputStr),
+		Tokens:      estimateTokens(outputStr),
 	}
 
 	// Try to parse JSON response if output looks like JSON
-	trimmedOutput := strings.TrimSpace(outputStr)
-	if strings.HasPrefix(trimmedOutput, "{") && strings.HasSuffix(trimmedOutput, "}") {
-		var jsonResp map[string]any
-		if err := json.Unmarshal([]byte(trimmedOutput), &jsonResp); err == nil {
-			result.Response = jsonResp
-		}
+	if jsonResp := tryParseJSONResponse(outputStr); jsonResp != nil {
+		result.Response = jsonResp
 	}
 
 	return result, nil
@@ -111,7 +105,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 
 	// Clone state to avoid modifying original
-	workingState := cloneGeminiState(state)
+	workingState := cloneState(state)
 
 	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
@@ -123,13 +117,11 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	args := []string{prompt}
 
 	// Apply options (only those supported by Gemini CLI)
-	if options != nil {
-		if model, ok := options["model"].(string); ok {
-			args = append([]string{"--model", model}, args...)
-		}
-		if outputFormat, ok := options["output_format"].(string); ok {
-			args = append([]string{"--output-format", outputFormat}, args...)
-		}
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append([]string{"--model", model}, args...)
+	}
+	if outputFormat, ok := getStringOption(options, "output_format"); ok {
+		args = append([]string{"--output-format", outputFormat}, args...)
 	}
 
 	// Execute command
@@ -145,7 +137,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateGeminiTokens(outputStr)
+	assistantTurn.Tokens = estimateTokens(outputStr)
 	if err := workingState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
@@ -154,7 +146,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	inputTokens := 0
 	for i := 0; i < len(workingState.Turns)-1; i++ {
 		if workingState.Turns[i].Tokens == 0 {
-			workingState.Turns[i].Tokens = estimateGeminiTokens(workingState.Turns[i].Content)
+			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
 		}
 		inputTokens += workingState.Turns[i].Tokens
 	}
@@ -186,24 +178,6 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	return result, nil
 }
 
-// cloneGeminiState creates a shallow copy of ConversationState.
-func cloneGeminiState(state *workflow.ConversationState) *workflow.ConversationState {
-	if state == nil {
-		return nil
-	}
-
-	// Create new state with copied turns slice
-	turns := make([]workflow.Turn, len(state.Turns))
-	copy(turns, state.Turns)
-
-	return &workflow.ConversationState{
-		Turns:       turns,
-		TotalTurns:  state.TotalTurns,
-		TotalTokens: state.TotalTokens,
-		StoppedBy:   state.StoppedBy,
-	}
-}
-
 // Name returns the provider identifier.
 func (p *GeminiProvider) Name() string {
 	return "gemini"
@@ -224,48 +198,20 @@ func validateGeminiOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate temperature type and value
-	if val, exists := options["temperature"]; exists {
-		temp, ok := val.(float64)
-		if !ok {
-			return errors.New("temperature must be a number")
-		}
+	// Validate temperature
+	if temp, ok := getFloatOption(options, "temperature"); ok {
 		if temp < 0 || temp > 1 {
 			return errors.New("temperature must be between 0 and 1")
 		}
 	}
 
 	// Validate model
-	if model, ok := options["model"].(string); ok {
-		validModels := []string{
-			"gemini-pro",
-			"gemini-pro-vision",
-			"gemini-ultra",
-		}
-		valid := false
-		for _, vm := range validModels {
-			if model == vm {
-				valid = true
-				break
-			}
-		}
-		if !valid {
+	if model, ok := getStringOption(options, "model"); ok {
+		validModels := []string{"gemini-pro", "gemini-pro-vision", "gemini-ultra"}
+		if !slices.Contains(validModels, model) {
 			return fmt.Errorf("unknown model: %s", model)
 		}
 	}
 
-	// Validate safety_settings type
-	if safety, exists := options["safety_settings"]; exists {
-		if _, ok := safety.(string); !ok {
-			return errors.New("safety_settings must be a string")
-		}
-	}
-
 	return nil
-}
-
-// estimateGeminiTokens provides a rough token count estimation.
-func estimateGeminiTokens(output string) int {
-	// Rough estimation: ~4 characters per token
-	return len(output) / 4
 }

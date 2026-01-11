@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -57,31 +58,23 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	args := []string{"-p", prompt}
 
 	// Apply options (only those supported by Claude CLI)
-	if options != nil {
-		if model, ok := options["model"].(string); ok {
-			args = append(args, "--model", model)
-		}
-		if outputFormat, ok := options["output_format"].(string); ok {
-			if outputFormat == "json" {
-				args = append(args, "--output-format", "json")
-			}
-		}
-		// allowedTools - pass tool list to Claude CLI for agentic workflows
-		if allowedTools, ok := options["allowedTools"].(string); ok && allowedTools != "" {
-			args = append(args, "--allowedTools", allowedTools)
-		}
-		// dangerouslySkipPermissions - skip permission prompts for automated execution
-		if skipPerms, ok := options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
-			args = append(args, "--dangerously-skip-permissions")
-			// Audit log for security compliance
-			p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
-				"timestamp", time.Now().Format(time.RFC3339),
-				"workflow", getWorkflowID(options),
-				"step", getStepName(options))
-		}
-		// Note: temperature and max_tokens are validated but not passed to CLI
-		// as the Claude CLI does not support these options directly
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
 	}
+	if outputFormat, ok := getStringOption(options, "output_format"); ok && outputFormat == "json" {
+		args = append(args, "--output-format", "json")
+	}
+	if allowedTools, ok := getStringOption(options, "allowedTools"); ok && allowedTools != "" {
+		args = append(args, "--allowedTools", allowedTools)
+	}
+	if skipPerms, ok := getBoolOption(options, "dangerouslySkipPermissions"); ok && skipPerms {
+		args = append(args, "--dangerously-skip-permissions")
+		p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
+			"timestamp", time.Now().Format(time.RFC3339),
+			"workflow", getWorkflowID(options),
+			"step", getStepName(options))
+	}
+	// Note: temperature and max_tokens are validated but not passed to CLI
 
 	// Execute command
 	cmd := exec.CommandContext(ctx, "claude", args...)
@@ -155,28 +148,21 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	args := []string{"-p", prompt}
 
 	// Apply options (only those supported by Claude CLI)
-	if options != nil {
-		if model, ok := options["model"].(string); ok {
-			args = append(args, "--model", model)
-		}
-		if outputFormat, ok := options["output_format"].(string); ok {
-			if outputFormat == "json" {
-				args = append(args, "--output-format", "json")
-			}
-		}
-		// allowedTools - pass tool list to Claude CLI for agentic workflows
-		if allowedTools, ok := options["allowedTools"].(string); ok && allowedTools != "" {
-			args = append(args, "--allowedTools", allowedTools)
-		}
-		// dangerouslySkipPermissions - skip permission prompts for automated execution
-		if skipPerms, ok := options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
-			args = append(args, "--dangerously-skip-permissions")
-			// Audit log for security compliance
-			p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
-				"timestamp", time.Now().Format(time.RFC3339),
-				"workflow", getWorkflowID(options),
-				"step", getStepName(options))
-		}
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+	if outputFormat, ok := getStringOption(options, "output_format"); ok && outputFormat == "json" {
+		args = append(args, "--output-format", "json")
+	}
+	if allowedTools, ok := getStringOption(options, "allowedTools"); ok && allowedTools != "" {
+		args = append(args, "--allowedTools", allowedTools)
+	}
+	if skipPerms, ok := getBoolOption(options, "dangerouslySkipPermissions"); ok && skipPerms {
+		args = append(args, "--dangerously-skip-permissions")
+		p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
+			"timestamp", time.Now().Format(time.RFC3339),
+			"workflow", getWorkflowID(options),
+			"step", getStepName(options))
 	}
 
 	// Execute command
@@ -233,24 +219,6 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	return result, nil
 }
 
-// cloneState creates a shallow copy of ConversationState.
-func cloneState(state *workflow.ConversationState) *workflow.ConversationState {
-	if state == nil {
-		return nil
-	}
-
-	// Create new state with copied turns slice
-	turns := make([]workflow.Turn, len(state.Turns))
-	copy(turns, state.Turns)
-
-	return &workflow.ConversationState{
-		Turns:       turns,
-		TotalTurns:  state.TotalTurns,
-		TotalTokens: state.TotalTokens,
-		StoppedBy:   state.StoppedBy,
-	}
-}
-
 // Name returns the provider identifier.
 func (p *ClaudeProvider) Name() string {
 	return "claude"
@@ -271,41 +239,23 @@ func validateOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate max_tokens type and value
-	if val, exists := options["max_tokens"]; exists {
-		maxTokens, ok := val.(int)
-		if !ok {
-			return errors.New("max_tokens must be an integer")
-		}
+	// Validate max_tokens
+	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
 		if maxTokens < 0 {
 			return errors.New("max_tokens must be non-negative")
 		}
 	}
 
-	// Validate temperature type and value
-	if val, exists := options["temperature"]; exists {
-		temp, ok := val.(float64)
-		if !ok {
-			return errors.New("temperature must be a number")
-		}
+	// Validate temperature
+	if temp, ok := getFloatOption(options, "temperature"); ok {
 		if temp < 0 || temp > 1 {
 			return errors.New("temperature must be between 0 and 1")
 		}
 	}
 
-	// Validate model format (aliases or claude-* models supported by Claude CLI)
-	if model, ok := options["model"].(string); ok {
-		// Accept known aliases
-		aliases := []string{"sonnet", "opus", "haiku"}
-		isAlias := false
-		for _, alias := range aliases {
-			if model == alias {
-				isAlias = true
-				break
-			}
-		}
-		// Accept models starting with 'claude-'
-		if !isAlias && !strings.HasPrefix(model, "claude-") {
+	// Validate model format
+	if model, ok := getStringOption(options, "model"); ok {
+		if !isValidClaudeModel(model) {
 			return fmt.Errorf("invalid model format: %s (must be an alias or start with 'claude-')", model)
 		}
 	}
@@ -313,33 +263,8 @@ func validateOptions(options map[string]any) error {
 	return nil
 }
 
-// estimateTokens provides an approximate token count estimation based on output length.
-// NOTE: This is a rough approximation (~4 characters per token) and may not reflect
-// actual token usage. For accurate token counts, parse the usage data from Claude CLI
-// JSON output when available (requires --output-format json).
-func estimateTokens(output string) int {
-	// Rough estimation: ~4 characters per token
-	return len(output) / 4
-}
-
-// getWorkflowID extracts workflow ID from options for structured logging.
-func getWorkflowID(options map[string]any) string {
-	if options == nil {
-		return "unknown"
-	}
-	if id, ok := options["workflowID"].(string); ok {
-		return id
-	}
-	return "unknown"
-}
-
-// getStepName extracts step name from options for structured logging.
-func getStepName(options map[string]any) string {
-	if options == nil {
-		return "unknown"
-	}
-	if name, ok := options["stepName"].(string); ok {
-		return name
-	}
-	return "unknown"
+// isValidClaudeModel checks if the model is a valid alias or Claude model name.
+func isValidClaudeModel(model string) bool {
+	aliases := []string{"sonnet", "opus", "haiku"}
+	return slices.Contains(aliases, model) || strings.HasPrefix(model, "claude-")
 }
