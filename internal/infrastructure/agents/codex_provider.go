@@ -43,16 +43,14 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	args := []string{"--prompt", prompt}
 
 	// Apply options
-	if options != nil {
-		if language, ok := options["language"].(string); ok {
-			args = append(args, "--language", language)
-		}
-		if maxTokens, ok := options["max_tokens"].(int); ok {
-			args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
-		}
-		if quiet, ok := options["quiet"].(bool); ok && quiet {
-			args = append(args, "--quiet")
-		}
+	if language, ok := getStringOption(options, "language"); ok {
+		args = append(args, "--language", language)
+	}
+	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
+		args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
+	}
+	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
+		args = append(args, "--quiet")
 	}
 
 	// Execute command
@@ -70,7 +68,7 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 		Output:      outputStr,
 		StartedAt:   startedAt,
 		CompletedAt: completedAt,
-		Tokens:      estimateCodexTokens(outputStr),
+		Tokens:      estimateTokens(outputStr),
 	}
 
 	return result, nil
@@ -101,7 +99,7 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	}
 
 	// Clone state to avoid modifying original
-	workingState := cloneCodexState(state)
+	workingState := cloneState(state)
 
 	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
@@ -113,22 +111,20 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	args := []string{"--prompt", prompt}
 
 	// Apply options
-	if options != nil {
-		if model, ok := options["model"].(string); ok {
-			args = append(args, "--model", model)
-		}
-		if language, ok := options["language"].(string); ok {
-			args = append(args, "--language", language)
-		}
-		if maxTokens, ok := options["max_tokens"].(int); ok {
-			args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
-		}
-		if temperature, ok := options["temperature"].(float64); ok {
-			args = append(args, "--temperature", fmt.Sprintf("%.2f", temperature))
-		}
-		if quiet, ok := options["quiet"].(bool); ok && quiet {
-			args = append(args, "--quiet")
-		}
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+	if language, ok := getStringOption(options, "language"); ok {
+		args = append(args, "--language", language)
+	}
+	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
+		args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
+	}
+	if temperature, ok := getFloatOption(options, "temperature"); ok {
+		args = append(args, "--temperature", fmt.Sprintf("%.2f", temperature))
+	}
+	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
+		args = append(args, "--quiet")
 	}
 
 	// Execute command
@@ -144,7 +140,7 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 
 	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateCodexTokens(outputStr)
+	assistantTurn.Tokens = estimateTokens(outputStr)
 	if err := workingState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
@@ -153,7 +149,7 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	inputTokens := 0
 	for i := 0; i < len(workingState.Turns)-1; i++ {
 		if workingState.Turns[i].Tokens == 0 {
-			workingState.Turns[i].Tokens = estimateCodexTokens(workingState.Turns[i].Content)
+			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
 		}
 		inputTokens += workingState.Turns[i].Tokens
 	}
@@ -195,16 +191,9 @@ func validateCodexOptions(options map[string]any) error {
 	}
 
 	// Validate max_tokens
-	if maxTokens, ok := options["max_tokens"].(int); ok {
+	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
 		if maxTokens < 0 {
 			return errors.New("max_tokens must be non-negative")
-		}
-	}
-
-	// Validate language
-	if language, ok := options["language"]; ok {
-		if _, isString := language.(string); !isString {
-			return errors.New("language must be a string")
 		}
 	}
 
@@ -217,54 +206,19 @@ func validateCodexConversationOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate temperature type and value
-	if val, exists := options["temperature"]; exists {
-		temp, ok := val.(float64)
-		if !ok {
-			return errors.New("temperature must be a number")
-		}
+	// Validate temperature
+	if temp, ok := getFloatOption(options, "temperature"); ok {
 		if temp < 0 || temp > 2 {
 			return errors.New("temperature must be between 0 and 2")
 		}
 	}
 
 	// Validate max_tokens
-	if maxTokens, ok := options["max_tokens"].(int); ok {
+	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
 		if maxTokens < 0 {
 			return errors.New("max_tokens must be non-negative")
 		}
 	}
 
-	// Validate language
-	if language, ok := options["language"]; ok {
-		if _, isString := language.(string); !isString {
-			return errors.New("language must be a string")
-		}
-	}
-
 	return nil
-}
-
-// cloneCodexState creates a shallow copy of ConversationState.
-func cloneCodexState(state *workflow.ConversationState) *workflow.ConversationState {
-	if state == nil {
-		return nil
-	}
-
-	// Create new state with copied turns slice
-	turns := make([]workflow.Turn, len(state.Turns))
-	copy(turns, state.Turns)
-
-	return &workflow.ConversationState{
-		Turns:       turns,
-		TotalTurns:  state.TotalTurns,
-		TotalTokens: state.TotalTokens,
-		StoppedBy:   state.StoppedBy,
-	}
-}
-
-// estimateCodexTokens provides a rough token count estimation.
-func estimateCodexTokens(output string) int {
-	// Rough estimation: ~4 characters per token
-	return len(output) / 4
 }
