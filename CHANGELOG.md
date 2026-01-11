@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive code quality documentation in `docs/development/code-quality.md`
   - Updated CONTRIBUTING.md with code quality requirements for PRs
 
+### Changed
+
+- refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
+
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch
   - Removed unused `.awf/storage/states/` and `.awf/storage/logs/` directory creation from `awf init` command
