@@ -1345,5 +1345,522 @@ func TestValidateInputs_NilDefinitions(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Feature: C001 - Type-Checked Validator Wrappers
+// These tests verify that the wrapper functions properly handle type assertions
+// and delegation to atomic validators.
+
+func TestValidatePatternWithType(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		value   any
+		pattern string
+		wantErr bool
+	}{
+		{
+			name:    "string value with valid pattern",
+			input:   "email",
+			value:   "test@example.com",
+			pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+			wantErr: false,
+		},
+		{
+			name:    "string value with invalid pattern",
+			input:   "email",
+			value:   "not-an-email",
+			pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+			wantErr: true,
+		},
+		{
+			name:    "int value skips validation (returns nil)",
+			input:   "port",
+			value:   8080,
+			pattern: `^\d+$`,
+			wantErr: false,
+		},
+		{
+			name:    "bool value skips validation (returns nil)",
+			input:   "flag",
+			value:   true,
+			pattern: `^true$`,
+			wantErr: false,
+		},
+		{
+			name:    "nil value skips validation (returns nil)",
+			input:   "optional",
+			value:   nil,
+			pattern: `.*`,
+			wantErr: false,
+		},
+		{
+			name:    "empty pattern with string value",
+			input:   "code",
+			value:   "anything",
+			pattern: "",
+			wantErr: false,
+		},
+		{
+			name:    "invalid regex pattern with string value",
+			input:   "code",
+			value:   "test",
+			pattern: `[invalid`,
+			wantErr: true,
+		},
+		{
+			name:    "complex pattern match",
+			input:   "code",
+			value:   "abc123",
+			pattern: `^[a-z]+[0-9]+$`,
+			wantErr: false,
+		},
+		{
+			name:    "complex pattern no match",
+			input:   "code",
+			value:   "123abc",
+			pattern: `^[a-z]+[0-9]+$`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePatternWithType(tt.input, tt.value, tt.pattern)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.input)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateEnumWithType(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		value   any
+		enum    []string
+		wantErr bool
+	}{
+		{
+			name:    "string value in enum list",
+			input:   "env",
+			value:   "staging",
+			enum:    []string{"dev", "staging", "prod"},
+			wantErr: false,
+		},
+		{
+			name:    "string value not in enum list",
+			input:   "env",
+			value:   "local",
+			enum:    []string{"dev", "staging", "prod"},
+			wantErr: true,
+		},
+		{
+			name:    "int value skips validation (returns nil)",
+			input:   "count",
+			value:   42,
+			enum:    []string{"1", "2", "3"},
+			wantErr: false,
+		},
+		{
+			name:    "bool value skips validation (returns nil)",
+			input:   "flag",
+			value:   false,
+			enum:    []string{"true", "false"},
+			wantErr: false,
+		},
+		{
+			name:    "nil value skips validation (returns nil)",
+			input:   "optional",
+			value:   nil,
+			enum:    []string{"a", "b"},
+			wantErr: false,
+		},
+		{
+			name:    "empty enum list with string value",
+			input:   "env",
+			value:   "anything",
+			enum:    []string{},
+			wantErr: false,
+		},
+		{
+			name:    "nil enum list with string value",
+			input:   "env",
+			value:   "anything",
+			enum:    nil,
+			wantErr: false,
+		},
+		{
+			name:    "case sensitive check",
+			input:   "env",
+			value:   "DEV",
+			enum:    []string{"dev", "staging", "prod"},
+			wantErr: true,
+		},
+		{
+			name:    "single item enum list match",
+			input:   "mode",
+			value:   "single",
+			enum:    []string{"single"},
+			wantErr: false,
+		},
+		{
+			name:    "single item enum list no match",
+			input:   "mode",
+			value:   "multi",
+			enum:    []string{"single"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateEnumWithType(tt.input, tt.value, tt.enum)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.input)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRangeWithType(t *testing.T) {
+	min1, max100 := 1, 100
+	min0 := 0
+	maxNeg := -1
+	min10, max10 := 10, 10
+
+	tests := []struct {
+		name    string
+		input   string
+		value   any
+		min     *int
+		max     *int
+		wantErr bool
+	}{
+		{
+			name:    "int value in range",
+			input:   "count",
+			value:   50,
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "int value at min boundary",
+			input:   "count",
+			value:   1,
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "int value at max boundary",
+			input:   "count",
+			value:   100,
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "int value below min",
+			input:   "count",
+			value:   0,
+			min:     &min1,
+			max:     &max100,
+			wantErr: true,
+		},
+		{
+			name:    "int value above max",
+			input:   "count",
+			value:   150,
+			min:     &min1,
+			max:     &max100,
+			wantErr: true,
+		},
+		{
+			name:    "string value skips validation (returns nil)",
+			input:   "port",
+			value:   "8080",
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "bool value skips validation (returns nil)",
+			input:   "flag",
+			value:   true,
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "nil value skips validation (returns nil)",
+			input:   "optional",
+			value:   nil,
+			min:     &min1,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "min only validation pass",
+			input:   "count",
+			value:   1000,
+			min:     &min1,
+			max:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "max only validation pass",
+			input:   "count",
+			value:   -1000,
+			min:     nil,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "no constraints",
+			input:   "count",
+			value:   999999,
+			min:     nil,
+			max:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "zero as min boundary",
+			input:   "count",
+			value:   0,
+			min:     &min0,
+			max:     &max100,
+			wantErr: false,
+		},
+		{
+			name:    "negative max boundary",
+			input:   "count",
+			value:   -5,
+			min:     nil,
+			max:     &maxNeg,
+			wantErr: false,
+		},
+		{
+			name:    "equal min and max - value matches",
+			input:   "exact",
+			value:   10,
+			min:     &min10,
+			max:     &max10,
+			wantErr: false,
+		},
+		{
+			name:    "equal min and max - value below",
+			input:   "exact",
+			value:   9,
+			min:     &min10,
+			max:     &max10,
+			wantErr: true,
+		},
+		{
+			name:    "equal min and max - value above",
+			input:   "exact",
+			value:   11,
+			min:     &min10,
+			max:     &max10,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRangeWithType(tt.input, tt.value, tt.min, tt.max)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.input)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateFileExistsWithType(t *testing.T) {
+	// Create a temporary test file
+	tmpFile, err := os.CreateTemp("", "test-*.txt")
+	require.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	tests := []struct {
+		name    string
+		input   string
+		value   any
+		wantErr bool
+	}{
+		{
+			name:    "string value with existing file",
+			input:   "config",
+			value:   tmpFile.Name(),
+			wantErr: false,
+		},
+		{
+			name:    "string value with non-existent file",
+			input:   "config",
+			value:   "/path/to/nonexistent/file.txt",
+			wantErr: true,
+		},
+		{
+			name:    "int value skips validation (returns nil)",
+			input:   "file",
+			value:   42,
+			wantErr: false,
+		},
+		{
+			name:    "bool value skips validation (returns nil)",
+			input:   "file",
+			value:   true,
+			wantErr: false,
+		},
+		{
+			name:    "nil value skips validation (returns nil)",
+			input:   "optional",
+			value:   nil,
+			wantErr: false,
+		},
+		{
+			name:    "empty string path",
+			input:   "file",
+			value:   "",
+			wantErr: true,
+		},
+		{
+			name:    "directory path (exists)",
+			input:   "dir",
+			value:   os.TempDir(),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFileExistsWithType(tt.input, tt.value)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.input)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateFileExtensionWithType(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		value      any
+		extensions []string
+		wantErr    bool
+	}{
+		{
+			name:       "string value with matching extension",
+			input:      "config",
+			value:      "config.yaml",
+			extensions: []string{".yaml", ".yml"},
+			wantErr:    false,
+		},
+		{
+			name:       "string value with non-matching extension",
+			input:      "config",
+			value:      "config.json",
+			extensions: []string{".yaml", ".yml"},
+			wantErr:    true,
+		},
+		{
+			name:       "int value skips validation (returns nil)",
+			input:      "file",
+			value:      42,
+			extensions: []string{".txt"},
+			wantErr:    false,
+		},
+		{
+			name:       "bool value skips validation (returns nil)",
+			input:      "file",
+			value:      false,
+			extensions: []string{".txt"},
+			wantErr:    false,
+		},
+		{
+			name:       "nil value skips validation (returns nil)",
+			input:      "optional",
+			value:      nil,
+			extensions: []string{".txt"},
+			wantErr:    false,
+		},
+		{
+			name:       "empty extensions list",
+			input:      "file",
+			value:      "anything.txt",
+			extensions: []string{},
+			wantErr:    false,
+		},
+		{
+			name:       "nil extensions list",
+			input:      "file",
+			value:      "anything.txt",
+			extensions: nil,
+			wantErr:    false,
+		},
+		{
+			name:       "case sensitive extension check",
+			input:      "file",
+			value:      "config.YAML",
+			extensions: []string{".yaml"},
+			wantErr:    true,
+		},
+		{
+			name:       "single extension match",
+			input:      "script",
+			value:      "run.sh",
+			extensions: []string{".sh"},
+			wantErr:    false,
+		},
+		{
+			name:       "file without extension",
+			input:      "file",
+			value:      "README",
+			extensions: []string{".md"},
+			wantErr:    true,
+		},
+		{
+			name:       "hidden file with extension",
+			input:      "dotfile",
+			value:      ".gitignore",
+			extensions: []string{".gitignore"},
+			wantErr:    false,
+		},
+		{
+			name:       "path with multiple dots",
+			input:      "archive",
+			value:      "backup.tar.gz",
+			extensions: []string{".gz", ".zip"},
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFileExtensionWithType(tt.input, tt.value, tt.extensions)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.input)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 // Ensure filepath is used
 var _ = filepath.Base
