@@ -705,7 +705,7 @@ func TestTemplateService_ParameterSubstitution(t *testing.T) {
 			repo := newMockTemplateRepository()
 
 			// Build params list from map
-			var params []workflow.TemplateParam
+			params := make([]workflow.TemplateParam, 0, len(tt.params))
 			for name := range tt.params {
 				params = append(params, workflow.TemplateParam{Name: name, Required: true})
 			}

@@ -38,7 +38,7 @@ func (g *Generator) Generate(wf *workflow.Workflow) string {
 func (g *Generator) generateStartNode(initialStep string) string {
 	var sb strings.Builder
 	sb.WriteString("    __start__ [shape=point, width=0.2];\n")
-	sb.WriteString(fmt.Sprintf("    __start__ -> %s;\n", escapeDOTID(initialStep)))
+	fmt.Fprintf(&sb, "    __start__ -> %s;\n", escapeDOTID(initialStep))
 	return sb.String()
 }
 
@@ -58,8 +58,8 @@ func (g *Generator) generateStartNode(initialStep string) string {
 func (g *Generator) generateHeader(name string) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("digraph %q {\n", name))
-	sb.WriteString(fmt.Sprintf("    rankdir=%s;\n", g.config.Direction))
+	fmt.Fprintf(&sb, "digraph %q {\n", name)
+	fmt.Fprintf(&sb, "    rankdir=%s;\n", g.config.Direction)
 	sb.WriteString("    node [fontname=\"Arial\", fontsize=10];\n")
 	sb.WriteString("    edge [fontname=\"Arial\", fontsize=9];\n")
 
@@ -180,6 +180,46 @@ func (g *Generator) formatNode(name string, style NodeStyle) string {
 //   - on_success → solid line (default edge style)
 //   - on_failure → dashed red line [style=dashed, color=red]
 //   - branches (parallel) → solid line to each branch step
+//
+// generateParallelEdges writes edges for parallel branches.
+func generateParallelEdges(sb *strings.Builder, name string, branches []string) {
+	for _, branch := range branches {
+		fmt.Fprintf(sb, "    %s -> %s;\n", escapeDOTID(name), escapeDOTID(branch))
+	}
+}
+
+// generateLoopEdges writes edges for loop body and completion.
+func generateLoopEdges(sb *strings.Builder, name string, loop *workflow.LoopConfig) {
+	for _, bodyStep := range loop.Body {
+		fmt.Fprintf(sb, "    %s -> %s;\n", escapeDOTID(name), escapeDOTID(bodyStep))
+	}
+	if loop.OnComplete != "" {
+		fmt.Fprintf(sb, "    %s -> %s [label=\"complete\"];\n", escapeDOTID(name), escapeDOTID(loop.OnComplete))
+	}
+}
+
+// generateTransitionEdge writes a single transition edge with optional styling.
+func generateTransitionEdge(sb *strings.Builder, from, to, label, style string) {
+	var attrs []string
+	if label != "" {
+		attrs = append(attrs, fmt.Sprintf("label=%q", label))
+	}
+	if style != "" {
+		attrs = append(attrs, style)
+	}
+	attrStr := ""
+	if len(attrs) > 0 {
+		attrStr = " [" + strings.Join(attrs, ", ") + "]"
+	}
+	fmt.Fprintf(sb, "    %s -> %s%s;\n", escapeDOTID(from), escapeDOTID(to), attrStr)
+}
+
+// generateEdges generates DOT edge declarations for workflow transitions.
+// Uses workflow.GetTransitions() to enumerate all transitions from each step.
+// Per FR-003:
+//   - on_success → solid line (default edge style)
+//   - on_failure → dashed red line [style=dashed, color=red]
+//   - branches (parallel) → solid line to each branch step
 func (g *Generator) generateEdges(wf *workflow.Workflow) string {
 	var sb strings.Builder
 
@@ -200,38 +240,31 @@ func (g *Generator) generateEdges(wf *workflow.Workflow) string {
 
 		// Handle parallel branches
 		if step.Type == workflow.StepTypeParallel {
-			for _, branch := range step.Branches {
-				sb.WriteString(fmt.Sprintf("    %s -> %s;\n", escapeDOTID(name), escapeDOTID(branch)))
-			}
+			generateParallelEdges(&sb, name, step.Branches)
 		}
 
 		// Handle loop body steps
 		if step.Loop != nil && len(step.Loop.Body) > 0 {
-			for _, bodyStep := range step.Loop.Body {
-				sb.WriteString(fmt.Sprintf("    %s -> %s;\n", escapeDOTID(name), escapeDOTID(bodyStep)))
-			}
-			if step.Loop.OnComplete != "" {
-				sb.WriteString(fmt.Sprintf("    %s -> %s [label=\"complete\"];\n", escapeDOTID(name), escapeDOTID(step.Loop.OnComplete)))
-			}
+			generateLoopEdges(&sb, name, step.Loop)
 		}
 
 		// Handle success transition
 		if step.OnSuccess != "" {
-			sb.WriteString(fmt.Sprintf("    %s -> %s;\n", escapeDOTID(name), escapeDOTID(step.OnSuccess)))
+			generateTransitionEdge(&sb, name, step.OnSuccess, "", "")
 		}
 
 		// Handle failure transition with red dashed style
 		if step.OnFailure != "" {
-			sb.WriteString(fmt.Sprintf("    %s -> %s [style=dashed, color=red];\n", escapeDOTID(name), escapeDOTID(step.OnFailure)))
+			generateTransitionEdge(&sb, name, step.OnFailure, "", "style=dashed, color=red")
 		}
 
 		// Handle conditional transitions
 		for _, tr := range step.Transitions {
 			label := ""
 			if tr.When != "" {
-				label = fmt.Sprintf(" [label=%q]", tr.When)
+				label = tr.When
 			}
-			sb.WriteString(fmt.Sprintf("    %s -> %s%s;\n", escapeDOTID(name), escapeDOTID(tr.Goto), label))
+			generateTransitionEdge(&sb, name, tr.Goto, label, "")
 		}
 	}
 
@@ -256,8 +289,8 @@ func (g *Generator) generateParallelSubgraph(step *workflow.Step, wf *workflow.W
 	var sb strings.Builder
 
 	// Create subgraph cluster for branches
-	sb.WriteString(fmt.Sprintf("    subgraph cluster_%s {\n", escapeDOTID(step.Name)))
-	sb.WriteString(fmt.Sprintf("        label=%q;\n", step.Name+" branches"))
+	fmt.Fprintf(&sb, "    subgraph cluster_%s {\n", escapeDOTID(step.Name))
+	fmt.Fprintf(&sb, "        label=%q;\n", step.Name+" branches")
 	sb.WriteString("        style=dashed;\n")
 
 	// Add branch nodes to the cluster
@@ -291,7 +324,7 @@ func (g *Generator) generateParallelSubgraph(step *workflow.Step, wf *workflow.W
 		if branchStyle.Style != "" {
 			attrs = append(attrs, fmt.Sprintf("style=%q", branchStyle.Style))
 		}
-		sb.WriteString(fmt.Sprintf("        %s [%s];\n", escapeDOTID(branchName), strings.Join(attrs, ", ")))
+		fmt.Fprintf(&sb, "        %s [%s];\n", escapeDOTID(branchName), strings.Join(attrs, ", "))
 	}
 
 	sb.WriteString("    }\n")

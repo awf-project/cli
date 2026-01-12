@@ -302,16 +302,16 @@ func TestDetectCycles_Integration_DeepNestedCycle(t *testing.T) {
 	}
 
 	steps := map[string]*workflow.Step{
-		"start": {Type: "command", OnSuccess: "step1"},
-		"step1": {Type: "command", OnSuccess: "step2"},
-		"step2": {Type: "command", OnSuccess: "step3"},
-		"step3": {Type: "command", OnSuccess: "step4"},
-		"step4": {Type: "command", OnSuccess: "step5"},
-		"step5": {Type: "command", OnSuccess: "step6"},
-		"step6": {Type: "command", OnSuccess: "step7"},
-		"step7": {Type: "command", OnSuccess: "step8"},
-		"step8": {Type: "command", OnSuccess: "step9"},
-		"step9": {Type: "command", OnSuccess: "step10"},
+		"start":  {Type: "command", OnSuccess: "step1"},
+		"step1":  {Type: "command", OnSuccess: "step2"},
+		"step2":  {Type: "command", OnSuccess: "step3"},
+		"step3":  {Type: "command", OnSuccess: "step4"},
+		"step4":  {Type: "command", OnSuccess: "step5"},
+		"step5":  {Type: "command", OnSuccess: "step6"},
+		"step6":  {Type: "command", OnSuccess: "step7"},
+		"step7":  {Type: "command", OnSuccess: "step8"},
+		"step8":  {Type: "command", OnSuccess: "step9"},
+		"step9":  {Type: "command", OnSuccess: "step10"},
 		"step10": {Type: "command", OnSuccess: "step5"}, // Cycle back to step5
 	}
 
@@ -386,8 +386,8 @@ func TestComputeExecutionOrder_Integration_MaxBreadth(t *testing.T) {
 		OnSuccess: "parallel",
 	}
 	steps["parallel"] = &workflow.Step{
-		Type:     workflow.StepTypeParallel,
-		Branches: branches,
+		Type:      workflow.StepTypeParallel,
+		Branches:  branches,
 		OnSuccess: "merge",
 	}
 	steps["merge"] = &workflow.Step{
@@ -509,12 +509,12 @@ func TestFullWorkflowValidation_Integration(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		steps         map[string]*workflow.Step
-		initial       string
-		expectCycles  bool
-		expectOrder   bool
-		minOrderLen   int
+		name         string
+		steps        map[string]*workflow.Step
+		initial      string
+		expectCycles bool
+		expectOrder  bool
+		minOrderLen  int
 	}{
 		{
 			name: "valid complex workflow",
@@ -630,19 +630,19 @@ func TestBackwardCompatibility_Integration(t *testing.T) {
 	// This test uses known workflow patterns that existed before C003
 	// to ensure backward compatibility
 	knownWorkflows := []struct {
-		name  string
-		steps map[string]*workflow.Step
-		initial string
+		name               string
+		steps              map[string]*workflow.Step
+		initial            string
 		expectedCycleCount int
 	}{
 		{
 			name: "simple linear (pre-C003)",
 			steps: map[string]*workflow.Step{
-				"init":   {Type: "command", OnSuccess: "process"},
+				"init":    {Type: "command", OnSuccess: "process"},
 				"process": {Type: "command", OnSuccess: "done"},
 				"done":    {Type: "terminal"},
 			},
-			initial: "init",
+			initial:            "init",
 			expectedCycleCount: 0,
 		},
 		{
@@ -651,7 +651,7 @@ func TestBackwardCompatibility_Integration(t *testing.T) {
 				"a": {Type: "command", OnSuccess: "b"},
 				"b": {Type: "command", OnSuccess: "a"},
 			},
-			initial: "a",
+			initial:            "a",
 			expectedCycleCount: 1,
 		},
 	}
