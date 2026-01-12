@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C005]** refactor(application): reduce step executors cognitive complexity through helper extraction
+  - `TemplateService.expandStep`: 23 → ≤18 by extracting parameter processing pipeline (`validateAndLoadTemplate`, `selectPrimaryStep`, `expandNestedTemplate`, `applyTemplateFields`)
+  - `InteractiveExecutor.executeStep`: 22 → ≤18 by extracting result handlers (`HandleExecutionError`, `HandleNonZeroExit`, `HandleSuccess`)
+  - `ParallelExecutor.executeAnySucceed`: 22 → ≤18 by extracting branch coordination helpers (`RunBranchWithSemaphore`, `CheckBranchSuccess`)
+  - Total: 9 helper methods extracted, 3 new test files (78KB), zero signature changes
+  - All 693 existing tests pass unchanged (100% backward compatibility)
 - **[C004]** refactor(cli): reduce CLI/UI layer cognitive complexity through systematic helper extraction
   - `formatStep` (dry_run_formatter.go): 42 → 15 by extracting field formatters (`formatFieldIfPresent`, `formatRetry`, `formatCapture`)
   - `generateEdges` (dot_generator.go): 27 → 18 by extracting edge generators (`generateParallelEdges`, `generateLoopEdges`, `generateTransitionEdge`)

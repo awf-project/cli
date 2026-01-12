@@ -501,56 +501,32 @@ func (e *InteractiveExecutor) executeStep(
 		state.ExitCode = result.ExitCode
 	}
 
-	// Determine outcome
+	// Determine outcome and delegate to appropriate handler
 	if execErr != nil {
 		state.Status = workflow.StatusFailed
 		state.Error = execErr.Error()
 		execCtx.SetStepState(step.Name, state)
 
-		// Execute post-hooks even on failure
+		// Rebuild interpolation context after state update
 		intCtx = e.buildInterpolationContext(execCtx)
-		if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-			e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-		}
-
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
-		}
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
-		}
-		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		return e.HandleExecutionError(stepCtx, step, &state, execErr, intCtx)
 	}
 
 	if result.ExitCode != 0 {
 		state.Status = workflow.StatusFailed
 		execCtx.SetStepState(step.Name, state)
 
-		// Execute post-hooks
+		// Rebuild interpolation context after state update
 		intCtx = e.buildInterpolationContext(execCtx)
-		if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-			e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-		}
-
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
-		}
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
-		}
-		return "", fmt.Errorf("step %s: exit code %d", step.Name, result.ExitCode)
+		return e.HandleNonZeroExit(stepCtx, step, &state, result, intCtx)
 	}
 
 	state.Status = workflow.StatusCompleted
 	execCtx.SetStepState(step.Name, state)
 
-	// Execute post-hooks
+	// Rebuild interpolation context after state update
 	intCtx = e.buildInterpolationContext(execCtx)
-	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-	}
-
-	return e.resolveNextStep(step, intCtx, true)
+	return e.HandleSuccess(stepCtx, step, &state, intCtx)
 }
 
 // resolveNextStep determines the next step using transitions or legacy OnSuccess/OnFailure.
@@ -579,6 +555,73 @@ func (e *InteractiveExecutor) resolveNextStep(
 		return step.OnSuccess, nil
 	}
 	return step.OnFailure, nil
+}
+
+// HandleExecutionError handles the case where command execution returns an error.
+// It records the failure state, executes post-hooks, and determines the next step
+// based on ContinueOnError or OnFailure configuration.
+func (e *InteractiveExecutor) HandleExecutionError(
+	ctx context.Context,
+	step *workflow.Step,
+	state *workflow.StepState,
+	execErr error,
+	intCtx *interpolation.Context,
+) (string, error) {
+	// Execute post-hooks even on failure
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Determine next step based on error handling configuration
+	if step.ContinueOnError {
+		return step.OnSuccess, nil
+	}
+	if step.OnFailure != "" {
+		return step.OnFailure, nil
+	}
+	return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+}
+
+// HandleNonZeroExit handles the case where command execution succeeds but returns non-zero exit code.
+// It records the failure state, executes post-hooks, and determines the next step
+// based on ContinueOnError or OnFailure configuration.
+func (e *InteractiveExecutor) HandleNonZeroExit(
+	ctx context.Context,
+	step *workflow.Step,
+	state *workflow.StepState,
+	result *ports.CommandResult,
+	intCtx *interpolation.Context,
+) (string, error) {
+	// Execute post-hooks
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Determine next step based on error handling configuration
+	if step.ContinueOnError {
+		return step.OnSuccess, nil
+	}
+	if step.OnFailure != "" {
+		return step.OnFailure, nil
+	}
+	return "", fmt.Errorf("step %s: exit code %d", step.Name, result.ExitCode)
+}
+
+// HandleSuccess handles the case where command execution succeeds with zero exit code.
+// It records the success state, executes post-hooks, and determines the next step
+// based on transitions or legacy OnSuccess configuration.
+func (e *InteractiveExecutor) HandleSuccess(
+	ctx context.Context,
+	step *workflow.Step,
+	state *workflow.StepState,
+	intCtx *interpolation.Context,
+) (string, error) {
+	// Execute post-hooks
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	return e.resolveNextStep(step, intCtx, true)
 }
 
 // executeParallelStep executes a parallel step.

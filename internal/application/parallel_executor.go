@@ -158,43 +158,12 @@ func (e *ParallelExecutor) executeAnySucceed(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			startTime := time.Now()
 
-			// Acquire semaphore
-			if sem != nil {
-				select {
-				case sem <- struct{}{}:
-					defer func() { <-sem }()
-				case <-ctx.Done():
-					return
-				}
-			}
+			branchResult, err := e.RunBranchWithSemaphore(ctx, branch, sem, stepExecutor, wf, execCtx, result, &mu)
 
-			branchResult, err := stepExecutor.ExecuteStep(ctx, wf, branch, execCtx)
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil {
-				result.AddResult(&workflow.BranchResult{
-					Name:        branch,
-					Error:       err,
-					StartedAt:   startTime,
-					CompletedAt: time.Now(),
-				})
-				return
-			}
-
-			result.AddResult(branchResult)
-
-			// Check if this branch succeeded
-			if branchResult.Success() && !firstSuccess {
-				firstSuccess = true
-				select {
-				case successChan <- struct{}{}:
-					cancel() // Cancel remaining branches
-				default:
-				}
+			// Check if branch succeeded and trigger cancellation
+			if err == nil && branchResult != nil {
+				e.CheckBranchSuccess(branchResult, &firstSuccess, &mu, successChan, cancel)
 			}
 		}()
 	}
@@ -223,6 +192,95 @@ func (e *ParallelExecutor) executeAnySucceed(
 	}
 
 	return errors.New("all branches failed")
+}
+
+// RunBranchWithSemaphore executes a single branch with semaphore control.
+// It acquires the semaphore, executes the branch, and adds the result to the parallel result.
+// Returns the branch result and any error encountered during execution.
+//
+// NOTE: Exported temporarily for T007 testing. Will be made private after TDD cycle completes.
+func (e *ParallelExecutor) RunBranchWithSemaphore(
+	ctx context.Context,
+	branch string,
+	sem chan struct{},
+	stepExecutor ports.StepExecutor,
+	wf *workflow.Workflow,
+	execCtx *workflow.ExecutionContext,
+	result *workflow.ParallelResult,
+	mu *sync.Mutex,
+) (*workflow.BranchResult, error) {
+	// Acquire semaphore
+	if sem != nil {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	branchResult, err := stepExecutor.ExecuteStep(ctx, wf, branch, execCtx)
+	if err != nil {
+		// If ExecuteStep returned a result with an error, add it
+		if branchResult != nil {
+			mu.Lock()
+			defer mu.Unlock()
+			result.AddResult(branchResult)
+			return branchResult, err
+		}
+
+		// ExecuteStep returned nil result (e.g., cancelled before execution started)
+		// Don't create an artificial error result, just propagate the error
+		return nil, err
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	result.AddResult(branchResult)
+	return branchResult, nil
+}
+
+// CheckBranchSuccess checks if a branch succeeded and signals cancellation if it's the first success.
+// Handles synchronization for success detection in any_succeed strategy.
+//
+// NOTE: Exported temporarily for T008 testing. Will be made private after TDD cycle completes.
+func (e *ParallelExecutor) CheckBranchSuccess(
+	branchResult *workflow.BranchResult,
+	firstSuccess *bool,
+	mu *sync.Mutex,
+	successChan chan struct{},
+	cancel context.CancelFunc,
+) {
+	// Handle nil branch result safely
+	if branchResult == nil {
+		return
+	}
+
+	// Thread-safe check: only proceed if branch succeeded AND we haven't succeeded yet
+	mu.Lock()
+	defer mu.Unlock()
+
+	// If already succeeded, do nothing (idempotent)
+	if *firstSuccess {
+		return
+	}
+
+	// Check if this branch succeeded (exit code 0 and no error)
+	if branchResult.Success() {
+		// Mark as first success
+		*firstSuccess = true
+
+		// Cancel remaining branches
+		cancel()
+
+		// Non-blocking send to success channel (default case prevents deadlock)
+		select {
+		case successChan <- struct{}{}:
+			// Signal sent successfully
+		default:
+			// Channel full, skip sending (first signal already there)
+		}
+	}
 }
 
 // executeBestEffort runs all branches and collects all results, never fails.
