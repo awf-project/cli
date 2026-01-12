@@ -876,7 +876,8 @@ states:
 			))
 
 			// Build command args
-			args := []string{"--storage=" + tmpDir, "resume", "config-test-id"}
+			args := make([]string, 0, 3+len(tt.cliInputFlags))
+			args = append(args, "--storage="+tmpDir, "resume", "config-test-id")
 			for _, input := range tt.cliInputFlags {
 				args = append(args, "--input="+input)
 			}

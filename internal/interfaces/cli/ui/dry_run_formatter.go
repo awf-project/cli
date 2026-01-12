@@ -100,10 +100,66 @@ func (f *DryRunFormatter) formatHeader(plan *workflow.DryRunPlan) error {
 }
 
 // formatStep renders a single step in the plan.
-//
-//nolint:gocognit // Complexity 42: step formatter handles all step types with type-specific formatting (command, agent, parallel, loop, plugin, subworkflow). Comprehensive formatting required.
 func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error {
-	// Step header with type indicator
+	// Step header
+	if err := f.formatStepHeader(step, index); err != nil {
+		return err
+	}
+
+	// Description
+	if step.Description != "" {
+		_, err := fmt.Fprintf(f.out, "    %s\n", step.Description)
+		if err != nil {
+			return fmt.Errorf("writing step description: %w", err)
+		}
+	}
+
+	// Type-specific formatting
+	if err := f.formatStepTypeDetails(step); err != nil {
+		return err
+	}
+
+	// Working directory - use helper for field formatting
+	if fmtErr := f.FormatFieldIfPresent("Dir", step.Dir); fmtErr != nil {
+		return fmtErr
+	}
+
+	// Hooks
+	if hookErr := f.formatHooks(step.Hooks); hookErr != nil {
+		return hookErr
+	}
+
+	// Timeout - use helper for field formatting
+	if step.Timeout > 0 {
+		timeoutStr := fmt.Sprintf("%ds", step.Timeout)
+		if fmtErr := f.FormatFieldIfPresent("Timeout", timeoutStr); fmtErr != nil {
+			return fmtErr
+		}
+	}
+
+	// Retry - use helper for retry formatting
+	if fmtErr := f.FormatRetry(step.Retry); fmtErr != nil {
+		return fmtErr
+	}
+
+	// Capture - use helper for capture formatting
+	if fmtErr := f.FormatCapture(step.Capture); fmtErr != nil {
+		return fmtErr
+	}
+
+	// Continue on error - use helper for field formatting
+	if step.ContinueOnError {
+		if fmtErr := f.FormatFieldIfPresent("Continue on error", "yes"); fmtErr != nil {
+			return fmtErr
+		}
+	}
+
+	// Transitions
+	return f.formatTransitions(step.Transitions)
+}
+
+// formatStepHeader renders the step header with type indicator.
+func (f *DryRunFormatter) formatStepHeader(step *workflow.DryRunStep, index int) error {
 	label := stepTypeLabel(step.Type)
 	var header string
 	switch step.Type {
@@ -124,16 +180,11 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	if err != nil {
 		return fmt.Errorf("writing step header: %w", err)
 	}
+	return nil
+}
 
-	// Description
-	if step.Description != "" {
-		_, err = fmt.Fprintf(f.out, "    %s\n", step.Description)
-		if err != nil {
-			return fmt.Errorf("writing step description: %w", err)
-		}
-	}
-
-	// Type-specific formatting
+// formatStepTypeDetails formats type-specific step details.
+func (f *DryRunFormatter) formatStepTypeDetails(step *workflow.DryRunStep) error {
 	switch step.Type {
 	case workflow.StepTypeParallel:
 		if fmtErr := f.formatParallelStep(step); fmtErr != nil {
@@ -152,74 +203,14 @@ func (f *DryRunFormatter) formatStep(step *workflow.DryRunStep, index int) error
 	case workflow.StepTypeCallWorkflow:
 		// Subworkflow calls - formatted in detail section
 	case workflow.StepTypeCommand:
-		// Command
-		if step.Command != "" {
-			_, err = fmt.Fprintf(f.out, "    Command: %s\n", step.Command)
-			if err != nil {
-				return fmt.Errorf("writing command: %w", err)
-			}
+		// Command - use helper for field formatting
+		if fmtErr := f.FormatFieldIfPresent("Command", step.Command); fmtErr != nil {
+			return fmtErr
 		}
 	case workflow.StepTypeTerminal:
 		// No additional info for terminal
 	}
-
-	// Working directory
-	if step.Dir != "" {
-		_, err = fmt.Fprintf(f.out, "    Dir: %s\n", step.Dir)
-		if err != nil {
-			return fmt.Errorf("writing dir: %w", err)
-		}
-	}
-
-	// Hooks
-	if hookErr := f.formatHooks(step.Hooks); hookErr != nil {
-		return hookErr
-	}
-
-	// Timeout
-	if step.Timeout > 0 {
-		_, err = fmt.Fprintf(f.out, "    Timeout: %ds\n", step.Timeout)
-		if err != nil {
-			return fmt.Errorf("writing timeout: %w", err)
-		}
-	}
-
-	// Retry
-	if step.Retry != nil {
-		_, err = fmt.Fprintf(f.out, "    Retry: %d attempts, %s backoff\n",
-			step.Retry.MaxAttempts, step.Retry.Backoff)
-		if err != nil {
-			return fmt.Errorf("writing retry: %w", err)
-		}
-	}
-
-	// Capture
-	if step.Capture != nil {
-		parts := []string{}
-		if step.Capture.Stdout != "" {
-			parts = append(parts, fmt.Sprintf("stdout -> %s", step.Capture.Stdout))
-		}
-		if step.Capture.Stderr != "" {
-			parts = append(parts, fmt.Sprintf("stderr -> %s", step.Capture.Stderr))
-		}
-		if len(parts) > 0 {
-			_, err = fmt.Fprintf(f.out, "    Capture: %s\n", strings.Join(parts, ", "))
-			if err != nil {
-				return fmt.Errorf("writing capture: %w", err)
-			}
-		}
-	}
-
-	// Continue on error
-	if step.ContinueOnError {
-		_, err = fmt.Fprintln(f.out, "    Continue on error: yes")
-		if err != nil {
-			return fmt.Errorf("writing continue on error: %w", err)
-		}
-	}
-
-	// Transitions
-	return f.formatTransitions(step.Transitions)
+	return nil
 }
 
 // formatHooks renders step hooks.
@@ -382,61 +373,24 @@ func (f *DryRunFormatter) formatAgentStep(step *workflow.DryRunStep) error {
 		return nil
 	}
 
-	// Provider
-	if step.Agent.Provider != "" {
-		_, err := fmt.Fprintf(f.out, "    Provider: %s\n", step.Agent.Provider)
-		if err != nil {
-			return fmt.Errorf("writing agent provider: %w", err)
-		}
+	// String fields using extracted helper
+	if err := f.FormatFieldIfPresent("Provider", step.Agent.Provider); err != nil {
+		return err
+	}
+	if err := f.FormatFieldIfPresent("Prompt", step.Agent.ResolvedPrompt); err != nil {
+		return err
+	}
+	if err := f.FormatFieldIfPresent("CLI", step.Agent.CLICommand); err != nil {
+		return err
 	}
 
-	// Resolved prompt
-	if step.Agent.ResolvedPrompt != "" {
-		_, err := fmt.Fprintf(f.out, "    Prompt: %s\n", step.Agent.ResolvedPrompt)
-		if err != nil {
-			return fmt.Errorf("writing agent prompt: %w", err)
-		}
+	// Options map using extracted helper
+	if err := f.formatAgentOptions(step.Agent.Options); err != nil {
+		return err
 	}
 
-	// CLI command
-	if step.Agent.CLICommand != "" {
-		_, err := fmt.Fprintf(f.out, "    CLI: %s\n", step.Agent.CLICommand)
-		if err != nil {
-			return fmt.Errorf("writing agent CLI: %w", err)
-		}
-	}
-
-	// Options
-	if len(step.Agent.Options) > 0 {
-		_, err := fmt.Fprintln(f.out, "    Options:")
-		if err != nil {
-			return fmt.Errorf("writing agent options header: %w", err)
-		}
-		// Sort option keys for consistent output
-		var optionKeys []string
-		for key := range step.Agent.Options {
-			optionKeys = append(optionKeys, key)
-		}
-		sort.Strings(optionKeys)
-
-		for _, key := range optionKeys {
-			value := step.Agent.Options[key]
-			_, err = fmt.Fprintf(f.out, "      %s: %v\n", key, value)
-			if err != nil {
-				return fmt.Errorf("writing agent option %s: %w", key, err)
-			}
-		}
-	}
-
-	// Agent-specific timeout (if different from step timeout)
-	if step.Agent.Timeout > 0 {
-		_, err := fmt.Fprintf(f.out, "    Agent timeout: %ds\n", step.Agent.Timeout)
-		if err != nil {
-			return fmt.Errorf("writing agent timeout: %w", err)
-		}
-	}
-
-	return nil
+	// Timeout using extracted helper
+	return f.FormatIntFieldIfPositive("Agent timeout", step.Agent.Timeout, "s")
 }
 
 // formatFooter renders the plan footer.
@@ -467,4 +421,112 @@ func stepTypeLabel(stepType workflow.StepType) string {
 	default:
 		return "[?]"
 	}
+}
+
+// =============================================================================
+// Field Formatters - Helper extraction to reduce formatStep complexity
+// =============================================================================
+
+// NewDryRunFormatterWithWriter creates a DryRunFormatter with custom writer (for testing).
+func NewDryRunFormatterWithWriter(out io.Writer, useColor bool) *DryRunFormatter {
+	return &DryRunFormatter{
+		out:       out,
+		colorizer: NewColorizer(useColor),
+	}
+}
+
+// FormatFieldIfPresent formats a configuration field if value is non-empty.
+func (f *DryRunFormatter) FormatFieldIfPresent(label, value string) error {
+	// Skip empty values (guard pattern from C001)
+	if value == "" {
+		return nil
+	}
+
+	// Write formatted field with 4-space indentation
+	_, err := fmt.Fprintf(f.out, "    %s: %s\n", label, value)
+	if err != nil {
+		return fmt.Errorf("writing field %s: %w", label, err)
+	}
+	return nil
+}
+
+// FormatIntFieldIfPositive formats an integer field if value is positive.
+func (f *DryRunFormatter) FormatIntFieldIfPositive(label string, value int, unit string) error {
+	if value <= 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(f.out, "    %s: %d%s\n", label, value, unit)
+	if err != nil {
+		return fmt.Errorf("writing field %s: %w", label, err)
+	}
+	return nil
+}
+
+// FormatRetry formats retry configuration.
+func (f *DryRunFormatter) FormatRetry(retry *workflow.DryRunRetry) error {
+	// Skip nil retry (guard pattern)
+	if retry == nil {
+		return nil
+	}
+
+	// Write retry configuration in format: "X attempts, Y backoff"
+	_, err := fmt.Fprintf(f.out, "    Retry: %d attempts, %s backoff\n",
+		retry.MaxAttempts, retry.Backoff)
+	if err != nil {
+		return fmt.Errorf("writing retry: %w", err)
+	}
+	return nil
+}
+
+// FormatCapture formats capture configuration.
+func (f *DryRunFormatter) FormatCapture(capture *workflow.DryRunCapture) error {
+	// Skip nil capture (guard pattern)
+	if capture == nil {
+		return nil
+	}
+
+	// Build parts slice with stdout-before-stderr ordering
+	parts := []string{}
+	if capture.Stdout != "" {
+		parts = append(parts, fmt.Sprintf("stdout -> %s", capture.Stdout))
+	}
+	if capture.Stderr != "" {
+		parts = append(parts, fmt.Sprintf("stderr -> %s", capture.Stderr))
+	}
+
+	// Skip if no streams configured
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// Write capture configuration
+	_, err := fmt.Fprintf(f.out, "    Capture: %s\n", strings.Join(parts, ", "))
+	if err != nil {
+		return fmt.Errorf("writing capture: %w", err)
+	}
+	return nil
+}
+
+// formatAgentOptions formats agent options map with sorted keys.
+func (f *DryRunFormatter) formatAgentOptions(options map[string]any) error {
+	if len(options) == 0 {
+		return nil
+	}
+
+	if _, err := fmt.Fprintln(f.out, "    Options:"); err != nil {
+		return fmt.Errorf("writing agent options header: %w", err)
+	}
+
+	keys := make([]string, 0, len(options))
+	for k := range options {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		if _, err := fmt.Fprintf(f.out, "      %s: %v\n", key, options[key]); err != nil {
+			return fmt.Errorf("writing agent option %s: %w", key, err)
+		}
+	}
+	return nil
 }

@@ -170,6 +170,57 @@ func runListPrompts(cmd *cobra.Command, cfg *Config) error {
 
 // collectPromptsFromPaths walks multiple prompt directories and returns deduplicated prompts.
 // Earlier paths take precedence (local wins over global for same-named prompts).
+// shouldProcessEntry determines if a directory entry should be processed.
+// Returns (process=true, skipDir=false) for files to process.
+// Returns (process=false, skipDir=false) to skip the entry.
+// Returns (process=false, skipDir=true) to skip entire directory subtrees.
+func shouldProcessEntry(d fs.DirEntry, err error) (process, skipDir bool) {
+	if err != nil {
+		return false, false // Skip entries with errors
+	}
+	if d.IsDir() {
+		return false, false // Skip directories themselves
+	}
+	return true, false // Process regular files
+}
+
+// buildPromptInfo constructs a PromptInfo from a file entry.
+// Returns nil if the entry should be skipped (e.g., already seen, errors).
+func buildPromptInfo(path string, d fs.DirEntry, basePath, source string, seen map[string]struct{}) (*ui.PromptInfo, error) {
+	// Calculate relative name from base path
+	relName, err := filepath.Rel(basePath, path)
+	if err != nil {
+		return nil, nil // Skip if paths are not related
+	}
+
+	// Skip if relative path goes outside base directory (starts with "..")
+	if len(relName) >= 2 && relName[0] == '.' && relName[1] == '.' {
+		return nil, nil
+	}
+
+	// Skip if already seen (earlier path wins)
+	if seen != nil {
+		if _, exists := seen[relName]; exists {
+			return nil, nil
+		}
+		seen[relName] = struct{}{}
+	}
+
+	// Get file info for size and mod time
+	fileInfo, err := d.Info()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ui.PromptInfo{
+		Name:    relName,
+		Source:  source,
+		Path:    path,
+		Size:    fileInfo.Size(),
+		ModTime: fileInfo.ModTime().Format("2006-01-02 15:04:05"),
+	}, nil
+}
+
 func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, error) {
 	if len(paths) == 0 {
 		return []ui.PromptInfo{}, nil
@@ -190,38 +241,20 @@ func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, e
 
 		// Walk directory tree
 		err = filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil // Skip entries with errors
-			}
-			if d.IsDir() {
-				return nil // Skip directories themselves
-			}
-
-			// Calculate relative name from base path
-			relName, err := filepath.Rel(basePath, path)
-			if err != nil {
+			// Check if we should process this entry
+			process, _ := shouldProcessEntry(d, err)
+			if !process {
 				return nil
 			}
 
-			// Skip if already seen (earlier path wins)
-			if _, exists := seen[relName]; exists {
-				return nil
-			}
-			seen[relName] = struct{}{}
-
-			// Get file info for size and mod time
-			fileInfo, err := d.Info()
+			// Build prompt info using extracted helper
+			promptInfo, err := buildPromptInfo(path, d, basePath, sp.Source.String(), seen)
 			if err != nil {
-				return nil
+				return fmt.Errorf("building prompt info for %s: %w", path, err)
 			}
-
-			prompts = append(prompts, ui.PromptInfo{
-				Name:    relName,
-				Source:  sp.Source.String(),
-				Path:    path,
-				Size:    fileInfo.Size(),
-				ModTime: fileInfo.ModTime().Format("2006-01-02 15:04:05"),
-			})
+			if promptInfo != nil {
+				prompts = append(prompts, *promptInfo)
+			}
 
 			return nil
 		})

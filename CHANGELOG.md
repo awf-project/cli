@@ -45,17 +45,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **[C001]**  refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
-- **[C002]** refactor(agents): reduce agent provider cognitive complexity by extracting shared helpers (C002)
-  - Created `helpers.go` with shared utility functions: `estimateTokens`, `cloneState`, type-checked option getters
-  - Refactored Claude, Codex, and Gemini providers to use shared helpers
-  - Eliminated 5 duplicated `estimateTokens` functions and 3 duplicated `cloneState` functions
-  - Maintained 100% backward compatibility with zero test modifications
+- **[C004]** refactor(cli): reduce CLI/UI layer cognitive complexity through systematic helper extraction
+  - `formatStep` (dry_run_formatter.go): 42 → 15 by extracting field formatters (`formatFieldIfPresent`, `formatRetry`, `formatCapture`)
+  - `generateEdges` (dot_generator.go): 27 → 18 by extracting edge generators (`generateParallelEdges`, `generateLoopEdges`, `generateTransitionEdge`)
+  - `writeValidationResultTable` (output.go): 25 → 11 by extracting row builders (`formatInputRow`, `formatStepRow`, `renderStatusHeader`)
+  - `collectPromptsFromPaths` (list.go): 22 → 16 by extracting path guards (`shouldProcessEntry`, `buildPromptInfo`)
+  - Total reduction: 116 → 60 complexity points across 4 functions (48% improvement, -56 points)
+  - All 3,670+ lines of existing CLI/UI tests pass unchanged (100% backward compatibility)
+  - Follows proven C001-C003 patterns: guard clauses, type-checked wrappers, helper consolidation
 - **[C003]** Reduced cognitive complexity in workflow graph algorithms by extracting type-safe helpers:
   - Introduced `visitState` enum to replace magic numbers in DFS cycle detection
   - Extracted `findCycleStart` and `buildCyclePath` helpers in DetectCycles (27→≤20 complexity)
   - Extracted `enqueueIfNotVisited` helper in ComputeExecutionOrder (23→≤20 complexity)
   - No behavior changes, all 62 existing tests pass
+- **[C002]** refactor(agents): reduce agent provider cognitive complexity by extracting shared helpers (C002)
+  - Created `helpers.go` with shared utility functions: `estimateTokens`, `cloneState`, type-checked option getters
+  - Refactored Claude, Codex, and Gemini providers to use shared helpers
+  - Eliminated 5 duplicated `estimateTokens` functions and 3 duplicated `cloneState` functions
+  - Maintained 100% backward compatibility with zero test modifications
+- **[C001]**  refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
 
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch

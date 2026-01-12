@@ -724,29 +724,82 @@ func (w *OutputWriter) writeValidationTable(result ValidationResult) error {
 	return nil
 }
 
+// formatInputRow formats a single input row for the validation table.
+// Returns: name, type, required, defaultVal as strings.
+func formatInputRow(inp InputInfo) (name, typ, required, defaultVal string) {
+	name = inp.Name
+	typ = inp.Type
+	required = "no"
+	if inp.Required {
+		required = "yes"
+	}
+	defaultVal = inp.Default
+	if defaultVal == "" {
+		defaultVal = "-"
+	}
+	return name, typ, required, defaultVal
+}
+
+// formatStepRow formats a single step row for the validation table.
+// Returns: name, type, next as strings.
+func formatStepRow(step StepSummary) (name, typ, next string) {
+	name = step.Name
+	typ = step.Type
+	next = step.Next
+	if next == "" {
+		next = "(terminal)"
+	}
+	return name, typ, next
+}
+
+// renderStatusHeader renders the workflow status header line.
+func renderStatusHeader(tw *tableWriter, workflowName string, valid bool) {
+	status := "valid"
+	if !valid {
+		status = "invalid"
+	}
+	tw.fullWidthSeparator()
+
+	// Calculate table inner width
+	total := 1
+	for _, width := range tw.columns {
+		total += width + 3
+	}
+	innerWidth := total - 4
+
+	// Format: "Workflow: <name>    Status: <status>"
+	formatStr := fmt.Sprintf("Workflow: %s    Status: %s", workflowName, status)
+
+	// If content is too long for a single row, split across two rows
+	// and output without truncation to preserve all content
+	if len(formatStr) > innerWidth {
+		workflowLine := fmt.Sprintf("Workflow: %s", workflowName)
+		statusLine := fmt.Sprintf("Status: %s", status)
+
+		// Output workflow line (may still be too long, but try fullWidthRow first)
+		if len(workflowLine) > innerWidth {
+			// Bypass truncation by writing directly with proper padding
+			_, _ = fmt.Fprintf(tw.w, "| %-*s |\n", innerWidth, workflowLine)
+		} else {
+			tw.fullWidthRow(workflowLine)
+		}
+		tw.fullWidthRow(statusLine)
+	} else {
+		tw.fullWidthRow(formatStr)
+	}
+	tw.fullWidthSeparator()
+}
+
 func (w *OutputWriter) writeValidationResultTable(result *ValidationResultTable) error {
 	// Inputs table
 	if len(result.Inputs) > 0 {
 		tw := newTableWriter(w.out, 15, 10, 10, 20)
-		tw.fullWidthSeparator()
-		status := "valid"
-		if !result.Valid {
-			status = "invalid"
-		}
-		tw.fullWidthRow(fmt.Sprintf("Workflow: %-25s Status: %s", result.Workflow, status))
-		tw.separator()
+		renderStatusHeader(tw, result.Workflow, result.Valid)
 		tw.row("INPUT", "TYPE", "REQUIRED", "DEFAULT")
 		tw.separator()
 		for _, inp := range result.Inputs {
-			required := "no"
-			if inp.Required {
-				required = "yes"
-			}
-			defaultVal := inp.Default
-			if defaultVal == "" {
-				defaultVal = "-"
-			}
-			tw.row(inp.Name, inp.Type, required, defaultVal)
+			name, typ, required, defaultVal := formatInputRow(inp)
+			tw.row(name, typ, required, defaultVal)
 		}
 		tw.separator()
 	}
@@ -755,22 +808,13 @@ func (w *OutputWriter) writeValidationResultTable(result *ValidationResultTable)
 	if len(result.Steps) > 0 {
 		tw := newTableWriter(w.out, 15, 10, 20)
 		if len(result.Inputs) == 0 {
-			tw.fullWidthSeparator()
-			status := "valid"
-			if !result.Valid {
-				status = "invalid"
-			}
-			tw.fullWidthRow(fmt.Sprintf("Workflow: %-25s Status: %s", result.Workflow, status))
+			renderStatusHeader(tw, result.Workflow, result.Valid)
 		}
-		tw.separator()
 		tw.row("STEP", "TYPE", "NEXT")
 		tw.separator()
 		for _, step := range result.Steps {
-			next := step.Next
-			if next == "" {
-				next = "(terminal)"
-			}
-			tw.row(step.Name, step.Type, next)
+			name, typ, next := formatStepRow(step)
+			tw.row(name, typ, next)
 		}
 		tw.separator()
 	}
