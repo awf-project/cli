@@ -71,3 +71,4 @@ jobs:
         with:
           name: awf-${{ matrix.goos }}-${{ matrix.goarch }}
           path: awf-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 5
