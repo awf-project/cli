@@ -1,0 +1,47 @@
+# Feature: Test context namespace in expressions (VALID)
+# This workflow should PASS validation with correct context.* namespace access
+
+name: expr-context-namespace
+version: "1.0.0"
+description: Valid workflow with context namespace in expressions
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "checking context"
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # VALID: Using context.WorkingDir with PascalCase
+    when: 'context.WorkingDir != ""'
+    command: 'echo "Working directory - {{context.WorkingDir}}"'
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    # VALID: Using context.User
+    when: 'context.User != ""'
+    command: 'echo "User - {{context.User}}"'
+    on_success: step4
+    on_failure: error
+
+  step4:
+    type: step
+    # VALID: Using context.Hostname
+    when: 'context.Hostname != ""'
+    command: 'echo "Hostname - {{context.Hostname}}"'
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

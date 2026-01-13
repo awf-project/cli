@@ -159,8 +159,8 @@ func (p *CLIPrompt) ShowContext(ctx *workflow.RuntimeContext) {
 		sort.Strings(keys)
 		for _, k := range keys {
 			state := ctx.States[k]
-			_, _ = fmt.Fprintf(p.writer, "│   %s.output: %s\n", k, truncateString(state.Output, 50))
-			_, _ = fmt.Fprintf(p.writer, "│   %s.exit_code: %d\n", k, state.ExitCode)
+			_, _ = fmt.Fprintf(p.writer, "│   %s.Output: %s\n", k, truncateString(state.Output, 50))
+			_, _ = fmt.Fprintf(p.writer, "│   %s.ExitCode: %d\n", k, state.ExitCode)
 		}
 	}
 

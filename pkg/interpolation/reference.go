@@ -35,11 +35,11 @@ type Reference struct {
 
 // ValidWorkflowProperties lists known workflow properties that can be referenced.
 var ValidWorkflowProperties = map[string]bool{
-	"id":            true,
-	"name":          true,
-	"current_state": true,
-	"started_at":    true,
-	"duration":      true,
+	"ID":           true,
+	"Name":         true,
+	"CurrentState": true,
+	"StartedAt":    true,
+	"Duration":     true,
 }
 
 // ValidStateProperties lists known step state properties that can be referenced.
@@ -48,21 +48,23 @@ var ValidStateProperties = map[string]bool{
 	"Stderr":   true,
 	"ExitCode": true,
 	"Status":   true,
+	"Response": true,
+	"Tokens":   true,
 }
 
 // ValidErrorProperties lists known error properties in error hooks.
 var ValidErrorProperties = map[string]bool{
-	"message":   true,
-	"state":     true,
-	"exit_code": true,
-	"type":      true,
+	"Message":  true,
+	"State":    true,
+	"ExitCode": true,
+	"Type":     true,
 }
 
 // ValidContextProperties lists known context properties.
 var ValidContextProperties = map[string]bool{
-	"working_dir": true,
-	"user":        true,
-	"hostname":    true,
+	"WorkingDir": true,
+	"User":       true,
+	"Hostname":   true,
 }
 
 // ExtractReferences parses a template string and extracts all interpolation references.

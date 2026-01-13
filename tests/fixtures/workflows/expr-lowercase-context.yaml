@@ -1,0 +1,31 @@
+# Feature: Test lowercase context namespace keys in expressions (INVALID)
+# This workflow should FAIL validation because it uses lowercase context.* keys
+
+name: expr-lowercase-context
+version: "1.0.0"
+description: Invalid workflow with lowercase context namespace keys
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "checking context"
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # INVALID: Using lowercase 'working_dir' instead of 'WorkingDir'
+    when: 'context.working_dir != ""'
+    command: echo "Has working directory"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

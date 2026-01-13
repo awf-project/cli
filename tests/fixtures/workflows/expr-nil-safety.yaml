@@ -1,0 +1,39 @@
+# Feature: Test nil safety in expressions (VALID)
+# This workflow should PASS validation even with potentially nil contexts
+
+name: expr-nil-safety
+version: "1.0.0"
+description: Workflow testing nil safety for error and loop contexts
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "success" && exit 0
+    on_success: success_hook
+    on_failure: error
+
+  success_hook:
+    type: step
+    # Should handle nil error context gracefully (error is nil on success)
+    when: 'states.step1.ExitCode == 0'
+    command: echo "Success hook without error context"
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # Outside of loop, loop context is nil but should not cause validation error
+    when: 'states.step1.Status == "success"'
+    command: echo "Not in a loop"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

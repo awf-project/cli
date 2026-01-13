@@ -270,7 +270,7 @@ func TestTemplateValidator_ValidStateReferenceAllProperties(t *testing.T) {
 
 func TestTemplateValidator_ValidWorkflowReference(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo Workflow: {{workflow.name}} ID: {{workflow.id}}"
+	w.Steps["start"].Command = "echo Workflow: {{workflow.Name}} ID: {{workflow.ID}}"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -280,7 +280,7 @@ func TestTemplateValidator_ValidWorkflowReference(t *testing.T) {
 
 func TestTemplateValidator_ValidWorkflowReferenceAllProperties(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo {{workflow.id}} {{workflow.name}} {{workflow.current_state}} {{workflow.started_at}} {{workflow.duration}}"
+	w.Steps["start"].Command = "echo {{workflow.ID}} {{workflow.Name}} {{workflow.CurrentState}} {{workflow.StartedAt}} {{workflow.Duration}}"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -311,7 +311,7 @@ func TestTemplateValidator_ValidEnvReferenceAnyVariable(t *testing.T) {
 
 func TestTemplateValidator_ValidContextReference(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "cd {{context.working_dir}} && whoami"
+	w.Steps["start"].Command = "cd {{context.WorkingDir}} && whoami"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -321,7 +321,7 @@ func TestTemplateValidator_ValidContextReference(t *testing.T) {
 
 func TestTemplateValidator_ValidContextReferenceAllProperties(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo {{context.working_dir}} {{context.user}} {{context.hostname}}"
+	w.Steps["start"].Command = "echo {{context.WorkingDir}} {{context.User}} {{context.Hostname}}"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -739,7 +739,7 @@ func TestTemplateValidator_ErrorRefInErrorHook_Valid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Hooks = workflow.WorkflowHooks{
 		WorkflowError: workflow.Hook{
-			{Command: "echo Error: {{error.message}} in {{error.state}}"},
+			{Command: "echo Error: {{error.Message}} in {{error.State}}"},
 		},
 	}
 
@@ -753,7 +753,7 @@ func TestTemplateValidator_ErrorRefAllProperties_Valid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Hooks = workflow.WorkflowHooks{
 		WorkflowError: workflow.Hook{
-			{Command: "echo {{error.message}} {{error.state}} {{error.exit_code}} {{error.type}}"},
+			{Command: "echo {{error.Message}} {{error.State}} {{error.ExitCode}} {{error.Type}}"},
 		},
 	}
 
@@ -765,7 +765,7 @@ func TestTemplateValidator_ErrorRefAllProperties_Valid(t *testing.T) {
 
 func TestTemplateValidator_ErrorRefOutsideErrorHook_Invalid(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Command = "echo {{error.message}}" // ERROR: not in error hook
+	w.Steps["start"].Command = "echo {{error.Message}}" // ERROR: not in error hook
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -778,7 +778,7 @@ func TestTemplateValidator_ErrorRefInStartHook_Invalid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Hooks = workflow.WorkflowHooks{
 		WorkflowStart: workflow.Hook{
-			{Command: "echo {{error.message}}"}, // Invalid: WorkflowStart is not an error hook
+			{Command: "echo {{error.Message}}"}, // Invalid: WorkflowStart is not an error hook
 		},
 	}
 
@@ -793,7 +793,7 @@ func TestTemplateValidator_ErrorRefInEndHook_Invalid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Hooks = workflow.WorkflowHooks{
 		WorkflowEnd: workflow.Hook{
-			{Command: "echo {{error.message}}"}, // Invalid: WorkflowEnd is not an error hook
+			{Command: "echo {{error.Message}}"}, // Invalid: WorkflowEnd is not an error hook
 		},
 	}
 
@@ -1005,7 +1005,7 @@ func TestTemplateValidator_AggregatesErrorsAcrossFields(t *testing.T) {
 
 func TestTemplateValidator_ValidDirFieldReference(t *testing.T) {
 	w := newTestWorkflow()
-	w.Steps["start"].Dir = "{{context.working_dir}}/subdir"
+	w.Steps["start"].Dir = "{{context.WorkingDir}}/subdir"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -1309,7 +1309,7 @@ func TestTemplateValidator_ComplexRealWorldWorkflow(t *testing.T) {
 				Name:      "build",
 				Type:      workflow.StepTypeCommand,
 				Command:   "make build",
-				Dir:       "{{context.working_dir}}/repo",
+				Dir:       "{{context.WorkingDir}}/repo",
 				OnSuccess: "test",
 				OnFailure: "error",
 			},
@@ -1323,7 +1323,7 @@ func TestTemplateValidator_ComplexRealWorldWorkflow(t *testing.T) {
 			"deploy": {
 				Name:      "deploy",
 				Type:      workflow.StepTypeCommand,
-				Command:   "deploy --env={{inputs.environment}} --version={{workflow.id}}",
+				Command:   "deploy --env={{inputs.environment}} --version={{workflow.ID}}",
 				OnSuccess: "notify",
 				OnFailure: "error",
 			},
@@ -1346,10 +1346,10 @@ func TestTemplateValidator_ComplexRealWorldWorkflow(t *testing.T) {
 				{Log: "Starting build for {{inputs.repo}}"},
 			},
 			WorkflowEnd: workflow.Hook{
-				{Log: "Workflow {{workflow.name}} completed in {{workflow.duration}}"},
+				{Log: "Workflow {{workflow.Name}} completed in {{workflow.Duration}}"},
 			},
 			WorkflowError: workflow.Hook{
-				{Command: "echo 'Error in {{error.state}}: {{error.message}}' | mail -s 'Build Failed' team@example.com"},
+				{Command: "echo 'Error in {{error.State}}: {{error.Message}}' | mail -s 'Build Failed' team@example.com"},
 			},
 		},
 	}
@@ -1760,7 +1760,7 @@ func TestTemplateValidator_LoopExpressions_MixedValidAndInvalid(t *testing.T) {
 func TestTemplateValidator_LoopExpressions_WorkflowReference(t *testing.T) {
 	w := newLoopWorkflow()
 	// Using workflow property in loop expression (unusual but valid)
-	w.Steps["loop_step"].Loop.BreakCondition = "{{workflow.duration}} > 60"
+	w.Steps["loop_step"].Loop.BreakCondition = "{{workflow.Duration}} > 60"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()
@@ -1782,7 +1782,7 @@ func TestTemplateValidator_LoopExpressions_InvalidWorkflowProperty(t *testing.T)
 func TestTemplateValidator_LoopExpressions_ContextReference(t *testing.T) {
 	w := newLoopWorkflow()
 	// Using context in loop (unusual but technically valid)
-	w.Steps["loop_step"].Loop.Items = "{{context.working_dir}}/items"
+	w.Steps["loop_step"].Loop.Items = "{{context.WorkingDir}}/items"
 
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
 	result := v.Validate()

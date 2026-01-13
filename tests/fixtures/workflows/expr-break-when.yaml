@@ -1,0 +1,43 @@
+# Feature: Test break_when with loop namespace (VALID)
+# This workflow should PASS validation and demonstrate loop control via expressions
+
+name: expr-break-when
+version: "1.0.0"
+description: Loop control using break_when with loop namespace
+
+inputs:
+  - name: items
+    type: array
+    required: true
+    default: ["one", "two", "three", "four", "five"]
+
+states:
+  initial: iterate_with_break
+
+  iterate_with_break:
+    type: step
+    loop:
+      over: "{{inputs.items}}"
+      # Break on third iteration using loop.Index
+      break_when: 'loop.Index >= 2'
+    command: 'echo "Processing - {{loop.Item}}"'
+    on_success: iterate_until_last
+    on_failure: error
+
+  iterate_until_last:
+    type: step
+    loop:
+      over: "{{inputs.items}}"
+      # Process until last item
+      break_when: 'loop.Last == true'
+    command: 'echo "Item {{loop.Index1}} - {{loop.Item}}"'
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

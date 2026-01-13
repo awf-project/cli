@@ -37,7 +37,7 @@ states:
       post:
         - command: echo "Conversation completed"
       error:
-        - command: echo "Conversation failed: {{error.message}}"
+        - command: echo "Conversation failed: {{error.Message}}"
         - log: "Error occurred in conversation step"
     on_success: conversation_with_error_transition
     on_failure: handle_failure
@@ -93,7 +93,7 @@ states:
     type: step
     command: |
       echo "Workflow failed at conversation step"
-      echo "Error details: {{error.message}}"
+      echo "Error details: {{error.Message}}"
       exit 1
     on_success: error
     on_failure: error

@@ -1,0 +1,31 @@
+# Feature: Test lowercase error namespace keys in expressions (INVALID)
+# This workflow should FAIL validation because it uses lowercase error.* keys
+
+name: expr-lowercase-error
+version: "1.0.0"
+description: Invalid workflow with lowercase error namespace keys
+
+states:
+  initial: risky_step
+
+  risky_step:
+    type: step
+    command: echo "might fail" && exit 1
+    on_success: done
+    on_failure: error_handler
+
+  error_handler:
+    type: step
+    # INVALID: Using lowercase 'message' instead of 'Message'
+    when: 'error.message contains "fail"'
+    command: 'echo "Error detected - {{error.Message}}"'
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

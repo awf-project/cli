@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **[B001] Expression context normalization to PascalCase**
+  - Expression evaluator now uses PascalCase keys matching Go struct fields
+  - **State fields:** `output` → `Output`, `exit_code` → `ExitCode`, `stderr` → `Stderr`, `status` → `Status`
+  - **Added state fields:** `Response`, `Tokens` for agent steps
+  - **Workflow fields:** `id` → `ID`, `name` → `Name`, `current_state` → `CurrentState`
+  - **Added workflow field:** `Duration` (method call)
+  - **Error fields:** `message` → `Message`, `state` → `State`, `exit_code` → `ExitCode`, `type` → `Type`
+  - **Context fields:** `working_dir` → `WorkingDir`, `user` → `User`, `hostname` → `Hostname`
+  - **Added namespaces:** `loop.*` (Index, Index1, Item, First, Last, Length, Parent), `error.*`, `context.*`
+  - **Migration:** Update all expression conditions (`when`, `break_when`, `while`, `until`) to use PascalCase
+  - Validation errors provide exact suggestions for incorrect casing
+  - **Example:** `break_when: 'states.check.exit_code != 0'` → `break_when: 'states.check.ExitCode != 0'`
+  - Affects: Expression evaluation in `when` clauses, loop conditions, break conditions
+
 - **[F050] Standardize state property casing to uppercase**
   - State property references in templates now require uppercase: `.Output`, `.Stderr`, `.ExitCode`, `.Status`
   - Previous lowercase syntax (`.output`, `.stderr`, etc.) was never functional with Go templates

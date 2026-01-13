@@ -1,0 +1,61 @@
+# Feature: Test multiple lowercase errors (INVALID)
+# This workflow should FAIL validation with multiple error reports
+
+name: expr-multiple-errors
+version: "1.0.0"
+description: Invalid workflow with multiple lowercase keys
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "test" && exit 0
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # INVALID: lowercase 'exit_code'
+    when: 'states.step1.exit_code == 0'
+    command: echo "check1"
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    # INVALID: lowercase 'output'
+    when: 'states.step1.output != ""'
+    command: echo "check2"
+    on_success: step4
+    on_failure: error
+
+  step4:
+    type: step
+    # INVALID: lowercase 'stderr'
+    when: 'states.step1.stderr == ""'
+    command: echo "check3"
+    on_success: step5
+    on_failure: error
+
+  step5:
+    type: step
+    command: exit 1
+    on_success: done
+    on_failure: error_handler
+
+  error_handler:
+    type: step
+    # INVALID: lowercase 'message' in error namespace
+    when: 'error.message != ""'
+    command: echo "error"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

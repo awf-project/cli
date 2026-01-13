@@ -1,0 +1,77 @@
+# Feature: Complete workflow with all namespace types (VALID)
+# This workflow exercises all features: state, loop, error, context, workflow
+
+name: expr-complete
+version: "1.0.0"
+description: Complete demonstration with all namespaces
+
+inputs:
+  - name: items
+    type: array
+    required: true
+    default: ["a", "b", "c"]
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "starting" && exit 0
+    on_success: check_state
+    on_failure: error
+
+  check_state:
+    type: step
+    # State namespace with PascalCase
+    when: 'states.step1.ExitCode == 0 && states.step1.Output contains "starting"'
+    command: echo "State check passed"
+    on_success: iterate
+    on_failure: error
+
+  iterate:
+    type: step
+    loop:
+      over: "{{inputs.items}}"
+      # Loop namespace
+      break_when: 'loop.Index >= 1'
+    command: 'echo "Item - {{loop.Item}}"'
+    on_success: check_context
+    on_failure: error
+
+  check_context:
+    type: step
+    # Context namespace
+    when: 'context.WorkingDir != "" && context.User != ""'
+    command: echo "Context available"
+    on_success: check_workflow
+    on_failure: error
+
+  check_workflow:
+    type: step
+    # Workflow namespace
+    when: 'workflow.Name == "expr-complete" && workflow.Duration() >= 0'
+    command: echo "Workflow metadata available"
+    on_success: risky_step
+    on_failure: error
+
+  risky_step:
+    type: step
+    command: exit 1
+    on_success: done
+    on_failure: error_handler
+
+  error_handler:
+    type: step
+    # Error namespace
+    when: 'error.Message != "" && error.ExitCode > 0'
+    command: 'echo "Error handled - {{error.Message}}"'
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
