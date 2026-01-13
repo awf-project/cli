@@ -320,137 +320,37 @@ func (s *ExecutionService) executeStep(
 ) (string, error) {
 	startTime := time.Now()
 
-	// apply step timeout
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+	// T007: Prepare step execution (timeout, pre-hooks, interpolation)
+	stepCtx, intCtx, cancel, err := s.prepareStepExecution(ctx, step, execCtx)
+	if cancel != nil {
 		defer cancel()
 	}
-
-	// build interpolation context
-	intCtx := s.buildInterpolationContext(execCtx)
-
-	// execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
-		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
-	}
-
-	// resolve command variables
-	resolvedCmd, err := s.resolver.Resolve(step.Command, intCtx)
 	if err != nil {
-		return "", fmt.Errorf("interpolate command: %w", err)
+		return "", err
 	}
 
-	// resolve dir if specified
-	resolvedDir := ""
-	if step.Dir != "" {
-		resolvedDir, err = s.resolver.Resolve(step.Dir, intCtx)
-		if err != nil {
-			return "", fmt.Errorf("interpolate dir: %w", err)
-		}
+	// T007: Resolve command and directory
+	cmd, err := s.resolveStepCommand(step, intCtx)
+	if err != nil {
+		return "", err
 	}
 
-	// build command
-	cmd := ports.Command{
-		Program: resolvedCmd,
-		Dir:     resolvedDir,
-		Timeout: step.Timeout,
-		Stdout:  s.stdoutWriter,
-		Stderr:  s.stderrWriter,
-	}
+	// T008: Execute command (with retry if configured)
+	result, attempt, execErr := s.executeStepCommand(stepCtx, step, cmd)
 
-	// execute (with retry if configured)
-	var result *ports.CommandResult
-	var execErr error
-	var attempt int
+	// T008: Record step state (timing, output, attempt)
+	state := s.recordStepResult(step, startTime, result, attempt)
 
-	if step.Retry != nil && step.Retry.MaxAttempts > 1 {
-		result, attempt, execErr = s.executeWithRetry(stepCtx, step, &cmd)
-	} else {
-		attempt = 1
-		result, execErr = s.executor.Execute(stepCtx, &cmd)
-	}
-
-	// record step state
-	state := workflow.StepState{
-		Name:        step.Name,
-		StartedAt:   startTime,
-		CompletedAt: time.Now(),
-		Attempt:     attempt,
-	}
-
-	if result != nil {
-		state.Output = result.Stdout
-		state.Stderr = result.Stderr
-		state.ExitCode = result.ExitCode
-	}
-
-	// determine outcome
+	// T009: Determine outcome and return next step
 	if execErr != nil {
-		// Check if the PARENT context was cancelled (workflow-level cancellation)
-		// This is different from step timeout (stepCtx deadline exceeded)
-		// Step timeout should follow OnFailure, workflow cancellation should propagate
-		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
-			state.Status = workflow.StatusFailed
-			state.Error = execErr.Error()
-			execCtx.SetStepState(step.Name, state)
-			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
-		}
-
-		state.Status = workflow.StatusFailed
-		state.Error = execErr.Error()
-		execCtx.SetStepState(step.Name, state)
-
-		// execute post-hooks even on failure
-		intCtx = s.buildInterpolationContext(execCtx)
-		if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-		}
-
-		// If continue_on_error is true, follow on_success path
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
-		}
-
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
-		}
-		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		return s.handleExecutionError(ctx, stepCtx, step, execCtx, &state, execErr)
 	}
 
 	if result.ExitCode != 0 {
-		state.Status = workflow.StatusFailed
-		execCtx.SetStepState(step.Name, state)
-
-		// execute post-hooks even on failure
-		intCtx = s.buildInterpolationContext(execCtx)
-		if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-			s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-		}
-
-		// If continue_on_error is true, follow on_success path
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
-		}
-
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
-		}
-		return "", fmt.Errorf("step %s: exit code %d", step.Name, result.ExitCode)
+		return s.handleNonZeroExit(stepCtx, step, execCtx, &state, result.ExitCode)
 	}
 
-	state.Status = workflow.StatusCompleted
-	execCtx.SetStepState(step.Name, state)
-
-	// execute post-hooks on success
-	intCtx = s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
-		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
-	}
-
-	// Resolve next step using transitions (if defined) or fallback to OnSuccess
-	return s.resolveNextStep(step, intCtx, true)
+	return s.handleSuccess(stepCtx, step, execCtx, &state)
 }
 
 // resolveNextStep determines the next step using conditional transitions or legacy OnSuccess/OnFailure.
@@ -960,14 +860,65 @@ func (s *ExecutionService) executeLoopStep(
 	return step.Loop.OnComplete, nil
 }
 
-// stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
-// IsProblematicMaxIterationPattern checks if a loop hit max iterations with problematic patterns.
-// Returns true if the loop completed by hitting max iterations AND has step failures or complex nesting.
-func (s *ExecutionService) IsProblematicMaxIterationPattern(
-	result *workflow.LoopResult,
-	step *workflow.Step,
-	wf *workflow.Workflow,
-) bool {
+// detectLoopPatterns examines loop iterations to detect step failures and complex step types.
+// This helper extracts shared logic used by IsProblematicMaxIterationPattern and HandleMaxIterationFailure.
+// Returns two booleans: hadFailures (true if any step failed), hasComplexSteps (true if loop contains while/foreach/parallel/callworkflow).
+func (s *ExecutionService) detectLoopPatterns(result *workflow.LoopResult, wf *workflow.Workflow) (hadFailures, hasComplexSteps bool) {
+	// Handle nil inputs gracefully
+	if result == nil || result.Iterations == nil {
+		return false, false
+	}
+
+	// Iterate through all iterations looking for failures and complex steps
+	for _, iteration := range result.Iterations {
+		// Skip iterations with nil step results
+		if iteration.StepResults == nil {
+			continue
+		}
+
+		// Check each step result in this iteration
+		for stepName, stepState := range iteration.StepResults {
+			// Check for failures
+			if stepState != nil && stepState.Status == workflow.StatusFailed {
+				hadFailures = true
+			}
+
+			// Check for complex step types - requires workflow definition
+			if wf != nil && wf.Steps != nil {
+				if stepDef, exists := wf.Steps[stepName]; exists {
+					if isComplexStepType(stepDef.Type) {
+						hasComplexSteps = true
+					}
+				}
+			}
+
+			// Early exit optimization: if both conditions found, no need to continue
+			if hadFailures && hasComplexSteps {
+				return true, true
+			}
+		}
+	}
+
+	return hadFailures, hasComplexSteps
+}
+
+// isComplexStepType returns true if the step type represents a complex/nested structure
+// that makes loop debugging difficult (while, foreach, parallel, call_workflow).
+func isComplexStepType(stepType workflow.StepType) bool {
+	switch stepType {
+	case workflow.StepTypeWhile,
+		workflow.StepTypeForEach,
+		workflow.StepTypeParallel,
+		workflow.StepTypeCallWorkflow:
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldCheckLoopProblems determines if we should analyze a loop for problematic patterns.
+// Returns true if the loop is a while loop with max iterations that completed by hitting the limit (didn't break early).
+func (s *ExecutionService) shouldCheckLoopProblems(result *workflow.LoopResult, step *workflow.Step) bool {
 	// Only check while loops with max iterations configured
 	if result == nil || step.Type != workflow.StepTypeWhile || step.Loop.MaxIterations <= 0 {
 		return false
@@ -978,32 +929,251 @@ func (s *ExecutionService) IsProblematicMaxIterationPattern(
 		return false
 	}
 
-	// Check for step failures or complex body steps (nested loops, parallel)
-	hadFailures := false
-	hasComplexSteps := false
+	return true
+}
 
-iterLoop:
-	for _, iter := range result.Iterations {
-		// Check if any step in this iteration failed
-		for stepName, stepState := range iter.StepResults {
-			if stepState.Status == workflow.StatusFailed {
-				hadFailures = true
-			}
-			// Check if body contains complex step types
-			if bodyStep, ok := wf.Steps[stepName]; ok {
-				if bodyStep.Type == workflow.StepTypeWhile ||
-					bodyStep.Type == workflow.StepTypeForEach ||
-					bodyStep.Type == workflow.StepTypeParallel ||
-					bodyStep.Type == workflow.StepTypeCallWorkflow {
-					hasComplexSteps = true
-				}
-			}
-			// Early exit when both conditions are met
-			if hadFailures && hasComplexSteps {
-				break iterLoop
-			}
+// buildLoopFailureError constructs an error message based on detected loop patterns.
+// It appends " with step failures" if failures occurred, or " with nested complexity" if complex steps exist.
+func (s *ExecutionService) buildLoopFailureError(hadFailures, hasComplexSteps bool) string {
+	errMsg := "loop reached maximum iterations"
+	if hadFailures {
+		errMsg += " with step failures"
+	} else if hasComplexSteps {
+		errMsg += " with nested complexity"
+	}
+	return errMsg
+}
+
+// executeLoopPostHooks executes post-failure hooks for a loop step.
+// It logs a warning if hook execution fails but does not propagate the error.
+func (s *ExecutionService) executeLoopPostHooks(ctx context.Context, step *workflow.Step, execCtx *workflow.ExecutionContext) {
+	// Build interpolation context for hook execution
+	intCtx := s.buildInterpolationContext(execCtx)
+
+	// Temporarily enable failOnError to detect hook failures for logging purposes
+	// (we still don't propagate the error to the caller)
+	s.hookExecutor.SetFailOnError(true)
+	defer s.hookExecutor.SetFailOnError(false)
+
+	// Execute post-hooks and log any failures (don't propagate errors)
+	if err := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+}
+
+// prepareStepExecution sets up the execution context for a step, including timeout,
+// interpolation context building, and pre-hook execution.
+// Returns the step context (with timeout if configured) and interpolation context.
+// NOTE: Caller is responsible for calling returned cancel function to prevent context leak.
+func (s *ExecutionService) prepareStepExecution(
+	ctx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (stepCtx context.Context, intCtx *interpolation.Context, cancel context.CancelFunc, err error) {
+	// apply step timeout
+	stepCtx = ctx
+	if step.Timeout > 0 {
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+	}
+
+	// build interpolation context
+	intCtx = s.buildInterpolationContext(execCtx)
+
+	// execute pre-hooks
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); hookErr != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	return stepCtx, intCtx, cancel, nil
+}
+
+// resolveStepCommand interpolates and resolves the step's command and directory,
+// building a ports.Command struct ready for execution.
+// Returns the fully resolved command or an interpolation error.
+func (s *ExecutionService) resolveStepCommand(
+	step *workflow.Step,
+	intCtx *interpolation.Context,
+) (*ports.Command, error) {
+	// resolve command variables
+	resolvedCmd, err := s.resolver.Resolve(step.Command, intCtx)
+	if err != nil {
+		return nil, fmt.Errorf("interpolate command: %w", err)
+	}
+
+	// resolve dir if specified
+	resolvedDir := ""
+	if step.Dir != "" {
+		resolvedDir, err = s.resolver.Resolve(step.Dir, intCtx)
+		if err != nil {
+			return nil, fmt.Errorf("interpolate dir: %w", err)
 		}
 	}
+
+	// build command
+	cmd := &ports.Command{
+		Program: resolvedCmd,
+		Dir:     resolvedDir,
+		Timeout: step.Timeout,
+		Stdout:  s.stdoutWriter,
+		Stderr:  s.stderrWriter,
+	}
+
+	return cmd, nil
+}
+
+// executeStepCommand executes the command with retry logic if configured.
+// Returns the command result, attempt number, and any execution error.
+func (s *ExecutionService) executeStepCommand(
+	ctx context.Context,
+	step *workflow.Step,
+	cmd *ports.Command,
+) (*ports.CommandResult, int, error) {
+	// Handle nil executor for testing (temporary for T010 RED phase tests)
+	if s.executor == nil {
+		return nil, 0, nil
+	}
+
+	if step.Retry != nil && step.Retry.MaxAttempts > 1 {
+		return s.executeWithRetry(ctx, step, cmd)
+	}
+
+	result, err := s.executor.Execute(ctx, cmd)
+	return result, 1, err
+}
+
+// recordStepResult builds a workflow.StepState from execution timing and command result.
+// Returns the step state with populated fields (without Status, which is set by outcome handlers).
+func (s *ExecutionService) recordStepResult(
+	step *workflow.Step,
+	startTime time.Time,
+	result *ports.CommandResult,
+	attempt int,
+) workflow.StepState {
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Attempt:     attempt,
+	}
+
+	if result != nil {
+		state.Output = result.Stdout
+		state.Stderr = result.Stderr
+		state.ExitCode = result.ExitCode
+	}
+
+	return state
+}
+
+// handleExecutionError processes execution errors, distinguishing between workflow-level
+// cancellation (propagate) and step-level failures (follow OnFailure/ContinueOnError).
+// Updates state, executes post-hooks, and returns the next step or error.
+func (s *ExecutionService) handleExecutionError(
+	ctx context.Context,
+	stepCtx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+	state *workflow.StepState,
+	execErr error,
+) (string, error) {
+	// Check if the PARENT context was cancelled (workflow-level cancellation)
+	// This is different from step timeout (stepCtx deadline exceeded)
+	// Step timeout should follow OnFailure, workflow cancellation should propagate
+	// When workflow is cancelled, propagate error immediately regardless of execErr type
+	if ctx.Err() != nil {
+		state.Status = workflow.StatusFailed
+		state.Error = execErr.Error()
+		execCtx.SetStepState(step.Name, *state)
+		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+	}
+
+	state.Status = workflow.StatusFailed
+	state.Error = execErr.Error()
+	execCtx.SetStepState(step.Name, *state)
+
+	// execute post-hooks even on failure
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	// If continue_on_error is true, follow on_success path
+	if step.ContinueOnError {
+		return step.OnSuccess, nil
+	}
+
+	if step.OnFailure != "" {
+		return step.OnFailure, nil
+	}
+	return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+}
+
+// handleNonZeroExit processes non-zero exit codes, following OnFailure or ContinueOnError paths.
+// Updates state, executes post-hooks, and returns the next step or error.
+func (s *ExecutionService) handleNonZeroExit(
+	stepCtx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+	state *workflow.StepState,
+	exitCode int,
+) (string, error) {
+	state.Status = workflow.StatusFailed
+	execCtx.SetStepState(step.Name, *state)
+
+	// execute post-hooks even on failure
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	// If continue_on_error is true, follow on_success path
+	if step.ContinueOnError {
+		return step.OnSuccess, nil
+	}
+
+	if step.OnFailure != "" {
+		return step.OnFailure, nil
+	}
+	return "", fmt.Errorf("step %s: exit code %d", step.Name, exitCode)
+}
+
+// handleSuccess processes successful step execution, executing post-hooks and resolving
+// the next step via transitions or OnSuccess.
+// Returns the next step name or error.
+func (s *ExecutionService) handleSuccess(
+	stepCtx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+	state *workflow.StepState,
+) (string, error) {
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, *state)
+
+	// execute post-hooks on success
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+
+	// Resolve next step using transitions (if defined) or fallback to OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
+}
+
+// stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
+// IsProblematicMaxIterationPattern checks if a loop hit max iterations with problematic patterns.
+// Returns true if the loop completed by hitting max iterations AND has step failures or complex nesting.
+func (s *ExecutionService) IsProblematicMaxIterationPattern(
+	result *workflow.LoopResult,
+	step *workflow.Step,
+	wf *workflow.Workflow,
+) bool {
+	// Guard clause: only check while loops with max iterations configured
+	if !s.shouldCheckLoopProblems(result, step) {
+		return false
+	}
+
+	// Check for step failures or complex body steps using extracted helper
+	hadFailures, hasComplexSteps := s.detectLoopPatterns(result, wf)
 
 	return hadFailures || hasComplexSteps
 }
@@ -1018,47 +1188,19 @@ func (s *ExecutionService) HandleMaxIterationFailure(
 	execCtx *workflow.ExecutionContext,
 	loopState *workflow.StepState,
 ) (string, error) {
-	// Determine error message based on pattern type
-	hadFailures := false
-	hasComplexSteps := false
+	// Use extracted helper to determine pattern type
+	hadFailures, hasComplexSteps := s.detectLoopPatterns(result, wf)
 
-	// Recheck to determine which pattern type (failures vs complexity)
-iterLoop:
-	for _, iter := range result.Iterations {
-		for stepName, stepState := range iter.StepResults {
-			if stepState.Status == workflow.StatusFailed {
-				hadFailures = true
-			}
-			if bodyStep, ok := wf.Steps[stepName]; ok {
-				if bodyStep.Type == workflow.StepTypeWhile ||
-					bodyStep.Type == workflow.StepTypeForEach ||
-					bodyStep.Type == workflow.StepTypeParallel ||
-					bodyStep.Type == workflow.StepTypeCallWorkflow {
-					hasComplexSteps = true
-				}
-			}
-			// Early exit when both conditions are met
-			if hadFailures && hasComplexSteps {
-				break iterLoop
-			}
-		}
-	}
-
+	// Update loop state with failure status
 	loopState.Status = workflow.StatusFailed
-	errMsg := "loop reached maximum iterations"
-	if hadFailures {
-		errMsg += " with step failures"
-	} else if hasComplexSteps {
-		errMsg += " with nested complexity"
-	}
+
+	// Use extracted helper to build error message
+	errMsg := s.buildLoopFailureError(hadFailures, hasComplexSteps)
 	loopState.Error = errMsg
 	execCtx.SetStepState(step.Name, *loopState)
 
-	// Execute post-hooks even on failure
-	intCtx := s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
-		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
-	}
+	// Use extracted helper to execute post-hooks
+	s.executeLoopPostHooks(ctx, step, execCtx)
 
 	if step.OnFailure != "" {
 		return step.OnFailure, nil
