@@ -1,0 +1,29 @@
+# Test Fixture: Valid PascalCase expression context keys
+# This workflow demonstrates VALID usage - should pass validation
+name: pascalcase-valid
+version: "1.0.0"
+
+states:
+  initial: check
+
+  check:
+    type: step
+    command: echo "ready"
+    on_success: conditional
+    on_failure: error
+
+  conditional:
+    type: step
+    # VALID: Using PascalCase 'ExitCode' in when: expression
+    when: 'states.check.ExitCode == 0'
+    command: echo "checking state"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

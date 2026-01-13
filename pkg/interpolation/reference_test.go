@@ -457,7 +457,7 @@ func TestCategorizeNamespace(t *testing.T) {
 // =============================================================================
 
 func TestValidWorkflowProperties(t *testing.T) {
-	expected := []string{"id", "name", "current_state", "started_at", "duration"}
+	expected := []string{"ID", "Name", "CurrentState", "StartedAt", "Duration"}
 	for _, prop := range expected {
 		assert.True(t, interpolation.ValidWorkflowProperties[prop],
 			"expected %q to be a valid workflow property", prop)
@@ -485,7 +485,7 @@ func TestValidStateProperties(t *testing.T) {
 }
 
 func TestValidErrorProperties(t *testing.T) {
-	expected := []string{"message", "state", "exit_code", "type"}
+	expected := []string{"Message", "State", "ExitCode", "Type"}
 	for _, prop := range expected {
 		assert.True(t, interpolation.ValidErrorProperties[prop],
 			"expected %q to be a valid error property", prop)
@@ -495,7 +495,7 @@ func TestValidErrorProperties(t *testing.T) {
 }
 
 func TestValidContextProperties(t *testing.T) {
-	expected := []string{"working_dir", "user", "hostname"}
+	expected := []string{"WorkingDir", "User", "Hostname"}
 	for _, prop := range expected {
 		assert.True(t, interpolation.ValidContextProperties[prop],
 			"expected %q to be a valid context property", prop)
@@ -808,4 +808,406 @@ func TestExtractReferences_RealWorldLeadingDot(t *testing.T) {
 	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
 	assert.Equal(t, "generate_commit", refs[0].Path)
 	assert.Equal(t, "Output", refs[0].Property)
+}
+
+// =============================================================================
+// Validation Maps PascalCase Normalization Tests
+// =============================================================================
+
+// TestValidationMaps_PascalCase verifies all validation maps use PascalCase keys
+func TestValidationMaps_PascalCase(t *testing.T) {
+	tests := []struct {
+		name           string
+		validMap       map[string]bool
+		expectedKeys   []string
+		forbiddenKeys  []string
+		mapDescription string
+	}{
+		{
+			name:     "ValidWorkflowProperties uses PascalCase",
+			validMap: interpolation.ValidWorkflowProperties,
+			expectedKeys: []string{
+				"ID",           // not "id"
+				"Name",         // not "name"
+				"CurrentState", // not "current_state"
+				"StartedAt",    // not "started_at"
+				"Duration",     // not "duration"
+			},
+			forbiddenKeys: []string{
+				"id",
+				"name",
+				"current_state",
+				"started_at",
+				"duration",
+			},
+			mapDescription: "ValidWorkflowProperties",
+		},
+		{
+			name:     "ValidStateProperties uses PascalCase and includes all fields",
+			validMap: interpolation.ValidStateProperties,
+			expectedKeys: []string{
+				"Output",   // already PascalCase
+				"Stderr",   // already PascalCase
+				"ExitCode", // already PascalCase
+				"Status",   // already PascalCase
+				"Response", // NEW: from agent steps (F039)
+				"Tokens",   // NEW: from agent steps (F039)
+			},
+			forbiddenKeys: []string{
+				"output",
+				"stderr",
+				"exit_code",
+				"status",
+				"response",
+				"tokens",
+			},
+			mapDescription: "ValidStateProperties",
+		},
+		{
+			name:     "ValidErrorProperties uses PascalCase",
+			validMap: interpolation.ValidErrorProperties,
+			expectedKeys: []string{
+				"Message",  // not "message"
+				"State",    // not "state"
+				"ExitCode", // not "exit_code"
+				"Type",     // not "type"
+			},
+			forbiddenKeys: []string{
+				"message",
+				"state",
+				"exit_code",
+				"type",
+			},
+			mapDescription: "ValidErrorProperties",
+		},
+		{
+			name:     "ValidContextProperties uses PascalCase",
+			validMap: interpolation.ValidContextProperties,
+			expectedKeys: []string{
+				"WorkingDir", // not "working_dir"
+				"User",       // not "user"
+				"Hostname",   // not "hostname"
+			},
+			forbiddenKeys: []string{
+				"working_dir",
+				"user",
+				"hostname",
+			},
+			mapDescription: "ValidContextProperties",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Assert all expected PascalCase keys are present
+			for _, key := range tt.expectedKeys {
+				assert.True(t, tt.validMap[key],
+					"%s must contain PascalCase key %q", tt.mapDescription, key)
+			}
+
+			// Assert all lowercase/snake_case keys are absent
+			for _, key := range tt.forbiddenKeys {
+				assert.False(t, tt.validMap[key],
+					"%s must NOT contain lowercase/snake_case key %q", tt.mapDescription, key)
+			}
+		})
+	}
+}
+
+// TestValidationMaps_Completeness verifies validation maps include ALL fields
+// that BuildExprContext exposes in pkg/expression/evaluator.go
+// Task: T009 - Validation completeness tests
+func TestValidationMaps_Completeness(t *testing.T) {
+	tests := []struct {
+		name              string
+		validMap          map[string]bool
+		requiredFields    []string
+		mapDescription    string
+		contextMapping    string
+		missingIsCritical bool
+	}{
+		{
+			name:     "ValidWorkflowProperties complete",
+			validMap: interpolation.ValidWorkflowProperties,
+			requiredFields: []string{
+				"ID",
+				"Name",
+				"CurrentState",
+				"StartedAt",
+				"Duration",
+			},
+			mapDescription:    "ValidWorkflowProperties",
+			contextMapping:    "workflow.* namespace in BuildExprContext()",
+			missingIsCritical: true,
+		},
+		{
+			name:     "ValidStateProperties complete with F039 fields",
+			validMap: interpolation.ValidStateProperties,
+			requiredFields: []string{
+				"Output",
+				"Stderr",
+				"ExitCode",
+				"Status",
+				"Response", // Added in F039 (agent steps)
+				"Tokens",   // Added in F039 (agent steps)
+			},
+			mapDescription:    "ValidStateProperties",
+			contextMapping:    "states.<step>.* namespace in BuildExprContext()",
+			missingIsCritical: true,
+		},
+		{
+			name:     "ValidErrorProperties complete with F037 fields",
+			validMap: interpolation.ValidErrorProperties,
+			requiredFields: []string{
+				"Message",
+				"State",
+				"ExitCode",
+				"Type",
+			},
+			mapDescription:    "ValidErrorProperties",
+			contextMapping:    "error.* namespace in BuildExprContext()",
+			missingIsCritical: true,
+		},
+		{
+			name:     "ValidContextProperties complete with F033 fields",
+			validMap: interpolation.ValidContextProperties,
+			requiredFields: []string{
+				"WorkingDir",
+				"User",
+				"Hostname",
+			},
+			mapDescription:    "ValidContextProperties",
+			contextMapping:    "context.* namespace in BuildExprContext()",
+			missingIsCritical: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Check all required fields are present
+			missing := []string{}
+			for _, field := range tt.requiredFields {
+				if !tt.validMap[field] {
+					missing = append(missing, field)
+				}
+			}
+
+			if len(missing) > 0 {
+				if tt.missingIsCritical {
+					t.Errorf("%s is incomplete. Missing fields from %s: %v",
+						tt.mapDescription, tt.contextMapping, missing)
+				} else {
+					t.Logf("Warning: %s missing optional fields: %v", tt.mapDescription, missing)
+				}
+			}
+
+			// Verify count matches expected
+			assert.Equal(t, len(tt.requiredFields), len(tt.validMap),
+				"%s should have exactly %d fields matching %s",
+				tt.mapDescription, len(tt.requiredFields), tt.contextMapping)
+		})
+	}
+}
+
+// hasUppercaseLetter checks if a string contains any uppercase letter
+func hasUppercaseLetter(s string) bool {
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			return true
+		}
+	}
+	return false
+}
+
+// containsUnderscore checks if a string contains an underscore
+func containsUnderscore(s string) bool {
+	for _, r := range s {
+		if r == '_' {
+			return true
+		}
+	}
+	return false
+}
+
+// findInvalidKeys returns lowercase and snake_case keys from a map
+func findInvalidKeys(validMap map[string]bool) (lowercase, snakeCase []string) {
+	for key := range validMap {
+		if !hasUppercaseLetter(key) {
+			lowercase = append(lowercase, key)
+		}
+		if containsUnderscore(key) {
+			snakeCase = append(snakeCase, key)
+		}
+	}
+	return lowercase, snakeCase
+}
+
+// TestValidationMaps_NoLowercaseKeys ensures no lowercase keys remain after PascalCase normalization.
+// This prevents regression to pre-normalization inconsistent casing.
+// Task: T009 - Validation completeness tests
+func TestValidationMaps_NoLowercaseKeys(t *testing.T) {
+	tests := []struct {
+		name        string
+		validMap    map[string]bool
+		description string
+	}{
+		{
+			name:        "ValidWorkflowProperties",
+			validMap:    interpolation.ValidWorkflowProperties,
+			description: "workflow properties",
+		},
+		{
+			name:        "ValidStateProperties",
+			validMap:    interpolation.ValidStateProperties,
+			description: "state properties",
+		},
+		{
+			name:        "ValidErrorProperties",
+			validMap:    interpolation.ValidErrorProperties,
+			description: "error properties",
+		},
+		{
+			name:        "ValidContextProperties",
+			validMap:    interpolation.ValidContextProperties,
+			description: "context properties",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lowercaseKeys, snakeCaseKeys := findInvalidKeys(tt.validMap)
+
+			//  requirement: NO lowercase or snake_case keys allowed
+			assert.Empty(t, lowercaseKeys,
+				"%s contains lowercase keys (should be PascalCase): %v", tt.description, lowercaseKeys)
+			assert.Empty(t, snakeCaseKeys,
+				"%s contains snake_case keys (should be PascalCase): %v", tt.description, snakeCaseKeys)
+		})
+	}
+}
+
+// TestValidationMaps_ConsistencyWithBuildExprContext verifies validation maps
+// are synchronized with what BuildExprContext() actually exposes
+// Task: T009 - Validation completeness tests
+func TestValidationMaps_ConsistencyWithBuildExprContext(t *testing.T) {
+	t.Run("workflow namespace consistency", func(t *testing.T) {
+		// These keys MUST match what BuildExprContext sets in workflow map
+		expectedInBuildExprContext := map[string]bool{
+			"ID":           true, // ctx.Workflow.ID
+			"Name":         true, // ctx.Workflow.Name
+			"CurrentState": true, // ctx.Workflow.CurrentState
+			"Duration":     true, // ctx.Workflow.Duration() method call
+			"StartedAt":    true, // ctx.Workflow.StartedAt (for completeness)
+		}
+
+		for key := range expectedInBuildExprContext {
+			assert.True(t, interpolation.ValidWorkflowProperties[key],
+				"ValidWorkflowProperties missing key %q that BuildExprContext exposes", key)
+		}
+	})
+
+	t.Run("state namespace consistency", func(t *testing.T) {
+		// These keys MUST match what BuildExprContext sets in states map
+		expectedInBuildExprContext := map[string]bool{
+			"Output":   true, // v.Output
+			"Stderr":   true, // v.Stderr
+			"ExitCode": true, // v.ExitCode
+			"Status":   true, // v.Status
+			"Response": true, // v.Response (agent steps)
+			"Tokens":   true, // v.Tokens (agent steps)
+		}
+
+		for key := range expectedInBuildExprContext {
+			assert.True(t, interpolation.ValidStateProperties[key],
+				"ValidStateProperties missing key %q that BuildExprContext exposes", key)
+		}
+	})
+
+	t.Run("error namespace consistency", func(t *testing.T) {
+		// These keys MUST match what buildErrorContext() returns
+		expectedInBuildErrorContext := map[string]bool{
+			"Message":  true, // err.Message
+			"State":    true, // err.State
+			"ExitCode": true, // err.ExitCode
+			"Type":     true, // err.Type
+		}
+
+		for key := range expectedInBuildErrorContext {
+			assert.True(t, interpolation.ValidErrorProperties[key],
+				"ValidErrorProperties missing key %q that buildErrorContext exposes", key)
+		}
+	})
+
+	t.Run("context namespace consistency", func(t *testing.T) {
+		// These keys MUST match what buildSystemContext() returns
+		expectedInBuildSystemContext := map[string]bool{
+			"WorkingDir": true, // ctx.WorkingDir
+			"User":       true, // ctx.User
+			"Hostname":   true, // ctx.Hostname
+		}
+
+		for key := range expectedInBuildSystemContext {
+			assert.True(t, interpolation.ValidContextProperties[key],
+				"ValidContextProperties missing key %q that buildSystemContext exposes", key)
+		}
+	})
+}
+
+// TestValidationMaps_BreakingChangeFromPre_ documents the breaking change
+// This test explicitly shows which keys changed from lowercase to PascalCase
+// Task: T009 - Validation completeness tests
+func TestValidationMaps_BreakingChangeFromPre_(t *testing.T) {
+	t.Run("workflow keys changed", func(t *testing.T) {
+		// Pre- (INVALID): lowercase
+		assert.False(t, interpolation.ValidWorkflowProperties["id"], "lowercase 'id' no longer valid")
+		assert.False(t, interpolation.ValidWorkflowProperties["name"], "lowercase 'name' no longer valid")
+		assert.False(t, interpolation.ValidWorkflowProperties["current_state"], "snake_case 'current_state' no longer valid")
+
+		// Post- (VALID): PascalCase
+		assert.True(t, interpolation.ValidWorkflowProperties["ID"], "PascalCase 'ID' is valid")
+		assert.True(t, interpolation.ValidWorkflowProperties["Name"], "PascalCase 'Name' is valid")
+		assert.True(t, interpolation.ValidWorkflowProperties["CurrentState"], "PascalCase 'CurrentState' is valid")
+	})
+
+	t.Run("error keys changed", func(t *testing.T) {
+		// Pre- (INVALID): lowercase/snake_case
+		assert.False(t, interpolation.ValidErrorProperties["message"], "lowercase 'message' no longer valid")
+		assert.False(t, interpolation.ValidErrorProperties["state"], "lowercase 'state' no longer valid")
+		assert.False(t, interpolation.ValidErrorProperties["exit_code"], "snake_case 'exit_code' no longer valid")
+		assert.False(t, interpolation.ValidErrorProperties["type"], "lowercase 'type' no longer valid")
+
+		// Post- (VALID): PascalCase
+		assert.True(t, interpolation.ValidErrorProperties["Message"], "PascalCase 'Message' is valid")
+		assert.True(t, interpolation.ValidErrorProperties["State"], "PascalCase 'State' is valid")
+		assert.True(t, interpolation.ValidErrorProperties["ExitCode"], "PascalCase 'ExitCode' is valid")
+		assert.True(t, interpolation.ValidErrorProperties["Type"], "PascalCase 'Type' is valid")
+	})
+
+	t.Run("context keys changed", func(t *testing.T) {
+		// Pre- (INVALID): snake_case
+		assert.False(t, interpolation.ValidContextProperties["working_dir"], "snake_case 'working_dir' no longer valid")
+		assert.False(t, interpolation.ValidContextProperties["user"], "lowercase 'user' no longer valid")
+		assert.False(t, interpolation.ValidContextProperties["hostname"], "lowercase 'hostname' no longer valid")
+
+		// Post- (VALID): PascalCase
+		assert.True(t, interpolation.ValidContextProperties["WorkingDir"], "PascalCase 'WorkingDir' is valid")
+		assert.True(t, interpolation.ValidContextProperties["User"], "PascalCase 'User' is valid")
+		assert.True(t, interpolation.ValidContextProperties["Hostname"], "PascalCase 'Hostname' is valid")
+	})
+
+	t.Run("state keys already PascalCase but Response/Tokens added", func(t *testing.T) {
+		// State properties were already PascalCase (good!)
+		assert.True(t, interpolation.ValidStateProperties["Output"], "Output already PascalCase")
+		assert.True(t, interpolation.ValidStateProperties["Stderr"], "Stderr already PascalCase")
+		assert.True(t, interpolation.ValidStateProperties["ExitCode"], "ExitCode already PascalCase")
+		assert.True(t, interpolation.ValidStateProperties["Status"], "Status already PascalCase")
+
+		//  adds missing fields from F039 (agent steps)
+		assert.True(t, interpolation.ValidStateProperties["Response"], "Response field added in ")
+		assert.True(t, interpolation.ValidStateProperties["Tokens"], "Tokens field added in ")
+
+		// Lowercase versions should NOT exist
+		assert.False(t, interpolation.ValidStateProperties["response"], "lowercase 'response' not valid")
+		assert.False(t, interpolation.ValidStateProperties["tokens"], "lowercase 'tokens' not valid")
+	})
 }

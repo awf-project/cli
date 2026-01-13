@@ -51,6 +51,8 @@ func convertReferenceType(t interpolation.ReferenceType) workflow.ReferenceType 
 		return workflow.TypeError
 	case interpolation.TypeContext:
 		return workflow.TypeContext
+	case interpolation.TypeLoop:
+		return workflow.TypeLoop
 	default:
 		return workflow.TypeUnknown
 	}

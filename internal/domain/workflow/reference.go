@@ -33,11 +33,11 @@ type TemplateReference struct {
 
 // ValidWorkflowProperties lists known workflow properties that can be referenced.
 var ValidWorkflowProperties = map[string]bool{
-	"id":            true,
-	"name":          true,
-	"current_state": true,
-	"started_at":    true,
-	"duration":      true,
+	"ID":           true,
+	"Name":         true,
+	"CurrentState": true,
+	"StartedAt":    true,
+	"Duration":     true,
 }
 
 // ValidStateProperties lists known step state properties that can be referenced.
@@ -46,6 +46,8 @@ var ValidStateProperties = map[string]bool{
 	"Stderr":   true,
 	"ExitCode": true,
 	"Status":   true,
+	"Response": true,
+	"Tokens":   true,
 }
 
 // lowercaseToUppercase maps lowercase property names to their correct uppercase equivalents.
@@ -55,21 +57,58 @@ var lowercaseToUppercase = map[string]string{
 	"stderr":    "Stderr",
 	"exit_code": "ExitCode",
 	"status":    "Status",
+	"response":  "Response",
+	"tokens":    "Tokens",
+}
+
+// lowercaseToUppercaseError maps lowercase error property names to their correct uppercase equivalents.
+var lowercaseToUppercaseError = map[string]string{
+	"message":   "Message",
+	"state":     "State",
+	"exit_code": "ExitCode",
+	"type":      "Type",
+}
+
+// lowercaseToUppercaseContext maps lowercase context property names to their correct uppercase equivalents.
+var lowercaseToUppercaseContext = map[string]string{
+	"working_dir": "WorkingDir",
+	"user":        "User",
+	"hostname":    "Hostname",
+}
+
+// lowercaseToUppercaseWorkflow maps lowercase workflow property names to their correct uppercase equivalents.
+var lowercaseToUppercaseWorkflow = map[string]string{
+	"id":            "ID",
+	"name":          "Name",
+	"current_state": "CurrentState",
+	"started_at":    "StartedAt",
+	"duration":      "Duration",
 }
 
 // ValidErrorProperties lists known error properties in error hooks.
 var ValidErrorProperties = map[string]bool{
-	"message":   true,
-	"state":     true,
-	"exit_code": true,
-	"type":      true,
+	"Message":  true,
+	"State":    true,
+	"ExitCode": true,
+	"Type":     true,
 }
 
 // ValidContextProperties lists known context properties.
 var ValidContextProperties = map[string]bool{
-	"working_dir": true,
-	"user":        true,
-	"hostname":    true,
+	"WorkingDir": true,
+	"User":       true,
+	"Hostname":   true,
+}
+
+// ValidLoopProperties lists known loop properties accessible during loop iteration.
+var ValidLoopProperties = map[string]bool{
+	"Item":   true,
+	"Index":  true,
+	"Index1": true, // 1-based index computed via Index1() method
+	"First":  true,
+	"Last":   true,
+	"Length": true,
+	"Parent": true, // nested loop parent reference
 }
 
 // TemplateAnalyzer parses templates and extracts interpolation references.

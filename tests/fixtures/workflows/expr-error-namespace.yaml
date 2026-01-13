@@ -1,0 +1,47 @@
+# Feature: Test error namespace in hook expressions (VALID)
+# This workflow should PASS validation with correct error.* namespace access
+
+name: expr-error-namespace
+version: "1.0.0"
+description: Valid workflow with error namespace in expressions
+
+states:
+  initial: risky_step
+
+  risky_step:
+    type: step
+    command: exit 1
+    on_success: done
+    on_failure: error_check1
+
+  error_check1:
+    type: step
+    # VALID: Using error.Message with PascalCase
+    when: 'error.Message != ""'
+    command: 'echo "Error occurred - {{error.Message}}"'
+    on_success: error_check2
+    on_failure: error
+
+  error_check2:
+    type: step
+    # VALID: Using error.ExitCode
+    when: 'error.ExitCode > 0'
+    command: 'echo "Non-zero exit code - {{error.ExitCode}}"'
+    on_success: error_check3
+    on_failure: error
+
+  error_check3:
+    type: step
+    # VALID: Using error.Type
+    when: 'error.Type == "execution"'
+    command: echo "Execution error"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

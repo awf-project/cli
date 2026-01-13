@@ -67,8 +67,8 @@ states:
 
 hooks:
   workflow_start:
-    - log: "Starting workflow: {{workflow.name}}"
+    - log: "Starting workflow: {{workflow.Name}}"
   workflow_end:
     - log: "Completed successfully"
   workflow_error:
-    - log: "Error occurred: {{error.message}}"
+    - log: "Error occurred: {{error.Message}}"

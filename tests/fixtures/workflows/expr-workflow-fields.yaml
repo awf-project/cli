@@ -1,0 +1,47 @@
+# Feature: Test workflow fields in expressions (VALID)
+# This workflow should PASS validation with PascalCase workflow.* fields
+
+name: expr-workflow-fields
+version: "1.0.0"
+description: Valid workflow with workflow namespace fields in expressions
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "test"
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # VALID: Using workflow.Name with PascalCase
+    when: 'workflow.Name == "expr-workflow-fields"'
+    command: echo "Workflow name matches"
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    # VALID: Using workflow.CurrentState
+    when: 'workflow.CurrentState != ""'
+    command: 'echo "Current state - {{workflow.CurrentState}}"'
+    on_success: step4
+    on_failure: error
+
+  step4:
+    type: step
+    # VALID: Using workflow.Duration (method call, not field)
+    when: 'workflow.Duration() > 0'
+    command: echo "Workflow has duration"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

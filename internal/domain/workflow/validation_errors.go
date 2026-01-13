@@ -28,6 +28,7 @@ const (
 	ErrInvalidStateProperty     ValidationCode = "invalid_state_property"
 	ErrInvalidErrorProperty     ValidationCode = "invalid_error_property"
 	ErrInvalidContextProperty   ValidationCode = "invalid_context_property"
+	ErrInvalidLoopProperty      ValidationCode = "invalid_loop_property"
 	ErrUnknownReferenceType     ValidationCode = "unknown_reference_type"
 	ErrErrorRefOutsideErrorHook ValidationCode = "error_ref_outside_error_hook"
 

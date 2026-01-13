@@ -230,8 +230,7 @@ func (v *TemplateValidator) ValidateReference(ref *TemplateReference, stepName, 
 	case TypeContext:
 		v.validateContextRef(ref, stepName, fieldName)
 	case TypeLoop:
-		// Loop references are validated at runtime, not statically
-		// No validation needed (e.g., {{loop.Index}}, {{loop.Item}})
+		v.validateLoopRef(ref, stepName, fieldName)
 	case TypeUnknown:
 		v.result.AddError(ErrUnknownReferenceType, stepName,
 			fmt.Sprintf("unknown reference type %q in %s", ref.Raw, fieldName))
@@ -424,9 +423,9 @@ func (v *TemplateValidator) validateStateRef(ref *TemplateReference, stepName, f
 
 	// Check for valid property (if provided)
 	if ref.Property == "" {
-		// Missing property - state refs require a property like .output, .stderr, etc.
+		// Missing property - state refs require a property like .Output, .Stderr, etc.
 		v.result.AddError(ErrInvalidStateProperty, stepName,
-			fmt.Sprintf("missing property for state reference %q in %s (expected .output, .stderr, .exit_code, or .status)", referencedStep, fieldName))
+			fmt.Sprintf("missing property for state reference %q in %s (expected .Output, .Stderr, .ExitCode, or .Status)", referencedStep, fieldName))
 		return
 	}
 
@@ -463,6 +462,13 @@ func (v *TemplateValidator) getStepNameFromPath(path string) string {
 }
 
 func (v *TemplateValidator) validateWorkflowRef(ref *TemplateReference, stepName, fieldName string) {
+	// Check for lowercase properties and suggest PascalCase
+	if suggestion, isLowercase := lowercaseToUppercaseWorkflow[ref.Path]; isLowercase {
+		v.result.AddError(ErrInvalidWorkflowProperty, stepName,
+			fmt.Sprintf("invalid workflow property %q in %s, use '%s' instead", ref.Path, fieldName, suggestion))
+		return
+	}
+
 	if !ValidWorkflowProperties[ref.Path] {
 		v.result.AddError(ErrInvalidWorkflowProperty, stepName,
 			fmt.Sprintf("invalid workflow property %q in %s", ref.Path, fieldName))
@@ -477,6 +483,13 @@ func (v *TemplateValidator) validateErrorRef(ref *TemplateReference, stepName, f
 		return
 	}
 
+	// Check for lowercase properties and suggest PascalCase
+	if suggestion, isLowercase := lowercaseToUppercaseError[ref.Path]; isLowercase {
+		v.result.AddError(ErrInvalidErrorProperty, stepName,
+			fmt.Sprintf("invalid error property %q in %s, use '%s' instead", ref.Path, fieldName, suggestion))
+		return
+	}
+
 	// Validate the property
 	if !ValidErrorProperties[ref.Path] {
 		v.result.AddError(ErrInvalidErrorProperty, stepName,
@@ -485,9 +498,25 @@ func (v *TemplateValidator) validateErrorRef(ref *TemplateReference, stepName, f
 }
 
 func (v *TemplateValidator) validateContextRef(ref *TemplateReference, stepName, fieldName string) {
+	// Check for lowercase properties and suggest PascalCase
+	if suggestion, isLowercase := lowercaseToUppercaseContext[ref.Path]; isLowercase {
+		v.result.AddError(ErrInvalidContextProperty, stepName,
+			fmt.Sprintf("invalid context property %q in %s, use '%s' instead", ref.Path, fieldName, suggestion))
+		return
+	}
+
 	if !ValidContextProperties[ref.Path] {
 		v.result.AddError(ErrInvalidContextProperty, stepName,
 			fmt.Sprintf("invalid context property %q in %s", ref.Path, fieldName))
+	}
+}
+
+func (v *TemplateValidator) validateLoopRef(ref *TemplateReference, stepName, fieldName string) {
+	// Loop references are only accessible in template interpolation
+	// We validate the property exists in ValidLoopProperties
+	if !ValidLoopProperties[ref.Path] {
+		v.result.AddError(ErrInvalidLoopProperty, stepName,
+			fmt.Sprintf("invalid loop property %q in %s", ref.Path, fieldName))
 	}
 }
 

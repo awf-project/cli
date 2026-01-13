@@ -1,0 +1,39 @@
+# Feature: Test lowercase state field keys in expressions (INVALID)
+# This workflow should FAIL validation because it uses lowercase keys
+# in when: expressions instead of PascalCase
+
+name: expr-lowercase-state
+version: "1.0.0"
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "test" && exit 0
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # INVALID: Using lowercase 'exit_code' instead of 'ExitCode' in when: expression
+    when: 'states.step1.exit_code == 0'
+    command: echo "success"
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    # INVALID: Using lowercase 'output' instead of 'Output' in when: expression
+    when: 'states.step1.output contains "test"'
+    command: echo "contains test"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

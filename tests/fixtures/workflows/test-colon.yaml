@@ -1,0 +1,19 @@
+name: test
+version: "1.0.0"
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "Error occurred: test"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

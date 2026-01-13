@@ -80,7 +80,7 @@ Examples:
   awf run analyze-code --input file=main.go
   awf run build-project --input target=linux --output=streaming
   awf run my-workflow --step=process --input data=test
-  awf run my-workflow --step=analyze --mock states.fetch.output="cached data"
+  awf run my-workflow --step=analyze --mock states.fetch.Output="cached data"
   awf run my-workflow --dry-run
   awf run my-workflow --interactive
   awf run my-workflow --interactive --breakpoint validate,process`,
@@ -111,7 +111,7 @@ Examples:
 		"Output mode: silent (default), streaming, buffered")
 	cmd.Flags().StringVarP(&stepFlag, "step", "s", "", "Execute only this step (skips state machine)")
 	cmd.Flags().StringArrayVarP(&mockFlags, "mock", "m", nil,
-		"Mock state value for single step execution (states.step.output=value)")
+		"Mock state value for single step execution (states.step.Output=value)")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false,
 		"Show execution plan without running commands")
 	cmd.Flags().BoolVar(&interactiveFlag, "interactive", false,
@@ -927,7 +927,7 @@ func runSingleStep(
 }
 
 // ParseMockFlags parses --mock flags into a map.
-// Format: states.step_name.output=value
+// Format: states.step_name.Output=value
 func ParseMockFlags(flags []string) (map[string]string, error) {
 	mocks := make(map[string]string)
 

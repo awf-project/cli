@@ -26,11 +26,11 @@ env:
 
 hooks:
   workflow_start:
-    - log: "Starting workflow: {{workflow.name}}"
+    - log: "Starting workflow: {{workflow.Name}}"
   workflow_end:
-    - log: "Completed in {{workflow.duration}}s"
+    - log: "Completed in {{workflow.Duration}}s"
   workflow_error:
-    - log: "Error: {{error.message}}"
+    - log: "Error: {{error.Message}}"
 
 states:
   initial: validate

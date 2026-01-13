@@ -1,0 +1,47 @@
+# Feature: Test PascalCase state field keys in expressions (VALID)
+# This workflow should PASS validation with correct PascalCase keys
+
+name: expr-pascalcase-state
+version: "1.0.0"
+description: Valid workflow with PascalCase state keys in expressions
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "test" && exit 0
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    # VALID: Using PascalCase 'ExitCode'
+    when: 'states.step1.ExitCode == 0'
+    command: echo "success"
+    on_success: step3
+    on_failure: error
+
+  step3:
+    type: step
+    # VALID: Using PascalCase 'Output'
+    when: 'states.step1.Output contains "test"'
+    command: echo "contains test"
+    on_success: step4
+    on_failure: error
+
+  step4:
+    type: step
+    # VALID: Using PascalCase 'Status'
+    when: 'states.step1.Status == "success"'
+    command: echo "step succeeded"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

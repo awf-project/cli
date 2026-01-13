@@ -1,0 +1,29 @@
+# Test Fixture: Invalid lowercase expression context keys
+# This workflow demonstrates INVALID usage - should fail validation
+name: lowercase-invalid
+version: "1.0.0"
+
+states:
+  initial: check
+
+  check:
+    type: step
+    command: echo "ready"
+    on_success: conditional
+    on_failure: error
+
+  conditional:
+    type: step
+    # INVALID: Using lowercase 'exit_code' instead of 'ExitCode' in when: expression
+    when: 'states.check.exit_code == 0'
+    command: echo "checking state"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

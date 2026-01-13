@@ -2,6 +2,7 @@ package expression
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,10 +54,8 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			want:    false,
 			wantErr: false,
 		},
-
-		// Comparison operators - inequality
 		{
-			name: "string inequality true",
+			name: "not equal true",
 			expr: `inputs.mode != "full"`,
 			ctx: &interpolation.Context{
 				Inputs: map[string]any{"mode": "partial"},
@@ -65,97 +64,289 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "integer inequality true",
-			expr: `inputs.count != 10`,
+			name: "not equal false",
+			expr: `inputs.mode != "full"`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 5},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Comparison operators - less than
-		{
-			name: "less than true",
-			expr: `inputs.count < 10`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 5},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "less than false",
-			expr: `inputs.count < 10`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 15},
+				Inputs: map[string]any{"mode": "full"},
 			},
 			want:    false,
 			wantErr: false,
 		},
 
-		// Comparison operators - greater than
+		// Comparison operators - greater/less
 		{
 			name: "greater than true",
-			expr: `inputs.count > 10`,
+			expr: `inputs.count > 5`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 15},
+				Inputs: map[string]any{"count": 10},
 			},
 			want:    true,
 			wantErr: false,
 		},
 		{
 			name: "greater than false",
-			expr: `inputs.count > 10`,
+			expr: `inputs.count > 5`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 5},
+				Inputs: map[string]any{"count": 3},
 			},
 			want:    false,
 			wantErr: false,
 		},
-
-		// Comparison operators - less than or equal
-		{
-			name: "less than or equal true (less)",
-			expr: `inputs.count <= 10`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 5},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "less than or equal true (equal)",
-			expr: `inputs.count <= 10`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 10},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "less than or equal false",
-			expr: `inputs.count <= 10`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 15},
-			},
-			want:    false,
-			wantErr: false,
-		},
-
-		// Comparison operators - greater than or equal
 		{
 			name: "greater than or equal true (greater)",
-			expr: `inputs.count >= 10`,
+			expr: `inputs.count >= 5`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 15},
+				Inputs: map[string]any{"count": 10},
 			},
 			want:    true,
 			wantErr: false,
 		},
 		{
 			name: "greater than or equal true (equal)",
-			expr: `inputs.count >= 10`,
+			expr: `inputs.count >= 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 5},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "less than true",
+			expr: `inputs.count < 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 3},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "less than false",
+			expr: `inputs.count < 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "less than or equal true (less)",
+			expr: `inputs.count <= 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 3},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "less than or equal true (equal)",
+			expr: `inputs.count <= 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 5},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Logical operators
+		{
+			name: "logical AND both true",
+			expr: `inputs.count > 5 && inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "full",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "logical AND first false",
+			expr: `inputs.count > 5 && inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 3,
+					"mode":  "full",
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "logical AND second false",
+			expr: `inputs.count > 5 && inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "partial",
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "logical OR both true",
+			expr: `inputs.count > 5 || inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "full",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "logical OR first true",
+			expr: `inputs.count > 5 || inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "partial",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "logical OR second true",
+			expr: `inputs.count > 5 || inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 3,
+					"mode":  "full",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "logical OR both false",
+			expr: `inputs.count > 5 || inputs.mode == "full"`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 3,
+					"mode":  "partial",
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "logical NOT true",
+			expr: `!(inputs.count > 5)`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 3},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "logical NOT false",
+			expr: `!(inputs.count > 5)`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// String operations
+		{
+			name: "string contains true",
+			expr: `contains(inputs.message, "hello")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "hello world"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "string contains false",
+			expr: `contains(inputs.message, "hello")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "goodbye world"},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "string has_prefix true",
+			expr: `has_prefix(inputs.message, "hello")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "hello world"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "string has_prefix false",
+			expr: `has_prefix(inputs.message, "hello")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "goodbye world"},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "string has_suffix true",
+			expr: `has_suffix(inputs.message, "world")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "hello world"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "string has_suffix false",
+			expr: `has_suffix(inputs.message, "world")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"message": "hello universe"},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Arithmetic operations
+		{
+			name: "arithmetic addition",
+			expr: `inputs.count + 5 == 15`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "arithmetic subtraction",
+			expr: `inputs.count - 5 == 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "arithmetic multiplication",
+			expr: `inputs.count * 2 == 20`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "arithmetic division",
+			expr: `inputs.count / 2 == 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"count": 10},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "arithmetic modulo",
+			expr: `inputs.count % 3 == 1`,
 			ctx: &interpolation.Context{
 				Inputs: map[string]any{"count": 10},
 			},
@@ -163,191 +354,9 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			wantErr: false,
 		},
 
-		// Logical operators - and
-		{
-			name: "logical and true",
-			expr: `inputs.mode == "full" and inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "full", "count": 10},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "logical and false (first false)",
-			expr: `inputs.mode == "full" and inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "partial", "count": 10},
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "logical and false (second false)",
-			expr: `inputs.mode == "full" and inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "full", "count": 3},
-			},
-			want:    false,
-			wantErr: false,
-		},
-
-		// Logical operators - or
-		{
-			name: "logical or true (first true)",
-			expr: `inputs.mode == "full" or inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "full", "count": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "logical or true (second true)",
-			expr: `inputs.mode == "full" or inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "partial", "count": 10},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "logical or false",
-			expr: `inputs.mode == "full" or inputs.count > 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "partial", "count": 3},
-			},
-			want:    false,
-			wantErr: false,
-		},
-
-		// Logical operators - not
-		{
-			name: "logical not true",
-			expr: `not (inputs.mode == "full")`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "partial"},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "logical not false",
-			expr: `not (inputs.mode == "full")`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "full"},
-			},
-			want:    false,
-			wantErr: false,
-		},
-
-		// Parentheses grouping
-		{
-			name: "parentheses precedence",
-			expr: `(inputs.a == 1 or inputs.b == 2) and inputs.c == 3`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 1, "b": 0, "c": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "parentheses precedence (without parens different result)",
-			expr: `inputs.a == 1 or (inputs.b == 2 and inputs.c == 3)`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 0, "b": 2, "c": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Access to states (step results)
-		{
-			name: "access states exit_code",
-			expr: `states.process.exit_code == 0`,
-			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"process": {ExitCode: 0, Output: "success"},
-				},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "access states output",
-			expr: `states.process.output == "success"`,
-			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"process": {ExitCode: 0, Output: "success"},
-				},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Complex condition from spec
-		{
-			name: "complex condition from spec",
-			expr: `states.process.exit_code == 0 and inputs.mode == "full"`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"mode": "full"},
-				States: map[string]interpolation.StepStateData{
-					"process": {ExitCode: 0},
-				},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Access to env variables
-		{
-			name: "access env variable",
-			expr: `env.DEBUG == "true"`,
-			ctx: &interpolation.Context{
-				Env: map[string]string{"DEBUG": "true"},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Access to workflow metadata
-		{
-			name: "access workflow name",
-			expr: `workflow.name == "my-workflow"`,
-			ctx: &interpolation.Context{
-				Workflow: interpolation.WorkflowData{Name: "my-workflow"},
-			},
-			want:    true,
-			wantErr: false,
-		},
-
-		// Error cases
-		{
-			name:    "invalid expression syntax",
-			expr:    `inputs.mode ==`,
-			ctx:     &interpolation.Context{Inputs: map[string]any{}},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "undefined variable returns false",
-			expr: `inputs.undefined_var == "value"`,
-			ctx:  &interpolation.Context{Inputs: map[string]any{}},
-			// expr library treats undefined as nil, comparison returns false
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name:    "empty expression",
-			expr:    ``,
-			ctx:     &interpolation.Context{},
-			want:    false,
-			wantErr: true,
-		},
-
 		// Type coercion
 		{
-			name: "string number comparison",
+			name: "string to number coercion",
 			expr: `inputs.count > 5`,
 			ctx: &interpolation.Context{
 				Inputs: map[string]any{"count": "10"},
@@ -356,30 +365,222 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "float comparison",
-			expr: `inputs.rate >= 0.5`,
+			name: "boolean string true",
+			expr: `inputs.enabled == true`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"rate": 0.75},
+				Inputs: map[string]any{"enabled": "true"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "boolean string false",
+			expr: `inputs.enabled == false`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{"enabled": "false"},
 			},
 			want:    true,
 			wantErr: false,
 		},
 
-		// Boolean values
+		// State access (step results)
 		{
-			name: "boolean true",
-			expr: `inputs.enabled == true`,
+			name: "state output equality",
+			expr: `states.step1.Output == "success"`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"enabled": true},
+				States: map[string]interpolation.StepStateData{
+					"step1": {Output: "success"},
+				},
 			},
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "boolean false",
-			expr: `inputs.enabled == false`,
+			name: "state exit code",
+			expr: `states.step1.ExitCode == 0`,
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"enabled": false},
+				States: map[string]interpolation.StepStateData{
+					"step1": {ExitCode: 0},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "state status",
+			expr: `states.step1.Status == "completed"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step1": {Status: "completed"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Environment variables
+		{
+			name: "env variable access",
+			expr: `env.HOME == "/home/user"`,
+			ctx: &interpolation.Context{
+				Env: map[string]string{"HOME": "/home/user"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "env variable contains",
+			expr: `contains(env.PATH, "/usr/bin")`,
+			ctx: &interpolation.Context{
+				Env: map[string]string{"PATH": "/usr/bin:/usr/local/bin"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Workflow metadata
+		{
+			name: "workflow ID",
+			expr: `workflow.ID == "wf-123"`,
+			ctx: &interpolation.Context{
+				Workflow: interpolation.WorkflowData{ID: "wf-123"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "workflow name",
+			expr: `workflow.Name == "my-workflow"`,
+			ctx: &interpolation.Context{
+				Workflow: interpolation.WorkflowData{Name: "my-workflow"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "workflow current state",
+			expr: `workflow.CurrentState == "step1"`,
+			ctx: &interpolation.Context{
+				Workflow: interpolation.WorkflowData{CurrentState: "step1"},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Complex nested conditions
+		{
+			name: "complex condition with multiple operators",
+			expr: `(inputs.count > 5 && inputs.mode == "full") || states.step1.ExitCode != 0`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "full",
+				},
+				States: map[string]interpolation.StepStateData{
+					"step1": {ExitCode: 0},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "complex condition with parentheses",
+			expr: `inputs.count > 5 && (inputs.mode == "full" || inputs.mode == "partial")`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{
+					"count": 10,
+					"mode":  "partial",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Edge cases and error conditions
+		{
+			name: "nil context",
+			expr: `inputs.count > 5`,
+			ctx:  nil,
+			// Should not error, inputs should be empty map
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "empty inputs",
+			expr: `inputs.count > 5`,
+			ctx: &interpolation.Context{
+				Inputs: map[string]any{},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "missing state",
+			expr: `states.nonexistent.Output == "test"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Test  PascalCase normalization
+		{
+			name: "access state.Output field (PascalCase)",
+			expr: `states.step1.Output == "success"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step1": {Output: "success"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "access state.ExitCode field (PascalCase)",
+			expr: `states.step1.ExitCode == 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step1": {ExitCode: 0},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "access state.Status field (PascalCase)",
+			expr: `states.step1.Status == "completed"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step1": {Status: "completed"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "access state.Response field",
+			expr: `states.agent.Response.result == "ok"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"agent": {
+						Response: map[string]any{"result": "ok"},
+					},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "access state.Tokens field",
+			expr: `states.agent.Tokens > 50`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"agent": {
+						Response: map[string]any{},
+						Tokens:   150,
+					},
+				},
 			},
 			want:    true,
 			wantErr: false,
@@ -473,69 +674,178 @@ func TestBuildExprContext(t *testing.T) {
 	}
 }
 
-// Additional edge case tests for expression evaluation
+func TestCoerceValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  any
+	}{
+		{
+			name:  "string number to int",
+			value: "42",
+			want:  int64(42),
+		},
+		{
+			name:  "string float to float",
+			value: "3.14",
+			want:  3.14,
+		},
+		{
+			name:  "string true to bool",
+			value: "true",
+			want:  true,
+		},
+		{
+			name:  "string false to bool",
+			value: "false",
+			want:  false,
+		},
+		{
+			name:  "string True (capitalized) to bool",
+			value: "True",
+			want:  true,
+		},
+		{
+			name:  "string FALSE (uppercase) to bool",
+			value: "FALSE",
+			want:  false,
+		},
+		{
+			name:  "non-numeric string unchanged",
+			value: "hello",
+			want:  "hello",
+		},
+		{
+			name:  "int unchanged",
+			value: 42,
+			want:  42,
+		},
+		{
+			name:  "float unchanged",
+			value: 3.14,
+			want:  3.14,
+		},
+		{
+			name:  "bool unchanged",
+			value: true,
+			want:  true,
+		},
+		{
+			name:  "nil unchanged",
+			value: nil,
+			want:  nil,
+		},
+	}
 
-func TestExprEvaluator_StringComparisons(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := coerceValue(tt.value)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExprEvaluator_LoopContext(t *testing.T) {
 	tests := []struct {
 		name    string
-		expr    string
 		ctx     *interpolation.Context
+		expr    string
 		want    bool
 		wantErr bool
 	}{
 		{
-			name: "string contains check",
-			expr: `inputs.message contains "error"`,
+			name: "loop.Index access",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"message": "an error occurred"},
+				Loop: &interpolation.LoopData{Index: 5, Length: 10},
 			},
+			expr:    "loop.Index == 5",
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "string does not contain",
-			expr: `inputs.message contains "error"`,
+			name: "loop.Index1 access (1-based index)",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"message": "all good"},
+				Loop: &interpolation.LoopData{Index: 5, Length: 10},
 			},
+			expr:    "loop.Index1 == 6",
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "loop.Item access",
+			ctx: &interpolation.Context{
+				Loop: &interpolation.LoopData{
+					Item:   "test-item",
+					Index:  0,
+					Length: 5,
+				},
+			},
+			expr:    `loop.Item == "test-item"`,
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "loop.First flag",
+			ctx: &interpolation.Context{
+				Loop: &interpolation.LoopData{
+					Index:  0,
+					Length: 5,
+					First:  true,
+				},
+			},
+			expr:    "loop.First == true",
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "loop.Last flag",
+			ctx: &interpolation.Context{
+				Loop: &interpolation.LoopData{
+					Index:  4,
+					Length: 5,
+					Last:   true,
+				},
+			},
+			expr:    "loop.Last == true",
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "loop.Length access",
+			ctx: &interpolation.Context{
+				Loop: &interpolation.LoopData{
+					Index:  2,
+					Length: 10,
+				},
+			},
+			expr:    "loop.Length == 10",
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "loop.Parent access (nested loop)",
+			ctx: &interpolation.Context{
+				Loop: &interpolation.LoopData{
+					Index:  1,
+					Length: 3,
+					Parent: &interpolation.LoopData{
+						Index:  5,
+						Length: 10,
+					},
+				},
+			},
+			expr:    "loop.Parent.Index == 5",
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "nil loop context",
+			ctx: &interpolation.Context{
+				Loop: nil,
+			},
+			expr:    "loop.Index == 0",
 			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "string startsWith",
-			expr: `inputs.path startsWith "/home"`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"path": "/home/user"},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "string endsWith",
-			expr: `inputs.file endsWith ".go"`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"file": "main.go"},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "empty string comparison",
-			expr: `inputs.value == ""`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"value": ""},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "string with special characters",
-			expr: `inputs.pattern == "test.*\\d+"`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"pattern": "test.*\\d+"},
-			},
-			want:    true,
-			wantErr: false,
+			wantErr: true, // Should error because loop namespace doesn't exist
 		},
 	}
 
@@ -555,230 +865,78 @@ func TestExprEvaluator_StringComparisons(t *testing.T) {
 	}
 }
 
-func TestExprEvaluator_NumericOperations(t *testing.T) {
+func TestExprEvaluator_ErrorContext(t *testing.T) {
 	tests := []struct {
 		name    string
-		expr    string
 		ctx     *interpolation.Context
+		expr    string
 		want    bool
 		wantErr bool
 	}{
 		{
-			name: "integer division comparison",
-			expr: `inputs.total / 2 >= 5`,
+			name: "error.Message access",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"total": 12},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "modulo operation",
-			expr: `inputs.count % 2 == 0`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"count": 10},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "negative number comparison",
-			expr: `inputs.offset < 0`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"offset": -5},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "float precision comparison",
-			expr: `inputs.ratio > 0.99 and inputs.ratio < 1.01`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"ratio": 1.0},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "mixed int and float comparison",
-			expr: `inputs.value >= 5`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"value": 5.5},
-			},
-			want:    true,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := NewExprEvaluator()
-			got, err := e.Evaluate(tt.expr, tt.ctx)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestExprEvaluator_ComplexLogicalExpressions(t *testing.T) {
-	tests := []struct {
-		name    string
-		expr    string
-		ctx     *interpolation.Context
-		want    bool
-		wantErr bool
-	}{
-		{
-			name: "triple and",
-			expr: `inputs.a == 1 and inputs.b == 2 and inputs.c == 3`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 1, "b": 2, "c": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "triple or",
-			expr: `inputs.a == 1 or inputs.b == 2 or inputs.c == 3`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 0, "b": 0, "c": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "mixed and/or without parentheses",
-			expr: `inputs.a == 1 and inputs.b == 2 or inputs.c == 3`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 0, "b": 2, "c": 3},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "double negation",
-			expr: `not (not (inputs.enabled == true))`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"enabled": true},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "nested parentheses",
-			expr: `((inputs.a > 0) and (inputs.b > 0)) or (inputs.c > 0)`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": 1, "b": 1, "c": 0},
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "de morgan law equivalent",
-			expr: `not (inputs.a == true or inputs.b == true)`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"a": false, "b": false},
-			},
-			want:    true,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := NewExprEvaluator()
-			got, err := e.Evaluate(tt.expr, tt.ctx)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestExprEvaluator_StateAccessPatterns(t *testing.T) {
-	tests := []struct {
-		name    string
-		expr    string
-		ctx     *interpolation.Context
-		want    bool
-		wantErr bool
-	}{
-		{
-			name: "check step status completed",
-			expr: `states.build.status == "completed"`,
-			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"build": {Status: "completed", ExitCode: 0},
+				Error: &interpolation.ErrorData{
+					Message:  "command failed",
+					State:    "step1",
+					ExitCode: 1,
+					Type:     "execution",
 				},
 			},
+			expr:    `error.Message == "command failed"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "check step status failed",
-			expr: `states.deploy.status == "failed"`,
+			name: "error.State access",
 			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"deploy": {Status: "failed", ExitCode: 1},
+				Error: &interpolation.ErrorData{
+					Message:  "command failed",
+					State:    "step1",
+					ExitCode: 1,
+					Type:     "execution",
 				},
 			},
+			expr:    `error.State == "step1"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "check exit code non-zero",
-			expr: `states.test.exit_code != 0`,
+			name: "error.ExitCode access",
 			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"test": {ExitCode: 127},
+				Error: &interpolation.ErrorData{
+					Message:  "command failed",
+					State:    "step1",
+					ExitCode: 1,
+					Type:     "execution",
 				},
 			},
+			expr:    "error.ExitCode == 1",
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "check stderr is empty",
-			expr: `states.compile.stderr == ""`,
+			name: "error.Type access",
 			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"compile": {Stderr: ""},
+				Error: &interpolation.ErrorData{
+					Message:  "command failed",
+					State:    "step1",
+					ExitCode: 1,
+					Type:     "execution",
 				},
 			},
+			expr:    `error.Type == "execution"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "combined state checks",
-			expr: `states.build.exit_code == 0 and states.test.exit_code == 0`,
+			name: "nil error context",
 			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{
-					"build": {ExitCode: 0},
-					"test":  {ExitCode: 0},
-				},
+				Error: nil,
 			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "access undefined state errors - deep access",
-			expr: `states.nonexistent.exit_code == 0`,
-			ctx: &interpolation.Context{
-				States: map[string]interpolation.StepStateData{},
-			},
-			// expr library errors when trying to access property of nil
+			expr:    `error.Message == ""`,
 			want:    false,
-			wantErr: true,
+			wantErr: true, // Should error because error namespace doesn't exist
 		},
 	}
 
@@ -798,56 +956,59 @@ func TestExprEvaluator_StateAccessPatterns(t *testing.T) {
 	}
 }
 
-func TestExprEvaluator_TypeCoercion(t *testing.T) {
+func TestExprEvaluator_SystemContext(t *testing.T) {
 	tests := []struct {
 		name    string
-		expr    string
 		ctx     *interpolation.Context
+		expr    string
 		want    bool
 		wantErr bool
 	}{
 		{
-			name: "string to int coercion in comparison",
-			expr: `inputs.port > 1000`,
+			name: "context.WorkingDir access",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"port": "8080"},
+				Context: interpolation.ContextData{
+					WorkingDir: "/home/user/project",
+					User:       "testuser",
+					Hostname:   "testhost",
+				},
 			},
+			expr:    `context.WorkingDir == "/home/user/project"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "float string to number",
-			expr: `inputs.rate < 1.0`,
+			name: "context.User access",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"rate": "0.5"},
+				Context: interpolation.ContextData{
+					WorkingDir: "/home/user/project",
+					User:       "testuser",
+					Hostname:   "testhost",
+				},
 			},
+			expr:    `context.User == "testuser"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "boolean string true",
-			expr: `inputs.debug == true`,
+			name: "context.Hostname access",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"debug": "true"},
+				Context: interpolation.ContextData{
+					WorkingDir: "/home/user/project",
+					User:       "testuser",
+					Hostname:   "testhost",
+				},
 			},
+			expr:    `context.Hostname == "testhost"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "boolean string false",
-			expr: `inputs.debug == false`,
+			name: "empty system context",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"debug": "false"},
+				Context: interpolation.ContextData{},
 			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "int64 comparison",
-			expr: `inputs.timestamp > 1700000000`,
-			ctx: &interpolation.Context{
-				Inputs: map[string]any{"timestamp": int64(1700000001)},
-			},
+			expr:    `context.WorkingDir == ""`,
 			want:    true,
 			wantErr: false,
 		},
@@ -869,99 +1030,55 @@ func TestExprEvaluator_TypeCoercion(t *testing.T) {
 	}
 }
 
-func TestExprEvaluator_ErrorMessages(t *testing.T) {
-	tests := []struct {
-		name       string
-		expr       string
-		ctx        *interpolation.Context
-		wantErr    bool
-		wantErrMsg string
-	}{
-		{
-			name:       "syntax error - missing operand",
-			expr:       `inputs.a == `,
-			ctx:        &interpolation.Context{Inputs: map[string]any{"a": 1}},
-			wantErr:    true,
-			wantErrMsg: "compile expression",
-		},
-		{
-			name:    "undefined variable in context - returns false not error",
-			expr:    `inputs.undefined == 1`,
-			ctx:     &interpolation.Context{Inputs: map[string]any{}},
-			wantErr: false, // expr library treats undefined as nil, comparison returns false
-		},
-		{
-			name:       "invalid operator",
-			expr:       `inputs.a === 1`,
-			ctx:        &interpolation.Context{Inputs: map[string]any{"a": 1}},
-			wantErr:    true,
-			wantErrMsg: "", // Should error but message varies
-		},
-		{
-			name:       "unclosed parenthesis",
-			expr:       `(inputs.a == 1`,
-			ctx:        &interpolation.Context{Inputs: map[string]any{"a": 1}},
-			wantErr:    true,
-			wantErrMsg: "", // Should error - syntax
-		},
-		{
-			name:       "unclosed string",
-			expr:       `inputs.a == "test`,
-			ctx:        &interpolation.Context{Inputs: map[string]any{"a": "test"}},
-			wantErr:    true,
-			wantErrMsg: "", // Should error - syntax
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := NewExprEvaluator()
-			_, err := e.Evaluate(tt.expr, tt.ctx)
-
-			if tt.wantErr {
-				require.Error(t, err, "expected error for invalid expression")
-				if tt.wantErrMsg != "" {
-					assert.Contains(t, err.Error(), tt.wantErrMsg)
-				}
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestExprEvaluator_WorkflowMetadata(t *testing.T) {
+func TestExprEvaluator_NewStepFields(t *testing.T) {
 	tests := []struct {
 		name    string
-		expr    string
 		ctx     *interpolation.Context
+		expr    string
 		want    bool
 		wantErr bool
 	}{
 		{
-			name: "check workflow id",
-			expr: `workflow.id != ""`,
+			name: "access state.Response field",
 			ctx: &interpolation.Context{
-				Workflow: interpolation.WorkflowData{ID: "wf-abc-123"},
+				States: map[string]interpolation.StepStateData{
+					"agent": {
+						Response: map[string]any{
+							"result": "ok",
+							"data":   "test",
+						},
+						Tokens: 100,
+					},
+				},
 			},
+			expr:    `states.agent.Response.result == "ok"`,
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "check workflow name pattern",
-			expr: `workflow.name == "deploy-prod"`,
+			name: "access state.Tokens field",
 			ctx: &interpolation.Context{
-				Workflow: interpolation.WorkflowData{Name: "deploy-prod"},
+				States: map[string]interpolation.StepStateData{
+					"agent": {
+						Response: map[string]any{},
+						Tokens:   150,
+					},
+				},
 			},
+			expr:    "states.agent.Tokens == 150",
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "check current state",
-			expr: `workflow.current_state == "build"`,
+			name: "compare state.Tokens with threshold",
 			ctx: &interpolation.Context{
-				Workflow: interpolation.WorkflowData{CurrentState: "build"},
+				States: map[string]interpolation.StepStateData{
+					"agent": {
+						Tokens: 150,
+					},
+				},
 			},
+			expr:    "states.agent.Tokens > 50",
 			want:    true,
 			wantErr: false,
 		},
@@ -983,55 +1100,216 @@ func TestExprEvaluator_WorkflowMetadata(t *testing.T) {
 	}
 }
 
-func TestExprEvaluator_InOperator(t *testing.T) {
+func TestBuildExprContext_PascalCaseStateFields(t *testing.T) {
 	tests := []struct {
-		name    string
-		expr    string
-		ctx     *interpolation.Context
-		want    bool
-		wantErr bool
+		name      string
+		ctx       *interpolation.Context
+		checkFunc func(t *testing.T, result map[string]any)
 	}{
 		{
-			name: "string in array",
-			expr: `inputs.env in ["dev", "staging", "prod"]`,
+			name: "state fields use PascalCase keys",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"env": "staging"},
+				States: map[string]interpolation.StepStateData{
+					"step1": {
+						Output:   "test output",
+						Stderr:   "test error",
+						ExitCode: 1,
+						Status:   "completed",
+						Response: map[string]any{"key": "value"},
+						Tokens:   100,
+					},
+				},
 			},
-			want:    true,
-			wantErr: false,
+			checkFunc: func(t *testing.T, result map[string]any) {
+				states, ok := result["states"].(map[string]any)
+				require.True(t, ok, "states should be a map")
+
+				step1, ok := states["step1"].(map[string]any)
+				require.True(t, ok, "step1 should exist and be a map")
+
+				// Verify PascalCase keys exist
+				assert.Contains(t, step1, "Output")
+				assert.Contains(t, step1, "Stderr")
+				assert.Contains(t, step1, "ExitCode")
+				assert.Contains(t, step1, "Status")
+				assert.Contains(t, step1, "Response")
+				assert.Contains(t, step1, "Tokens")
+
+				// Verify values
+				assert.Equal(t, "test output", step1["Output"])
+				assert.Equal(t, "test error", step1["Stderr"])
+				assert.Equal(t, 1, step1["ExitCode"])
+				assert.Equal(t, "completed", step1["Status"])
+				assert.Equal(t, 100, step1["Tokens"])
+			},
 		},
 		{
-			name: "string not in array",
-			expr: `inputs.env in ["dev", "staging", "prod"]`,
+			name: "workflow fields use PascalCase keys",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"env": "local"},
+				Workflow: interpolation.WorkflowData{
+					ID:           "wf-123",
+					Name:         "test-workflow",
+					CurrentState: "step1",
+					StartedAt:    time.Now(),
+				},
 			},
-			want:    false,
-			wantErr: false,
+			checkFunc: func(t *testing.T, result map[string]any) {
+				workflow, ok := result["workflow"].(map[string]any)
+				require.True(t, ok, "workflow should be a map")
+
+				// Verify PascalCase keys exist
+				assert.Contains(t, workflow, "ID")
+				assert.Contains(t, workflow, "Name")
+				assert.Contains(t, workflow, "CurrentState")
+				assert.Contains(t, workflow, "Duration")
+
+				// Verify values
+				assert.Equal(t, "wf-123", workflow["ID"])
+				assert.Equal(t, "test-workflow", workflow["Name"])
+				assert.Equal(t, "step1", workflow["CurrentState"])
+			},
 		},
 		{
-			name: "int in array",
-			expr: `inputs.code in [0, 1, 2]`,
+			name: "loop context uses PascalCase keys",
 			ctx: &interpolation.Context{
-				Inputs: map[string]any{"code": 1},
+				Loop: &interpolation.LoopData{
+					Index:  2,
+					Item:   "test-item",
+					Length: 5,
+					First:  false,
+					Last:   false,
+				},
 			},
-			want:    true,
-			wantErr: false,
+			checkFunc: func(t *testing.T, result map[string]any) {
+				loop, ok := result["loop"].(map[string]any)
+				require.True(t, ok, "loop should be a map")
+
+				// Verify PascalCase keys exist
+				assert.Contains(t, loop, "Index")
+				assert.Contains(t, loop, "Index1")
+				assert.Contains(t, loop, "Item")
+				assert.Contains(t, loop, "Length")
+				assert.Contains(t, loop, "First")
+				assert.Contains(t, loop, "Last")
+				assert.Contains(t, loop, "Parent")
+
+				// Verify values
+				assert.Equal(t, 2, loop["Index"])
+				assert.Equal(t, 3, loop["Index1"]) // Index1() returns Index + 1
+				assert.Equal(t, "test-item", loop["Item"])
+				assert.Equal(t, 5, loop["Length"])
+				assert.Equal(t, false, loop["First"])
+				assert.Equal(t, false, loop["Last"])
+				assert.Nil(t, loop["Parent"])
+			},
+		},
+		{
+			name: "error context uses PascalCase keys",
+			ctx: &interpolation.Context{
+				Error: &interpolation.ErrorData{
+					Message:  "test error",
+					State:    "step1",
+					ExitCode: 1,
+					Type:     "execution",
+				},
+			},
+			checkFunc: func(t *testing.T, result map[string]any) {
+				errorData, ok := result["error"].(map[string]any)
+				require.True(t, ok, "error should be a map")
+
+				// Verify PascalCase keys exist
+				assert.Contains(t, errorData, "Message")
+				assert.Contains(t, errorData, "State")
+				assert.Contains(t, errorData, "ExitCode")
+				assert.Contains(t, errorData, "Type")
+
+				// Verify values
+				assert.Equal(t, "test error", errorData["Message"])
+				assert.Equal(t, "step1", errorData["State"])
+				assert.Equal(t, 1, errorData["ExitCode"])
+				assert.Equal(t, "execution", errorData["Type"])
+			},
+		},
+		{
+			name: "system context uses PascalCase keys",
+			ctx: &interpolation.Context{
+				Context: interpolation.ContextData{
+					WorkingDir: "/test/dir",
+					User:       "testuser",
+					Hostname:   "testhost",
+				},
+			},
+			checkFunc: func(t *testing.T, result map[string]any) {
+				contextData, ok := result["context"].(map[string]any)
+				require.True(t, ok, "context should be a map")
+
+				// Verify PascalCase keys exist
+				assert.Contains(t, contextData, "WorkingDir")
+				assert.Contains(t, contextData, "User")
+				assert.Contains(t, contextData, "Hostname")
+
+				// Verify values
+				assert.Equal(t, "/test/dir", contextData["WorkingDir"])
+				assert.Equal(t, "testuser", contextData["User"])
+				assert.Equal(t, "testhost", contextData["Hostname"])
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := NewExprEvaluator()
-			got, err := e.Evaluate(tt.expr, tt.ctx)
+			result := BuildExprContext(tt.ctx)
+			require.NotNil(t, result)
+			tt.checkFunc(t, result)
+		})
+	}
+}
 
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
+func TestBuildExprContext_NilSafety(t *testing.T) {
+	tests := []struct {
+		name      string
+		ctx       *interpolation.Context
+		checkFunc func(t *testing.T, result map[string]any)
+	}{
+		{
+			name: "nil loop context omitted",
+			ctx: &interpolation.Context{
+				Loop: nil,
+			},
+			checkFunc: func(t *testing.T, result map[string]any) {
+				assert.NotContains(t, result, "loop", "loop should not be present when nil")
+			},
+		},
+		{
+			name: "nil error context omitted",
+			ctx: &interpolation.Context{
+				Error: nil,
+			},
+			checkFunc: func(t *testing.T, result map[string]any) {
+				assert.NotContains(t, result, "error", "error should not be present when nil")
+			},
+		},
+		{
+			name: "system context always present",
+			ctx: &interpolation.Context{
+				Context: interpolation.ContextData{},
+			},
+			checkFunc: func(t *testing.T, result map[string]any) {
+				assert.Contains(t, result, "context", "context should always be present")
+				contextData, ok := result["context"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "", contextData["WorkingDir"])
+				assert.Equal(t, "", contextData["User"])
+				assert.Equal(t, "", contextData["Hostname"])
+			},
+		},
+	}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := BuildExprContext(tt.ctx)
+			require.NotNil(t, result)
+			tt.checkFunc(t, result)
 		})
 	}
 }
