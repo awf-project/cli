@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C006]** refactor(application): reduce execution core cognitive complexity through helper extraction
+  - `ExecuteConversation`: 29 → ≤18 by extracting sequential pipeline (`validateConversationInputs`, `initializeConversationState`, `executeTurn`, `evaluateTurnCompletion`, `finalizeStopReason`)
+  - `executeStep`: 29 → ≤18 by extracting preparation/execution/outcome handlers (`prepareStepExecution`, `resolveStepCommand`, `executeStepCommand`, `recordStepResult`, `handleExecutionError`, `handleNonZeroExit`, `handleSuccess`)
+  - `IsProblematicMaxIterationPattern`: 24 → ≤18 by extracting shared pattern detection (`detectLoopPatterns`, `shouldCheckLoopProblems`)
+  - `HandleMaxIterationFailure`: 23 → ≤18 by using shared `detectLoopPatterns` plus extraction of `buildLoopFailureError`, `executeLoopPostHooks`
+  - Total: 15 helper methods extracted, 3 test files (54KB), eliminated 20+ lines of code duplication
+  - All 693 existing tests pass unchanged (100% backward compatibility)
+  - Helper methods achieve ~95% average test coverage
 - **[C005]** refactor(application): reduce step executors cognitive complexity through helper extraction
   - `TemplateService.expandStep`: 23 → ≤18 by extracting parameter processing pipeline (`validateAndLoadTemplate`, `selectPrimaryStep`, `expandNestedTemplate`, `applyTemplateFields`)
   - `InteractiveExecutor.executeStep`: 22 → ≤18 by extracting result handlers (`HandleExecutionError`, `HandleNonZeroExit`, `HandleSuccess`)

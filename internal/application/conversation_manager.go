@@ -48,6 +48,128 @@ func NewConversationManager(
 	}
 }
 
+// =============================================================================
+// Helper Methods - Component T011/T012
+// Feature: C006 - Reduce ExecuteConversation complexity from 29 to ≤18
+// =============================================================================
+
+// validateConversationInputs validates step and config inputs.
+func (m *ConversationManager) validateConversationInputs(
+	step *workflow.Step,
+	config *workflow.ConversationConfig,
+) error {
+	if step == nil || step.Agent == nil {
+		return errors.New("step or agent config is nil")
+	}
+	if config == nil {
+		return errors.New("conversation config is nil")
+	}
+	return nil
+}
+
+// initializeConversationState initializes conversation state with system prompt
+// and resolves initial prompt with interpolation.
+func (m *ConversationManager) initializeConversationState(
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+	buildContext ContextBuilderFunc,
+) (*workflow.ConversationState, string, error) {
+	// Initialize conversation state with system prompt
+	systemPrompt := step.Agent.SystemPrompt
+	state := workflow.NewConversationState(systemPrompt)
+
+	// Determine initial prompt (InitialPrompt takes precedence over Prompt)
+	initialPrompt := step.Agent.Prompt
+	if step.Agent.InitialPrompt != "" {
+		initialPrompt = step.Agent.InitialPrompt
+	}
+
+	// Resolve initial prompt with interpolation
+	intCtx := buildContext(execCtx)
+	resolvedPrompt, err := m.resolver.Resolve(initialPrompt, intCtx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return state, resolvedPrompt, nil
+}
+
+// executeTurn executes a single conversation turn with the provider.
+func (m *ConversationManager) executeTurn(
+	ctx context.Context,
+	provider ports.AgentProvider,
+	state *workflow.ConversationState,
+	prompt string,
+	options map[string]any,
+) (*workflow.ConversationResult, error) {
+	// Check context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Execute one turn with provider
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// evaluateTurnCompletion evaluates stop conditions and max tokens,
+// returns true if conversation should stop.
+func (m *ConversationManager) evaluateTurnCompletion(
+	config *workflow.ConversationConfig,
+	state *workflow.ConversationState,
+	execCtx *workflow.ExecutionContext,
+	buildContext ContextBuilderFunc,
+) bool {
+	// Check stop condition if configured
+	if config.StopCondition != "" {
+		// Build context with current state for evaluation
+		stopCtx := buildContext(execCtx)
+		// Add conversation-specific variables for stop condition evaluation
+		if stopCtx.Inputs == nil {
+			stopCtx.Inputs = make(map[string]any)
+		}
+		stopCtx.Inputs["response"] = state.GetLastAssistantResponse()
+		stopCtx.Inputs["turn_count"] = state.TotalTurns
+
+		shouldStop, err := m.evaluator.Evaluate(config.StopCondition, stopCtx)
+		if err != nil {
+			// Log error but continue
+			m.logger.Warn("failed to evaluate stop condition", "error", err)
+		} else if shouldStop {
+			state.StoppedBy = workflow.StopReasonCondition
+			return true
+		}
+	}
+
+	// Check max tokens if configured
+	if config.MaxContextTokens > 0 && state.TotalTokens >= config.MaxContextTokens {
+		state.StoppedBy = workflow.StopReasonMaxTokens
+		return true
+	}
+
+	return false
+}
+
+// finalizeStopReason sets stop reason if not already set.
+func (m *ConversationManager) finalizeStopReason(
+	state *workflow.ConversationState,
+	turnCount int,
+	maxTurns int,
+) {
+	// Set stop reason if not already set
+	if state.StoppedBy == "" {
+		if turnCount >= maxTurns {
+			state.StoppedBy = workflow.StopReasonMaxTurns
+		}
+	}
+}
+
 // ExecuteConversation orchestrates a multi-turn conversation according to the
 // configuration in the agent step's conversation settings.
 //
