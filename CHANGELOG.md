@@ -59,6 +59,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C008]** refactor(tests): restructure execution_service_test.go for improved maintainability
+  - Split monolithic 1,923-line test file into 6 thematic test files by execution concern
+  - Extracted specialized test mocks (timeoutMockExecutor, errorMockExecutor, retryCountingExecutor, conditionMockEvaluator) to `execution_service_specialized_mocks_test.go` for reuse across split files
+  - Created domain-specific test files:
+    - `execution_service_core_test.go`: Core execution tests (50 tests) - basic workflow execution, state transitions, context propagation, resume functionality, call workflow steps
+    - `execution_service_hooks_test.go`: Hook execution tests (3 tests)
+    - `execution_service_loop_test.go`: Loop iteration tests (11 tests)
+    - `execution_service_parallel_test.go`: Parallel execution tests (1 test)
+    - `execution_service_retry_test.go`: Retry mechanism tests (10 tests)
+  - All 633 application tests pass unchanged with race detection
+  - Reduced cognitive load for test navigation - developers can now quickly locate relevant test categories
+  - Test count distribution: 50 core + 3 hooks + 11 loop + 1 parallel + 10 retry = 75 execution service tests across 6 files
 - **[C006]** refactor(application): reduce execution core cognitive complexity through helper extraction
   - `ExecuteConversation`: 29 → ≤18 by extracting sequential pipeline (`validateConversationInputs`, `initializeConversationState`, `executeTurn`, `evaluateTurnCompletion`, `finalizeStopReason`)
   - `executeStep`: 29 → ≤18 by extracting preparation/execution/outcome handlers (`prepareStepExecution`, `resolveStepCommand`, `executeStepCommand`, `recordStepResult`, `handleExecutionError`, `handleNonZeroExit`, `handleSuccess`)
