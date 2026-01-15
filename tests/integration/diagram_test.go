@@ -35,8 +35,7 @@ func TestDiagram_Simple_OutputsValidDOT(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -71,8 +70,7 @@ func TestDiagram_Parallel_ShowsSubgraphCluster(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -99,8 +97,7 @@ func TestDiagram_AllTypes_MapsCorrectShapes(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -143,8 +140,7 @@ func TestDiagram_InitialStep_HasIndicator(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -173,8 +169,7 @@ func TestDiagram_EdgeStyles_SuccessAndFailure(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -212,8 +207,7 @@ func TestDiagram_Direction_AllValues(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tests := []struct {
 		name      string
@@ -249,8 +243,7 @@ func TestDiagram_Direction_Default(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -279,8 +272,7 @@ func TestDiagram_Highlight_EmphasizesStep(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -311,8 +303,7 @@ func TestDiagram_Highlight_NonexistentStep(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -339,8 +330,7 @@ func TestDiagram_Output_DotFile(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "workflow.dot")
@@ -371,8 +361,7 @@ func TestDiagram_Output_ImageExport_RequiresGraphviz(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// Check if graphviz is installed
 	_, lookupErr := exec.LookPath("dot")
@@ -426,8 +415,7 @@ func TestDiagram_Output_SVGExport(t *testing.T) {
 		t.Skip("graphviz not installed, skipping image export test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "workflow.svg")
@@ -457,8 +445,7 @@ func TestDiagram_Output_PDFExport(t *testing.T) {
 		t.Skip("graphviz not installed, skipping image export test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "workflow.pdf")
@@ -489,8 +476,7 @@ func TestDiagram_CombinedFlags_DirectionAndHighlight(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -522,8 +508,7 @@ func TestDiagram_CombinedFlags_AllFlags(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "combined.dot")
@@ -561,8 +546,7 @@ func TestDiagram_InvalidWorkflow_NotFound(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -604,8 +588,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "malformed.yaml"), []byte(malformedYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -623,8 +606,7 @@ func TestDiagram_InvalidDirection(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -661,8 +643,7 @@ func TestDiagram_OutputDirectory_NotExists(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -705,8 +686,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(specialCharsYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -747,8 +727,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "minimal.yaml"), []byte(minimalYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -810,8 +789,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "nested-parallel.yaml"), []byte(nestedYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -855,8 +833,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "long-names.yaml"), []byte(longNameYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -888,8 +865,7 @@ func TestDiagram_DOTSyntax_ValidWithGraphviz(t *testing.T) {
 		t.Skip("graphviz not installed, skipping DOT validation test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -924,8 +900,7 @@ func TestDiagram_DOTSyntax_AllFixtures(t *testing.T) {
 		t.Skip("graphviz not installed, skipping DOT validation test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	fixtures := []string{"diagram-simple", "diagram-parallel", "diagram-all-types"}
 

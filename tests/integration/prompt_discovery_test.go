@@ -51,13 +51,13 @@ func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent-xdg"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent-xdg"))
 	require.NoError(t, os.Chdir(projectDir))
 
 	// Execute: awf list prompts
@@ -102,13 +102,13 @@ func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	// Execute: awf list prompts
@@ -159,13 +159,13 @@ func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	// Execute: awf list prompts
@@ -220,13 +220,13 @@ func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	// List should show only local version
@@ -285,13 +285,13 @@ func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -346,13 +346,13 @@ func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -402,13 +402,13 @@ func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -439,13 +439,13 @@ func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -493,13 +493,13 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -551,13 +551,13 @@ func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -624,19 +624,19 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -702,19 +702,19 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -787,19 +787,19 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -864,19 +864,19 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -935,19 +935,19 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -998,13 +998,13 @@ states:
 	defer func() {
 		os.Chdir(origDir)
 		if origWF != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", origWF)
+			t.Setenv("AWF_WORKFLOWS_PATH", origWF)
 		} else {
 			os.Unsetenv("AWF_WORKFLOWS_PATH")
 		}
 	}()
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	tests := []struct {
@@ -1055,13 +1055,13 @@ func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -1111,13 +1111,13 @@ func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -1152,13 +1152,13 @@ func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", customXDG)
+	t.Setenv("XDG_CONFIG_HOME", customXDG)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()
@@ -1246,13 +1246,13 @@ func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 	defer func() {
 		os.Chdir(origDir)
 		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
+			t.Setenv("XDG_CONFIG_HOME", origXDG)
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	require.NoError(t, os.Chdir(projectDir))
 
 	cmd := cli.NewRootCommand()

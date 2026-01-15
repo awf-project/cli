@@ -131,9 +131,7 @@ func TestConfigShow_NoConfigFile_DisplaysMessage(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	// Isolate from global config
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	// Don't create any .awf/config.yaml
 

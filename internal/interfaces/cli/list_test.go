@@ -15,9 +15,7 @@ import (
 func TestListCommand_NoWorkflows(t *testing.T) {
 	// Use temp directory for XDG to isolate from global workflows
 	tmpDir := t.TempDir()
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	// Also ensure no local workflows directory exists
 	originalWD, _ := os.Getwd()
@@ -95,9 +93,7 @@ func TestListPromptsCommand(t *testing.T) {
 		_ = os.Chdir(tmpDir)
 
 		// Isolate from global prompts
-		originalXDG := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
-		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Create empty prompts directory
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
@@ -123,9 +119,7 @@ func TestListPromptsCommand(t *testing.T) {
 		_ = os.Chdir(tmpDir)
 
 		// Isolate from global prompts
-		originalXDG := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
-		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Don't create .awf/prompts directory
 
@@ -277,9 +271,7 @@ func TestListPromptsCommand(t *testing.T) {
 		_ = os.Chdir(tmpDir)
 
 		// Isolate from global prompts
-		originalXDG := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
-		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
 		require.NoError(t, os.MkdirAll(promptsDir, 0o755))

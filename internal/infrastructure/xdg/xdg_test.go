@@ -34,13 +34,10 @@ func TestConfigHome(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore env
-			orig := os.Getenv("XDG_CONFIG_HOME")
-			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
-
 			if tt.envValue != "" {
-				_ = os.Setenv("XDG_CONFIG_HOME", tt.envValue)
+				t.Setenv("XDG_CONFIG_HOME", tt.envValue)
 			} else {
-				_ = os.Unsetenv("XDG_CONFIG_HOME")
+				t.Setenv("XDG_CONFIG_HOME", "")
 			}
 
 			got := ConfigHome()
@@ -72,13 +69,10 @@ func TestDataHome(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orig := os.Getenv("XDG_DATA_HOME")
-			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
 			if tt.envValue != "" {
-				_ = os.Setenv("XDG_DATA_HOME", tt.envValue)
+				t.Setenv("XDG_DATA_HOME", tt.envValue)
 			} else {
-				_ = os.Unsetenv("XDG_DATA_HOME")
+				t.Setenv("XDG_DATA_HOME", "")
 			}
 
 			got := DataHome()
@@ -91,10 +85,7 @@ func TestAWFConfigDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	orig := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
-
-	_ = os.Unsetenv("XDG_CONFIG_HOME")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	got := AWFConfigDir()
 	assert.Equal(t, filepath.Join(home, ".config", "awf"), got)
 }
@@ -103,10 +94,7 @@ func TestAWFDataDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
-	_ = os.Unsetenv("XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", "")
 	got := AWFDataDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf"), got)
 }
@@ -115,10 +103,7 @@ func TestAWFWorkflowsDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	orig := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
-
-	_ = os.Unsetenv("XDG_CONFIG_HOME")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	got := AWFWorkflowsDir()
 	assert.Equal(t, filepath.Join(home, ".config", "awf", "workflows"), got)
 }
@@ -146,13 +131,10 @@ func TestAWFPromptsDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orig := os.Getenv("XDG_CONFIG_HOME")
-			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", orig) }()
-
 			if tt.envValue != "" {
-				_ = os.Setenv("XDG_CONFIG_HOME", tt.envValue)
+				t.Setenv("XDG_CONFIG_HOME", tt.envValue)
 			} else {
-				_ = os.Unsetenv("XDG_CONFIG_HOME")
+				t.Setenv("XDG_CONFIG_HOME", "")
 			}
 
 			got := AWFPromptsDir()
@@ -165,10 +147,7 @@ func TestAWFStatesDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
-	_ = os.Unsetenv("XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", "")
 	got := AWFStatesDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf", "states"), got)
 }
@@ -177,10 +156,7 @@ func TestAWFLogsDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
-	_ = os.Unsetenv("XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", "")
 	got := AWFLogsDir()
 	assert.Equal(t, filepath.Join(home, ".local", "share", "awf", "logs"), got)
 }
@@ -238,13 +214,10 @@ func TestAWFPluginsDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orig := os.Getenv("XDG_DATA_HOME")
-			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
 			if tt.envValue != "" {
-				_ = os.Setenv("XDG_DATA_HOME", tt.envValue)
+				t.Setenv("XDG_DATA_HOME", tt.envValue)
 			} else {
-				_ = os.Unsetenv("XDG_DATA_HOME")
+				t.Setenv("XDG_DATA_HOME", "")
 			}
 
 			got := AWFPluginsDir()
@@ -255,9 +228,7 @@ func TestAWFPluginsDir(t *testing.T) {
 
 func TestAWFPluginsDir_IsUnderDataDir(t *testing.T) {
 	// AWFPluginsDir should be under AWFDataDir
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-	_ = os.Unsetenv("XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", "")
 
 	dataDir := AWFDataDir()
 	pluginsDir := AWFPluginsDir()
@@ -268,9 +239,7 @@ func TestAWFPluginsDir_IsUnderDataDir(t *testing.T) {
 }
 
 func TestAWFPluginsDir_EndsWithPlugins(t *testing.T) {
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-	_ = os.Unsetenv("XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", "")
 
 	got := AWFPluginsDir()
 
@@ -308,12 +277,10 @@ func TestLocalPluginsDir_MirrorsLocalWorkflowsPattern(t *testing.T) {
 
 func TestPluginsDirs_ConsistentWithOtherDirs(t *testing.T) {
 	// Plugin dirs should follow same XDG patterns as other dirs
-	orig := os.Getenv("XDG_DATA_HOME")
-	defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
 
 	// Test with custom XDG_DATA_HOME
 	customPath := "/custom/data/path"
-	_ = os.Setenv("XDG_DATA_HOME", customPath)
+	t.Setenv("XDG_DATA_HOME", customPath)
 
 	statesDir := AWFStatesDir()
 	logsDir := AWFLogsDir()
@@ -361,13 +328,10 @@ func TestPluginsDirs_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orig := os.Getenv("XDG_DATA_HOME")
-			defer func() { _ = os.Setenv("XDG_DATA_HOME", orig) }()
-
 			if tt.xdgDataHome != "" {
-				_ = os.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
+				t.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
 			} else {
-				_ = os.Unsetenv("XDG_DATA_HOME")
+				t.Setenv("XDG_DATA_HOME", "")
 			}
 
 			assert.Equal(t, tt.wantGlobal(), AWFPluginsDir())
@@ -469,23 +433,18 @@ func TestLocalConfigPath_DoesNotDependOnEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore env
-			origConfig := os.Getenv("XDG_CONFIG_HOME")
-			origData := os.Getenv("XDG_DATA_HOME")
 			defer func() {
-				_ = os.Setenv("XDG_CONFIG_HOME", origConfig)
-				_ = os.Setenv("XDG_DATA_HOME", origData)
 			}()
-
 			if tt.xdgConfigHome != "" {
-				_ = os.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
+				t.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
 			} else {
-				_ = os.Unsetenv("XDG_CONFIG_HOME")
+				t.Setenv("XDG_CONFIG_HOME", "")
 			}
 
 			if tt.xdgDataHome != "" {
-				_ = os.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
+				t.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
 			} else {
-				_ = os.Unsetenv("XDG_DATA_HOME")
+				t.Setenv("XDG_DATA_HOME", "")
 			}
 
 			got := LocalConfigPath()

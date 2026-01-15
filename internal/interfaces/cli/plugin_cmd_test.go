@@ -113,17 +113,8 @@ func TestPluginListCommand_NoPlugins(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Isolate from global plugins
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	defer os.Setenv("XDG_DATA_HOME", originalXDG)
-
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Unsetenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		}
-	}()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	// Change to temp directory (no local plugins)
 	originalWD, _ := os.Getwd()
@@ -166,15 +157,7 @@ capabilities:
 	))
 
 	// Isolate from other plugins
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -212,15 +195,7 @@ capabilities:
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -249,17 +224,8 @@ func TestPluginListCommand_TableFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Isolate
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	defer os.Setenv("XDG_DATA_HOME", originalXDG)
-
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Unsetenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		}
-	}()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	originalWD, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -320,15 +286,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, os.WriteFile(filepath.Join(plugin1Dir, "plugin.yaml"), []byte(manifest1), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(plugin2Dir, "plugin.yaml"), []byte(manifest2), 0o644))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -381,15 +339,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -441,15 +391,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -483,15 +425,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -546,15 +480,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -610,15 +536,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -652,15 +570,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -700,15 +610,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -803,15 +705,7 @@ func TestPluginListCommand_WithInvalidPluginManifest(t *testing.T) {
 		0o644,
 	))
 
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -829,17 +723,8 @@ func TestPluginEnableCommand_NonexistentPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// No plugins
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	defer os.Setenv("XDG_DATA_HOME", originalXDG)
-
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Unsetenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		}
-	}()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	originalWD, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -861,17 +746,8 @@ func TestPluginDisableCommand_NonexistentPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// No plugins
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	defer os.Setenv("XDG_DATA_HOME", originalXDG)
-
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Unsetenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		}
-	}()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	originalWD, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -907,17 +783,8 @@ func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
 	))
 
 	// No plugins directory
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	defer os.Setenv("XDG_DATA_HOME", originalXDG)
-
-	originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-	os.Unsetenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalPluginsPath != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-		}
-	}()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	originalWD, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -993,15 +860,7 @@ awf_version: ">=0.1.0"
 				0o644,
 			))
 
-			originalPluginsPath := os.Getenv("AWF_PLUGINS_PATH")
-			os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-			defer func() {
-				if originalPluginsPath != "" {
-					os.Setenv("AWF_PLUGINS_PATH", originalPluginsPath)
-				} else {
-					os.Unsetenv("AWF_PLUGINS_PATH")
-				}
-			}()
+			t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 			cmd := cli.NewRootCommand()
 			var out bytes.Buffer

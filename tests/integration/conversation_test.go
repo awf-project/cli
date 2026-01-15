@@ -53,8 +53,7 @@ func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
 	// CI-enabled: Only validates YAML syntax, no external API calls required
 
 	// Given: Conversation workflow fixtures exist
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tests := []struct {
 		name         string
@@ -132,8 +131,7 @@ func TestFeature33_ConversationWorkflowsListedSuccessfully(t *testing.T) {
 	// CI-enabled: Only lists workflow files, no external API calls required
 
 	// Given: Workflow directory with conversation workflows
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: List command is executed
 	cmd := cli.NewRootCommand()
@@ -165,8 +163,7 @@ func TestFeature33_BasicConversation_SimpleWorkflow(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Simple conversation workflow with stop condition
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -228,8 +225,7 @@ func TestFeature33_DryRun_ConversationConfiguration(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow with full configuration
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -277,8 +273,7 @@ func TestFeature33_MaxTurns_MultiTurnWorkflow(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Multi-turn conversation workflow with max_turns limit
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -338,8 +333,7 @@ func TestFeature33_ContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow with context window limit
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -412,8 +406,7 @@ func TestFeature33_TokenCounting_InputOutputTracking(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -489,8 +482,7 @@ func TestFeature33_StopCondition_ExpressionEvaluation(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow with stop condition expression
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -554,8 +546,7 @@ func TestFeature33_MaxTurns_BoundaryEnforcement(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow with max_turns=3
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -614,8 +605,7 @@ func TestFeature33_InjectContext_ContinueConversation(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Multi-turn workflow with continue_from
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -679,8 +669,7 @@ func TestFeature33_StateInterpolation_ConversationAccess(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Multi-step workflow accessing conversation state
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -739,8 +728,7 @@ func TestFeature33_ParallelConversations_ConcurrentExecution(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow with parallel conversation steps
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -804,8 +792,7 @@ func TestFeature33_ErrorHandling_ConversationErrors(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Conversation workflow with error handling
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -867,8 +854,7 @@ func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent step with mode: conversation but minimal config
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -943,8 +929,7 @@ func TestFeature33_DiagramGeneration_ConversationSteps(t *testing.T) {
 	// CI-enabled: Only generates DOT diagram from YAML, no external API calls required
 
 	// Given: Conversation workflow
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: Generate diagram
 	cmd := cli.NewRootCommand()
@@ -977,8 +962,7 @@ func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
 	// CI-enabled: Only displays workflow help from YAML, no external API calls required
 
 	// Given: Conversation workflow exists
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -1045,8 +1029,7 @@ func TestFeature33_BackwardsCompatibility_StatelessMode(t *testing.T) {
 	skipInCI(t)
 
 	// Given: F039 agent workflow (stateless mode, no conversation config)
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 

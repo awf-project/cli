@@ -48,8 +48,7 @@ func TestFeature39_AgentStepTypeRecognizedByValidator(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow fixtures exist
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tests := []struct {
 		name         string
@@ -117,8 +116,7 @@ func TestFeature39_AgentWorkflowsListedSuccessfully(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow directory with agent workflows
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: List command is executed
 	cmd := cli.NewRootCommand()
@@ -149,8 +147,7 @@ func TestFeature39_DryRun_BasicAgentStep(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Simple agent workflow
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -197,8 +194,7 @@ func TestFeature39_DryRun_PromptInterpolation(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow with prompt interpolation
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -241,8 +237,7 @@ func TestFeature39_DryRun_JSONOutputFormat(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow with JSON output format
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -284,8 +279,7 @@ func TestFeature39_DryRun_ParallelAgents(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow with parallel agent steps
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -330,8 +324,7 @@ func TestFeature39_DryRun_MultiTurnConversation(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Multi-turn agent workflow
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -378,8 +371,7 @@ func TestFeature39_Validation_InvalidProvider(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow with invalid provider
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: Validate workflow with invalid provider
 	cmd := cli.NewRootCommand()
@@ -415,8 +407,7 @@ func TestFeature39_CustomProviderParsing(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow with custom provider
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: Validate custom provider workflow
 	cmd := cli.NewRootCommand()
@@ -444,8 +435,7 @@ func TestFeature39_TimeoutConfigurationParsing(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Workflow with timeout configuration
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: Validate timeout workflow
 	cmd := cli.NewRootCommand()
@@ -473,8 +463,7 @@ func TestFeature39_HelpShowsAgentWorkflows(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow exists
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -517,8 +506,7 @@ func TestFeature39_MissingRequiredInput(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow with required input
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -556,8 +544,7 @@ func TestFeature39_DiagramGenerationWithAgentSteps(t *testing.T) {
 	skipInCI(t)
 
 	// Given: Agent workflow
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// When: Generate diagram
 	cmd := cli.NewRootCommand()

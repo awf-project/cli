@@ -441,15 +441,7 @@ func TestInitCommand_GlobalFlag(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Save and restore XDG_CONFIG_HOME
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -595,15 +587,7 @@ func TestInitCommand_GlobalFlag_CreatesExamplePrompt(t *testing.T) {
 			tmpDir := t.TempDir()
 
 			// Save and restore XDG_CONFIG_HOME
-			originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-			t.Cleanup(func() {
-				if originalXDGConfigHome == "" {
-					os.Unsetenv("XDG_CONFIG_HOME")
-				} else {
-					os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-				}
-			})
-			os.Setenv("XDG_CONFIG_HOME", tmpDir)
+			t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 			// Run setup if provided
 			if tt.setup != nil {
@@ -664,15 +648,7 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Save and restore XDG_CONFIG_HOME
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create the prompts directory with a custom example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -703,15 +679,7 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 	t.Run("preserves user-created prompts alongside example.md", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create prompts directory with user files
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -742,15 +710,7 @@ func TestInitCommand_GlobalFlag_PreservesExisting(t *testing.T) {
 	t.Run("shows already initialized message when directory exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create the prompts directory with example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -786,15 +746,7 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Save and restore XDG_CONFIG_HOME
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create prompts directory with custom example.md
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -831,15 +783,7 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 	t.Run("preserves non-example user prompts even with --force", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create prompts directory with user files
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -875,15 +819,7 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 	t.Run("creates example.md in pre-existing empty directory with --force", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Pre-create empty prompts directory (simulating partial manual setup)
 		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
@@ -919,16 +855,7 @@ func TestInitCommand_GlobalFlag_WithForce(t *testing.T) {
 func TestInitCommand_GlobalFlag_XDGConfigHome(t *testing.T) {
 	t.Run("uses XDG_CONFIG_HOME when set", func(t *testing.T) {
 		customConfigHome := t.TempDir()
-
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", customConfigHome)
+		t.Setenv("XDG_CONFIG_HOME", customConfigHome)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -955,21 +882,10 @@ func TestInitCommand_GlobalFlag_XDGConfigHome(t *testing.T) {
 	t.Run("does not create in default location when XDG_CONFIG_HOME is set", func(t *testing.T) {
 		customConfigHome := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		originalHome := os.Getenv("HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-			os.Setenv("HOME", originalHome)
-		})
-
 		// Set a different HOME to ensure we're testing the right thing
 		fakeHome := t.TempDir()
-		os.Setenv("HOME", fakeHome)
-		os.Setenv("XDG_CONFIG_HOME", customConfigHome)
+		t.Setenv("HOME", fakeHome)
+		t.Setenv("XDG_CONFIG_HOME", customConfigHome)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -995,16 +911,7 @@ func TestInitCommand_GlobalFlag_XDGConfigHome(t *testing.T) {
 
 	t.Run("output message shows correct path with custom XDG_CONFIG_HOME", func(t *testing.T) {
 		customConfigHome := t.TempDir()
-
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", customConfigHome)
+		t.Setenv("XDG_CONFIG_HOME", customConfigHome)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -1316,16 +1223,7 @@ func parseYAML(data []byte, v interface{}) error {
 // TestInitCommand_GlobalFlag_ExamplePromptPermissions verifies file permissions.
 func TestInitCommand_GlobalFlag_ExamplePromptPermissions(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() {
-		if originalXDGConfigHome == "" {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-		}
-	})
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetArgs([]string{"init", "--global"})

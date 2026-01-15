@@ -34,8 +34,7 @@ func TestValidate_SingleLowercaseError(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -67,8 +66,7 @@ func TestValidate_MultipleLowercaseErrors(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -104,8 +102,7 @@ func TestValidate_UppercasePropertiesPass(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -133,8 +130,7 @@ func TestValidate_MixedCasing(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -175,8 +171,7 @@ func TestValidate_LoopConditionLowercase(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -206,8 +201,7 @@ func TestValidate_HookLowercase(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -237,8 +231,7 @@ func TestValidate_ErrorMessageQuality(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -304,8 +297,7 @@ steps:
 	err := os.WriteFile(workflowPath, []byte(workflowContent), 0o644)
 	require.NoError(t, err)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -339,8 +331,7 @@ func TestValidate_NoFalsePositives(t *testing.T) {
 		"agent-simple",
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	for _, workflow := range validWorkflows {
 		t.Run(workflow, func(t *testing.T) {
@@ -398,8 +389,7 @@ steps:
 	err := os.WriteFile(workflowPath, []byte(workflowContent), 0o644)
 	require.NoError(t, err)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -445,8 +435,7 @@ steps:
 	err := os.WriteFile(workflowPath, []byte(workflowContent.String()), 0o644)
 	require.NoError(t, err)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
 
 	// Note: We're not strictly measuring <100ms here as that would be flaky
 	// in CI environments. This test primarily ensures the validator handles

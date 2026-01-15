@@ -217,16 +217,8 @@ func TestGetPluginSearchPaths_WithOverride(t *testing.T) {
 }
 
 func TestGetPluginSearchPaths_WithoutOverride(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset environment variable
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	cfg := &Config{
 		PluginsDir: "", // Empty = use BuildPluginPaths
@@ -822,16 +814,6 @@ func TestInitPluginSystemReadOnly_HandlesInvalidManifest(t *testing.T) {
 }
 
 func TestInitPluginSystemReadOnly_UsesBuildPluginPaths(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "env-plugins")
 	testPluginDir := filepath.Join(pluginsDir, "env-test-plugin")
@@ -847,7 +829,7 @@ awf_version: ">=0.1.0"
 		0o644,
 	))
 
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cfg := &Config{
 		StoragePath: tmpDir,
