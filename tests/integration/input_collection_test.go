@@ -5,7 +5,6 @@ package integration_test
 
 import (
 	"bytes"
-	"os"
 	"strings"
 	"testing"
 
@@ -44,8 +43,7 @@ func TestInputCollection_PromptForMissingRequired_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -84,8 +82,7 @@ func TestInputCollection_DisplayEnumOptions_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -125,8 +122,7 @@ func TestInputCollection_InvalidEnumRetry_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -163,8 +159,7 @@ func TestInputCollection_ExecuteWithCollectedValues_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -204,8 +199,7 @@ func TestInputCollection_SkipOptionalInput_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -245,8 +239,7 @@ func TestInputCollection_UseDefaultValue_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -290,8 +283,7 @@ func TestInputCollection_ValidationErrorMessage_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -328,8 +320,7 @@ func TestInputCollection_ErrorRecovery_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -389,8 +380,7 @@ func TestInputCollection_NonInteractiveStdin_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -421,8 +411,7 @@ func TestInputCollection_AllInputsProvided_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 
@@ -459,8 +448,7 @@ func TestInputCollection_PartialInputsProvided_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
 

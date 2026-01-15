@@ -49,8 +49,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "inputs-test.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -105,8 +104,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-inputs.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -133,8 +131,7 @@ func TestRunHelp_NonExistentWorkflow_Integration(t *testing.T) {
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -199,8 +196,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-inputs.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -245,8 +241,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "undescribed-inputs.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -296,8 +291,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "default-values.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -343,8 +337,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "optional-no-default.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -398,8 +391,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "described-workflow.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -448,8 +440,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "no-description.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -477,8 +468,7 @@ func TestRunHelp_FullWorkflowExample_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -516,8 +506,7 @@ func TestRunHelp_SimpleWorkflowExample_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -553,8 +542,7 @@ func TestRunHelp_NoColorFlag_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -582,8 +570,7 @@ func TestRunHelp_Performance_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// Run multiple times and measure
 	const iterations = 5
@@ -643,8 +630,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "would-fail.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -728,8 +714,7 @@ states:
 			require.NoError(t, os.MkdirAll(wfDir, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(wfDir, "test.yaml"), []byte(tt.workflowYAML), 0o644))
 
-			os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-			defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+			t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 			cmd := cli.NewRootCommand()
 			buf := new(bytes.Buffer)
@@ -775,8 +760,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-content.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -835,8 +819,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "special-chars.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -878,8 +861,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "invalid-yaml.yaml"), []byte(invalidYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -934,8 +916,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "edge-case-names.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -964,8 +945,7 @@ func TestRunHelp_ExitCode_Integration(t *testing.T) {
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1015,8 +995,7 @@ states:
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "env-path-workflow.yaml"), []byte(wfYAML), 0o644))
 
 	// Set custom workflow path via environment variable
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1073,8 +1052,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-input-types.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1131,8 +1109,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "long-descriptions.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1176,8 +1153,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "unicode-workflow.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1226,8 +1202,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-required.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -1283,8 +1258,7 @@ states:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "all-optional.yaml"), []byte(wfYAML), 0o644))
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)

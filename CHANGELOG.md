@@ -59,6 +59,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C007]** refactor(tests): modernize test infrastructure for thread-safety and reusability
+  - Migrated 359 of 394 `os.Setenv` calls to thread-safe `t.Setenv()` across integration, infrastructure, application, and pkg test layers (remaining 35 in CLI layer intentionally excluded for XDG config testing)
+  - Removed 196 `defer os.Unsetenv` calls (automatic cleanup via `t.Setenv`)
+  - Created centralized `internal/testutil` package with 5-file structure (doc.go, mocks.go, builders.go, assertions.go, fixtures.go)
+  - Implemented 7 thread-safe mock implementations with `sync.Mutex` protection:
+    - MockWorkflowRepository, MockStateStore, MockCommandExecutor, MockLogger
+    - MockAgentProvider, MockTokenizer, MockAgentRegistry
+  - Added fluent builder API for test construction (ExecutionServiceBuilder, WorkflowBuilder, StepBuilder, ExecutionContextBuilder)
+  - Implemented domain-specific assertion helpers: AssertWorkflowValid, AssertStepOutput, AssertExecutionCompleted
+  - Created workflow fixture factories: SimpleWorkflow, LinearWorkflow, ParallelWorkflow, LoopWorkflow, ConversationWorkflow
+  - Refactored existing tests to use testutil package, reducing test setup from 30+ lines to 2-3 lines (93% reduction)
+  - All tests pass with `go test -race ./...` without data race warnings
+  - Test suite now fully parallel-safe with zero environment variable pollution
+  - Consolidated 23 duplicated mock types into ~10 reusable implementations
+  - Comprehensive package documentation with usage examples and migration patterns
 - **[C008]** refactor(tests): restructure execution_service_test.go for improved maintainability
   - Split monolithic 1,923-line test file into 6 thematic test files by execution concern
   - Extracted specialized test mocks (timeoutMockExecutor, errorMockExecutor, retryCountingExecutor, conditionMockEvaluator) to `execution_service_specialized_mocks_test.go` for reuse across split files

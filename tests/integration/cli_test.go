@@ -20,8 +20,7 @@ func TestCLI_List_Integration(t *testing.T) {
 	}
 
 	// Use fixtures directory
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -42,8 +41,7 @@ func TestCLI_Validate_Valid_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -63,8 +61,7 @@ func TestCLI_Validate_Invalid_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -85,8 +82,7 @@ func TestCLI_Run_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	statesDir := filepath.Join(tmpDir, "states")
 
-	os.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -205,8 +201,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "input-test.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -298,8 +293,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "failing-test.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -351,8 +345,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "invalid-strategy.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -389,8 +382,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "output-test.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	tests := []struct {
 		name          string
@@ -487,8 +479,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "multi-step.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -531,8 +522,7 @@ states:
 	os.MkdirAll(wfDir, 0o755)
 	os.WriteFile(filepath.Join(wfDir, "silent-step.yaml"), []byte(wfYAML), 0o644)
 
-	os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-	defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 	t.Run("shows success message for silent step", func(t *testing.T) {
 		testDir := filepath.Join(tmpDir, "default")

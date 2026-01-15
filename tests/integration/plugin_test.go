@@ -353,8 +353,7 @@ func TestCLI_Plugin_List_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
-	os.Setenv("AWF_PLUGINS_PATH", fixturesPath)
-	defer os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("AWF_PLUGINS_PATH", fixturesPath)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -379,8 +378,7 @@ func TestCLI_Plugin_List_JSON_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
-	os.Setenv("AWF_PLUGINS_PATH", fixturesPath)
-	defer os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("AWF_PLUGINS_PATH", fixturesPath)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
@@ -405,8 +403,7 @@ func TestCLI_Plugin_EnableDisable_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
-	os.Setenv("AWF_PLUGINS_PATH", fixturesPath)
-	defer os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("AWF_PLUGINS_PATH", fixturesPath)
 
 	// Disable a plugin
 	cmd := cli.NewRootCommand()
@@ -1055,8 +1052,7 @@ func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	os.MkdirAll(pluginsDir, 0o755)
 
-	os.Setenv("AWF_PLUGINS_PATH", pluginsDir)
-	defer os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)

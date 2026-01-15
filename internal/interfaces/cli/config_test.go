@@ -217,19 +217,9 @@ func TestBuildPromptPaths_GlobalPathContainsAwfPrompts(t *testing.T) {
 
 func TestBuildPromptPaths_RespectsXDGConfigHome(t *testing.T) {
 	// FR-002: XDG_CONFIG_HOME environment variable is respected
-	// Save and restore original env
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		if originalXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		}
-	}()
-
 	// Set custom XDG_CONFIG_HOME
 	customConfig := "/custom/config/path"
-	os.Setenv("XDG_CONFIG_HOME", customConfig)
+	t.Setenv("XDG_CONFIG_HOME", customConfig)
 
 	paths := cli.BuildPromptPaths()
 
@@ -241,17 +231,8 @@ func TestBuildPromptPaths_RespectsXDGConfigHome(t *testing.T) {
 
 func TestBuildPromptPaths_DefaultsToHomeConfig(t *testing.T) {
 	// FR-002: Defaults to ~/.config when XDG_CONFIG_HOME is not set
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		if originalXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		}
-	}()
-
 	// Unset XDG_CONFIG_HOME
-	os.Unsetenv("XDG_CONFIG_HOME")
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	paths := cli.BuildPromptPaths()
 
@@ -376,20 +357,7 @@ func TestBuildPromptPaths_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore XDG_CONFIG_HOME
-			originalXDG := os.Getenv("XDG_CONFIG_HOME")
-			defer func() {
-				if originalXDG != "" {
-					os.Setenv("XDG_CONFIG_HOME", originalXDG)
-				} else {
-					os.Unsetenv("XDG_CONFIG_HOME")
-				}
-			}()
-
-			if tt.xdgConfigHome != "" {
-				os.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
-			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			}
+			t.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
 
 			paths := cli.BuildPromptPaths()
 

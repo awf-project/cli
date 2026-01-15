@@ -527,13 +527,11 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 
 		// Save and set environment
 		origDir, _ := os.Getwd()
-		origXDG := os.Getenv("XDG_CONFIG_HOME")
 
-		os.Setenv("XDG_CONFIG_HOME", xdgDir)
+		t.Setenv("XDG_CONFIG_HOME", xdgDir)
 		os.Chdir(projectDir)
 
 		cleanup = func() {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
 			os.Chdir(origDir)
 		}
 

@@ -18,16 +18,8 @@ import (
 // =============================================================================
 
 func TestBuildPluginPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	// Without env var: should return exactly 2 paths (local + global)
 	paths := cli.BuildPluginPaths()
@@ -37,18 +29,9 @@ func TestBuildPluginPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
 
 func TestBuildPluginPaths_EnvVarTakesPriority(t *testing.T) {
 	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-
 	// Set custom env var
 	customPath := "/custom/plugins/path"
-	os.Setenv("AWF_PLUGINS_PATH", customPath)
+	t.Setenv("AWF_PLUGINS_PATH", customPath)
 
 	paths := cli.BuildPluginPaths()
 
@@ -58,16 +41,8 @@ func TestBuildPluginPaths_EnvVarTakesPriority(t *testing.T) {
 }
 
 func TestBuildPluginPaths_LocalPathSecond(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -77,16 +52,8 @@ func TestBuildPluginPaths_LocalPathSecond(t *testing.T) {
 }
 
 func TestBuildPluginPaths_GlobalPathLast(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -97,17 +64,8 @@ func TestBuildPluginPaths_GlobalPathLast(t *testing.T) {
 
 func TestBuildPluginPaths_PriorityOrder(t *testing.T) {
 	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-
 	customPath := "/custom/plugins"
-	os.Setenv("AWF_PLUGINS_PATH", customPath)
+	t.Setenv("AWF_PLUGINS_PATH", customPath)
 
 	paths := cli.BuildPluginPaths()
 
@@ -132,16 +90,8 @@ func TestBuildPluginPaths_PriorityOrder(t *testing.T) {
 }
 
 func TestBuildPluginPaths_LocalPathIsRelative(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -155,16 +105,8 @@ func TestBuildPluginPaths_LocalPathIsRelative(t *testing.T) {
 }
 
 func TestBuildPluginPaths_GlobalPathIsAbsolute(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -176,16 +118,8 @@ func TestBuildPluginPaths_GlobalPathIsAbsolute(t *testing.T) {
 }
 
 func TestBuildPluginPaths_GlobalPathContainsAwfPlugins(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -199,26 +133,10 @@ func TestBuildPluginPaths_GlobalPathContainsAwfPlugins(t *testing.T) {
 }
 
 func TestBuildPluginPaths_RespectsXDGDataHome(t *testing.T) {
-	// Save and restore original env
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	originalPlugins := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalXDG != "" {
-			os.Setenv("XDG_DATA_HOME", originalXDG)
-		} else {
-			os.Unsetenv("XDG_DATA_HOME")
-		}
-		if originalPlugins != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPlugins)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-
 	// Set custom XDG_DATA_HOME
 	customData := "/custom/data/path"
-	os.Setenv("XDG_DATA_HOME", customData)
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("XDG_DATA_HOME", customData)
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -229,25 +147,9 @@ func TestBuildPluginPaths_RespectsXDGDataHome(t *testing.T) {
 }
 
 func TestBuildPluginPaths_DefaultsToLocalShare(t *testing.T) {
-	// Save and restore original env
-	originalXDG := os.Getenv("XDG_DATA_HOME")
-	originalPlugins := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalXDG != "" {
-			os.Setenv("XDG_DATA_HOME", originalXDG)
-		} else {
-			os.Unsetenv("XDG_DATA_HOME")
-		}
-		if originalPlugins != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPlugins)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-
 	// Unset both env vars
-	os.Unsetenv("XDG_DATA_HOME")
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -274,16 +176,8 @@ func TestBuildPluginPaths_ConsistentResults(t *testing.T) {
 }
 
 func TestBuildPluginPaths_SourcedPathStructure(t *testing.T) {
-	// Save and restore environment
-	originalEnv := os.Getenv("AWF_PLUGINS_PATH")
-	defer func() {
-		if originalEnv != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalEnv)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-	}()
-	os.Unsetenv("AWF_PLUGINS_PATH")
+	// Unset env var for test
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
 	paths := cli.BuildPluginPaths()
 
@@ -306,25 +200,9 @@ func TestBuildPluginPaths_MirrorsWorkflowPathsPattern(t *testing.T) {
 	// BuildPluginPaths follows same pattern as BuildWorkflowPaths
 	// Both should support env var (if set), local, global in same order
 
-	// Save and restore environment
-	originalPlugins := os.Getenv("AWF_PLUGINS_PATH")
-	originalWorkflows := os.Getenv("AWF_WORKFLOWS_PATH")
-	defer func() {
-		if originalPlugins != "" {
-			os.Setenv("AWF_PLUGINS_PATH", originalPlugins)
-		} else {
-			os.Unsetenv("AWF_PLUGINS_PATH")
-		}
-		if originalWorkflows != "" {
-			os.Setenv("AWF_WORKFLOWS_PATH", originalWorkflows)
-		} else {
-			os.Unsetenv("AWF_WORKFLOWS_PATH")
-		}
-	}()
-
 	// Set both env vars
-	os.Setenv("AWF_PLUGINS_PATH", "/custom/plugins")
-	os.Setenv("AWF_WORKFLOWS_PATH", "/custom/workflows")
+	t.Setenv("AWF_PLUGINS_PATH", "/custom/plugins")
+	t.Setenv("AWF_WORKFLOWS_PATH", "/custom/workflows")
 
 	pluginPaths := cli.BuildPluginPaths()
 	workflowPaths := cli.BuildWorkflowPaths()
@@ -390,33 +268,9 @@ func TestBuildPluginPaths_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore env
-			originalXDG := os.Getenv("XDG_DATA_HOME")
-			originalPlugins := os.Getenv("AWF_PLUGINS_PATH")
-			defer func() {
-				if originalXDG != "" {
-					os.Setenv("XDG_DATA_HOME", originalXDG)
-				} else {
-					os.Unsetenv("XDG_DATA_HOME")
-				}
-				if originalPlugins != "" {
-					os.Setenv("AWF_PLUGINS_PATH", originalPlugins)
-				} else {
-					os.Unsetenv("AWF_PLUGINS_PATH")
-				}
-			}()
-
-			if tt.xdgDataHome != "" {
-				os.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
-			} else {
-				os.Unsetenv("XDG_DATA_HOME")
-			}
-
-			if tt.awfPluginsPath != "" {
-				os.Setenv("AWF_PLUGINS_PATH", tt.awfPluginsPath)
-			} else {
-				os.Unsetenv("AWF_PLUGINS_PATH")
-			}
+			// Set env vars using t.Setenv
+			t.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
+			t.Setenv("AWF_PLUGINS_PATH", tt.awfPluginsPath)
 
 			paths := cli.BuildPluginPaths()
 

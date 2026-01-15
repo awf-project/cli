@@ -239,8 +239,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		// Run from tmpDir so config is discovered
 		originalDir, _ := os.Getwd()
@@ -305,8 +304,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -360,8 +358,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -427,8 +424,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -489,8 +485,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -775,8 +770,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -903,8 +897,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -971,8 +964,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -1042,8 +1034,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))
@@ -1190,8 +1181,7 @@ states:
 			0o644,
 		))
 
-		os.Setenv("AWF_WORKFLOWS_PATH", wfDir)
-		defer os.Unsetenv("AWF_WORKFLOWS_PATH")
+		t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
 		originalDir, _ := os.Getwd()
 		require.NoError(t, os.Chdir(tmpDir))

@@ -24,15 +24,7 @@ func TestInitGlobalCommand(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Set XDG_CONFIG_HOME to temp directory
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -54,15 +46,7 @@ func TestInitGlobalCommand(t *testing.T) {
 	t.Run("creates example prompt in global directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -87,16 +71,6 @@ func TestInitGlobalCommand(t *testing.T) {
 	})
 
 	t.Run("preserves existing prompts with --force flag", func(t *testing.T) {
-		// Use existing fixture with pre-existing prompts
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-
 		// Create temp directory and copy fixture to it (so we don't modify fixtures)
 		tmpDir := t.TempDir()
 		configFixture := filepath.Join(fixturesPath, "config")
@@ -105,7 +79,7 @@ func TestInitGlobalCommand(t *testing.T) {
 		err := copyDir(configFixture, tmpDir)
 		require.NoError(t, err)
 
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Verify pre-existing prompt exists before init
 		existingPrompt := filepath.Join(tmpDir, "awf", "prompts", "global-example.md")
@@ -134,23 +108,13 @@ func TestInitGlobalCommand(t *testing.T) {
 	})
 
 	t.Run("skips if global prompts directory already exists without --force", func(t *testing.T) {
-		// Use fixture with existing prompts
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-
 		// Copy fixture to temp
 		tmpDir := t.TempDir()
 		configFixture := filepath.Join(fixturesPath, "config")
 		err := copyDir(configFixture, tmpDir)
 		require.NoError(t, err)
 
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -171,15 +135,7 @@ func TestInitGlobalCommand(t *testing.T) {
 		// Create a custom config home path
 		customConfigHome := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", customConfigHome)
+		t.Setenv("XDG_CONFIG_HOME", customConfigHome)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
@@ -201,15 +157,7 @@ func TestInitGlobalCommand(t *testing.T) {
 	t.Run("displays success message with created path", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		originalXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		t.Cleanup(func() {
-			if originalXDGConfigHome == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", originalXDGConfigHome)
-			}
-		})
-		os.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		cmd := cli.NewRootCommand()
 		cmd.SetArgs([]string{"init", "--global"})
