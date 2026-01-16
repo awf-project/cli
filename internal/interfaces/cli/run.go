@@ -633,16 +633,16 @@ func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionCo
 	formatter.Printf("Status: %s\n", execCtx.Status)
 	formatter.Printf("Steps executed:\n")
 
-	for name := range execCtx.States {
-		state := execCtx.States[name]
+	allStates := execCtx.GetAllStepStates()
+	for name, state := range allStates {
 		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
 		formatter.StatusLine("  "+name, string(state.Status), fmt.Sprintf("(%s)", duration))
 	}
 }
 
 func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
-	for name := range execCtx.States {
-		state := execCtx.States[name]
+	allStates := execCtx.GetAllStepStates()
+	for name, state := range allStates {
 		if state.Output != "" {
 			formatter.Printf("\n--- [%s] stdout ---\n", name)
 			formatter.Printf("%s", state.Output)

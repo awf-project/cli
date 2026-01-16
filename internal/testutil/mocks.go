@@ -170,8 +170,22 @@ func (m *MockStateStore) Save(ctx context.Context, state *workflow.ExecutionCont
 	}
 
 	// Make a copy to avoid external modifications
-	stateCopy := *state
-	m.states[state.WorkflowID] = &stateCopy
+	// Cannot use struct copy due to sync.RWMutex - copy fields manually
+	stateCopy := &workflow.ExecutionContext{
+		WorkflowID:   state.WorkflowID,
+		WorkflowName: state.WorkflowName,
+		Status:       state.Status,
+		CurrentStep:  state.CurrentStep,
+		Inputs:       state.Inputs,
+		States:       state.States,
+		Env:          state.Env,
+		StartedAt:    state.StartedAt,
+		UpdatedAt:    state.UpdatedAt,
+		CompletedAt:  state.CompletedAt,
+		CurrentLoop:  state.CurrentLoop,
+		CallStack:    state.CallStack,
+	}
+	m.states[state.WorkflowID] = stateCopy
 	return nil
 }
 
@@ -190,8 +204,22 @@ func (m *MockStateStore) Load(ctx context.Context, workflowID string) (*workflow
 	}
 
 	// Return a copy to prevent external modifications
-	stateCopy := *state
-	return &stateCopy, nil
+	// Cannot use struct copy due to sync.RWMutex - copy fields manually
+	stateCopy := &workflow.ExecutionContext{
+		WorkflowID:   state.WorkflowID,
+		WorkflowName: state.WorkflowName,
+		Status:       state.Status,
+		CurrentStep:  state.CurrentStep,
+		Inputs:       state.Inputs,
+		States:       state.States,
+		Env:          state.Env,
+		StartedAt:    state.StartedAt,
+		UpdatedAt:    state.UpdatedAt,
+		CompletedAt:  state.CompletedAt,
+		CurrentLoop:  state.CurrentLoop,
+		CallStack:    state.CallStack,
+	}
+	return stateCopy, nil
 }
 
 // Delete removes an execution context by workflow ID.

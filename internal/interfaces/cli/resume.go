@@ -89,8 +89,9 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 
 		// Calculate progress
 		completed := 0
-		for i := range execCtx.States {
-			if execCtx.States[i].Status == workflow.StatusCompleted {
+		allStates := execCtx.GetAllStepStates()
+		for _, state := range allStates { //nolint:gocritic // rangeValCopy: GetAllStepStates returns defensive copy, iteration copy is acceptable for simple status check
+			if state.Status == workflow.StatusCompleted {
 				completed++
 			}
 		}

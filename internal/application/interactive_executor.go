@@ -226,7 +226,7 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 		}
 
 		// Get step state for display
-		if state, exists := execCtx.States[step.Name]; exists {
+		if state, exists := execCtx.GetStepState(step.Name); exists {
 			e.prompt.ShowStepResult(&state, nextStep)
 		}
 
@@ -385,10 +385,11 @@ func (e *InteractiveExecutor) checkpoint(ctx context.Context, execCtx *workflow.
 func (e *InteractiveExecutor) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	// Convert step states
-	states := make(map[string]interpolation.StepStateData, len(execCtx.States))
-	for name := range execCtx.States {
-		state := execCtx.States[name]
+	// Convert step states - use thread-safe method
+	allStates := execCtx.GetAllStepStates()
+	states := make(map[string]interpolation.StepStateData, len(allStates))
+	for name := range allStates {
+		state := allStates[name]
 		states[name] = interpolation.StepStateData{
 			Output:   state.Output,
 			Stderr:   state.Stderr,
@@ -844,7 +845,7 @@ func (a *interactiveStepExecutorAdapter) ExecuteStep(
 	_, err := a.execSvc.executeStep(ctx, wf, step, execCtx)
 	result.CompletedAt = time.Now()
 
-	if state, exists := execCtx.States[stepName]; exists {
+	if state, exists := execCtx.GetStepState(stepName); exists {
 		result.Output = state.Output
 		result.Stderr = state.Stderr
 		result.ExitCode = state.ExitCode
