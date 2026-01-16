@@ -424,15 +424,18 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 	}
 
 	// Find last executed step for exit code and error
-	if len(execCtx.States) > 0 {
-		var lastState *workflow.StepState
-		for name := range execCtx.States {
-			state := execCtx.States[name]
-			if lastState == nil || state.CompletedAt.After(lastState.CompletedAt) {
-				lastState = &state
+	allStates := execCtx.GetAllStepStates()
+	if len(allStates) > 0 {
+		var lastState workflow.StepState
+		var foundLast bool
+		for name := range allStates {
+			state := allStates[name]
+			if !foundLast || state.CompletedAt.After(lastState.CompletedAt) {
+				lastState = state
+				foundLast = true
 			}
 		}
-		if lastState != nil {
+		if foundLast {
 			record.ExitCode = lastState.ExitCode
 			if lastState.Error != "" {
 				record.ErrorMessage = lastState.Error
@@ -470,10 +473,12 @@ func buildLoopDataChain(domainLoop *workflow.LoopContext) *interpolation.LoopDat
 func (s *ExecutionService) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	// Convert step states
-	states := make(map[string]interpolation.StepStateData, len(execCtx.States))
-	for name := range execCtx.States {
-		state := execCtx.States[name]
+	// Convert step states - use thread-safe method
+	allStates := execCtx.GetAllStepStates()
+	states := make(map[string]interpolation.StepStateData, len(allStates))
+	// Use explicit index iteration to avoid copying 184-byte StepState
+	for name := range allStates {
+		state := allStates[name]
 		states[name] = interpolation.StepStateData{
 			Output:   state.Output,
 			Stderr:   state.Stderr,
@@ -776,7 +781,7 @@ func (s *ExecutionService) executeLoopStep(
 		// - Escape: on_failure transitions ELSEWHERE → propagate failure to break loop
 		if nextStep != "" && nextStep != step.Name {
 			// Step wanted to transition elsewhere while in failed state - escape pattern
-			if state, exists := execCtx.States[stepName]; exists && state.Status == workflow.StatusFailed {
+			if state, exists := execCtx.GetStepState(stepName); exists && state.Status == workflow.StatusFailed {
 				if state.Error != "" {
 					return "", fmt.Errorf("step %s failed: %s", stepName, state.Error)
 				}
@@ -1118,6 +1123,7 @@ func (s *ExecutionService) handleNonZeroExit(
 	exitCode int,
 ) (string, error) {
 	state.Status = workflow.StatusFailed
+	state.Error = fmt.Sprintf("exit code %d", exitCode)
 	execCtx.SetStepState(step.Name, *state)
 
 	// execute post-hooks even on failure
@@ -1250,7 +1256,7 @@ func (a *stepExecutorAdapter) ExecuteStep(
 	result.CompletedAt = time.Now()
 
 	// Get the step state that was recorded by the execution method
-	if state, exists := execCtx.States[stepName]; exists {
+	if state, exists := execCtx.GetStepState(stepName); exists {
 		result.Output = state.Output
 		result.Stderr = state.Stderr
 		result.ExitCode = state.ExitCode

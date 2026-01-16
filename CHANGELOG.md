@@ -59,6 +59,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C009]** test(integration): add comprehensive parallel execution integration tests
+  - Created CLI-level integration test suite for parallel execution (`tests/integration/parallel_test.go`, 948 lines)
+  - Comprehensive coverage of all parallel execution strategies:
+    - `all_succeed`: Workflow fails if ANY branch fails (3 test scenarios)
+    - `any_succeed`: Workflow succeeds if ANY branch succeeds (3 test scenarios)
+    - `best_effort`: All branches complete regardless of failures (3 test scenarios)
+  - Added `max_concurrent` limit verification with timing-based assertions:
+    - Validates that max_concurrent=2 with 3 branches properly serializes execution
+    - Confirms unlimited parallelism when max_concurrent is not set
+    - Uses 3x timing margin for CI variability (per ADR-004)
+  - Implemented failure propagation tests:
+    - Branch errors captured in ExecutionContext.States
+    - on_failure transitions respected in parallel contexts
+    - Error details preserved in StepState with exit codes and messages
+  - Fixed race condition in ExecutionContext by adding RWMutex protection for concurrent map access
+  - Added GetAllStepStates() method for thread-safe state iteration
+  - All tests use inline YAML fixtures for visibility and maintainability
+  - Leverages testutil builders from C007 for 93% setup code reduction
 - **[C007]** refactor(tests): modernize test infrastructure for thread-safety and reusability
   - Migrated 359 of 394 `os.Setenv` calls to thread-safe `t.Setenv()` across integration, infrastructure, application, and pkg test layers (remaining 35 in CLI layer intentionally excluded for XDG config testing)
   - Removed 196 `defer os.Unsetenv` calls (automatic cleanup via `t.Setenv`)
@@ -74,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Test suite now fully parallel-safe with zero environment variable pollution
   - Consolidated 23 duplicated mock types into ~10 reusable implementations
   - Comprehensive package documentation with usage examples and migration patterns
-- **[C008]** refactor(tests): restructure execution_service_test.go for improved maintainability
+ **[C008]** refactor(tests): restructure execution_service_test.go for improved maintainability
   - Split monolithic 1,923-line test file into 6 thematic test files by execution concern
   - Extracted specialized test mocks (timeoutMockExecutor, errorMockExecutor, retryCountingExecutor, conditionMockEvaluator) to `execution_service_specialized_mocks_test.go` for reuse across split files
   - Created domain-specific test files:
