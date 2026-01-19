@@ -1,0 +1,23 @@
+# Signal Handling Test Fixture: Long Running Step
+# Purpose: Test signal interruption during a single long-running command
+# Used by: TestSignalHandling_SIGINTGracefulShutdown
+#          TestSignalHandling_RapidSuccessiveSignals
+#          TestSignalHandling_ChildProcessCleanup
+name: signal-long-running
+version: "1.0.0"
+states:
+  initial: long_step
+
+  long_step:
+    type: step
+    command: "sleep 10"
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  success_terminal:
+    type: terminal
+    status: success
+
+  error_terminal:
+    type: terminal
+    status: failure

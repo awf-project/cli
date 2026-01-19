@@ -1,0 +1,44 @@
+# Signal Handling Test Fixture: Parallel Execution
+# Purpose: Test signal interruption during parallel branch execution
+# Used by: TestSignalHandling_ParallelBranchCancellation
+name: signal-parallel
+version: "1.0.0"
+states:
+  initial: parallel_step
+
+  parallel_step:
+    type: parallel
+    parallel:
+      - branch1
+      - branch2
+      - branch3
+    strategy: all_succeed
+    max_concurrent: 3
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  branch1:
+    type: step
+    command: "sleep 5"
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  branch2:
+    type: step
+    command: "sleep 10"
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  branch3:
+    type: step
+    command: "sleep 15"
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  success_terminal:
+    type: terminal
+    status: success
+
+  error_terminal:
+    type: terminal
+    status: failure

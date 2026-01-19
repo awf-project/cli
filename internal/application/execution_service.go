@@ -286,6 +286,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
+			s.checkpoint(hookCtx, execCtx)
 			s.recordHistory(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
@@ -1451,6 +1452,7 @@ func (s *ExecutionService) executeFromStep(
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
+			s.checkpoint(hookCtx, execCtx)
 			s.recordHistory(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)

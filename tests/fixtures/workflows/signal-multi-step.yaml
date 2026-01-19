@@ -1,0 +1,35 @@
+# Signal Handling Test Fixture: Multi-Step Linear Workflow
+# Purpose: Test signal interruption at different points in a linear workflow
+# Used by: TestSignalHandling_SIGTERMGracefulShutdown
+#          TestSignalHandling_StatePreservation
+#          TestSignalHandling_ResumabilityAfterInterruption
+name: signal-multi-step
+version: "1.0.0"
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: "echo 'Step 1' && sleep 2"
+    on_success: step2
+    on_failure: error_terminal
+
+  step2:
+    type: step
+    command: "echo 'Step 2' && sleep 2"
+    on_success: step3
+    on_failure: error_terminal
+
+  step3:
+    type: step
+    command: "echo 'Step 3' && sleep 2"
+    on_success: success_terminal
+    on_failure: error_terminal
+
+  success_terminal:
+    type: terminal
+    status: success
+
+  error_terminal:
+    type: terminal
+    status: failure
