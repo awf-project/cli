@@ -59,6 +59,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C010]** test(integration): add comprehensive signal handling integration tests
+  - Created integration test suite for signal handling (`tests/integration/signal_test.go`, 690 lines)
+  - Comprehensive coverage of graceful shutdown scenarios:
+    - SIGINT/SIGTERM graceful shutdown within 5 seconds (2 test scenarios)
+    - State preservation during workflow interruption with atomic persistence
+    - Parallel branch cancellation ensuring all branches terminate
+    - Workflow resumability from preserved state after interruption
+    - Idempotent handling of rapid successive signals (edge case)
+    - Child process cleanup preventing zombie processes
+  - Signal simulation via context cancellation for better test isolation (ADR-001):
+    - Uses `context.WithCancel()` and `cancel()` instead of actual OS signals
+    - Works consistently across environments (Linux, macOS, CI)
+    - Tests real signal handler code path without process management complexity
+  - Created 3 test fixture workflows with deterministic timing (120 lines YAML):
+    - `signal-long-running.yaml`: Single long-running step (10s sleep)
+    - `signal-multi-step.yaml`: Linear workflow with 3 steps (2s each)
+    - `signal-parallel.yaml`: Parallel workflow with 3 branches (5s, 10s, 15s)
+  - Added state checkpointing on workflow cancellation in ExecutionService
+  - All tests use 3-layer assertion pattern (error→status→details)
+  - Applied 3x timing tolerance for CI variability (15s graceful shutdown window)
+  - Leverages testutil builders from C007 and thread-safe patterns from C009
+  - All tests pass race detection with zero concurrency issues
 - **[C009]** test(integration): add comprehensive parallel execution integration tests
   - Created CLI-level integration test suite for parallel execution (`tests/integration/parallel_test.go`, 948 lines)
   - Comprehensive coverage of all parallel execution strategies:
