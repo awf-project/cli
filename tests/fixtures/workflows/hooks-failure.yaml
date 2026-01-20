@@ -1,0 +1,28 @@
+# Feature: C011 - Hook Failure Propagation Tests
+# Task: T002
+# Purpose: Test that hook failures abort workflow by default
+
+name: hooks-failure
+description: Workflow with failing hooks to test failure propagation
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "WORKFLOW_START" >> {{.env.HOOK_LOG_FILE}}
+    # This hook fails and should abort the workflow
+    - command: echo "FAILING_HOOK" >> {{.env.HOOK_LOG_FILE}} && exit 1
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "STEP1_SHOULD_NOT_EXECUTE" >> {{.env.HOOK_LOG_FILE}}
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

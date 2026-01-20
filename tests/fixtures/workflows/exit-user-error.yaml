@@ -1,0 +1,29 @@
+# Feature: C011 - CLI Exit Code Tests (User Errors)
+# Task: T011
+# Purpose: Trigger exit code 1 (user errors: missing input, validation failure)
+
+name: exit-user-error
+description: Workflow to test CLI exit code 1 for user errors
+version: "1.0.0"
+
+inputs:
+  - name: email
+    type: string
+    required: true
+    pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    description: "Email address (must be valid format)"
+
+states:
+  initial: validate_input
+
+  validate_input:
+    type: step
+    command: 'echo "Email validated: {{inputs.email}}"'
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

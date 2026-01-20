@@ -212,9 +212,15 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 	// execute workflow_start hooks
 	intCtx := s.buildInterpolationContext(execCtx)
+	s.hookExecutor.SetFailOnError(true)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
-		s.logger.Warn("workflow_start hook failed", "error", err)
+		s.hookExecutor.SetFailOnError(false)
+		execCtx.Status = workflow.StatusFailed
+		s.checkpoint(ctx, execCtx)
+		s.recordHistory(execCtx)
+		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
+	s.hookExecutor.SetFailOnError(false)
 
 	// execution loop
 	var execErr error
@@ -231,11 +237,17 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 		// terminal state - done
 		if step.Type == workflow.StepTypeTerminal {
-			execCtx.Status = workflow.StatusCompleted
+			// Check terminal status: failure or success (default)
+			if step.Status == workflow.TerminalFailure {
+				execCtx.Status = workflow.StatusFailed
+				execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+			} else {
+				execCtx.Status = workflow.StatusCompleted
+			}
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
 			s.recordHistory(execCtx)
-			s.logger.Info("workflow completed", "step", currentStep)
+			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
 
@@ -296,6 +308,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 		// regular error - execute error hook
 		intCtx.Error = &interpolation.ErrorData{
+			Type:    classifyErrorType(execErr),
 			Message: execErr.Error(),
 			State:   execCtx.CurrentStep,
 		}
@@ -1015,10 +1028,19 @@ func (s *ExecutionService) resolveStepCommand(
 		}
 	}
 
-	// build command
+	// build command with env for secret masking
+	env := make(map[string]string)
+	for k, v := range intCtx.Inputs {
+		// Convert input values to strings for env map
+		if strVal, ok := v.(string); ok {
+			env[k] = strVal
+		}
+	}
+
 	cmd := &ports.Command{
 		Program: resolvedCmd,
 		Dir:     resolvedDir,
+		Env:     env,
 		Timeout: step.Timeout,
 		Stdout:  s.stdoutWriter,
 		Stderr:  s.stderrWriter,
@@ -1345,9 +1367,15 @@ func (s *ExecutionService) Resume(
 
 	// execute workflow_start hooks (on resume we might want these again)
 	intCtx := s.buildInterpolationContext(execCtx)
+	s.hookExecutor.SetFailOnError(true)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
-		s.logger.Warn("workflow_start hook failed", "error", err)
+		s.hookExecutor.SetFailOnError(false)
+		execCtx.Status = workflow.StatusFailed
+		s.checkpoint(ctx, execCtx)
+		s.recordHistory(execCtx)
+		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
+	s.hookExecutor.SetFailOnError(false)
 
 	// Continue execution from current step
 	return s.executeFromStep(ctx, wf, execCtx)
@@ -1397,11 +1425,17 @@ func (s *ExecutionService) executeFromStep(
 
 		// terminal state - done
 		if step.Type == workflow.StepTypeTerminal {
-			execCtx.Status = workflow.StatusCompleted
+			// Check terminal status: failure or success (default)
+			if step.Status == workflow.TerminalFailure {
+				execCtx.Status = workflow.StatusFailed
+				execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+			} else {
+				execCtx.Status = workflow.StatusCompleted
+			}
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
 			s.recordHistory(execCtx)
-			s.logger.Info("workflow completed", "step", currentStep)
+			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
 
@@ -1462,6 +1496,7 @@ func (s *ExecutionService) executeFromStep(
 
 		// regular error - execute error hook
 		intCtx.Error = &interpolation.ErrorData{
+			Type:    classifyErrorType(execErr),
 			Message: execErr.Error(),
 			State:   execCtx.CurrentStep,
 		}
@@ -1886,4 +1921,38 @@ func (s *ExecutionService) serializeOperationOutputs(outputs map[string]any) str
 		first = false
 	}
 	return result.String()
+}
+
+// classifyErrorType categorizes errors into types matching CLI exit code taxonomy.
+// Returns: "execution", "workflow", "user", or "system"
+func classifyErrorType(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	errStr := err.Error()
+	switch {
+	case strings.Contains(errStr, "terminal failure"):
+		return "workflow"
+	case strings.Contains(errStr, "step not found"), strings.Contains(errStr, "invalid state"):
+		return "workflow"
+	case strings.Contains(errStr, "cycle detected"):
+		return "workflow"
+	case strings.Contains(errStr, "exit code"):
+		return "execution"
+	case strings.Contains(errStr, "timeout"), strings.Contains(errStr, "context deadline"):
+		return "execution"
+	case strings.Contains(errStr, "command failed"):
+		return "execution"
+	case strings.Contains(errStr, "not found"), strings.Contains(errStr, "missing"):
+		return "user"
+	case strings.Contains(errStr, "invalid input"), strings.Contains(errStr, "validation"):
+		return "user"
+	case strings.Contains(errStr, "permission"), strings.Contains(errStr, "access denied"):
+		return "system"
+	case strings.Contains(errStr, "IO error"), strings.Contains(errStr, "file system"):
+		return "system"
+	default:
+		return "execution"
+	}
 }

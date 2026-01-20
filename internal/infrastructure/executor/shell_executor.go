@@ -12,14 +12,19 @@ import (
 	"time"
 
 	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/infrastructure/logger"
 )
 
 // ShellExecutor executes shell commands via /bin/sh -c.
-type ShellExecutor struct{}
+type ShellExecutor struct {
+	masker *logger.SecretMasker
+}
 
 // NewShellExecutor creates a new ShellExecutor.
 func NewShellExecutor() *ShellExecutor {
-	return &ShellExecutor{}
+	return &ShellExecutor{
+		masker: logger.NewSecretMasker(),
+	}
 }
 
 // Execute runs a command and returns the result.
@@ -76,9 +81,13 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 	// execute
 	err := execCmd.Run()
 
+	// mask secrets in output
+	stdoutStr := e.masker.MaskText(stdout.String(), cmd.Env)
+	stderrStr := e.masker.MaskText(stderr.String(), cmd.Env)
+
 	result := &ports.CommandResult{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
+		Stdout: stdoutStr,
+		Stderr: stderrStr,
 	}
 
 	// handle context cancellation (process group already killed by Cancel func)

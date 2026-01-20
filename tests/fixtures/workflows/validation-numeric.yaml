@@ -1,0 +1,49 @@
+# Validation Numeric Test Fixture (C011 - US2)
+# Tests min/max numeric validation for inputs
+# Feature: Input validation with numeric bounds
+
+name: validation-numeric
+version: "1.0"
+description: Workflow to test numeric min/max validation rules
+
+inputs:
+  - name: port
+    type: integer
+    required: true
+    description: Port number with min/max constraints
+    validation:
+      min: 1024
+      max: 65535
+
+  - name: timeout_seconds
+    type: integer
+    required: false
+    default: 30
+    description: Timeout in seconds
+    validation:
+      min: 1
+      max: 3600
+
+  - name: percentage
+    type: integer
+    required: false
+    default: 50
+    description: Percentage value
+    validation:
+      min: 0
+      max: 100
+
+states:
+  initial: start
+
+  start:
+    type: step
+    command: echo "Port={{.inputs.port}} Timeout={{.inputs.timeout_seconds}}s Percentage={{.inputs.percentage}}%"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

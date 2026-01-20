@@ -291,3 +291,376 @@ func TestShellExecutor_Execute_NilWriters_BackwardCompatible(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "hello\n", result.Stdout)
 }
+
+// TestShellExecutor_MaskSecrets_HappyPath tests normal secret masking scenarios
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		command    string
+		env        map[string]string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:    "mask SECRET_ prefix in stdout",
+			command: "echo $SECRET_API_TOKEN",
+			env: map[string]string{
+				"SECRET_API_TOKEN": "super_secret_value_12345",
+				"PUBLIC_VAR":       "visible",
+			},
+			wantStdout: "***\n",
+			wantStderr: "",
+		},
+		{
+			name:    "mask API_KEY prefix in stdout",
+			command: "echo $API_KEY_OPENAI",
+			env: map[string]string{
+				"API_KEY_OPENAI": "sk-proj-abc123def456",
+			},
+			wantStdout: "***\n",
+			wantStderr: "",
+		},
+		{
+			name:    "mask PASSWORD prefix in stdout",
+			command: "echo $PASSWORD_DB",
+			env: map[string]string{
+				"PASSWORD_DB": "admin_pass_987654",
+			},
+			wantStdout: "***\n",
+			wantStderr: "",
+		},
+		{
+			name:    "mask multiple secrets in same output",
+			command: "echo $SECRET_TOKEN $API_KEY",
+			env: map[string]string{
+				"SECRET_TOKEN": "abc123",
+				"API_KEY":      "xyz789",
+			},
+			wantStdout: "*** ***\n",
+			wantStderr: "",
+		},
+		{
+			name:    "preserve non-secret values",
+			command: "echo $PUBLIC_VAR $USERNAME",
+			env: map[string]string{
+				"PUBLIC_VAR": "visible",
+				"USERNAME":   "john",
+			},
+			wantStdout: "visible john\n",
+			wantStderr: "",
+		},
+		{
+			name:    "mask secrets in stderr",
+			command: "echo $SECRET_KEY >&2",
+			env: map[string]string{
+				"SECRET_KEY": "hidden_value",
+			},
+			wantStdout: "",
+			wantStderr: "***\n",
+		},
+		{
+			name:    "mask secrets in both stdout and stderr",
+			command: "echo $SECRET_A; echo $SECRET_B >&2",
+			env: map[string]string{
+				"SECRET_A": "value_a",
+				"SECRET_B": "value_b",
+			},
+			wantStdout: "***\n",
+			wantStderr: "***\n",
+		},
+	}
+
+	executor := NewShellExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := ports.Command{
+				Program: tt.command,
+				Env:     tt.env,
+			}
+
+			result, err := executor.Execute(context.Background(), &cmd)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStdout, result.Stdout, "stdout should have secrets masked")
+			assert.Equal(t, tt.wantStderr, result.Stderr, "stderr should have secrets masked")
+		})
+	}
+}
+
+// TestShellExecutor_MaskSecrets_EdgeCases tests boundary conditions for secret masking
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		command    string
+		env        map[string]string
+		wantStdout string
+	}{
+		{
+			name:       "empty env map",
+			command:    "echo hello",
+			env:        map[string]string{},
+			wantStdout: "hello\n",
+		},
+		{
+			name:       "nil env map",
+			command:    "echo hello",
+			env:        nil,
+			wantStdout: "hello\n",
+		},
+		{
+			name:    "secret appears multiple times",
+			command: "echo $SECRET_TOKEN $SECRET_TOKEN",
+			env: map[string]string{
+				"SECRET_TOKEN": "repeated",
+			},
+			wantStdout: "*** ***\n",
+		},
+		{
+			name:    "overlapping secret values",
+			command: "echo abc abcdef",
+			env: map[string]string{
+				"SECRET_A": "abc",
+				"SECRET_B": "abcdef",
+			},
+			wantStdout: "*** ***\n",
+		},
+		{
+			name:    "empty secret value not masked",
+			command: "echo SECRET_KEY=",
+			env: map[string]string{
+				"SECRET_KEY": "",
+			},
+			wantStdout: "SECRET_KEY=\n",
+		},
+		{
+			name:    "secret with special characters",
+			command: "echo 'p@ss.w0rd+123'",
+			env: map[string]string{
+				"PASSWORD": "p@ss.w0rd+123",
+			},
+			wantStdout: "***\n",
+		},
+		{
+			name:    "multiline output with secrets",
+			command: "echo line1:$SECRET_KEY; echo line2:normal; echo line3:$API_KEY",
+			env: map[string]string{
+				"SECRET_KEY": "abc123",
+				"API_KEY":    "xyz789",
+			},
+			wantStdout: "line1:***\nline2:normal\nline3:***\n",
+		},
+	}
+
+	executor := NewShellExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := ports.Command{
+				Program: tt.command,
+				Env:     tt.env,
+			}
+
+			result, err := executor.Execute(context.Background(), &cmd)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStdout, result.Stdout)
+		})
+	}
+}
+
+// TestShellExecutor_MaskSecrets_CaseInsensitive tests case-insensitive key matching
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		name       string
+		command    string
+		env        map[string]string
+		wantStdout string
+	}{
+		{
+			name:    "lowercase secret_ prefix",
+			command: "echo $secret_key",
+			env: map[string]string{
+				"secret_key": "hidden123",
+			},
+			wantStdout: "***\n",
+		},
+		{
+			name:    "mixed case api_key prefix",
+			command: "echo $Api_Key_OpenAI",
+			env: map[string]string{
+				"Api_Key_OpenAI": "xyz",
+			},
+			wantStdout: "***\n",
+		},
+		{
+			name:    "uppercase PASSWORD prefix",
+			command: "echo $PASSWORD",
+			env: map[string]string{
+				"PASSWORD": "pass123",
+			},
+			wantStdout: "***\n",
+		},
+	}
+
+	executor := NewShellExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := ports.Command{
+				Program: tt.command,
+				Env:     tt.env,
+			}
+
+			result, err := executor.Execute(context.Background(), &cmd)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStdout, result.Stdout)
+		})
+	}
+}
+
+// TestShellExecutor_MaskSecrets_ErrorHandling tests error output masking
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		command    string
+		env        map[string]string
+		wantStderr string
+		wantCode   int
+	}{
+		{
+			name:    "mask secret in error message",
+			command: "echo 'Error: Authentication failed with token '$SECRET_TOKEN >&2; exit 1",
+			env: map[string]string{
+				"SECRET_TOKEN": "secret123",
+			},
+			wantStderr: "Error: Authentication failed with token ***\n",
+			wantCode:   1,
+		},
+		{
+			name:    "mask API key in curl error",
+			command: "echo 'curl: unauthorized key='$API_KEY >&2; exit 1",
+			env: map[string]string{
+				"API_KEY": "sk-abc123",
+			},
+			wantStderr: "curl: unauthorized key=***\n",
+			wantCode:   1,
+		},
+		{
+			name:    "non-secret error preserved",
+			command: "echo 'Error: command not found' >&2; exit 1",
+			env: map[string]string{
+				"SECRET_KEY": "hidden",
+			},
+			wantStderr: "Error: command not found\n",
+			wantCode:   1,
+		},
+	}
+
+	executor := NewShellExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := ports.Command{
+				Program: tt.command,
+				Env:     tt.env,
+			}
+
+			result, err := executor.Execute(context.Background(), &cmd)
+
+			// non-zero exit is not an error for executor
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStderr, result.Stderr, "error output should mask secrets")
+			assert.Equal(t, tt.wantCode, result.ExitCode)
+		})
+	}
+}
+
+// TestShellExecutor_MaskSecrets_RealWorldScenarios tests realistic command patterns
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_RealWorldScenarios(t *testing.T) {
+	tests := []struct {
+		name       string
+		command    string
+		env        map[string]string
+		wantStdout string
+	}{
+		{
+			name:    "environment variable listing",
+			command: "echo SECRET_API_TOKEN=$SECRET_API_TOKEN; echo API_KEY_OPENAI=$API_KEY_OPENAI; echo PUBLIC_VAR=$PUBLIC_VAR",
+			env: map[string]string{
+				"SECRET_API_TOKEN": "super_secret_value_12345",
+				"API_KEY_OPENAI":   "sk-proj-abc123",
+				"PUBLIC_VAR":       "visible_value",
+			},
+			wantStdout: "SECRET_API_TOKEN=***\nAPI_KEY_OPENAI=***\nPUBLIC_VAR=visible_value\n",
+		},
+		{
+			name:    "JSON output with secrets",
+			command: `echo '{"api_key":"'$API_KEY_OPENAI'","user":"john","password":"'$PASSWORD_DB'"}'`,
+			env: map[string]string{
+				"API_KEY_OPENAI": "sk-proj-abc123",
+				"PASSWORD_DB":    "admin_pass",
+			},
+			wantStdout: `{"api_key":"***","user":"john","password":"***"}` + "\n",
+		},
+		{
+			name:    "shell command with secret arguments",
+			command: `echo 'curl -H "Authorization: Bearer '$API_KEY'" https://api.example.com'`,
+			env: map[string]string{
+				"API_KEY": "sk-proj-abc123",
+			},
+			wantStdout: `curl -H "Authorization: Bearer ***" https://api.example.com` + "\n",
+		},
+		{
+			name:    "mixed secrets and public data",
+			command: "echo user=$USERNAME token=$SECRET_TOKEN status=$STATUS",
+			env: map[string]string{
+				"USERNAME":     "alice",
+				"SECRET_TOKEN": "abc123",
+				"STATUS":       "active",
+			},
+			wantStdout: "user=alice token=*** status=active\n",
+		},
+	}
+
+	executor := NewShellExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := ports.Command{
+				Program: tt.command,
+				Env:     tt.env,
+			}
+
+			result, err := executor.Execute(context.Background(), &cmd)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStdout, result.Stdout)
+		})
+	}
+}
+
+// TestShellExecutor_MaskSecrets_WithStreaming tests masking works with streaming output
+// Feature: C011 - Task T018
+func TestShellExecutor_MaskSecrets_WithStreaming(t *testing.T) {
+	executor := NewShellExecutor()
+
+	var streamBuf bytes.Buffer
+	cmd := ports.Command{
+		Program: "echo $SECRET_TOKEN",
+		Env: map[string]string{
+			"SECRET_TOKEN": "secret123",
+		},
+		Stdout: &streamBuf,
+	}
+
+	result, err := executor.Execute(context.Background(), &cmd)
+
+	require.NoError(t, err)
+	// Captured result should be masked
+	assert.Equal(t, "***\n", result.Stdout, "captured stdout should mask secret")
+	// Note: Streamed output is NOT masked (masking happens after execution)
+	// This is expected behavior - streaming shows raw output, final result is masked
+	assert.Equal(t, "secret123\n", streamBuf.String(), "streamed output is raw (not masked)")
+}

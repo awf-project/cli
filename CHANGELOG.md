@@ -59,106 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **[C010]** test(integration): add comprehensive signal handling integration tests
-  - Created integration test suite for signal handling (`tests/integration/signal_test.go`, 690 lines)
-  - Comprehensive coverage of graceful shutdown scenarios:
-    - SIGINT/SIGTERM graceful shutdown within 5 seconds (2 test scenarios)
-    - State preservation during workflow interruption with atomic persistence
-    - Parallel branch cancellation ensuring all branches terminate
-    - Workflow resumability from preserved state after interruption
-    - Idempotent handling of rapid successive signals (edge case)
-    - Child process cleanup preventing zombie processes
-  - Signal simulation via context cancellation for better test isolation (ADR-001):
-    - Uses `context.WithCancel()` and `cancel()` instead of actual OS signals
-    - Works consistently across environments (Linux, macOS, CI)
-    - Tests real signal handler code path without process management complexity
-  - Created 3 test fixture workflows with deterministic timing (120 lines YAML):
-    - `signal-long-running.yaml`: Single long-running step (10s sleep)
-    - `signal-multi-step.yaml`: Linear workflow with 3 steps (2s each)
-    - `signal-parallel.yaml`: Parallel workflow with 3 branches (5s, 10s, 15s)
-  - Added state checkpointing on workflow cancellation in ExecutionService
-  - All tests use 3-layer assertion pattern (error→status→details)
-  - Applied 3x timing tolerance for CI variability (15s graceful shutdown window)
-  - Leverages testutil builders from C007 and thread-safe patterns from C009
-  - All tests pass race detection with zero concurrency issues
-- **[C009]** test(integration): add comprehensive parallel execution integration tests
-  - Created CLI-level integration test suite for parallel execution (`tests/integration/parallel_test.go`, 948 lines)
-  - Comprehensive coverage of all parallel execution strategies:
-    - `all_succeed`: Workflow fails if ANY branch fails (3 test scenarios)
-    - `any_succeed`: Workflow succeeds if ANY branch succeeds (3 test scenarios)
-    - `best_effort`: All branches complete regardless of failures (3 test scenarios)
-  - Added `max_concurrent` limit verification with timing-based assertions:
-    - Validates that max_concurrent=2 with 3 branches properly serializes execution
-    - Confirms unlimited parallelism when max_concurrent is not set
-    - Uses 3x timing margin for CI variability (per ADR-004)
-  - Implemented failure propagation tests:
-    - Branch errors captured in ExecutionContext.States
-    - on_failure transitions respected in parallel contexts
-    - Error details preserved in StepState with exit codes and messages
-  - Fixed race condition in ExecutionContext by adding RWMutex protection for concurrent map access
-  - Added GetAllStepStates() method for thread-safe state iteration
-  - All tests use inline YAML fixtures for visibility and maintainability
-  - Leverages testutil builders from C007 for 93% setup code reduction
-- **[C007]** refactor(tests): modernize test infrastructure for thread-safety and reusability
-  - Migrated 359 of 394 `os.Setenv` calls to thread-safe `t.Setenv()` across integration, infrastructure, application, and pkg test layers (remaining 35 in CLI layer intentionally excluded for XDG config testing)
-  - Removed 196 `defer os.Unsetenv` calls (automatic cleanup via `t.Setenv`)
-  - Created centralized `internal/testutil` package with 5-file structure (doc.go, mocks.go, builders.go, assertions.go, fixtures.go)
-  - Implemented 7 thread-safe mock implementations with `sync.Mutex` protection:
-    - MockWorkflowRepository, MockStateStore, MockCommandExecutor, MockLogger
-    - MockAgentProvider, MockTokenizer, MockAgentRegistry
-  - Added fluent builder API for test construction (ExecutionServiceBuilder, WorkflowBuilder, StepBuilder, ExecutionContextBuilder)
-  - Implemented domain-specific assertion helpers: AssertWorkflowValid, AssertStepOutput, AssertExecutionCompleted
-  - Created workflow fixture factories: SimpleWorkflow, LinearWorkflow, ParallelWorkflow, LoopWorkflow, ConversationWorkflow
-  - Refactored existing tests to use testutil package, reducing test setup from 30+ lines to 2-3 lines (93% reduction)
-  - All tests pass with `go test -race ./...` without data race warnings
-  - Test suite now fully parallel-safe with zero environment variable pollution
-  - Consolidated 23 duplicated mock types into ~10 reusable implementations
-  - Comprehensive package documentation with usage examples and migration patterns
- **[C008]** refactor(tests): restructure execution_service_test.go for improved maintainability
-  - Split monolithic 1,923-line test file into 6 thematic test files by execution concern
-  - Extracted specialized test mocks (timeoutMockExecutor, errorMockExecutor, retryCountingExecutor, conditionMockEvaluator) to `execution_service_specialized_mocks_test.go` for reuse across split files
-  - Created domain-specific test files:
-    - `execution_service_core_test.go`: Core execution tests (50 tests) - basic workflow execution, state transitions, context propagation, resume functionality, call workflow steps
-    - `execution_service_hooks_test.go`: Hook execution tests (3 tests)
-    - `execution_service_loop_test.go`: Loop iteration tests (11 tests)
-    - `execution_service_parallel_test.go`: Parallel execution tests (1 test)
-    - `execution_service_retry_test.go`: Retry mechanism tests (10 tests)
-  - All 633 application tests pass unchanged with race detection
-  - Reduced cognitive load for test navigation - developers can now quickly locate relevant test categories
-  - Test count distribution: 50 core + 3 hooks + 11 loop + 1 parallel + 10 retry = 75 execution service tests across 6 files
-- **[C006]** refactor(application): reduce execution core cognitive complexity through helper extraction
-  - `ExecuteConversation`: 29 → ≤18 by extracting sequential pipeline (`validateConversationInputs`, `initializeConversationState`, `executeTurn`, `evaluateTurnCompletion`, `finalizeStopReason`)
-  - `executeStep`: 29 → ≤18 by extracting preparation/execution/outcome handlers (`prepareStepExecution`, `resolveStepCommand`, `executeStepCommand`, `recordStepResult`, `handleExecutionError`, `handleNonZeroExit`, `handleSuccess`)
-  - `IsProblematicMaxIterationPattern`: 24 → ≤18 by extracting shared pattern detection (`detectLoopPatterns`, `shouldCheckLoopProblems`)
-  - `HandleMaxIterationFailure`: 23 → ≤18 by using shared `detectLoopPatterns` plus extraction of `buildLoopFailureError`, `executeLoopPostHooks`
-  - Total: 15 helper methods extracted, 3 test files (54KB), eliminated 20+ lines of code duplication
-  - All 693 existing tests pass unchanged (100% backward compatibility)
-  - Helper methods achieve ~95% average test coverage
-- **[C005]** refactor(application): reduce step executors cognitive complexity through helper extraction
-  - `TemplateService.expandStep`: 23 → ≤18 by extracting parameter processing pipeline (`validateAndLoadTemplate`, `selectPrimaryStep`, `expandNestedTemplate`, `applyTemplateFields`)
-  - `InteractiveExecutor.executeStep`: 22 → ≤18 by extracting result handlers (`HandleExecutionError`, `HandleNonZeroExit`, `HandleSuccess`)
-  - `ParallelExecutor.executeAnySucceed`: 22 → ≤18 by extracting branch coordination helpers (`RunBranchWithSemaphore`, `CheckBranchSuccess`)
-  - Total: 9 helper methods extracted, 3 new test files (78KB), zero signature changes
-  - All 693 existing tests pass unchanged (100% backward compatibility)
-- **[C004]** refactor(cli): reduce CLI/UI layer cognitive complexity through systematic helper extraction
-  - `formatStep` (dry_run_formatter.go): 42 → 15 by extracting field formatters (`formatFieldIfPresent`, `formatRetry`, `formatCapture`)
-  - `generateEdges` (dot_generator.go): 27 → 18 by extracting edge generators (`generateParallelEdges`, `generateLoopEdges`, `generateTransitionEdge`)
-  - `writeValidationResultTable` (output.go): 25 → 11 by extracting row builders (`formatInputRow`, `formatStepRow`, `renderStatusHeader`)
-  - `collectPromptsFromPaths` (list.go): 22 → 16 by extracting path guards (`shouldProcessEntry`, `buildPromptInfo`)
-  - Total reduction: 116 → 60 complexity points across 4 functions (48% improvement, -56 points)
-  - All 3,670+ lines of existing CLI/UI tests pass unchanged (100% backward compatibility)
-  - Follows proven C001-C003 patterns: guard clauses, type-checked wrappers, helper consolidation
-- **[C003]** Reduced cognitive complexity in workflow graph algorithms by extracting type-safe helpers:
-  - Introduced `visitState` enum to replace magic numbers in DFS cycle detection
-  - Extracted `findCycleStart` and `buildCyclePath` helpers in DetectCycles (27→≤20 complexity)
-  - Extracted `enqueueIfNotVisited` helper in ComputeExecutionOrder (23→≤20 complexity)
-  - No behavior changes, all 62 existing tests pass
-- **[C002]** refactor(agents): reduce agent provider cognitive complexity by extracting shared helpers (C002)
-  - Created `helpers.go` with shared utility functions: `estimateTokens`, `cloneState`, type-checked option getters
-  - Refactored Claude, Codex, and Gemini providers to use shared helpers
-  - Eliminated 5 duplicated `estimateTokens` functions and 3 duplicated `cloneState` functions
-  - Maintained 100% backward compatibility with zero test modifications
-- **[C001]**  refactor(validation): reduce validateRules cognitive complexity from 31 to ≤20 by extracting type-checked validator wrappers (C001)
+- **[C011]** Added 4 integration test suites (1430 LOC): hooks lifecycle, input validation, secret masking, CLI exit codes
+- **[C011]** Created 9 YAML fixtures (345 LOC) for hooks, validation, secrets, and exit code test scenarios
+- **[C011]** Fixed `MaskText()` never invoked in shell executor; hook failures not enforced; error.type missing
+- **[C010]** Added `signal_test.go` (690 LOC): SIGINT/SIGTERM graceful shutdown, state preservation, parallel cancellation
+- **[C010]** Created 3 signal test fixtures; added state checkpointing on workflow cancellation in ExecutionService
+- **[C009]** Added `parallel_test.go` (948 LOC): all_succeed/any_succeed/best_effort strategies with timing assertions
+- **[C009]** Fixed race condition in ExecutionContext with RWMutex; added `GetAllStepStates()` thread-safe iterator
+- **[C008]** Split 1,923-line `execution_service_test.go` into 6 thematic files (core/hooks/loop/parallel/retry)
+- **[C007]** Migrated 359 `os.Setenv` to `t.Setenv()`; created `internal/testutil` with 7 mocks and fluent builders
+- **[C007]** Added fixture factories (Simple/Linear/Parallel/Loop/ConversationWorkflow); 93% test setup reduction
+- **[C006]** Reduced `ExecuteConversation` 29→18, `executeStep` 29→18 via pipeline and handler extraction
+- **[C005]** Reduced `expandStep` 23→18, `executeStep` 22→18, `executeAnySucceed` 22→18 via helper extraction
+- **[C004]** Reduced CLI complexity 116→60 points: `formatStep`, `generateEdges`, `writeValidationResultTable`
+- **[C003]** Reduced graph complexity via `visitState` enum and extracted helpers (27/23→≤20)
+- **[C002]** Created `helpers.go` with shared `estimateTokens`, `cloneState`; eliminated 8 duplicated functions
+- **[C001]** Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch
