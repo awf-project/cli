@@ -1,0 +1,45 @@
+# Feature: C011 - Hook Lifecycle Integration Tests
+# Task: T001
+# Purpose: Test all hook execution order (workflow_start, workflow_end, step pre/post)
+# Hooks write to a log file to enable deterministic order verification
+
+name: hooks-lifecycle
+description: Workflow demonstrating all hook types with file-based verification
+version: "1.0.0"
+
+hooks:
+  workflow_start:
+    - command: echo "WORKFLOW_START" >> {{.env.HOOK_LOG_FILE}}
+  workflow_end:
+    - command: echo "WORKFLOW_END" >> {{.env.HOOK_LOG_FILE}}
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "STEP1_COMMAND" >> {{.env.HOOK_LOG_FILE}}
+    hooks:
+      pre:
+        - command: echo "STEP1_PRE" >> {{.env.HOOK_LOG_FILE}}
+      post:
+        - command: echo "STEP1_POST" >> {{.env.HOOK_LOG_FILE}}
+    on_success: step2
+    on_failure: error
+
+  step2:
+    type: step
+    command: echo "STEP2_COMMAND" >> {{.env.HOOK_LOG_FILE}}
+    hooks:
+      pre:
+        - command: echo "STEP2_PRE" >> {{.env.HOOK_LOG_FILE}}
+      post:
+        - command: echo "STEP2_POST" >> {{.env.HOOK_LOG_FILE}}
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

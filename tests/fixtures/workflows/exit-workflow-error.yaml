@@ -1,0 +1,28 @@
+# Feature: C011 - CLI Exit Code Tests (Workflow Errors)
+# Task: T011
+# Purpose: Trigger exit code 2 (workflow errors: invalid state, cycle)
+
+name: exit-workflow-error
+description: Workflow to test CLI exit code 2 for workflow configuration errors
+version: "1.0.0"
+
+inputs:
+  - name: trigger-cycle
+    type: string
+    required: false
+    default: "false"
+
+states:
+  initial: check_mode
+
+  check_mode:
+    type: step
+    command: echo "Checking mode..."
+    on_success: invalid_state_reference  # This state does not exist -> workflow error
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

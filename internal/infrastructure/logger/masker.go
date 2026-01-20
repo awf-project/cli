@@ -55,3 +55,55 @@ func (m *SecretMasker) MaskFields(fields []any) []any {
 
 	return result
 }
+
+// MaskText replaces secret values in text output with "***".
+// It accepts a text string and a map of environment variables,
+// then scans for any secret values and replaces them.
+// MaskText replaces secret values in text output with "***".
+// It accepts a text string and a map of environment variables,
+// then scans for any secret values and replaces them.
+func (m *SecretMasker) MaskText(text string, env map[string]string) string {
+	if len(env) == 0 || text == "" {
+		return text
+	}
+
+	result := text
+
+	// Collect secret values from env vars with secret keys
+	// Sort by length descending to handle overlapping values correctly
+	// (e.g., "abc" and "abcdef" - replace longer one first)
+	type secretValue struct {
+		value  string
+		length int
+	}
+	var secrets []secretValue
+
+	for key, value := range env {
+		// Skip empty values
+		if value == "" {
+			continue
+		}
+		// Only process keys that match secret patterns
+		if m.IsSecretKey(key) {
+			secrets = append(secrets, secretValue{value: value, length: len(value)})
+		}
+	}
+
+	// Sort by length descending (longer values first to handle overlaps)
+	for i := 0; i < len(secrets); i++ {
+		for j := i + 1; j < len(secrets); j++ {
+			if secrets[j].length > secrets[i].length {
+				secrets[i], secrets[j] = secrets[j], secrets[i]
+			}
+		}
+	}
+
+	// Replace each secret value with ***
+	for _, secret := range secrets {
+		// Use strings.ReplaceAll with the exact value
+		// This handles special regex characters correctly
+		result = strings.ReplaceAll(result, secret.value, "***")
+	}
+
+	return result
+}

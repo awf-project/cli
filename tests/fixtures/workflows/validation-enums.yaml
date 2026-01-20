@@ -1,0 +1,45 @@
+# Validation Enums Test Fixture (C011 - US2)
+# Tests enum/allowed values validation for inputs
+# Feature: Input validation with enum constraints
+
+name: validation-enums
+version: "1.0"
+description: Workflow to test enum validation rules
+
+inputs:
+  - name: environment
+    type: string
+    required: true
+    description: Deployment environment
+    validation:
+      enum:
+        - development
+        - staging
+        - production
+
+  - name: log_level
+    type: string
+    required: false
+    default: info
+    description: Logging level
+    validation:
+      enum:
+        - debug
+        - info
+        - warn
+        - error
+
+states:
+  initial: start
+
+  start:
+    type: step
+    command: echo "Deploying to {{.inputs.environment}} with log level {{.inputs.log_level}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal

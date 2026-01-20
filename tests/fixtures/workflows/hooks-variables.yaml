@@ -1,0 +1,42 @@
+# Feature: C011 - Hook Variable Interpolation Tests
+# Task: T003
+# Purpose: Test variable interpolation in hooks
+# Tests: inputs, env, workflow metadata (ID), states output (Output field with capital O)
+
+name: hooks-variables
+description: Workflow testing variable interpolation in all hook types
+version: "1.0.0"
+
+inputs:
+  - name: test_input
+    type: string
+    required: true
+    default: "input_value"
+
+hooks:
+  workflow_start:
+    - command: echo "START workflow_id={{.workflow.ID}}" >> {{.env.HOOK_LOG_FILE}}
+    - command: echo "START input={{.inputs.test_input}}" >> {{.env.HOOK_LOG_FILE}}
+  workflow_end:
+    - command: echo "END workflow_id={{.workflow.ID}}" >> {{.env.HOOK_LOG_FILE}}
+    - command: echo "END step1_output={{.states.step1.Output}}" >> {{.env.HOOK_LOG_FILE}}
+
+states:
+  initial: step1
+
+  step1:
+    type: step
+    command: echo "step1_captured_output"
+    capture:
+      stdout: output
+    hooks:
+      pre:
+        - command: echo "PRE workflow_id={{.workflow.ID}}" >> {{.env.HOOK_LOG_FILE}}
+        - command: echo "PRE input={{.inputs.test_input}}" >> {{.env.HOOK_LOG_FILE}}
+      post:
+        - command: echo "POST workflow_id={{.workflow.ID}}" >> {{.env.HOOK_LOG_FILE}}
+        - command: echo "POST output={{.states.step1.Output}}" >> {{.env.HOOK_LOG_FILE}}
+    on_success: done
+
+  done:
+    type: terminal
