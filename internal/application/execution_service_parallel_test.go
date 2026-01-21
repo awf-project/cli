@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
@@ -29,8 +28,7 @@ import (
 
 func TestExecutionService_Resume_ParallelStep(t *testing.T) {
 	// Resume from a parallel step
-	repo := newMockRepository()
-	repo.workflows["parallel-resume"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "parallel-resume",
 		Initial: "parallel",
 		Steps: map[string]*workflow.Step{
@@ -47,9 +45,12 @@ func TestExecutionService_Resume_ParallelStep(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	store := newMockStateStore()
-	store.states["parallel-id"] = &workflow.ExecutionContext{
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("parallel-resume", wf).
+		Build()
+
+	// Setup existing execution state for resume
+	err := mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "parallel-id",
 		WorkflowName: "parallel-resume",
 		Status:       workflow.StatusRunning,
@@ -57,10 +58,8 @@ func TestExecutionService_Resume_ParallelStep(t *testing.T) {
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
 		Env:          make(map[string]string),
-	}
-
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	})
+	require.NoError(t, err, "setup should succeed")
 
 	ctx, err := execSvc.Resume(context.Background(), "parallel-id", nil)
 

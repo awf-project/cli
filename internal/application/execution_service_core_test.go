@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
@@ -31,8 +30,7 @@ import (
 // Helper functions are defined in execution_service_helpers_test.go
 
 func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -49,11 +47,10 @@ func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo hello"] = &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test", wf).
+		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
@@ -70,8 +67,7 @@ func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
 }
 
 func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["multi"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "multi",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -82,10 +78,9 @@ func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor() // default returns ExitCode: 0
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("multi", wf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "multi", nil)
 
@@ -103,8 +98,7 @@ func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
 }
 
 func TestExecutionService_Run_FailureTransition(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["fail-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "fail-test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -120,11 +114,10 @@ func TestExecutionService_Run_FailureTransition(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "failed"}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("fail-test", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "failed"}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "fail-test", nil)
 
@@ -139,8 +132,7 @@ func TestExecutionService_Run_FailureTransition(t *testing.T) {
 }
 
 func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["fail-no-transition"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "fail-no-transition",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -155,11 +147,10 @@ func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("fail-no-transition", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "fail-no-transition", nil)
 
@@ -168,8 +159,7 @@ func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
 }
 
 func TestExecutionService_Run_StepTimeout(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["timeout-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "timeout-test",
 		Initial: "slow",
 		Steps: map[string]*workflow.Step{
@@ -191,8 +181,10 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 		timeout: 500 * time.Millisecond,
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("timeout-test", wf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
 
@@ -201,8 +193,7 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 }
 
 func TestExecutionService_Run_WorkflowNotFound(t *testing.T) {
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).Build()
 
 	_, err := execSvc.Run(context.Background(), "nonexistent", nil)
 
@@ -211,8 +202,7 @@ func TestExecutionService_Run_WorkflowNotFound(t *testing.T) {
 }
 
 func TestExecutionService_Run_WithInputs(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["input-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "input-test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -221,8 +211,9 @@ func TestExecutionService_Run_WithInputs(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("input-test", wf).
+		Build()
 
 	inputs := map[string]any{"name": "test", "count": 42}
 	ctx, err := execSvc.Run(context.Background(), "input-test", inputs)
@@ -239,8 +230,7 @@ func TestExecutionService_Run_WithInputs(t *testing.T) {
 }
 
 func TestExecutionService_Run_StepNotFound(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["bad-ref"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "bad-ref",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -253,8 +243,9 @@ func TestExecutionService_Run_StepNotFound(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("bad-ref", wf).
+		Build()
 
 	_, err := execSvc.Run(context.Background(), "bad-ref", nil)
 
@@ -263,8 +254,7 @@ func TestExecutionService_Run_StepNotFound(t *testing.T) {
 }
 
 func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["immediate"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "immediate",
 		Initial: "done",
 		Steps: map[string]*workflow.Step{
@@ -272,8 +262,9 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("immediate", wf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "immediate", nil)
 
@@ -283,15 +274,13 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 }
 
 func TestNewExecutionService(t *testing.T) {
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).Build()
 
 	assert.NotNil(t, execSvc)
 }
 
 func TestExecutionService_Run_ExecutorError(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["exec-error"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "exec-error",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -309,8 +298,10 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 
 	executor := &errorMockExecutor{err: errors.New("command not found")}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("exec-error", wf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
 
@@ -319,8 +310,7 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 }
 
 func TestExecutionService_Run_WithDir(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["dir-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "dir-test",
 		Initial: "build",
 		Steps: map[string]*workflow.Step{
@@ -337,8 +327,10 @@ func TestExecutionService_Run_WithDir(t *testing.T) {
 
 	executor := newCapturingMockExecutor()
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("dir-test", wf).
+		WithExecutor(executor).
+		Build()
 
 	_, err := execSvc.Run(context.Background(), "dir-test", nil)
 
@@ -348,8 +340,7 @@ func TestExecutionService_Run_WithDir(t *testing.T) {
 }
 
 func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["no-dir-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "no-dir-test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
@@ -365,8 +356,10 @@ func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
 
 	executor := newCapturingMockExecutor()
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("no-dir-test", wf).
+		WithExecutor(executor).
+		Build()
 
 	_, err := execSvc.Run(context.Background(), "no-dir-test", nil)
 
@@ -376,8 +369,7 @@ func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
 }
 
 func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["checkpoint-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "checkpoint-test",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -388,17 +380,15 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 		},
 	}
 
-	store := newMockStateStore()
-	executor := newMockExecutor()
-
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("checkpoint-test", wf).
+		Build()
 
 	execCtx, err := execSvc.Run(context.Background(), "checkpoint-test", nil)
 	require.NoError(t, err)
 
 	// State should have been saved (checkpointed)
-	saved, err := store.Load(context.Background(), execCtx.WorkflowID)
+	saved, err := mocks.StateStore.Load(context.Background(), execCtx.WorkflowID)
 	require.NoError(t, err)
 	require.NotNil(t, saved, "state should be checkpointed after execution")
 	assert.Equal(t, workflow.StatusCompleted, saved.Status)
@@ -412,8 +402,7 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 	// When continue_on_error is true, even if the step fails (non-zero exit),
 	// it should follow on_success instead of on_failure
-	repo := newMockRepository()
-	repo.workflows["continue-on-error"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "continue-on-error",
 		Initial: "flaky",
 		Steps: map[string]*workflow.Step{
@@ -438,11 +427,10 @@ func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("continue-on-error", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "continue-on-error", nil)
 
@@ -459,8 +447,7 @@ func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 func TestExecutionService_Run_ContinueOnErrorWithExecutorError(t *testing.T) {
 	// When continue_on_error is true and the executor returns an error,
 	// it should still follow on_success
-	repo := newMockRepository()
-	repo.workflows["continue-exec-error"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "continue-exec-error",
 		Initial: "failing",
 		Steps: map[string]*workflow.Step{
@@ -479,8 +466,10 @@ func TestExecutionService_Run_ContinueOnErrorWithExecutorError(t *testing.T) {
 
 	executor := &errorMockExecutor{err: errors.New("command not found")}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("continue-exec-error", wf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "continue-exec-error", nil)
 
@@ -490,8 +479,7 @@ func TestExecutionService_Run_ContinueOnErrorWithExecutorError(t *testing.T) {
 
 func TestExecutionService_Run_ContinueOnErrorFalseFollowsOnFailure(t *testing.T) {
 	// When continue_on_error is false (default), failure should follow on_failure
-	repo := newMockRepository()
-	repo.workflows["normal-failure"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "normal-failure",
 		Initial: "step",
 		Steps: map[string]*workflow.Step{
@@ -508,11 +496,10 @@ func TestExecutionService_Run_ContinueOnErrorFalseFollowsOnFailure(t *testing.T)
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("normal-failure", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "normal-failure", nil)
 
@@ -522,8 +509,7 @@ func TestExecutionService_Run_ContinueOnErrorFalseFollowsOnFailure(t *testing.T)
 
 func TestExecutionService_Run_ContinueOnErrorMultipleSteps(t *testing.T) {
 	// Test that continue_on_error works correctly across multiple steps
-	repo := newMockRepository()
-	repo.workflows["multi-continue"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "multi-continue",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -555,13 +541,12 @@ func TestExecutionService_Run_ContinueOnErrorMultipleSteps(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["fail1"] = &ports.CommandResult{ExitCode: 1}
-	executor.results["fail2"] = &ports.CommandResult{ExitCode: 2}
-	executor.results["success"] = &ports.CommandResult{ExitCode: 0}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("multi-continue", wf).
+		WithCommandResult("fail1", &ports.CommandResult{ExitCode: 1}).
+		WithCommandResult("fail2", &ports.CommandResult{ExitCode: 2}).
+		WithCommandResult("success", &ports.CommandResult{ExitCode: 0}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "multi-continue", nil)
 
@@ -580,8 +565,7 @@ func TestExecutionService_Run_ContinueOnErrorMultipleSteps(t *testing.T) {
 func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 	// When continue_on_error is true and there's no on_failure defined,
 	// it should still follow on_success on failure
-	repo := newMockRepository()
-	repo.workflows["continue-no-onfailure"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "continue-no-onfailure",
 		Initial: "step",
 		Steps: map[string]*workflow.Step{
@@ -597,11 +581,10 @@ func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("continue-no-onfailure", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "continue-no-onfailure", nil)
 
@@ -616,8 +599,7 @@ func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 	// Workflow with input validation - all inputs valid
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["input-validation"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "input-validation",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -645,9 +627,9 @@ func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("input-validation", wf).
+		Build()
 
 	inputs := map[string]any{
 		"email": "test@example.com",
@@ -663,8 +645,7 @@ func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
 	// Workflow with input validation - invalid email pattern
-	repo := newMockRepository()
-	repo.workflows["invalid-email"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "invalid-email",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -683,9 +664,9 @@ func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("invalid-email", wf).
+		Build()
 
 	inputs := map[string]any{
 		"email": "not-an-email",
@@ -700,8 +681,7 @@ func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
 	// Required input not provided
-	repo := newMockRepository()
-	repo.workflows["required-missing"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "required-missing",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -717,9 +697,9 @@ func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("required-missing", wf).
+		Build()
 
 	// Empty inputs - required field missing
 	_, err := execSvc.Run(context.Background(), "required-missing", map[string]any{})
@@ -732,8 +712,7 @@ func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
 func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
 	// Integer input outside min/max range
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["integer-range"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "integer-range",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -753,9 +732,9 @@ func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("integer-range", wf).
+		Build()
 
 	// count=150 exceeds max=100
 	inputs := map[string]any{
@@ -771,8 +750,7 @@ func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
 	// Enum input with invalid value
-	repo := newMockRepository()
-	repo.workflows["enum-validation"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "enum-validation",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -791,9 +769,9 @@ func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("enum-validation", wf).
+		Build()
 
 	// "local" not in enum list
 	inputs := map[string]any{
@@ -810,8 +788,7 @@ func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
 func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
 	// Multiple validation errors should be aggregated
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["multiple-errors"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "multiple-errors",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -847,9 +824,9 @@ func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("multiple-errors", wf).
+		Build()
 
 	// All inputs invalid
 	inputs := map[string]any{
@@ -868,8 +845,7 @@ func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
 func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *testing.T) {
 	// Default values should be applied before validation runs
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["default-values"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "default-values",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -890,9 +866,9 @@ func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("default-values", wf).
+		Build()
 
 	// No inputs provided - default should be used
 	ctx, err := execSvc.Run(context.Background(), "default-values", nil)
@@ -909,8 +885,7 @@ func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *
 func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
 	// String "42" should be coerced to integer 42 for validation
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["type-coercion"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "type-coercion",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -930,9 +905,9 @@ func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("type-coercion", wf).
+		Build()
 
 	// String "42" should be coerced to integer
 	inputs := map[string]any{
@@ -947,8 +922,7 @@ func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
 	// Inputs without validation rules should still be accepted
-	repo := newMockRepository()
-	repo.workflows["no-validation"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "no-validation",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -965,9 +939,9 @@ func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("no-validation", wf).
+		Build()
 
 	inputs := map[string]any{
 		"name": "anything_goes",
@@ -981,8 +955,7 @@ func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
 	// Workflow without any input definitions should work
-	repo := newMockRepository()
-	repo.workflows["no-inputs"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "no-inputs",
 		Initial: "start",
 		// No Inputs field
@@ -992,9 +965,9 @@ func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("no-inputs", wf).
+		Build()
 
 	// Pass some inputs anyway - should be ignored
 	inputs := map[string]any{
@@ -1009,8 +982,7 @@ func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
 
 func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
 	// Boolean type validation
-	repo := newMockRepository()
-	repo.workflows["boolean-validation"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "boolean-validation",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -1026,9 +998,9 @@ func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("boolean-validation", wf).
+		Build()
 
 	tests := []struct {
 		name    string
@@ -1061,8 +1033,7 @@ func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
 func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.T) {
 	// Optional input with validation rules - should validate if provided
 	min1, max100 := 1, 100
-	repo := newMockRepository()
-	repo.workflows["optional-validation"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "optional-validation",
 		Initial: "start",
 		Inputs: []workflow.Input{
@@ -1082,9 +1053,9 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 		},
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("optional-validation", wf).
+		Build()
 
 	t.Run("not provided should succeed", func(t *testing.T) {
 		ctx, err := execSvc.Run(context.Background(), "optional-validation", nil)
@@ -1113,8 +1084,7 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 
 func TestExecutionService_Resume_Success(t *testing.T) {
 	// Setup: Create a workflow with 3 steps, interrupt after step1, resume from step2
-	repo := newMockRepository()
-	repo.workflows["resume-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "resume-test",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -1125,11 +1095,6 @@ func TestExecutionService_Resume_Success(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo 2"] = &ports.CommandResult{Stdout: "output2\n", ExitCode: 0}
-	executor.results["echo 3"] = &ports.CommandResult{Stdout: "output3\n", ExitCode: 0}
-
-	store := newMockStateStore()
 	// Pre-populate store with interrupted state (step1 completed, paused at step2)
 	interruptedState := &workflow.ExecutionContext{
 		WorkflowID:   "test-id-123",
@@ -1150,10 +1115,13 @@ func TestExecutionService_Resume_Success(t *testing.T) {
 		StartedAt: time.Now().Add(-time.Minute),
 		UpdatedAt: time.Now(),
 	}
-	store.states["test-id-123"] = interruptedState
 
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("resume-test", wf).
+		WithCommandResult("echo 2", &ports.CommandResult{Stdout: "output2\n", ExitCode: 0}).
+		WithCommandResult("echo 3", &ports.CommandResult{Stdout: "output3\n", ExitCode: 0}).
+		Build()
+	mocks.StateStore.Save(context.Background(), interruptedState)
 
 	// Execute resume
 	ctx, err := execSvc.Resume(context.Background(), "test-id-123", nil)
@@ -1179,9 +1147,7 @@ func TestExecutionService_Resume_Success(t *testing.T) {
 
 func TestExecutionService_Resume_NotFound(t *testing.T) {
 	// Resume non-existent workflow should fail
-	store := newMockStateStore()
-	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).Build()
 
 	_, err := execSvc.Resume(context.Background(), "non-existent-id", nil)
 
@@ -1191,8 +1157,16 @@ func TestExecutionService_Resume_NotFound(t *testing.T) {
 
 func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
 	// Resume already-completed workflow should fail
-	store := newMockStateStore()
-	store.states["completed-id"] = &workflow.ExecutionContext{
+	wf := &workflow.Workflow{
+		Name:    "some-workflow",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	completedState := &workflow.ExecutionContext{
 		WorkflowID:   "completed-id",
 		WorkflowName: "some-workflow",
 		Status:       workflow.StatusCompleted, // Already completed
@@ -1202,18 +1176,10 @@ func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	repo := newMockRepository()
-	repo.workflows["some-workflow"] = &workflow.Workflow{
-		Name:    "some-workflow",
-		Initial: "start",
-		Steps: map[string]*workflow.Step{
-			"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo", OnSuccess: "done"},
-			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
-		},
-	}
-
-	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("some-workflow", wf).
+		Build()
+	mocks.StateStore.Save(context.Background(), completedState)
 
 	_, err := execSvc.Resume(context.Background(), "completed-id", nil)
 
@@ -1223,8 +1189,7 @@ func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
 
 func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
 	// Resume workflow when definition no longer exists
-	store := newMockStateStore()
-	store.states["orphan-id"] = &workflow.ExecutionContext{
+	orphanState := &workflow.ExecutionContext{
 		WorkflowID:   "orphan-id",
 		WorkflowName: "deleted-workflow", // This workflow no longer exists in repo
 		Status:       workflow.StatusRunning,
@@ -1234,11 +1199,9 @@ func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	repo := newMockRepository()
 	// No workflows added - "deleted-workflow" doesn't exist
-
-	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).Build()
+	mocks.StateStore.Save(context.Background(), orphanState)
 
 	_, err := execSvc.Resume(context.Background(), "orphan-id", nil)
 
@@ -1248,19 +1211,7 @@ func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
 
 func TestExecutionService_Resume_StepNotFound(t *testing.T) {
 	// Resume when current step no longer exists in workflow (definition changed)
-	store := newMockStateStore()
-	store.states["stale-id"] = &workflow.ExecutionContext{
-		WorkflowID:   "stale-id",
-		WorkflowName: "changed-workflow",
-		Status:       workflow.StatusRunning,
-		CurrentStep:  "old_step", // This step was removed from workflow
-		Inputs:       make(map[string]any),
-		States:       make(map[string]workflow.StepState),
-		Env:          make(map[string]string),
-	}
-
-	repo := newMockRepository()
-	repo.workflows["changed-workflow"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "changed-workflow",
 		Initial: "new_step",
 		Steps: map[string]*workflow.Step{
@@ -1270,8 +1221,20 @@ func TestExecutionService_Resume_StepNotFound(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	staleState := &workflow.ExecutionContext{
+		WorkflowID:   "stale-id",
+		WorkflowName: "changed-workflow",
+		Status:       workflow.StatusRunning,
+		CurrentStep:  "old_step", // This step was removed from workflow
+		Inputs:       make(map[string]any),
+		States:       make(map[string]workflow.StepState),
+		Env:          make(map[string]string),
+	}
+
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("changed-workflow", wf).
+		Build()
+	mocks.StateStore.Save(context.Background(), staleState)
 
 	_, err := execSvc.Resume(context.Background(), "stale-id", nil)
 
@@ -1281,18 +1244,16 @@ func TestExecutionService_Resume_StepNotFound(t *testing.T) {
 
 func TestExecutionService_Resume_InputOverrides(t *testing.T) {
 	// Resume with input overrides - verify overrides are merged
-	repo := newMockRepository()
-	repo.workflows["override-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "override-test",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
-			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo {{inputs.key}}", OnSuccess: "done"},
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo {{.inputs.key}}", OnSuccess: "done"},
 			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
 
-	store := newMockStateStore()
-	store.states["override-id"] = &workflow.ExecutionContext{
+	overrideState := &workflow.ExecutionContext{
 		WorkflowID:   "override-id",
 		WorkflowName: "override-test",
 		Status:       workflow.StatusRunning,
@@ -1302,9 +1263,10 @@ func TestExecutionService_Resume_InputOverrides(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	executor := newMockExecutor()
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("override-test", wf).
+		Build()
+	mocks.StateStore.Save(context.Background(), overrideState)
 
 	// Resume with overrides
 	overrides := map[string]any{"key": "overridden"}
@@ -1325,8 +1287,7 @@ func TestExecutionService_Resume_InputOverrides(t *testing.T) {
 
 func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 	// Verify that completed steps are skipped during resume
-	repo := newMockRepository()
-	repo.workflows["skip-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "skip-test",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -1340,9 +1301,8 @@ func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 	// Track which commands were executed
 	executor := newRetryCountingExecutor()
 
-	store := newMockStateStore()
 	// step1 and step2 already completed, currently at step3
-	store.states["skip-id"] = &workflow.ExecutionContext{
+	skipState := &workflow.ExecutionContext{
 		WorkflowID:   "skip-id",
 		WorkflowName: "skip-test",
 		Status:       workflow.StatusRunning,
@@ -1355,8 +1315,11 @@ func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 		Env: make(map[string]string),
 	}
 
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("skip-test", wf).
+		WithExecutor(executor).
+		Build()
+	mocks.StateStore.Save(context.Background(), skipState)
 
 	ctx, err := execSvc.Resume(context.Background(), "skip-id", nil)
 
@@ -1373,8 +1336,7 @@ func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 
 func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 	// Can resume a workflow that was in failed status (retry after fixing issue)
-	repo := newMockRepository()
-	repo.workflows["failed-resume"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "failed-resume",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -1383,9 +1345,7 @@ func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	store := newMockStateStore()
-	store.states["failed-id"] = &workflow.ExecutionContext{
+	failedState := &workflow.ExecutionContext{
 		WorkflowID:   "failed-id",
 		WorkflowName: "failed-resume",
 		Status:       workflow.StatusFailed, // Previously failed
@@ -1395,8 +1355,10 @@ func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("failed-resume", wf).
+		Build()
+	mocks.StateStore.Save(context.Background(), failedState)
 
 	ctx, err := execSvc.Resume(context.Background(), "failed-id", nil)
 
@@ -1406,8 +1368,7 @@ func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 
 func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 	// Can resume a workflow that was cancelled
-	repo := newMockRepository()
-	repo.workflows["cancelled-resume"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "cancelled-resume",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -1416,9 +1377,7 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	store := newMockStateStore()
-	store.states["cancelled-id"] = &workflow.ExecutionContext{
+	cancelledState := &workflow.ExecutionContext{
 		WorkflowID:   "cancelled-id",
 		WorkflowName: "cancelled-resume",
 		Status:       workflow.StatusCancelled, // Previously cancelled
@@ -1428,8 +1387,10 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("cancelled-resume", wf).
+		Build()
+	mocks.StateStore.Save(context.Background(), cancelledState)
 
 	ctx, err := execSvc.Resume(context.Background(), "cancelled-id", nil)
 
@@ -1443,52 +1404,49 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 
 func TestExecutionService_ListResumable_FiltersCompleted(t *testing.T) {
 	// ListResumable should only return non-completed executions
-	store := newMockStateStore()
+	execSvc, mocks := NewTestHarness(t).Build()
 
 	// Add various states
-	store.states["running-1"] = &workflow.ExecutionContext{
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "running-1",
 		WorkflowName: "wf1",
 		Status:       workflow.StatusRunning,
 		CurrentStep:  "step2",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-	store.states["failed-1"] = &workflow.ExecutionContext{
+	})
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "failed-1",
 		WorkflowName: "wf2",
 		Status:       workflow.StatusFailed,
 		CurrentStep:  "step1",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-	store.states["completed-1"] = &workflow.ExecutionContext{
+	})
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "completed-1",
 		WorkflowName: "wf3",
 		Status:       workflow.StatusCompleted, // Should be filtered out
 		CurrentStep:  "done",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-	store.states["cancelled-1"] = &workflow.ExecutionContext{
+	})
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "cancelled-1",
 		WorkflowName: "wf4",
 		Status:       workflow.StatusCancelled,
 		CurrentStep:  "step1",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-	store.states["pending-1"] = &workflow.ExecutionContext{
+	})
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "pending-1",
 		WorkflowName: "wf5",
 		Status:       workflow.StatusPending,
 		CurrentStep:  "",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-
-	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	})
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -1503,10 +1461,7 @@ func TestExecutionService_ListResumable_FiltersCompleted(t *testing.T) {
 
 func TestExecutionService_ListResumable_Empty(t *testing.T) {
 	// ListResumable with no states should return empty list
-	store := newMockStateStore()
-
-	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).Build()
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -1516,26 +1471,23 @@ func TestExecutionService_ListResumable_Empty(t *testing.T) {
 
 func TestExecutionService_ListResumable_AllCompleted(t *testing.T) {
 	// ListResumable when all workflows are completed should return empty
-	store := newMockStateStore()
-	store.states["completed-1"] = &workflow.ExecutionContext{
+	execSvc, mocks := NewTestHarness(t).Build()
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "completed-1",
 		WorkflowName: "wf1",
 		Status:       workflow.StatusCompleted,
 		CurrentStep:  "done",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-	store.states["completed-2"] = &workflow.ExecutionContext{
+	})
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "completed-2",
 		WorkflowName: "wf2",
 		Status:       workflow.StatusCompleted,
 		CurrentStep:  "done",
 		Inputs:       make(map[string]any),
 		States:       make(map[string]workflow.StepState),
-	}
-
-	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	})
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -1545,9 +1497,9 @@ func TestExecutionService_ListResumable_AllCompleted(t *testing.T) {
 
 func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 	// Verify ListResumable returns all required fields
-	store := newMockStateStore()
 	now := time.Now()
-	store.states["test-id"] = &workflow.ExecutionContext{
+	execSvc, mocks := NewTestHarness(t).Build()
+	mocks.StateStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "test-id",
 		WorkflowName: "test-workflow",
 		Status:       workflow.StatusRunning,
@@ -1558,10 +1510,7 @@ func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 		},
 		StartedAt: now.Add(-time.Minute),
 		UpdatedAt: now,
-	}
-
-	wfSvc := application.NewWorkflowService(newMockRepository(), store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	})
 
 	resumable, err := execSvc.ListResumable(context.Background())
 
@@ -1584,10 +1533,8 @@ func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 
 func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
 	// Test that the dispatcher correctly routes call_workflow steps
-	repo := newMockRepository()
-
 	// Simple child workflow
-	repo.workflows["child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "child",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1602,7 +1549,7 @@ func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
 	}
 
 	// Parent workflow with call_workflow step
-	repo.workflows["parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "parent",
 		Initial: "call_child",
 		Steps: map[string]*workflow.Step{
@@ -1618,8 +1565,10 @@ func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("child", childWf).
+		WithWorkflow("parent", parentWf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "parent", nil)
 
@@ -1635,10 +1584,8 @@ func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
 
 func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
 	// Test call_workflow step in a sequence with other step types
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["helper"] = &workflow.Workflow{
+	helperWf := &workflow.Workflow{
 		Name:    "helper",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1653,7 +1600,7 @@ func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
 	}
 
 	// Parent: command -> call_workflow -> command -> done
-	repo.workflows["sequence"] = &workflow.Workflow{
+	sequenceWf := &workflow.Workflow{
 		Name:    "sequence",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -1681,8 +1628,10 @@ func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("helper", helperWf).
+		WithWorkflow("sequence", sequenceWf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "sequence", nil)
 
@@ -1701,10 +1650,8 @@ func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
 
 func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
 	// Test that call_workflow step follows on_failure transition when child fails
-	repo := newMockRepository()
-
 	// Failing child workflow
-	repo.workflows["failing-child"] = &workflow.Workflow{
+	failingChildWf := &workflow.Workflow{
 		Name:    "failing-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -1719,7 +1666,7 @@ func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
 	}
 
 	// Parent with on_failure transition
-	repo.workflows["parent-with-handler"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "parent-with-handler",
 		Initial: "call_child",
 		Steps: map[string]*workflow.Step{
@@ -1737,11 +1684,11 @@ func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("failing-child", failingChildWf).
+		WithWorkflow("parent-with-handler", parentWf).
+		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "parent-with-handler", nil)
 
@@ -1753,10 +1700,8 @@ func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
 func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 	// Test that Resume correctly routes call_workflow steps
 	// This tests the executeFromStep dispatcher
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "child",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1771,7 +1716,7 @@ func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 	}
 
 	// Parent with call_workflow
-	repo.workflows["resume-parent"] = &workflow.Workflow{
+	resumeParentWf := &workflow.Workflow{
 		Name:    "resume-parent",
 		Initial: "prep",
 		Steps: map[string]*workflow.Step{
@@ -1794,8 +1739,7 @@ func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 	}
 
 	// Create persisted state at call_child step
-	store := newMockStateStore()
-	store.states["resume-test-id"] = &workflow.ExecutionContext{
+	resumeState := &workflow.ExecutionContext{
 		WorkflowID:   "resume-test-id",
 		WorkflowName: "resume-parent",
 		Status:       workflow.StatusRunning,
@@ -1806,8 +1750,11 @@ func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, store, newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), store, &mockLogger{}, newMockResolver(), nil)
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("child", childWf).
+		WithWorkflow("resume-parent", resumeParentWf).
+		Build()
+	mocks.StateStore.Save(context.Background(), resumeState)
 
 	ctx, err := execSvc.Resume(context.Background(), "resume-test-id", nil)
 
@@ -1824,10 +1771,8 @@ func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
 	// Test dispatcher correctly handles workflow with mixed step types
 	// Testing: command -> call_workflow -> command sequence
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["subflow"] = &workflow.Workflow{
+	subflowWf := &workflow.Workflow{
 		Name:    "subflow",
 		Initial: "sub_work",
 		Steps: map[string]*workflow.Step{
@@ -1842,7 +1787,7 @@ func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
 	}
 
 	// Parent with command and call_workflow steps interleaved
-	repo.workflows["mixed-types"] = &workflow.Workflow{
+	mixedTypesWf := &workflow.Workflow{
 		Name:    "mixed-types",
 		Initial: "first_step",
 		Steps: map[string]*workflow.Step{
@@ -1870,8 +1815,10 @@ func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("subflow", subflowWf).
+		WithWorkflow("mixed-types", mixedTypesWf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "mixed-types", nil)
 
@@ -1891,10 +1838,8 @@ func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
 func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 	// Ensure call_workflow doesn't fall through to default case
 	// This test verifies call_workflow is handled before the default case
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["simple-child"] = &workflow.Workflow{
+	simpleChildWf := &workflow.Workflow{
 		Name:    "simple-child",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1909,7 +1854,7 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 	}
 
 	// Parent with only call_workflow step
-	repo.workflows["only-call"] = &workflow.Workflow{
+	onlyCallWf := &workflow.Workflow{
 		Name:    "only-call",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1927,8 +1872,10 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("simple-child", simpleChildWf).
+		WithWorkflow("only-call", onlyCallWf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "only-call", nil)
 

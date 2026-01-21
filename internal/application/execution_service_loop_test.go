@@ -20,8 +20,7 @@ import (
 
 func TestExecuteLoopStep_ForEach_HappyPath(t *testing.T) {
 	// Given: A workflow with a for_each loop step
-	repo := newMockRepository()
-	repo.workflows["test-foreach"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "test-foreach",
 		Initial: "loop_step",
 		Steps: map[string]*workflow.Step{
@@ -39,7 +38,7 @@ func TestExecuteLoopStep_ForEach_HappyPath(t *testing.T) {
 			"process_item": {
 				Name:      "process_item",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -49,13 +48,12 @@ func TestExecuteLoopStep_ForEach_HappyPath(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo a"] = &ports.CommandResult{Stdout: "a\n", ExitCode: 0}
-	executor.results["echo b"] = &ports.CommandResult{Stdout: "b\n", ExitCode: 0}
-	executor.results["echo c"] = &ports.CommandResult{Stdout: "c\n", ExitCode: 0}
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-foreach", wf).
+		WithCommandResult("echo a", &ports.CommandResult{Stdout: "a\n", ExitCode: 0}).
+		WithCommandResult("echo b", &ports.CommandResult{Stdout: "b\n", ExitCode: 0}).
+		WithCommandResult("echo c", &ports.CommandResult{Stdout: "c\n", ExitCode: 0}).
+		Build()
 
 	// When: Executing the workflow
 	execCtx, err := execSvc.Run(context.Background(), "test-foreach", nil)
@@ -89,7 +87,7 @@ func TestExecuteLoopStep_While_HappyPath(t *testing.T) {
 			"increment": {
 				Name:      "increment",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.index}}",
+				Command:   "echo {{.loop.Index}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -151,7 +149,7 @@ func TestExecuteLoopStep_NestedForEach(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -209,7 +207,7 @@ func TestExecuteLoopStep_WhileContainingForEach(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -486,7 +484,7 @@ func TestExecuteLoopStep_ForEach_MaxIterationsLimit(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -533,7 +531,7 @@ func TestExecuteLoopStep_While_MaxIterationsReached(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.index}}",
+				Command:   "echo {{.loop.Index}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -583,7 +581,7 @@ func TestExecuteLoopStep_ContextCancellation(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {
@@ -630,7 +628,7 @@ func TestExecuteLoopStep_ForEach_BreakCondition(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{loop.item}}",
+				Command:   "echo {{.loop.Item}}",
 				OnSuccess: "",
 			},
 			"done": {

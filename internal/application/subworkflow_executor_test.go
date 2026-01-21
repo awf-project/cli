@@ -18,25 +18,11 @@ import (
 // Test Helpers for Sub-Workflow Tests
 // =============================================================================
 
-// createSubWorkflowTestService creates an ExecutionService for sub-workflow testing.
-// The repo parameter is used to register parent and child workflows.
-func createSubWorkflowTestService(repo *mockRepository) *application.ExecutionService {
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	return application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
-}
-
-// createParentChildWorkflows registers a parent workflow that calls a child workflow.
-func createParentChildWorkflows(repo *mockRepository, parentName, childName string) {
+// createParentChildWorkflows returns parent and child workflows for testing call_workflow.
+// Returns (parentWorkflow, childWorkflow) as separate workflow instances.
+func createParentChildWorkflows(parentName, childName string) (parentWf, childWf *workflow.Workflow) {
 	// Child workflow: simple echo command
-	repo.workflows[childName] = &workflow.Workflow{
+	childWf = &workflow.Workflow{
 		Name:    childName,
 		Initial: "do_work",
 		Inputs: []workflow.Input{
@@ -46,7 +32,7 @@ func createParentChildWorkflows(repo *mockRepository, parentName, childName stri
 			"do_work": {
 				Name:      "do_work",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{inputs.input_value}}",
+				Command:   "echo {{.inputs.input_value}}",
 				OnSuccess: "done",
 			},
 			"done": {
@@ -57,7 +43,7 @@ func createParentChildWorkflows(repo *mockRepository, parentName, childName stri
 	}
 
 	// Parent workflow: calls child workflow
-	repo.workflows[parentName] = &workflow.Workflow{
+	parentWf = &workflow.Workflow{
 		Name:    parentName,
 		Initial: "call_child",
 		Inputs: []workflow.Input{
@@ -70,7 +56,7 @@ func createParentChildWorkflows(repo *mockRepository, parentName, childName stri
 				CallWorkflow: &workflow.CallWorkflowConfig{
 					Workflow: childName,
 					Inputs: map[string]string{
-						"input_value": "{{inputs.parent_input}}",
+						"input_value": "{{.inputs.parent_input}}",
 					},
 					Outputs: map[string]string{
 						"do_work": "child_result",
@@ -89,6 +75,8 @@ func createParentChildWorkflows(repo *mockRepository, parentName, childName stri
 			},
 		},
 	}
+
+	return parentWf, childWf
 }
 
 // =============================================================================
@@ -131,10 +119,12 @@ func TestSubWorkflowErrors_Defined(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_BasicSuccess(t *testing.T) {
-	repo := newMockRepository()
-	createParentChildWorkflows(repo, "parent", "child")
+	parentWf, childWf := createParentChildWorkflows("parent", "child")
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		WithWorkflow("child", childWf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "parent", map[string]any{
 		"parent_input": "hello",
@@ -146,10 +136,8 @@ func TestExecuteCallWorkflowStep_BasicSuccess(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child with no inputs
-	repo.workflows["simple-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "simple-child",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -167,7 +155,7 @@ func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
 	}
 
 	// Parent calling child without inputs
-	repo.workflows["simple-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "simple-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -186,7 +174,11 @@ func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("simple-child", childWf).
+		WithWorkflow("simple-parent", parentWf).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "simple-parent", nil)
 
 	require.NoError(t, err)
@@ -198,10 +190,8 @@ func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child expecting specific inputs
-	repo.workflows["input-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "input-child",
 		Initial: "process",
 		Inputs: []workflow.Input{
@@ -212,7 +202,7 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 			"process": {
 				Name:      "process",
 				Type:      workflow.StepTypeCommand,
-				Command:   "process {{inputs.file}} --mode={{inputs.mode}}",
+				Command:   "process {{.inputs.file}} --mode={{.inputs.mode}}",
 				OnSuccess: "done",
 			},
 			"done": {
@@ -223,7 +213,7 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 	}
 
 	// Parent with input mapping
-	repo.workflows["input-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "input-parent",
 		Initial: "call",
 		Inputs: []workflow.Input{
@@ -237,8 +227,8 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 				CallWorkflow: &workflow.CallWorkflowConfig{
 					Workflow: "input-child",
 					Inputs: map[string]string{
-						"file": "{{inputs.target_file}}",
-						"mode": "{{inputs.operation_mode}}",
+						"file": "{{.inputs.target_file}}",
+						"mode": "{{.inputs.operation_mode}}",
 					},
 				},
 				OnSuccess: "done",
@@ -250,7 +240,11 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("input-child", childWf).
+		WithWorkflow("input-parent", parentWf).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "input-parent", map[string]any{
 		"target_file":    "test.txt",
 		"operation_mode": "strict",
@@ -261,10 +255,8 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["step-output-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "step-output-child",
 		Initial: "work",
 		Inputs: []workflow.Input{
@@ -274,7 +266,7 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 			"work": {
 				Name:      "work",
 				Type:      workflow.StepTypeCommand,
-				Command:   "process {{inputs.data}}",
+				Command:   "process {{.inputs.data}}",
 				OnSuccess: "done",
 			},
 			"done": {
@@ -285,7 +277,7 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 	}
 
 	// Parent with step that produces output, then calls child
-	repo.workflows["step-output-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "step-output-parent",
 		Initial: "prepare",
 		Steps: map[string]*workflow.Step{
@@ -301,7 +293,7 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 				CallWorkflow: &workflow.CallWorkflowConfig{
 					Workflow: "step-output-child",
 					Inputs: map[string]string{
-						"data": "{{states.prepare.output}}",
+						"data": "{{.states.prepare.Output}}",
 					},
 				},
 				OnSuccess: "done",
@@ -313,7 +305,15 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("step-output-child", childWf).
+		WithWorkflow("step-output-parent", parentWf).
+		WithCommandResult("echo prepared_data", &ports.CommandResult{
+			Stdout:   "prepared_data\n",
+			ExitCode: 0,
+		}).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "step-output-parent", nil)
 
 	require.NoError(t, err)
@@ -325,16 +325,21 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_OutputMapping(t *testing.T) {
-	repo := newMockRepository()
-	createParentChildWorkflows(repo, "output-parent", "output-child")
+	parentWf, childWf := createParentChildWorkflows("output-parent", "output-child")
 
 	// Modify parent to capture outputs
-	repo.workflows["output-parent"].Steps["call_child"].CallWorkflow.Outputs = map[string]string{
+	parentWf.Steps["call_child"].CallWorkflow.Outputs = map[string]string{
 		"do_work": "result",
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
-	ctx, err := execSvc.Run(context.Background(), "output-parent", nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("output-parent", parentWf).
+		WithWorkflow("output-child", childWf).
+		Build()
+
+	ctx, err := execSvc.Run(context.Background(), "output-parent", map[string]any{
+		"parent_input": "test_value",
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -346,10 +351,8 @@ func TestExecuteCallWorkflowStep_OutputMapping(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child with multiple steps producing output
-	repo.workflows["multi-output-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "multi-output-child",
 		Initial: "step1",
 		Steps: map[string]*workflow.Step{
@@ -373,7 +376,7 @@ func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
 	}
 
 	// Parent capturing multiple outputs
-	repo.workflows["multi-output-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "multi-output-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -396,7 +399,11 @@ func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("multi-output-child", childWf).
+		WithWorkflow("multi-output-parent", parentWf).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "multi-output-parent", nil)
 
 	require.NoError(t, err)
@@ -408,10 +415,8 @@ func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_CircularDetection_Direct(t *testing.T) {
-	repo := newMockRepository()
-
 	// Workflow A calls itself
-	repo.workflows["self-caller"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "self-caller",
 		Initial: "call_self",
 		Steps: map[string]*workflow.Step{
@@ -430,7 +435,10 @@ func TestExecuteCallWorkflowStep_CircularDetection_Direct(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("self-caller", wf).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "self-caller", nil)
 
 	require.Error(t, err)
@@ -438,10 +446,8 @@ func TestExecuteCallWorkflowStep_CircularDetection_Direct(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_CircularDetection_Indirect(t *testing.T) {
-	repo := newMockRepository()
-
 	// A -> B -> A (indirect circular)
-	repo.workflows["workflow-a"] = &workflow.Workflow{
+	wfA := &workflow.Workflow{
 		Name:    "workflow-a",
 		Initial: "call_b",
 		Steps: map[string]*workflow.Step{
@@ -460,7 +466,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_Indirect(t *testing.T) {
 		},
 	}
 
-	repo.workflows["workflow-b"] = &workflow.Workflow{
+	wfB := &workflow.Workflow{
 		Name:    "workflow-b",
 		Initial: "call_a",
 		Steps: map[string]*workflow.Step{
@@ -479,7 +485,11 @@ func TestExecuteCallWorkflowStep_CircularDetection_Indirect(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("workflow-a", wfA).
+		WithWorkflow("workflow-b", wfB).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "workflow-a", nil)
 
 	require.Error(t, err)
@@ -487,10 +497,8 @@ func TestExecuteCallWorkflowStep_CircularDetection_Indirect(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
-	repo := newMockRepository()
-
 	// A -> B -> C -> A (three-level circular)
-	repo.workflows["wf-a"] = &workflow.Workflow{
+	wfA := &workflow.Workflow{
 		Name:    "wf-a",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -506,7 +514,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 		},
 	}
 
-	repo.workflows["wf-b"] = &workflow.Workflow{
+	wfB := &workflow.Workflow{
 		Name:    "wf-b",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -522,7 +530,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 		},
 	}
 
-	repo.workflows["wf-c"] = &workflow.Workflow{
+	wfC := &workflow.Workflow{
 		Name:    "wf-c",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -538,7 +546,12 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("wf-a", wfA).
+		WithWorkflow("wf-b", wfB).
+		WithWorkflow("wf-c", wfC).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "wf-a", nil)
 
 	require.Error(t, err)
@@ -550,10 +563,8 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
-	repo := newMockRepository()
-
 	// Create a valid 3-level nesting: A -> B -> C (no circular)
-	repo.workflows["level-a"] = &workflow.Workflow{
+	levelA := &workflow.Workflow{
 		Name:    "level-a",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -569,7 +580,7 @@ func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 		},
 	}
 
-	repo.workflows["level-b"] = &workflow.Workflow{
+	levelB := &workflow.Workflow{
 		Name:    "level-b",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -585,7 +596,7 @@ func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 		},
 	}
 
-	repo.workflows["level-c"] = &workflow.Workflow{
+	levelC := &workflow.Workflow{
 		Name:    "level-c",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -599,7 +610,12 @@ func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("level-a", levelA).
+		WithWorkflow("level-b", levelB).
+		WithWorkflow("level-c", levelC).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "level-a", nil)
 
 	require.NoError(t, err)
@@ -607,14 +623,14 @@ func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
-	repo := newMockRepository()
-
 	// Create 12 levels of nesting (exceeds MaxCallStackDepth of 10)
 	// We need 12 workflows because:
 	// - The depth check happens when a workflow tries to CALL another
 	// - At depth=10, the 11th call_workflow should fail
 	// - So we need: deep-a(calls b) -> deep-b(calls c) -> ... -> deep-k(calls l) -> deep-l(terminal)
 	// That's 11 call_workflow steps, with the 11th triggering the depth check at depth=10
+	harness := NewTestHarness(t)
+
 	for i := 1; i <= 12; i++ {
 		name := "deep-" + string(rune('a'+i-1))
 		var nextWorkflow string
@@ -623,7 +639,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 		}
 
 		if nextWorkflow != "" {
-			repo.workflows[name] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    name,
 				Initial: "call",
 				Steps: map[string]*workflow.Step{
@@ -638,9 +654,10 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 					"done": {Name: "done", Type: workflow.StepTypeTerminal},
 				},
 			}
+			harness = harness.WithWorkflow(name, wf)
 		} else {
 			// Last one is a terminal
-			repo.workflows[name] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    name,
 				Initial: "work",
 				Steps: map[string]*workflow.Step{
@@ -653,10 +670,11 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 					"done": {Name: "done", Type: workflow.StepTypeTerminal},
 				},
 			}
+			harness = harness.WithWorkflow(name, wf)
 		}
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := harness.Build()
 	_, err := execSvc.Run(context.Background(), "deep-a", nil)
 
 	require.Error(t, err)
@@ -668,10 +686,8 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child that fails
-	repo.workflows["failing-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "failing-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -686,7 +702,7 @@ func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
 	}
 
 	// Parent without OnFailure
-	repo.workflows["error-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "error-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -703,20 +719,15 @@ func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
 		},
 	}
 
-	// Create service with executor that fails on "exit 1"
+	// Create executor that fails on "exit 1"
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("failing-child", childWf).
+		WithWorkflow("error-parent", parentWf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "error-parent", nil)
 
@@ -725,10 +736,8 @@ func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_ChildFailure_OnFailureTransition(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child that fails
-	repo.workflows["failing-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "failing-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -743,7 +752,7 @@ func TestExecuteCallWorkflowStep_ChildFailure_OnFailureTransition(t *testing.T) 
 	}
 
 	// Parent with OnFailure transition
-	repo.workflows["handled-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "handled-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -769,16 +778,11 @@ func TestExecuteCallWorkflowStep_ChildFailure_OnFailureTransition(t *testing.T) 
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("failing-child", childWf).
+		WithWorkflow("handled-parent", parentWf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "handled-parent", nil)
 
@@ -787,10 +791,8 @@ func TestExecuteCallWorkflowStep_ChildFailure_OnFailureTransition(t *testing.T) 
 }
 
 func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child that fails
-	repo.workflows["failing-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "failing-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -805,7 +807,7 @@ func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
 	}
 
 	// Parent with ContinueOnError
-	repo.workflows["continue-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "continue-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -825,16 +827,11 @@ func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("failing-child", childWf).
+		WithWorkflow("continue-parent", parentWf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "continue-parent", nil)
 
@@ -848,10 +845,8 @@ func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
-	repo := newMockRepository()
-
 	// Parent calls non-existent child
-	repo.workflows["missing-child-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "missing-child-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -867,7 +862,10 @@ func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("missing-child-parent", parentWf).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "missing-child-parent", nil)
 
 	require.Error(t, err)
@@ -879,10 +877,8 @@ func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
-	repo := newMockRepository()
-
 	// Slow child workflow
-	repo.workflows["slow-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "slow-child",
 		Initial: "slow",
 		Steps: map[string]*workflow.Step{
@@ -897,7 +893,7 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 	}
 
 	// Parent with short timeout
-	repo.workflows["timeout-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "timeout-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -919,16 +915,11 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 	// Create a mock executor that simulates slow execution
 	slowExecutor := &slowMockExecutor{delay: 5 * time.Second}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), slowExecutor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		slowExecutor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("slow-child", childWf).
+		WithWorkflow("timeout-parent", parentWf).
+		WithExecutor(slowExecutor).
+		Build()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -960,10 +951,8 @@ func (m *slowMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*po
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
-	repo := newMockRepository()
-
 	// Step with call_workflow type but nil CallWorkflow config
-	repo.workflows["bad-config"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "bad-config",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -977,7 +966,10 @@ func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("bad-config", wf).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "bad-config", nil)
 
 	require.Error(t, err)
@@ -989,10 +981,8 @@ func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child workflow
-	repo.workflows["helper"] = &workflow.Workflow{
+	helperWf := &workflow.Workflow{
 		Name:    "helper",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1007,7 +997,7 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 	}
 
 	// Parent with command -> call_workflow -> command
-	repo.workflows["mixed"] = &workflow.Workflow{
+	mixedWf := &workflow.Workflow{
 		Name:    "mixed",
 		Initial: "prepare",
 		Steps: map[string]*workflow.Step{
@@ -1035,7 +1025,11 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("helper", helperWf).
+		WithWorkflow("mixed", mixedWf).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "mixed", nil)
 
 	require.NoError(t, err)
@@ -1059,14 +1053,14 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 	tests := []struct {
 		name          string
-		setupRepo     func(*mockRepository)
+		setupHarness  func(*testing.T) *application.ExecutionService
 		workflowName  string
 		expectedParts []string
 	}{
 		{
 			name: "missing workflow includes step and workflow name",
-			setupRepo: func(repo *mockRepository) {
-				repo.workflows["parent"] = &workflow.Workflow{
+			setupHarness: func(t *testing.T) *application.ExecutionService {
+				wf := &workflow.Workflow{
 					Name:    "parent",
 					Initial: "call",
 					Steps: map[string]*workflow.Step{
@@ -1081,14 +1075,16 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 						"done": {Name: "done", Type: workflow.StepTypeTerminal},
 					},
 				}
+				execSvc, _ := NewTestHarness(t).WithWorkflow("parent", wf).Build()
+				return execSvc
 			},
 			workflowName:  "parent",
 			expectedParts: []string{"call", "missing-workflow"},
 		},
 		{
 			name: "circular error includes call stack",
-			setupRepo: func(repo *mockRepository) {
-				repo.workflows["loop-a"] = &workflow.Workflow{
+			setupHarness: func(t *testing.T) *application.ExecutionService {
+				loopA := &workflow.Workflow{
 					Name:    "loop-a",
 					Initial: "call",
 					Steps: map[string]*workflow.Step{
@@ -1103,7 +1099,7 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 						"done": {Name: "done", Type: workflow.StepTypeTerminal},
 					},
 				}
-				repo.workflows["loop-b"] = &workflow.Workflow{
+				loopB := &workflow.Workflow{
 					Name:    "loop-b",
 					Initial: "call",
 					Steps: map[string]*workflow.Step{
@@ -1118,6 +1114,11 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 						"done": {Name: "done", Type: workflow.StepTypeTerminal},
 					},
 				}
+				execSvc, _ := NewTestHarness(t).
+					WithWorkflow("loop-a", loopA).
+					WithWorkflow("loop-b", loopB).
+					Build()
+				return execSvc
 			},
 			workflowName:  "loop-a",
 			expectedParts: []string{"circular", "loop-a"},
@@ -1126,10 +1127,7 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockRepository()
-			tt.setupRepo(repo)
-
-			execSvc := createSubWorkflowTestService(repo)
+			execSvc := tt.setupHarness(t)
 			_, err := execSvc.Run(context.Background(), tt.workflowName, nil)
 
 			require.Error(t, err)
@@ -1147,11 +1145,16 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_RecordsStepState(t *testing.T) {
-	repo := newMockRepository()
-	createParentChildWorkflows(repo, "state-parent", "state-child")
+	parentWf, childWf := createParentChildWorkflows("state-parent", "state-child")
 
-	execSvc := createSubWorkflowTestService(repo)
-	ctx, err := execSvc.Run(context.Background(), "state-parent", nil)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("state-parent", parentWf).
+		WithWorkflow("state-child", childWf).
+		Build()
+
+	ctx, err := execSvc.Run(context.Background(), "state-parent", map[string]any{
+		"parent_input": "test_value",
+	})
 
 	require.NoError(t, err)
 
@@ -1166,9 +1169,7 @@ func TestExecuteCallWorkflowStep_RecordsStepState(t *testing.T) {
 }
 
 func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
-	repo := newMockRepository()
-
-	repo.workflows["error-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "error-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -1182,7 +1183,7 @@ func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
 		},
 	}
 
-	repo.workflows["error-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "error-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1203,16 +1204,11 @@ func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("error-child", childWf).
+		WithWorkflow("error-parent", parentWf).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "error-parent", nil)
 
@@ -1230,10 +1226,8 @@ func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child with slow step
-	repo.workflows["slow-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "slow-child",
 		Initial: "slow",
 		Steps: map[string]*workflow.Step{
@@ -1247,7 +1241,7 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	repo.workflows["cancel-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "cancel-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1265,16 +1259,11 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 
 	slowExecutor := &slowMockExecutor{delay: 30 * time.Second}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), slowExecutor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		slowExecutor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("slow-child", childWf).
+		WithWorkflow("cancel-parent", parentWf).
+		WithExecutor(slowExecutor).
+		Build()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -1298,8 +1287,6 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) {
-	repo := newMockRepository()
-
 	// Diamond pattern: A calls B and C, both B and C call D, D calls A
 	// This tests that circular detection works across multiple paths
 	//
@@ -1309,7 +1296,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 	//      \ /
 	//       D -> A (circular!)
 
-	repo.workflows["diamond-a"] = &workflow.Workflow{
+	diamondA := &workflow.Workflow{
 		Name:    "diamond-a",
 		Initial: "call_b",
 		Steps: map[string]*workflow.Step{
@@ -1325,7 +1312,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 		},
 	}
 
-	repo.workflows["diamond-b"] = &workflow.Workflow{
+	diamondB := &workflow.Workflow{
 		Name:    "diamond-b",
 		Initial: "call_d",
 		Steps: map[string]*workflow.Step{
@@ -1341,7 +1328,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 		},
 	}
 
-	repo.workflows["diamond-d"] = &workflow.Workflow{
+	diamondD := &workflow.Workflow{
 		Name:    "diamond-d",
 		Initial: "call_a",
 		Steps: map[string]*workflow.Step{
@@ -1357,7 +1344,12 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("diamond-a", diamondA).
+		WithWorkflow("diamond-b", diamondB).
+		WithWorkflow("diamond-d", diamondD).
+		Build()
+
 	_, err := execSvc.Run(context.Background(), "diamond-a", nil)
 
 	require.Error(t, err)
@@ -1365,8 +1357,6 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 }
 
 func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircular(t *testing.T) {
-	repo := newMockRepository()
-
 	// Non-circular: A calls B, A also calls C, both B and C call D
 	// D is called twice from different parents - this is NOT circular
 	//
@@ -1376,7 +1366,7 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 	//      \ /
 	//       D (terminal)
 
-	repo.workflows["shared-d"] = &workflow.Workflow{
+	sharedD := &workflow.Workflow{
 		Name:    "shared-d",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1390,7 +1380,7 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 		},
 	}
 
-	repo.workflows["shared-b"] = &workflow.Workflow{
+	sharedB := &workflow.Workflow{
 		Name:    "shared-b",
 		Initial: "call_d",
 		Steps: map[string]*workflow.Step{
@@ -1406,7 +1396,7 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 		},
 	}
 
-	repo.workflows["shared-a"] = &workflow.Workflow{
+	sharedA := &workflow.Workflow{
 		Name:    "shared-a",
 		Initial: "call_b",
 		Steps: map[string]*workflow.Step{
@@ -1422,7 +1412,12 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 		},
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("shared-d", sharedD).
+		WithWorkflow("shared-b", sharedB).
+		WithWorkflow("shared-a", sharedA).
+		Build()
+
 	ctx, err := execSvc.Run(context.Background(), "shared-a", nil)
 
 	require.NoError(t, err, "calling same workflow from different parents should not be circular")
@@ -1434,10 +1429,8 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child with slow operation
-	repo.workflows["inherit-child"] = &workflow.Workflow{
+	childWf := &workflow.Workflow{
 		Name:    "inherit-child",
 		Initial: "slow",
 		Steps: map[string]*workflow.Step{
@@ -1452,7 +1445,7 @@ func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T)
 	}
 
 	// Parent with Timeout: 0 (should inherit from parent context)
-	repo.workflows["inherit-parent"] = &workflow.Workflow{
+	parentWf := &workflow.Workflow{
 		Name:    "inherit-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1471,16 +1464,11 @@ func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T)
 
 	slowExecutor := &slowMockExecutor{delay: 10 * time.Second}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), slowExecutor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		slowExecutor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("inherit-child", childWf).
+		WithWorkflow("inherit-parent", parentWf).
+		WithExecutor(slowExecutor).
+		Build()
 
 	// Parent context with short timeout - should apply to child
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -1495,10 +1483,8 @@ func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T)
 }
 
 func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T) {
-	repo := newMockRepository()
-
 	// Innermost child with slow operation
-	repo.workflows["inner-child"] = &workflow.Workflow{
+	innerChild := &workflow.Workflow{
 		Name:    "inner-child",
 		Initial: "slow",
 		Steps: map[string]*workflow.Step{
@@ -1513,7 +1499,7 @@ func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T
 	}
 
 	// Middle workflow with 5s timeout
-	repo.workflows["middle-child"] = &workflow.Workflow{
+	middleChild := &workflow.Workflow{
 		Name:    "middle-child",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1531,7 +1517,7 @@ func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T
 	}
 
 	// Outer workflow with 10s timeout
-	repo.workflows["outer-parent"] = &workflow.Workflow{
+	outerParent := &workflow.Workflow{
 		Name:    "outer-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
@@ -1550,16 +1536,12 @@ func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T
 
 	slowExecutor := &slowMockExecutor{delay: 30 * time.Second}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), slowExecutor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		slowExecutor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("inner-child", innerChild).
+		WithWorkflow("middle-child", middleChild).
+		WithWorkflow("outer-parent", outerParent).
+		WithExecutor(slowExecutor).
+		Build()
 
 	// Parent context with 1s timeout - most restrictive
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -1576,10 +1558,10 @@ func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T
 }
 
 func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
-	repo := newMockRepository()
-
 	// Create exactly MaxCallStackDepth levels (10)
 	// This should succeed, not fail
+	harness := NewTestHarness(t)
+
 	for i := 1; i <= workflow.MaxCallStackDepth; i++ {
 		name := fmt.Sprintf("exact-%d", i)
 		var nextWorkflow string
@@ -1588,7 +1570,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 		}
 
 		if nextWorkflow != "" {
-			repo.workflows[name] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    name,
 				Initial: "call",
 				Steps: map[string]*workflow.Step{
@@ -1603,9 +1585,10 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 					"done": {Name: "done", Type: workflow.StepTypeTerminal},
 				},
 			}
+			harness = harness.WithWorkflow(name, wf)
 		} else {
 			// Last one is a terminal with command
-			repo.workflows[name] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    name,
 				Initial: "work",
 				Steps: map[string]*workflow.Step{
@@ -1618,10 +1601,11 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 					"done": {Name: "done", Type: workflow.StepTypeTerminal},
 				},
 			}
+			harness = harness.WithWorkflow(name, wf)
 		}
 	}
 
-	execSvc := createSubWorkflowTestService(repo)
+	execSvc, _ := harness.Build()
 	ctx, err := execSvc.Run(context.Background(), "exact-1", nil)
 
 	require.NoError(t, err, "exactly MaxCallStackDepth levels should succeed")
@@ -1633,10 +1617,8 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 // =============================================================================
 
 func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
-	repo := newMockRepository()
-
 	// Child that fails
-	repo.workflows["cleanup-child"] = &workflow.Workflow{
+	cleanupChild := &workflow.Workflow{
 		Name:    "cleanup-child",
 		Initial: "fail",
 		Steps: map[string]*workflow.Step{
@@ -1651,7 +1633,7 @@ func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 	}
 
 	// Parent that can recover and call another workflow
-	repo.workflows["recovery-child"] = &workflow.Workflow{
+	recoveryChild := &workflow.Workflow{
 		Name:    "recovery-child",
 		Initial: "work",
 		Steps: map[string]*workflow.Step{
@@ -1665,7 +1647,7 @@ func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 		},
 	}
 
-	repo.workflows["cleanup-parent"] = &workflow.Workflow{
+	cleanupParent := &workflow.Workflow{
 		Name:    "cleanup-parent",
 		Initial: "call_failing",
 		Steps: map[string]*workflow.Step{
@@ -1693,16 +1675,12 @@ func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("cleanup-child", cleanupChild).
+		WithWorkflow("recovery-child", recoveryChild).
+		WithWorkflow("cleanup-parent", cleanupParent).
+		WithExecutor(executor).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "cleanup-parent", nil)
 

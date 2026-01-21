@@ -23,8 +23,7 @@ import (
 // TestExecutionService_ConversationStep_RoutingToConversationMode tests that
 // when agent step has mode: conversation, it routes to executeConversationStep
 func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["conv-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-test",
 		Initial: "refine",
 		Steps: map[string]*workflow.Step{
@@ -52,6 +51,10 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 		},
 	}
 
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("conv-test", wf).
+		Build()
+
 	registry := agents.NewAgentRegistry()
 	claude := newMockConversationProvider("claude")
 	_ = registry.Register(claude)
@@ -67,16 +70,6 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 		mockRegistry,
 	)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
@@ -92,8 +85,7 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 // TestExecutionService_ConversationStep_WithInputInterpolation tests that
 // conversation steps properly interpolate inputs in initial_prompt
 func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["conv-input-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-input-test",
 		Initial: "analyze",
 		Inputs: []workflow.Input{
@@ -122,6 +114,10 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 		},
 	}
 
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("conv-input-test", wf).
+		Build()
+
 	registry := agents.NewAgentRegistry()
 	claude := newMockConversationProvider("claude")
 	_ = registry.Register(claude)
@@ -131,16 +127,6 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
@@ -159,8 +145,7 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 // TestExecutionService_ConversationStep_WithHooks tests that pre/post hooks
 // are executed for conversation steps (pre-hook executes before stub error)
 func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["conv-hooks"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-hooks",
 		Initial: "chat",
 		Steps: map[string]*workflow.Step{
@@ -205,16 +190,10 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("conv-hooks", wf).
+		Build()
+
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
@@ -233,8 +212,7 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 // TestExecutionService_ConversationStep_SingleModeSkipsConversation tests that
 // agent steps with mode: single (default) skip conversation execution
 func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["single-mode"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "single-mode",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -270,16 +248,10 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("single-mode", wf).
+		Build()
+
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
@@ -299,8 +271,7 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 // TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle tests that
 // when mode is empty/unset, it defaults to single execution
 func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["default-mode"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "default-mode",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -335,16 +306,10 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("default-mode", wf).
+		Build()
+
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
@@ -362,8 +327,7 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 // TestExecutionService_ConversationStep_MinimalConversationConfig tests
 // conversation execution with minimal (default) config values
 func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["minimal-conv"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "minimal-conv",
 		Initial: "chat",
 		Steps: map[string]*workflow.Step{
@@ -386,6 +350,10 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 		},
 	}
 
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("minimal-conv", wf).
+		Build()
+
 	registry := agents.NewAgentRegistry()
 	claude := newMockConversationProvider("claude")
 	_ = registry.Register(claude)
@@ -395,16 +363,6 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
