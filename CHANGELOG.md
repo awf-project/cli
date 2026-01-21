@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C012]** Created `ServiceTestHarness` in `internal/application/testutil_test.go` with fluent API for test setup
+- **[C012]** Reduced test boilerplate by 29% (13,676→9,753 LOC) across 3 test files via harness consolidation
+- **[C012]** Replaced 200+ repetitive mock setup patterns with 3-line harness chains (71% setup reduction)
+- **[C012]** Added comprehensive functional test suite (18 tests) validating end-to-end workflows across all harness features:
+  - 12 core functional tests in `testutil_harness_functional_test.go` (workflows, inputs, retry, parallel, subworkflows, error handling)
+  - 6 advanced functional tests in `testutil_harness_advanced_functional_test.go` (hooks, custom state stores, custom executors, thread safety)
 - **[C011]** Added 4 integration test suites (1430 LOC): hooks lifecycle, input validation, secret masking, CLI exit codes
 - **[C011]** Created 9 YAML fixtures (345 LOC) for hooks, validation, secrets, and exit code test scenarios
 - **[C011]** Fixed `MaskText()` never invoked in shell executor; hook failures not enforced; error.type missing

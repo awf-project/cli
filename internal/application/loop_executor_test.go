@@ -897,8 +897,7 @@ func TestLoopExecutor_ParseItems_CommaSeparated(t *testing.T) {
 // =============================================================================
 
 func TestExecutionService_Run_ForEachStep(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["foreach-workflow"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "foreach-workflow",
 		Initial: "process_files",
 		Steps: map[string]*workflow.Step{
@@ -927,15 +926,9 @@ func TestExecutionService_Run_ForEachStep(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	store := newMockStateStore()
-	evaluator := newMockExpressionEvaluator()
-
-	wfSvc := application.NewWorkflowService(repo, store, executor, &mockLogger{})
-	execSvc := application.NewExecutionServiceWithEvaluator(
-		wfSvc, executor, newMockParallelExecutor(), store,
-		&mockLogger{}, newMockResolver(), nil, evaluator,
-	)
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("foreach-workflow", wf).
+		Build()
 
 	ctx, err := execSvc.Run(context.Background(), "foreach-workflow", nil)
 
@@ -944,6 +937,10 @@ func TestExecutionService_Run_ForEachStep(t *testing.T) {
 	assert.Equal(t, "done", ctx.CurrentStep)
 }
 
+// TestExecutionService_Run_WhileStep tests while loop integration with ExecutionService.
+// Note: This test uses NewExecutionServiceWithEvaluator with a custom counterExpressionEvaluator
+// to control loop iterations. ServiceTestHarness doesn't support custom evaluators,
+// so this test retains the manual setup pattern.
 func TestExecutionService_Run_WhileStep(t *testing.T) {
 	repo := newMockRepository()
 	repo.workflows["while-workflow"] = &workflow.Workflow{

@@ -308,7 +308,7 @@ func (m *MockStateStore) Clear() {
 //	result, err := executor.Execute(ctx, cmd)
 type MockCommandExecutor struct {
 	mu      sync.Mutex
-	result  *ports.CommandResult
+	results map[string]*ports.CommandResult // Command-keyed results (key = Program field)
 	execErr error
 	calls   []*ports.Command
 }
@@ -316,7 +316,8 @@ type MockCommandExecutor struct {
 // NewMockCommandExecutor creates a new thread-safe mock command executor.
 func NewMockCommandExecutor() *MockCommandExecutor {
 	return &MockCommandExecutor{
-		calls: make([]*ports.Command, 0),
+		results: make(map[string]*ports.CommandResult),
+		calls:   make([]*ports.Command, 0),
 	}
 }
 
@@ -332,15 +333,35 @@ func (m *MockCommandExecutor) Execute(ctx context.Context, cmd *ports.Command) (
 	// Record the call
 	m.calls = append(m.calls, cmd)
 
-	// Return configured result (may be nil after Clear)
-	return m.result, nil
+	// Return command-specific result, or fall back to default (empty key)
+	if cmd != nil {
+		if result, ok := m.results[cmd.Program]; ok {
+			return result, nil
+		}
+	}
+
+	// Return default result if configured, otherwise return nil
+	if defaultResult, ok := m.results[""]; ok {
+		return defaultResult, nil
+	}
+
+	// No result configured - return nil (matching legacy behavior)
+	return nil, nil
 }
 
-// SetResult configures the mock to return a specific result (test helper).
+// SetResult configures the mock to return a specific result for all commands (test helper).
+//
+// Deprecated: Use SetCommandResult for command-specific results.
 func (m *MockCommandExecutor) SetResult(result *ports.CommandResult) {
+	// Legacy behavior: set a default result for empty command key
+	m.SetCommandResult("", result)
+}
+
+// SetCommandResult configures the mock to return a specific result for a given command (test helper).
+func (m *MockCommandExecutor) SetCommandResult(cmd string, result *ports.CommandResult) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.result = result
+	m.results[cmd] = result
 }
 
 // SetExecuteError configures the mock to return an error on Execute calls (test helper).
@@ -368,7 +389,7 @@ func (m *MockCommandExecutor) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = make([]*ports.Command, 0)
-	m.result = nil
+	m.results = make(map[string]*ports.CommandResult)
 	m.execErr = nil
 }
 

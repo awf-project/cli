@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/agents"
@@ -32,8 +31,7 @@ import (
 // Mock helper functions are defined in execution_service_helpers_test.go
 
 func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["agent-prehook"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-prehook",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -59,11 +57,13 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo 'pre-hook executed'"] = &ports.CommandResult{
-		Stdout:   "pre-hook executed\n",
-		ExitCode: 0,
-	}
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("agent-prehook", wf).
+		WithCommandResult("echo 'pre-hook executed'", &ports.CommandResult{
+			Stdout:   "pre-hook executed\n",
+			ExitCode: 0,
+		}).
+		Build()
 
 	registry := agents.NewAgentRegistry()
 	claude := newMockAgentProvider("claude")
@@ -78,16 +78,6 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 	}
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 
 	ctx, err := execSvc.Run(context.Background(), "agent-prehook", nil)
@@ -104,15 +94,21 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 	assert.Equal(t, "Summary: This is the summary", state.Output)
 
 	// Verify pre-hook command was executed
-	_, wasExecuted := executor.results["echo 'pre-hook executed'"]
+	calls := mocks.Executor.GetCalls()
+	wasExecuted := false
+	for _, call := range calls {
+		if call.Program == "echo 'pre-hook executed'" {
+			wasExecuted = true
+			break
+		}
+	}
 	assert.True(t, wasExecuted, "pre-hook command should have been executed")
 }
 
 // TestExecutionService_AgentStep_WithPostHook_OnSuccess tests that post-hooks
 // execute after successful agent steps.
 func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["agent-posthook"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-posthook",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -138,11 +134,13 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo 'post-hook executed'"] = &ports.CommandResult{
-		Stdout:   "post-hook executed\n",
-		ExitCode: 0,
-	}
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("agent-posthook", wf).
+		WithCommandResult("echo 'post-hook executed'", &ports.CommandResult{
+			Stdout:   "post-hook executed\n",
+			ExitCode: 0,
+		}).
+		Build()
 
 	registry := agents.NewAgentRegistry()
 	claude := newMockAgentProvider("claude")
@@ -157,16 +155,6 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 	}
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 
 	ctx, err := execSvc.Run(context.Background(), "agent-posthook", nil)
@@ -183,15 +171,21 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 	assert.Equal(t, "Analysis: Data is valid", state.Output)
 
 	// Verify post-hook command was executed
-	_, wasExecuted := executor.results["echo 'post-hook executed'"]
+	calls := mocks.Executor.GetCalls()
+	wasExecuted := false
+	for _, call := range calls {
+		if call.Program == "echo 'post-hook executed'" {
+			wasExecuted = true
+			break
+		}
+	}
 	assert.True(t, wasExecuted, "post-hook command should have been executed")
 }
 
 // TestExecutionService_AgentStep_WithPostHook_OnFailure tests that post-hooks
 // execute even when agent steps fail.
 func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["agent-posthook-fail"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-posthook-fail",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -222,11 +216,13 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 		},
 	}
 
-	executor := newMockExecutor()
-	executor.results["echo 'post-hook cleanup'"] = &ports.CommandResult{
-		Stdout:   "post-hook cleanup\n",
-		ExitCode: 0,
-	}
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("agent-posthook-fail", wf).
+		WithCommandResult("echo 'post-hook cleanup'", &ports.CommandResult{
+			Stdout:   "post-hook cleanup\n",
+			ExitCode: 0,
+		}).
+		Build()
 
 	registry := agents.NewAgentRegistry()
 	claude := newMockAgentProvider("claude")
@@ -241,16 +237,6 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 	}
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		executor,
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
 	execSvc.SetAgentRegistry(registry)
 
 	ctx, err := execSvc.Run(context.Background(), "agent-posthook-fail", nil)
@@ -267,6 +253,13 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 	assert.Contains(t, state.Error, "API rate limit exceeded")
 
 	// Verify post-hook command was executed even though agent failed
-	_, wasExecuted := executor.results["echo 'post-hook cleanup'"]
+	calls := mocks.Executor.GetCalls()
+	wasExecuted := false
+	for _, call := range calls {
+		if call.Program == "echo 'post-hook cleanup'" {
+			wasExecuted = true
+			break
+		}
+	}
 	assert.True(t, wasExecuted, "post-hook command should execute even on agent failure")
 }
