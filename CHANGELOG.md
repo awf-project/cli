@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **[C013]** Split 3 large domain test files (4,317 LOC total) into 11 focused test modules organized by functionality
+- **[C013]** Deleted `step_test.go` (1,615 lines) → split into 4 files: `step_command_test.go`, `step_parallel_test.go`, `step_loop_test.go`, `step_agent_test.go`
+- **[C013]** Split `agent_config_test.go` (1,819 lines) → split into 3 files: `agent_config_config_test.go`, `agent_config_result_test.go`, `agent_config_conversation_test.go` (retained 169-line stub)
+- **[C013]** Created `domain_test_helpers_test.go` (5.7K) with shared test utilities to prevent duplication across split files
+- **[C013]** All 170 original tests preserved across reorganized files; each new file <600 lines for improved maintainability
 - **[C012]** Created `ServiceTestHarness` in `internal/application/testutil_test.go` with fluent API for test setup
 - **[C012]** Reduced test boilerplate by 29% (13,676→9,753 LOC) across 3 test files via harness consolidation
 - **[C012]** Replaced 200+ repetitive mock setup patterns with 3-line harness chains (71% setup reduction)

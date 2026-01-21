@@ -1,5 +1,11 @@
 package workflow
 
+// C013: Domain test file splitting
+// Source: internal/domain/workflow/parallel_test.go (Feature F033)
+// Test count: 19 tests
+// Tests: Parallel execution types - ParallelStrategy parsing and conversion,
+//        ParallelConfig defaults, BranchResult handling, ParallelResult aggregation
+
 import (
 	"errors"
 	"testing"
