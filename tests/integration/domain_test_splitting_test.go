@@ -1,3 +1,5 @@
+//go:build integration
+
 // Domain Test File Splitting Functional Tests
 //
 // This file contains comprehensive functional tests validating that the domain
@@ -15,7 +17,7 @@
 // - All tests pass with maintained coverage (≥79.2%)
 // - No shared state or import cycles
 // - Shared helpers properly extracted
-package integration
+package integration_test
 
 import (
 	"context"

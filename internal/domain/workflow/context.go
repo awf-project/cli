@@ -38,6 +38,11 @@ type StepState struct {
 	Conversation       *ConversationState  // conversation history and state (nil for non-conversation steps)
 	TokensUsed         int                 // total tokens used in conversation mode
 	ContextWindowState *ContextWindowState // context window management state (nil if not applicable)
+
+	// C019: Output streaming fields for memory management
+	OutputPath string // Path to temp file if output was streamed (empty if in-memory)
+	StderrPath string // Path to temp file if stderr was streamed (empty if in-memory)
+	Truncated  bool   // True if output was truncated (not streamed)
 }
 
 // LoopContext holds the current loop iteration state.

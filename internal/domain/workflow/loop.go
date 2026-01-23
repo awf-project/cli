@@ -25,15 +25,16 @@ const MaxAllowedIterations = 10000
 
 // LoopConfig holds configuration for loop execution.
 type LoopConfig struct {
-	Type                       LoopType // for_each or while
-	Items                      string   // template expression for items (for_each)
-	Condition                  string   // expression to evaluate (while)
-	Body                       []string // step names to execute each iteration
-	MaxIterations              int      // safety limit (default: 100, max: 10000)
-	MaxIterationsExpr          string   // dynamic expression for max_iterations (e.g., "{{inputs.limit}}")
-	MaxIterationsExplicitlySet bool     // true if max_iterations was explicitly set in YAML (even if zero)
-	BreakCondition             string   // optional early exit expression
-	OnComplete                 string   // next state after loop completes
+	Type                       LoopType          // for_each or while
+	Items                      string            // template expression for items (for_each)
+	Condition                  string            // expression to evaluate (while)
+	Body                       []string          // step names to execute each iteration
+	MaxIterations              int               // safety limit (default: 100, max: 10000)
+	MaxIterationsExpr          string            // dynamic expression for max_iterations (e.g., "{{inputs.limit}}")
+	MaxIterationsExplicitlySet bool              // true if max_iterations was explicitly set in YAML (even if zero)
+	BreakCondition             string            // optional early exit expression
+	OnComplete                 string            // next state after loop completes
+	MemoryConfig               *LoopMemoryConfig // C019: Rolling window memory management
 }
 
 // Validate checks if the loop configuration is valid.
@@ -103,6 +104,9 @@ type LoopResult struct {
 	NextStep    string // F048 T007: Target step when loop exits early via transition
 	StartedAt   time.Time
 	CompletedAt time.Time
+
+	// C019: Memory management fields
+	PrunedCount int // Number of iterations pruned from memory (for rolling window)
 }
 
 // NewLoopResult creates a new LoopResult with initialized values.

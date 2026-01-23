@@ -36,6 +36,7 @@ type ExecutionService struct {
 	operationProvider ports.OperationProvider
 	agentRegistry     *agents.AgentRegistry
 	conversationMgr   *ConversationManager // F033: Multi-turn conversation orchestration
+	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
 }
 
 // ExpressionEvaluator evaluates conditional expressions.
@@ -93,6 +94,7 @@ func NewExecutionService(
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
 		loopExecutor:     NewLoopExecutor(logger, nil, resolver),
 		historySvc:       historySvc,
+		outputLimiter:    NewOutputLimiter(workflow.DefaultOutputLimits()),
 	}
 }
 
@@ -119,6 +121,7 @@ func NewExecutionServiceWithEvaluator(
 		hookExecutor:     NewHookExecutor(executor, logger, resolver),
 		loopExecutor:     NewLoopExecutor(logger, evaluator, resolver),
 		historySvc:       historySvc,
+		outputLimiter:    NewOutputLimiter(workflow.DefaultOutputLimits()),
 	}
 }
 
@@ -1085,8 +1088,23 @@ func (s *ExecutionService) recordStepResult(
 	}
 
 	if result != nil {
-		state.Output = result.Stdout
-		state.Stderr = result.Stderr
+		// C019: Apply output limits to prevent OOM from large outputs
+		limitResult, err := s.outputLimiter.Apply(result.Stdout, result.Stderr)
+		if err != nil {
+			// Log error but don't fail the step - store raw output
+			s.logger.Error("Failed to apply output limits", map[string]interface{}{
+				"step":  step.Name,
+				"error": err.Error(),
+			})
+			state.Output = result.Stdout
+			state.Stderr = result.Stderr
+		} else {
+			state.Output = limitResult.Output
+			state.Stderr = limitResult.Stderr
+			state.OutputPath = limitResult.OutputPath
+			state.StderrPath = limitResult.StderrPath
+			state.Truncated = limitResult.Truncated
+		}
 		state.ExitCode = result.ExitCode
 	}
 
