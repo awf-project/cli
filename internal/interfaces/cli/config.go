@@ -111,16 +111,29 @@ func NewWorkflowRepository() *repository.CompositeRepository {
 // 1. ./.awf/prompts/ (local project)
 // 2. $XDG_CONFIG_HOME/awf/prompts/ (global)
 func BuildPromptPaths() []repository.SourcedPath {
-	return []repository.SourcedPath{
-		{
+	var paths []repository.SourcedPath
+
+	// 1. Environment variable (highest priority)
+	if envPath := os.Getenv("AWF_PROMPTS_PATH"); envPath != "" {
+		paths = append(paths, repository.SourcedPath{
+			Path:   envPath,
+			Source: repository.SourceEnv,
+		})
+	}
+
+	// 2. Local project directory and 3. Global XDG directory (lowest priority)
+	paths = append(paths,
+		repository.SourcedPath{
 			Path:   xdg.LocalPromptsDir(),
 			Source: repository.SourceLocal,
 		},
-		{
+		repository.SourcedPath{
 			Path:   xdg.AWFPromptsDir(),
 			Source: repository.SourceGlobal,
 		},
-	}
+	)
+
+	return paths
 }
 
 // BuildPluginPaths returns plugin paths in priority order:
