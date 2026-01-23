@@ -209,7 +209,7 @@ func TestExecutionService_detectLoopPatterns(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Create minimal ExecutionService with nil dependencies (not needed for this helper)
-			execSvc := &ExecutionService{}
+			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
 			// Act: Call the helper method
 			gotHadFailures, gotHasComplexity := execSvc.detectLoopPatterns(tt.result, tt.wf)
@@ -329,7 +329,7 @@ func TestExecutionService_shouldCheckLoopProblems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Create minimal ExecutionService
-			execSvc := &ExecutionService{}
+			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
 			// Act: Call the guard helper
 			got := execSvc.shouldCheckLoopProblems(tt.result, tt.step)
@@ -441,7 +441,7 @@ func TestExecutionService_buildLoopFailureError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Create minimal ExecutionService
-			execSvc := &ExecutionService{}
+			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
 			// Act: Build error message
 			got := execSvc.buildLoopFailureError(tt.hadFailures, tt.hasComplexSteps)
@@ -542,8 +542,9 @@ func TestExecutionService_executeLoopPostHooks(t *testing.T) {
 			logger, hookExec := tt.setupMocks()
 
 			execSvc := &ExecutionService{
-				logger:       logger,
-				hookExecutor: hookExec,
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				logger:        logger,
+				hookExecutor:  hookExec,
 			}
 
 			// Act: Execute post hooks

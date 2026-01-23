@@ -219,6 +219,17 @@ func (e *LoopExecutor) ExecuteForEach(
 		result.Iterations = append(result.Iterations, iterResult)
 		result.TotalCount++
 
+		// C019: Apply rolling window memory management
+		if step.Loop.MemoryConfig != nil && step.Loop.MemoryConfig.MaxRetainedIterations > 0 {
+			maxRetained := step.Loop.MemoryConfig.MaxRetainedIterations
+			if len(result.Iterations) > maxRetained {
+				// Prune oldest iterations, keeping only the last N
+				pruneCount := len(result.Iterations) - maxRetained
+				result.Iterations = result.Iterations[pruneCount:]
+				result.PrunedCount += pruneCount
+			}
+		}
+
 		// F048 T006: Check if we should exit the loop due to external transition
 		if exitState.shouldExit {
 			// F048 T007: Set nextStep in result for early exit
@@ -379,6 +390,17 @@ func (e *LoopExecutor) ExecuteWhile(
 		iterResult.CompletedAt = time.Now()
 		result.Iterations = append(result.Iterations, iterResult)
 		result.TotalCount++
+
+		// C019: Apply rolling window memory management
+		if step.Loop.MemoryConfig != nil && step.Loop.MemoryConfig.MaxRetainedIterations > 0 {
+			maxRetained := step.Loop.MemoryConfig.MaxRetainedIterations
+			if len(result.Iterations) > maxRetained {
+				// Prune oldest iterations, keeping only the last N
+				pruneCount := len(result.Iterations) - maxRetained
+				result.Iterations = result.Iterations[pruneCount:]
+				result.PrunedCount += pruneCount
+			}
+		}
 
 		// F048 T006: Check if we should exit the loop due to external transition
 		if exitState.shouldExit {

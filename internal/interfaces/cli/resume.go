@@ -3,10 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -162,15 +159,12 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
+	cleanup := setupSignalHandler(ctx, cancel, func() {
 		if cfg.OutputFormat != ui.FormatJSON && cfg.OutputFormat != ui.FormatTable {
 			formatter.Warning("\nReceived interrupt signal, cancelling...")
 		}
-		cancel()
-	}()
+	})
+	defer cleanup()
 
 	// Initialize dependencies
 	repo := NewWorkflowRepository()

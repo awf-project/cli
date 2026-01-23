@@ -201,6 +201,185 @@ inputs:
 
 ---
 
+## Workflow-Level Configuration
+
+In addition to project inputs, workflows can define configuration options that control execution behavior and resource management.
+
+### Output Configuration
+
+Control how step outputs are captured and stored:
+
+```yaml
+# In workflow YAML file
+output:
+  max_size: "1MB"             # Maximum output size per step (default: 1MB)
+  stream_large_output: false  # Stream large outputs to temp files (default: false)
+  temp_dir: "/tmp/awf"        # Directory for temp files (default: system temp)
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_size` | string | `"1MB"` | Maximum size for captured output/stderr per step. Accepts units: `B`, `KB`, `MB`, `GB` |
+| `stream_large_output` | bool | `false` | When `true`, outputs exceeding `max_size` are streamed to temporary files instead of truncated |
+| `temp_dir` | string | system temp | Directory for temporary output files when streaming is enabled |
+
+#### Behavior
+
+- **Truncation (default)**: When `max_size` is exceeded and `stream_large_output` is `false`, output is truncated with a warning logged
+- **Streaming**: When `max_size` is exceeded and `stream_large_output` is `true`, output is written to a temp file and accessible via `{{.states.step_name.OutputPath}}`
+- **Backward compatibility**: Omitting `output` config preserves existing behavior (unlimited output capture)
+
+#### Example
+
+```yaml
+name: large-log-workflow
+version: "1.0.0"
+
+output:
+  max_size: "500KB"
+  stream_large_output: true
+  temp_dir: "/var/tmp/workflow-outputs"
+
+states:
+  initial: generate_logs
+
+  generate_logs:
+    type: step
+    command: generate-large-logfile
+    on_success: process_logs
+
+  process_logs:
+    type: step
+    # If output was streamed, OutputPath contains file location
+    command: |
+      if [ -n "{{.states.generate_logs.OutputPath}}" ]; then
+        process-file "{{.states.generate_logs.OutputPath}}"
+      else
+        echo "{{.states.generate_logs.Output}}" | process-stdin
+      fi
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+```
+
+### Loop Configuration
+
+Configure memory management for loop iterations:
+
+```yaml
+# In workflow YAML file
+loop:
+  max_retained_iterations: 100  # Keep only last N iterations (default: 0 = unlimited)
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_retained_iterations` | int | `0` | Maximum loop iterations retained in memory. `0` = unlimited (backward compatible) |
+
+#### Behavior
+
+- **Rolling window**: When set, only the last N iteration results are kept in memory
+- **Pruned iterations**: Earlier iterations are discarded and counted in `{{.states.loop_name.PrunedCount}}`
+- **Memory efficiency**: Prevents unbounded memory growth in long-running loops (1000+ iterations)
+- **Backward compatibility**: Default `0` preserves existing behavior
+
+#### Example
+
+```yaml
+name: long-running-poll
+version: "1.0.0"
+
+loop:
+  max_retained_iterations: 50  # Keep only last 50 iterations
+
+states:
+  initial: poll_api
+
+  poll_api:
+    type: while
+    while: "states.check_status.Output != 'complete'"
+    max_iterations: 10000
+    body:
+      - check_status
+      - wait
+    on_complete: report
+
+  check_status:
+    type: step
+    command: curl -s https://api.example.com/job/status
+    on_success: poll_api
+
+  wait:
+    type: step
+    command: sleep 10
+    on_success: poll_api
+
+  report:
+    type: step
+    command: |
+      echo "Total iterations: {{.states.poll_api.Iterations | len}}"
+      echo "Pruned iterations: {{.states.poll_api.PrunedCount}}"
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+```
+
+### Memory Monitoring
+
+Enable memory usage logging for workflows:
+
+```yaml
+# In workflow YAML file
+monitoring:
+  enabled: true              # Enable monitoring (default: false)
+  memory_threshold: "500MB"  # Log warning when exceeded (default: 500MB)
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable memory monitoring and logging |
+| `memory_threshold` | string | `"500MB"` | Threshold for logging warnings. Accepts units: `B`, `KB`, `MB`, `GB` |
+
+#### Behavior
+
+- When enabled, AWF logs memory usage at key execution points
+- Warnings are logged when heap allocation exceeds `memory_threshold`
+- Useful for debugging memory issues in long-running workflows
+- No performance impact when disabled (default)
+
+#### Example
+
+```yaml
+name: memory-intensive-workflow
+version: "1.0.0"
+
+monitoring:
+  enabled: true
+  memory_threshold: "1GB"
+
+output:
+  max_size: "1MB"
+
+loop:
+  max_retained_iterations: 100
+
+states:
+  initial: process_data
+  # ... workflow states
+```
+
+---
+
 ## See Also
 
 - [Commands](commands.md) - CLI command reference

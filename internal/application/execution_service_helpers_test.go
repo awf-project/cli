@@ -16,6 +16,14 @@ import (
 // Test Mocks and Helpers
 // =============================================================================
 
+// newTestExecutionService creates an ExecutionService for testing with minimal setup.
+// C019: Ensures outputLimiter is initialized to prevent nil pointer panics.
+func newTestExecutionService() *ExecutionService {
+	return &ExecutionService{
+		outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+	}
+}
+
 // mockResolver is a simple resolver that returns templates unchanged
 type mockResolver struct{}
 
@@ -125,10 +133,11 @@ func TestExecutionService_prepareStepExecution(t *testing.T) {
 			mockLogger := &mockLogger{}
 			mockResolver := newMockResolver()
 			svc := &ExecutionService{
-				executor:     mockExec,
-				logger:       mockLogger,
-				resolver:     mockResolver,
-				hookExecutor: NewHookExecutor(mockExec, mockLogger, mockResolver),
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				executor:      mockExec,
+				logger:        mockLogger,
+				resolver:      mockResolver,
+				hookExecutor:  NewHookExecutor(mockExec, mockLogger, mockResolver),
 			}
 
 			ctx := context.Background()
@@ -212,7 +221,8 @@ func TestExecutionService_resolveStepCommand(t *testing.T) {
 			// Arrange: Create ExecutionService with mock dependencies for GREEN phase testing
 			mockResolver := newMockResolver()
 			svc := &ExecutionService{
-				resolver: mockResolver,
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				resolver:      mockResolver,
 			}
 
 			// Act: Call resolveStepCommand
@@ -298,7 +308,7 @@ func TestExecutionService_executeStepCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Create minimal ExecutionService for stub phase testing
-			svc := &ExecutionService{}
+			svc := newTestExecutionService()
 
 			ctx := context.Background()
 
@@ -370,8 +380,10 @@ func TestExecutionService_recordStepResult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup ExecutionService
-			svc := &ExecutionService{}
+			// Arrange: Setup ExecutionService with output limiter
+			svc := &ExecutionService{
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+			}
 
 			// Act: Call recordStepResult
 			state := svc.recordStepResult(tt.step, tt.startTime, tt.result, tt.attempt)
@@ -484,7 +496,8 @@ func TestExecutionService_handleExecutionError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
-				logger: &mockLogger{},
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				logger:        &mockLogger{},
 			}
 
 			ctx := context.Background()
@@ -582,7 +595,8 @@ func TestExecutionService_handleNonZeroExit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
-				logger: &mockLogger{},
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				logger:        &mockLogger{},
 			}
 
 			stepCtx := context.Background()
@@ -670,7 +684,8 @@ func TestExecutionService_handleSuccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
-				logger: &mockLogger{},
+				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+				logger:        &mockLogger{},
 			}
 
 			stepCtx := context.Background()
