@@ -59,6 +59,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C017** Reorganized CLI tests to separate unit and integration concerns
+  - Moved 280 integration-style tests from `internal/interfaces/cli/` to `tests/integration/cli/` with `//go:build integration` tags
+  - Retained 176 unit tests in-place focused on flag parsing, help text, and command registration
+  - Created shared workflow fixtures in `internal/testutil/cli_fixtures.go` to eliminate duplication across test files
+  - Fixed thread-safety issues by replacing `os.Chdir` with `t.TempDir()` and `t.Setenv()` patterns
+  - Added `AWF_CONFIG_PATH` environment variable to override config file location (enables thread-safe config tests)
+  - Updated Makefile targets: `make test-unit` excludes integration tests, `make test-integration` includes CLI integration tests
+  - Consolidated duplicate test helpers (`setupWorkflows`, `setupWorkflow`, `setTestEnv`) into shared utilities
+  - Improved test maintainability with clear boundaries: interface layer unit tests verify only the interface contract
+  - Faster feedback loops: unit tests run without integration overhead (workflow parsing, state management, shell execution)
+
 - **C016** Added comprehensive unit tests for input validation and state persistence layers
   - Input validation tests: Pattern matching, enum constraints, min/max bounds, file existence checks
   - SQLite History Store tests (2,082 lines): CRUD operations, error paths, edge cases, nil handling, concurrent access (20-goroutine stress tests)

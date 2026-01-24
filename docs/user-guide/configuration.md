@@ -22,6 +22,28 @@ The configuration file is located at:
 
 This path is relative to the current working directory. AWF searches for this file when executing commands like `run`, `config show`, etc.
 
+### Environment Variable Override
+
+You can override the configuration file path using the `AWF_CONFIG_PATH` environment variable:
+
+```bash
+# Use a custom config file location
+export AWF_CONFIG_PATH="/path/to/custom/config.yaml"
+awf run my-workflow
+
+# Or inline for a single command
+AWF_CONFIG_PATH=./configs/staging.yaml awf run deploy
+```
+
+This is useful for:
+- Testing with different configurations
+- CI/CD pipelines with environment-specific configs
+- Running multiple AWF instances with isolated configurations
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWF_CONFIG_PATH` | `.awf/config.yaml` | Absolute or relative path to the configuration file |
+
 ---
 
 ## Configuration Format
