@@ -2,7 +2,10 @@ package workflow
 
 import (
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/expr-lang/expr"
 )
 
 // Conversation errors
@@ -100,6 +103,14 @@ func (c *ConversationConfig) Validate() error {
 			// Valid strategies
 		default:
 			return errors.New("invalid context window strategy")
+		}
+	}
+
+	// Validate StopCondition if set (compile-time syntax check)
+	if c.StopCondition != "" {
+		_, err := expr.Compile(c.StopCondition)
+		if err != nil {
+			return fmt.Errorf("invalid stop_condition expression: %w", err)
 		}
 	}
 

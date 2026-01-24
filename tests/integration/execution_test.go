@@ -54,17 +54,6 @@ func (m *mockStateStore) List(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-// mockLogger for integration tests
-type mockLogger struct{}
-
-func (m *mockLogger) Debug(msg string, fields ...any) {}
-func (m *mockLogger) Info(msg string, fields ...any)  {}
-func (m *mockLogger) Warn(msg string, fields ...any)  {}
-func (m *mockLogger) Error(msg string, fields ...any) {}
-func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
-	return m
-}
-
 func TestLinearExecution_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

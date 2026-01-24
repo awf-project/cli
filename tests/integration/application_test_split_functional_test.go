@@ -1,5 +1,7 @@
 //go:build integration
 
+package integration_test
+
 // # Application Test File Splitting Functional Tests
 //
 // This file contains comprehensive functional tests validating that the
@@ -20,7 +22,6 @@
 // - No race conditions or shared state issues
 // - No test duplication between extracted files
 // - Shared mocks properly extracted to prevent import cycles
-package integration_test
 
 import (
 	"context"

@@ -1,5 +1,7 @@
 //go:build integration
 
+package integration_test
+
 // Infrastructure Test File Splitting Functional Tests
 //
 // This file contains comprehensive functional tests validating that the infrastructure
@@ -20,7 +22,6 @@
 // - No race conditions detected (thread-safety fixes applied)
 // - Zero os.Chdir calls remain in CLI tests
 // - Shared helpers properly extracted
-package integration_test
 
 import (
 	"context"

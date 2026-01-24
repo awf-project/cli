@@ -15,6 +15,24 @@ import (
 )
 
 // =============================================================================
+// Interface Compliance Checks (Compile-Time)
+// =============================================================================
+
+// Feature: C016 Missing Unit Tests for Input Validation and State Persistence
+// Component: T001 Testutil Interface Compliance
+
+// These compile-time assertions verify that mock implementations satisfy their
+// corresponding port interfaces. If a mock fails to implement its interface,
+// the code will not compile, catching interface mismatches early.
+var (
+	_ ports.WorkflowRepository = (*testutil.MockWorkflowRepository)(nil)
+	_ ports.StateStore         = (*testutil.MockStateStore)(nil)
+	_ ports.CommandExecutor    = (*testutil.MockCommandExecutor)(nil)
+	_ ports.Logger             = (*testutil.MockLogger)(nil)
+	_ ports.HistoryStore       = (*testutil.MockHistoryStore)(nil)
+)
+
+// =============================================================================
 // MockWorkflowRepository Tests
 // =============================================================================
 
