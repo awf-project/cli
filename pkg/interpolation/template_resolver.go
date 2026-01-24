@@ -25,12 +25,15 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 	// Build template data map
 	data := r.buildTemplateData(ctx)
 
-	// Create template with custom functions
+	// Create template with custom functions and namespace accessors
 	tmpl := template.New("cmd").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
-			"escape": escapeTemplateFunc,
-			"json":   jsonTemplateFunc,
+			"escape":  escapeTemplateFunc,
+			"json":    jsonTemplateFunc,
+			"loop":    r.makeLoopAccessor(ctx),
+			"context": r.makeContextAccessor(ctx),
+			"error":   r.makeErrorAccessor(ctx),
 		})
 
 	// Parse template
@@ -168,5 +171,53 @@ func (r *TemplateResolver) serializeLoopData(loop *LoopData) *LoopData {
 		Last:   loop.Last,
 		Length: loop.Length,
 		Parent: loop.Parent,
+	}
+}
+
+// makeLoopAccessor returns a function that provides a map with lowercase property names
+// for loop data (e.g., {{loop.index}}, {{loop.first}}, {{loop.last}}).
+func (r *TemplateResolver) makeLoopAccessor(ctx *Context) func() (map[string]any, error) {
+	return func() (map[string]any, error) {
+		if ctx.Loop == nil {
+			return nil, &UndefinedVariableError{Variable: "loop"}
+		}
+
+		serialized := r.serializeLoopData(ctx.Loop)
+		return map[string]any{
+			"index":  ctx.Loop.Index,
+			"first":  ctx.Loop.First,
+			"last":   ctx.Loop.Last,
+			"length": ctx.Loop.Length,
+			"item":   serialized.Item,
+		}, nil
+	}
+}
+
+// makeContextAccessor returns a function that provides a map with lowercase property names
+// for context data (e.g., {{context.working_dir}}, {{context.user}}).
+func (r *TemplateResolver) makeContextAccessor(ctx *Context) func() map[string]any {
+	return func() map[string]any {
+		return map[string]any{
+			"working_dir": ctx.Context.WorkingDir,
+			"user":        ctx.Context.User,
+			"hostname":    ctx.Context.Hostname,
+		}
+	}
+}
+
+// makeErrorAccessor returns a function that provides a map with lowercase property names
+// for error data (e.g., {{error.message}}, {{error.type}}, {{error.exit_code}}).
+func (r *TemplateResolver) makeErrorAccessor(ctx *Context) func() (map[string]any, error) {
+	return func() (map[string]any, error) {
+		if ctx.Error == nil {
+			return nil, &UndefinedVariableError{Variable: "error"}
+		}
+
+		return map[string]any{
+			"message":   ctx.Error.Message,
+			"type":      ctx.Error.Type,
+			"exit_code": ctx.Error.ExitCode,
+			"state":     ctx.Error.State,
+		}, nil
 	}
 }

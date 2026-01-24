@@ -591,7 +591,7 @@ func (e *LoopExecutor) evaluateBodyTransition(
 
 	// Case 2: Intra-body jump - transition to step within loop body
 	if targetIdx, exists := bodyStepIndices[nextStep]; exists {
-		e.logger.Info("loop intra-body transition",
+		e.logger.Debug("loop intra-body transition",
 			"target", nextStep,
 			"target_index", targetIdx)
 		return false, targetIdx
@@ -599,7 +599,7 @@ func (e *LoopExecutor) evaluateBodyTransition(
 
 	// Case 3: Retry pattern - transition to loop step itself (ADR-004)
 	if nextStep == loopStepName {
-		e.logger.Info("loop retry pattern detected",
+		e.logger.Debug("loop retry pattern detected",
 			"loop", loopStepName,
 			"current_index", currentIdx)
 		return false, -1
@@ -614,7 +614,7 @@ func (e *LoopExecutor) evaluateBodyTransition(
 	}
 
 	// Case 5: Early exit - target exists in workflow but not in body (ADR-003)
-	e.logger.Info("loop early exit",
+	e.logger.Debug("loop early exit",
 		"target", nextStep,
 		"current_index", currentIdx,
 		"body_size", len(body))
@@ -640,7 +640,7 @@ func (e *LoopExecutor) handleIntraBodyJump(newIdx, currentIdx int) int {
 	// Example: To jump to index 3, we return 2, then loop increments to 3
 	// Special case: To jump to index 0, we return -1, then loop increments to 0
 	adjustedIdx := newIdx - 1
-	e.logger.Info("loop intra-body jump",
+	e.logger.Debug("loop intra-body jump",
 		"from_index", currentIdx,
 		"to_index", newIdx,
 		"adjusted_index", adjustedIdx)

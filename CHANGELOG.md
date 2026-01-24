@@ -59,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C018** Improved test coverage in pkg/ layer
+  - Added tests for LoopData.Parent field (nested loop support)
+  - Added tests for StepStateData.Response/Tokens fields (agent step data)
+  - Added tests for expression namespaces (loop.*, context.*, error.*)
+  - Fixed test data mutation in resolver_test.go
+  - Completed TestRetryer_LogsAttempts assertions
+
 - **C017** Reorganized CLI tests to separate unit and integration concerns
   - Moved 280 integration-style tests from `internal/interfaces/cli/` to `tests/integration/cli/` with `//go:build integration` tags
   - Retained 176 unit tests in-place focused on flag parsing, help text, and command registration

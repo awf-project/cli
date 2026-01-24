@@ -3,6 +3,7 @@ package retry
 import (
 	"context"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -759,9 +760,42 @@ func TestRetryer_LogsAttempts(t *testing.T) {
 
 	// Trigger a wait which should log
 	ctx := context.Background()
-	_ = retryer.Wait(ctx, 2)
+	err := retryer.Wait(ctx, 2)
+	require.NoError(t, err)
 
-	// Verify logging occurred (implementation specific)
-	// This test verifies that a logger, if provided, receives calls
-	// The exact format depends on implementation
+	// Verify logging occurred
+	require.NotEmpty(t, logger.debugCalls, "expected logger to receive debug calls")
+
+	// Verify log message mentions retry/attempt
+	found := false
+	var foundCall logCall
+	for _, call := range logger.debugCalls {
+		if strings.Contains(call.msg, "retry") || strings.Contains(call.msg, "waiting") {
+			found = true
+			foundCall = call
+			break
+		}
+	}
+	require.True(t, found, "expected log message to mention retry or waiting")
+
+	// Verify fields include attempt number and delay
+	require.NotEmpty(t, foundCall.fields, "expected log call to include fields")
+
+	// Check that fields contain attempt number (2) and delay
+	hasAttempt := false
+	hasDelay := false
+	for i := 0; i < len(foundCall.fields); i += 2 {
+		if i+1 < len(foundCall.fields) {
+			key := foundCall.fields[i]
+			if key == "attempt" {
+				hasAttempt = true
+				assert.Equal(t, 2, foundCall.fields[i+1], "expected attempt number to be 2")
+			}
+			if key == "delay" {
+				hasDelay = true
+			}
+		}
+	}
+	assert.True(t, hasAttempt, "expected log fields to include 'attempt'")
+	assert.True(t, hasDelay, "expected log fields to include 'delay'")
 }

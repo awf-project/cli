@@ -147,6 +147,253 @@ func TestTemplateResolver_States(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// StepStateData.Response Tests (C018-T004)
+// =============================================================================
+
+func TestTemplateResolver_StepStateDataResponse(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		states   map[string]interpolation.StepStateData
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "response map with string values",
+			template: "result: {{.states.api_call.Response.status}}",
+			states: map[string]interpolation.StepStateData{
+				"api_call": {
+					Output: "success",
+					Response: map[string]any{
+						"status": "completed",
+					},
+				},
+			},
+			want: "result: completed",
+		},
+		{
+			name:     "response map with multiple string fields",
+			template: "user: {{.states.get_user.Response.name}}, role: {{.states.get_user.Response.role}}",
+			states: map[string]interpolation.StepStateData{
+				"get_user": {
+					Output: "fetched",
+					Response: map[string]any{
+						"name": "Alice",
+						"role": "admin",
+					},
+				},
+			},
+			want: "user: Alice, role: admin",
+		},
+		{
+			name:     "response map with nested objects",
+			template: "city: {{.states.get_address.Response.address.city}}",
+			states: map[string]interpolation.StepStateData{
+				"get_address": {
+					Output: "retrieved",
+					Response: map[string]any{
+						"address": map[string]any{
+							"city":    "Seattle",
+							"zipcode": "98101",
+						},
+					},
+				},
+			},
+			want: "city: Seattle",
+		},
+		{
+			name:     "response map with deeply nested objects",
+			template: "value: {{.states.nested_data.Response.level1.level2.value}}",
+			states: map[string]interpolation.StepStateData{
+				"nested_data": {
+					Output: "ok",
+					Response: map[string]any{
+						"level1": map[string]any{
+							"level2": map[string]any{
+								"value": "deep",
+							},
+						},
+					},
+				},
+			},
+			want: "value: deep",
+		},
+		{
+			name:     "nil response handling",
+			template: "{{.states.no_response.Output}}",
+			states: map[string]interpolation.StepStateData{
+				"no_response": {
+					Output:   "plain output",
+					Response: nil,
+				},
+			},
+			want: "plain output",
+		},
+		{
+			name:     "empty response map",
+			template: "output: {{.states.empty_resp.Output}}",
+			states: map[string]interpolation.StepStateData{
+				"empty_resp": {
+					Output:   "has output",
+					Response: map[string]any{},
+				},
+			},
+			want: "output: has output",
+		},
+		{
+			name:     "response with numeric values",
+			template: "count: {{.states.counter.Response.count}}, score: {{.states.counter.Response.score}}",
+			states: map[string]interpolation.StepStateData{
+				"counter": {
+					Output: "counted",
+					Response: map[string]any{
+						"count": 42,
+						"score": 98.5,
+					},
+				},
+			},
+			want: "count: 42, score: 98.5",
+		},
+		{
+			name:     "response with boolean values",
+			template: "success: {{.states.check.Response.success}}, enabled: {{.states.check.Response.enabled}}",
+			states: map[string]interpolation.StepStateData{
+				"check": {
+					Output: "checked",
+					Response: map[string]any{
+						"success": true,
+						"enabled": false,
+					},
+				},
+			},
+			want: "success: true, enabled: false",
+		},
+		{
+			name:     "response with array values",
+			template: "tags: {{index .states.tags.Response.tags 0}}, {{index .states.tags.Response.tags 1}}",
+			states: map[string]interpolation.StepStateData{
+				"tags": {
+					Output: "listed",
+					Response: map[string]any{
+						"tags": []string{"urgent", "bug"},
+					},
+				},
+			},
+			want: "tags: urgent, bug",
+		},
+		{
+			name:     "response with mixed types",
+			template: "id: {{.states.entity.Response.id}}, name: {{.states.entity.Response.name}}, active: {{.states.entity.Response.active}}",
+			states: map[string]interpolation.StepStateData{
+				"entity": {
+					Output: "entity data",
+					Response: map[string]any{
+						"id":     123,
+						"name":   "Service",
+						"active": true,
+					},
+				},
+			},
+			want: "id: 123, name: Service, active: true",
+		},
+		{
+			name:     "undefined response field",
+			template: "{{.states.api_call.Response.missing}}",
+			states: map[string]interpolation.StepStateData{
+				"api_call": {
+					Output:   "success",
+					Response: map[string]any{"status": "ok"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "accessing response on step without response data",
+			template: "{{.states.plain_step.Response.field}}",
+			states: map[string]interpolation.StepStateData{
+				"plain_step": {
+					Output:   "plain",
+					Response: nil,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "combined output and response access",
+			template: "output: {{.states.combined.Output}}, status: {{.states.combined.Response.status}}",
+			states: map[string]interpolation.StepStateData{
+				"combined": {
+					Output: "command result",
+					Response: map[string]any{
+						"status": "success",
+					},
+				},
+			},
+			want: "output: command result, status: success",
+		},
+		{
+			name:     "response with null value",
+			template: "value: {{.states.nullable.Response.optional}}",
+			states: map[string]interpolation.StepStateData{
+				"nullable": {
+					Output: "ok",
+					Response: map[string]any{
+						"optional": nil,
+					},
+				},
+			},
+			want: "value: <no value>",
+		},
+		{
+			name:     "response with empty string value",
+			template: "value=[{{.states.empty_str.Response.field}}]",
+			states: map[string]interpolation.StepStateData{
+				"empty_str": {
+					Output: "ok",
+					Response: map[string]any{
+						"field": "",
+					},
+				},
+			},
+			want: "value=[]",
+		},
+		{
+			name:     "response with zero numeric values",
+			template: "count: {{.states.zeros.Response.count}}, score: {{.states.zeros.Response.score}}",
+			states: map[string]interpolation.StepStateData{
+				"zeros": {
+					Output: "ok",
+					Response: map[string]any{
+						"count": 0,
+						"score": 0.0,
+					},
+				},
+			},
+			want: "count: 0, score: 0",
+		},
+	}
+
+	resolver := interpolation.NewTemplateResolver()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			ctx.States = tt.states
+
+			got, err := resolver.Resolve(tt.template, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestTemplateResolver_Workflow(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -407,9 +654,10 @@ func TestTemplateResolver_EdgeCases(t *testing.T) {
 			for k, v := range tt.inputs {
 				ctx.Inputs[k] = v
 			}
+			expected := tt.want
 			if tt.name == "mixed namespaces" {
 				ctx.Workflow.Name = "test-workflow"
-				tt.want = "value - test-workflow"
+				expected = "value - test-workflow"
 			}
 
 			got, err := resolver.Resolve(tt.template, ctx)
@@ -420,7 +668,7 @@ func TestTemplateResolver_EdgeCases(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, expected, got)
 		})
 	}
 }
@@ -2620,6 +2868,774 @@ func TestTemplateResolver_AutomaticSerialization_PointerTypes(t *testing.T) {
 			} else {
 				assert.JSONEq(t, tt.want, got, "Pointer should be dereferenced and serialized")
 			}
+		})
+	}
+}
+
+// =============================================================================
+// Component T006: Expression Namespace Tests
+// =============================================================================
+
+// =============================================================================
+// StepStateData.Tokens Tests (C018-T005)
+// =============================================================================
+
+func TestTemplateResolver_StepStateDataTokens(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		states   map[string]interpolation.StepStateData
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "tokens integer access",
+			template: "tokens: {{.states.agent_step.Tokens}}",
+			states: map[string]interpolation.StepStateData{
+				"agent_step": {Tokens: 1500},
+			},
+			want: "tokens: 1500",
+		},
+		{
+			name:     "tokens zero value",
+			template: "count: {{.states.empty_step.Tokens}}",
+			states: map[string]interpolation.StepStateData{
+				"empty_step": {Tokens: 0},
+			},
+			want: "count: 0",
+		},
+		{
+			name:     "tokens with other fields",
+			template: "{{.states.api_call.Output}} used {{.states.api_call.Tokens}} tokens",
+			states: map[string]interpolation.StepStateData{
+				"api_call": {
+					Output: "Success",
+					Tokens: 2500,
+				},
+			},
+			want: "Success used 2500 tokens",
+		},
+		{
+			name:     "tokens formatting in template",
+			template: "API call completed with {{.states.step1.Tokens}} tokens (exit {{.states.step1.ExitCode}})",
+			states: map[string]interpolation.StepStateData{
+				"step1": {
+					Tokens:   3200,
+					ExitCode: 0,
+					Status:   "success",
+				},
+			},
+			want: "API call completed with 3200 tokens (exit 0)",
+		},
+		{
+			name:     "multiple steps with tokens",
+			template: "Total: {{.states.step1.Tokens}} + {{.states.step2.Tokens}}",
+			states: map[string]interpolation.StepStateData{
+				"step1": {Tokens: 1000},
+				"step2": {Tokens: 1500},
+			},
+			want: "Total: 1000 + 1500",
+		},
+		{
+			name:     "tokens with response data",
+			template: "Response tokens: {{.states.agent.Tokens}}",
+			states: map[string]interpolation.StepStateData{
+				"agent": {
+					Tokens:   4200,
+					Response: map[string]any{"result": "data"},
+				},
+			},
+			want: "Response tokens: 4200",
+		},
+		{
+			name:     "large token count",
+			template: "tokens={{.states.large.Tokens}}",
+			states: map[string]interpolation.StepStateData{
+				"large": {Tokens: 999999},
+			},
+			want: "tokens=999999",
+		},
+		{
+			name:     "undefined state with tokens",
+			template: "{{.states.nonexistent.Tokens}}",
+			states:   map[string]interpolation.StepStateData{},
+			wantErr:  true,
+		},
+	}
+
+	resolver := interpolation.NewTemplateResolver()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			ctx.States = tt.states
+
+			got, err := resolver.Resolve(tt.template, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// =============================================================================
+// LoopData.Parent Tests (C018-T003)
+// =============================================================================
+
+func TestTemplateResolver_LoopDataParent(t *testing.T) {
+	resolver := interpolation.NewTemplateResolver()
+
+	tests := []struct {
+		name     string
+		template string
+		loop     *interpolation.LoopData
+		want     string
+		wantErr  bool
+	}{
+		// Nil parent - single loop, no nesting
+		{
+			name:     "nil parent - single loop",
+			template: "{{.loop.Index}}",
+			loop: &interpolation.LoopData{
+				Index:  3,
+				Item:   "item3",
+				Parent: nil,
+			},
+			want: "3",
+		},
+		{
+			name:     "nil parent with all fields",
+			template: "{{.loop.Item}} at {{.loop.Index}}",
+			loop: &interpolation.LoopData{
+				Item:   "single-loop",
+				Index:  0,
+				First:  true,
+				Last:   true,
+				Length: 1,
+				Parent: nil,
+			},
+			want: "single-loop at 0",
+		},
+
+		// Single parent - two-level nesting
+		{
+			name:     "parent.Index access",
+			template: "{{.loop.Parent.Index}}",
+			loop: &interpolation.LoopData{
+				Index: 2,
+				Item:  "inner",
+				Parent: &interpolation.LoopData{
+					Index: 5,
+					Item:  "outer",
+				},
+			},
+			want: "5",
+		},
+		{
+			name:     "parent.Item access",
+			template: "{{.loop.Parent.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 1,
+				Item:  "child",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "parent",
+				},
+			},
+			want: "parent",
+		},
+		{
+			name:     "parent.Index1 method access",
+			template: "{{.loop.Parent.Index1}}",
+			loop: &interpolation.LoopData{
+				Index: 2,
+				Item:  "inner",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "outer",
+				},
+			},
+			want: "1",
+		},
+		{
+			name:     "parent and child indexes",
+			template: "outer[{{.loop.Parent.Index}}].inner[{{.loop.Index}}]",
+			loop: &interpolation.LoopData{
+				Index: 3,
+				Item:  "inner-item",
+				Parent: &interpolation.LoopData{
+					Index: 1,
+					Item:  "outer-item",
+				},
+			},
+			want: "outer[1].inner[3]",
+		},
+		{
+			name:     "parent.First flag",
+			template: "{{.loop.Parent.First}}",
+			loop: &interpolation.LoopData{
+				Index: 2,
+				First: false,
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					First: true,
+				},
+			},
+			want: "true",
+		},
+		{
+			name:     "parent.Last flag",
+			template: "{{.loop.Parent.Last}}",
+			loop: &interpolation.LoopData{
+				Index: 1,
+				Last:  false,
+				Parent: &interpolation.LoopData{
+					Index: 4,
+					Last:  true,
+				},
+			},
+			want: "true",
+		},
+		{
+			name:     "parent.Length",
+			template: "{{.loop.Parent.Length}}",
+			loop: &interpolation.LoopData{
+				Index:  0,
+				Length: 5,
+				Parent: &interpolation.LoopData{
+					Index:  2,
+					Length: 10,
+				},
+			},
+			want: "10",
+		},
+
+		// Nested parents - three-level nesting (grandparent access)
+		{
+			name:     "grandparent.Index access",
+			template: "{{.loop.Parent.Parent.Index}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Item:  "level3",
+				Parent: &interpolation.LoopData{
+					Index: 1,
+					Item:  "level2",
+					Parent: &interpolation.LoopData{
+						Index: 2,
+						Item:  "level1",
+					},
+				},
+			},
+			want: "2",
+		},
+		{
+			name:     "grandparent.Item access",
+			template: "{{.loop.Parent.Parent.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Item:  "innermost",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "middle",
+					Parent: &interpolation.LoopData{
+						Index: 0,
+						Item:  "outermost",
+					},
+				},
+			},
+			want: "outermost",
+		},
+		{
+			name:     "grandparent.Index1 method",
+			template: "{{.loop.Parent.Parent.Index1}}",
+			loop: &interpolation.LoopData{
+				Index: 5,
+				Parent: &interpolation.LoopData{
+					Index: 3,
+					Parent: &interpolation.LoopData{
+						Index: 7,
+					},
+				},
+			},
+			want: "8",
+		},
+		{
+			name:     "all three levels - indexes",
+			template: "[{{.loop.Parent.Parent.Index}},{{.loop.Parent.Index}},{{.loop.Index}}]",
+			loop: &interpolation.LoopData{
+				Index: 2,
+				Item:  "c",
+				Parent: &interpolation.LoopData{
+					Index: 1,
+					Item:  "b",
+					Parent: &interpolation.LoopData{
+						Index: 0,
+						Item:  "a",
+					},
+				},
+			},
+			want: "[0,1,2]",
+		},
+		{
+			name:     "all three levels - items",
+			template: "{{.loop.Parent.Parent.Item}}/{{.loop.Parent.Item}}/{{.loop.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Item:  "file.txt",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "subdir",
+					Parent: &interpolation.LoopData{
+						Index: 0,
+						Item:  "rootdir",
+					},
+				},
+			},
+			want: "rootdir/subdir/file.txt",
+		},
+		{
+			name:     "all three levels - 1-based indexes",
+			template: "{{.loop.Parent.Parent.Index1}}.{{.loop.Parent.Index1}}.{{.loop.Index1}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Parent: &interpolation.LoopData{
+						Index: 0,
+					},
+				},
+			},
+			want: "1.1.1",
+		},
+		{
+			name:     "three levels with First/Last flags",
+			template: "L1={{.loop.Parent.Parent.First}},L2={{.loop.Parent.Last}},L3={{.loop.First}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				First: true,
+				Last:  false,
+				Parent: &interpolation.LoopData{
+					Index: 2,
+					First: false,
+					Last:  true,
+					Parent: &interpolation.LoopData{
+						Index: 0,
+						First: true,
+						Last:  false,
+					},
+				},
+			},
+			want: "L1=true,L2=true,L3=true",
+		},
+
+		// Complex item types with parent
+		// Note: Parent.Item doesn't get serialized automatically, only the current loop.Item does
+		{
+			name:     "parent with map item (Go format)",
+			template: "{{.loop.Parent.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Item:  "child",
+				Parent: &interpolation.LoopData{
+					Index: 1,
+					Item: map[string]any{
+						"name": "parent-map",
+						"id":   42,
+					},
+				},
+			},
+			want: `map[id:42 name:parent-map]`,
+		},
+		{
+			name:     "parent with slice item (Go format)",
+			template: "{{.loop.Parent.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Item:  "child",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  []string{"a", "b", "c"},
+				},
+			},
+			want: `[a b c]`,
+		},
+		{
+			name:     "parent with string item",
+			template: "{{.loop.Parent.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 1,
+				Item:  "child-item",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "parent-item",
+				},
+			},
+			want: "parent-item",
+		},
+
+		// Conditional usage with parent
+		{
+			name:     "conditional on parent.First",
+			template: "{{if .loop.Parent.First}}FIRST{{else}}NOT-FIRST{{end}}",
+			loop: &interpolation.LoopData{
+				Index: 2,
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					First: true,
+				},
+			},
+			want: "FIRST",
+		},
+		{
+			name:     "conditional on parent.Last",
+			template: "{{if .loop.Parent.Last}}LAST{{else}}NOT-LAST{{end}}",
+			loop: &interpolation.LoopData{
+				Index: 1,
+				Parent: &interpolation.LoopData{
+					Index: 5,
+					Last:  true,
+				},
+			},
+			want: "LAST",
+		},
+
+		// Realistic nested loop templates
+		{
+			name:     "nested loop progress indicator",
+			template: "Processing {{.loop.Parent.Index1}}/{{.loop.Parent.Length}}: {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})",
+			loop: &interpolation.LoopData{
+				Item:   "task-3",
+				Index:  2,
+				Length: 5,
+				Parent: &interpolation.LoopData{
+					Index:  4,
+					Length: 10,
+				},
+			},
+			want: "Processing 5/10: task-3 (3/5)",
+		},
+		{
+			name:     "nested file path construction",
+			template: "{{.loop.Parent.Item}}/{{.loop.Item}}",
+			loop: &interpolation.LoopData{
+				Index: 1,
+				Item:  "file.go",
+				Parent: &interpolation.LoopData{
+					Index: 0,
+					Item:  "pkg/interpolation",
+				},
+			},
+			want: "pkg/interpolation/file.go",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			ctx.Loop = tt.loop
+
+			got, err := resolver.Resolve(tt.template, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestLoopData_ParentChain tests the parent chain structure directly
+func TestLoopData_ParentChain(t *testing.T) {
+	// Three-level nesting
+	level1 := &interpolation.LoopData{
+		Item:   "level1",
+		Index:  0,
+		First:  true,
+		Last:   false,
+		Length: 3,
+		Parent: nil,
+	}
+
+	level2 := &interpolation.LoopData{
+		Item:   "level2",
+		Index:  1,
+		First:  false,
+		Last:   false,
+		Length: 5,
+		Parent: level1,
+	}
+
+	level3 := &interpolation.LoopData{
+		Item:   "level3",
+		Index:  2,
+		First:  false,
+		Last:   true,
+		Length: 4,
+		Parent: level2,
+	}
+
+	// Verify level3 can access level2
+	assert.NotNil(t, level3.Parent)
+	assert.Equal(t, "level2", level3.Parent.Item)
+	assert.Equal(t, 1, level3.Parent.Index)
+	assert.Equal(t, 2, level3.Parent.Index1())
+
+	// Verify level3 can access level1 through level2
+	assert.NotNil(t, level3.Parent.Parent)
+	assert.Equal(t, "level1", level3.Parent.Parent.Item)
+	assert.Equal(t, 0, level3.Parent.Parent.Index)
+	assert.Equal(t, 1, level3.Parent.Parent.Index1())
+
+	// Verify level1 has no parent
+	assert.Nil(t, level1.Parent)
+
+	// Verify level2 parent chain
+	assert.NotNil(t, level2.Parent)
+	assert.Nil(t, level2.Parent.Parent)
+}
+
+// TestLoopData_ParentWithComplexItems tests parent with various item types
+func TestLoopData_ParentWithComplexItems(t *testing.T) {
+	tests := []struct {
+		name       string
+		parentItem any
+		childItem  any
+	}{
+		{
+			name:       "parent map, child string",
+			parentItem: map[string]any{"key": "value", "count": 10},
+			childItem:  "child-string",
+		},
+		{
+			name:       "parent slice, child map",
+			parentItem: []int{1, 2, 3},
+			childItem:  map[string]string{"name": "child"},
+		},
+		{
+			name:       "parent struct, child slice",
+			parentItem: struct{ Name string }{"parent-struct"},
+			childItem:  []string{"a", "b"},
+		},
+		{
+			name:       "both maps",
+			parentItem: map[string]int{"x": 1},
+			childItem:  map[string]string{"y": "2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parent := &interpolation.LoopData{
+				Item:  tt.parentItem,
+				Index: 0,
+			}
+
+			child := &interpolation.LoopData{
+				Item:   tt.childItem,
+				Index:  1,
+				Parent: parent,
+			}
+
+			assert.Equal(t, tt.childItem, child.Item)
+			assert.Equal(t, tt.parentItem, child.Parent.Item)
+			assert.Equal(t, 0, child.Parent.Index)
+			assert.Equal(t, 1, child.Index)
+		})
+	}
+}
+
+// TestTemplateResolver_LoopDataParent_ErrorCases tests error conditions
+func TestTemplateResolver_LoopDataParent_ErrorCases(t *testing.T) {
+	resolver := interpolation.NewTemplateResolver()
+
+	tests := []struct {
+		name     string
+		template string
+		loop     *interpolation.LoopData
+		wantErr  bool
+	}{
+		{
+			name:     "access parent when nil",
+			template: "{{.loop.Parent.Index}}",
+			loop: &interpolation.LoopData{
+				Index:  0,
+				Parent: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name:     "access grandparent when parent.parent is nil",
+			template: "{{.loop.Parent.Parent.Index}}",
+			loop: &interpolation.LoopData{
+				Index: 0,
+				Parent: &interpolation.LoopData{
+					Index:  1,
+					Parent: nil,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "access parent when loop is nil",
+			template: "{{.loop.Parent.Index}}",
+			loop:     nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			ctx.Loop = tt.loop
+
+			_, err := resolver.Resolve(tt.template, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Component T006: Expression Namespace Tests
+// =============================================================================
+
+// TestTemplateResolver_ExpressionNamespaces tests lowercase expression namespace access
+// for loop, context, and error namespaces
+func TestTemplateResolver_ExpressionNamespaces(t *testing.T) {
+	resolver := interpolation.NewTemplateResolver()
+
+	tests := []struct {
+		name     string
+		template string
+		setup    func(*interpolation.Context)
+		want     string
+		wantErr  bool
+	}{
+		// Loop namespace expressions
+		{
+			name:     "loop.index expression",
+			template: "index: {{loop.index}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Loop = &interpolation.LoopData{Index: 5}
+			},
+			want: "index: 5",
+		},
+		{
+			name:     "loop.first boolean",
+			template: "first: {{loop.first}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Loop = &interpolation.LoopData{First: true}
+			},
+			want: "first: true",
+		},
+		{
+			name:     "loop.last boolean",
+			template: "last: {{loop.last}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Loop = &interpolation.LoopData{Last: false}
+			},
+			want: "last: false",
+		},
+
+		// Context namespace expressions
+		{
+			name:     "context.working_dir",
+			template: "dir: {{context.working_dir}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Context.WorkingDir = "/home/user/project"
+			},
+			want: "dir: /home/user/project",
+		},
+		{
+			name:     "context.user",
+			template: "user: {{context.user}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Context.User = "alice"
+			},
+			want: "user: alice",
+		},
+		{
+			name:     "context.hostname",
+			template: "host: {{context.hostname}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Context.Hostname = "server-01"
+			},
+			want: "host: server-01",
+		},
+
+		// Error namespace expressions
+		{
+			name:     "error.message",
+			template: "error: {{error.message}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Error = &interpolation.ErrorData{
+					Message: "command failed",
+				}
+			},
+			want: "error: command failed",
+		},
+		{
+			name:     "error.exit_code",
+			template: "code: {{error.exit_code}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Error = &interpolation.ErrorData{
+					ExitCode: 127,
+				}
+			},
+			want: "code: 127",
+		},
+		{
+			name:     "error.type",
+			template: "type: {{error.type}}",
+			setup: func(ctx *interpolation.Context) {
+				ctx.Error = &interpolation.ErrorData{
+					Type: "execution_error",
+				}
+			},
+			want: "type: execution_error",
+		},
+
+		// Missing namespace tests
+		{
+			name:     "missing loop context",
+			template: "{{loop.index}}",
+			setup:    func(ctx *interpolation.Context) {},
+			wantErr:  true,
+		},
+		{
+			name:     "missing error context",
+			template: "{{error.message}}",
+			setup:    func(ctx *interpolation.Context) {},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := interpolation.NewContext()
+			tt.setup(ctx)
+
+			got, err := resolver.Resolve(tt.template, ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
