@@ -31,6 +31,9 @@ storage/states/
 storage/logs/
 storage/history.db
 
+# Workflow files
+/audit
+
 # Temporary files
 *.tmp
 *.bak

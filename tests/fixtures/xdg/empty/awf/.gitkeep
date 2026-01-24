@@ -1,2 +1,0 @@
-# This directory simulates an empty $XDG_CONFIG_HOME/awf/ state
-# Used for testing `awf init --global` when no prompts exist yet
