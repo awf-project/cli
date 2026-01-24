@@ -108,6 +108,10 @@ func createSchema(db *sql.DB) error {
 
 // Record stores a workflow execution record.
 func (s *SQLiteHistoryStore) Record(ctx context.Context, record *workflow.ExecutionRecord) error {
+	if record == nil {
+		return errors.New("record cannot be nil")
+	}
+
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -294,6 +298,11 @@ func (s *SQLiteHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 		return 0, errors.New("store is closed")
 	}
 	s.mu.RUnlock()
+
+	// Negative duration doesn't make sense for cleanup - return early
+	if olderThan < 0 {
+		return 0, nil
+	}
 
 	cutoff := time.Now().Add(-olderThan)
 	cutoffNs := cutoff.UnixNano()

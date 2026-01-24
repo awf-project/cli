@@ -59,33 +59,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **[C013]** Split 3 large domain test files (4,317 LOC total) into 11 focused test modules organized by functionality
-- **[C013]** Deleted `step_test.go` (1,615 lines) → split into 4 files: `step_command_test.go`, `step_parallel_test.go`, `step_loop_test.go`, `step_agent_test.go`
-- **[C013]** Split `agent_config_test.go` (1,819 lines) → split into 3 files: `agent_config_config_test.go`, `agent_config_result_test.go`, `agent_config_conversation_test.go` (retained 169-line stub)
-- **[C013]** Created `domain_test_helpers_test.go` (5.7K) with shared test utilities to prevent duplication across split files
-- **[C013]** All 170 original tests preserved across reorganized files; each new file <600 lines for improved maintainability
-- **[C012]** Created `ServiceTestHarness` in `internal/application/testutil_test.go` with fluent API for test setup
-- **[C012]** Reduced test boilerplate by 29% (13,676→9,753 LOC) across 3 test files via harness consolidation
-- **[C012]** Replaced 200+ repetitive mock setup patterns with 3-line harness chains (71% setup reduction)
-- **[C012]** Added comprehensive functional test suite (18 tests) validating end-to-end workflows across all harness features:
-  - 12 core functional tests in `testutil_harness_functional_test.go` (workflows, inputs, retry, parallel, subworkflows, error handling)
-  - 6 advanced functional tests in `testutil_harness_advanced_functional_test.go` (hooks, custom state stores, custom executors, thread safety)
-- **[C011]** Added 4 integration test suites (1430 LOC): hooks lifecycle, input validation, secret masking, CLI exit codes
-- **[C011]** Created 9 YAML fixtures (345 LOC) for hooks, validation, secrets, and exit code test scenarios
-- **[C011]** Fixed `MaskText()` never invoked in shell executor; hook failures not enforced; error.type missing
-- **[C010]** Added `signal_test.go` (690 LOC): SIGINT/SIGTERM graceful shutdown, state preservation, parallel cancellation
-- **[C010]** Created 3 signal test fixtures; added state checkpointing on workflow cancellation in ExecutionService
-- **[C009]** Added `parallel_test.go` (948 LOC): all_succeed/any_succeed/best_effort strategies with timing assertions
-- **[C009]** Fixed race condition in ExecutionContext with RWMutex; added `GetAllStepStates()` thread-safe iterator
-- **[C008]** Split 1,923-line `execution_service_test.go` into 6 thematic files (core/hooks/loop/parallel/retry)
-- **[C007]** Migrated 359 `os.Setenv` to `t.Setenv()`; created `internal/testutil` with 7 mocks and fluent builders
-- **[C007]** Added fixture factories (Simple/Linear/Parallel/Loop/ConversationWorkflow); 93% test setup reduction
-- **[C006]** Reduced `ExecuteConversation` 29→18, `executeStep` 29→18 via pipeline and handler extraction
-- **[C005]** Reduced `expandStep` 23→18, `executeStep` 22→18, `executeAnySucceed` 22→18 via helper extraction
-- **[C004]** Reduced CLI complexity 116→60 points: `formatStep`, `generateEdges`, `writeValidationResultTable`
-- **[C003]** Reduced graph complexity via `visitState` enum and extracted helpers (27/23→≤20)
-- **[C002]** Created `helpers.go` with shared `estimateTokens`, `cloneState`; eliminated 8 duplicated functions
-- **[C001]** Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
+- **C016** Added comprehensive unit tests for input validation and state persistence layers
+  - Input validation tests: Pattern matching, enum constraints, min/max bounds, file existence checks
+  - SQLite History Store tests (2,082 lines): CRUD operations, error paths, edge cases, nil handling, concurrent access (20-goroutine stress tests)
+  - JSON Store corruption recovery tests: Empty files, whitespace-only, truncated JSON, invalid UTF-8, null bytes, excessive nesting, duplicate keys, mixed line endings, very large files (10MB), trailing garbage
+  - JSON Store concurrent access tests: 20-goroutine concurrent read validation
+  - Interface compliance checks: Compile-time assertions for all 5 testutil mocks
+  - Fixed nil record validation in SQLiteHistoryStore.Record() preventing segmentation fault
+  - Enabled StopCondition syntax validation in ConversationConfig (previously skipped test)
+
+- **C013** Split large domain test files into focused modules
+  - Split 3 large domain test files (4,317 LOC total) into 11 focused test modules organized by functionality
+  - Deleted `step_test.go` (1,615 lines) → split into 4 files: `step_command_test.go`, `step_parallel_test.go`, `step_loop_test.go`, `step_agent_test.go`
+  - Split `agent_config_test.go` (1,819 lines) → split into 3 files: `agent_config_config_test.go`, `agent_config_result_test.go`, `agent_config_conversation_test.go` (retained 169-line stub)
+  - Created `domain_test_helpers_test.go` (5.7K) with shared test utilities to prevent duplication across split files
+  - All 170 original tests preserved across reorganized files; each new file <600 lines for improved maintainability
+
+- **C012** Created ServiceTestHarness for fluent test setup
+  - Created `ServiceTestHarness` in `internal/application/testutil_test.go` with fluent API for test setup
+  - Reduced test boilerplate by 29% (13,676→9,753 LOC) across 3 test files via harness consolidation
+  - Replaced 200+ repetitive mock setup patterns with 3-line harness chains (71% setup reduction)
+  - Added comprehensive functional test suite (18 tests) validating end-to-end workflows:
+
+- **C011** Added integration test suites for hooks, validation, secrets, and CLI
+  - Added 4 integration test suites (1430 LOC): hooks lifecycle, input validation, secret masking, CLI exit codes
+  - Created 9 YAML fixtures (345 LOC) for hooks, validation, secrets, and exit code test scenarios
+  - Fixed `MaskText()` never invoked in shell executor; hook failures not enforced; error.type missing
+
+- **C010** Added signal handling tests
+  - Added `signal_test.go` (690 LOC): SIGINT/SIGTERM graceful shutdown, state preservation, parallel cancellation
+  - Created 3 signal test fixtures; added state checkpointing on workflow cancellation in ExecutionService
+
+- **C009** Added parallel execution tests and fixed race condition
+  - Added `parallel_test.go` (948 LOC): all_succeed/any_succeed/best_effort strategies with timing assertions
+  - Fixed race condition in ExecutionContext with RWMutex; added `GetAllStepStates()` thread-safe iterator
+
+- **C008** Split execution_service_test.go into thematic files
+  - Split 1,923-line `execution_service_test.go` into 6 thematic files (core/hooks/loop/parallel/retry)
+
+- **C007** Modernized test infrastructure
+  - Migrated 359 `os.Setenv` to `t.Setenv()`; created `internal/testutil` with 7 mocks and fluent builders
+  - Added fixture factories (Simple/Linear/Parallel/Loop/ConversationWorkflow); 93% test setup reduction
+
+- **C006** Reduced cognitive complexity in conversation and step execution
+  - Reduced `ExecuteConversation` 29→18, `executeStep` 29→18 via pipeline and handler extraction
+
+- **C005** Reduced cognitive complexity in step expansion and parallel execution
+  - Reduced `expandStep` 23→18, `executeStep` 22→18, `executeAnySucceed` 22→18 via helper extraction
+
+- **C004** Reduced CLI cognitive complexity
+  - Reduced CLI complexity 116→60 points: `formatStep`, `generateEdges`, `writeValidationResultTable`
+
+- **C003** Reduced graph traversal complexity
+  - Reduced graph complexity via `visitState` enum and extracted helpers (27/23→≤20)
+
+- **C002** Created shared helpers to eliminate duplication
+  - Created `helpers.go` with shared `estimateTokens`, `cloneState`; eliminated 8 duplicated functions
+
+- **C001** Reduced validation complexity
+  - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
 - **F049**: Storage Directory Documentation Mismatch

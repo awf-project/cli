@@ -322,10 +322,6 @@ func TestConversationConfig_Validate_Strategies(t *testing.T) {
 }
 
 func TestConversationConfig_Validate_StopConditions(t *testing.T) {
-	// TODO(F033): Implement stop condition expression parser and validation
-	// Current implementation accepts all strings; validation will be added in expression evaluator component
-	t.Skip("Stop condition syntax validation not yet implemented - requires expression parser")
-
 	tests := []struct {
 		name      string
 		condition string
