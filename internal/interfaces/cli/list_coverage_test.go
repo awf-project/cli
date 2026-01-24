@@ -8,251 +8,188 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/interfaces/cli"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // These tests focus on code coverage, not strict behavior validation
 
-func setupWorkflows(t *testing.T, workflows map[string]string) func() {
-	t.Helper()
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
-	for name, content := range workflows {
-		require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0o644))
-	}
-	require.NoError(t, os.Chdir(tmpDir))
-	return func() { _ = os.Chdir(origDir) }
-}
-
 func TestList_TextFormat(t *testing.T) {
-	wfs := map[string]string{"test": simpleWF, "test2": fullWF}
-	cleanup := setupWorkflows(t, wfs)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML, "test2": testutil.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list"})
+	cmd.SetArgs([]string{"list", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_JSONFormat(t *testing.T) {
-	wfs := map[string]string{"test": simpleWF}
-	cleanup := setupWorkflows(t, wfs)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "--format", "json"})
+	cmd.SetArgs([]string{"list", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_QuietFormat(t *testing.T) {
-	wfs := map[string]string{"test": simpleWF}
-	cleanup := setupWorkflows(t, wfs)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "--format", "quiet"})
+	cmd.SetArgs([]string{"list", "--format", "quiet", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_TableFormat(t *testing.T) {
-	wfs := map[string]string{"test": fullWF}
-	cleanup := setupWorkflows(t, wfs)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "--format", "table"})
+	cmd.SetArgs([]string{"list", "--format", "table", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_VerboseFlag(t *testing.T) {
-	wfs := map[string]string{"test": simpleWF}
-	cleanup := setupWorkflows(t, wfs)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "--verbose"})
+	cmd.SetArgs([]string{"list", "--verbose", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_NoWorkflows(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list"})
+	cmd.SetArgs([]string{"list", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_NoWorkflowsJSON(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "--format", "json"})
+	cmd.SetArgs([]string{"list", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestList_BrokenWorkflow(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	workflowsDir := filepath.Join(dir, ".awf", "workflows")
 	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "broken.yaml"), []byte("name: broken\nstates:\n  bad: [[["), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list"})
+	cmd.SetArgs([]string{"list", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 // === list prompts ===
 
 func TestListPrompts_NoDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := t.TempDir()
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts"})
+	cmd.SetArgs([]string{"list", "prompts", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_NoDirectoryJSON(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := t.TempDir()
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts", "--format", "json"})
+	cmd.SetArgs([]string{"list", "prompts", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_EmptyDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
-
-	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	dir := testutil.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts"})
+	cmd.SetArgs([]string{"list", "prompts", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_WithFiles(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test content"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts"})
+	cmd.SetArgs([]string{"list", "prompts", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_JSONFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts", "--format", "json"})
+	cmd.SetArgs([]string{"list", "prompts", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_TableFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts", "--format", "table"})
+	cmd.SetArgs([]string{"list", "prompts", "--format", "table", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_QuietFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
-	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts", "--format", "quiet"})
+	cmd.SetArgs([]string{"list", "prompts", "--format", "quiet", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestListPrompts_NestedFiles(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
-	nestedDir := filepath.Join(tmpDir, ".awf", "prompts", "sub", "nested")
+	nestedDir := filepath.Join(dir, ".awf", "prompts", "sub", "nested")
 	require.NoError(t, os.MkdirAll(nestedDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(nestedDir, "test.md"), []byte("test"), 0o644))
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"list", "prompts"})
+	cmd.SetArgs([]string{"list", "prompts", "--storage", dir})
 	_ = cmd.Execute()
 }

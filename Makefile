@@ -68,7 +68,7 @@ test-unit:
 
 # Integration tests (real CLI calls - slow)
 test-integration:
-	go test -v -tags=integration ./internal/infrastructure/agents/... ./tests/integration/...
+	go test -v -tags=integration ./internal/infrastructure/agents/... ./tests/integration/cli/...
 
 # All tests including integration (slow - requires CLI tools installed)
 test-all:

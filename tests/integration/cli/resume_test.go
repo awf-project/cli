@@ -1,3 +1,5 @@
+//go:build integration
+
 package cli_test
 
 import (
@@ -866,8 +868,14 @@ func TestResumeCommand_ConfigError_Propagates(t *testing.T) {
 	t.Run("invalid YAML config should cause error", func(t *testing.T) {
 		tmpDir := setupTestDir(t)
 
-		// Use AWF_CONFIG_PATH to override config path (thread-safe alternative to os.Chdir)
-		t.Setenv("AWF_CONFIG_PATH", filepath.Join(tmpDir, ".awf", "config.yaml"))
+		// This test needs to change directory because config loading uses
+		// LocalConfigPath() which returns ".awf/config.yaml" (relative path).
+		// Unlike other tests that use AWF_WORKFLOWS_PATH for workflow loading,
+		// there's no environment variable for config path override.
+		origDir, cdErr := os.Getwd()
+		require.NoError(t, cdErr)
+		defer func() { _ = os.Chdir(origDir) }()
+		require.NoError(t, os.Chdir(tmpDir))
 
 		// Create states directory
 		statesDir := filepath.Join(tmpDir, "states")

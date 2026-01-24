@@ -1,4 +1,4 @@
-package cli_test
+package cli
 
 import (
 	"os"
@@ -10,12 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := cli.DefaultConfig()
+	cfg := DefaultConfig()
 
 	if cfg.Verbose {
 		t.Error("expected Verbose to be false by default")
@@ -32,19 +31,19 @@ func TestDefaultConfig(t *testing.T) {
 	if !strings.Contains(cfg.StoragePath, "awf") {
 		t.Errorf("expected StoragePath to contain 'awf', got '%s'", cfg.StoragePath)
 	}
-	if cfg.OutputMode != cli.OutputSilent {
+	if cfg.OutputMode != OutputSilent {
 		t.Errorf("expected OutputMode to be silent by default, got %v", cfg.OutputMode)
 	}
 }
 
 func TestOutputMode_String(t *testing.T) {
 	tests := []struct {
-		mode cli.OutputMode
+		mode OutputMode
 		want string
 	}{
-		{cli.OutputSilent, "silent"},
-		{cli.OutputStreaming, "streaming"},
-		{cli.OutputBuffered, "buffered"},
+		{OutputSilent, "silent"},
+		{OutputStreaming, "streaming"},
+		{OutputBuffered, "buffered"},
 	}
 
 	for _, tt := range tests {
@@ -55,19 +54,19 @@ func TestOutputMode_String(t *testing.T) {
 func TestParseOutputMode(t *testing.T) {
 	tests := []struct {
 		input   string
-		want    cli.OutputMode
+		want    OutputMode
 		wantErr bool
 	}{
-		{"silent", cli.OutputSilent, false},
-		{"streaming", cli.OutputStreaming, false},
-		{"buffered", cli.OutputBuffered, false},
-		{"invalid", cli.OutputSilent, true},
-		{"", cli.OutputSilent, true},
+		{"silent", OutputSilent, false},
+		{"streaming", OutputStreaming, false},
+		{"buffered", OutputBuffered, false},
+		{"invalid", OutputSilent, true},
+		{"", OutputSilent, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got, err := cli.ParseOutputMode(tt.input)
+			got, err := ParseOutputMode(tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -131,14 +130,14 @@ func TestParseOutputFormat(t *testing.T) {
 func TestBuildPromptPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
 	// BuildPromptPaths should return exactly 2 paths: local and global
 	// (no AWF_PROMPTS_PATH env var support per ADR-002)
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2, "BuildPromptPaths should return exactly 2 paths (local + global)")
 }
 
 func TestBuildPromptPaths_LocalPathFirst(t *testing.T) {
 	// FR-001: Local prompts have highest priority
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	assert.Equal(t, repository.SourceLocal, paths[0].Source, "First path should be local source")
@@ -147,7 +146,7 @@ func TestBuildPromptPaths_LocalPathFirst(t *testing.T) {
 
 func TestBuildPromptPaths_GlobalPathSecond(t *testing.T) {
 	// FR-001: Global prompts are searched after local
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	assert.Equal(t, repository.SourceGlobal, paths[1].Source, "Second path should be global source")
@@ -157,7 +156,7 @@ func TestBuildPromptPaths_GlobalPathSecond(t *testing.T) {
 func TestBuildPromptPaths_PriorityOrder(t *testing.T) {
 	// Comprehensive test: verify priority order matches spec FR-001
 	// Order: 1. .awf/prompts/ (local), 2. $XDG_CONFIG_HOME/awf/prompts/ (global)
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 
@@ -180,7 +179,7 @@ func TestBuildPromptPaths_PriorityOrder(t *testing.T) {
 
 func TestBuildPromptPaths_LocalPathIsRelative(t *testing.T) {
 	// Local prompts dir should be relative (project-specific)
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	localPath := paths[0].Path
@@ -193,7 +192,7 @@ func TestBuildPromptPaths_LocalPathIsRelative(t *testing.T) {
 
 func TestBuildPromptPaths_GlobalPathIsAbsolute(t *testing.T) {
 	// Global prompts dir should be absolute (user-level)
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	globalPath := paths[1].Path
@@ -204,7 +203,7 @@ func TestBuildPromptPaths_GlobalPathIsAbsolute(t *testing.T) {
 
 func TestBuildPromptPaths_GlobalPathContainsAwfPrompts(t *testing.T) {
 	// Verify global path structure contains awf/prompts
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	globalPath := paths[1].Path
@@ -221,7 +220,7 @@ func TestBuildPromptPaths_RespectsXDGConfigHome(t *testing.T) {
 	customConfig := "/custom/config/path"
 	t.Setenv("XDG_CONFIG_HOME", customConfig)
 
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	expectedGlobalPath := filepath.Join(customConfig, "awf", "prompts")
@@ -234,7 +233,7 @@ func TestBuildPromptPaths_DefaultsToHomeConfig(t *testing.T) {
 	// Unset XDG_CONFIG_HOME
 	t.Setenv("XDG_CONFIG_HOME", "")
 
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 	homeDir, _ := os.UserHomeDir()
@@ -245,8 +244,8 @@ func TestBuildPromptPaths_DefaultsToHomeConfig(t *testing.T) {
 
 func TestBuildPromptPaths_ConsistentResults(t *testing.T) {
 	// Multiple calls should return consistent results
-	paths1 := cli.BuildPromptPaths()
-	paths2 := cli.BuildPromptPaths()
+	paths1 := BuildPromptPaths()
+	paths2 := BuildPromptPaths()
 
 	require.Len(t, paths1, 2)
 	require.Len(t, paths2, 2)
@@ -261,7 +260,7 @@ func TestBuildPromptPaths_ConsistentResults(t *testing.T) {
 
 func TestBuildPromptPaths_SourcedPathStructure(t *testing.T) {
 	// Verify returned slice contains properly structured SourcedPath values
-	paths := cli.BuildPromptPaths()
+	paths := BuildPromptPaths()
 
 	require.Len(t, paths, 2)
 
@@ -280,8 +279,8 @@ func TestBuildPromptPaths_MirrorsWorkflowPathsPattern(t *testing.T) {
 	// ADR-003: BuildPromptPaths follows same pattern as BuildWorkflowPaths
 	// Both should return paths with same source types in same order (excluding env var)
 
-	promptPaths := cli.BuildPromptPaths()
-	workflowPaths := cli.BuildWorkflowPaths()
+	promptPaths := BuildPromptPaths()
+	workflowPaths := BuildWorkflowPaths()
 
 	// Prompt paths: local, global (2 paths)
 	// Workflow paths: env (if set), local, global (2-3 paths)
@@ -359,7 +358,7 @@ func TestBuildPromptPaths_TableDriven(t *testing.T) {
 			// Save and restore XDG_CONFIG_HOME
 			t.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
 
-			paths := cli.BuildPromptPaths()
+			paths := BuildPromptPaths()
 
 			require.Len(t, paths, 2)
 			assert.Equal(t, tt.expectLocalDir, paths[0].Path)

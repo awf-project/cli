@@ -345,32 +345,59 @@ func TestPluginsDirs_TableDriven(t *testing.T) {
 // =============================================================================
 
 func TestLocalConfigPath(t *testing.T) {
-	got := LocalConfigPath()
-	assert.Equal(t, ".awf/config.yaml", got)
+	tests := []struct {
+		name     string
+		envValue string
+		want     string
+	}{
+		{
+			name:     "uses AWF_CONFIG_PATH when set",
+			envValue: "/custom/project/.awf/config.yaml",
+			want:     "/custom/project/.awf/config.yaml",
+		},
+		{
+			name:     "defaults to .awf/config.yaml when unset",
+			envValue: "",
+			want:     ".awf/config.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("AWF_CONFIG_PATH", tt.envValue)
+
+			got := LocalConfigPath()
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestLocalConfigPath_IsRelative(t *testing.T) {
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
 	got := LocalConfigPath()
 
 	assert.False(t, filepath.IsAbs(got),
-		"LocalConfigPath should be relative, got: %s", got)
+		"LocalConfigPath default should be relative, got: %s", got)
 }
 
 func TestLocalConfigPath_IsUnderAWFDir(t *testing.T) {
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
 	got := LocalConfigPath()
 
 	assert.True(t, strings.HasPrefix(got, ".awf/"),
-		"LocalConfigPath should be under .awf/, got: %s", got)
+		"LocalConfigPath default should be under .awf/, got: %s", got)
 }
 
 func TestLocalConfigPath_HasYAMLExtension(t *testing.T) {
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
 	got := LocalConfigPath()
 
 	assert.Equal(t, ".yaml", filepath.Ext(got),
-		"LocalConfigPath should have .yaml extension, got: %s", filepath.Ext(got))
+		"LocalConfigPath default should have .yaml extension, got: %s", filepath.Ext(got))
 }
 
 func TestLocalConfigPath_IsConfigFile(t *testing.T) {
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
 	got := LocalConfigPath()
 
 	// Extract filename without extension
@@ -378,11 +405,13 @@ func TestLocalConfigPath_IsConfigFile(t *testing.T) {
 	name := strings.TrimSuffix(base, filepath.Ext(base))
 
 	assert.Equal(t, "config", name,
-		"LocalConfigPath filename should be 'config', got: %s", name)
+		"LocalConfigPath default filename should be 'config', got: %s", name)
 }
 
 func TestLocalConfigPath_ConsistentWithLocalDirs(t *testing.T) {
-	// LocalConfigPath should follow same .awf/ pattern as other local paths
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
+
+	// LocalConfigPath default should follow same .awf/ pattern as other local paths
 	configPath := LocalConfigPath()
 	workflowsDir := LocalWorkflowsDir()
 	promptsDir := LocalPromptsDir()
@@ -390,7 +419,7 @@ func TestLocalConfigPath_ConsistentWithLocalDirs(t *testing.T) {
 
 	// All should be under .awf/
 	assert.True(t, strings.HasPrefix(configPath, ".awf/"),
-		"LocalConfigPath should be under .awf/")
+		"LocalConfigPath default should be under .awf/")
 	assert.True(t, strings.HasPrefix(workflowsDir, ".awf/"),
 		"LocalWorkflowsDir should be under .awf/")
 	assert.True(t, strings.HasPrefix(promptsDir, ".awf/"),
@@ -399,8 +428,9 @@ func TestLocalConfigPath_ConsistentWithLocalDirs(t *testing.T) {
 		"LocalPluginsDir should be under .awf/")
 }
 
-func TestLocalConfigPath_DoesNotDependOnEnv(t *testing.T) {
-	// LocalConfigPath should always return the same value regardless of XDG env vars
+func TestLocalConfigPath_DoesNotDependOnXDGEnv(t *testing.T) {
+	// LocalConfigPath default should be independent of XDG env vars
+	// (but can be overridden by AWF_CONFIG_PATH)
 	tests := []struct {
 		name          string
 		xdgConfigHome string
@@ -432,9 +462,9 @@ func TestLocalConfigPath_DoesNotDependOnEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore env
-			defer func() {
-			}()
+			// Clear AWF_CONFIG_PATH to test default behavior
+			t.Setenv("AWF_CONFIG_PATH", "")
+
 			if tt.xdgConfigHome != "" {
 				t.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
 			} else {
@@ -449,19 +479,20 @@ func TestLocalConfigPath_DoesNotDependOnEnv(t *testing.T) {
 
 			got := LocalConfigPath()
 			assert.Equal(t, expected, got,
-				"LocalConfigPath should always return %s regardless of env vars", expected)
+				"LocalConfigPath default should be %s regardless of XDG env vars", expected)
 		})
 	}
 }
 
 func TestLocalConfigPath_DirectoryAndFileSeparation(t *testing.T) {
+	t.Setenv("AWF_CONFIG_PATH", "") // Test default behavior
 	got := LocalConfigPath()
 
 	dir := filepath.Dir(got)
 	file := filepath.Base(got)
 
 	assert.Equal(t, ".awf", dir,
-		"LocalConfigPath directory should be .awf, got: %s", dir)
+		"LocalConfigPath default directory should be .awf, got: %s", dir)
 	assert.Equal(t, "config.yaml", file,
-		"LocalConfigPath file should be config.yaml, got: %s", file)
+		"LocalConfigPath default file should be config.yaml, got: %s", file)
 }

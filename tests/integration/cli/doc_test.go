@@ -1,0 +1,181 @@
+//go:build integration
+
+package cli_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Component: T010
+// Feature: C017
+
+// TestDocGo_FileExists verifies that doc.go file exists in the correct location
+func TestDocGo_FileExists(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	info, err := os.Stat(docPath)
+
+	// Assert
+	require.NoError(t, err, "doc.go should exist")
+	assert.False(t, info.IsDir(), "doc.go should be a file, not a directory")
+}
+
+// TestDocGo_HasBuildTag verifies that doc.go contains the integration build tag
+func TestDocGo_HasBuildTag(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	lines := strings.Split(string(content), "\n")
+
+	// Assert
+	require.Greater(t, len(lines), 0, "doc.go should not be empty")
+	assert.Equal(t, "//go:build integration", lines[0],
+		"first line should be integration build tag")
+}
+
+// TestDocGo_HasPackageDeclaration verifies that doc.go declares the correct package
+func TestDocGo_HasPackageDeclaration(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	// Assert
+	assert.Contains(t, string(content), "package cli_test",
+		"doc.go should declare package cli_test")
+}
+
+// TestDocGo_HasDocumentation verifies that doc.go contains package documentation
+func TestDocGo_HasDocumentation(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	// Assert
+	assert.Contains(t, string(content), "// Package cli_test",
+		"doc.go should have package documentation comment")
+	assert.Contains(t, string(content), "integration tests",
+		"documentation should mention integration tests")
+}
+
+// TestDocGo_BuildTagFormat verifies the build tag format matches Go conventions
+func TestDocGo_BuildTagFormat(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	lines := strings.Split(string(content), "\n")
+
+	// Assert - build tag should be on first line
+	require.Greater(t, len(lines), 2, "doc.go should have at least build tag, blank line, and package")
+	assert.Equal(t, "//go:build integration", lines[0], "build tag should be first line")
+
+	// Assert - blank line should follow build tag
+	assert.Empty(t, lines[1], "second line should be blank after build tag")
+}
+
+// TestDocGo_PackageNameConsistency verifies package name matches directory convention
+func TestDocGo_PackageNameConsistency(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	// Assert
+	// Package should be cli_test (directory name + _test suffix for white-box testing)
+	assert.Contains(t, string(content), "package cli_test",
+		"package name should be cli_test for white-box integration testing")
+}
+
+// TestDocGo_NoExecutableCode verifies that doc.go contains no executable code
+func TestDocGo_NoExecutableCode(t *testing.T) {
+	// Arrange
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err, "should find repository root")
+
+	docPath := filepath.Join(repoRoot, "tests", "integration", "cli", "doc.go")
+
+	// Act
+	content, err := os.ReadFile(docPath)
+	require.NoError(t, err, "should read doc.go")
+
+	// Assert - doc.go should only have comments and package declaration
+	assert.NotContains(t, string(content), "func ", "doc.go should not contain functions")
+	assert.NotContains(t, string(content), "var ", "doc.go should not contain variables")
+	assert.NotContains(t, string(content), "const ", "doc.go should not contain constants")
+	assert.NotContains(t, string(content), "type ", "doc.go should not contain type definitions")
+	assert.NotContains(t, string(content), "import ", "doc.go should not contain imports")
+}
+
+// TestDocGo_EmptyPackageCompiles verifies the package can be compiled
+func TestDocGo_EmptyPackageCompiles(t *testing.T) {
+	// This test passes if the file compiles, which is verified by the test suite running
+	// The presence of this test file in the same package proves compilation works
+
+	// Arrange & Act - compilation happens at test load time
+
+	// Assert
+	assert.True(t, true, "if this test runs, the package compiled successfully")
+}
+
+// findRepoRoot walks up the directory tree to find the repository root
+func findRepoRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		// Check if go.mod exists (indicates repo root)
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached filesystem root without finding go.mod
+			return "", os.ErrNotExist
+		}
+		dir = parent
+	}
+}

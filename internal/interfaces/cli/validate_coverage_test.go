@@ -2,167 +2,101 @@ package cli_test
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/interfaces/cli"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // These tests focus on code coverage, not strict behavior validation
 
-func setupWorkflow(t *testing.T, name, content string) func() {
-	t.Helper()
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	workflowsDir := filepath.Join(tmpDir, ".awf", "workflows")
-	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(content), 0o644))
-	require.NoError(t, os.Chdir(tmpDir))
-	return func() { _ = os.Chdir(origDir) }
-}
-
-const simpleWF = `name: test
-states:
-  initial: start
-  start:
-    type: step
-    command: echo "test"
-    on_success: done
-  done:
-    type: terminal
-`
-
-const fullWF = `name: test-full
-version: "1.0.0"
-description: Test workflow
-inputs:
-  - name: var1
-    type: string
-    required: true
-  - name: var2
-    type: integer
-    default: 5
-states:
-  initial: step1
-  step1:
-    type: step
-    command: echo "{{inputs.var1}}"
-    on_success: done
-  done:
-    type: terminal
-`
-
-const badWF = `name: bad
-states:
-  initial: start
-  start:
-    type: step
-    command: echo "test"
-    on_success: nonexistent
-  done:
-    type: terminal
-`
-
 func TestValidate_TextFormat(t *testing.T) {
-	cleanup := setupWorkflow(t, "test", simpleWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "test"})
+	cmd.SetArgs([]string{"validate", "test", "--storage", dir})
 	_ = cmd.Execute() // Coverage, don't care about result
 }
 
 func TestValidate_VerboseFormat(t *testing.T) {
-	cleanup := setupWorkflow(t, "test", fullWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "test", "--verbose"})
+	cmd.SetArgs([]string{"validate", "test", "--verbose", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_JSONFormat(t *testing.T) {
-	cleanup := setupWorkflow(t, "test", simpleWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "test", "--format", "json"})
+	cmd.SetArgs([]string{"validate", "test", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_QuietFormat(t *testing.T) {
-	cleanup := setupWorkflow(t, "test", simpleWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "test", "--format", "quiet"})
+	cmd.SetArgs([]string{"validate", "test", "--format", "quiet", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_TableFormat(t *testing.T) {
-	cleanup := setupWorkflow(t, "test", fullWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "test", "--format", "table"})
+	cmd.SetArgs([]string{"validate", "test", "--format", "table", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_InvalidWorkflow(t *testing.T) {
-	cleanup := setupWorkflow(t, "bad", badWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"bad": testutil.BadWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "bad"})
+	cmd.SetArgs([]string{"validate", "bad", "--storage", dir})
 	_ = cmd.Execute() // Will fail, that's expected
 }
 
 func TestValidate_InvalidWorkflowJSON(t *testing.T) {
-	cleanup := setupWorkflow(t, "bad", badWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"bad": testutil.BadWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "bad", "--format", "json"})
+	cmd.SetArgs([]string{"validate", "bad", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_InvalidWorkflowTable(t *testing.T) {
-	cleanup := setupWorkflow(t, "bad", badWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"bad": testutil.BadWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "bad", "--format", "table"})
+	cmd.SetArgs([]string{"validate", "bad", "--format", "table", "--storage", dir})
 	_ = cmd.Execute()
 }
 
 func TestValidate_WorkflowNotFoundJSON(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	os.Chdir(tmpDir)
+	dir := testutil.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "nonexistent", "--format", "json"})
+	cmd.SetArgs([]string{"validate", "nonexistent", "--format", "json", "--storage", dir})
 	_ = cmd.Execute()
 }
 
@@ -179,12 +113,11 @@ states:
   done:
     type: terminal
 `
-	cleanup := setupWorkflow(t, "tmpl", tmplWF)
-	defer cleanup()
+	dir := testutil.SetupWorkflowsDir(t, map[string]string{"tmpl": tmplWF})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"validate", "tmpl"})
+	cmd.SetArgs([]string{"validate", "tmpl", "--storage", dir})
 	_ = cmd.Execute() // Will fail on template, that's coverage
 }

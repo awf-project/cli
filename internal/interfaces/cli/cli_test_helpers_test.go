@@ -37,28 +37,47 @@ func setupTestDir(t *testing.T) string {
 
 	// Set PWD environment variable to the test directory
 	// This makes relative path resolution work without os.Chdir
-	setTestEnv(t, "PWD", tmpDir)
+	t.Setenv("PWD", tmpDir)
 
 	// Set AWF_WORKFLOWS_PATH to point to the test workflows directory
 	// This ensures the CLI loads workflows from the test directory, not the project root
-	setTestEnv(t, "AWF_WORKFLOWS_PATH", workflowsDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowsDir)
 
 	// Set AWF_PROMPTS_PATH to point to the test prompts directory
 	// This ensures the CLI loads prompts from the test directory, not the project root
-	setTestEnv(t, "AWF_PROMPTS_PATH", promptsDir)
+	t.Setenv("AWF_PROMPTS_PATH", promptsDir)
 
 	return tmpDir
 }
 
-// setTestEnv sets an environment variable for the duration of the test.
-// Thread-safe: uses t.Setenv() which is scoped to the test.
+// setupInitTestDir creates an isolated test directory for init command tests.
+// Unlike setupTestDir, this does NOT create the .awf structure, allowing init to create it from scratch.
+// Returns the temporary directory path.
 //
 // Usage:
 //
-//	setTestEnv(t, "AWF_LOG_LEVEL", "debug")
-func setTestEnv(t *testing.T, key, value string) {
+//	tmpDir := setupInitTestDir(t)
+//	// Run init command
+func setupInitTestDir(t *testing.T) string {
 	t.Helper()
-	t.Setenv(key, value)
+
+	tmpDir := t.TempDir()
+
+	// Change to test directory for init command
+	// Note: init command creates .awf relative to current working directory
+	// This is a controlled use of os.Chdir for tests that specifically need it
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to test directory: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origDir)
+	})
+
+	return tmpDir
 }
 
 // createTestWorkflow writes a workflow YAML file to the test directory.
@@ -105,20 +124,6 @@ func TestSetupTestDir(t *testing.T) {
 	pwd := os.Getenv("PWD")
 	if pwd != tmpDir {
 		t.Errorf("expected PWD=%s, got PWD=%s", tmpDir, pwd)
-	}
-}
-
-// TestSetTestEnv verifies the thread-safe environment variable helper.
-// This test validates T002 acceptance criteria: setTestEnv wraps t.Setenv().
-func TestSetTestEnv(t *testing.T) {
-	const testKey = "TEST_CLI_HELPER_VAR"
-	const testValue = "test-value-123"
-
-	setTestEnv(t, testKey, testValue)
-
-	got := os.Getenv(testKey)
-	if got != testValue {
-		t.Errorf("expected %s=%s, got %s=%s", testKey, testValue, testKey, got)
 	}
 }
 

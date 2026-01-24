@@ -16,6 +16,23 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
+// setupConfigTestDir creates a temporary directory for config loading tests.
+// It sets AWF_CONFIG_PATH to the config file path, which is a thread-safe
+// alternative to os.Chdir for tests that need loadProjectConfig().
+//
+// Returns the temporary directory path.
+func setupConfigTestDir(t *testing.T) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	// Set AWF_CONFIG_PATH to override config path (thread-safe alternative to os.Chdir)
+	// This allows loadProjectConfig() to find the config at an absolute path
+	t.Setenv("AWF_CONFIG_PATH", filepath.Join(tmpDir, ".awf", "config.yaml"))
+
+	return tmpDir
+}
+
 // RED Phase: Test stubs for unexported run.go helper functions
 // These tests will compile but fail when run - implementation validation needed
 
@@ -576,8 +593,11 @@ func TestCliLogger_InfoWithContext(t *testing.T) {
 // TestResolvePromptFromPaths tests the multi-path prompt resolution function.
 // This implements T006 - Update resolvePromptInput() to search multiple paths in priority order.
 func TestResolvePromptFromPaths(t *testing.T) {
-	// Base fixture path relative to project root
-	fixtureBase := "tests/fixtures/prompts"
+	// Get project root (3 levels up from internal/interfaces/cli)
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	projectRoot := filepath.Join(origDir, "..", "..", "..")
+	fixtureBase := filepath.Join(projectRoot, "tests/fixtures/prompts")
 
 	tests := []struct {
 		name         string
@@ -718,16 +738,6 @@ func TestResolvePromptFromPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Change to project root for fixture paths to work
-			origDir, err := os.Getwd()
-			require.NoError(t, err)
-
-			// Navigate to project root (3 levels up from internal/interfaces/cli)
-			projectRoot := filepath.Join(origDir, "..", "..", "..")
-			err = os.Chdir(projectRoot)
-			require.NoError(t, err)
-			defer func() { _ = os.Chdir(origDir) }()
-
 			// Call the function under test
 			content, err := resolvePromptFromPaths(tt.relativePath, tt.paths)
 
@@ -1392,11 +1402,8 @@ func TestLoadProjectConfig(t *testing.T) {
 			name: "no config file returns empty config",
 			setupFunc: func(t *testing.T) func() {
 				// Create temp dir and chdir to it (no .awf/config.yaml)
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				_ = setupConfigTestDir(t)
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: nil, // empty config has nil Inputs
 			wantErr:    false,
@@ -1405,9 +1412,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "valid config file with inputs",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				// Create .awf/config.yaml
 				awfDir := filepath.Join(tmpDir, ".awf")
@@ -1423,8 +1428,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: map[string]any{
 				"project": "my-project",
@@ -1437,9 +1441,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "empty config file returns empty config",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
 				require.NoError(t, os.MkdirAll(awfDir, 0o755))
@@ -1449,8 +1451,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: nil,
 			wantErr:    false,
@@ -1459,9 +1460,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "invalid YAML returns error",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
 				require.NoError(t, os.MkdirAll(awfDir, 0o755))
@@ -1476,8 +1475,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantErr:     true,
 			errContains: "parse",
@@ -1486,9 +1484,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "config with only comments returns empty",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
 				require.NoError(t, os.MkdirAll(awfDir, 0o755))
@@ -1502,8 +1498,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: nil,
 			wantErr:    false,
@@ -1512,9 +1507,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "config with empty inputs section",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
 				require.NoError(t, os.MkdirAll(awfDir, 0o755))
@@ -1526,8 +1519,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: nil,
 			wantErr:    false,
@@ -1536,9 +1528,7 @@ func TestLoadProjectConfig(t *testing.T) {
 		{
 			name: "config with various value types",
 			setupFunc: func(t *testing.T) func() {
-				tmpDir := t.TempDir()
-				origDir, err := os.Getwd()
-				require.NoError(t, err)
+				tmpDir := setupConfigTestDir(t)
 
 				awfDir := filepath.Join(tmpDir, ".awf")
 				require.NoError(t, os.MkdirAll(awfDir, 0o755))
@@ -1555,8 +1545,7 @@ func TestLoadProjectConfig(t *testing.T) {
 					0o644,
 				))
 
-				require.NoError(t, os.Chdir(tmpDir))
-				return func() { _ = os.Chdir(origDir) }
+				return func() {} // no-op cleanup, t.Cleanup handles restoration
 			},
 			wantInputs: map[string]any{
 				"string_val": "hello",
@@ -1608,10 +1597,7 @@ func TestLoadProjectConfig(t *testing.T) {
 // xdg.LocalConfigPath() which returns ".awf/config.yaml"
 func TestLoadProjectConfig_UsesCorrectPath(t *testing.T) {
 	// Create temp dir with config at expected path
-	tmpDir := t.TempDir()
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() { _ = os.Chdir(origDir) }()
+	tmpDir := setupConfigTestDir(t)
 
 	// Create .awf/config.yaml at the expected path
 	awfDir := filepath.Join(tmpDir, ".awf")
@@ -1624,8 +1610,6 @@ func TestLoadProjectConfig_UsesCorrectPath(t *testing.T) {
 		[]byte(configContent),
 		0o644,
 	))
-
-	require.NoError(t, os.Chdir(tmpDir))
 
 	logger := newConfigTestLogger()
 	cfg, err := loadProjectConfig(logger)
@@ -1640,11 +1624,7 @@ func TestLoadProjectConfig_UsesCorrectPath(t *testing.T) {
 // accepts a logger parameter (for future warning logging)
 func TestLoadProjectConfig_LoggerParameter(t *testing.T) {
 	// Create temp dir with no config
-	tmpDir := t.TempDir()
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() { _ = os.Chdir(origDir) }()
-	require.NoError(t, os.Chdir(tmpDir))
+	_ = setupConfigTestDir(t)
 
 	// Verify the function accepts a logger and doesn't panic
 	logger := newConfigTestLogger()
