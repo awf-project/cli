@@ -7,7 +7,6 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -24,7 +23,7 @@ type ExecutionServiceBuilder struct {
 	executor   ports.CommandExecutor
 	store      ports.StateStore
 	repository ports.WorkflowRepository
-	registry   *agents.AgentRegistry
+	registry   ports.AgentRegistry
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -81,7 +80,7 @@ func (b *ExecutionServiceBuilder) WithWorkflowRepository(repository ports.Workfl
 
 // WithAgentRegistry configures the agent registry for the ExecutionService.
 // If nil, a default AgentRegistry will be created.
-func (b *ExecutionServiceBuilder) WithAgentRegistry(registry *agents.AgentRegistry) *ExecutionServiceBuilder {
+func (b *ExecutionServiceBuilder) WithAgentRegistry(registry ports.AgentRegistry) *ExecutionServiceBuilder {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.registry = registry

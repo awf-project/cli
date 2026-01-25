@@ -8,6 +8,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 )
 
+// Compile-time assertion that AgentRegistry implements ports.AgentRegistry
+var _ ports.AgentRegistry = (*AgentRegistry)(nil)
+
 // AgentRegistry manages registered agent providers.
 type AgentRegistry struct {
 	mu        sync.RWMutex
@@ -59,6 +62,14 @@ func (r *AgentRegistry) List() []string {
 	}
 
 	return names
+}
+
+// Has checks if a provider with the given name is registered.
+func (r *AgentRegistry) Has(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, exists := r.providers[name]
+	return exists
 }
 
 // RegisterDefaults registers all default providers.
