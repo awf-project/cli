@@ -362,61 +362,6 @@ func TestSetupWorkflowsDir_LargeNumberOfWorkflows(t *testing.T) {
 }
 
 // =============================================================================
-// SimpleWorkflowFromYAML Tests
-// =============================================================================
-
-// TestSimpleWorkflowFromYAML_HappyPath tests parsing SimpleWorkflowYAML constant
-func TestSimpleWorkflowFromYAML_HappyPath(t *testing.T) {
-	// Act
-	result := testutil.SimpleWorkflowFromYAML()
-
-	// Assert
-	// Note: stub returns nil, so test should fail until implementation
-	// When implemented, result should be *workflow.Workflow
-	assert.Nil(t, result, "Stub should return nil (will be *workflow.Workflow when implemented)")
-
-	// TODO: After implementation, verify:
-	// wf, ok := result.(*workflow.Workflow)
-	// require.True(t, ok, "Should return *workflow.Workflow")
-	// assert.Equal(t, "test", wf.Name)
-	// assert.Equal(t, "start", wf.Initial)
-	// assert.Len(t, wf.Steps, 2) // start + done
-}
-
-// TestSimpleWorkflowFromYAML_ReturnsValidWorkflow tests that parsed workflow is valid
-func TestSimpleWorkflowFromYAML_ReturnsValidWorkflow(t *testing.T) {
-	// Act
-	result := testutil.SimpleWorkflowFromYAML()
-
-	// Assert (will fail on stub)
-	assert.Nil(t, result, "Stub returns nil")
-
-	// TODO: After implementation:
-	// wf, ok := result.(*workflow.Workflow)
-	// require.True(t, ok)
-	// err := wf.Validate()
-	// assert.NoError(t, err, "Parsed workflow should be valid")
-}
-
-// TestSimpleWorkflowFromYAML_ReturnsNewInstance tests that each call returns a new instance
-func TestSimpleWorkflowFromYAML_ReturnsNewInstance(t *testing.T) {
-	// Act
-	result1 := testutil.SimpleWorkflowFromYAML()
-	result2 := testutil.SimpleWorkflowFromYAML()
-
-	// Assert (will fail on stub - both nil)
-	assert.Nil(t, result1)
-	assert.Nil(t, result2)
-
-	// TODO: After implementation:
-	// wf1, ok1 := result1.(*workflow.Workflow)
-	// wf2, ok2 := result2.(*workflow.Workflow)
-	// require.True(t, ok1)
-	// require.True(t, ok2)
-	// assert.NotSame(t, wf1, wf2, "Each call should return new instance")
-}
-
-// =============================================================================
 // YAML Constants Tests
 // =============================================================================
 

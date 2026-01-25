@@ -856,7 +856,7 @@ func TestExecutionService_PluginOperation_Timeout(t *testing.T) {
 	execSvc.SetOperationProvider(provider)
 
 	// This test verifies timeout handling is implemented
-	// For now with stub, it will fail with ErrOperationNotImplemented
+	// For now with stub implementation, behavior is limited
 	_, err := execSvc.Run(context.Background(), "op-timeout", nil)
 
 	// GREEN PHASE: When implemented, should either succeed or timeout gracefully

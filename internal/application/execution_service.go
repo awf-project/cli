@@ -1534,11 +1534,6 @@ func (s *ExecutionService) executeFromStep(
 // ErrNoOperationProvider is returned when an operation step is executed without a configured provider.
 var ErrNoOperationProvider = errors.New("operation provider not configured")
 
-// ErrOperationNotImplemented is kept for backward compatibility with tests.
-//
-// Deprecated: This error is no longer returned by the implementation.
-var ErrOperationNotImplemented = errors.New("plugin operation execution: not implemented")
-
 // executePluginOperation executes a plugin-provided operation step.
 // F021: Plugin System - Executes operations registered by plugins.
 // Returns ErrNoOperationProvider if no operation provider is configured.

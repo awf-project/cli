@@ -38,13 +38,6 @@
 //   - WorkflowBuilder: Construct valid workflows with progressive configuration
 //   - StepBuilder: Create workflow steps of any type (command, parallel, terminal)
 //
-// ## Assertions (assertions.go)
-//
-// Domain-specific assertion helpers:
-//   - AssertWorkflowValid: Validate workflow structure and references
-//   - AssertStepOutput: Check execution context contains expected output
-//   - AssertExecutionCompleted: Verify execution reached terminal state
-//
 // ## Fixtures (fixtures.go)
 //
 // Workflow factory functions for common test patterns:
@@ -146,25 +139,6 @@
 //	// Conversation workflow with agent
 //	wf := testutil.ConversationWorkflow("chat-name", "claude-sonnet", "openai")
 //
-// ## Assertion Helpers
-//
-// Validate workflows and execution results:
-//
-//	// Validate workflow structure
-//	testutil.AssertWorkflowValid(t, workflow)
-//
-//	// Check step produced expected output
-//	ctx := &workflow.ExecutionContext{
-//	    States: map[string]*workflow.StepState{
-//	        "step1": {Output: "success"},
-//	    },
-//	}
-//	testutil.AssertStepOutput(t, ctx, "step1", "success")
-//
-//	// Verify execution completed successfully
-//	ctx.CurrentState = "end"
-//	testutil.AssertExecutionCompleted(t, ctx)
-//
 // ## Complete Test Example
 //
 // Typical test function using testutil (reduces LOC by 15%+):
@@ -175,7 +149,6 @@
 //	    executor.SetResult("success", nil)
 //
 //	    workflow := testutil.SimpleWorkflow("test")
-//	    testutil.AssertWorkflowValid(t, workflow)
 //
 //	    svc := testutil.NewExecutionServiceBuilder().
 //	        WithExecutor(executor).
@@ -186,8 +159,8 @@
 //
 //	    // Assert: Verify results
 //	    require.NoError(t, err)
-//	    testutil.AssertExecutionCompleted(t, ctx)
-//	    testutil.AssertStepOutput(t, ctx, "start", "success")
+//	    assert.Equal(t, "end", ctx.CurrentState)
+//	    assert.Equal(t, "success", ctx.States["start"].Output)
 //	}
 //
 // # Migration Guide
