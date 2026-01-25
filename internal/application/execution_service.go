@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/pkg/interpolation"
 	"github.com/vanoix/awf/pkg/retry"
 	"github.com/vanoix/awf/pkg/validation"
@@ -34,7 +33,7 @@ type ExecutionService struct {
 	historySvc        *HistoryService
 	templateSvc       *TemplateService
 	operationProvider ports.OperationProvider
-	agentRegistry     *agents.AgentRegistry
+	agentRegistry     ports.AgentRegistry
 	conversationMgr   *ConversationManager // F033: Multi-turn conversation orchestration
 	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
 }
@@ -63,7 +62,7 @@ func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider
 
 // SetAgentRegistry configures the agent registry for F039 agent step execution.
 // When set, agent-type steps can execute AI provider operations.
-func (s *ExecutionService) SetAgentRegistry(registry *agents.AgentRegistry) {
+func (s *ExecutionService) SetAgentRegistry(registry ports.AgentRegistry) {
 	s.agentRegistry = registry
 }
 

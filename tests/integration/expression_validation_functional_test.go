@@ -322,10 +322,10 @@ func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.
 
 	// Test cases derived from conversation-stop-condition.yaml fixture
 	tests := []struct {
-		name       string
-		condition  string
-		stepName   string
-		wantErr    bool
+		name      string
+		condition string
+		stepName  string
+		wantErr   bool
 	}{
 		{
 			name:      "keyword_match_step",
@@ -404,11 +404,11 @@ func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
 	validator := expression.NewExprValidator()
 
 	tests := []struct {
-		name           string
-		expression     string
-		wantErr        bool
-		errorShouldBe  string
-		errorMentions  []string
+		name          string
+		expression    string
+		wantErr       bool
+		errorShouldBe string
+		errorMentions []string
 	}{
 		{
 			name:          "unclosed_parenthesis_clear_message",

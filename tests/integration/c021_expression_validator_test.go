@@ -41,10 +41,10 @@ func TestExprValidator_EdgeCases(t *testing.T) {
 		expr    string
 		wantErr bool
 	}{
-		{"", false},                            // empty is valid (no condition)
-		{"   ", false},                         // whitespace is valid (no condition)
-		{"response contains '完成'", false},     // unicode in strings
-		{"response contains '!@#$%^&*()'", false}, // special chars
+		{"", false},                                     // empty is valid (no condition)
+		{"   ", false},                                  // whitespace is valid (no condition)
+		{"response contains '完成'", false},               // unicode in strings
+		{"response contains '!@#$%^&*()'", false},       // special chars
 		{`response contains "He said \"done\""`, false}, // escaped quotes
 	}
 
@@ -63,9 +63,9 @@ func TestExprValidator_ErrorHandling(t *testing.T) {
 	validator := expression.NewExprValidator()
 
 	invalidExpressions := []string{
-		"(turn_count >= 3",              // unclosed paren
-		"turn_count &&",                  // missing operand
-		"response contains 'unclosed",    // unclosed quote
+		"(turn_count >= 3",            // unclosed paren
+		"turn_count &&",               // missing operand
+		"response contains 'unclosed", // unclosed quote
 	}
 
 	for _, expr := range invalidExpressions {

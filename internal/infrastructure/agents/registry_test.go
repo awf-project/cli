@@ -2,10 +2,13 @@ package agents
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
@@ -15,6 +18,18 @@ import (
 // mockProvider is a test implementation of AgentProvider
 type mockProvider struct {
 	name string
+}
+
+// Component: T002
+// Feature: C022
+
+// ============================================================================
+// Interface Compliance Tests
+// ============================================================================
+
+func TestAgentRegistry_InterfaceCompliance(t *testing.T) {
+	// Verify AgentRegistry implements ports.AgentRegistry
+	var _ ports.AgentRegistry = (*AgentRegistry)(nil)
 }
 
 func (m *mockProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
@@ -124,6 +139,105 @@ func TestAgentRegistry_Get_EmptyName(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, retrieved)
+}
+
+func TestAgentRegistry_Has_Found(t *testing.T) {
+	registry := NewAgentRegistry()
+	provider := &mockProvider{name: "test"}
+	_ = registry.Register(provider)
+
+	exists := registry.Has("test")
+
+	assert.True(t, exists)
+}
+
+func TestAgentRegistry_Has_NotFound(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	exists := registry.Has("nonexistent")
+
+	assert.False(t, exists)
+}
+
+func TestAgentRegistry_Has_EmptyName(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	exists := registry.Has("")
+
+	assert.False(t, exists)
+}
+
+func TestAgentRegistry_Has_MultipleProviders(t *testing.T) {
+	registry := NewAgentRegistry()
+	_ = registry.Register(&mockProvider{name: "provider1"})
+	_ = registry.Register(&mockProvider{name: "provider2"})
+	_ = registry.Register(&mockProvider{name: "provider3"})
+
+	assert.True(t, registry.Has("provider1"))
+	assert.True(t, registry.Has("provider2"))
+	assert.True(t, registry.Has("provider3"))
+	assert.False(t, registry.Has("provider4"))
+}
+
+func TestAgentRegistry_Has_CaseSensitive(t *testing.T) {
+	registry := NewAgentRegistry()
+	_ = registry.Register(&mockProvider{name: "TestProvider"})
+
+	assert.True(t, registry.Has("TestProvider"))
+	assert.False(t, registry.Has("testprovider"))
+	assert.False(t, registry.Has("TESTPROVIDER"))
+	assert.False(t, registry.Has("testProvider"))
+}
+
+func TestAgentRegistry_Has_ThreadSafety(t *testing.T) {
+	registry := NewAgentRegistry()
+	_ = registry.Register(&mockProvider{name: "test"})
+
+	const goroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			exists := registry.Has("test")
+			assert.True(t, exists)
+			notExists := registry.Has("nonexistent")
+			assert.False(t, notExists)
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestAgentRegistry_Has_ConcurrentWithRegister(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine 1: Register providers
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			_ = registry.Register(&mockProvider{name: fmt.Sprintf("provider%d", i)})
+		}
+	}()
+
+	// Goroutine 2: Check existence
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			_ = registry.Has(fmt.Sprintf("provider%d", i))
+		}
+	}()
+
+	wg.Wait()
+
+	// Verify all providers are registered
+	for i := 0; i < 50; i++ {
+		assert.True(t, registry.Has(fmt.Sprintf("provider%d", i)))
+	}
 }
 
 func TestAgentRegistry_List_Empty(t *testing.T) {

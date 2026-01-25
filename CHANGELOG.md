@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C022** Fixed DIP violation in ExecutionService AgentRegistry dependency
+  - Changed `agentRegistry` field from concrete `*agents.AgentRegistry` to `ports.AgentRegistry` interface
+  - Updated `SetAgentRegistry()` setter to accept interface type
+  - Removed `internal/infrastructure/agents` import from `execution_service.go`
+  - Added `Has()` method to `agents.AgentRegistry` to complete interface implementation
+  - Updated `ExecutionServiceBuilder` in testutil to use interface type
+  - Restored hexagonal architecture compliance: application layer now depends only on domain ports
+
 - **C018** Improved test coverage in pkg/ layer
   - Added tests for LoopData.Parent field (nested loop support)
   - Added tests for StepStateData.Response/Tokens fields (agent step data)
