@@ -93,7 +93,7 @@ func TestAgentConfig_ConversationField(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			err := tt.config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -161,7 +161,7 @@ func TestAgentConfig_SystemPrompt(t *testing.T) {
 				InitialPrompt: "Test",
 				Prompt:        "Test",
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -234,7 +234,7 @@ func TestAgentConfig_InitialPrompt(t *testing.T) {
 				InitialPrompt: tt.initialPrompt,
 				Prompt:        tt.prompt,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -296,7 +296,7 @@ func TestAgentConfig_IsConversationMode(t *testing.T) {
 				assert.Equal(t, tt.expected, config.IsConversationMode())
 			} else {
 				// For tests after normalization
-				_ = config.Validate()
+				_ = config.Validate(nil)
 				assert.Equal(t, tt.expected, config.IsConversationMode())
 			}
 		})
@@ -327,7 +327,7 @@ func TestAgentConfig_IsConversationMode_AfterValidation(t *testing.T) {
 				Prompt:        "Test",
 				InitialPrompt: "Test",
 			}
-			_ = config.Validate() // Normalize mode
+			_ = config.Validate(nil) // Normalize mode
 			assert.Equal(t, tt.expected, config.IsConversationMode())
 		})
 	}
@@ -397,7 +397,7 @@ func TestAgentConfig_GetEffectivePrompt(t *testing.T) {
 				Prompt:        tt.prompt,
 				InitialPrompt: tt.initialPrompt,
 			}
-			_ = config.Validate() // Normalize mode
+			_ = config.Validate(nil) // Normalize mode
 			assert.Equal(t, tt.expectedPrompt, config.GetEffectivePrompt())
 		})
 	}
@@ -472,7 +472,7 @@ Say "APPROVED" when done.`,
 	}
 
 	// Validate
-	err := config.Validate()
+	err := config.Validate(nil)
 	require.NoError(t, err)
 
 	// Verify fields
@@ -495,7 +495,7 @@ func TestAgentConfig_ConversationMode_MinimalConfig(t *testing.T) {
 		InitialPrompt: "Hello",
 	}
 
-	err := config.Validate()
+	err := config.Validate(nil)
 	require.NoError(t, err)
 	assert.True(t, config.IsConversationMode())
 	assert.Equal(t, "Hello", config.GetEffectivePrompt())
@@ -512,7 +512,7 @@ func TestAgentConfig_SingleMode_BackwardCompatibility(t *testing.T) {
 		},
 	}
 
-	err := config.Validate()
+	err := config.Validate(nil)
 	require.NoError(t, err)
 	assert.False(t, config.IsConversationMode())
 	assert.Equal(t, "single", config.Mode) // Normalized to "single"
@@ -562,7 +562,7 @@ func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			err := tt.config.Validate(nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})

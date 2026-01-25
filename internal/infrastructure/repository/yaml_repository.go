@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
 // YAMLRepository implements WorkflowRepository for YAML files.
@@ -61,7 +62,8 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 	}
 
 	// Domain validation
-	if err := wf.Validate(); err != nil {
+	validator := expression.NewExprValidator()
+	if err := wf.Validate(validator.Compile); err != nil {
 		return nil, NewParseError(filePath, "", err.Error())
 	}
 

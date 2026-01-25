@@ -552,3 +552,66 @@ func (m *MockHistoryStore) Cleanup(ctx context.Context, olderThan time.Duration)
 func (m *MockHistoryStore) Close() error {
 	return nil
 }
+
+// =============================================================================
+// MockExpressionValidator - T006
+// =============================================================================
+
+// MockExpressionValidator is a thread-safe mock implementation of ports.ExpressionValidator.
+// It uses sync.Mutex to protect concurrent access to configuration.
+//
+// Usage:
+//
+//	validator := testutil.NewMockExpressionValidator()
+//	validator.SetCompileError(errors.New("syntax error"))
+//	err := validator.Compile("invalid expression")
+type MockExpressionValidator struct {
+	mu          sync.Mutex
+	compileErr  error
+	compileFunc func(string) error
+}
+
+// NewMockExpressionValidator creates a new thread-safe mock expression validator.
+func NewMockExpressionValidator() *MockExpressionValidator {
+	return &MockExpressionValidator{}
+}
+
+// Compile validates the syntax of an expression string.
+func (m *MockExpressionValidator) Compile(expression string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.compileFunc != nil {
+		return m.compileFunc(expression)
+	}
+
+	if m.compileErr != nil {
+		return m.compileErr
+	}
+
+	return nil
+}
+
+// SetCompileError configures the mock to return an error on Compile calls (test helper).
+func (m *MockExpressionValidator) SetCompileError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.compileErr = err
+	m.compileFunc = nil
+}
+
+// SetCompileFunc configures a custom function to handle Compile calls (test helper).
+func (m *MockExpressionValidator) SetCompileFunc(fn func(string) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.compileFunc = fn
+	m.compileErr = nil
+}
+
+// Clear resets the mock to default state (test helper).
+func (m *MockExpressionValidator) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.compileErr = nil
+	m.compileFunc = nil
+}

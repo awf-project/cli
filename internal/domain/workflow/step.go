@@ -93,9 +93,10 @@ type Step struct {
 }
 
 // Validate checks if the step configuration is valid.
+// The validator parameter is used to check expression syntax in agent configurations.
 //
 //nolint:gocognit // Complexity 37: step validation checks all step types (command, agent, parallel, loop, operation, subworkflow) and their type-specific constraints. Comprehensive validation required.
-func (s *Step) Validate() error {
+func (s *Step) Validate(validator ExpressionCompiler) error {
 	if s.Name == "" {
 		return errors.New("step name is required")
 	}
@@ -157,7 +158,7 @@ func (s *Step) Validate() error {
 		if s.Agent == nil {
 			return errors.New("agent config is required for agent-type steps")
 		}
-		if err := s.Agent.Validate(); err != nil {
+		if err := s.Agent.Validate(validator); err != nil {
 			return fmt.Errorf("agent config: %w", err)
 		}
 	default:

@@ -150,7 +150,7 @@ func TestAgentConfig_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			err := tt.config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -191,7 +191,7 @@ func TestAgentConfig_Validate_ProviderVariants(t *testing.T) {
 				Provider: tt.provider,
 				Prompt:   "Test prompt",
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -224,7 +224,7 @@ func TestAgentConfig_Validate_PromptVariants(t *testing.T) {
 				Provider: "claude",
 				Prompt:   tt.prompt,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -345,7 +345,7 @@ func TestAgentConfig_Options(t *testing.T) {
 				Prompt:   "Test",
 				Options:  tt.options,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			require.NoError(t, err)
 			if tt.options != nil {
 				assert.Equal(t, tt.options, config.Options)
@@ -398,7 +398,7 @@ func TestAgentConfig_CustomCommand(t *testing.T) {
 				Prompt:   "Test prompt",
 				Command:  tt.command,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.command, config.Command)
 		})
@@ -426,7 +426,7 @@ Focus on: {{inputs.focus_areas}}`,
 	}
 
 	// Validate structure
-	err := config.Validate()
+	err := config.Validate(nil)
 	require.NoError(t, err)
 
 	// Check field values
@@ -466,7 +466,7 @@ func TestAgentConfig_TimeoutBoundaries(t *testing.T) {
 				Prompt:   "Test",
 				Timeout:  tt.timeout,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -518,7 +518,7 @@ Using these settings:
 				Provider: "claude",
 				Prompt:   tt.prompt,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.prompt, config.Prompt)
 		})

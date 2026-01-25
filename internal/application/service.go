@@ -6,6 +6,7 @@ import (
 
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
 // WorkflowService orchestrates workflow operations.
@@ -58,7 +59,8 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	if wf == nil {
 		return nil
 	}
-	if err := wf.Validate(); err != nil {
+	validator := expression.NewExprValidator()
+	if err := wf.Validate(validator.Compile); err != nil {
 		return fmt.Errorf("validate workflow %s: %w", name, err)
 	}
 	return nil
