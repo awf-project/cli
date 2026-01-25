@@ -2,6 +2,7 @@
 bin/
 dist/
 /awf
+**/CLAUDE.md
 
 # Test artifacts
 coverage.out
