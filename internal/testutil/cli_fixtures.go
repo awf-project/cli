@@ -19,7 +19,6 @@ import (
 //
 //	dir := testutil.SetupTestDir(t)                             // Create test environment
 //	testutil.CreateTestWorkflow(t, dir, "test", testutil.SimpleWorkflowYAML)
-//	wf := testutil.SimpleWorkflowFromYAML()                     // Parse YAML to *workflow.Workflow
 
 // CLI Test YAML Workflow Constants
 //
@@ -187,20 +186,4 @@ func SetupWorkflowsDir(t *testing.T, workflows map[string]string) string {
 	}
 
 	return dir
-}
-
-// SimpleWorkflowFromYAML parses SimpleWorkflowYAML and returns a *workflow.Workflow.
-// Convenience function for tests that need parsed workflow objects from YAML fixtures.
-//
-// Note: This is a stub. Implementation requires YAML parsing.
-// For now, tests should use SimpleWorkflowYAML constant directly with CLI commands.
-//
-// Usage:
-//
-//	wf := SimpleWorkflowFromYAML()  // Returns parsed workflow
-//
-// TODO: Implement YAML parsing when needed by tests
-func SimpleWorkflowFromYAML() any {
-	// TODO: Parse SimpleWorkflowYAML to *workflow.Workflow
-	return nil
 }
