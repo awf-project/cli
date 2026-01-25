@@ -23,7 +23,8 @@ type AgentConfig struct {
 }
 
 // Validate checks if the agent configuration is valid.
-func (c *AgentConfig) Validate() error {
+// The validator parameter is used to check expression syntax in conversation config.
+func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 	// Validate provider (required, non-empty after trimming)
 	c.Provider = strings.TrimSpace(c.Provider)
 	if c.Provider == "" {
@@ -49,7 +50,7 @@ func (c *AgentConfig) Validate() error {
 		}
 		// Validate ConversationConfig if present
 		if c.Conversation != nil {
-			if err := c.Conversation.Validate(); err != nil {
+			if err := c.Conversation.Validate(validator); err != nil {
 				return err
 			}
 		}

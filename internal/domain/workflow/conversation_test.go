@@ -2,12 +2,27 @@ package workflow
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockExpressionValidator returns an ExpressionCompiler for tests that validates syntax.
+// It checks for unbalanced quotes as a simple syntax validation.
+func mockExpressionValidator(expr string) error {
+	if strings.TrimSpace(expr) == "" {
+		return nil
+	}
+	// Simple check for unbalanced single quotes (mimics real validator behavior)
+	singleQuotes := strings.Count(expr, "'")
+	if singleQuotes%2 != 0 {
+		return errors.New("expression compilation failed: unbalanced quotes")
+	}
+	return nil
+}
 
 // =============================================================================
 // Component: conversation_domain_models
@@ -277,7 +292,7 @@ func TestConversationConfig_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			err := tt.config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -311,7 +326,7 @@ func TestConversationConfig_Validate_Strategies(t *testing.T) {
 				MaxTurns: 5,
 				Strategy: tt.strategy,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -370,7 +385,8 @@ func TestConversationConfig_Validate_StopConditions(t *testing.T) {
 				MaxTurns:      5,
 				StopCondition: tt.condition,
 			}
-			err := config.Validate()
+			// Use mock validator for stop condition syntax checking
+			err := config.Validate(mockExpressionValidator)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -886,7 +902,7 @@ func TestConversationConfig_CompleteExample(t *testing.T) {
 	}
 
 	// Validate structure
-	err := config.Validate()
+	err := config.Validate(nil)
 	require.NoError(t, err)
 
 	// Check field values
@@ -1085,7 +1101,7 @@ func TestConversationConfig_MaxTurnsBoundaries(t *testing.T) {
 			config := ConversationConfig{
 				MaxTurns: tt.maxTurns,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -1116,7 +1132,7 @@ func TestConversationConfig_MaxContextTokensBoundaries(t *testing.T) {
 				MaxTurns:         5,
 				MaxContextTokens: tt.maxContextTokens,
 			}
-			err := config.Validate()
+			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {

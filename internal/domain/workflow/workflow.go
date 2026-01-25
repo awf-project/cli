@@ -36,9 +36,10 @@ func (w *Workflow) GetStep(name string) (*Step, bool) {
 }
 
 // Validate checks if the workflow configuration is valid.
+// The validator parameter is used to check expression syntax in agent configurations.
 //
 //nolint:gocognit // Complexity 62: workflow validation is comprehensive, checking inputs, steps, graph, templates, parallel strategies. Central validation requires thorough checking.
-func (w *Workflow) Validate() error {
+func (w *Workflow) Validate(validator ExpressionCompiler) error {
 	if w.Name == "" {
 		return errors.New("workflow name is required")
 	}
@@ -77,7 +78,7 @@ func (w *Workflow) Validate() error {
 
 	// Validate each step
 	for name, step := range w.Steps {
-		if err := step.Validate(); err != nil {
+		if err := step.Validate(validator); err != nil {
 			return fmt.Errorf("step '%s': %w", name, err)
 		}
 

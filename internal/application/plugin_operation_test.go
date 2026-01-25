@@ -374,7 +374,7 @@ func TestExecutionService_PluginOperation_StepValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate()
+			err := tt.step.Validate(nil)
 			if tt.wantError {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errorMsg)

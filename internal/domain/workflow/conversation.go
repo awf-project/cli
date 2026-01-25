@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/expr-lang/expr"
 )
+
+// ExpressionCompiler is a function type for validating expression syntax.
+// This type mirrors the ports.ExpressionValidator.Compile signature but is defined
+// in the workflow package to avoid import cycles while maintaining hexagonal architecture.
+// Returns nil if the expression is syntactically valid, error otherwise.
+type ExpressionCompiler func(expression string) error
 
 // Conversation errors
 var (
@@ -82,7 +86,8 @@ type ConversationConfig struct {
 }
 
 // Validate checks if the conversation configuration is valid.
-func (c *ConversationConfig) Validate() error {
+// The validator parameter is used to check stop condition expression syntax.
+func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
 	// Validate MaxTurns (0 is allowed and means use default)
 	if c.MaxTurns < 0 {
 		return errors.New("max_turns must be non-negative")
@@ -107,9 +112,8 @@ func (c *ConversationConfig) Validate() error {
 	}
 
 	// Validate StopCondition if set (compile-time syntax check)
-	if c.StopCondition != "" {
-		_, err := expr.Compile(c.StopCondition)
-		if err != nil {
+	if c.StopCondition != "" && validator != nil {
+		if err := validator(c.StopCondition); err != nil {
 			return fmt.Errorf("invalid stop_condition expression: %w", err)
 		}
 	}

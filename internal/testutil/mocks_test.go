@@ -25,11 +25,12 @@ import (
 // corresponding port interfaces. If a mock fails to implement its interface,
 // the code will not compile, catching interface mismatches early.
 var (
-	_ ports.WorkflowRepository = (*testutil.MockWorkflowRepository)(nil)
-	_ ports.StateStore         = (*testutil.MockStateStore)(nil)
-	_ ports.CommandExecutor    = (*testutil.MockCommandExecutor)(nil)
-	_ ports.Logger             = (*testutil.MockLogger)(nil)
-	_ ports.HistoryStore       = (*testutil.MockHistoryStore)(nil)
+	_ ports.WorkflowRepository  = (*testutil.MockWorkflowRepository)(nil)
+	_ ports.StateStore          = (*testutil.MockStateStore)(nil)
+	_ ports.CommandExecutor     = (*testutil.MockCommandExecutor)(nil)
+	_ ports.Logger              = (*testutil.MockLogger)(nil)
+	_ ports.HistoryStore        = (*testutil.MockHistoryStore)(nil)
+	_ ports.ExpressionValidator = (*testutil.MockExpressionValidator)(nil)
 )
 
 // =============================================================================
@@ -1890,4 +1891,492 @@ func TestMockLogger_MessageOrdering(t *testing.T) {
 	assert.Equal(t, "second", messages[1].Msg, "Message order should be preserved")
 	assert.Equal(t, "third", messages[2].Msg, "Message order should be preserved")
 	assert.Equal(t, "fourth", messages[3].Msg, "Message order should be preserved")
+}
+
+// =============================================================================
+// MockExpressionValidator Tests
+// =============================================================================
+
+// Feature: C021 Domain Purity Violation Fix
+// Component: T006 MockExpressionValidator Tests
+
+func TestMockExpressionValidator_NewMockExpressionValidator(t *testing.T) {
+	// Arrange & Act
+	validator := &testutil.MockExpressionValidator{}
+
+	// Assert
+	require.NotNil(t, validator, "MockExpressionValidator should be non-nil")
+
+	// Verify it's usable immediately with default behavior
+	err := validator.Compile("valid.expression")
+	assert.NoError(t, err, "Compile on new validator should return nil by default")
+
+	err = validator.Compile("")
+	assert.NoError(t, err, "Compile with empty string should return nil by default")
+}
+
+func TestMockExpressionValidator_Compile_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionValidator)
+		expression string
+		wantErr    bool
+	}{
+		{
+			name:       "default behavior returns nil",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "user.name == 'John'",
+			wantErr:    false,
+		},
+		{
+			name:       "empty expression with default behavior",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "",
+			wantErr:    false,
+		},
+		{
+			name:       "whitespace expression with default behavior",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "   ",
+			wantErr:    false,
+		},
+		{
+			name:       "complex expression with default behavior",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: `user.age > 18 && user.status in ["active", "pending"]`,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+			tt.setupFunc(validator)
+
+			// Act
+			err := validator.Compile(tt.expression)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMockExpressionValidator_Compile_ErrorInjection(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionValidator)
+		expression string
+		wantErr    string
+	}{
+		{
+			name: "SetCompileError injects error",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileError(errors.New("syntax error"))
+			},
+			expression: "user.name",
+			wantErr:    "syntax error",
+		},
+		{
+			name: "SetCompileError with empty expression",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileError(errors.New("empty expression"))
+			},
+			expression: "",
+			wantErr:    "empty expression",
+		},
+		{
+			name: "SetCompileFunc with custom error",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileFunc(func(expr string) error {
+					if expr == "" {
+						return errors.New("expression cannot be empty")
+					}
+					return nil
+				})
+			},
+			expression: "",
+			wantErr:    "expression cannot be empty",
+		},
+		{
+			name: "SetCompileFunc with expression-specific validation",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileFunc(func(expr string) error {
+					if len(expr) > 100 {
+						return errors.New("expression too long")
+					}
+					return nil
+				})
+			},
+			expression: string(make([]byte, 101)),
+			wantErr:    "expression too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+			tt.setupFunc(validator)
+
+			// Act
+			err := validator.Compile(tt.expression)
+
+			// Assert
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestMockExpressionValidator_SetCompileFunc_CustomBehavior(t *testing.T) {
+	tests := []struct {
+		name        string
+		compileFunc func(string) error
+		expression  string
+		wantErr     bool
+	}{
+		{
+			name: "custom validation logic - reject invalid prefix",
+			compileFunc: func(expr string) error {
+				if expr != "" && expr[0] == '!' {
+					return errors.New("expression cannot start with '!'")
+				}
+				return nil
+			},
+			expression: "!invalid",
+			wantErr:    true,
+		},
+		{
+			name: "custom validation logic - accept valid prefix",
+			compileFunc: func(expr string) error {
+				if expr != "" && expr[0] == '!' {
+					return errors.New("expression cannot start with '!'")
+				}
+				return nil
+			},
+			expression: "valid.expression",
+			wantErr:    false,
+		},
+		{
+			name: "always succeed function",
+			compileFunc: func(expr string) error {
+				return nil
+			},
+			expression: "anything",
+			wantErr:    false,
+		},
+		{
+			name: "always fail function",
+			compileFunc: func(expr string) error {
+				return errors.New("always fails")
+			},
+			expression: "anything",
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+			validator.SetCompileFunc(tt.compileFunc)
+
+			// Act
+			err := validator.Compile(tt.expression)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMockExpressionValidator_SetCompileError_OverridesFunc(t *testing.T) {
+	// Arrange
+	validator := &testutil.MockExpressionValidator{}
+	validator.SetCompileFunc(func(expr string) error {
+		return errors.New("from func")
+	})
+
+	// Act - SetCompileError should override the func
+	validator.SetCompileError(errors.New("from error"))
+	err := validator.Compile("test")
+
+	// Assert
+	require.Error(t, err)
+	assert.Equal(t, "from error", err.Error(), "SetCompileError should override SetCompileFunc")
+}
+
+func TestMockExpressionValidator_SetCompileFunc_OverridesError(t *testing.T) {
+	// Arrange
+	validator := &testutil.MockExpressionValidator{}
+	validator.SetCompileError(errors.New("from error"))
+
+	// Act - SetCompileFunc should override the error
+	validator.SetCompileFunc(func(expr string) error {
+		return errors.New("from func")
+	})
+	err := validator.Compile("test")
+
+	// Assert
+	require.Error(t, err)
+	assert.Equal(t, "from func", err.Error(), "SetCompileFunc should override SetCompileError")
+}
+
+func TestMockExpressionValidator_Clear(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(*testutil.MockExpressionValidator)
+	}{
+		{
+			name: "clear after SetCompileError",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileError(errors.New("test error"))
+			},
+		},
+		{
+			name: "clear after SetCompileFunc",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileFunc(func(expr string) error {
+					return errors.New("test error")
+				})
+			},
+		},
+		{
+			name:      "clear on fresh validator",
+			setupFunc: func(v *testutil.MockExpressionValidator) {},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+			tt.setupFunc(validator)
+
+			// Act
+			validator.Clear()
+			err := validator.Compile("test")
+
+			// Assert
+			assert.NoError(t, err, "Clear should reset to default behavior (return nil)")
+		})
+	}
+}
+
+func TestMockExpressionValidator_ConcurrentAccess(t *testing.T) {
+	// Arrange
+	validator := &testutil.MockExpressionValidator{}
+	const goroutines = 10
+	const iterations = 100
+
+	// Act - concurrent Compile calls
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	// Readers
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				expr := fmt.Sprintf("expr_%d_%d", id, j)
+				_ = validator.Compile(expr)
+			}
+		}(i)
+	}
+
+	// Writers (configuration changes)
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				if j%2 == 0 {
+					validator.SetCompileError(fmt.Errorf("error_%d_%d", id, j))
+				} else {
+					validator.SetCompileFunc(func(expr string) error {
+						return nil
+					})
+				}
+			}
+		}(i)
+	}
+
+	// Assert - should complete without race conditions
+	wg.Wait()
+	assert.True(t, true, "Concurrent access should not cause races")
+}
+
+func TestMockExpressionValidator_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionValidator)
+		expression string
+		wantErr    bool
+	}{
+		{
+			name:       "empty string",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "",
+			wantErr:    false,
+		},
+		{
+			name:       "single character",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "x",
+			wantErr:    false,
+		},
+		{
+			name:       "very long expression",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: string(make([]byte, 10000)),
+			wantErr:    false,
+		},
+		{
+			name:       "unicode characters",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: "用户.名称 == '张三'",
+			wantErr:    false,
+		},
+		{
+			name:       "special characters",
+			setupFunc:  func(v *testutil.MockExpressionValidator) {},
+			expression: `!@#$%^&*()_+-=[]{}|;:'",.<>?/`,
+			wantErr:    false,
+		},
+		{
+			name: "nil error from SetCompileError",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileError(nil)
+			},
+			expression: "test",
+			wantErr:    false,
+		},
+		{
+			name: "nil function from SetCompileFunc",
+			setupFunc: func(v *testutil.MockExpressionValidator) {
+				v.SetCompileFunc(nil)
+			},
+			expression: "test",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+			tt.setupFunc(validator)
+
+			// Act
+			err := validator.Compile(tt.expression)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMockExpressionValidator_RealWorldExpressions(t *testing.T) {
+	tests := []struct {
+		name       string
+		expression string
+	}{
+		{
+			name:       "simple comparison",
+			expression: "user.age > 18",
+		},
+		{
+			name:       "logical AND",
+			expression: "user.active && user.verified",
+		},
+		{
+			name:       "logical OR",
+			expression: "user.role == 'admin' || user.role == 'moderator'",
+		},
+		{
+			name:       "in operator",
+			expression: `user.status in ["active", "pending"]`,
+		},
+		{
+			name:       "complex nested",
+			expression: `(user.age >= 18 && user.country == "US") || user.role == "admin"`,
+		},
+		{
+			name:       "string concatenation",
+			expression: `user.firstName + " " + user.lastName`,
+		},
+		{
+			name:       "method call",
+			expression: "len(user.permissions) > 0",
+		},
+		{
+			name:       "ternary-like",
+			expression: "user.premium ? 100 : 10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			validator := &testutil.MockExpressionValidator{}
+
+			// Act - default behavior should accept all
+			err := validator.Compile(tt.expression)
+
+			// Assert
+			assert.NoError(t, err, "Real-world expressions should pass with default behavior")
+		})
+	}
+}
+
+func TestMockExpressionValidator_ClearMultipleTimes(t *testing.T) {
+	// Arrange
+	validator := &testutil.MockExpressionValidator{}
+
+	// Act & Assert - multiple Clear calls should be safe
+	validator.Clear()
+	err := validator.Compile("test1")
+	assert.NoError(t, err)
+
+	validator.SetCompileError(errors.New("error"))
+	validator.Clear()
+	err = validator.Compile("test2")
+	assert.NoError(t, err)
+
+	validator.Clear()
+	validator.Clear()
+	err = validator.Compile("test3")
+	assert.NoError(t, err, "Multiple Clear calls should be idempotent")
+}
+
+func TestMockExpressionValidator_StateIsolation(t *testing.T) {
+	// Arrange
+	validator1 := &testutil.MockExpressionValidator{}
+	validator2 := &testutil.MockExpressionValidator{}
+
+	// Act - configure each differently
+	validator1.SetCompileError(errors.New("error1"))
+	validator2.SetCompileError(errors.New("error2"))
+
+	err1 := validator1.Compile("test")
+	err2 := validator2.Compile("test")
+
+	// Assert - state should be isolated
+	require.Error(t, err1)
+	require.Error(t, err2)
+	assert.Equal(t, "error1", err1.Error())
+	assert.Equal(t, "error2", err2.Error())
 }

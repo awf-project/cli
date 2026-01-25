@@ -102,7 +102,7 @@ func TestForEachStepValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate()
+			err := tt.step.Validate(nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -191,7 +191,7 @@ func TestWhileStepValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate()
+			err := tt.step.Validate(nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -290,7 +290,7 @@ func TestLoopStepWithHooks(t *testing.T) {
 		t.Errorf("expected 1 post hook, got %d", len(step.Hooks.Post))
 	}
 
-	err := step.Validate()
+	err := step.Validate(nil)
 	if err != nil {
 		t.Errorf("loop step with hooks should be valid: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestLoopStepWithTimeout(t *testing.T) {
 		t.Errorf("expected Timeout 60, got %d", step.Timeout)
 	}
 
-	err := step.Validate()
+	err := step.Validate(nil)
 	if err != nil {
 		t.Errorf("loop step with timeout should be valid: %v", err)
 	}
