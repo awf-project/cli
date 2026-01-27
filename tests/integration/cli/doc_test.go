@@ -157,4 +157,3 @@ func TestDocGo_EmptyPackageCompiles(t *testing.T) {
 	// Assert
 	assert.True(t, true, "if this test runs, the package compiled successfully")
 }
-

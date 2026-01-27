@@ -28,13 +28,13 @@ type OperationSchema struct {
 }
 
 // Validate checks if the operation schema is valid.
-// TODO: Implement validation logic.
+// TODO(#148): Implement validation logic.
 func (o *OperationSchema) Validate() error {
 	return ErrNotImplemented
 }
 
 // GetRequiredInputs returns a list of required input parameter names.
-// TODO: Implement this method.
+// TODO(#148): Implement this method.
 func (o *OperationSchema) GetRequiredInputs() []string {
 	return nil // stub
 }
@@ -49,13 +49,13 @@ type InputSchema struct {
 }
 
 // Validate checks if the input schema is valid.
-// TODO: Implement validation logic.
+// TODO(#148): Implement validation logic.
 func (i *InputSchema) Validate() error {
 	return ErrNotImplemented
 }
 
 // IsValidType checks if the input type is a recognized type.
-// TODO: Implement this method.
+// TODO(#148): Implement this method.
 func (i *InputSchema) IsValidType() bool {
 	return false // stub
 }
