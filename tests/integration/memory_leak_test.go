@@ -13,13 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/executor"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
-	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Feature: C019 - Resource Management Fixes

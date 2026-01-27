@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 
@@ -123,6 +124,19 @@ func (e *simpleExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Con
 	}
 
 	return false, nil
+}
+
+// =============================================================================
+// CI Environment Detection
+// =============================================================================
+
+// skipInCI skips the test if running in a CI environment.
+// Tests requiring external API access use this helper since CI lacks credentials.
+func skipInCI(t *testing.T) {
+	t.Helper()
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("Skipping test in CI environment")
+	}
 }
 
 // =============================================================================
