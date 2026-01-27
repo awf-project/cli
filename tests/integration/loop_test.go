@@ -707,56 +707,6 @@ states:
 	assert.Equal(t, expected, string(data))
 }
 
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
-// simpleExpressionEvaluator evaluates basic expressions for integration tests
-type simpleExpressionEvaluator struct{}
-
-func newSimpleExpressionEvaluator() *simpleExpressionEvaluator {
-	return &simpleExpressionEvaluator{}
-}
-
-func (e *simpleExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
-	// Handle common test expressions
-	switch expr {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	}
-
-	// Check for states.X.output == "value" pattern
-	if len(expr) > 0 {
-		// Simple implementation for integration tests
-		// In real implementation, use proper expression evaluator
-
-		// Check exit_code patterns
-		if ctx != nil && ctx.States != nil {
-			for stepName, state := range ctx.States {
-				// states.X.exit_code == 0
-				if expr == "states."+stepName+".exit_code == 0" {
-					return state.ExitCode == 0, nil
-				}
-				// states.X.exit_code != 0
-				if expr == "states."+stepName+".exit_code != 0" {
-					return state.ExitCode != 0, nil
-				}
-				// states.X.output == "value" (simplified)
-				if expr == `states.`+stepName+`.output == "ready"` {
-					return state.Output == "ready\n" || state.Output == "ready", nil
-				}
-				if expr == `states.`+stepName+`.output == "stop"` {
-					return state.Output == "stop\n" || state.Output == "stop", nil
-				}
-			}
-		}
-	}
-
-	return false, nil
-}
-
 // alwaysTrueEvaluator always returns true (for testing max_iterations)
 type alwaysTrueEvaluator struct{}
 

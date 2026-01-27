@@ -512,23 +512,3 @@ func countTestFunctions(t *testing.T, dir string) int {
 	return count
 }
 
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		// Check if go.mod exists (indicates repo root)
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			// Reached filesystem root without finding go.mod
-			return "", os.ErrNotExist
-		}
-		dir = parent
-	}
-}
