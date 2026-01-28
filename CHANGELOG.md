@@ -74,6 +74,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed test data mutation in resolver_test.go
   - Completed TestRetryer_LogsAttempts assertions
 
+- **C028** Improved CLI test coverage from 77.6% to 80%+ by adding targeted integration tests
+  - Added comprehensive integration tests for `runValidate` (12.4% → covered): All output formats (text, JSON, table, quiet), workflow not found errors, validation error formatting, template reference validation
+  - Added integration tests for `runDiagram` (34.6% → covered): Invalid direction handling, workflow not found errors, stdout DOT output, file output modes, graphviz availability checks
+  - Added integration tests for `runStatus` (47.4% → covered): State loading, all format variations (text, JSON, quiet), execution not found errors
+  - Added integration tests for plugin commands (55% → 80%+): Enable/disable lifecycle, plugin not found errors, environment-based plugin discovery, state persistence
+  - Added unit tests for `CheckMigration` (27.8% → covered): Legacy directory detection, XDG migration notice display, singleton suppression pattern
+  - Created 5 new test files: `tests/integration/cli/validate_coverage_test.go`, `tests/integration/cli/diagram_coverage_test.go`, `tests/integration/cli/status_coverage_test.go`, `tests/integration/cli/plugin_cmd_coverage_test.go`, `internal/interfaces/cli/migration_coverage_test.go`
+  - Deleted obsolete `validate_coverage_test.go` containing 10 assertion-free tests providing false coverage confidence
+  - Tests use `//go:build integration` tags for proper test categorization and isolation
+
 - **C017** Reorganized CLI tests to separate unit and integration concerns
   - Moved 280 integration-style tests from `internal/interfaces/cli/` to `tests/integration/cli/` with `//go:build integration` tags
   - Retained 176 unit tests in-place focused on flag parsing, help text, and command registration
