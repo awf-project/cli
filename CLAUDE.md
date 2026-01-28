@@ -31,29 +31,6 @@ Update memories if:
 
 Use `mcp__plugin_common_serena__write_memory` or `mcp__plugin_common_serena__edit_memory`.
 
-## Repomix MCP Integration
-
-**IMPORTANT:** This project uses Repomix MCP for codebase analysis.
-
-### Storage Location
-- Output directory: `.repomix/`
-- Output file: `.repomix/repomix-output.xml`
-- Ignored in `.gitignore`
-
-### At Session Start
-Attach existing pack: `mcp__plugin_common_repomix__attach_packed_output` with path `.repomix`
-
-### After Significant Code Changes
-Update the pack:
-1. `mcp__plugin_common_repomix__pack_codebase` with:
-   - `directory`: `/home/pocky/Sites/vanoix/gustave`
-   - `ignorePatterns`: `.git/**,storage/**,bin/**,coverage.*,*.db,*.log`
-2. Copy output to `.repomix/`: `cp /tmp/repomix/mcp-outputs/*/repomix-output.xml .repomix/`
-
-### Usage
-- `grep_repomix_output` - Search patterns in packed codebase
-- `read_repomix_output` - Read content with line ranges
-
 ## Project Overview
 
 **ai-workflow-cli** (`awf`) - A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.

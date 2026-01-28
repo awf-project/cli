@@ -511,4 +511,3 @@ func countTestFunctions(t *testing.T, dir string) int {
 
 	return count
 }
-

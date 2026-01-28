@@ -351,7 +351,7 @@ func (m *MockCommandExecutor) Execute(ctx context.Context, cmd *ports.Command) (
 
 // SetResult configures the mock to return a specific result for all commands (test helper).
 //
-// Deprecated: Use SetCommandResult for command-specific results.
+// Deprecated: Use SetCommandResult for command-specific results. Migration tracked in #150.
 func (m *MockCommandExecutor) SetResult(result *ports.CommandResult) {
 	// Legacy behavior: set a default result for empty command key
 	m.SetCommandResult("", result)
@@ -470,7 +470,7 @@ func (m *MockLogger) Error(msg string, fields ...any) {
 
 // WithContext returns a logger with additional context fields.
 func (m *MockLogger) WithContext(ctx map[string]any) ports.Logger {
-	// TODO: implement context support
+	// TODO(#150): implement context support
 	return m
 }
 

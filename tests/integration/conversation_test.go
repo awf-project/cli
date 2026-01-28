@@ -88,12 +88,12 @@ func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
 		{
 			name:         "parallel_conversation_workflow",
 			workflowName: "conversation-parallel",
-			shouldPass:   false, // FIXME: Fixture has invalid parallel structure
+			shouldPass:   false, // FIXME(#130): Fixture has invalid parallel structure
 		},
 		{
 			name:         "error_handling_conversation_workflow",
 			workflowName: "conversation-error",
-			shouldPass:   false, // FIXME: Fixture has YAML syntax error
+			shouldPass:   false, // FIXME(#130): Fixture has YAML syntax error
 		},
 	}
 
