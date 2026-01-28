@@ -98,7 +98,10 @@ func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagra
 	if opts.Output == "" {
 		// Output to stdout
 		_, err = fmt.Fprint(cmd.OutOrStdout(), dotOutput)
-		return fmt.Errorf("write DOT output: %w", err)
+		if err != nil {
+			return fmt.Errorf("write DOT output: %w", err)
+		}
+		return nil
 	}
 
 	// Output to file - check extension for format
