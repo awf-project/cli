@@ -54,7 +54,6 @@ func (m *mockStateStore) List(ctx context.Context) ([]string, error) {
 }
 
 func TestLinearExecution_Integration(t *testing.T) {
-
 	// setup temp directory with workflow file
 	tmpDir := t.TempDir()
 
@@ -111,7 +110,6 @@ states:
 }
 
 func TestLinearExecution_FailurePath_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: failure-test
@@ -168,7 +166,6 @@ states:
 }
 
 func TestLinearExecution_Timeout_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: timeout-test
@@ -221,7 +218,6 @@ states:
 }
 
 func TestLinearExecution_WithValidFixture_Integration(t *testing.T) {
-
 	// use existing fixtures
 	fixturesPath := "../fixtures/workflows"
 
@@ -245,7 +241,6 @@ func TestLinearExecution_WithValidFixture_Integration(t *testing.T) {
 }
 
 func TestHooks_WorkflowAndStepHooks_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// workflow with hooks that write to a log file for verification
@@ -303,7 +298,6 @@ states:
 }
 
 func TestHooks_WorkflowErrorHook_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "error_hooks.log")
 
@@ -358,7 +352,6 @@ states:
 }
 
 func TestHooks_MultipleSteps_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "multi_step_hooks.log")
 
@@ -424,7 +417,6 @@ states:
 }
 
 func TestHooks_LogAction_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// workflow using log hooks (not command hooks)
@@ -475,7 +467,6 @@ states:
 }
 
 func TestStreamingOutput_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: streaming-test
@@ -524,7 +515,6 @@ states:
 }
 
 func TestValidFixtures_Integration(t *testing.T) {
-
 	// test that all valid fixtures can be loaded and validated
 	fixturesPath := "../fixtures/workflows"
 

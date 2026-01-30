@@ -35,7 +35,6 @@ import (
 // -----------------------------------------------------------------------------
 
 func TestInteractive_ContinueThroughAllSteps_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -64,7 +63,6 @@ func TestInteractive_ContinueThroughAllSteps_Integration(t *testing.T) {
 }
 
 func TestInteractive_ShowsStepDetails_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -92,7 +90,6 @@ func TestInteractive_ShowsStepDetails_Integration(t *testing.T) {
 }
 
 func TestInteractive_ShowsStepResult_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -119,7 +116,6 @@ func TestInteractive_ShowsStepResult_Integration(t *testing.T) {
 }
 
 func TestInteractive_ShowsResolvedCommand_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -148,7 +144,6 @@ func TestInteractive_ShowsResolvedCommand_Integration(t *testing.T) {
 }
 
 func TestInteractive_ShowsTransitions_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -176,7 +171,6 @@ func TestInteractive_ShowsTransitions_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_AbortStopsExecution_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -202,7 +196,6 @@ func TestInteractive_AbortStopsExecution_Integration(t *testing.T) {
 }
 
 func TestInteractive_AbortAfterFirstStep_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -230,7 +223,6 @@ func TestInteractive_AbortAfterFirstStep_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_SkipJumpsToNextStep_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -257,7 +249,6 @@ func TestInteractive_SkipJumpsToNextStep_Integration(t *testing.T) {
 }
 
 func TestInteractive_SkipMultipleSteps_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -286,7 +277,6 @@ func TestInteractive_SkipMultipleSteps_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_InspectShowsContext_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -317,7 +307,6 @@ func TestInteractive_InspectShowsContext_Integration(t *testing.T) {
 }
 
 func TestInteractive_InspectShowsStatesAfterExecution_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -341,7 +330,6 @@ func TestInteractive_InspectShowsStatesAfterExecution_Integration(t *testing.T) 
 }
 
 func TestInteractive_MultipleInspects_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -370,7 +358,6 @@ func TestInteractive_MultipleInspects_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_EditModifiesInput_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -399,7 +386,6 @@ func TestInteractive_EditModifiesInput_Integration(t *testing.T) {
 }
 
 func TestInteractive_EditShowsCurrentValue_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -427,7 +413,6 @@ func TestInteractive_EditShowsCurrentValue_Integration(t *testing.T) {
 }
 
 func TestInteractive_EditEmptyKeepsCurrentValue_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -459,7 +444,6 @@ func TestInteractive_EditEmptyKeepsCurrentValue_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_RetryReExecutesStep_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -487,7 +471,6 @@ func TestInteractive_RetryReExecutesStep_Integration(t *testing.T) {
 }
 
 func TestInteractive_RetryNotAvailableOnFirstPrompt_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -515,7 +498,6 @@ func TestInteractive_RetryNotAvailableOnFirstPrompt_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_BreakpointPausesOnlyAtSpecified_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -546,7 +528,6 @@ func TestInteractive_BreakpointPausesOnlyAtSpecified_Integration(t *testing.T) {
 }
 
 func TestInteractive_MultipleBreakpoints_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -574,7 +555,6 @@ func TestInteractive_MultipleBreakpoints_Integration(t *testing.T) {
 }
 
 func TestInteractive_BreakpointWithSeparateFlags_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -607,7 +587,6 @@ func TestInteractive_BreakpointWithSeparateFlags_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_InvalidInputRepromptsUser_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -631,7 +610,6 @@ func TestInteractive_InvalidInputRepromptsUser_Integration(t *testing.T) {
 }
 
 func TestInteractive_MultipleInvalidInputs_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -656,7 +634,6 @@ func TestInteractive_MultipleInvalidInputs_Integration(t *testing.T) {
 }
 
 func TestInteractive_EmptyInputRepromptsUser_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -679,7 +656,6 @@ func TestInteractive_EmptyInputRepromptsUser_Integration(t *testing.T) {
 }
 
 func TestInteractive_CaseInsensitiveActions_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -706,7 +682,6 @@ func TestInteractive_CaseInsensitiveActions_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_WorkflowNotFound_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -724,7 +699,6 @@ func TestInteractive_WorkflowNotFound_Integration(t *testing.T) {
 }
 
 func TestInteractive_InvalidBreakpoint_StillRuns_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -755,7 +729,6 @@ func TestInteractive_InvalidBreakpoint_StillRuns_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_AbortPersistsState_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -783,7 +756,6 @@ func TestInteractive_AbortPersistsState_Integration(t *testing.T) {
 }
 
 func TestInteractive_CompletionPersistsState_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -813,7 +785,6 @@ func TestInteractive_CompletionPersistsState_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_WithInputs_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -842,7 +813,6 @@ func TestInteractive_WithInputs_Integration(t *testing.T) {
 }
 
 func TestInteractive_ParallelWorkflow_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -866,7 +836,6 @@ func TestInteractive_ParallelWorkflow_Integration(t *testing.T) {
 }
 
 func TestInteractive_LoopWorkflow_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -890,7 +859,6 @@ func TestInteractive_LoopWorkflow_Integration(t *testing.T) {
 }
 
 func TestInteractive_SimpleWorkflow_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -920,7 +888,6 @@ func TestInteractive_SimpleWorkflow_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_ActionCombinations_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tests := []struct {
@@ -992,7 +959,6 @@ func TestInteractive_ActionCombinations_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
-
 	originalPath := os.Getenv("AWF_WORKFLOWS_PATH")
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -1023,7 +989,6 @@ func TestInteractive_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 }
 
 func TestInteractive_CanRunMultipleTimes_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// Run interactive mode multiple times to ensure no state leaks
@@ -1049,7 +1014,6 @@ func TestInteractive_CanRunMultipleTimes_Integration(t *testing.T) {
 }
 
 func TestInteractive_FlagOrderDoesNotMatter_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -1081,7 +1045,6 @@ func TestInteractive_FlagOrderDoesNotMatter_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestInteractive_ShowsCorrectStepCount_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -1108,7 +1071,6 @@ func TestInteractive_ShowsCorrectStepCount_Integration(t *testing.T) {
 }
 
 func TestInteractive_ShowsStepTypeForDifferentSteps_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()

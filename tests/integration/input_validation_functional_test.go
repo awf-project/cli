@@ -34,7 +34,6 @@ import (
 // (pattern, enum, numeric) work correctly through the full workflow
 // execution pipeline.
 func TestInputValidation_HappyPath(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		workflowYAML string
@@ -285,7 +284,6 @@ states:
 
 // TestInputValidation_EdgeCases tests edge cases for input validation.
 func TestInputValidation_EdgeCases(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		workflowYAML string

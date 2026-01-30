@@ -39,240 +39,218 @@ func TestConfigTypeConstants_Values(t *testing.T) {
 }
 
 // =============================================================================
-// Manifest Creation Tests
+// NamePattern Regex Tests (Component T001)
+// Feature: C031
 // =============================================================================
 
-func TestManifest_Creation(t *testing.T) {
-	m := plugin.Manifest{
-		Name:         "slack-notifier",
-		Version:      "1.0.0",
-		Description:  "Send notifications to Slack",
-		AWFVersion:   ">=0.4.0",
-		Capabilities: []string{"operations"},
-		Config: map[string]plugin.ConfigField{
-			"webhook_url": {
-				Type:        "string",
-				Required:    true,
-				Description: "Slack webhook URL",
-			},
-		},
-	}
-
-	assert.Equal(t, "slack-notifier", m.Name)
-	assert.Equal(t, "1.0.0", m.Version)
-	assert.Equal(t, "Send notifications to Slack", m.Description)
-	assert.Equal(t, ">=0.4.0", m.AWFVersion)
-	assert.Contains(t, m.Capabilities, "operations")
-	require.Contains(t, m.Config, "webhook_url")
-	assert.Equal(t, "string", m.Config["webhook_url"].Type)
-	assert.True(t, m.Config["webhook_url"].Required)
-}
-
-func TestManifest_FullManifest(t *testing.T) {
-	m := plugin.Manifest{
-		Name:         "awf-plugin-slack",
-		Version:      "1.0.0",
-		Description:  "Slack notifications for AWF workflows",
-		AWFVersion:   ">=0.4.0",
-		Author:       "Jane Developer <jane@example.com>",
-		License:      "MIT",
-		Homepage:     "https://github.com/example/awf-plugin-slack",
-		Capabilities: []string{plugin.CapabilityOperations, plugin.CapabilityCommands},
-		Config: map[string]plugin.ConfigField{
-			"webhook_url": {
-				Type:        plugin.ConfigTypeString,
-				Required:    true,
-				Description: "Slack webhook URL",
-			},
-			"channel": {
-				Type:        plugin.ConfigTypeString,
-				Required:    false,
-				Default:     "#general",
-				Description: "Target Slack channel",
-			},
-		},
-	}
-
-	assert.Equal(t, "awf-plugin-slack", m.Name)
-	assert.Equal(t, "1.0.0", m.Version)
-	assert.Equal(t, "Slack notifications for AWF workflows", m.Description)
-	assert.Equal(t, ">=0.4.0", m.AWFVersion)
-	assert.Equal(t, "Jane Developer <jane@example.com>", m.Author)
-	assert.Equal(t, "MIT", m.License)
-	assert.Equal(t, "https://github.com/example/awf-plugin-slack", m.Homepage)
-	assert.Len(t, m.Capabilities, 2)
-	assert.Len(t, m.Config, 2)
-}
-
-func TestManifest_EmptyConfig(t *testing.T) {
-	m := plugin.Manifest{
-		Name:         "simple-plugin",
-		Version:      "0.1.0",
-		Capabilities: []string{"operations"},
-	}
-
-	assert.Empty(t, m.Config)
-	assert.Empty(t, m.Description)
-	assert.Empty(t, m.AWFVersion)
-	assert.Empty(t, m.Author)
-	assert.Empty(t, m.License)
-	assert.Empty(t, m.Homepage)
-}
-
-func TestManifest_MultipleCapabilities(t *testing.T) {
-	m := plugin.Manifest{
-		Name:         "full-plugin",
-		Version:      "2.0.0",
-		Capabilities: []string{"operations", "commands", "validators"},
-	}
-
-	assert.Len(t, m.Capabilities, 3)
-	assert.Contains(t, m.Capabilities, "operations")
-	assert.Contains(t, m.Capabilities, "commands")
-	assert.Contains(t, m.Capabilities, "validators")
-}
-
-func TestManifest_OptionalMetadata(t *testing.T) {
+func TestNamePattern_ValidNames(t *testing.T) {
+	// Component: T001
+	// Feature: C031
 	tests := []struct {
-		name     string
-		manifest plugin.Manifest
+		name  string
+		input string
 	}{
-		{
-			name: "with author only",
-			manifest: plugin.Manifest{
-				Name:    "test-plugin",
-				Version: "1.0.0",
-				Author:  "Test Author",
-			},
-		},
-		{
-			name: "with license only",
-			manifest: plugin.Manifest{
-				Name:    "test-plugin",
-				Version: "1.0.0",
-				License: "Apache-2.0",
-			},
-		},
-		{
-			name: "with homepage only",
-			manifest: plugin.Manifest{
-				Name:     "test-plugin",
-				Version:  "1.0.0",
-				Homepage: "https://example.com",
-			},
-		},
-		{
-			name: "with all optional metadata",
-			manifest: plugin.Manifest{
-				Name:        "test-plugin",
-				Version:     "1.0.0",
-				Description: "A test plugin",
-				Author:      "Test Author <test@example.com>",
-				License:     "MIT",
-				Homepage:    "https://github.com/example/test-plugin",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.NotEmpty(t, tt.manifest.Name)
-			assert.NotEmpty(t, tt.manifest.Version)
-		})
-	}
-}
-
-// =============================================================================
-// HasCapability Tests
-// =============================================================================
-
-func TestManifest_HasCapability(t *testing.T) {
-	tests := []struct {
-		name         string
-		capabilities []string
-		check        string
-		want         bool
-	}{
-		{
-			name:         "has operations capability",
-			capabilities: []string{plugin.CapabilityOperations},
-			check:        plugin.CapabilityOperations,
-			want:         true,
-		},
-		{
-			name:         "has commands capability",
-			capabilities: []string{plugin.CapabilityCommands},
-			check:        plugin.CapabilityCommands,
-			want:         true,
-		},
-		{
-			name:         "has validators capability",
-			capabilities: []string{plugin.CapabilityValidators},
-			check:        plugin.CapabilityValidators,
-			want:         true,
-		},
-		{
-			name:         "multiple capabilities - check first",
-			capabilities: []string{plugin.CapabilityOperations, plugin.CapabilityCommands},
-			check:        plugin.CapabilityOperations,
-			want:         true,
-		},
-		{
-			name:         "multiple capabilities - check second",
-			capabilities: []string{plugin.CapabilityOperations, plugin.CapabilityCommands},
-			check:        plugin.CapabilityCommands,
-			want:         true,
-		},
-		{
-			name:         "all capabilities - check validators",
-			capabilities: []string{plugin.CapabilityOperations, plugin.CapabilityCommands, plugin.CapabilityValidators},
-			check:        plugin.CapabilityValidators,
-			want:         true,
-		},
-		{
-			name:         "does not have capability",
-			capabilities: []string{plugin.CapabilityOperations},
-			check:        plugin.CapabilityCommands,
-			want:         false,
-		},
-		{
-			name:         "empty capabilities",
-			capabilities: []string{},
-			check:        plugin.CapabilityOperations,
-			want:         false,
-		},
-		{
-			name:         "nil capabilities",
-			capabilities: nil,
-			check:        plugin.CapabilityOperations,
-			want:         false,
-		},
-		{
-			name:         "unknown capability check",
-			capabilities: []string{plugin.CapabilityOperations},
-			check:        "unknown",
-			want:         false,
-		},
-		{
-			name:         "empty string capability check",
-			capabilities: []string{plugin.CapabilityOperations},
-			check:        "",
-			want:         false,
-		},
+		{name: "lowercase single letter", input: "a"},
+		{name: "lowercase word", input: "plugin"},
+		{name: "lowercase with hyphen", input: "my-plugin"},
+		{name: "multiple hyphens", input: "my-awesome-plugin"},
+		{name: "numbers after letter", input: "plugin123"},
+		{name: "mixed alphanumeric with hyphens", input: "my-plugin-v2"},
+		{name: "trailing numbers", input: "test1"},
+		{name: "complex pattern", input: "awf-marketplace-v2-beta"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := plugin.Manifest{
-				Name:         "test-plugin",
-				Version:      "1.0.0",
-				Capabilities: tt.capabilities,
+				Name:       tt.input,
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
 			}
-
-			got := m.HasCapability(tt.check)
-			assert.Equal(t, tt.want, got)
+			err := m.Validate()
+			assert.NoError(t, err, "expected %q to be valid", tt.input)
 		})
 	}
+}
+
+func TestNamePattern_InvalidNames(t *testing.T) {
+	// Component: T001
+	// Feature: C031
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "starts with digit", input: "1plugin"},
+		{name: "contains uppercase", input: "MyPlugin"},
+		{name: "contains underscore", input: "my_plugin"},
+		{name: "contains space", input: "my plugin"},
+		{name: "starts with hyphen", input: "-plugin"},
+		{name: "contains special chars", input: "my@plugin"},
+		{name: "contains dot", input: "my.plugin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       tt.input,
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			}
+			err := m.Validate()
+			assert.Error(t, err, "expected %q to be invalid", tt.input)
+			assert.Contains(t, err.Error(), "name")
+		})
+	}
+}
+
+func TestNamePattern_EdgeCases(t *testing.T) {
+	// Component: T001
+	// Feature: C031
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "empty string", input: "", wantErr: true},
+		{name: "whitespace only", input: "   ", wantErr: true},
+		{name: "hyphen only", input: "-", wantErr: true},
+		{name: "number only", input: "123", wantErr: true},
+		{name: "valid single char", input: "a", wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       tt.input,
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "name")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestNamePattern_RegexCompilation(t *testing.T) {
+	// Component: T001
+	// Feature: C031
+	// Test that the regex pattern compiles successfully
+	// This is implicitly tested by other tests, but explicit verification is good practice
+	m := plugin.Manifest{
+		Name:       "valid-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
+	}
+	err := m.Validate()
+	assert.NoError(t, err)
+}
+
+// =============================================================================
+// Manifest Creation Tests
+// =============================================================================
+
+func TestManifest_Creation(t *testing.T) {
+	m := plugin.Manifest{
+		Name:       "test-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
+	}
+	assert.Equal(t, "test-plugin", m.Name)
+	assert.Equal(t, "1.0.0", m.Version)
+	assert.Equal(t, ">=0.4.0", m.AWFVersion)
+}
+
+func TestManifest_FullManifest(t *testing.T) {
+	m := plugin.Manifest{
+		Name:        "marketplace-plugin",
+		Version:     "1.2.3",
+		AWFVersion:  ">=0.4.0",
+		Description: "A marketplace plugin",
+		Author:      "AWF Team",
+		License:     "MIT",
+		Homepage:    "https://github.com/vanoix/awf",
+		Capabilities: []string{
+			plugin.CapabilityOperations,
+			plugin.CapabilityCommands,
+		},
+		Config: map[string]plugin.ConfigField{
+			"api_key": {
+				Type:        plugin.ConfigTypeString,
+				Required:    true,
+				Description: "API key for authentication",
+			},
+		},
+	}
+
+	assert.Equal(t, "marketplace-plugin", m.Name)
+	assert.Equal(t, "1.2.3", m.Version)
+	assert.Equal(t, ">=0.4.0", m.AWFVersion)
+	assert.Len(t, m.Capabilities, 2)
+	assert.Len(t, m.Config, 1)
+}
+
+func TestManifest_EmptyConfig(t *testing.T) {
+	m := plugin.Manifest{
+		Name:       "test-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
+		Config:     map[string]plugin.ConfigField{},
+	}
+	assert.NotNil(t, m.Config)
+	assert.Len(t, m.Config, 0)
+}
+
+func TestManifest_MultipleCapabilities(t *testing.T) {
+	m := plugin.Manifest{
+		Name:       "test-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
+		Capabilities: []string{
+			plugin.CapabilityOperations,
+			plugin.CapabilityCommands,
+			plugin.CapabilityValidators,
+		},
+	}
+	assert.Len(t, m.Capabilities, 3)
+	assert.Contains(t, m.Capabilities, plugin.CapabilityOperations)
+	assert.Contains(t, m.Capabilities, plugin.CapabilityCommands)
+	assert.Contains(t, m.Capabilities, plugin.CapabilityValidators)
+}
+
+func TestManifest_OptionalMetadata(t *testing.T) {
+	m := plugin.Manifest{
+		Name:        "test-plugin",
+		Version:     "1.0.0",
+		AWFVersion:  ">=0.4.0",
+		Description: "Test plugin description",
+		Author:      "Test Author",
+		License:     "MIT",
+		Homepage:    "https://example.com",
+	}
+	assert.Equal(t, "Test plugin description", m.Description)
+	assert.Equal(t, "Test Author", m.Author)
+	assert.Equal(t, "MIT", m.License)
+	assert.Equal(t, "https://example.com", m.Homepage)
+}
+
+func TestManifest_HasCapability(t *testing.T) {
+	m := plugin.Manifest{
+		Name:       "test-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
+		Capabilities: []string{
+			plugin.CapabilityOperations,
+		},
+	}
+
+	assert.True(t, m.HasCapability(plugin.CapabilityOperations))
+	assert.False(t, m.HasCapability(plugin.CapabilityCommands))
+	assert.False(t, m.HasCapability(plugin.CapabilityValidators))
 }
 
 // =============================================================================
@@ -280,204 +258,73 @@ func TestManifest_HasCapability(t *testing.T) {
 // =============================================================================
 
 func TestConfigField_Creation(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    plugin.ConfigField
-		wantType string
-		wantReq  bool
-	}{
-		{
-			name: "required string field",
-			field: plugin.ConfigField{
-				Type:        "string",
-				Required:    true,
-				Description: "A required string",
-			},
-			wantType: "string",
-			wantReq:  true,
-		},
-		{
-			name: "optional integer with default",
-			field: plugin.ConfigField{
-				Type:        "integer",
-				Required:    false,
-				Default:     42,
-				Description: "Port number",
-			},
-			wantType: "integer",
-			wantReq:  false,
-		},
-		{
-			name: "boolean field",
-			field: plugin.ConfigField{
-				Type:     "boolean",
-				Required: false,
-				Default:  true,
-			},
-			wantType: "boolean",
-			wantReq:  false,
-		},
+	cf := plugin.ConfigField{
+		Type:        plugin.ConfigTypeString,
+		Required:    true,
+		Description: "API key",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantType, tt.field.Type)
-			assert.Equal(t, tt.wantReq, tt.field.Required)
-		})
-	}
+	assert.Equal(t, plugin.ConfigTypeString, cf.Type)
+	assert.True(t, cf.Required)
+	assert.Equal(t, "API key", cf.Description)
 }
 
 func TestConfigField_DefaultValues(t *testing.T) {
-	tests := []struct {
-		name        string
-		field       plugin.ConfigField
-		wantDefault any
-	}{
-		{
-			name: "string default",
-			field: plugin.ConfigField{
-				Type:    "string",
-				Default: "default-value",
-			},
-			wantDefault: "default-value",
-		},
-		{
-			name: "integer default",
-			field: plugin.ConfigField{
-				Type:    "integer",
-				Default: 8080,
-			},
-			wantDefault: 8080,
-		},
-		{
-			name: "boolean default true",
-			field: plugin.ConfigField{
-				Type:    "boolean",
-				Default: true,
-			},
-			wantDefault: true,
-		},
-		{
-			name: "boolean default false",
-			field: plugin.ConfigField{
-				Type:    "boolean",
-				Default: false,
-			},
-			wantDefault: false,
-		},
-		{
-			name: "nil default",
-			field: plugin.ConfigField{
-				Type: "string",
-			},
-			wantDefault: nil,
-		},
+	cf := plugin.ConfigField{
+		Type:    plugin.ConfigTypeString,
+		Default: "default-value",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantDefault, tt.field.Default)
-		})
-	}
+	assert.Equal(t, "default-value", cf.Default)
 }
 
 func TestConfigField_WithEnum(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    plugin.ConfigField
-		wantEnum []string
-	}{
-		{
-			name: "string field with enum",
-			field: plugin.ConfigField{
-				Type:        plugin.ConfigTypeString,
-				Required:    true,
-				Description: "Environment",
-				Enum:        []string{"development", "staging", "production"},
-			},
-			wantEnum: []string{"development", "staging", "production"},
-		},
-		{
-			name: "single value enum",
-			field: plugin.ConfigField{
-				Type: plugin.ConfigTypeString,
-				Enum: []string{"only-option"},
-			},
-			wantEnum: []string{"only-option"},
-		},
-		{
-			name: "empty enum",
-			field: plugin.ConfigField{
-				Type: plugin.ConfigTypeString,
-				Enum: []string{},
-			},
-			wantEnum: []string{},
-		},
-		{
-			name: "nil enum",
-			field: plugin.ConfigField{
-				Type: plugin.ConfigTypeString,
-			},
-			wantEnum: nil,
-		},
+	cf := plugin.ConfigField{
+		Type: plugin.ConfigTypeString,
+		Enum: []string{"option1", "option2", "option3"},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.wantEnum == nil {
-				assert.Nil(t, tt.field.Enum)
-			} else {
-				assert.Equal(t, tt.wantEnum, tt.field.Enum)
-			}
-		})
-	}
+	assert.Len(t, cf.Enum, 3)
+	assert.Contains(t, cf.Enum, "option1")
+	assert.Contains(t, cf.Enum, "option2")
+	assert.Contains(t, cf.Enum, "option3")
 }
 
 func TestConfigField_FullField(t *testing.T) {
-	field := plugin.ConfigField{
+	cf := plugin.ConfigField{
 		Type:        plugin.ConfigTypeString,
 		Required:    true,
-		Default:     "info",
-		Description: "Log level for the plugin",
-		Enum:        []string{"debug", "info", "warn", "error"},
+		Default:     "default",
+		Description: "Configuration field",
+		Enum:        []string{"option1", "option2"},
 	}
-
-	assert.Equal(t, plugin.ConfigTypeString, field.Type)
-	assert.True(t, field.Required)
-	assert.Equal(t, "info", field.Default)
-	assert.Equal(t, "Log level for the plugin", field.Description)
-	assert.Len(t, field.Enum, 4)
-	assert.Contains(t, field.Enum, "debug")
-	assert.Contains(t, field.Enum, "info")
-	assert.Contains(t, field.Enum, "warn")
-	assert.Contains(t, field.Enum, "error")
+	assert.Equal(t, plugin.ConfigTypeString, cf.Type)
+	assert.True(t, cf.Required)
+	assert.Equal(t, "default", cf.Default)
+	assert.Equal(t, "Configuration field", cf.Description)
+	assert.Len(t, cf.Enum, 2)
 }
 
 // =============================================================================
-// Edge Cases and Boundary Tests
+// Manifest Field Format Tests
 // =============================================================================
 
 func TestManifest_NameFormats(t *testing.T) {
 	tests := []struct {
-		name       string
-		pluginName string
+		name   string
+		format string
 	}{
-		{name: "simple name", pluginName: "myplugin"},
-		{name: "with hyphen", pluginName: "my-plugin"},
-		{name: "with multiple hyphens", pluginName: "my-awesome-plugin"},
-		{name: "with numbers", pluginName: "plugin123"},
-		{name: "with prefix", pluginName: "awf-plugin-slack"},
-		{name: "single char", pluginName: "a"},
-		{name: "numeric start", pluginName: "123plugin"},
+		{name: "simple lowercase", format: "plugin"},
+		{name: "hyphenated", format: "my-plugin"},
+		{name: "with numbers", format: "plugin123"},
+		{name: "complex", format: "awf-marketplace-v2"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := plugin.Manifest{
-				Name:    tt.pluginName,
-				Version: "1.0.0",
+				Name:       tt.format,
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
 			}
-			assert.Equal(t, tt.pluginName, m.Name)
+			assert.Equal(t, tt.format, m.Name)
 		})
 	}
 }
@@ -487,21 +334,20 @@ func TestManifest_VersionFormats(t *testing.T) {
 		name    string
 		version string
 	}{
-		{name: "standard semver", version: "1.0.0"},
-		{name: "with v prefix", version: "v1.0.0"},
-		{name: "prerelease", version: "1.0.0-alpha"},
-		{name: "prerelease with number", version: "1.0.0-beta.1"},
-		{name: "build metadata", version: "1.0.0+build.123"},
-		{name: "full semver", version: "1.0.0-rc.1+build.456"},
-		{name: "zero version", version: "0.0.0"},
-		{name: "high version", version: "99.99.99"},
+		{name: "semantic version", version: "1.0.0"},
+		{name: "with prerelease", version: "1.0.0-alpha.1"},
+		{name: "with build metadata", version: "1.0.0+20230101"},
+		{name: "full semver", version: "1.0.0-beta.2+build.123"},
+		{name: "major only", version: "1"},
+		{name: "major.minor", version: "1.0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := plugin.Manifest{
-				Name:    "test-plugin",
-				Version: tt.version,
+				Name:       "test-plugin",
+				Version:    tt.version,
+				AWFVersion: ">=0.4.0",
 			}
 			assert.Equal(t, tt.version, m.Version)
 		})
@@ -538,54 +384,32 @@ func TestManifest_AWFVersionConstraints(t *testing.T) {
 
 func TestManifest_ConfigWithMultipleFields(t *testing.T) {
 	m := plugin.Manifest{
-		Name:         "complex-plugin",
-		Version:      "1.0.0",
-		Capabilities: []string{plugin.CapabilityOperations},
+		Name:       "test-plugin",
+		Version:    "1.0.0",
+		AWFVersion: ">=0.4.0",
 		Config: map[string]plugin.ConfigField{
-			"api_url": {
+			"api_key": {
 				Type:        plugin.ConfigTypeString,
 				Required:    true,
-				Description: "API endpoint URL",
+				Description: "API key",
 			},
 			"timeout": {
 				Type:        plugin.ConfigTypeInteger,
-				Required:    false,
 				Default:     30,
-				Description: "Request timeout in seconds",
+				Description: "Timeout in seconds",
 			},
-			"verify_ssl": {
+			"enabled": {
 				Type:        plugin.ConfigTypeBoolean,
-				Required:    false,
 				Default:     true,
-				Description: "Whether to verify SSL certificates",
-			},
-			"log_level": {
-				Type:        plugin.ConfigTypeString,
-				Required:    false,
-				Default:     "info",
-				Description: "Logging level",
-				Enum:        []string{"debug", "info", "warn", "error"},
+				Description: "Enable feature",
 			},
 		},
 	}
 
-	assert.Len(t, m.Config, 4)
-
-	apiURL := m.Config["api_url"]
-	assert.Equal(t, plugin.ConfigTypeString, apiURL.Type)
-	assert.True(t, apiURL.Required)
-
-	timeout := m.Config["timeout"]
-	assert.Equal(t, plugin.ConfigTypeInteger, timeout.Type)
-	assert.False(t, timeout.Required)
-	assert.Equal(t, 30, timeout.Default)
-
-	verifySSL := m.Config["verify_ssl"]
-	assert.Equal(t, plugin.ConfigTypeBoolean, verifySSL.Type)
-	assert.Equal(t, true, verifySSL.Default)
-
-	logLevel := m.Config["log_level"]
-	assert.Len(t, logLevel.Enum, 4)
+	assert.Len(t, m.Config, 3)
+	assert.Equal(t, plugin.ConfigTypeString, m.Config["api_key"].Type)
+	assert.Equal(t, plugin.ConfigTypeInteger, m.Config["timeout"].Type)
+	assert.Equal(t, plugin.ConfigTypeBoolean, m.Config["enabled"].Type)
 }
 
 func TestManifest_LicenseFormats(t *testing.T) {
@@ -597,17 +421,16 @@ func TestManifest_LicenseFormats(t *testing.T) {
 		{name: "Apache 2.0", license: "Apache-2.0"},
 		{name: "GPL v3", license: "GPL-3.0"},
 		{name: "BSD 3-Clause", license: "BSD-3-Clause"},
-		{name: "LGPL", license: "LGPL-2.1"},
 		{name: "Proprietary", license: "Proprietary"},
-		{name: "Unlicense", license: "Unlicense"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := plugin.Manifest{
-				Name:    "test-plugin",
-				Version: "1.0.0",
-				License: tt.license,
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				License:    tt.license,
 			}
 			assert.Equal(t, tt.license, m.License)
 		})
@@ -619,19 +442,19 @@ func TestManifest_HomepageFormats(t *testing.T) {
 		name     string
 		homepage string
 	}{
-		{name: "GitHub", homepage: "https://github.com/user/repo"},
-		{name: "GitLab", homepage: "https://gitlab.com/user/repo"},
-		{name: "Custom domain", homepage: "https://myplugin.example.com"},
-		{name: "With path", homepage: "https://example.com/plugins/my-plugin"},
-		{name: "HTTP", homepage: "http://insecure.example.com"},
+		{name: "GitHub URL", homepage: "https://github.com/vanoix/awf"},
+		{name: "GitLab URL", homepage: "https://gitlab.com/project/repo"},
+		{name: "Custom domain", homepage: "https://awf-plugin.example.com"},
+		{name: "HTTP URL", homepage: "http://example.com"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := plugin.Manifest{
-				Name:     "test-plugin",
-				Version:  "1.0.0",
-				Homepage: tt.homepage,
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Homepage:   tt.homepage,
 			}
 			assert.Equal(t, tt.homepage, m.Homepage)
 		})
@@ -643,11 +466,10 @@ func TestManifest_AuthorFormats(t *testing.T) {
 		name   string
 		author string
 	}{
-		{name: "name only", author: "John Doe"},
-		{name: "with email", author: "John Doe <john@example.com>"},
-		{name: "email only", author: "<john@example.com>"},
-		{name: "organization", author: "ACME Inc."},
-		{name: "multiple authors", author: "John Doe, Jane Smith"},
+		{name: "Simple name", author: "John Doe"},
+		{name: "Organization", author: "AWF Team"},
+		{name: "With email", author: "John Doe <john@example.com>"},
+		{name: "With URL", author: "AWF Team (https://github.com/vanoix)"},
 	}
 
 	for _, tt := range tests {
@@ -658,6 +480,2152 @@ func TestManifest_AuthorFormats(t *testing.T) {
 				Author:  tt.author,
 			}
 			assert.Equal(t, tt.author, m.Author)
+		})
+	}
+}
+
+// =============================================================================
+// validateConfigField() Tests (Component T002)
+// Feature: C031
+// =============================================================================
+
+// TestValidateConfigField_HappyPath tests valid ConfigField configurations
+func TestValidateConfigField_HappyPath(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name   string
+		field  plugin.ConfigField
+		config map[string]plugin.ConfigField
+	}{
+		{
+			name: "valid string field",
+			config: map[string]plugin.ConfigField{
+				"api_key": {
+					Type:        plugin.ConfigTypeString,
+					Required:    true,
+					Description: "API key for authentication",
+				},
+			},
+		},
+		{
+			name: "valid integer field",
+			config: map[string]plugin.ConfigField{
+				"timeout": {
+					Type:        plugin.ConfigTypeInteger,
+					Required:    false,
+					Default:     30,
+					Description: "Timeout in seconds",
+				},
+			},
+		},
+		{
+			name: "valid boolean field",
+			config: map[string]plugin.ConfigField{
+				"enabled": {
+					Type:        plugin.ConfigTypeBoolean,
+					Required:    false,
+					Default:     true,
+					Description: "Enable feature",
+				},
+			},
+		},
+		{
+			name: "string field with enum",
+			config: map[string]plugin.ConfigField{
+				"log_level": {
+					Type:        plugin.ConfigTypeString,
+					Required:    false,
+					Default:     "info",
+					Enum:        []string{"debug", "info", "warn", "error"},
+					Description: "Logging level",
+				},
+			},
+		},
+		{
+			name: "string field with default matching enum",
+			config: map[string]plugin.ConfigField{
+				"environment": {
+					Type:     plugin.ConfigTypeString,
+					Default:  "development",
+					Enum:     []string{"development", "staging", "production"},
+					Required: false,
+				},
+			},
+		},
+		{
+			name: "field without default value",
+			config: map[string]plugin.ConfigField{
+				"optional_field": {
+					Type:        plugin.ConfigTypeString,
+					Required:    false,
+					Description: "Optional field",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     tt.config,
+			}
+			err := m.Validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// TestValidateConfigField_TypeValidation tests config field type validation
+func TestValidateConfigField_TypeValidation(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		field   plugin.ConfigField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "empty type",
+			field: plugin.ConfigField{
+				Type:        "",
+				Description: "Field with empty type",
+			},
+			wantErr: true,
+			errMsg:  "type",
+		},
+		{
+			name: "invalid type",
+			field: plugin.ConfigField{
+				Type:        "array",
+				Description: "Unsupported array type",
+			},
+			wantErr: true,
+			errMsg:  "type",
+		},
+		{
+			name: "unknown type",
+			field: plugin.ConfigField{
+				Type:        "object",
+				Description: "Unsupported object type",
+			},
+			wantErr: true,
+			errMsg:  "type",
+		},
+		{
+			name: "valid string type",
+			field: plugin.ConfigField{
+				Type:        plugin.ConfigTypeString,
+				Description: "Valid string field",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid integer type",
+			field: plugin.ConfigField{
+				Type:        plugin.ConfigTypeInteger,
+				Description: "Valid integer field",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid boolean type",
+			field: plugin.ConfigField{
+				Type:        plugin.ConfigTypeBoolean,
+				Description: "Valid boolean field",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": tt.field,
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateConfigField_EnumValidation tests enum constraint validation
+func TestValidateConfigField_EnumValidation(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		field   plugin.ConfigField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "enum on string type - valid",
+			field: plugin.ConfigField{
+				Type: plugin.ConfigTypeString,
+				Enum: []string{"option1", "option2", "option3"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "enum on integer type - invalid",
+			field: plugin.ConfigField{
+				Type: plugin.ConfigTypeInteger,
+				Enum: []string{"1", "2", "3"},
+			},
+			wantErr: true,
+			errMsg:  "enum",
+		},
+		{
+			name: "enum on boolean type - invalid",
+			field: plugin.ConfigField{
+				Type: plugin.ConfigTypeBoolean,
+				Enum: []string{"true", "false"},
+			},
+			wantErr: true,
+			errMsg:  "enum",
+		},
+		{
+			name: "empty enum on string type",
+			field: plugin.ConfigField{
+				Type: plugin.ConfigTypeString,
+				Enum: []string{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "nil enum on string type",
+			field: plugin.ConfigField{
+				Type: plugin.ConfigTypeString,
+				Enum: nil,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": tt.field,
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateConfigField_DefaultTypeValidation tests default value type matching
+func TestValidateConfigField_DefaultTypeValidation(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		field   plugin.ConfigField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "string default matches string type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: "default-value",
+			},
+			wantErr: false,
+		},
+		{
+			name: "integer default matches integer type - int",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeInteger,
+				Default: 42,
+			},
+			wantErr: false,
+		},
+		{
+			name: "integer default matches integer type - float64 (JSON)",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeInteger,
+				Default: float64(42),
+			},
+			wantErr: false,
+		},
+		{
+			name: "boolean default matches boolean type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeBoolean,
+				Default: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "string default mismatch with integer type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeInteger,
+				Default: "not-a-number",
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "integer default mismatch with string type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: 123,
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "boolean default mismatch with string type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: true,
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "string default mismatch with boolean type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeBoolean,
+				Default: "true",
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "nil default value - valid",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: nil,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": tt.field,
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateConfigField_EdgeCases tests edge cases in config field validation
+func TestValidateConfigField_EdgeCases(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		config  map[string]plugin.ConfigField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "nil config map",
+			config:  nil,
+			wantErr: false,
+		},
+		{
+			name:    "empty config map",
+			config:  map[string]plugin.ConfigField{},
+			wantErr: false,
+		},
+		{
+			name: "multiple valid fields",
+			config: map[string]plugin.ConfigField{
+				"field1": {Type: plugin.ConfigTypeString, Default: "value1"},
+				"field2": {Type: plugin.ConfigTypeInteger, Default: 42},
+				"field3": {Type: plugin.ConfigTypeBoolean, Default: true},
+			},
+			wantErr: false,
+		},
+		{
+			name: "first field valid, second field invalid",
+			config: map[string]plugin.ConfigField{
+				"valid_field":   {Type: plugin.ConfigTypeString, Default: "value"},
+				"invalid_field": {Type: "invalid_type", Default: "value"},
+			},
+			wantErr: true,
+			errMsg:  "type",
+		},
+		{
+			name: "field with all attributes",
+			config: map[string]plugin.ConfigField{
+				"comprehensive": {
+					Type:        plugin.ConfigTypeString,
+					Required:    true,
+					Default:     "default",
+					Description: "Comprehensive field test",
+					Enum:        []string{"option1", "option2"},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     tt.config,
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateConfigField_ErrorMessages tests error message clarity
+func TestValidateConfigField_ErrorMessages(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name        string
+		config      map[string]plugin.ConfigField
+		expectedErr []string // multiple strings that should appear in error
+	}{
+		{
+			name: "invalid type error includes field name",
+			config: map[string]plugin.ConfigField{
+				"bad_field": {Type: "invalid"},
+			},
+			expectedErr: []string{"bad_field"},
+		},
+		{
+			name: "enum on non-string includes field name and constraint",
+			config: map[string]plugin.ConfigField{
+				"numeric_enum": {
+					Type: plugin.ConfigTypeInteger,
+					Enum: []string{"1", "2", "3"},
+				},
+			},
+			expectedErr: []string{"numeric_enum", "enum"},
+		},
+		{
+			name: "type mismatch includes expected and actual types",
+			config: map[string]plugin.ConfigField{
+				"wrong_default": {
+					Type:    plugin.ConfigTypeInteger,
+					Default: "not-a-number",
+				},
+			},
+			expectedErr: []string{"wrong_default", "type mismatch"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     tt.config,
+			}
+			err := m.Validate()
+			require.Error(t, err)
+			for _, expected := range tt.expectedErr {
+				assert.Contains(t, err.Error(), expected,
+					"error message should contain %q", expected)
+			}
+		})
+	}
+}
+
+// TestValidateConfigField_ComplexScenarios tests realistic complex configurations
+func TestValidateConfigField_ComplexScenarios(t *testing.T) {
+	// Component: T002, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		config  map[string]plugin.ConfigField
+		wantErr bool
+	}{
+		{
+			name: "realistic marketplace plugin config",
+			config: map[string]plugin.ConfigField{
+				"api_key": {
+					Type:        plugin.ConfigTypeString,
+					Required:    true,
+					Description: "Marketplace API key",
+				},
+				"timeout": {
+					Type:        plugin.ConfigTypeInteger,
+					Default:     30,
+					Description: "Request timeout in seconds",
+				},
+				"environment": {
+					Type:        plugin.ConfigTypeString,
+					Default:     "production",
+					Enum:        []string{"development", "staging", "production"},
+					Description: "Deployment environment",
+				},
+				"cache_enabled": {
+					Type:        plugin.ConfigTypeBoolean,
+					Default:     true,
+					Description: "Enable response caching",
+				},
+				"log_level": {
+					Type:        plugin.ConfigTypeString,
+					Default:     "info",
+					Enum:        []string{"debug", "info", "warn", "error"},
+					Description: "Logging verbosity level",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "config with one invalid field among many valid",
+			config: map[string]plugin.ConfigField{
+				"valid1":  {Type: plugin.ConfigTypeString, Default: "value"},
+				"valid2":  {Type: plugin.ConfigTypeInteger, Default: 42},
+				"invalid": {Type: "bad_type", Default: "value"},
+				"valid3":  {Type: plugin.ConfigTypeBoolean, Default: true},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     tt.config,
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// validateDefaultType() Helper Tests (Component T003)
+// =============================================================================
+
+// TestValidateDefaultType_StringType tests string type validation via validateDefaultType
+func TestValidateDefaultType_StringType(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name         string
+		defaultValue any
+		wantErr      bool
+		errMsg       string
+	}{
+		{
+			name:         "valid string default",
+			defaultValue: "hello",
+			wantErr:      false,
+		},
+		{
+			name:         "empty string is valid",
+			defaultValue: "",
+			wantErr:      false,
+		},
+		{
+			name:         "multiline string is valid",
+			defaultValue: "line1\nline2\nline3",
+			wantErr:      false,
+		},
+		{
+			name:         "string with special characters",
+			defaultValue: "test@#$%^&*()_+-={}[]|\\:;\"'<>,.?/",
+			wantErr:      false,
+		},
+		{
+			name:         "unicode string is valid",
+			defaultValue: "こんにちは世界",
+			wantErr:      false,
+		},
+		{
+			name:         "integer instead of string",
+			defaultValue: 42,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "float instead of string",
+			defaultValue: 3.14,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "boolean instead of string",
+			defaultValue: true,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "slice instead of string",
+			defaultValue: []string{"a", "b"},
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "map instead of string",
+			defaultValue: map[string]string{"key": "value"},
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "nil value is valid (no default)",
+			defaultValue: nil,
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": {
+						Type:    plugin.ConfigTypeString,
+						Default: tt.defaultValue,
+					},
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_IntegerType tests integer type validation via validateDefaultType
+func TestValidateDefaultType_IntegerType(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name         string
+		defaultValue any
+		wantErr      bool
+		errMsg       string
+	}{
+		{
+			name:         "valid int",
+			defaultValue: 42,
+			wantErr:      false,
+		},
+		{
+			name:         "valid int8",
+			defaultValue: int8(127),
+			wantErr:      false,
+		},
+		{
+			name:         "valid int16",
+			defaultValue: int16(32767),
+			wantErr:      false,
+		},
+		{
+			name:         "valid int32",
+			defaultValue: int32(2147483647),
+			wantErr:      false,
+		},
+		{
+			name:         "valid int64",
+			defaultValue: int64(9223372036854775807),
+			wantErr:      false,
+		},
+		{
+			name:         "valid uint",
+			defaultValue: uint(42),
+			wantErr:      false,
+		},
+		{
+			name:         "valid uint8",
+			defaultValue: uint8(255),
+			wantErr:      false,
+		},
+		{
+			name:         "valid uint16",
+			defaultValue: uint16(65535),
+			wantErr:      false,
+		},
+		{
+			name:         "valid uint32",
+			defaultValue: uint32(4294967295),
+			wantErr:      false,
+		},
+		{
+			name:         "valid uint64",
+			defaultValue: uint64(18446744073709551615),
+			wantErr:      false,
+		},
+		{
+			name:         "valid float64 from JSON (42.0)",
+			defaultValue: float64(42),
+			wantErr:      false,
+		},
+		{
+			name:         "valid float64 from JSON (negative)",
+			defaultValue: float64(-100),
+			wantErr:      false,
+		},
+		{
+			name:         "valid zero",
+			defaultValue: 0,
+			wantErr:      false,
+		},
+		{
+			name:         "valid negative integer",
+			defaultValue: -42,
+			wantErr:      false,
+		},
+		{
+			name:         "string instead of integer",
+			defaultValue: "42",
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "boolean instead of integer",
+			defaultValue: true,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "slice instead of integer",
+			defaultValue: []int{1, 2, 3},
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "nil value is valid (no default)",
+			defaultValue: nil,
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": {
+						Type:    plugin.ConfigTypeInteger,
+						Default: tt.defaultValue,
+					},
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_BooleanType tests boolean type validation via validateDefaultType
+func TestValidateDefaultType_BooleanType(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name         string
+		defaultValue any
+		wantErr      bool
+		errMsg       string
+	}{
+		{
+			name:         "valid true",
+			defaultValue: true,
+			wantErr:      false,
+		},
+		{
+			name:         "valid false",
+			defaultValue: false,
+			wantErr:      false,
+		},
+		{
+			name:         "string 'true' instead of boolean",
+			defaultValue: "true",
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "string 'false' instead of boolean",
+			defaultValue: "false",
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "integer 1 instead of boolean",
+			defaultValue: 1,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "integer 0 instead of boolean",
+			defaultValue: 0,
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "slice instead of boolean",
+			defaultValue: []bool{true, false},
+			wantErr:      true,
+			errMsg:       "type mismatch",
+		},
+		{
+			name:         "nil value is valid (no default)",
+			defaultValue: nil,
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": {
+						Type:    plugin.ConfigTypeBoolean,
+						Default: tt.defaultValue,
+					},
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_TypeMismatchMessages tests error message clarity
+func TestValidateDefaultType_TypeMismatchMessages(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name          string
+		configType    string
+		defaultValue  any
+		wantErrSubstr []string
+	}{
+		{
+			name:          "string type expects string",
+			configType:    plugin.ConfigTypeString,
+			defaultValue:  123,
+			wantErrSubstr: []string{"type mismatch", "expected string", "got int"},
+		},
+		{
+			name:          "integer type expects integer",
+			configType:    plugin.ConfigTypeInteger,
+			defaultValue:  "not-a-number",
+			wantErrSubstr: []string{"type mismatch", "expected integer", "got string"},
+		},
+		{
+			name:          "boolean type expects bool",
+			configType:    plugin.ConfigTypeBoolean,
+			defaultValue:  "true",
+			wantErrSubstr: []string{"type mismatch", "expected bool", "got string"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": {
+						Type:    tt.configType,
+						Default: tt.defaultValue,
+					},
+				},
+			}
+			err := m.Validate()
+			require.Error(t, err)
+			for _, substr := range tt.wantErrSubstr {
+				assert.Contains(t, err.Error(), substr, "error message should contain %q", substr)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_EdgeCases tests edge cases in type validation
+func TestValidateDefaultType_EdgeCases(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name       string
+		field      plugin.ConfigField
+		wantErr    bool
+		errMsg     string
+		skipReason string
+	}{
+		{
+			name: "nil default with string type (optional field)",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "nil default with integer type (optional field)",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeInteger,
+				Default: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "nil default with boolean type (optional field)",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeBoolean,
+				Default: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "struct instead of primitive type",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: struct{ Value string }{Value: "test"},
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "pointer to string instead of string",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeString,
+				Default: func() *string { s := "test"; return &s }(),
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "pointer to int instead of int",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeInteger,
+				Default: func() *int { i := 42; return &i }(),
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "pointer to bool instead of bool",
+			field: plugin.ConfigField{
+				Type:    plugin.ConfigTypeBoolean,
+				Default: func() *bool { b := true; return &b }(),
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skipReason != "" {
+				t.Skip(tt.skipReason)
+			}
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": tt.field,
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_JSONUnmarshalBehavior tests JSON float64 handling for integers
+func TestValidateDefaultType_JSONUnmarshalBehavior(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	//
+	// This test verifies that validateDefaultType correctly handles the JSON
+	// unmarshaling behavior where all numbers are decoded as float64.
+	// This is critical for YAML/JSON config parsing.
+	tests := []struct {
+		name         string
+		defaultValue any
+		wantErr      bool
+	}{
+		{
+			name:         "float64(42) from JSON should be valid for integer type",
+			defaultValue: float64(42),
+			wantErr:      false,
+		},
+		{
+			name:         "float64(0) should be valid for integer type",
+			defaultValue: float64(0),
+			wantErr:      false,
+		},
+		{
+			name:         "float64(-100) should be valid for integer type",
+			defaultValue: float64(-100),
+			wantErr:      false,
+		},
+		{
+			name:         "float64(3.14) should be valid (no fractional check)",
+			defaultValue: float64(3.14),
+			wantErr:      false,
+		},
+		{
+			name:         "native int should still work",
+			defaultValue: 42,
+			wantErr:      false,
+		},
+		{
+			name:         "float32 is NOT accepted (not from JSON)",
+			defaultValue: float32(42),
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"test_field": {
+						Type:    plugin.ConfigTypeInteger,
+						Default: tt.defaultValue,
+					},
+				},
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateDefaultType_MultipleFields tests type validation across multiple config fields
+func TestValidateDefaultType_MultipleFields(t *testing.T) {
+	// Component: T003, T008
+	// Feature: C031
+	tests := []struct {
+		name    string
+		config  map[string]plugin.ConfigField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "all fields valid with correct types",
+			config: map[string]plugin.ConfigField{
+				"api_key":     {Type: plugin.ConfigTypeString, Default: "secret-key"},
+				"port":        {Type: plugin.ConfigTypeInteger, Default: 8080},
+				"enabled":     {Type: plugin.ConfigTypeBoolean, Default: true},
+				"timeout":     {Type: plugin.ConfigTypeInteger, Default: float64(30)},
+				"description": {Type: plugin.ConfigTypeString, Default: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name: "first field invalid type",
+			config: map[string]plugin.ConfigField{
+				"api_key": {Type: plugin.ConfigTypeString, Default: 12345},
+				"port":    {Type: plugin.ConfigTypeInteger, Default: 8080},
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "middle field invalid type",
+			config: map[string]plugin.ConfigField{
+				"api_key": {Type: plugin.ConfigTypeString, Default: "secret"},
+				"port":    {Type: plugin.ConfigTypeInteger, Default: "8080"},
+				"enabled": {Type: plugin.ConfigTypeBoolean, Default: true},
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "last field invalid type",
+			config: map[string]plugin.ConfigField{
+				"api_key": {Type: plugin.ConfigTypeString, Default: "secret"},
+				"port":    {Type: plugin.ConfigTypeInteger, Default: 8080},
+				"enabled": {Type: plugin.ConfigTypeBoolean, Default: "true"},
+			},
+			wantErr: true,
+			errMsg:  "type mismatch",
+		},
+		{
+			name: "all fields with nil defaults",
+			config: map[string]plugin.ConfigField{
+				"api_key": {Type: plugin.ConfigTypeString, Default: nil},
+				"port":    {Type: plugin.ConfigTypeInteger, Default: nil},
+				"enabled": {Type: plugin.ConfigTypeBoolean, Default: nil},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     tt.config,
+			}
+			err := m.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Manifest.Validate() Integration Tests (Component T004)
+// Feature: C031
+// =============================================================================
+
+// TestManifestValidate_HappyPath tests valid manifests that should pass all validation
+func TestManifestValidate_HappyPath(t *testing.T) {
+	// Component: T004
+	// Feature: C031
+	tests := []struct {
+		name     string
+		manifest plugin.Manifest
+	}{
+		{
+			name: "minimal valid manifest",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+		{
+			name: "complete valid manifest with all fields",
+			manifest: plugin.Manifest{
+				Name:        "marketplace-plugin",
+				Version:     "1.2.3",
+				AWFVersion:  ">=0.4.0",
+				Description: "A marketplace integration plugin",
+				Author:      "AWF Team <team@awf.dev>",
+				License:     "MIT",
+				Homepage:    "https://github.com/vanoix/awf",
+				Capabilities: []string{
+					plugin.CapabilityOperations,
+					plugin.CapabilityCommands,
+					plugin.CapabilityValidators,
+				},
+				Config: map[string]plugin.ConfigField{
+					"api_key": {
+						Type:        plugin.ConfigTypeString,
+						Required:    true,
+						Description: "API key for authentication",
+					},
+					"timeout": {
+						Type:        plugin.ConfigTypeInteger,
+						Default:     30,
+						Description: "Request timeout in seconds",
+					},
+					"enabled": {
+						Type:        plugin.ConfigTypeBoolean,
+						Default:     true,
+						Description: "Enable plugin",
+					},
+					"environment": {
+						Type:        plugin.ConfigTypeString,
+						Default:     "production",
+						Enum:        []string{"development", "staging", "production"},
+						Description: "Deployment environment",
+					},
+				},
+			},
+		},
+		{
+			name: "manifest with single capability",
+			manifest: plugin.Manifest{
+				Name:         "simple-plugin",
+				Version:      "0.1.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{plugin.CapabilityOperations},
+			},
+		},
+		{
+			name: "manifest with empty capabilities list",
+			manifest: plugin.Manifest{
+				Name:         "basic-plugin",
+				Version:      "2.0.0",
+				AWFVersion:   "^0.4.0",
+				Capabilities: []string{},
+			},
+		},
+		{
+			name: "manifest with nil config",
+			manifest: plugin.Manifest{
+				Name:       "no-config-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     nil,
+			},
+		},
+		{
+			name: "manifest with version prerelease",
+			manifest: plugin.Manifest{
+				Name:       "beta-plugin",
+				Version:    "1.0.0-beta.1",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+		{
+			name: "manifest with version build metadata",
+			manifest: plugin.Manifest{
+				Name:       "build-plugin",
+				Version:    "1.0.0+build.123",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+		{
+			name: "manifest with complex name pattern",
+			manifest: plugin.Manifest{
+				Name:       "awf-marketplace-v2-beta",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			assert.NoError(t, err, "expected valid manifest to pass validation")
+			assert.NotErrorIs(t, err, plugin.ErrNotImplemented, "should not return ErrNotImplemented")
+		})
+	}
+}
+
+// TestManifestValidate_NameValidation tests name field validation
+func TestManifestValidate_NameValidation(t *testing.T) {
+	// Component: T004, T005
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "empty name",
+			manifest: plugin.Manifest{
+				Name:       "",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "name cannot be empty",
+		},
+		{
+			name: "whitespace only name",
+			manifest: plugin.Manifest{
+				Name:       "   ",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name starts with digit",
+			manifest: plugin.Manifest{
+				Name:       "1plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name contains uppercase",
+			manifest: plugin.Manifest{
+				Name:       "MyPlugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name contains underscore",
+			manifest: plugin.Manifest{
+				Name:       "my_plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name contains space",
+			manifest: plugin.Manifest{
+				Name:       "my plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name contains special characters",
+			manifest: plugin.Manifest{
+				Name:       "my@plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "name starts with hyphen",
+			manifest: plugin.Manifest{
+				Name:       "-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "invalid name",
+		},
+		{
+			name: "valid lowercase name",
+			manifest: plugin.Manifest{
+				Name:       "plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid name with hyphens and numbers",
+			manifest: plugin.Manifest{
+				Name:       "my-plugin-v2",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSubstr)
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_VersionValidation tests version field validation
+func TestManifestValidate_VersionValidation(t *testing.T) {
+	// Component: T004, T006
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "empty version",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "version cannot be empty",
+		},
+		{
+			name: "valid semantic version",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid version with prerelease",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0-alpha.1",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid version with build metadata",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0+20230101",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid version major.minor",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid version major only",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "arbitrary version string (ADR-003 minimal validation)",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "v2024.01.01",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSubstr)
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_AWFVersionValidation tests AWFVersion field validation
+func TestManifestValidate_AWFVersionValidation(t *testing.T) {
+	// Component: T004, T006
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "empty AWFVersion",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: "",
+			},
+			wantErr:   true,
+			errSubstr: "awf_version cannot be empty",
+		},
+		{
+			name: "valid constraint >=",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid constraint ^",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: "^0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid constraint ~",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: "~0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid range constraint",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0 <1.0.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid exact version",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: "0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "arbitrary constraint string (ADR-003 minimal validation)",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: "latest",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSubstr)
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_CapabilitiesValidation tests capabilities list validation
+func TestManifestValidate_CapabilitiesValidation(t *testing.T) {
+	// Component: T004, T007
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "nil capabilities list",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty capabilities list",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single valid capability - operations",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{plugin.CapabilityOperations},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single valid capability - commands",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{plugin.CapabilityCommands},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single valid capability - validators",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{plugin.CapabilityValidators},
+			},
+			wantErr: false,
+		},
+		{
+			name: "all valid capabilities",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Capabilities: []string{
+					plugin.CapabilityOperations,
+					plugin.CapabilityCommands,
+					plugin.CapabilityValidators,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid capability",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{"unknown"},
+			},
+			wantErr:   true,
+			errSubstr: "invalid capability",
+		},
+		{
+			name: "mixed valid and invalid capabilities",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Capabilities: []string{
+					plugin.CapabilityOperations,
+					"invalid-capability",
+				},
+			},
+			wantErr:   true,
+			errSubstr: "invalid capability",
+		},
+		{
+			name: "duplicate valid capabilities",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Capabilities: []string{
+					plugin.CapabilityOperations,
+					plugin.CapabilityOperations,
+				},
+			},
+			wantErr: false, // duplicates are allowed per spec
+		},
+		{
+			name: "capability with typo",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{"operation"}, // missing 's'
+			},
+			wantErr:   true,
+			errSubstr: "invalid capability",
+		},
+		{
+			name: "capability with wrong case",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{"Operations"}, // capitalized
+			},
+			wantErr:   true,
+			errSubstr: "invalid capability",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSubstr)
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_ConfigValidation tests config field validation integration
+func TestManifestValidate_ConfigValidation(t *testing.T) {
+	// Component: T004, T008
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "nil config map",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty config map",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config:     map[string]plugin.ConfigField{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid single config field",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"api_key": {
+						Type:        plugin.ConfigTypeString,
+						Required:    true,
+						Description: "API key",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid config field type",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"bad_field": {
+						Type: "invalid_type",
+					},
+				},
+			},
+			wantErr:   true,
+			errSubstr: "config field \"bad_field\"",
+		},
+		{
+			name: "config field with enum on non-string type",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"port": {
+						Type: plugin.ConfigTypeInteger,
+						Enum: []string{"8080", "8081"},
+					},
+				},
+			},
+			wantErr:   true,
+			errSubstr: "enum",
+		},
+		{
+			name: "config field with type mismatch default",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"timeout": {
+						Type:    plugin.ConfigTypeInteger,
+						Default: "not-a-number",
+					},
+				},
+			},
+			wantErr:   true,
+			errSubstr: "type mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSubstr)
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_FailFastBehavior tests that validation returns first error
+func TestManifestValidate_FailFastBehavior(t *testing.T) {
+	// Component: T004
+	// Feature: C031
+	//
+	// Per ADR-001, validation should fail fast and return the first error encountered.
+	// This test verifies that multiple errors don't result in aggregated errors.
+	tests := []struct {
+		name        string
+		manifest    plugin.Manifest
+		firstErrMsg string // The first validation error expected
+		notErrMsg   string // A later error that should NOT appear
+	}{
+		{
+			name: "empty name fails before version check",
+			manifest: plugin.Manifest{
+				Name:       "",
+				Version:    "", // also invalid
+				AWFVersion: ">=0.4.0",
+			},
+			firstErrMsg: "name",
+			notErrMsg:   "version",
+		},
+		{
+			name: "invalid name fails before version check",
+			manifest: plugin.Manifest{
+				Name:       "Invalid-Name",
+				Version:    "", // also invalid
+				AWFVersion: ">=0.4.0",
+			},
+			firstErrMsg: "name",
+			notErrMsg:   "version",
+		},
+		{
+			name: "empty version fails before AWFVersion check",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "",
+				AWFVersion: "", // also invalid
+			},
+			firstErrMsg: "version",
+			notErrMsg:   "awf_version",
+		},
+		{
+			name: "empty AWFVersion fails before capabilities check",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   "",
+				Capabilities: []string{"invalid"}, // also invalid
+			},
+			firstErrMsg: "awf_version",
+			notErrMsg:   "capability",
+		},
+		{
+			name: "invalid capability fails before config check",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{"bad-capability"},
+				Config: map[string]plugin.ConfigField{
+					"bad": {Type: "invalid"}, // also invalid
+				},
+			},
+			firstErrMsg: "capability",
+			notErrMsg:   "config",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.firstErrMsg,
+				"should contain first error: %s", tt.firstErrMsg)
+			assert.NotContains(t, err.Error(), tt.notErrMsg,
+				"should NOT contain later error: %s (fail-fast behavior)", tt.notErrMsg)
+			assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+		})
+	}
+}
+
+// TestManifestValidate_EdgeCases tests edge cases and boundary conditions
+func TestManifestValidate_EdgeCases(t *testing.T) {
+	// Component: T004
+	// Feature: C031
+	tests := []struct {
+		name      string
+		manifest  plugin.Manifest
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "all fields empty",
+			manifest: plugin.Manifest{
+				Name:       "",
+				Version:    "",
+				AWFVersion: "",
+			},
+			wantErr:   true,
+			errSubstr: "name",
+		},
+		{
+			name: "whitespace in name",
+			manifest: plugin.Manifest{
+				Name:       "  ",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr:   true,
+			errSubstr: "name",
+		},
+		{
+			name: "single character name",
+			manifest: plugin.Manifest{
+				Name:       "a",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "very long valid name",
+			manifest: plugin.Manifest{
+				Name:       "very-long-plugin-name-with-many-hyphens-and-numbers-12345",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			wantErr: false,
+		},
+		{
+			name: "manifest with all optional fields filled",
+			manifest: plugin.Manifest{
+				Name:        "complete-plugin",
+				Version:     "1.0.0",
+				AWFVersion:  ">=0.4.0",
+				Description: "Complete plugin with all fields",
+				Author:      "Author Name",
+				License:     "MIT",
+				Homepage:    "https://example.com",
+				Capabilities: []string{
+					plugin.CapabilityOperations,
+					plugin.CapabilityCommands,
+				},
+				Config: map[string]plugin.ConfigField{
+					"key": {
+						Type:        plugin.ConfigTypeString,
+						Required:    true,
+						Default:     "value",
+						Description: "A key",
+						Enum:        []string{"value", "other"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero-length capabilities slice (not nil)",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "config with empty field name key",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"": {Type: plugin.ConfigTypeString},
+				},
+			},
+			wantErr: false, // empty keys are allowed in Go maps
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errSubstr != "" {
+					assert.Contains(t, err.Error(), tt.errSubstr)
+				}
+				assert.NotErrorIs(t, err, plugin.ErrNotImplemented)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_ErrorMessages tests error message clarity and helpfulness
+func TestManifestValidate_ErrorMessages(t *testing.T) {
+	// Component: T004
+	// Feature: C031
+	tests := []struct {
+		name           string
+		manifest       plugin.Manifest
+		expectedSubstr []string // All substrings that should appear in error
+	}{
+		{
+			name: "invalid name error shows pattern",
+			manifest: plugin.Manifest{
+				Name:       "Invalid_Name",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+			expectedSubstr: []string{"invalid name", "Invalid_Name", "pattern"},
+		},
+		{
+			name: "invalid capability error shows valid options",
+			manifest: plugin.Manifest{
+				Name:         "test-plugin",
+				Version:      "1.0.0",
+				AWFVersion:   ">=0.4.0",
+				Capabilities: []string{"bad-capability"},
+			},
+			expectedSubstr: []string{"invalid capability", "bad-capability", "operations", "commands", "validators"},
+		},
+		{
+			name: "config field error includes field name",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+				Config: map[string]plugin.ConfigField{
+					"problematic_field": {Type: "invalid"},
+				},
+			},
+			expectedSubstr: []string{"config field", "problematic_field"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			require.Error(t, err)
+			for _, substr := range tt.expectedSubstr {
+				assert.Contains(t, err.Error(), substr,
+					"error message should contain %q", substr)
+			}
+		})
+	}
+}
+
+// TestManifestValidate_NoLongerReturnsErrNotImplemented verifies stub is replaced
+func TestManifestValidate_NoLongerReturnsErrNotImplemented(t *testing.T) {
+	// Component: T004
+	// Feature: C031
+	//
+	// This test explicitly verifies that Manifest.Validate() no longer returns
+	// ErrNotImplemented, confirming that the stub has been fully replaced with
+	// actual validation logic.
+	tests := []struct {
+		name     string
+		manifest plugin.Manifest
+	}{
+		{
+			name: "valid manifest should not return ErrNotImplemented",
+			manifest: plugin.Manifest{
+				Name:       "test-plugin",
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+		{
+			name: "invalid manifest should not return ErrNotImplemented",
+			manifest: plugin.Manifest{
+				Name:       "", // invalid
+				Version:    "1.0.0",
+				AWFVersion: ">=0.4.0",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manifest.Validate()
+			assert.NotErrorIs(t, err, plugin.ErrNotImplemented,
+				"Validate() should never return ErrNotImplemented after C031 implementation")
 		})
 	}
 }

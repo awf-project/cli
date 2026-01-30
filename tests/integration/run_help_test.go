@@ -19,7 +19,6 @@ import (
 // Given a workflow with inputs, when running `awf run <workflow> --help`,
 // displays all inputs with their types and required/optional status.
 func TestRunHelp_WorkflowWithInputs_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -83,7 +82,6 @@ states:
 // Given a workflow with no inputs defined, when running `awf run <workflow> --help`,
 // displays a message indicating the workflow has no input arguments.
 func TestRunHelp_WorkflowNoInputs_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -117,7 +115,6 @@ states:
 // Given a non-existent workflow, when running `awf run <workflow> --help`,
 // displays an error message with exit code 1.
 func TestRunHelp_NonExistentWorkflow_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -159,7 +156,6 @@ func TestRunHelp_NonExistentWorkflow_Integration(t *testing.T) {
 // Given a workflow with inputs that have description fields, when running `--help`,
 // displays the description next to each input.
 func TestRunHelp_InputDescriptions_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -207,7 +203,6 @@ states:
 // Given a workflow with inputs missing description fields, when running `--help`,
 // displays "No description" placeholder for those inputs.
 func TestRunHelp_InputMissingDescriptions_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -245,7 +240,6 @@ states:
 // Given a workflow with optional inputs that have defaults, when running `--help`,
 // displays the default values next to those inputs.
 func TestRunHelp_DefaultValues_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -297,7 +291,6 @@ states:
 // Given a workflow with an optional input without a default, when running `--help`,
 // displays "-" for that input's default column.
 func TestRunHelp_OptionalWithoutDefault_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -347,7 +340,6 @@ states:
 // Given a workflow with a description field, when running `--help`,
 // displays the description at the top before the inputs list.
 func TestRunHelp_WorkflowDescription_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -394,7 +386,6 @@ states:
 // Given a workflow without a description field, when running `--help`,
 // displays inputs without a description section.
 func TestRunHelp_WorkflowNoDescription_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -437,7 +428,6 @@ states:
 // Uses valid-full.yaml fixture which has all features: description, multiple inputs,
 // required/optional, defaults, and input descriptions.
 func TestRunHelp_FullWorkflowExample_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -472,7 +462,6 @@ func TestRunHelp_FullWorkflowExample_Integration(t *testing.T) {
 // TestRunHelp_SimpleWorkflowExample_Integration tests basic help output
 // Uses valid-simple.yaml fixture as a basic test case.
 func TestRunHelp_SimpleWorkflowExample_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -505,7 +494,6 @@ func TestRunHelp_SimpleWorkflowExample_Integration(t *testing.T) {
 // TestRunHelp_NoColorFlag_Integration tests --no-color flag with help
 // Verifies that --no-color flag is respected in help output.
 func TestRunHelp_NoColorFlag_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -530,7 +518,6 @@ func TestRunHelp_NoColorFlag_Integration(t *testing.T) {
 // TestRunHelp_Performance_Integration tests NFR-001: < 50ms response
 // Help display should complete quickly as it only parses YAML, no execution.
 func TestRunHelp_Performance_Integration(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// Run multiple times and measure
@@ -562,7 +549,6 @@ func TestRunHelp_Performance_Integration(t *testing.T) {
 // TestRunHelp_HelpTakesPrecedence_Integration tests FR-005: --help takes precedence
 // Verifies that --help flag takes precedence over other flags (workflow is not executed).
 func TestRunHelp_HelpTakesPrecedence_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -610,7 +596,6 @@ states:
 // TestRunHelp_MixedInputTypes_Integration tests table-driven scenarios
 // for various input type combinations.
 func TestRunHelp_MixedInputTypes_Integration(t *testing.T) {
-
 	tests := []struct {
 		name           string
 		workflowYAML   string
@@ -691,7 +676,6 @@ states:
 // TestRunHelp_TerminalWidth_Integration tests NFR-002: 80-column readability
 // Help output must be readable in 80-column terminals.
 func TestRunHelp_TerminalWidth_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -742,7 +726,6 @@ states:
 // TestRunHelp_SpecialCharactersInInputs_Integration tests edge case with special characters
 // Verifies that input names and descriptions with special characters are displayed correctly.
 func TestRunHelp_SpecialCharactersInInputs_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -791,7 +774,6 @@ states:
 // TestRunHelp_InvalidYAMLWorkflow_Integration tests error handling for malformed YAML
 // Verifies that invalid YAML produces appropriate error message.
 func TestRunHelp_InvalidYAMLWorkflow_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -835,7 +817,6 @@ states:
 // TestRunHelp_EmptyInputName_Integration tests edge case with empty or whitespace input names
 // Verifies graceful handling of edge cases in input definitions.
 func TestRunHelp_EmptyInputName_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -880,7 +861,6 @@ states:
 // TestRunHelp_ExitCode_Integration tests FR-004: exit code 1 for user error
 // Verifies that non-existent workflow returns exit code 1.
 func TestRunHelp_ExitCode_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -910,7 +890,6 @@ func TestRunHelp_ExitCode_Integration(t *testing.T) {
 // TestRunHelp_EnvPathOverride_Integration tests NFR-003: workflows from env path
 // Verifies that AWF_WORKFLOWS_PATH environment variable is respected.
 func TestRunHelp_EnvPathOverride_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "custom-workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -951,7 +930,6 @@ states:
 // TestRunHelp_AllInputTypes_Integration tests comprehensive input type coverage
 // Verifies all supported input types are displayed correctly.
 func TestRunHelp_AllInputTypes_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -1019,7 +997,6 @@ states:
 // TestRunHelp_LongDescription_Integration tests handling of long descriptions
 // Verifies that long workflow and input descriptions are handled gracefully.
 func TestRunHelp_LongDescription_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -1061,7 +1038,6 @@ states:
 // TestRunHelp_UnicodeContent_Integration tests Unicode support
 // Verifies that Unicode characters in workflow names and descriptions are handled.
 func TestRunHelp_UnicodeContent_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -1103,7 +1079,6 @@ states:
 // TestRunHelp_OnlyRequiredInputs_Integration tests workflow with only required inputs
 // Verifies display when all inputs are required (no optional column needed).
 func TestRunHelp_OnlyRequiredInputs_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))
@@ -1153,7 +1128,6 @@ states:
 // TestRunHelp_OnlyOptionalInputs_Integration tests workflow with only optional inputs
 // Verifies display when all inputs are optional with defaults.
 func TestRunHelp_OnlyOptionalInputs_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	wfDir := filepath.Join(tmpDir, "workflows")
 	require.NoError(t, os.MkdirAll(wfDir, 0o755))

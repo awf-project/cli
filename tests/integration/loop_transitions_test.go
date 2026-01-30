@@ -205,7 +205,6 @@ func setupF048Test(t *testing.T, workflowYAML string) (*application.ExecutionSer
 // WHEN check_tests_passed outputs "TESTS_PASSED"
 // THEN it should transition to run_fmt, skipping prepare_impl_prompt and implement_item
 func TestF048_HappyPath_SkipStepsInBody(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -297,7 +296,6 @@ func TestF048_HappyPath_ForEachWithTransitions(t *testing.T) {
 // WHEN the transition is triggered
 // THEN it should skip all intermediate steps
 func TestF048_EdgeCase_SkipToLastStep(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -365,7 +363,6 @@ states:
 // WHEN the transition is triggered
 // THEN the loop should exit early and continue to the target step
 func TestF048_EdgeCase_EarlyLoopExit(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -438,7 +435,6 @@ states:
 // WHEN that step has a transition outside the loop
 // THEN the transition should be honored (early exit)
 func TestF048_EdgeCase_SingleStepBodyWithTransition(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -509,7 +505,6 @@ func TestF048_EdgeCase_EmptyLoopBody(t *testing.T) {
 // WHEN the transition is evaluated
 // THEN it should log a warning and continue sequential execution (ADR-005)
 func TestF048_ErrorHandling_InvalidTransitionTarget(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -566,7 +561,6 @@ states:
 // WHEN the step has transitions
 // THEN the error should be propagated and transitions should not be evaluated
 func TestF048_ErrorHandling_TransitionWithError(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -637,7 +631,6 @@ states:
 // WHEN innermost loop transitions to parent loop or outside
 // THEN it should properly exit nested loops and continue to target
 func TestDeeplyNestedLoops_TransitionToParent(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -743,7 +736,6 @@ states:
 // WHEN the loop executes
 // THEN it should complete within reasonable time (<5s) and handle transitions correctly
 func TestLargeLoopBody_PerformanceValidation(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -837,7 +829,6 @@ states:
 }
 
 func TestF048_Integration_FixtureWorkflow(t *testing.T) {
-
 	// Load the actual fixture
 	fixtureDir := "../../tests/fixtures/workflows"
 	tmpDir := t.TempDir()
@@ -898,7 +889,6 @@ func TestF048_Integration_FixtureWorkflow(t *testing.T) {
 // WHEN the loop executes
 // THEN it should work exactly as before (sequential execution)
 func TestF048_Integration_BackwardCompatibility(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -958,7 +948,6 @@ states:
 // WHEN different conditions are met across iterations
 // THEN appropriate steps should be skipped or executed per iteration
 func TestF048_Integration_ConditionalTransitions(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -1206,7 +1195,6 @@ func (e *simpleExpressionEvaluatorT009) Evaluate(expr string, ctx *interpolation
 // WHEN check_tests_passed outputs "TESTS_PASSED"
 // THEN it should transition to run_fmt, skipping prepare_impl_prompt and implement_item
 func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
-
 	// Arrange: Load the fixture workflow
 	fixtureDir := "../../tests/fixtures/workflows"
 	tmpDir := t.TempDir()
@@ -1270,7 +1258,6 @@ func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
 // WHEN the transition is triggered
 // THEN it should skip all intermediate steps and execute the last step
 func TestF048_WhileLoopBodyTransition_EdgeCase_SkipToEnd(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1344,7 +1331,6 @@ states:
 // WHEN the transition is triggered
 // THEN the loop should exit early and continue to the target step
 func TestF048_WhileLoopBodyTransition_EdgeCase_EarlyExit(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1419,7 +1405,6 @@ states:
 // WHEN different conditions are met across iterations
 // THEN appropriate steps should be skipped or executed
 func TestF048_WhileLoopBodyTransition_EdgeCase_ConditionalSkip(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -1538,7 +1523,6 @@ states:
 // WHEN the transition is evaluated
 // THEN it should log a warning and continue sequential execution
 func TestF048_WhileLoopBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1610,7 +1594,6 @@ states:
 // WHEN that step has a transition
 // THEN the transition should be honored (early exit scenario)
 func TestF048_WhileLoopBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1683,7 +1666,6 @@ states:
 // WHEN the loop executes
 // THEN it should work exactly as before (sequential execution)
 func TestF048_WhileLoopBodyTransition_EdgeCase_NoTransitions(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 

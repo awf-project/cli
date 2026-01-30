@@ -30,7 +30,6 @@ import (
 //
 // Acceptance: US2 - Validation Errors on Incorrect Casing
 func TestValidate_SingleLowercaseError(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -59,7 +58,6 @@ func TestValidate_SingleLowercaseError(t *testing.T) {
 //
 // Acceptance: US2 - Mixed casing scenario
 func TestValidate_MultipleLowercaseErrors(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -92,7 +90,6 @@ func TestValidate_MultipleLowercaseErrors(t *testing.T) {
 //
 // Acceptance: US1 - Correct Template Field Casing
 func TestValidate_UppercasePropertiesPass(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -117,7 +114,6 @@ func TestValidate_UppercasePropertiesPass(t *testing.T) {
 //
 // Edge Case: Partial correctness
 func TestValidate_MixedCasing(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -155,7 +151,6 @@ func TestValidate_MixedCasing(t *testing.T) {
 //
 // Edge Case: Properties in control flow structures
 func TestValidate_LoopConditionLowercase(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -182,7 +177,6 @@ func TestValidate_LoopConditionLowercase(t *testing.T) {
 //
 // Edge Case: Properties in hooks (on_error, on_success)
 func TestValidate_HookLowercase(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -209,7 +203,6 @@ func TestValidate_HookLowercase(t *testing.T) {
 //
 // Integration: Error message formatting
 func TestValidate_ErrorMessageQuality(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -249,7 +242,6 @@ func TestValidate_ErrorMessageQuality(t *testing.T) {
 //
 // Edge Case: All-caps and mixed case variants
 func TestValidate_CaseSensitivity(t *testing.T) {
-
 	// Create a temporary workflow with all-caps property
 	tmpDir := t.TempDir()
 	workflowPath := tmpDir + "/test-allcaps.yaml"
@@ -295,7 +287,6 @@ steps:
 //
 // Integration: Complex valid workflows
 func TestValidate_NoFalsePositives(t *testing.T) {
-
 	// Test with existing valid workflows that use correct casing
 	validWorkflows := []string{
 		"valid-simple",
@@ -336,7 +327,6 @@ func TestValidate_NoFalsePositives(t *testing.T) {
 //
 // Edge Case: No state references at all
 func TestValidate_EmptyWorkflow(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	workflowPath := tmpDir + "/test-empty.yaml"
 
@@ -379,7 +369,6 @@ steps:
 //
 // Non-Functional: NFR-001 - Performance
 func TestValidate_PerformanceUnder100ms(t *testing.T) {
-
 	// Create a workflow with many steps (up to 50)
 	tmpDir := t.TempDir()
 	workflowPath := tmpDir + "/test-large.yaml"

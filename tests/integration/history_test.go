@@ -67,7 +67,6 @@ func (m *historyMockLogger) WithContext(ctx map[string]any) ports.Logger {
 }
 
 func TestHistoryStore_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -108,7 +107,6 @@ func TestHistoryStore_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_FilterByWorkflowName_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -147,7 +145,6 @@ func TestHistoryStore_FilterByWorkflowName_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_FilterByStatus_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -194,7 +191,6 @@ func TestHistoryStore_FilterByStatus_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_FilterByDateRange_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -239,7 +235,6 @@ func TestHistoryStore_FilterByDateRange_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_Cleanup_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -293,7 +288,6 @@ func TestHistoryStore_Cleanup_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_Persistence_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 	ctx := context.Background()
@@ -343,7 +337,6 @@ func TestHistoryStore_Persistence_Integration(t *testing.T) {
 }
 
 func TestHistoryService_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -384,7 +377,6 @@ func TestHistoryService_Integration(t *testing.T) {
 }
 
 func TestHistoryService_CleanupOnInit_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 	ctx := context.Background()
@@ -443,7 +435,6 @@ func TestHistoryService_CleanupOnInit_Integration(t *testing.T) {
 }
 
 func TestWorkflowExecution_RecordsHistory_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
 	historyPath := filepath.Join(tmpDir, "history.db")
@@ -499,7 +490,6 @@ states:
 }
 
 func TestHistoryStore_CombinedFilters_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -581,7 +571,6 @@ func TestHistoryStore_CombinedFilters_Integration(t *testing.T) {
 }
 
 func TestHistoryStore_StatsWithFilters_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 

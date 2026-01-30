@@ -36,7 +36,6 @@ import (
 // Feature: C011 - Task T004
 // Strategy: Run workflow with hooks writing to log file, verify order
 func TestHooks_WorkflowStartEnd_Integration(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		workflowFile string
@@ -129,7 +128,6 @@ func TestHooks_WorkflowStartEnd_Integration(t *testing.T) {
 // Feature: C011 - Task T005
 // Strategy: Run workflow that fails, verify workflow_error hook receives error context
 func TestHooks_WorkflowError_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowYAML    string // Inline YAML for custom error scenarios
@@ -229,7 +227,6 @@ states:
 // Feature: C011 - Task T005
 // Strategy: Run workflow with step hooks, verify pre executes before command, post after
 func TestHooks_StepPrePost_Integration(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		workflowFile string
@@ -317,7 +314,6 @@ func TestHooks_StepPrePost_Integration(t *testing.T) {
 // Feature: C011 - Task T006
 // Strategy: Run workflow with failing hook, verify workflow aborts and main command doesn't execute
 func TestHooks_FailurePropagation_Integration(t *testing.T) {
-
 	tests := []struct {
 		name               string
 		workflowFile       string
@@ -406,7 +402,6 @@ func TestHooks_FailurePropagation_Integration(t *testing.T) {
 // Feature: C011 - Task T006
 // Strategy: Run workflow with variables in hooks, verify {{workflow.id}}, {{inputs.x}}, {{states.y.output}} interpolated
 func TestHooks_VariableInterpolation_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string

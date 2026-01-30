@@ -43,7 +43,6 @@ import (
 // =============================================================================
 
 func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
-
 	// Given: Real ExprValidator adapter (not mocked)
 	validator := expression.NewExprValidator()
 
@@ -109,7 +108,6 @@ func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
-
 	validator := expression.NewExprValidator()
 
 	tests := []struct {
@@ -198,7 +196,6 @@ func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
-
 	validator := expression.NewExprValidator()
 
 	tests := []struct {
@@ -284,7 +281,6 @@ func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
-
 	// Given: ExprValidator must implement ports.ExpressionValidator interface
 	var _ ports.ExpressionValidator = (*expression.ExprValidator)(nil)
 
@@ -302,7 +298,6 @@ func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.T) {
-
 	validator := expression.NewExprValidator()
 
 	// Test cases derived from conversation-stop-condition.yaml fixture
@@ -358,7 +353,6 @@ func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.
 // =============================================================================
 
 func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
-
 	// When: Creating multiple validator instances
 	validator1 := expression.NewExprValidator()
 	validator2 := expression.NewExprValidator()
@@ -379,7 +373,6 @@ func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
-
 	validator := expression.NewExprValidator()
 
 	tests := []struct {
@@ -431,7 +424,6 @@ func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ConcurrentValidation(t *testing.T) {
-
 	validator := expression.NewExprValidator()
 
 	// When: Multiple goroutines validate expressions concurrently

@@ -23,7 +23,6 @@ import (
 // =============================================================================
 
 func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
-
 	// Setup: Create temp directory with local prompts only
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -74,7 +73,6 @@ func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
-
 	// Setup: Create temp directory with global prompts only
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -121,7 +119,6 @@ func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -181,7 +178,6 @@ func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -245,7 +241,6 @@ func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -295,7 +290,6 @@ func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -364,7 +358,6 @@ func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -404,7 +397,6 @@ func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.MkdirAll(projectDir, 0o755))
@@ -438,7 +430,6 @@ func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -495,7 +486,6 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -552,7 +542,6 @@ func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptResolution_LocalPrompt_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -625,7 +614,6 @@ states:
 }
 
 func TestPromptResolution_GlobalPrompt_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
@@ -700,7 +688,6 @@ states:
 }
 
 func TestPromptResolution_LocalOverridesGlobal_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -783,7 +770,6 @@ states:
 }
 
 func TestPromptResolution_NestedPath_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	localPrompts := filepath.Join(projectDir, ".awf", "prompts")
@@ -860,7 +846,6 @@ states:
 // =============================================================================
 
 func TestPromptResolution_NotFound_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
@@ -921,7 +906,6 @@ states:
 }
 
 func TestPromptResolution_PathTraversal_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	wfDir := filepath.Join(projectDir, ".awf", "workflows")
@@ -991,7 +975,6 @@ states:
 // =============================================================================
 
 func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.MkdirAll(projectDir, 0o755))
@@ -1035,7 +1018,6 @@ func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 }
 
 func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.MkdirAll(projectDir, 0o755))
@@ -1082,7 +1064,6 @@ func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
 }
 
 func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.MkdirAll(projectDir, 0o755))
@@ -1124,7 +1105,6 @@ func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
-
 	// Get project root
 	origDir, err := os.Getwd()
 	require.NoError(t, err)

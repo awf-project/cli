@@ -25,7 +25,6 @@ import (
 // =============================================================================
 
 func TestForEachLoop_Simple_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -80,7 +79,6 @@ states:
 }
 
 func TestForEachLoop_WithIndex_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "index.log")
 
@@ -134,7 +132,6 @@ states:
 }
 
 func TestForEachLoop_WithBreak_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "break.log")
 
@@ -192,7 +189,6 @@ states:
 }
 
 func TestForEachLoop_MultipleBodySteps_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "multi.log")
 
@@ -261,7 +257,6 @@ states:
 // =============================================================================
 
 func TestWhileLoop_Simple_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -326,7 +321,6 @@ states:
 }
 
 func TestWhileLoop_MaxIterations_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "max.log")
 
@@ -380,7 +374,6 @@ states:
 }
 
 func TestWhileLoop_WithBreak_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "break.log")
 
@@ -451,7 +444,6 @@ states:
 // =============================================================================
 
 func TestForEachLoop_StepError_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "error.log")
 
@@ -517,7 +509,6 @@ states:
 // =============================================================================
 
 func TestLoopFixtures_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/workflows"
 
 	// Check if loop fixtures exist
@@ -566,7 +557,6 @@ func TestLoopFixtures_Integration(t *testing.T) {
 // =============================================================================
 
 func TestForEachLoop_WithIndex1_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "index1.log")
 
@@ -620,7 +610,6 @@ states:
 }
 
 func TestForEachLoop_Index1WithLength_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "progress.log")
 
@@ -818,7 +807,6 @@ func (m *mockLoggerWithCapture) WithContext(ctx map[string]any) ports.Logger {
 // TestF042_LoopAllVariables_Integration verifies all loop context variables
 // work correctly in step command templates.
 func TestF042_LoopAllVariables_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "all_vars.log")
 
@@ -880,7 +868,6 @@ idx=2 idx1=3 item=gamma first=false last=true len=3
 // TestF042_LoopFirst_ConditionalLogic_Integration tests using loop.First
 // to perform special handling on the first iteration.
 func TestF042_LoopFirst_ConditionalLogic_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "first.log")
 
@@ -948,7 +935,6 @@ DATA: row3
 // TestF042_LoopLast_ConditionalLogic_Integration tests using loop.Last
 // to perform special handling on the last iteration.
 func TestF042_LoopLast_ConditionalLogic_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "last.log")
 
@@ -1016,7 +1002,6 @@ item3
 // TestF042_LoopIndex1_ProgressOutput_Integration tests using Index1
 // for human-readable progress output.
 func TestF042_LoopIndex1_ProgressOutput_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "progress.log")
 
@@ -1080,7 +1065,6 @@ states:
 // TestF042_LoopContextClearedAfterCompletion_Integration verifies that
 // loop context is cleared after the loop completes.
 func TestF042_LoopContextClearedAfterCompletion_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "cleared.log")
 
@@ -1148,7 +1132,6 @@ AFTER LOOP: workflow=foreach-cleared
 
 // TestF042_LoopSingleItem_EdgeCase_Integration tests edge case with single item.
 func TestF042_LoopSingleItem_EdgeCase_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "single.log")
 
@@ -1207,7 +1190,6 @@ states:
 // TestF042_WhileLoopIndex_Integration tests loop variables in while loops.
 // While loops have Length=-1 since count is unknown upfront.
 func TestF042_WhileLoopIndex_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "while_idx.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -1281,7 +1263,6 @@ iteration=3 first=false length=-1
 
 // TestF042_LoopWithNumericItems_Integration tests loop with numeric items.
 func TestF042_LoopWithNumericItems_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "numeric.log")
 
@@ -1343,7 +1324,6 @@ Position 4: value=40 doubled=80
 
 // TestF042_LoopWithInputItems_Integration tests loop items from workflow inputs.
 func TestF042_LoopWithInputItems_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "input_items.log")
 
@@ -1413,7 +1393,6 @@ File 3/3: test.go
 // TestF042_LoopWithStatesReference_Integration tests using loop variables
 // combined with states reference to access previous step outputs.
 func TestF042_LoopWithStatesReference_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "states_ref.log")
 
@@ -1484,7 +1463,6 @@ Item 3: c | init=INITIALIZED
 
 // TestF042_EmptyLoop_EdgeCase_Integration tests edge case with empty items array.
 func TestF042_EmptyLoop_EdgeCase_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "empty.log")
 
@@ -1565,7 +1543,6 @@ FINISHED
 func TestF042_NestedForEachLoops_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
 
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "nested.log")
 
@@ -1645,7 +1622,6 @@ OUTER[2/2]: row2 (first=false, last=true)
 // context is properly restored after inner loop completes.
 func TestF042_NestedLoops_ContextRestored_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "context_restore.log")
@@ -1731,7 +1707,6 @@ AFTER: outer=B idx=1 (context restored)
 // a for_each loop.
 func TestF042_NestedWhileInForEach_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "nested_while.log")
@@ -1821,7 +1796,6 @@ states:
 // TestF042_TripleNestedLoops_Integration tests three levels of nested loops.
 func TestF042_TripleNestedLoops_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "triple.log")
@@ -1919,7 +1893,6 @@ CATEGORY: cat2
 // TestF042_LoopIndexZeroBasedVsOneBased_Integration explicitly compares
 // Index (0-based) vs Index1 (1-based) to ensure they differ correctly.
 func TestF042_LoopIndexZeroBasedVsOneBased_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "compare.log")
 
@@ -1989,7 +1962,6 @@ states:
 // outer loop context via {{.loop.Parent.*}} syntax.
 func TestF043_NestedLoops_ParentAccess_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "parent_access.log")
@@ -2062,7 +2034,6 @@ outer=B inner=2
 func TestF043_NestedLoops_ParentIndexAccess_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
 
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "parent_index.log")
 
@@ -2134,7 +2105,6 @@ states:
 // loop context via {{.loop.Parent.Parent.*}} for 3-level nesting.
 func TestF043_NestedLoops_DeepParentChain_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "deep_parent.log")
@@ -2218,7 +2188,6 @@ L1=B L2=2 L3=y
 func TestF043_NestedLoops_ParentFirstLast_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
 
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "parent_first_last.log")
 
@@ -2290,7 +2259,6 @@ outer=last (first=false last=true) inner=b
 // access when a while loop is nested inside a for_each loop.
 func TestF043_NestedLoops_WhileInsideForEach_ParentAccess_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
-
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "while_parent.log")
@@ -2375,7 +2343,6 @@ batch=batch2 iter=3
 func TestF043_NestedLoops_ParentNilSafe_Integration(t *testing.T) {
 	// F043 implementation enables nested loops
 
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "nil_parent.log")
 
@@ -2443,7 +2410,6 @@ states:
 // TestF043_NestedLoops_EmptyInnerLoop_Integration tests that an empty inner loop
 // correctly completes without executing body and restores outer loop context.
 func TestF043_NestedLoops_EmptyInnerLoop_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "empty_inner.log")
 
@@ -2523,7 +2489,6 @@ AFTER: outer=B (context preserved)
 // TestF043_NestedLoops_InnerBreak_Integration tests break_when in nested loops.
 // When inner loop breaks via max_iterations, outer loop should continue normally.
 func TestF043_NestedLoops_InnerBreak_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "inner_break.log")
 
@@ -2595,7 +2560,6 @@ batch2/iter3
 // TestF043_NestedLoops_ErrorInInner_Propagate_Integration tests that errors in
 // inner loop can propagate to outer loop's on_failure handler.
 func TestF043_NestedLoops_ErrorInInner_Propagate_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "error_propagate.log")
 
@@ -2675,7 +2639,6 @@ states:
 // TestF043_NestedLoops_FourLevelDeep_Integration tests 4 levels of nested loops
 // to validate arbitrary depth support with parent chain access.
 func TestF043_NestedLoops_FourLevelDeep_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "four_level.log")
 
@@ -2763,7 +2726,6 @@ UK/LA/Main/102
 // TestF043_NestedLoops_ParentIndex1Arithmetic_Integration tests using Parent.Index1
 // in arithmetic expressions within shell commands.
 func TestF043_NestedLoops_ParentIndex1Arithmetic_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "arithmetic.log")
 
@@ -2835,7 +2797,6 @@ Cell[3,2]=R3-C2 position=5
 // TestF043_NestedLoops_MixedForEachWhile_ParentAccess_Integration tests nested
 // for_each inside while loop with parent access to while's context.
 func TestF043_NestedLoops_MixedForEachWhile_ParentAccess_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "mixed_while_foreach.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -2908,7 +2869,6 @@ while_iter=2 foreach_item=b
 // TestF043_NestedLoops_DynamicInnerItems_Integration tests inner loop with items
 // derived from outer loop context (using states).
 func TestF043_NestedLoops_DynamicInnerItems_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "dynamic_inner.log")
 
@@ -2994,7 +2954,6 @@ batch=3 item=item3
 // TestF043_NestedLoops_ParentLengthInCondition_Integration tests using Parent.Length
 // in template conditions within nested loops.
 func TestF043_NestedLoops_ParentLengthInCondition_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "parent_length.log")
 
@@ -3065,7 +3024,6 @@ states:
 // TestF043_NestedLoops_MaxIterationsInner_Integration tests that max_iterations
 // is correctly enforced on inner loops without affecting outer loop.
 func TestF043_NestedLoops_MaxIterationsInner_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "max_iter_inner.log")
 
@@ -3135,7 +3093,6 @@ batch2: iter=2
 // TestF043_NestedLoops_SingleItemBothLoops_Integration tests edge case where
 // both outer and inner loops have single items.
 func TestF043_NestedLoops_SingleItemBothLoops_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "single_both.log")
 
@@ -3202,7 +3159,6 @@ states:
 // TestF043_NestedLoops_MultipleBodyStepsWithParent_Integration tests nested loops
 // where inner loop has multiple body steps all accessing parent context.
 func TestF043_NestedLoops_MultipleBodyStepsWithParent_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "multi_body_parent.log")
 
@@ -3289,7 +3245,6 @@ S3: done with B/2
 // TestF043_NestedLoops_ParentAccessAfterInnerComplete_Integration verifies that
 // after inner loop completes, outer loop context is accessible in next outer step.
 func TestF043_NestedLoops_ParentAccessAfterInnerComplete_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "after_inner.log")
 
@@ -3382,7 +3337,6 @@ AFTER outer=Y idx=1 (restored)
 // WHEN a transition condition is met within the body
 // THEN subsequent steps should be skipped according to the transition target
 func TestF048_WhileLoop_BodyTransitions_SkipSteps(t *testing.T) {
-
 	// Item: T012
 	// Feature: F048
 	// Test happy path: Transitions within while loop body should skip subsequent steps
@@ -3489,7 +3443,6 @@ states:
 // WHEN that transition condition is met
 // THEN the loop should exit early and continue to the external target step
 func TestF048_WhileLoop_BodyTransitions_EarlyExit(t *testing.T) {
-
 	// Item: T012
 	// Feature: F048
 	// Test edge case: Transition to external step should exit loop early
@@ -3585,7 +3538,6 @@ states:
 // WHEN a transition condition is met within the body
 // THEN subsequent steps should be skipped according to the transition target
 func TestF048_ForEachLoop_BodyTransitions_SkipSteps(t *testing.T) {
-
 	// Item: T012
 	// Feature: F048
 	// Test happy path: Transitions within foreach loop body should work like while
@@ -3699,7 +3651,6 @@ states:
 // WHEN that transition is evaluated
 // THEN it should log a warning and continue sequential execution (graceful degradation)
 func TestF048_WhileLoop_BodyTransitions_InvalidTarget(t *testing.T) {
-
 	// Item: T012
 	// Feature: F048
 	// Test error handling: Invalid transition target should degrade gracefully
@@ -3796,7 +3747,6 @@ states:
 // WHEN the loop executes
 // THEN it should work exactly as before (sequential execution)
 func TestF048_WhileLoop_BodyTransitions_BackwardCompatibility(t *testing.T) {
-
 	// Item: T012
 	// Feature: F048
 	// Test backward compatibility: Loops without transitions should work unchanged

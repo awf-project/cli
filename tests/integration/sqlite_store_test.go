@@ -1571,7 +1571,7 @@ func TestSQLiteHistoryStore_VeryLongErrorMessage(t *testing.T) {
 // multiple processes trying to access the same database simultaneously.
 // This test spawns actual child processes to verify SQLite handles this correctly.
 func TestSQLiteHistoryStore_MultiProcessConcurrency(t *testing.T) {
-		t.Skip("skipping multi-process test in short mode")
+	t.Skip("skipping multi-process test in short mode")
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "multiproc.db")
@@ -1686,7 +1686,7 @@ func TestSQLiteHistoryStore_WALModeEnabled(t *testing.T) {
 // TestSQLiteHistoryStore_SimulateWorkflowExecution simulates the actual workflow
 // execution pattern: open store, record execution, close store
 func TestSQLiteHistoryStore_SimulateWorkflowExecution(t *testing.T) {
-		t.Skip("skipping workflow simulation in short mode")
+	t.Skip("skipping workflow simulation in short mode")
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "workflow.db")

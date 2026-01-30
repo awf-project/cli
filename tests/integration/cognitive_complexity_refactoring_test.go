@@ -54,7 +54,6 @@ func (m *mockC005Logger) WithContext(ctx map[string]any) ports.Logger {
 // =============================================================================
 
 func TestC005_TemplateService_ExpandWorkflow_WithNestedTemplates_Integration(t *testing.T) {
-
 	// Feature: C005 - Component T001 (expandStep helpers)
 	// Given: A workflow with nested template references
 	// When: The workflow is expanded
@@ -139,7 +138,6 @@ states:
 }
 
 func TestC005_TemplateService_ExpandWorkflow_WithParameterSubstitution_Integration(t *testing.T) {
-
 	// Feature: C005 - Component T001 (applyTemplateFields with parameter substitution)
 	// Given: A template with parameter substitution
 	// When: The workflow is expanded with parameters
@@ -206,7 +204,6 @@ states:
 // =============================================================================
 
 func TestC005_TemplateService_ExpandWorkflow_CircularReference_DetectsError_Integration(t *testing.T) {
-
 	// Feature: C005 - Component T001 (validateAndLoadTemplate circular detection)
 	// Given: Templates with circular references
 	// When: Expansion is attempted
@@ -279,7 +276,6 @@ states:
 // =============================================================================
 
 func TestC005_TemplateService_ExpandWorkflow_MissingTemplate_ReturnsError_Integration(t *testing.T) {
-
 	// Feature: C005 - Component T001 (validateAndLoadTemplate error path)
 	// Given: A workflow referencing a non-existent template
 	// When: Expansion is attempted
@@ -316,7 +312,6 @@ func TestC005_TemplateService_ExpandWorkflow_MissingTemplate_ReturnsError_Integr
 }
 
 func TestC005_TemplateService_SelectPrimaryStep_MultipleSteps_SelectsCorrectly_Integration(t *testing.T) {
-
 	// Feature: C005 - Component T001 (selectPrimaryStep helper)
 	// Given: A template with multiple steps
 	// When: SelectPrimaryStep is called
@@ -365,7 +360,6 @@ states:
 // =============================================================================
 
 func TestC005_TemplateService_FullExpansion_DeepNesting_ThreeLevels_Integration(t *testing.T) {
-
 	// Feature: C005 - All T001 components working together
 	// Given: Three levels of nested templates
 	// When: The workflow is expanded
@@ -472,7 +466,6 @@ states:
 // =============================================================================
 
 func TestC005_ExecutorIntegration_HandleSuccess_WorkflowCompletion(t *testing.T) {
-
 	// Feature: C005 - Component T002 (HandleSuccess result handler behavioral validation)
 	// Given: A simple workflow with sequential successful steps
 	// When: The workflow is executed via AWF CLI
@@ -530,7 +523,6 @@ states:
 }
 
 func TestC005_ExecutorIntegration_ErrorHandling_WorkflowStructure(t *testing.T) {
-
 	// Feature: C005 - Component T002 (HandleNonZeroExit & HandleExecutionError validation)
 	// Given: A workflow with error handling paths
 	// When: The workflow structure is validated
@@ -583,7 +575,6 @@ states:
 }
 
 func TestC005_ParallelExecutorIntegration_StrategyValidation(t *testing.T) {
-
 	// Feature: C005 - Component T003 (RunBranchWithSemaphore & CheckBranchSuccess validation)
 	// Given: Workflows with different parallel strategies
 	// When: The workflows are validated
@@ -695,7 +686,6 @@ states:
 // =============================================================================
 
 func TestC005_FullIntegration_TemplateExpansion_ParallelExecution(t *testing.T) {
-
 	// Feature: C005 - All components (T001 + T002 + T003) working together
 	// Given: A complex workflow with templates and parallel execution
 	// When: The workflow is loaded and templates expanded

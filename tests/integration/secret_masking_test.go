@@ -35,7 +35,6 @@ import (
 // Feature: C011 - Task T007
 // Strategy: Run workflow with SECRET_* variable in command output, verify masked as ***
 func TestSecretMasking_SECRET_Prefix_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string
@@ -146,7 +145,6 @@ func TestSecretMasking_SECRET_Prefix_Integration(t *testing.T) {
 // Feature: C011 - Task T007
 // Strategy: Run workflow with API_KEY* variable, verify masked in logs
 func TestSecretMasking_API_KEY_Prefix_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string
@@ -251,7 +249,6 @@ func TestSecretMasking_API_KEY_Prefix_Integration(t *testing.T) {
 // Feature: C011 - Task T007
 // Strategy: Run workflow with PASSWORD* variable, verify masked in logs
 func TestSecretMasking_PASSWORD_Prefix_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string
@@ -356,7 +353,6 @@ func TestSecretMasking_PASSWORD_Prefix_Integration(t *testing.T) {
 // Feature: C011 - Task T007
 // Strategy: Run workflow with mixed secret/non-secret vars, verify only secrets masked
 func TestSecretMasking_NonSecrets_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string
@@ -467,7 +463,6 @@ func TestSecretMasking_NonSecrets_Integration(t *testing.T) {
 // Feature: C011 - Task T007
 // Strategy: Run workflow that fails with secret in error output, verify masked
 func TestSecretMasking_ErrorOutput_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowFile    string
@@ -566,7 +561,6 @@ func TestSecretMasking_ErrorOutput_Integration(t *testing.T) {
 // Feature: C011 - Task T007 (Edge case)
 // Strategy: Test secret_, api_key_, password_ (lowercase) also get masked
 func TestSecretMasking_CaseInsensitive_Integration(t *testing.T) {
-
 	tests := []struct {
 		name            string
 		workflowYAML    string // Inline YAML for custom scenarios

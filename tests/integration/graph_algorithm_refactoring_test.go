@@ -38,7 +38,6 @@ import (
 // TestDetectCycles_Integration_LinearWorkflow validates that linear workflows
 // (no cycles) are correctly identified as cycle-free.
 func TestDetectCycles_Integration_LinearWorkflow(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -66,7 +65,6 @@ func TestDetectCycles_Integration_LinearWorkflow(t *testing.T) {
 // TestDetectCycles_Integration_ComplexParallelWorkflow validates cycle detection
 // in workflows with parallel branches and multiple paths.
 func TestDetectCycles_Integration_ComplexParallelWorkflow(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -119,7 +117,6 @@ func TestDetectCycles_Integration_ComplexParallelWorkflow(t *testing.T) {
 // TestComputeExecutionOrder_Integration_LinearWorkflow validates that execution
 // order is correctly computed for simple linear workflows.
 func TestComputeExecutionOrder_Integration_LinearWorkflow(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -157,7 +154,6 @@ func TestComputeExecutionOrder_Integration_LinearWorkflow(t *testing.T) {
 // TestComputeExecutionOrder_Integration_ParallelWorkflow validates execution
 // order computation for workflows with parallel branches.
 func TestComputeExecutionOrder_Integration_ParallelWorkflow(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -209,7 +205,6 @@ func TestComputeExecutionOrder_Integration_ParallelWorkflow(t *testing.T) {
 // TestDetectCycles_Integration_MultipleCyclesInGraph validates detection of
 // multiple distinct cycles in a single workflow graph.
 func TestDetectCycles_Integration_MultipleCyclesInGraph(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -254,7 +249,6 @@ func TestDetectCycles_Integration_MultipleCyclesInGraph(t *testing.T) {
 // TestDetectCycles_Integration_SelfLoopCycle validates detection of self-referencing
 // steps (a step that transitions to itself).
 func TestDetectCycles_Integration_SelfLoopCycle(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -279,7 +273,6 @@ func TestDetectCycles_Integration_SelfLoopCycle(t *testing.T) {
 // TestDetectCycles_Integration_DeepNestedCycle validates cycle detection in
 // deeply nested workflow structures (>10 levels).
 func TestDetectCycles_Integration_DeepNestedCycle(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start":  {Type: "command", OnSuccess: "step1"},
 		"step1":  {Type: "command", OnSuccess: "step2"},
@@ -302,7 +295,6 @@ func TestDetectCycles_Integration_DeepNestedCycle(t *testing.T) {
 // TestComputeExecutionOrder_Integration_EmptyGraph validates handling of
 // empty workflow graphs.
 func TestComputeExecutionOrder_Integration_EmptyGraph(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		steps   map[string]*workflow.Step
@@ -340,7 +332,6 @@ func TestComputeExecutionOrder_Integration_EmptyGraph(t *testing.T) {
 // TestComputeExecutionOrder_Integration_MaxBreadth validates handling of
 // workflows with many parallel branches (stress test for enqueueIfNotVisited).
 func TestComputeExecutionOrder_Integration_MaxBreadth(t *testing.T) {
-
 	// Create a workflow with 20 parallel branches
 	branches := make([]string, 20)
 	steps := make(map[string]*workflow.Step)
@@ -393,7 +384,6 @@ func TestComputeExecutionOrder_Integration_MaxBreadth(t *testing.T) {
 // TestDetectCycles_Integration_InvalidTransitions validates handling of
 // transitions to non-existent states.
 func TestDetectCycles_Integration_InvalidTransitions(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -415,7 +405,6 @@ func TestDetectCycles_Integration_InvalidTransitions(t *testing.T) {
 // TestComputeExecutionOrder_Integration_InvalidInitialState validates handling
 // of non-existent initial states.
 func TestComputeExecutionOrder_Integration_InvalidInitialState(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -435,7 +424,6 @@ func TestComputeExecutionOrder_Integration_InvalidInitialState(t *testing.T) {
 // TestComputeExecutionOrder_Integration_CircularDependencies validates handling
 // of workflows with cycles (which should be caught by DetectCycles first).
 func TestComputeExecutionOrder_Integration_CircularDependencies(t *testing.T) {
-
 	steps := map[string]*workflow.Step{
 		"start": {
 			Type:      "command",
@@ -468,7 +456,6 @@ func TestComputeExecutionOrder_Integration_CircularDependencies(t *testing.T) {
 // TestFullWorkflowValidation_Integration validates that DetectCycles and
 // ComputeExecutionOrder work correctly together for complete workflow validation.
 func TestFullWorkflowValidation_Integration(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		steps        map[string]*workflow.Step
@@ -584,7 +571,6 @@ func TestFullWorkflowValidation_Integration(t *testing.T) {
 // TestBackwardCompatibility_Integration validates that refactored algorithms
 // maintain exact same behavior as before C003 refactoring.
 func TestBackwardCompatibility_Integration(t *testing.T) {
-
 	// This test uses known workflow patterns that existed before C003
 	// to ensure backward compatibility
 	knownWorkflows := []struct {
