@@ -29,9 +29,6 @@ import (
 // TestExpressionContext_LowercaseStateFields tests that expressions using
 // lowercase state field keys fail validation with helpful suggestions.
 func TestExpressionContext_LowercaseStateFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-lowercase-state")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -53,9 +50,6 @@ func TestExpressionContext_LowercaseStateFields(t *testing.T) {
 // TestExpressionContext_LowercaseErrorFields tests that expressions using
 // lowercase error namespace keys fail validation.
 func TestExpressionContext_LowercaseErrorFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-lowercase-error")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -73,9 +67,6 @@ func TestExpressionContext_LowercaseErrorFields(t *testing.T) {
 // TestExpressionContext_LowercaseContextFields tests that expressions using
 // lowercase context namespace keys fail validation.
 func TestExpressionContext_LowercaseContextFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-lowercase-context")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -93,9 +84,6 @@ func TestExpressionContext_LowercaseContextFields(t *testing.T) {
 // TestExpressionContext_PascalCaseStateFields tests that expressions using
 // correct PascalCase state field keys pass validation.
 func TestExpressionContext_PascalCaseStateFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-pascalcase-state")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -114,9 +102,6 @@ func TestExpressionContext_PascalCaseStateFields(t *testing.T) {
 // TestExpressionContext_LoopNamespace tests that loop.* namespace fields
 // are accessible in break_when expressions with PascalCase keys.
 func TestExpressionContext_LoopNamespace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-loop-namespace")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -131,9 +116,6 @@ func TestExpressionContext_LoopNamespace(t *testing.T) {
 // TestExpressionContext_ErrorNamespace tests that error.* namespace fields
 // are accessible in error hook when: expressions.
 func TestExpressionContext_ErrorNamespace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-error-namespace")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -148,9 +130,6 @@ func TestExpressionContext_ErrorNamespace(t *testing.T) {
 // TestExpressionContext_SystemContextNamespace tests that context.* namespace
 // fields are accessible in expressions.
 func TestExpressionContext_SystemContextNamespace(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-context-namespace")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -165,9 +144,6 @@ func TestExpressionContext_SystemContextNamespace(t *testing.T) {
 // TestExpressionContext_NewStateFields tests that new state fields
 // (Response, Tokens) from agent steps are accessible in expressions.
 func TestExpressionContext_NewStateFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-agent-fields")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -182,9 +158,6 @@ func TestExpressionContext_NewStateFields(t *testing.T) {
 // TestExpressionContext_WorkflowFields tests that workflow.* fields
 // use PascalCase (ID, Name, CurrentState, Duration).
 func TestExpressionContext_WorkflowFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-workflow-fields")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -199,9 +172,6 @@ func TestExpressionContext_WorkflowFields(t *testing.T) {
 // TestExpressionContext_MixedCasing tests that workflows with both correct
 // and incorrect casing report only the incorrect references.
 func TestExpressionContext_MixedCasing(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-mixed-casing")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -224,9 +194,6 @@ func TestExpressionContext_MixedCasing(t *testing.T) {
 // all expression context features: state fields, loop namespace, error namespace,
 // context namespace, and workflow fields.
 func TestExpressionContext_CompleteWorkflow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-complete")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -241,9 +208,6 @@ func TestExpressionContext_CompleteWorkflow(t *testing.T) {
 // TestExpressionContext_NilSafety tests that expressions handle nil contexts
 // gracefully (e.g., error namespace when no error occurred).
 func TestExpressionContext_NilSafety(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// This workflow attempts to access error.Message in a success hook
 	// The expression evaluator should handle nil error context gracefully
@@ -260,9 +224,6 @@ func TestExpressionContext_NilSafety(t *testing.T) {
 // TestExpressionContext_BreakWhenWithLoop tests that break_when expressions
 // can use loop namespace to control loop termination.
 func TestExpressionContext_BreakWhenWithLoop(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-break-when")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -277,9 +238,6 @@ func TestExpressionContext_BreakWhenWithLoop(t *testing.T) {
 // TestExpressionContext_MultipleLowercaseErrors tests that workflows with
 // multiple lowercase expression keys report all errors (non-fail-fast).
 func TestExpressionContext_MultipleLowercaseErrors(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "expr-multiple-errors")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -297,9 +255,6 @@ func TestExpressionContext_MultipleLowercaseErrors(t *testing.T) {
 // TestExpressionContext_NoFalsePositives tests that valid workflows with
 // PascalCase expressions and complex conditions don't trigger false positive errors.
 func TestExpressionContext_NoFalsePositives(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Test with existing valid workflows
 	validWorkflows := []string{

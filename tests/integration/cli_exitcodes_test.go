@@ -53,9 +53,6 @@ func getBinaryPath(t *testing.T) string {
 // Feature: C011 - Task T011
 // Strategy: Run valid workflow via subprocess, verify exit code 0
 func TestCLI_ExitCode0_Success_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -106,9 +103,6 @@ func TestCLI_ExitCode0_Success_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Trigger user errors (missing input, validation failure), verify exit code 1
 func TestCLI_ExitCode1_UserError_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -161,9 +155,6 @@ func TestCLI_ExitCode1_UserError_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Provide invalid input value (violates validation rule), verify exit code 1
 func TestCLI_ExitCode1_InvalidInputValue_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -216,9 +207,6 @@ func TestCLI_ExitCode1_InvalidInputValue_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Use workflow with invalid state reference, verify exit code 2
 func TestCLI_ExitCode2_InvalidStateReference_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -271,9 +259,6 @@ func TestCLI_ExitCode2_InvalidStateReference_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Use workflow with cycle, verify exit code 2
 func TestCLI_ExitCode2_CyclicStateMachine_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -326,9 +311,6 @@ func TestCLI_ExitCode2_CyclicStateMachine_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Run workflow with failing command, verify exit code 3
 func TestCLI_ExitCode3_CommandFailure_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -381,9 +363,6 @@ func TestCLI_ExitCode3_CommandFailure_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Run workflow that times out, verify exit code 3
 func TestCLI_ExitCode3_Timeout_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -436,9 +415,6 @@ func TestCLI_ExitCode3_Timeout_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Try to run non-existent workflow file, verify exit code 4
 func TestCLI_ExitCode4_FileNotFound_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -491,9 +467,6 @@ func TestCLI_ExitCode4_FileNotFound_Integration(t *testing.T) {
 // Feature: C011 - Task T011
 // Strategy: Create unreadable workflow file, verify exit code 4
 func TestCLI_ExitCode4_PermissionDenied_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Skip on systems where we can't test permissions reliably
 	if os.Getuid() == 0 {
@@ -560,9 +533,6 @@ states:
 // Feature: C011 - Task T011 (Comprehensive edge cases)
 // Strategy: Table-driven test covering all exit codes with various scenarios
 func TestCLI_ExitCodeMapping_ComprehensiveScenarios_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string

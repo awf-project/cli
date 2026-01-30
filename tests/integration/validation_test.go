@@ -20,9 +20,6 @@ import (
 
 // TestValidateRules_HappyPath validates normal usage with all validation types
 func TestValidateRules_HappyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name        string
@@ -125,9 +122,6 @@ func TestValidateRules_HappyPath(t *testing.T) {
 
 // TestValidateRules_EdgeCases validates boundary conditions and edge cases
 func TestValidateRules_EdgeCases(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name        string
@@ -334,9 +328,6 @@ func TestValidateRules_EdgeCases(t *testing.T) {
 
 // TestValidateRules_ErrorHandling validates invalid inputs are rejected properly
 func TestValidateRules_ErrorHandling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name        string
@@ -456,9 +447,6 @@ func TestValidateRules_ErrorHandling(t *testing.T) {
 
 // TestValidateRules_FileValidation validates file-based validation rules
 func TestValidateRules_FileValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// create temp files for testing
 	tmpDir := t.TempDir()
@@ -616,9 +604,6 @@ func TestValidateRules_FileValidation(t *testing.T) {
 
 // TestValidateRules_Integration validates full workflow execution with validation
 func TestValidateRules_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// define complex input schema with all validation types
 	definitions := []validation.Input{
@@ -726,9 +711,6 @@ func TestValidateRules_Integration(t *testing.T) {
 
 // TestValidateRules_BackwardCompatibility ensures refactoring maintains exact behavior
 func TestValidateRules_BackwardCompatibility(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Test scenarios that should work identically before and after refactoring
 	tests := []struct {

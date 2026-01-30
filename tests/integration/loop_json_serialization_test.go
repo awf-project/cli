@@ -36,9 +36,6 @@ import (
 // for_each loop passing JSON objects to call_workflow via {{.loop.Item}}
 // Feature: F047
 func TestF047_HappyPath_CallWorkflowWithJSONObjects(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Parent workflow iterates over JSON objects and calls child workflow
 	tmpDir := t.TempDir()
@@ -140,9 +137,6 @@ states:
 // Complex nested structures serialize correctly
 // Feature: F047
 func TestF047_HappyPath_NestedObjectsAndArrays(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Workflow with deeply nested JSON structures
 	tmpDir := t.TempDir()
@@ -224,9 +218,6 @@ states:
 // TestF047_EdgeCase_EmptyObjectsAndArrays tests edge cases with empty structures
 // Feature: F047
 func TestF047_EdgeCase_EmptyObjectsAndArrays(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Items with empty objects and arrays
 	tmpDir := t.TempDir()
@@ -286,9 +277,6 @@ states:
 // TestF047_EdgeCase_PrimitiveTypes tests AC4: primitives pass through unchanged
 // Feature: F047
 func TestF047_EdgeCase_PrimitiveTypes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Loop items are primitive types (not objects)
 	tmpDir := t.TempDir()
@@ -380,9 +368,6 @@ states:
 // TestF047_EdgeCase_UnicodeAndSpecialCharacters tests unicode handling
 // Feature: F047
 func TestF047_EdgeCase_UnicodeAndSpecialCharacters(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Items with unicode characters
 	tmpDir := t.TempDir()
@@ -449,9 +434,6 @@ states:
 // TestF047_Integration_RealWorldWorkflowPattern tests a realistic scenario
 // Feature: F047
 func TestF047_Integration_RealWorldWorkflowPattern(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: A realistic PR review workflow pattern
 	tmpDir := t.TempDir()
@@ -554,9 +536,6 @@ states:
 // Workflows created before F047 continue to work unchanged
 // Feature: F047
 func TestF047_BackwardCompatibility_ExistingWorkflows(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Pre-F047 workflows with simple string/number items
 	tmpDir := t.TempDir()

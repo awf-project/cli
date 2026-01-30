@@ -23,9 +23,6 @@ func TestGeminiProvider_Name(t *testing.T) {
 
 func TestGeminiProvider_Execute_HappyPath(t *testing.T) {
 	provider := NewGeminiProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Gemini CLI not installed, skipping")
-	}
 
 	tests := []struct {
 		name    string
@@ -153,9 +150,6 @@ func TestGeminiProvider_Validate_CLINotInstalled(t *testing.T) {
 
 func TestGeminiProvider_Validate_CLIInstalled(t *testing.T) {
 	provider := NewGeminiProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Gemini CLI not installed, skipping")
-	}
 
 	err := provider.Validate()
 	assert.NoError(t, err)
@@ -163,9 +157,6 @@ func TestGeminiProvider_Validate_CLIInstalled(t *testing.T) {
 
 func TestGeminiProvider_Execute_LongPrompt(t *testing.T) {
 	provider := NewGeminiProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Gemini CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -184,9 +175,6 @@ func TestGeminiProvider_Execute_LongPrompt(t *testing.T) {
 
 func TestGeminiProvider_Execute_SpecialCharacters(t *testing.T) {
 	provider := NewGeminiProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Gemini CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 

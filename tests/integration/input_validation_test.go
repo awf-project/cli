@@ -35,9 +35,6 @@ import (
 // Feature: C011 - Component: input_validation_tests
 // Strategy: Test valid and invalid pattern matches
 func TestInputValidation_PatternMatch_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name      string
@@ -127,9 +124,6 @@ func TestInputValidation_PatternMatch_Integration(t *testing.T) {
 // Feature: C011 - Component: input_validation_tests
 // Strategy: Test values in and out of allowed set
 func TestInputValidation_EnumAllowedValues_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name      string
@@ -219,9 +213,6 @@ func TestInputValidation_EnumAllowedValues_Integration(t *testing.T) {
 // Feature: C011 - Component: input_validation_tests
 // Strategy: Test values within and outside bounds
 func TestInputValidation_NumericMinMax_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name      string
@@ -319,9 +310,6 @@ func TestInputValidation_NumericMinMax_Integration(t *testing.T) {
 // Feature: C011 - Component: input_validation_tests
 // Strategy: Test inputs that must satisfy multiple constraints
 func TestInputValidation_CombinedRules_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name      string
@@ -417,9 +405,6 @@ func TestInputValidation_CombinedRules_Integration(t *testing.T) {
 // Feature: C011 - Component: input_validation_tests
 // Strategy: Validate error messages include field name, rule type, and constraint
 func TestInputValidation_ErrorMessages_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name        string

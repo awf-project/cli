@@ -25,9 +25,6 @@ import (
 
 func TestResumeWorkflow_E2E(t *testing.T) {
 	// Full flow: create workflow, run until interrupt, resume, complete
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -87,9 +84,6 @@ states:
 
 func TestResumeWorkflow_FromInterruptedState_E2E(t *testing.T) {
 	// Simulate interrupted workflow by manually creating state, then resume
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -179,9 +173,6 @@ states:
 
 func TestResumeList_E2E(t *testing.T) {
 	// Create multiple interrupted workflows, verify list shows them
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -301,9 +292,6 @@ states:
 
 func TestResumeWithOverrides_E2E(t *testing.T) {
 	// Resume with different inputs, verify they are used
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -379,9 +367,6 @@ states:
 
 func TestResumeFailedWorkflow_E2E(t *testing.T) {
 	// Resume a workflow that was previously failed
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -450,9 +435,6 @@ states:
 
 func TestResumeWorkflow_WorkflowDefinitionChanged_E2E(t *testing.T) {
 	// Resume fails when workflow definition has changed (step removed)
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -517,9 +499,6 @@ states:
 
 func TestResumeWorkflow_ParallelStep_E2E(t *testing.T) {
 	// Resume workflow with parallel step
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")

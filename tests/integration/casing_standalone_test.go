@@ -22,9 +22,6 @@ const awfBinary = "../../bin/awf"
 // TestCLI_SingleLowercaseError validates that awf validate detects a single
 // lowercase property and provides a helpful error message with a suggestion.
 func TestCLI_SingleLowercaseError(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "lowercase-single")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -47,9 +44,6 @@ func TestCLI_SingleLowercaseError(t *testing.T) {
 // TestCLI_MultipleLowercaseErrors validates that all lowercase properties
 // are reported, not just the first one (non-fail-fast behavior).
 func TestCLI_MultipleLowercaseErrors(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "lowercase-multiple")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -81,9 +75,6 @@ func TestCLI_MultipleLowercaseErrors(t *testing.T) {
 // TestCLI_UppercasePropertiesPass validates that workflows using correct
 // uppercase property syntax pass validation without errors.
 func TestCLI_UppercasePropertiesPass(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "uppercase-valid")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -101,9 +92,6 @@ func TestCLI_UppercasePropertiesPass(t *testing.T) {
 // TestCLI_MixedCasing validates that workflows with both correct and
 // incorrect casing report only the incorrect references.
 func TestCLI_MixedCasing(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "mixed-casing")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -126,9 +114,6 @@ func TestCLI_MixedCasing(t *testing.T) {
 // Note: Loop conditions may not be validated in current implementation.
 // This test is kept for future enhancement verification.
 func TestCLI_LoopConditionLowercase(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "loop-lowercase")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -152,9 +137,6 @@ func TestCLI_LoopConditionLowercase(t *testing.T) {
 // TestCLI_HookValidation validates that workflows with hooks can be validated.
 // Note: Hook content validation may not be implemented yet.
 func TestCLI_HookValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "hook-lowercase")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")
@@ -174,9 +156,6 @@ func TestCLI_HookValidation(t *testing.T) {
 // TestCLI_ErrorMessageQuality validates that error messages meet quality
 // standards: clear property identification, actionable suggestions, context.
 func TestCLI_ErrorMessageQuality(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	cmd := exec.Command(awfBinary, "validate", "lowercase-single")
 	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH=../fixtures/workflows")

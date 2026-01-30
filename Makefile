@@ -18,6 +18,7 @@ help:
 	@echo "  test             Run fast tests (excludes real CLI calls)"
 	@echo "  test-unit        Run unit tests only"
 	@echo "  test-integration Run integration tests (real CLI calls - slow)"
+	@echo "  test-external    Run external tests (requires CLIs: claude, codex, gemini, opencode)"
 	@echo "  test-all         Run all tests including integration"
 	@echo "  test-coverage    Generate coverage report"
 	@echo "  test-race        Run tests with race detector"
@@ -68,7 +69,11 @@ test-unit:
 
 # Integration tests (real CLI calls - slow)
 test-integration:
-	go test -v -tags=integration ./internal/infrastructure/agents/... ./tests/integration/cli/...
+	go test -v -tags=integration ./internal/infrastructure/agents/... ./tests/integration/...
+
+# External tests (requires external CLIs: claude, codex, gemini, opencode)
+test-external:
+	go test -v -tags=external ./...
 
 # All tests including integration (slow - requires CLI tools installed)
 test-all:

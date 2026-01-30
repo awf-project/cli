@@ -47,9 +47,6 @@ import (
 // =============================================================================
 
 func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// CI-enabled: Only validates YAML syntax, no external API calls required
 
 	// Given: Conversation workflow fixtures exist
@@ -125,9 +122,6 @@ func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_ConversationWorkflowsListedSuccessfully(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// CI-enabled: Only lists workflow files, no external API calls required
 
 	// Given: Workflow directory with conversation workflows
@@ -156,9 +150,6 @@ func TestFeature33_ConversationWorkflowsListedSuccessfully(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_BasicConversation_SimpleWorkflow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real Claude API provider with ANTHROPIC_API_KEY and billable API calls
 	skipInCI(t)
 
@@ -218,9 +209,6 @@ func TestFeature33_BasicConversation_SimpleWorkflow(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_DryRun_ConversationConfiguration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -266,9 +254,6 @@ func TestFeature33_DryRun_ConversationConfiguration(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_MaxTurns_MultiTurnWorkflow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -326,9 +311,6 @@ func TestFeature33_MaxTurns_MultiTurnWorkflow(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_ContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -399,9 +381,6 @@ func TestFeature33_ContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_TokenCounting_InputOutputTracking(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -475,9 +454,6 @@ func TestFeature33_TokenCounting_InputOutputTracking(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_StopCondition_ExpressionEvaluation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -539,9 +515,6 @@ func TestFeature33_StopCondition_ExpressionEvaluation(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_MaxTurns_BoundaryEnforcement(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -598,9 +571,6 @@ func TestFeature33_MaxTurns_BoundaryEnforcement(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_InjectContext_ContinueConversation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -662,9 +632,6 @@ func TestFeature33_InjectContext_ContinueConversation(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_StateInterpolation_ConversationAccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -721,9 +688,6 @@ func TestFeature33_StateInterpolation_ConversationAccess(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_ParallelConversations_ConcurrentExecution(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -785,9 +749,6 @@ func TestFeature33_ParallelConversations_ConcurrentExecution(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_ErrorHandling_ConversationErrors(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -847,9 +808,6 @@ func TestFeature33_ErrorHandling_ConversationErrors(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -900,9 +858,6 @@ func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_EdgeCase_ZeroMaxTurns(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -923,9 +878,6 @@ func TestFeature33_EdgeCase_ZeroMaxTurns(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_DiagramGeneration_ConversationSteps(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// CI-enabled: Only generates DOT diagram from YAML, no external API calls required
 
 	// Given: Conversation workflow
@@ -956,9 +908,6 @@ func TestFeature33_DiagramGeneration_ConversationSteps(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// CI-enabled: Only displays workflow help from YAML, no external API calls required
 
 	// Given: Conversation workflow exists
@@ -999,9 +948,6 @@ func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_Performance_LargeConversationHistory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider with many billable API calls (performance stress test)
 	skipInCI(t)
 
@@ -1022,9 +968,6 @@ func TestFeature33_Performance_LargeConversationHistory(t *testing.T) {
 // =============================================================================
 
 func TestFeature33_BackwardsCompatibility_StatelessMode(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 

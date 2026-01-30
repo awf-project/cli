@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,9 +63,6 @@ func TestJSONPluginStateStore_Save_CreatesFile(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	filePath := filepath.Join(tmpDir, "plugins.json")
@@ -81,30 +77,18 @@ func TestJSONPluginStateStore_Save_PersistsStates(t *testing.T) {
 
 	// Set up some state
 	err := store.SetEnabled(ctx, "plugin-a", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = store.SetConfig(ctx, "plugin-b", map[string]any{"key": "value"})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Save
 	err = store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Load in new store instance
 	store2 := NewJSONPluginStateStore(tmpDir)
 	err = store2.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Verify states persisted
@@ -119,9 +103,6 @@ func TestJSONPluginStateStore_Save_EmptyStates(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// File should exist and be valid JSON
@@ -138,9 +119,6 @@ func TestJSONPluginStateStore_Save_CreatesDirectory(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	_, statErr := os.Stat(nestedPath)
@@ -153,9 +131,6 @@ func TestJSONPluginStateStore_Save_AtomicWrite(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// No temp files should remain
@@ -179,9 +154,6 @@ func TestJSONPluginStateStore_Save_PermissionDenied(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	assert.Error(t, err, "Save should fail on read-only directory")
 }
 
@@ -192,9 +164,6 @@ func TestJSONPluginStateStore_Save_ContextCancellation(t *testing.T) {
 	cancel()
 
 	err := store.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	if err == nil {
 		t.Log("Save succeeded despite cancelled context - acceptable if operation is fast")
 	}
@@ -213,9 +182,6 @@ func TestJSONPluginStateStore_Load_ExistingFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte(data), 0o600))
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Verify loaded states
@@ -231,9 +197,6 @@ func TestJSONPluginStateStore_Load_NonExistentFile(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	// Should succeed with empty state (no file = no persisted state)
 	assert.NoError(t, err, "Load should not error for non-existent file")
 }
@@ -248,9 +211,6 @@ func TestJSONPluginStateStore_Load_InvalidJSON(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("not valid json{"), 0o600))
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	assert.Error(t, err, "Load should error on invalid JSON")
 }
 
@@ -264,11 +224,9 @@ func TestJSONPluginStateStore_Load_EmptyFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte(""), 0o600))
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	// Empty file should either error or be handled gracefully
 	// Implementation decides the behavior
+	_ = err
 }
 
 func TestJSONPluginStateStore_Load_PermissionDenied(t *testing.T) {
@@ -287,9 +245,6 @@ func TestJSONPluginStateStore_Load_PermissionDenied(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(filePath, 0o644) })
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	assert.Error(t, err, "Load should fail on unreadable file")
 }
 
@@ -300,10 +255,8 @@ func TestJSONPluginStateStore_Load_ContextCancellation(t *testing.T) {
 	cancel()
 
 	err := store.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	// Should either error or succeed quickly
+	_ = err
 }
 
 // --- SetEnabled tests ---
@@ -314,9 +267,6 @@ func TestJSONPluginStateStore_SetEnabled_DisablePlugin(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	assert.False(t, store.IsEnabled("test-plugin"), "plugin should be disabled")
@@ -329,9 +279,6 @@ func TestJSONPluginStateStore_SetEnabled_EnablePlugin(t *testing.T) {
 
 	// First disable
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Then enable
@@ -347,9 +294,6 @@ func TestJSONPluginStateStore_SetEnabled_SetsDisabledAt(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	state := store.GetState("test-plugin")
@@ -366,9 +310,6 @@ func TestJSONPluginStateStore_SetEnabled_ClearsDisabledAtOnEnable(t *testing.T) 
 
 	// Disable first
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Enable
@@ -388,10 +329,8 @@ func TestJSONPluginStateStore_SetEnabled_EmptyName(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	// Should either error or accept empty name - implementation decides
+	_ = err
 }
 
 func TestJSONPluginStateStore_SetEnabled_ContextCancellation(t *testing.T) {
@@ -401,10 +340,8 @@ func TestJSONPluginStateStore_SetEnabled_ContextCancellation(t *testing.T) {
 	cancel()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	// Should either error or succeed quickly
+	_ = err
 }
 
 // --- IsEnabled tests ---
@@ -423,9 +360,6 @@ func TestJSONPluginStateStore_IsEnabled_DisabledPlugin(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "disabled-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	assert.False(t, store.IsEnabled("disabled-plugin"))
@@ -438,9 +372,6 @@ func TestJSONPluginStateStore_IsEnabled_EnabledPlugin(t *testing.T) {
 
 	// Explicitly enable (should be redundant but explicit)
 	err := store.SetEnabled(ctx, "enabled-plugin", true)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	assert.True(t, store.IsEnabled("enabled-plugin"))
@@ -476,9 +407,6 @@ func TestJSONPluginStateStore_GetConfig_ExistingConfig(t *testing.T) {
 	}
 
 	err := store.SetConfig(ctx, "test-plugin", testConfig)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	config := store.GetConfig("test-plugin")
@@ -492,9 +420,6 @@ func TestJSONPluginStateStore_GetConfig_EmptyConfig(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	config := store.GetConfig("test-plugin")
@@ -511,9 +436,6 @@ func TestJSONPluginStateStore_SetConfig_NewPlugin(t *testing.T) {
 
 	testConfig := map[string]any{"key": "value"}
 	err := store.SetConfig(ctx, "new-plugin", testConfig)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	config := store.GetConfig("new-plugin")
@@ -527,9 +449,6 @@ func TestJSONPluginStateStore_SetConfig_OverwriteExisting(t *testing.T) {
 
 	// Set initial config
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{"old": "value"})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Overwrite with new config
@@ -547,10 +466,8 @@ func TestJSONPluginStateStore_SetConfig_NilConfig(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", nil)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	// Should either clear config or error - implementation decides
+	_ = err
 }
 
 func TestJSONPluginStateStore_SetConfig_PreservesEnabled(t *testing.T) {
@@ -560,16 +477,10 @@ func TestJSONPluginStateStore_SetConfig_PreservesEnabled(t *testing.T) {
 
 	// Disable plugin first
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Set config
 	err = store.SetConfig(ctx, "test-plugin", map[string]any{"key": "value"})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Verify enabled state preserved
@@ -583,10 +494,8 @@ func TestJSONPluginStateStore_SetConfig_ContextCancellation(t *testing.T) {
 	cancel()
 
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{"key": "value"})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	// Should either error or succeed quickly
+	_ = err
 }
 
 // --- GetState tests ---
@@ -605,9 +514,6 @@ func TestJSONPluginStateStore_GetState_ExistingPlugin(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	state := store.GetState("test-plugin")
@@ -621,9 +527,6 @@ func TestJSONPluginStateStore_GetState_WithConfig(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{"key": "value"})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	state := store.GetState("test-plugin")
@@ -647,9 +550,6 @@ func TestJSONPluginStateStore_ListDisabled_SingleDisabled(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "disabled-plugin", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	disabled := store.ListDisabled()
@@ -664,9 +564,6 @@ func TestJSONPluginStateStore_ListDisabled_MultipleDisabled(t *testing.T) {
 
 	for _, name := range []string{"plugin-a", "plugin-b", "plugin-c"} {
 		err := store.SetEnabled(ctx, name, false)
-		if errors.Is(err, ErrStateStoreNotImplemented) {
-			t.Skip("SetEnabled not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -684,9 +581,6 @@ func TestJSONPluginStateStore_ListDisabled_MixedEnabledDisabled(t *testing.T) {
 
 	// Disable some plugins
 	err := store.SetEnabled(ctx, "disabled-1", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = store.SetEnabled(ctx, "disabled-2", false)
@@ -720,10 +614,7 @@ func TestJSONPluginStateStore_ConcurrentSetEnabled(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			name := fmt.Sprintf("plugin-%d", n)
-			err := store.SetEnabled(ctx, name, n%2 == 0)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				return // Skip if not implemented
-			}
+			_ = store.SetEnabled(ctx, name, n%2 == 0)
 		}(i)
 	}
 
@@ -750,10 +641,7 @@ func TestJSONPluginStateStore_ConcurrentSetConfig(t *testing.T) {
 			defer wg.Done()
 			name := fmt.Sprintf("plugin-%d", n)
 			config := map[string]any{"iteration": n}
-			err := store.SetConfig(ctx, name, config)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				return // Skip if not implemented
-			}
+			_ = store.SetConfig(ctx, name, config)
 		}(i)
 	}
 
@@ -776,10 +664,7 @@ func TestJSONPluginStateStore_ConcurrentReadWrite(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			name := fmt.Sprintf("plugin-%d", n%5)
-			err := store.SetEnabled(ctx, name, n%2 == 0)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				return
-			}
+			_ = store.SetEnabled(ctx, name, n%2 == 0)
 		}(i)
 	}
 
@@ -817,10 +702,7 @@ func TestJSONPluginStateStore_ConcurrentSaveLoad(t *testing.T) {
 			// Set some state first
 			name := fmt.Sprintf("plugin-%d", n)
 			_ = store.SetEnabled(ctx, name, n%2 == 0)
-			err := store.Save(ctx)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				return
-			}
+			_ = store.Save(ctx)
 		}(i)
 	}
 
@@ -829,10 +711,7 @@ func TestJSONPluginStateStore_ConcurrentSaveLoad(t *testing.T) {
 	for i := 0; i < iterations; i++ {
 		go func() {
 			defer wg.Done()
-			err := store.Load(ctx)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				return
-			}
+			_ = store.Load(ctx)
 		}()
 	}
 
@@ -899,9 +778,6 @@ func TestJSONPluginStateStore_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := store.SetEnabled(ctx, tt.pluginName, false)
-			if errors.Is(err, ErrStateStoreNotImplemented) {
-				t.Skip("SetEnabled not yet implemented")
-			}
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetEnabled() error = %v, wantErr %v", err, tt.wantErr)
@@ -924,9 +800,6 @@ func TestJSONPluginStateStore_Roundtrip(t *testing.T) {
 	store1 := NewJSONPluginStateStore(tmpDir)
 
 	err := store1.SetEnabled(ctx, "plugin-a", false)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetEnabled not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = store1.SetEnabled(ctx, "plugin-b", true)
@@ -938,24 +811,15 @@ func TestJSONPluginStateStore_Roundtrip(t *testing.T) {
 		"bool":   true,
 		"nested": map[string]any{"inner": "data"},
 	})
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("SetConfig not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Save
 	err = store1.Save(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Save not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Load in new store instance
 	store2 := NewJSONPluginStateStore(tmpDir)
 	err = store2.Load(ctx)
-	if errors.Is(err, ErrStateStoreNotImplemented) {
-		t.Skip("Load not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Verify all states match

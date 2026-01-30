@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -52,9 +51,6 @@ func TestOperationRegistry_RegisterOperation_ValidOperation(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Verify operation was registered
@@ -67,9 +63,6 @@ func TestOperationRegistry_RegisterOperation_NilOperation(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	err := registry.RegisterOperation(nil)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	assert.ErrorIs(t, err, ErrInvalidOperation, "should return ErrInvalidOperation for nil operation")
 }
 
@@ -82,9 +75,6 @@ func TestOperationRegistry_RegisterOperation_EmptyName(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	assert.ErrorIs(t, err, ErrInvalidOperation, "should return ErrInvalidOperation for empty name")
 }
 
@@ -102,9 +92,6 @@ func TestOperationRegistry_RegisterOperation_DuplicateName(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op1)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err, "first registration should succeed")
 
 	err = registry.RegisterOperation(op2)
@@ -121,9 +108,6 @@ func TestOperationRegistry_RegisterOperation_MultipleOperations(t *testing.T) {
 
 	for _, op := range operations {
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err, "registering %s should succeed", op.Name)
 	}
 
@@ -153,9 +137,6 @@ func TestOperationRegistry_RegisterOperation_WithInputs(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	retrieved, found := registry.GetOperation("http.request")
@@ -173,9 +154,6 @@ func TestOperationRegistry_RegisterOperation_SetsSource(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	source, found := registry.GetOperationSource("test.operation")
@@ -194,15 +172,9 @@ func TestOperationRegistry_UnregisterOperation_Existing(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = registry.UnregisterOperation("to.remove")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	_, found := registry.GetOperation("to.remove")
@@ -213,9 +185,6 @@ func TestOperationRegistry_UnregisterOperation_NonExistent(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	err := registry.UnregisterOperation("nonexistent")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	assert.ErrorIs(t, err, ErrOperationNotFound, "should return ErrOperationNotFound")
 }
 
@@ -223,9 +192,6 @@ func TestOperationRegistry_UnregisterOperation_EmptyName(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	err := registry.UnregisterOperation("")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	assert.ErrorIs(t, err, ErrOperationNotFound, "empty name should return ErrOperationNotFound")
 }
 
@@ -238,15 +204,9 @@ func TestOperationRegistry_UnregisterOperation_ClearsSource(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = registry.UnregisterOperation("test.op")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	_, found := registry.GetOperationSource("test.op")
@@ -262,15 +222,9 @@ func TestOperationRegistry_UnregisterOperation_AllowsReregistration(t *testing.T
 	}
 
 	err := registry.RegisterOperation(op1)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	err = registry.UnregisterOperation("reusable.op")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// Should be able to register again with different plugin
@@ -305,9 +259,6 @@ func TestOperationRegistry_Operations_ReturnsAll(t *testing.T) {
 
 	for _, op := range operations {
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -342,9 +293,6 @@ func TestOperationRegistry_GetOperation_Existing(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	retrieved, found := registry.GetOperation("find.me")
@@ -378,9 +326,6 @@ func TestOperationRegistry_GetOperation_CaseSensitive(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	_, found := registry.GetOperation("my.operation") // lowercase
@@ -402,16 +347,10 @@ func TestOperationRegistry_UnregisterPluginOperations_RemovesAll(t *testing.T) {
 
 	for _, op := range operations {
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
 	err := registry.UnregisterPluginOperations("plugin-a")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterPluginOperations not yet implemented")
-	}
 	require.NoError(t, err)
 
 	// plugin-a operations should be gone
@@ -429,9 +368,6 @@ func TestOperationRegistry_UnregisterPluginOperations_NonExistentPlugin(t *testi
 	registry := NewOperationRegistry()
 
 	err := registry.UnregisterPluginOperations("nonexistent-plugin")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterPluginOperations not yet implemented")
-	}
 	// Should succeed even if plugin has no operations (no-op)
 	assert.NoError(t, err, "unregistering non-existent plugin should succeed silently")
 }
@@ -439,10 +375,7 @@ func TestOperationRegistry_UnregisterPluginOperations_NonExistentPlugin(t *testi
 func TestOperationRegistry_UnregisterPluginOperations_EmptyPluginName(t *testing.T) {
 	registry := NewOperationRegistry()
 
-	err := registry.UnregisterPluginOperations("")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterPluginOperations not yet implemented")
-	}
+	_ = registry.UnregisterPluginOperations("")
 	// Empty plugin name should be handled gracefully (no-op or error)
 	// Implementation decides the behavior
 }
@@ -461,9 +394,6 @@ func TestOperationRegistry_UnregisterPluginOperations_PartialRemoval(t *testing.
 			PluginName: "plugin-b",
 		}
 		err := registry.RegisterOperation(opA)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 		err = registry.RegisterOperation(opB)
 		require.NoError(t, err)
@@ -472,9 +402,6 @@ func TestOperationRegistry_UnregisterPluginOperations_PartialRemoval(t *testing.
 	assert.Equal(t, 10, registry.Count(), "should have 10 operations")
 
 	err := registry.UnregisterPluginOperations("plugin-a")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterPluginOperations not yet implemented")
-	}
 	require.NoError(t, err)
 
 	assert.Equal(t, 5, registry.Count(), "should have 5 operations after removal")
@@ -496,9 +423,6 @@ func TestOperationRegistry_GetPluginOperations_ReturnsMatching(t *testing.T) {
 
 	for _, op := range operations {
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -544,9 +468,6 @@ func TestOperationRegistry_Count_AfterRegistration(t *testing.T) {
 			PluginName: "test-plugin",
 		}
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -562,16 +483,10 @@ func TestOperationRegistry_Count_AfterUnregistration(t *testing.T) {
 			PluginName: "test-plugin",
 		}
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
 	err := registry.UnregisterOperation("op.2")
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("UnregisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	assert.Equal(t, 4, registry.Count())
@@ -588,9 +503,6 @@ func TestOperationRegistry_GetOperationSource_Existing(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	source, found := registry.GetOperationSource("sourced.op")
@@ -626,9 +538,6 @@ func TestOperationRegistry_Clear_PopulatedRegistry(t *testing.T) {
 			PluginName: "test-plugin",
 		}
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -648,9 +557,6 @@ func TestOperationRegistry_Clear_AllowsReregistration(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	require.NoError(t, err)
 
 	registry.Clear()
@@ -677,10 +583,7 @@ func TestOperationRegistry_ConcurrentRegister(t *testing.T) {
 				Name:       fmt.Sprintf("concurrent.op.%d", n),
 				PluginName: fmt.Sprintf("plugin-%d", n%5),
 			}
-			err := registry.RegisterOperation(op)
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				return // Skip if not implemented
-			}
+			_ = registry.RegisterOperation(op)
 		}(i)
 	}
 
@@ -704,9 +607,6 @@ func TestOperationRegistry_ConcurrentUnregister(t *testing.T) {
 			PluginName: "test-plugin",
 		}
 		err := registry.RegisterOperation(op)
-		if errors.Is(err, ErrRegistryNotImplemented) {
-			t.Skip("RegisterOperation not yet implemented")
-		}
 		require.NoError(t, err)
 	}
 
@@ -716,10 +616,7 @@ func TestOperationRegistry_ConcurrentUnregister(t *testing.T) {
 	for i := 0; i < operations; i++ {
 		go func(n int) {
 			defer wg.Done()
-			err := registry.UnregisterOperation(fmt.Sprintf("to.unregister.%d", n))
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				return
-			}
+			_ = registry.UnregisterOperation(fmt.Sprintf("to.unregister.%d", n))
 		}(i)
 	}
 
@@ -744,10 +641,7 @@ func TestOperationRegistry_ConcurrentReadWrite(t *testing.T) {
 				Name:       fmt.Sprintf("readwrite.op.%d", n),
 				PluginName: "test-plugin",
 			}
-			err := registry.RegisterOperation(op)
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				return
-			}
+			_ = registry.RegisterOperation(op)
 		}(i)
 	}
 
@@ -783,9 +677,6 @@ func TestOperationRegistry_ConcurrentPluginOperations(t *testing.T) {
 				PluginName: fmt.Sprintf("plugin-%d", p),
 			}
 			err := registry.RegisterOperation(op)
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				t.Skip("RegisterOperation not yet implemented")
-			}
 			require.NoError(t, err)
 		}
 	}
@@ -797,10 +688,7 @@ func TestOperationRegistry_ConcurrentPluginOperations(t *testing.T) {
 	for p := 0; p < plugins; p++ {
 		go func(pluginNum int) {
 			defer wg.Done()
-			err := registry.UnregisterPluginOperations(fmt.Sprintf("plugin-%d", pluginNum))
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				return
-			}
+			_ = registry.UnregisterPluginOperations(fmt.Sprintf("plugin-%d", pluginNum))
 		}(p)
 	}
 
@@ -836,9 +724,6 @@ func TestOperationRegistry_SpecialCharactersInName(t *testing.T) {
 			}
 
 			err := registry.RegisterOperation(op)
-			if errors.Is(err, ErrRegistryNotImplemented) {
-				t.Skip("RegisterOperation not yet implemented")
-			}
 
 			if tt.shouldError {
 				assert.Error(t, err)
@@ -864,9 +749,6 @@ func TestOperationRegistry_LongOperationName(t *testing.T) {
 	}
 
 	err := registry.RegisterOperation(op)
-	if errors.Is(err, ErrRegistryNotImplemented) {
-		t.Skip("RegisterOperation not yet implemented")
-	}
 	assert.NoError(t, err)
 
 	retrieved, found := registry.GetOperation(longName)
@@ -956,9 +838,6 @@ func TestOperationRegistry_TableDriven(t *testing.T) {
 
 			for _, op := range tt.operations {
 				err := registry.RegisterOperation(op)
-				if errors.Is(err, ErrRegistryNotImplemented) {
-					t.Skip("RegisterOperation not yet implemented")
-				}
 				require.NoError(t, err)
 			}
 

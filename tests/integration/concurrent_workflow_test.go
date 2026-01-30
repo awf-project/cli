@@ -87,9 +87,6 @@ func (m *concurrentMockLogger) WithContext(ctx map[string]any) ports.Logger {
 // This is the core test for bug-48: BadgerDB used exclusive locks preventing
 // concurrent workflow execution.
 func TestConcurrentWorkflowExecution_SharedHistoryStore(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
@@ -185,9 +182,6 @@ states:
 // TestConcurrentWorkflowExecution_HistoryIntegrity verifies that all workflow
 // executions are correctly recorded in history even under concurrent load.
 func TestConcurrentWorkflowExecution_HistoryIntegrity(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
@@ -288,9 +282,6 @@ states:
 // TestConcurrentHistoryStoreAccess validates that multiple goroutines can
 // read and write to the SQLite history store without data corruption.
 func TestConcurrentHistoryStoreAccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
@@ -410,9 +401,6 @@ func TestConcurrentHistoryStoreAccess(t *testing.T) {
 // TestConcurrentWorkflowExecution_NoLockContention ensures that concurrent
 // workflow executions don't block each other due to database locking.
 func TestConcurrentWorkflowExecution_NoLockContention(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
@@ -522,9 +510,6 @@ states:
 // concurrently without conflicts. This simulates multiple awf processes accessing
 // the same history database.
 func TestConcurrentHistoryStoreAccess_MultipleStoreInstances(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
@@ -618,9 +603,6 @@ func TestConcurrentHistoryStoreAccess_MultipleStoreInstances(t *testing.T) {
 // TestConcurrentWorkflowExecution_RapidSuccession tests that workflows can be
 // started in rapid succession without database errors.
 func TestConcurrentWorkflowExecution_RapidSuccession(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	workflowDir := filepath.Join(tmpDir, "workflows")
@@ -699,9 +681,6 @@ states:
 // TestConcurrentHistoryStoreAccess_MixedOperations tests concurrent
 // Record, List, GetStats, and Cleanup operations on the history store.
 func TestConcurrentHistoryStoreAccess_MixedOperations(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")

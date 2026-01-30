@@ -72,10 +72,6 @@ func (m *mockExecutionLogger) WithContext(ctx map[string]any) ports.Logger {
 // =============================================================================
 
 func TestExecuteStep_SuccessfulLinearWorkflow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A simple linear workflow with multiple steps
 	// When: The workflow is executed
 	// Then: All helpers (prepareStepExecution, resolveStepCommand,
@@ -154,10 +150,6 @@ states:
 }
 
 func TestExecuteStep_WithRetry_SuccessOnSecondAttempt_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A step configured with retry that fails once then succeeds
 	// When: The step is executed
 	// Then: executeStepCommand retry logic works correctly
@@ -225,10 +217,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_NonZeroExit_WithOnFailure_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A step that fails with non-zero exit and has on_failure configured
 	// When: The step is executed
 	// Then: handleNonZeroExit transitions correctly to on_failure state
@@ -298,10 +286,6 @@ states:
 }
 
 func TestExecuteStep_ContinueOnError_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A step with continue_on_error: true that fails
 	// When: The step is executed
 	// Then: handleNonZeroExit continues to on_success despite failure
@@ -369,10 +353,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_ContextCancellationTimeout_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A long-running command with timeout configured
 	// When: The step is executed
 	// Then: prepareStepExecution creates timeout context, handleExecutionError
@@ -444,10 +424,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_ComplexWorkflowWithAllHelpers_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A complex workflow with retries, error handling, and multiple transitions
 	// When: The workflow is executed
 	// Then: All refactored helpers integrate seamlessly
@@ -552,10 +528,6 @@ states:
 }
 
 func TestExecuteStep_ParallelStepsWithErrorHandling_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A workflow with parallel steps using best_effort strategy
 	// When: Steps are executed (one succeeds, one fails)
 	// Then: Error handling works correctly for both paths
@@ -636,10 +608,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_ComplexInterpolation_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: Steps that reference inputs, previous outputs, and env vars
 	// When: The workflow is executed
 	// Then: resolveStepCommand correctly interpolates all variables
@@ -713,10 +681,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_ConcurrentWorkflows_NoRaceConditions_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: Multiple workflows executed concurrently
 	// When: Workflows run in parallel
 	// Then: No race conditions occur, all helpers are thread-safe
@@ -797,10 +761,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_RetryExhaustion_TransitionsToFailure_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A step that always fails with max retries configured
 	// When: The step is executed
 	// Then: Retry logic exhausts attempts and transitions to on_failure
@@ -872,10 +832,6 @@ states:
 // =============================================================================
 
 func TestExecuteStep_BackwardCompatibility_ExistingWorkflowsStillWork_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
 	// Given: A workflow pattern from before refactoring
 	// When: The workflow is executed with refactored code
 	// Then: Behavior is identical to pre-refactoring implementation

@@ -59,6 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C030** Reduced test skip count by 84% (823 → 128 skipped tests)
+  - Converted 400+ integration test runtime skips to `//go:build integration` tags
+  - Removed 250+ obsolete conditional skip guards from plugin infrastructure tests (state store, loader, registry, version)
+  - Deleted validation stub tests from manifest_test.go after C029 implementation completion
+  - Created standardized skip helper functions in `tests/integration/test_helpers_skip_test.go`
+  - Added `test-external` Makefile target for tests requiring external CLI dependencies
+  - Fixed `test-integration` target to run all integration tests (was only running cli/ subdirectory)
+  - Created comprehensive testing documentation in `docs/development/testing.md`:
+    - Build tag usage guide (integration, external, slow, !short)
+    - Skip helper function patterns for environment checks
+    - Formal skip policy with categorization and message format requirements
+    - Verification commands for skip count and format validation
+  - Created audit script `scripts/audit-skips.sh` for categorizing skip patterns
+  - Removed redundant `testing.Short()` checks from files with `//go:build integration` tags
+  - All remaining skips follow standardized format with category prefixes (ENVIRONMENT, PLATFORM, PERMISSION)
+
 - **C022** Fixed DIP violation in ExecutionService AgentRegistry dependency
   - Changed `agentRegistry` field from concrete `*agents.AgentRegistry` to `ports.AgentRegistry` interface
   - Updated `SetAgentRegistry()` setter to accept interface type

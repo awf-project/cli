@@ -20,9 +20,6 @@ import (
 // TestOperationSchemaValidate_ValidMinimal_Integration tests validation of a minimal valid operation schema.
 // Acceptance Criteria: OperationSchema.Validate() returns nil for valid schemas
 func TestOperationSchemaValidate_ValidMinimal_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -39,9 +36,6 @@ func TestOperationSchemaValidate_ValidMinimal_Integration(t *testing.T) {
 // TestOperationSchemaValidate_ValidComplete_Integration tests validation of a complete operation schema.
 // Acceptance Criteria: OperationSchema.Validate() validates all fields including nested InputSchemas
 func TestOperationSchemaValidate_ValidComplete_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:        "slack.send",
@@ -77,9 +71,6 @@ func TestOperationSchemaValidate_ValidComplete_Integration(t *testing.T) {
 // TestInputSchemaValidate_AllValidTypes_Integration tests validation of all valid input types.
 // Acceptance Criteria: InputSchema.Validate() accepts all valid input types
 func TestInputSchemaValidate_AllValidTypes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validTypes := []string{
 		plugin.InputTypeString,
@@ -106,9 +97,6 @@ func TestInputSchemaValidate_AllValidTypes_Integration(t *testing.T) {
 // TestGetRequiredInputs_MixedRequiredOptional_Integration tests filtering required inputs.
 // Acceptance Criteria: GetRequiredInputs() returns correct slice of required input names
 func TestGetRequiredInputs_MixedRequiredOptional_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -133,9 +121,6 @@ func TestGetRequiredInputs_MixedRequiredOptional_Integration(t *testing.T) {
 // TestIsValidType_ValidTypes_Integration tests type validation for valid types.
 // Acceptance Criteria: IsValidType() returns true for all valid types
 func TestIsValidType_ValidTypes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validTypes := []string{
 		plugin.InputTypeString,
@@ -163,9 +148,6 @@ func TestIsValidType_ValidTypes_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyInputsMap_Integration tests handling of empty inputs map.
 // Acceptance Criteria: OperationSchema.Validate() handles empty inputs gracefully
 func TestOperationSchemaValidate_EmptyInputsMap_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -182,9 +164,6 @@ func TestOperationSchemaValidate_EmptyInputsMap_Integration(t *testing.T) {
 // TestOperationSchemaValidate_NilInputsMap_Integration tests handling of nil inputs map.
 // Acceptance Criteria: OperationSchema.Validate() handles nil inputs gracefully
 func TestOperationSchemaValidate_NilInputsMap_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -201,9 +180,6 @@ func TestOperationSchemaValidate_NilInputsMap_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyOutputsList_Integration tests handling of empty outputs list.
 // Acceptance Criteria: OperationSchema.Validate() handles empty outputs gracefully
 func TestOperationSchemaValidate_EmptyOutputsList_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -220,9 +196,6 @@ func TestOperationSchemaValidate_EmptyOutputsList_Integration(t *testing.T) {
 // TestGetRequiredInputs_EmptyInputs_Integration tests filtering with no inputs.
 // Acceptance Criteria: GetRequiredInputs() returns empty slice for empty inputs
 func TestGetRequiredInputs_EmptyInputs_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -239,9 +212,6 @@ func TestGetRequiredInputs_EmptyInputs_Integration(t *testing.T) {
 // TestGetRequiredInputs_NilInputs_Integration tests filtering with nil inputs.
 // Acceptance Criteria: GetRequiredInputs() returns empty slice for nil inputs
 func TestGetRequiredInputs_NilInputs_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -258,9 +228,6 @@ func TestGetRequiredInputs_NilInputs_Integration(t *testing.T) {
 // TestInputSchemaValidate_UnicodeDescriptions_Integration tests handling of unicode in descriptions.
 // Acceptance Criteria: InputSchema.Validate() handles unicode text correctly
 func TestInputSchemaValidate_UnicodeDescriptions_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := plugin.InputSchema{
 		Type:        plugin.InputTypeString,
@@ -276,9 +243,6 @@ func TestInputSchemaValidate_UnicodeDescriptions_Integration(t *testing.T) {
 // TestInputSchemaValidate_DefaultValues_Integration tests various default value types.
 // Acceptance Criteria: InputSchema.Validate() validates default value types match declared type
 func TestInputSchemaValidate_DefaultValues_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name    string
@@ -347,9 +311,6 @@ func TestInputSchemaValidate_DefaultValues_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyName_Integration tests rejection of empty name.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty Name with descriptive error
 func TestOperationSchemaValidate_EmptyName_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "",
@@ -365,9 +326,6 @@ func TestOperationSchemaValidate_EmptyName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_WhitespaceName_Integration tests rejection of whitespace-only name.
 // Acceptance Criteria: OperationSchema.Validate() rejects whitespace-only Name
 func TestOperationSchemaValidate_WhitespaceName_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "   \t\n",
@@ -383,9 +341,6 @@ func TestOperationSchemaValidate_WhitespaceName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyPluginName_Integration tests rejection of empty plugin name.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty PluginName
 func TestOperationSchemaValidate_EmptyPluginName_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -401,9 +356,6 @@ func TestOperationSchemaValidate_EmptyPluginName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_InvalidInputSchema_Integration tests rejection of invalid input schemas.
 // Acceptance Criteria: OperationSchema.Validate() validates nested InputSchemas
 func TestOperationSchemaValidate_InvalidInputSchema_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -426,9 +378,6 @@ func TestOperationSchemaValidate_InvalidInputSchema_Integration(t *testing.T) {
 // TestOperationSchemaValidate_DuplicateOutputs_Integration tests rejection of duplicate output names.
 // Acceptance Criteria: OperationSchema.Validate() rejects duplicate output names
 func TestOperationSchemaValidate_DuplicateOutputs_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -446,9 +395,6 @@ func TestOperationSchemaValidate_DuplicateOutputs_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyOutputName_Integration tests rejection of empty output names.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty output names
 func TestOperationSchemaValidate_EmptyOutputName_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",
@@ -465,9 +411,6 @@ func TestOperationSchemaValidate_EmptyOutputName_Integration(t *testing.T) {
 // TestInputSchemaValidate_EmptyType_Integration tests rejection of empty type.
 // Acceptance Criteria: InputSchema.Validate() rejects empty Type
 func TestInputSchemaValidate_EmptyType_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := plugin.InputSchema{
 		Type:     "",
@@ -483,9 +426,6 @@ func TestInputSchemaValidate_EmptyType_Integration(t *testing.T) {
 // TestInputSchemaValidate_InvalidType_Integration tests rejection of invalid types.
 // Acceptance Criteria: InputSchema.Validate() rejects invalid types with descriptive error
 func TestInputSchemaValidate_InvalidType_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	invalidTypes := []string{"invalid", "float", "number", "text", "null"}
 
@@ -508,9 +448,6 @@ func TestInputSchemaValidate_InvalidType_Integration(t *testing.T) {
 // TestInputSchemaValidate_InvalidValidationRule_Integration tests rejection of unknown validation rules.
 // Acceptance Criteria: InputSchema.Validate() rejects unknown validation rules
 func TestInputSchemaValidate_InvalidValidationRule_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := plugin.InputSchema{
 		Type:       plugin.InputTypeString,
@@ -527,9 +464,6 @@ func TestInputSchemaValidate_InvalidValidationRule_Integration(t *testing.T) {
 // TestInputSchemaValidate_ValidValidationRules_Integration tests acceptance of valid validation rules.
 // Acceptance Criteria: InputSchema.Validate() accepts recognized validation rules
 func TestInputSchemaValidate_ValidValidationRules_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validRules := []string{"url", "email"}
 
@@ -550,9 +484,6 @@ func TestInputSchemaValidate_ValidValidationRules_Integration(t *testing.T) {
 // TestInputSchemaValidate_DefaultTypeMismatch_Integration tests rejection of mismatched default values.
 // Acceptance Criteria: InputSchema.Validate() rejects default values that don't match declared type
 func TestInputSchemaValidate_DefaultTypeMismatch_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name    string
@@ -614,9 +545,6 @@ func TestInputSchemaValidate_DefaultTypeMismatch_Integration(t *testing.T) {
 // TestIsValidType_InvalidTypes_Integration tests type validation for invalid types.
 // Acceptance Criteria: IsValidType() returns false for invalid types
 func TestIsValidType_InvalidTypes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	invalidTypes := []string{"", "invalid", "float", "number", "null", "undefined"}
 
@@ -638,9 +566,6 @@ func TestIsValidType_InvalidTypes_Integration(t *testing.T) {
 // TestOperationSchemaFullWorkflow_Integration tests complete validation workflow.
 // Acceptance Criteria: All validation methods work together correctly
 func TestOperationSchemaFullWorkflow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Create a complete operation schema
 	schema := &plugin.OperationSchema{
@@ -705,9 +630,6 @@ func TestOperationSchemaFullWorkflow_Integration(t *testing.T) {
 // TestOperationSchemaComplexValidation_Integration tests validation with complex nested schemas.
 // Acceptance Criteria: Validation correctly handles complex, deeply nested structures
 func TestOperationSchemaComplexValidation_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:        "database.query",
@@ -765,9 +687,6 @@ func TestOperationSchemaComplexValidation_Integration(t *testing.T) {
 // TestOperationSchemaErrorPropagation_Integration tests error propagation from nested validations.
 // Acceptance Criteria: Errors from nested validations propagate correctly with context
 func TestOperationSchemaErrorPropagation_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	schema := &plugin.OperationSchema{
 		Name:       "test.operation",

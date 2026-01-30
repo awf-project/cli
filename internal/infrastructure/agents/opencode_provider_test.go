@@ -22,9 +22,6 @@ func TestOpenCodeProvider_Name(t *testing.T) {
 
 func TestOpenCodeProvider_Execute_HappyPath(t *testing.T) {
 	provider := NewOpenCodeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("OpenCode CLI not installed, skipping")
-	}
 
 	tests := []struct {
 		name    string
@@ -159,9 +156,6 @@ func TestOpenCodeProvider_Validate_CLINotInstalled(t *testing.T) {
 
 func TestOpenCodeProvider_Validate_CLIInstalled(t *testing.T) {
 	provider := NewOpenCodeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("OpenCode CLI not installed, skipping")
-	}
 
 	err := provider.Validate()
 	assert.NoError(t, err)
@@ -169,9 +163,6 @@ func TestOpenCodeProvider_Validate_CLIInstalled(t *testing.T) {
 
 func TestOpenCodeProvider_Execute_ComplexPrompt(t *testing.T) {
 	provider := NewOpenCodeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("OpenCode CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -190,9 +181,6 @@ func TestOpenCodeProvider_Execute_ComplexPrompt(t *testing.T) {
 
 func TestOpenCodeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
 	provider := NewOpenCodeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("OpenCode CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 

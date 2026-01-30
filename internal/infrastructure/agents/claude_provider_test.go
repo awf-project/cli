@@ -24,9 +24,6 @@ func TestClaudeProvider_Name(t *testing.T) {
 
 func TestClaudeProvider_Execute_HappyPath(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	tests := []struct {
 		name    string
@@ -73,9 +70,6 @@ func TestClaudeProvider_Execute_HappyPath(t *testing.T) {
 
 func TestClaudeProvider_Execute_JSONResponse(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -93,9 +87,6 @@ func TestClaudeProvider_Execute_JSONResponse(t *testing.T) {
 
 func TestClaudeProvider_Execute_TokenUsage(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -119,9 +110,6 @@ func TestClaudeProvider_Execute_EmptyPrompt(t *testing.T) {
 
 func TestClaudeProvider_Execute_Timeout(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -137,9 +125,6 @@ func TestClaudeProvider_Execute_Timeout(t *testing.T) {
 
 func TestClaudeProvider_Execute_ContextCancellation(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -208,9 +193,6 @@ func TestClaudeProvider_Validate_CLINotInstalled(t *testing.T) {
 func TestClaudeProvider_Validate_CLIInstalled(t *testing.T) {
 	// Skip if Claude CLI not available
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	err := provider.Validate()
 	assert.NoError(t, err)
@@ -218,9 +200,6 @@ func TestClaudeProvider_Validate_CLIInstalled(t *testing.T) {
 
 func TestClaudeProvider_Execute_LargePrompt(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -239,9 +218,6 @@ func TestClaudeProvider_Execute_LargePrompt(t *testing.T) {
 
 func TestClaudeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	tests := []struct {
 		name   string
@@ -287,9 +263,6 @@ func TestClaudeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_HappyPath(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -312,9 +285,6 @@ func TestClaudeProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{}
@@ -355,9 +325,6 @@ func TestClaudeProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_WithHistory(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -384,9 +351,6 @@ func TestClaudeProvider_ExecuteConversation_WithHistory(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_JSONResponse(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -405,9 +369,6 @@ func TestClaudeProvider_ExecuteConversation_JSONResponse(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -423,9 +384,6 @@ func TestClaudeProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -496,9 +454,6 @@ func TestClaudeProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -515,9 +470,6 @@ func TestClaudeProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -543,9 +495,6 @@ func TestClaudeProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_MultilinePrompt(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a code reviewer.")
@@ -563,9 +512,6 @@ func add(a, b int) int {
 
 func TestClaudeProvider_ExecuteConversation_WithAllowedTools(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -583,9 +529,6 @@ func TestClaudeProvider_ExecuteConversation_WithAllowedTools(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 	provider := NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	initialState := workflow.NewConversationState("You are a helpful assistant.")

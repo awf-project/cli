@@ -28,9 +28,6 @@ import (
 // TestJSONStore_ConcurrentAccess verifies that the JSON store handles
 // concurrent access correctly after C016 improvements.
 func TestJSONStore_ConcurrentAccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Arrange
 	tmpDir := t.TempDir()
@@ -77,9 +74,6 @@ func TestJSONStore_ConcurrentAccess(t *testing.T) {
 // TestJSONStore_FileCorruption verifies that the JSON store handles
 // file corruption gracefully after C016 improvements.
 func TestJSONStore_FileCorruption(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name          string
@@ -159,9 +153,6 @@ func TestJSONStore_FileCorruption(t *testing.T) {
 // TestSQLiteHistoryStore_Integration verifies that the SQLite history
 // store works correctly after C016 improvements.
 func TestSQLiteHistoryStore_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Arrange
 	tmpDir := t.TempDir()

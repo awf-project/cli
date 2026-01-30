@@ -36,9 +36,6 @@ import (
 // -----------------------------------------------------------------------------
 
 func TestDryRun_SimpleWorkflow_ShowsExecutionPlan_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -64,9 +61,6 @@ func TestDryRun_SimpleWorkflow_ShowsExecutionPlan_Integration(t *testing.T) {
 }
 
 func TestDryRun_WithInputs_ResolvesInterpolation_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -95,9 +89,6 @@ func TestDryRun_WithInputs_ResolvesInterpolation_Integration(t *testing.T) {
 }
 
 func TestDryRun_ShowsDefaultInputValues_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -125,9 +116,6 @@ func TestDryRun_ShowsDefaultInputValues_Integration(t *testing.T) {
 }
 
 func TestDryRun_ParallelWorkflow_ShowsBranchesAndStrategy_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -153,9 +141,6 @@ func TestDryRun_ParallelWorkflow_ShowsBranchesAndStrategy_Integration(t *testing
 }
 
 func TestDryRun_ForEachLoop_ShowsLoopConfiguration_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -180,9 +165,6 @@ func TestDryRun_ForEachLoop_ShowsLoopConfiguration_Integration(t *testing.T) {
 }
 
 func TestDryRun_WhileLoop_ShowsCondition_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -205,9 +187,6 @@ func TestDryRun_WhileLoop_ShowsCondition_Integration(t *testing.T) {
 }
 
 func TestDryRun_NestedLoops_ShowsBothLoops_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -230,9 +209,6 @@ func TestDryRun_NestedLoops_ShowsBothLoops_Integration(t *testing.T) {
 }
 
 func TestDryRun_WithHooks_ShowsPrePostHooks_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -255,9 +231,6 @@ func TestDryRun_WithHooks_ShowsPrePostHooks_Integration(t *testing.T) {
 }
 
 func TestDryRun_WithRetry_ShowsRetryConfiguration_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -286,9 +259,6 @@ func TestDryRun_WithRetry_ShowsRetryConfiguration_Integration(t *testing.T) {
 }
 
 func TestDryRun_WithCapture_ShowsCaptureConfiguration_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -317,9 +287,6 @@ func TestDryRun_WithCapture_ShowsCaptureConfiguration_Integration(t *testing.T) 
 }
 
 func TestDryRun_WithTimeout_ShowsTimeoutValue_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -346,9 +313,6 @@ func TestDryRun_WithTimeout_ShowsTimeoutValue_Integration(t *testing.T) {
 }
 
 func TestDryRun_ShowsTransitions_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -371,9 +335,6 @@ func TestDryRun_ShowsTransitions_Integration(t *testing.T) {
 }
 
 func TestDryRun_ConditionalTransitions_ShowsAllPaths_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -402,9 +363,6 @@ func TestDryRun_ConditionalTransitions_ShowsAllPaths_Integration(t *testing.T) {
 }
 
 func TestDryRun_WithWorkingDirectory_ShowsDir_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -427,9 +385,6 @@ func TestDryRun_WithWorkingDirectory_ShowsDir_Integration(t *testing.T) {
 }
 
 func TestDryRun_ContinueOnError_ShowsFlag_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -456,9 +411,6 @@ func TestDryRun_ContinueOnError_ShowsFlag_Integration(t *testing.T) {
 }
 
 func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -489,9 +441,6 @@ func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_JSONOutput_ValidJSON_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -522,9 +471,6 @@ func TestDryRun_JSONOutput_ValidJSON_Integration(t *testing.T) {
 }
 
 func TestDryRun_JSONOutput_ContainsAllFields_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -564,9 +510,6 @@ func TestDryRun_JSONOutput_ContainsAllFields_Integration(t *testing.T) {
 }
 
 func TestDryRun_JSONOutput_StepsHaveCorrectTypes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -609,9 +552,6 @@ func TestDryRun_JSONOutput_StepsHaveCorrectTypes_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_QuietMode_OutputsWorkflowNameOnly_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -640,9 +580,6 @@ func TestDryRun_QuietMode_OutputsWorkflowNameOnly_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_NoStateFiles_Created_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -667,9 +604,6 @@ func TestDryRun_NoStateFiles_Created_Integration(t *testing.T) {
 }
 
 func TestDryRun_NoHistoryRecorded_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -701,9 +635,6 @@ func TestDryRun_NoHistoryRecorded_Integration(t *testing.T) {
 }
 
 func TestDryRun_NoCommandExecution_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -733,9 +664,6 @@ func TestDryRun_NoCommandExecution_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_WorkflowNotFound_ReturnsError_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -753,9 +681,6 @@ func TestDryRun_WorkflowNotFound_ReturnsError_Integration(t *testing.T) {
 }
 
 func TestDryRun_MissingRequiredInput_ReturnsError_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -778,9 +703,6 @@ func TestDryRun_MissingRequiredInput_ReturnsError_Integration(t *testing.T) {
 }
 
 func TestDryRun_InvalidInputFormat_ReturnsError_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -808,9 +730,6 @@ func TestDryRun_InvalidInputFormat_ReturnsError_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_EmptyInputValue_Accepted_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -832,9 +751,6 @@ func TestDryRun_EmptyInputValue_Accepted_Integration(t *testing.T) {
 }
 
 func TestDryRun_MultipleInputs_AllResolved_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -865,9 +781,6 @@ func TestDryRun_MultipleInputs_AllResolved_Integration(t *testing.T) {
 }
 
 func TestDryRun_WorkflowWithDescription_ShowsDescription_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -894,9 +807,6 @@ func TestDryRun_WorkflowWithDescription_ShowsDescription_Integration(t *testing.
 }
 
 func TestDryRun_StepDescriptions_Shown_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -927,9 +837,6 @@ func TestDryRun_StepDescriptions_Shown_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_VariousWorkflows_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -1040,9 +947,6 @@ func TestDryRun_VariousWorkflows_Integration(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestDryRun_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	originalPath := os.Getenv("AWF_WORKFLOWS_PATH")
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -1071,9 +975,6 @@ func TestDryRun_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 }
 
 func TestDryRun_CanRunMultipleTimes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 

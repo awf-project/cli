@@ -25,9 +25,6 @@ import (
 
 // TestConfigShow_Integration tests the 'awf config show' command behavior.
 func TestConfigShow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("displays config values when config exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -195,9 +192,6 @@ func TestConfigShow_Integration(t *testing.T) {
 
 // TestConfigInputsInWorkflow_Integration tests that config inputs are used in workflows.
 func TestConfigInputsInWorkflow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("workflow uses input from config file", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -386,9 +380,6 @@ states:
 
 // TestConfigValidation_Integration tests config validation during workflow run.
 func TestConfigValidation_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("invalid YAML produces error on workflow run", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -513,9 +504,6 @@ states:
 
 // TestConfigInit_Integration tests that 'awf init' creates config file.
 func TestConfigInit_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("init creates config.yaml with template", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -584,9 +572,6 @@ inputs:
 
 // TestConfigMultipleInputTypes_Integration tests various input types in config.
 func TestConfigMultipleInputTypes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("supports string, number, and boolean inputs", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -636,9 +621,6 @@ func TestConfigMultipleInputTypes_Integration(t *testing.T) {
 
 // TestConfigEdgeCases_Integration tests edge cases for config handling.
 func TestConfigEdgeCases_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("empty config file is valid", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -800,9 +782,6 @@ states:
 
 // TestConfigShowFormats_Integration tests different output formats for config show.
 func TestConfigShowFormats_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("json format with no config shows empty state", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -848,9 +827,6 @@ func TestConfigShowFormats_Integration(t *testing.T) {
 
 // TestConfigMultipleOverrides_Integration tests multiple CLI overrides.
 func TestConfigMultipleOverrides_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("multiple CLI inputs override multiple config values", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -992,9 +968,6 @@ states:
 
 // TestConfigResume_Integration tests config integration with resume command.
 func TestConfigResume_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("resume uses config inputs for new inputs", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1062,9 +1035,6 @@ states:
 
 // TestConfigPermissions_Integration tests config file permission errors.
 func TestConfigPermissions_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Skip on Windows where permission model is different
 	if os.Getenv("OS") == "Windows_NT" {
@@ -1101,9 +1071,6 @@ func TestConfigPermissions_Integration(t *testing.T) {
 
 // TestConfigWithSpecialCharacters_Integration tests config with special characters in values.
 func TestConfigWithSpecialCharacters_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Run("config values with special characters are preserved", func(t *testing.T) {
 		tmpDir := t.TempDir()

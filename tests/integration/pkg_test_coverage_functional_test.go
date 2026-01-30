@@ -34,9 +34,6 @@ import (
 // TestNestedLoops_HappyPath verifies that nested loops can access parent
 // loop data through LoopData.Parent field in workflow execution.
 func TestNestedLoops_HappyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -154,9 +151,6 @@ states:
 // TestAgentStepData_HappyPath verifies that StepStateData.Response and
 // StepStateData.Tokens fields can be accessed in workflow templates.
 func TestAgentStepData_HappyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -251,9 +245,6 @@ states:
 // TestExpressionNamespaces_HappyPath verifies that lowercase expression
 // namespaces (loop.*, context.*, error.*) work in workflow execution.
 func TestExpressionNamespaces_HappyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -388,9 +379,6 @@ states:
 
 // TestPkgCoverage_EdgeCases tests edge cases for pkg layer improvements.
 func TestPkgCoverage_EdgeCases(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -543,9 +531,6 @@ states:
 
 // TestPkgCoverage_ErrorHandling tests error scenarios for pkg improvements.
 func TestPkgCoverage_ErrorHandling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
