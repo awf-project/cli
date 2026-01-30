@@ -35,7 +35,6 @@ import (
 // TestSubworkflow_Simple_Integration verifies basic parent → child sub-workflow invocation.
 // Tests: call_workflow loads child, passes inputs, captures outputs
 func TestSubworkflow_Simple_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "simple.log")
 
@@ -137,7 +136,6 @@ states:
 // TestSubworkflow_NestedThreeLevels_Integration verifies 3-level nesting: A → B → C.
 // Uses fixtures: subworkflow-nested-a.yaml, subworkflow-nested-b.yaml, subworkflow-nested-c.yaml
 func TestSubworkflow_NestedThreeLevels_Integration(t *testing.T) {
-
 	// Use existing fixtures
 	fixturesPath := "../fixtures/workflows"
 
@@ -170,7 +168,6 @@ func TestSubworkflow_NestedThreeLevels_Integration(t *testing.T) {
 // TestSubworkflow_CircularDetection_Integration verifies circular call A → B → A is detected.
 // Uses fixtures: subworkflow-circular-a.yaml, subworkflow-circular-b.yaml
 func TestSubworkflow_CircularDetection_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/workflows"
 
 	repo := repository.NewYAMLRepository(fixturesPath)
@@ -197,7 +194,6 @@ func TestSubworkflow_CircularDetection_Integration(t *testing.T) {
 // TestSubworkflow_SelfReference_Integration verifies direct self-reference A → A is detected.
 // Uses fixture: subworkflow-circular.yaml
 func TestSubworkflow_SelfReference_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/workflows"
 
 	repo := repository.NewYAMLRepository(fixturesPath)
@@ -223,7 +219,6 @@ func TestSubworkflow_SelfReference_Integration(t *testing.T) {
 
 // TestSubworkflow_Timeout_Integration verifies sub-workflow respects timeout configuration.
 func TestSubworkflow_Timeout_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create slow child workflow
@@ -295,7 +290,6 @@ states:
 
 // TestSubworkflow_ErrorPropagation_Integration verifies child failure propagates to parent.
 func TestSubworkflow_ErrorPropagation_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create failing child
@@ -366,7 +360,6 @@ states:
 
 // TestSubworkflow_OutputMapping_Integration verifies child outputs are accessible in parent.
 func TestSubworkflow_OutputMapping_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -446,7 +439,6 @@ states:
 
 // TestSubworkflow_NotFound_Integration verifies error when sub-workflow doesn't exist.
 func TestSubworkflow_NotFound_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create parent calling non-existent child
@@ -499,7 +491,6 @@ states:
 
 // TestSubworkflow_ContextCancellation_Integration verifies parent cancellation propagates to child.
 func TestSubworkflow_ContextCancellation_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "cancel.log")
 
@@ -574,7 +565,6 @@ states:
 
 // TestSubworkflow_InputMapping_Integration verifies input mapping with interpolation.
 func TestSubworkflow_InputMapping_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "inputs.log")
 
@@ -666,7 +656,6 @@ states:
 
 // TestSubworkflow_WithExistingFixtures_Integration runs using the pre-defined fixtures.
 func TestSubworkflow_WithExistingFixtures_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/workflows"
 
 	repo := repository.NewYAMLRepository(fixturesPath)
@@ -694,7 +683,6 @@ func TestSubworkflow_WithExistingFixtures_Integration(t *testing.T) {
 
 // TestSubworkflow_MaxNestingDepth_Integration verifies max nesting depth is enforced.
 func TestSubworkflow_MaxNestingDepth_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create a chain of workflows that exceeds max depth (default is 10)

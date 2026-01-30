@@ -27,7 +27,7 @@ import (
 // does not leak goroutines from signal handlers or other concurrent operations.
 // This test validates the fix for T001 (signal_handler_extraction).
 func TestNoGoroutineLeak_NormalWorkflow(t *testing.T) {
-		t.Skip("skipping goroutine leak test in short mode")
+	t.Skip("skipping goroutine leak test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -82,7 +82,7 @@ states:
 // properly clean up signal handler goroutines when the workflow completes.
 // This test validates the fix for T001 (signal_handler_extraction) in resume.go.
 func TestNoGoroutineLeak_ResumeWorkflow(t *testing.T) {
-		t.Skip("skipping goroutine leak test in short mode")
+	t.Skip("skipping goroutine leak test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -140,7 +140,7 @@ states:
 // TestNoGoroutineLeak_SignalInterruption verifies that signal handler goroutines
 // are properly cleaned up when a workflow is interrupted by a signal.
 func TestNoGoroutineLeak_SignalInterruption(t *testing.T) {
-		t.Skip("skipping goroutine leak test in short mode")
+	t.Skip("skipping goroutine leak test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -213,7 +213,7 @@ states:
 // stay under 2GB memory usage when MaxRetainedIterations is configured.
 // This test validates the fix for T004 (loop_iteration_pruning).
 func TestMemoryBounds_10000Iterations(t *testing.T) {
-		t.Skip("skipping memory test in short mode")
+	t.Skip("skipping memory test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -297,7 +297,7 @@ states:
 // are properly truncated when OutputLimit is configured, preventing unbounded memory growth.
 // This test validates the fix for T002 (output_limit_config) and T007 (output_truncation).
 func TestMemoryBounds_LargeOutputTruncation(t *testing.T) {
-		t.Skip("skipping memory test in short mode")
+	t.Skip("skipping memory test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -373,7 +373,7 @@ states:
 // are properly streamed to temp files when StreamLargeOutput is enabled.
 // This test validates the fix for T010 (output_streaming).
 func TestMemoryBounds_LargeOutputStreaming(t *testing.T) {
-		t.Skip("skipping memory test in short mode")
+	t.Skip("skipping memory test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -455,7 +455,7 @@ states:
 // TestBackwardCompatibility_DefaultBehavior verifies that workflows without
 // the new C019 configuration fields behave exactly as before (unlimited memory).
 func TestBackwardCompatibility_DefaultBehavior(t *testing.T) {
-		t.Skip("skipping backward compatibility test in short mode")
+	t.Skip("skipping backward compatibility test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -516,7 +516,7 @@ states:
 // TestBackwardCompatibility_ExplicitUnlimitedConfig verifies that workflows
 // with MaxRetainedIterations=0 explicitly configured behave as unlimited.
 func TestBackwardCompatibility_ExplicitUnlimitedConfig(t *testing.T) {
-		t.Skip("skipping backward compatibility test in short mode")
+	t.Skip("skipping backward compatibility test in short mode")
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")

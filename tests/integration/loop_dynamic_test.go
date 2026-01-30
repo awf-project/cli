@@ -25,7 +25,6 @@ import (
 
 // TestDynamicMaxIterations_FromInput tests US1: max_iterations from input variable
 func TestDynamicMaxIterations_FromInput(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -90,7 +89,6 @@ states:
 
 // TestDynamicMaxIterations_FromInputDifferentValues tests various limit values
 func TestDynamicMaxIterations_FromInputDifferentValues(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		limit         int
@@ -164,7 +162,6 @@ states:
 
 // TestDynamicMaxIterations_FromEnv tests US1: max_iterations from environment variable
 func TestDynamicMaxIterations_FromEnv(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -226,7 +223,6 @@ states:
 
 // TestDynamicMaxIterations_Arithmetic tests US3: arithmetic expressions in max_iterations
 func TestDynamicMaxIterations_Arithmetic(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		expression    string
@@ -305,7 +301,6 @@ states:
 
 // TestDynamicMaxIterations_MissingVariable tests error handling for missing variables
 func TestDynamicMaxIterations_MissingVariable(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: missing-var
@@ -355,7 +350,6 @@ states:
 
 // TestDynamicMaxIterations_NonInteger tests error handling for non-integer result
 func TestDynamicMaxIterations_NonInteger(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: non-integer
@@ -414,7 +408,6 @@ states:
 
 // TestDynamicMaxIterations_ZeroValue tests error handling for zero value
 func TestDynamicMaxIterations_ZeroValue(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: zero-value
@@ -473,7 +466,6 @@ states:
 
 // TestDynamicMaxIterations_NegativeValue tests error handling for negative value
 func TestDynamicMaxIterations_NegativeValue(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: negative-value
@@ -532,7 +524,6 @@ states:
 
 // TestDynamicMaxIterations_ExceedsMaxBound tests error handling when exceeding max allowed
 func TestDynamicMaxIterations_ExceedsMaxBound(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: exceeds-max
@@ -592,7 +583,6 @@ states:
 
 // TestDynamicMaxIterations_BackwardCompatibility tests that static integer values still work
 func TestDynamicMaxIterations_BackwardCompatibility(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -651,7 +641,6 @@ states:
 
 // TestDynamicMaxIterations_WithWhileLoop tests dynamic max_iterations with while loops
 func TestDynamicMaxIterations_WithWhileLoop(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -714,7 +703,6 @@ states:
 
 // TestDynamicMaxIterations_UsingFixtureFiles tests with actual fixture YAML files
 func TestDynamicMaxIterations_UsingFixtureFiles(t *testing.T) {
-
 	// Path relative to tests/integration/ where the test runs
 	fixturesDir := "../fixtures/workflows"
 
@@ -787,7 +775,6 @@ func TestDynamicMaxIterations_UsingFixtureFiles(t *testing.T) {
 
 // TestDynamicLoopCondition_WithStepOutput tests US2: loop conditions referencing step outputs
 func TestDynamicLoopCondition_WithStepOutput(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -871,7 +858,6 @@ states:
 
 // TestDynamicLoopCondition_UntilCondition tests until condition with interpolated variables
 func TestDynamicLoopCondition_UntilCondition(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 	statusFile := filepath.Join(tmpDir, "status")
@@ -949,7 +935,6 @@ states:
 
 // TestDynamicMaxIterations_StringInputResolvesToInteger tests string input that parses to int
 func TestDynamicMaxIterations_StringInputResolvesToInteger(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -1011,7 +996,6 @@ states:
 
 // TestDynamicMaxIterations_FloatInputTruncated tests float input is handled appropriately
 func TestDynamicMaxIterations_FloatInputTruncated(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -1079,7 +1063,6 @@ states:
 
 // TestDynamicMaxIterations_ComplexArithmetic tests complex arithmetic expressions
 func TestDynamicMaxIterations_ComplexArithmetic(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		expression    string
@@ -1179,7 +1162,6 @@ states:
 
 // TestDynamicMaxIterations_DivisionByZero tests error handling for division by zero
 func TestDynamicMaxIterations_DivisionByZero(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	wfYAML := `name: div-zero
@@ -1248,7 +1230,6 @@ states:
 
 // TestDynamicMaxIterations_ValidationWarning tests US4: awf validate warns about undefined variables
 func TestDynamicMaxIterations_ValidationWarning(t *testing.T) {
-
 	// Use the invalid fixture with undefined variable
 	fixturesDir := "../fixtures/workflows"
 
@@ -1280,7 +1261,6 @@ func TestDynamicMaxIterations_ValidationWarning(t *testing.T) {
 
 // TestDynamicMaxIterations_ValidationPasses tests US4: valid loop expressions pass validation
 func TestDynamicMaxIterations_ValidationPasses(t *testing.T) {
-
 	fixturesDir := "../fixtures/workflows"
 
 	tests := []struct {
@@ -1318,7 +1298,6 @@ func TestDynamicMaxIterations_ValidationPasses(t *testing.T) {
 
 // TestDynamicMaxIterations_WhitespaceHandling tests edge case: whitespace in expressions
 func TestDynamicMaxIterations_WhitespaceHandling(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		expression    string
@@ -1404,7 +1383,6 @@ states:
 
 // TestDynamicMaxIterations_EmptyExpression tests edge case: empty expression string
 func TestDynamicMaxIterations_EmptyExpression(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Workflow with empty max_iterations expression
@@ -1466,7 +1444,6 @@ states:
 
 // TestDynamicMaxIterations_NestedTemplates tests edge case: nested template expressions
 func TestDynamicMaxIterations_NestedTemplates(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
 
@@ -1533,7 +1510,6 @@ states:
 // AC1: {{.loop.Item}} passed to call_workflow produces valid JSON
 // AC2: Nested objects and arrays properly serialized
 func TestForEachLoop_WithObjectItems_Integration(t *testing.T) {
-
 	// Given: A parent workflow that iterates over JSON objects and passes them to a child workflow
 	fixturesDir := "../fixtures/workflows"
 
@@ -1576,7 +1552,6 @@ func TestForEachLoop_WithObjectItems_Integration(t *testing.T) {
 
 // TestForEachLoop_WithNestedStructures tests AC2: nested objects and arrays properly serialized
 func TestForEachLoop_WithNestedStructures(t *testing.T) {
-
 	// Given: A workflow with deeply nested JSON structures
 	fixturesDir := "../fixtures/workflows"
 
@@ -1615,7 +1590,6 @@ func TestForEachLoop_WithNestedStructures(t *testing.T) {
 
 // TestForEachLoop_MixedPrimitiveAndComplex tests mixed primitive and complex types in loop
 func TestForEachLoop_MixedPrimitiveAndComplex(t *testing.T) {
-
 	// Given: A workflow that can handle both primitive and complex types
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "results.txt")
@@ -1694,7 +1668,6 @@ states:
 
 // TestForEachLoop_EmptyObjectsAndArrays tests edge case: empty objects and arrays
 func TestForEachLoop_EmptyObjectsAndArrays(t *testing.T) {
-
 	// Given: Workflow with empty objects and arrays
 	fixturesDir := "../fixtures/workflows"
 
@@ -1731,7 +1704,6 @@ func TestForEachLoop_EmptyObjectsAndArrays(t *testing.T) {
 
 // TestForEachLoop_UnicodeAndSpecialChars tests edge case: unicode and special characters
 func TestForEachLoop_UnicodeAndSpecialChars(t *testing.T) {
-
 	// Given: Workflow with unicode and special characters
 	fixturesDir := "../fixtures/workflows"
 
@@ -1768,7 +1740,6 @@ func TestForEachLoop_UnicodeAndSpecialChars(t *testing.T) {
 
 // TestForEachLoop_BackwardCompatibility_StringItems tests AC4: existing workflows work unchanged
 func TestForEachLoop_BackwardCompatibility_StringItems(t *testing.T) {
-
 	// Given: A workflow with simple string items (existing behavior)
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "output.txt")

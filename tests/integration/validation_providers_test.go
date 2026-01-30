@@ -36,7 +36,6 @@ import (
 // =============================================================================
 
 func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
-
 	provider := agents.NewClaudeProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Claude CLI not installed, skipping")
@@ -94,7 +93,6 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) {
-
 	provider := agents.NewCodexProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Codex CLI not installed, skipping")
@@ -163,7 +161,6 @@ func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) 
 }
 
 func TestGeminiProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) {
-
 	provider := agents.NewGeminiProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Gemini CLI not installed, skipping")
@@ -217,7 +214,6 @@ func TestGeminiProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T)
 // =============================================================================
 
 func TestClaudeProvider_Execute_EmptyAndNilOptions(t *testing.T) {
-
 	provider := agents.NewClaudeProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Claude CLI not installed, skipping")
@@ -257,7 +253,6 @@ func TestClaudeProvider_Execute_EmptyAndNilOptions(t *testing.T) {
 }
 
 func TestSharedHelpers_TokenEstimation(t *testing.T) {
-
 	// Test that token estimation is consistent across providers after extraction
 	tests := []struct {
 		name     string
@@ -299,7 +294,6 @@ func TestSharedHelpers_TokenEstimation(t *testing.T) {
 }
 
 func TestConversationState_Cloning(t *testing.T) {
-
 	// Test that state cloning works correctly after helper extraction
 	provider := agents.NewCodexProvider()
 	if err := provider.Validate(); err != nil {
@@ -341,7 +335,6 @@ func TestConversationState_Cloning(t *testing.T) {
 // =============================================================================
 
 func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
-
 	provider := agents.NewClaudeProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Claude CLI not installed, skipping")
@@ -390,7 +383,6 @@ func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
-
 	provider := agents.NewCodexProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Codex CLI not installed, skipping")
@@ -409,7 +401,6 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 }
 
 func TestGeminiProvider_ExecuteConversation_NilState(t *testing.T) {
-
 	provider := agents.NewGeminiProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Gemini CLI not installed, skipping")
@@ -425,7 +416,6 @@ func TestGeminiProvider_ExecuteConversation_NilState(t *testing.T) {
 }
 
 func TestAllProviders_ContextCancellation(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		provider ports.AgentProvider
@@ -463,7 +453,6 @@ func TestAllProviders_ContextCancellation(t *testing.T) {
 }
 
 func TestAllProviders_ContextTimeout(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		provider ports.AgentProvider
@@ -507,7 +496,6 @@ func TestAllProviders_ContextTimeout(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
-
 	provider := agents.NewCodexProvider()
 	if err := provider.Validate(); err != nil {
 		t.Skip("Codex CLI not installed, skipping")
@@ -548,7 +536,6 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 }
 
 func TestIntegration_JSONParsing_SharedHelper(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		provider ports.AgentProvider
@@ -590,7 +577,6 @@ func TestIntegration_JSONParsing_SharedHelper(t *testing.T) {
 }
 
 func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
-
 	// Test that provider-specific validations still work after refactoring
 	// (ADR-003: Preserve provider-specific validation)
 
@@ -657,7 +643,6 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 // =============================================================================
 
 func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
-
 	// Test that refactored providers work with existing workflow fixtures
 	// This ensures no behavioral changes (AC5)
 
@@ -707,7 +692,6 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 // =============================================================================
 
 func TestPerformance_NoRegressionFromHelpers(t *testing.T) {
-
 	// Basic smoke test to ensure helper extraction doesn't cause performance issues
 	// (Risk: Performance regression from function call overhead - P2 Very Low)
 
@@ -731,7 +715,6 @@ func TestPerformance_NoRegressionFromHelpers(t *testing.T) {
 }
 
 func TestRegression_AllOptionTypesCombined(t *testing.T) {
-
 	// Comprehensive regression test with all option types
 	// Validates C001 pattern (type-checked wrappers) works correctly
 

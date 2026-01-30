@@ -38,7 +38,6 @@ import (
 // TestSubworkflow_StateVisibleInParent_Functional verifies that sub-workflow step state
 // is properly recorded in parent's execution context (AC7).
 func TestSubworkflow_StateVisibleInParent_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create child that produces known output
@@ -113,7 +112,6 @@ states:
 // TestSubworkflow_InsideForEachLoop_Functional verifies sub-workflows can be called
 // from within a for_each loop body.
 func TestSubworkflow_InsideForEachLoop_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "loop.log")
 
@@ -198,7 +196,6 @@ states:
 
 // TestSubworkflow_MultipleOutputs_Functional verifies mapping multiple outputs from child.
 func TestSubworkflow_MultipleOutputs_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "multi.log")
 
@@ -282,7 +279,6 @@ states:
 // TestSubworkflow_MissingRequiredInput_Functional verifies error when child requires
 // an input not provided by parent.
 func TestSubworkflow_MissingRequiredInput_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create child requiring a specific input
@@ -358,7 +354,6 @@ states:
 // TestSubworkflow_DefaultInputValue_Functional verifies child uses default when
 // parent omits optional input.
 func TestSubworkflow_DefaultInputValue_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "default.log")
 
@@ -432,7 +427,6 @@ states:
 // TestSubworkflow_CallStackInErrorMessage_Functional verifies that circular call
 // errors include the full call stack for debugging.
 func TestSubworkflow_CallStackInErrorMessage_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create A that calls B
@@ -507,7 +501,6 @@ states:
 // TestSubworkflow_ParentInputPassedToChild_Functional verifies parent workflow inputs
 // are correctly interpolated and passed to child workflow.
 func TestSubworkflow_ParentInputPassedToChild_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "pass.log")
 
@@ -586,7 +579,6 @@ states:
 // TestSubworkflow_ContinueOnError_Functional verifies continue_on_error behavior
 // with failing sub-workflows.
 func TestSubworkflow_ContinueOnError_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "continue.log")
 
@@ -659,7 +651,6 @@ states:
 
 // TestSubworkflow_WithHooks_Functional verifies pre and post hooks work with sub-workflows.
 func TestSubworkflow_WithHooks_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "hooks.log")
 
@@ -745,7 +736,6 @@ states:
 // TestSubworkflow_EmptyInputsAndOutputs_Functional verifies sub-workflow works with
 // no inputs or outputs configured.
 func TestSubworkflow_EmptyInputsAndOutputs_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "empty.log")
 
@@ -813,7 +803,6 @@ states:
 // TestSubworkflow_UsesPreviousStepOutput_Functional verifies parent can pass previous
 // step output to child workflow.
 func TestSubworkflow_UsesPreviousStepOutput_Functional(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "prev.log")
 

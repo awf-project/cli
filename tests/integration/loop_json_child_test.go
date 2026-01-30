@@ -28,7 +28,6 @@ import (
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_HappyPath_ValidJSONInput(t *testing.T) {
-
 	// Given: Child workflow fixture exists
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -72,7 +71,6 @@ func TestLoopJSONChild_HappyPath_ValidJSONInput(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_HappyPath_NestedJSON(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -114,7 +112,6 @@ func TestLoopJSONChild_HappyPath_NestedJSON(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_HappyPath_JSONArray(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -155,7 +152,6 @@ func TestLoopJSONChild_HappyPath_JSONArray(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_EdgeCase_EmptyFields(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -196,7 +192,6 @@ func TestLoopJSONChild_EdgeCase_EmptyFields(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_EdgeCase_UnicodeCharacters(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -236,7 +231,6 @@ func TestLoopJSONChild_EdgeCase_UnicodeCharacters(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_EdgeCase_MinimalJSON(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -277,7 +271,6 @@ func TestLoopJSONChild_EdgeCase_MinimalJSON(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_ErrorHandling_GoMapFormat(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -321,7 +314,6 @@ func TestLoopJSONChild_ErrorHandling_GoMapFormat(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_ErrorHandling_InvalidJSON(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -376,7 +368,6 @@ func TestLoopJSONChild_ErrorHandling_InvalidJSON(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_ErrorHandling_MissingRequiredInput(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -415,7 +406,6 @@ func TestLoopJSONChild_ErrorHandling_MissingRequiredInput(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_EdgeCase_IndexParameter(t *testing.T) {
-
 	// Given: Child workflow fixture
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)
@@ -469,7 +459,6 @@ func TestLoopJSONChild_EdgeCase_IndexParameter(t *testing.T) {
 // Item: T010
 // Feature: F047
 func TestLoopJSONChild_Integration_LoadsAndValidates(t *testing.T) {
-
 	// Given: Fixtures directory
 	fixturesDir := "../fixtures/workflows"
 	repo := repository.NewYAMLRepository(fixturesDir)

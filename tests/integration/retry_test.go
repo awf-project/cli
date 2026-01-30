@@ -69,7 +69,6 @@ func (m *retryMockLogger) WithContext(ctx map[string]any) ports.Logger {
 // =============================================================================
 
 func TestRetry_SucceedsOnNthAttempt_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -139,7 +138,6 @@ states:
 }
 
 func TestRetry_ExhaustsAllAttempts_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "attempts.log")
 
@@ -201,7 +199,6 @@ states:
 }
 
 func TestRetry_ExitCodeFiltering_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -267,7 +264,6 @@ states:
 }
 
 func TestRetry_ExponentialBackoff_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 	timestampFile := filepath.Join(tmpDir, "timestamps")
@@ -333,7 +329,6 @@ states:
 }
 
 func TestRetry_LinearBackoff_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -395,7 +390,6 @@ states:
 }
 
 func TestRetry_WithJitter_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -454,7 +448,6 @@ states:
 }
 
 func TestRetry_MaxDelayCap_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 
@@ -515,7 +508,6 @@ states:
 }
 
 func TestRetry_NoRetryOnSuccess_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")
 

@@ -31,7 +31,6 @@ import (
 // TestDiagram_Simple_OutputsValidDOT tests US1: basic DOT output to stdout
 // for a linear workflow.
 func TestDiagram_Simple_OutputsValidDOT(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -63,7 +62,6 @@ func TestDiagram_Simple_OutputsValidDOT(t *testing.T) {
 // TestDiagram_Parallel_ShowsSubgraphCluster tests FR-004: parallel branches
 // are grouped in subgraph clusters.
 func TestDiagram_Parallel_ShowsSubgraphCluster(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -87,7 +85,6 @@ func TestDiagram_Parallel_ShowsSubgraphCluster(t *testing.T) {
 // TestDiagram_AllTypes_MapsCorrectShapes tests FR-002: each step type maps
 // to its correct DOT shape.
 func TestDiagram_AllTypes_MapsCorrectShapes(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -127,7 +124,6 @@ func TestDiagram_AllTypes_MapsCorrectShapes(t *testing.T) {
 // TestDiagram_InitialStep_HasIndicator tests FR-005: initial step marked with
 // special indicator.
 func TestDiagram_InitialStep_HasIndicator(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -153,7 +149,6 @@ func TestDiagram_InitialStep_HasIndicator(t *testing.T) {
 // TestDiagram_EdgeStyles_SuccessAndFailure tests FR-003: edge styling for
 // success and failure transitions.
 func TestDiagram_EdgeStyles_SuccessAndFailure(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -188,7 +183,6 @@ func TestDiagram_EdgeStyles_SuccessAndFailure(t *testing.T) {
 // TestDiagram_Direction_AllValues tests FR-007: --direction flag controls
 // graph layout direction.
 func TestDiagram_Direction_AllValues(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tests := []struct {
@@ -221,7 +215,6 @@ func TestDiagram_Direction_AllValues(t *testing.T) {
 
 // TestDiagram_Direction_Default tests that default direction is TB.
 func TestDiagram_Direction_Default(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -247,7 +240,6 @@ func TestDiagram_Direction_Default(t *testing.T) {
 // TestDiagram_Highlight_EmphasizesStep tests US3: --highlight step_name
 // visually emphasizes the specified step.
 func TestDiagram_Highlight_EmphasizesStep(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -275,7 +267,6 @@ func TestDiagram_Highlight_EmphasizesStep(t *testing.T) {
 
 // TestDiagram_Highlight_NonexistentStep tests highlight of non-existent step.
 func TestDiagram_Highlight_NonexistentStep(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -299,7 +290,6 @@ func TestDiagram_Highlight_NonexistentStep(t *testing.T) {
 
 // TestDiagram_Output_DotFile tests FR-006: --output exports to .dot file.
 func TestDiagram_Output_DotFile(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -327,7 +317,6 @@ func TestDiagram_Output_DotFile(t *testing.T) {
 // TestDiagram_Output_ImageExport_RequiresGraphviz tests US2: image export
 // requires graphviz and produces clear error if missing.
 func TestDiagram_Output_ImageExport_RequiresGraphviz(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	// Check if graphviz is installed
@@ -373,7 +362,6 @@ func TestDiagram_Output_ImageExport_RequiresGraphviz(t *testing.T) {
 
 // TestDiagram_Output_SVGExport tests SVG export format detection.
 func TestDiagram_Output_SVGExport(t *testing.T) {
-
 	// Skip if graphviz not available
 	if _, err := exec.LookPath("dot"); err != nil {
 		t.Skip("graphviz not installed, skipping image export test")
@@ -400,7 +388,6 @@ func TestDiagram_Output_SVGExport(t *testing.T) {
 
 // TestDiagram_Output_PDFExport tests PDF export format detection.
 func TestDiagram_Output_PDFExport(t *testing.T) {
-
 	// Skip if graphviz not available
 	if _, err := exec.LookPath("dot"); err != nil {
 		t.Skip("graphviz not installed, skipping image export test")
@@ -433,7 +420,6 @@ func TestDiagram_Output_PDFExport(t *testing.T) {
 
 // TestDiagram_CombinedFlags_DirectionAndHighlight tests multiple flags together.
 func TestDiagram_CombinedFlags_DirectionAndHighlight(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -462,7 +448,6 @@ func TestDiagram_CombinedFlags_DirectionAndHighlight(t *testing.T) {
 
 // TestDiagram_CombinedFlags_AllFlags tests all flags combined.
 func TestDiagram_CombinedFlags_AllFlags(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	tmpDir := t.TempDir()
@@ -497,7 +482,6 @@ func TestDiagram_CombinedFlags_AllFlags(t *testing.T) {
 
 // TestDiagram_InvalidWorkflow_NotFound tests FR-008: non-existent workflow.
 func TestDiagram_InvalidWorkflow_NotFound(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -520,7 +504,6 @@ func TestDiagram_InvalidWorkflow_NotFound(t *testing.T) {
 
 // TestDiagram_InvalidWorkflow_MalformedYAML tests FR-008: malformed YAML.
 func TestDiagram_InvalidWorkflow_MalformedYAML(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create a malformed YAML workflow
@@ -551,7 +534,6 @@ states:
 
 // TestDiagram_InvalidDirection tests error for invalid direction value.
 func TestDiagram_InvalidDirection(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -585,7 +567,6 @@ func TestDiagram_MissingArgument(t *testing.T) {
 
 // TestDiagram_OutputDirectory_NotExists tests error when output directory doesn't exist.
 func TestDiagram_OutputDirectory_NotExists(t *testing.T) {
-
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
 	cmd := cli.NewRootCommand()
@@ -604,7 +585,6 @@ func TestDiagram_OutputDirectory_NotExists(t *testing.T) {
 
 // TestDiagram_WorkflowWithSpecialCharacters tests DOT escaping for special characters.
 func TestDiagram_WorkflowWithSpecialCharacters(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create a workflow with special characters in descriptions
@@ -648,7 +628,6 @@ states:
 
 // TestDiagram_SingleStepWorkflow tests minimal workflow with single step.
 func TestDiagram_SingleStepWorkflow(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create minimal single-step workflow
@@ -682,7 +661,6 @@ states:
 
 // TestDiagram_NestedParallel tests workflow with nested parallel branches.
 func TestDiagram_NestedParallel(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	// Create workflow with nested parallel
@@ -745,7 +723,6 @@ states:
 
 // TestDiagram_LongStepNames tests workflow with long step names.
 func TestDiagram_LongStepNames(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	longName := "this_is_a_very_long_step_name_that_might_cause_issues_with_rendering"
@@ -786,7 +763,6 @@ states:
 // TestDiagram_DOTSyntax_ValidWithGraphviz validates DOT output with graphviz
 // if available. This is the ultimate integration test per US1 acceptance.
 func TestDiagram_DOTSyntax_ValidWithGraphviz(t *testing.T) {
-
 	// Skip if graphviz not available
 	dotPath, err := exec.LookPath("dot")
 	if err != nil {
@@ -818,7 +794,6 @@ func TestDiagram_DOTSyntax_ValidWithGraphviz(t *testing.T) {
 
 // TestDiagram_DOTSyntax_AllFixtures validates all diagram fixtures produce valid DOT.
 func TestDiagram_DOTSyntax_AllFixtures(t *testing.T) {
-
 	// Skip if graphviz not available
 	dotPath, err := exec.LookPath("dot")
 	if err != nil {

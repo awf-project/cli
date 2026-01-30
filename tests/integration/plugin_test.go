@@ -29,7 +29,6 @@ import (
 // TestPluginDiscovery_Integration tests discovering plugins from a directory.
 // Acceptance Criteria: Plugin discovery from plugins/ directory
 func TestPluginDiscovery_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -60,7 +59,6 @@ func TestPluginDiscovery_Integration(t *testing.T) {
 // TestPluginLoadPlugin_Integration tests loading a single plugin.
 // Acceptance Criteria: Plugin lifecycle (load, init, shutdown)
 func TestPluginLoadPlugin_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -87,7 +85,6 @@ func TestPluginLoadPlugin_Integration(t *testing.T) {
 // TestPluginManifestFullFields_Integration tests loading a plugin with all manifest fields.
 // Acceptance Criteria: Plugin manifest (name, version, capabilities)
 func TestPluginManifestFullFields_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -154,7 +151,6 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 // TestPluginManager_Lifecycle_Integration tests the full plugin lifecycle.
 // Acceptance Criteria: Plugin lifecycle (load, init, shutdown)
 func TestPluginManager_Lifecycle_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -191,7 +187,6 @@ func TestPluginManager_Lifecycle_Integration(t *testing.T) {
 // TestPluginService_EnableDisable_Integration tests enabling and disabling plugins.
 // Acceptance Criteria: Plugin enable/disable state persistence
 func TestPluginService_EnableDisable_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath := "../fixtures/plugins"
 
@@ -244,7 +239,6 @@ func TestPluginService_EnableDisable_Integration(t *testing.T) {
 
 // TestPluginService_ConfigStorage_Integration tests plugin configuration persistence.
 func TestPluginService_ConfigStorage_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
@@ -328,7 +322,6 @@ func TestOperationRegistry_Integration(t *testing.T) {
 
 // TestCLI_Plugin_List_Integration tests the `awf plugin list` command.
 func TestCLI_Plugin_List_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
@@ -350,7 +343,6 @@ func TestCLI_Plugin_List_Integration(t *testing.T) {
 
 // TestCLI_Plugin_List_JSON_Integration tests JSON output format.
 func TestCLI_Plugin_List_JSON_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
@@ -372,7 +364,6 @@ func TestCLI_Plugin_List_JSON_Integration(t *testing.T) {
 
 // TestCLI_Plugin_EnableDisable_Integration tests enable/disable commands.
 func TestCLI_Plugin_EnableDisable_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath, _ := filepath.Abs("../fixtures/plugins")
 
@@ -435,7 +426,6 @@ func TestCLI_Plugin_Help_Integration(t *testing.T) {
 
 // TestPluginDiscovery_EmptyDirectory_Integration tests discovery with no plugins.
 func TestPluginDiscovery_EmptyDirectory_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -452,7 +442,6 @@ func TestPluginDiscovery_EmptyDirectory_Integration(t *testing.T) {
 
 // TestPluginDiscovery_MixedValidity_Integration tests discovery with valid and invalid plugins.
 func TestPluginDiscovery_MixedValidity_Integration(t *testing.T) {
-
 	// Use fixtures which contain both valid and invalid plugins
 	fixturesPath := "../fixtures/plugins"
 
@@ -486,7 +475,6 @@ func TestPluginDiscovery_MixedValidity_Integration(t *testing.T) {
 // TestPluginLoader_Validation_Integration tests manifest validation.
 // Acceptance Criteria: Plugin versioning and compatibility
 func TestPluginLoader_Validation_Integration(t *testing.T) {
-
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
 
@@ -558,7 +546,6 @@ func TestPluginLoader_Validation_Integration(t *testing.T) {
 
 // TestPluginStateStore_Concurrent_Integration tests concurrent access to state store.
 func TestPluginStateStore_Concurrent_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
 
@@ -626,7 +613,6 @@ func TestOperationRegistry_Concurrent_Integration(t *testing.T) {
 
 // TestPluginLoad_InvalidPath_Integration tests loading from non-existent path.
 func TestPluginLoad_InvalidPath_Integration(t *testing.T) {
-
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
 
@@ -641,7 +627,6 @@ func TestPluginLoad_InvalidPath_Integration(t *testing.T) {
 
 // TestPluginLoad_NotDirectory_Integration tests loading a file instead of directory.
 func TestPluginLoad_NotDirectory_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "not-a-dir")
 	os.WriteFile(filePath, []byte("content"), 0o644)
@@ -660,7 +645,6 @@ func TestPluginLoad_NotDirectory_Integration(t *testing.T) {
 
 // TestPluginLoad_NoManifest_Integration tests loading a directory without plugin.yaml.
 func TestPluginLoad_NoManifest_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -677,7 +661,6 @@ func TestPluginLoad_NoManifest_Integration(t *testing.T) {
 
 // TestPluginLoad_InvalidYAML_Integration tests loading plugin with invalid YAML.
 func TestPluginLoad_InvalidYAML_Integration(t *testing.T) {
-
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
 
@@ -691,7 +674,6 @@ func TestPluginLoad_InvalidYAML_Integration(t *testing.T) {
 
 // TestPluginManager_LoadUnknown_Integration tests loading an unknown plugin.
 func TestPluginManager_LoadUnknown_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -709,7 +691,6 @@ func TestPluginManager_LoadUnknown_Integration(t *testing.T) {
 
 // TestPluginService_LoadDisabled_Integration tests that loading a disabled plugin fails.
 func TestPluginService_LoadDisabled_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath := "../fixtures/plugins"
 
@@ -827,7 +808,6 @@ func TestCLI_Plugin_Disable_NoArgs_Integration(t *testing.T) {
 
 // TestPluginDiscovery_ContextCancellation_Integration tests discovery with cancelled context.
 func TestPluginDiscovery_ContextCancellation_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -844,7 +824,6 @@ func TestPluginDiscovery_ContextCancellation_Integration(t *testing.T) {
 
 // TestPluginLoad_ContextCancellation_Integration tests loading with cancelled context.
 func TestPluginLoad_ContextCancellation_Integration(t *testing.T) {
-
 	fixturesPath := "../fixtures/plugins/valid-simple"
 
 	parser := infrastructurePlugin.NewManifestParser()
@@ -861,7 +840,6 @@ func TestPluginLoad_ContextCancellation_Integration(t *testing.T) {
 
 // TestPluginService_ContextCancellation_Integration tests service with cancelled context.
 func TestPluginService_ContextCancellation_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	fixturesPath := "../fixtures/plugins"
 
@@ -978,7 +956,6 @@ func TestManifest_HasCapability_Integration(t *testing.T) {
 
 // TestCLI_Plugin_List_EmptyDir_Integration tests list command with no plugins.
 func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
-
 	tmpDir := t.TempDir()
 	pluginsDir := filepath.Join(tmpDir, "plugins")
 	os.MkdirAll(pluginsDir, 0o755)

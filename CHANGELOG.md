@@ -59,6 +59,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C031** Implemented plugin manifest validation to replace ErrNotImplemented stub
+  - Replaced `Manifest.Validate()` stub with comprehensive field validation logic
+  - Name validation: enforces `^[a-z][a-z0-9-]*$` pattern (lowercase, starts with letter, alphanumeric + hyphens)
+  - Version validation: ensures non-empty version string
+  - AWFVersion validation: requires non-empty AWF version constraint
+  - Capabilities validation: verifies all capabilities against whitelist (operations, commands, validators)
+  - Config field validation: validates field types (string, integer, boolean), enum constraints (string only), default type matching
+  - Added 15 table-driven unit test functions with 130+ test cases covering valid/invalid names, versions, capabilities, and config fields
+  - Added 18 integration tests verifying parser-to-validation workflow with realistic YAML fixtures
+  - Achieved 99% test coverage for manifest.go validation logic (exceeds 80% requirement)
+  - Breaking change: `Manifest.Validate()` now returns `nil` for valid manifests instead of `ErrNotImplemented`
+  - All validation errors provide descriptive messages indicating which field failed and why
+
 - **C030** Reduced test skip count by 84% (823 → 128 skipped tests)
   - Converted 400+ integration test runtime skips to `//go:build integration` tags
   - Removed 250+ obsolete conditional skip guards from plugin infrastructure tests (state store, loader, registry, version)
