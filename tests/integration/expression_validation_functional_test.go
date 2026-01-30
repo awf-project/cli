@@ -43,9 +43,6 @@ import (
 // =============================================================================
 
 func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: Real ExprValidator adapter (not mocked)
 	validator := expression.NewExprValidator()
@@ -112,9 +109,6 @@ func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validator := expression.NewExprValidator()
 
@@ -204,9 +198,6 @@ func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validator := expression.NewExprValidator()
 
@@ -293,9 +284,6 @@ func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Given: ExprValidator must implement ports.ExpressionValidator interface
 	var _ ports.ExpressionValidator = (*expression.ExprValidator)(nil)
@@ -314,9 +302,6 @@ func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validator := expression.NewExprValidator()
 
@@ -373,9 +358,6 @@ func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.
 // =============================================================================
 
 func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// When: Creating multiple validator instances
 	validator1 := expression.NewExprValidator()
@@ -397,9 +379,6 @@ func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validator := expression.NewExprValidator()
 
@@ -452,9 +431,6 @@ func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
 // =============================================================================
 
 func TestExpressionValidation_Integration_ConcurrentValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	validator := expression.NewExprValidator()
 

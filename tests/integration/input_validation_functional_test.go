@@ -34,9 +34,6 @@ import (
 // (pattern, enum, numeric) work correctly through the full workflow
 // execution pipeline.
 func TestInputValidation_HappyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -288,9 +285,6 @@ states:
 
 // TestInputValidation_EdgeCases tests edge cases for input validation.
 func TestInputValidation_EdgeCases(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string

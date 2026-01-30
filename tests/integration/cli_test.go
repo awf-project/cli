@@ -15,9 +15,6 @@ import (
 )
 
 func TestCLI_List_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Use fixtures directory
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -37,9 +34,6 @@ func TestCLI_List_Integration(t *testing.T) {
 }
 
 func TestCLI_Validate_Valid_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -57,9 +51,6 @@ func TestCLI_Validate_Valid_Integration(t *testing.T) {
 }
 
 func TestCLI_Validate_Invalid_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
 
@@ -74,9 +65,6 @@ func TestCLI_Validate_Invalid_Integration(t *testing.T) {
 }
 
 func TestCLI_Run_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Create temp directory for state storage
 	tmpDir := t.TempDir()
@@ -103,9 +91,6 @@ func TestCLI_Run_Integration(t *testing.T) {
 }
 
 func TestCLI_Status_NotFound_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -174,9 +159,6 @@ func TestCLI_GlobalFlags_Integration(t *testing.T) {
 }
 
 func TestCLI_Run_WithInputs_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -268,9 +250,6 @@ func TestCLI_ExitCodes_Integration(t *testing.T) {
 
 // TestCLI_Run_FailingCommand_Integration tests workflow with a failing command
 func TestCLI_Run_FailingCommand_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -311,9 +290,6 @@ states:
 
 // TestCLI_Validate_InvalidStrategy_Integration tests validation of invalid parallel strategy
 func TestCLI_Validate_InvalidStrategy_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -360,9 +336,6 @@ states:
 
 // TestCLI_Run_OutputModes_Integration tests different output modes
 func TestCLI_Run_OutputModes_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -444,9 +417,6 @@ states:
 
 // TestCLI_Run_MultiStep_Integration tests a workflow with multiple steps
 func TestCLI_Run_MultiStep_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 
@@ -497,9 +467,6 @@ states:
 
 // TestCLI_Run_StepSuccessFeedback_Integration tests F037 success feedback for silent steps
 func TestCLI_Run_StepSuccessFeedback_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 

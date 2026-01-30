@@ -29,9 +29,6 @@ import (
 // TestParallelExecution_AllSucceedStrategy validates all_succeed strategy
 // Strategy behavior: workflow fails if ANY branch fails
 func TestParallelExecution_AllSucceedStrategy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string
@@ -219,9 +216,6 @@ states:
 // TestParallelExecution_AnySucceedStrategy validates any_succeed strategy
 // Strategy behavior: workflow succeeds if AT LEAST ONE branch succeeds
 func TestParallelExecution_AnySucceedStrategy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string
@@ -409,9 +403,6 @@ states:
 // TestParallelExecution_BestEffortStrategy validates best_effort strategy
 // Strategy behavior: workflow completes REGARDLESS of branch failures
 func TestParallelExecution_BestEffortStrategy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string
@@ -601,9 +592,6 @@ states:
 // TestParallelExecution_MaxConcurrent validates max_concurrent limit enforcement
 // Uses timing-based assertions with ADR-004: 3x margin for CI variability
 func TestParallelExecution_MaxConcurrent(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name          string
@@ -755,9 +743,6 @@ states:
 // TestParallelExecution_FailurePropagation validates error capture and propagation
 // Verifies that branch failures are captured in state and on_failure transitions work
 func TestParallelExecution_FailurePropagation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string

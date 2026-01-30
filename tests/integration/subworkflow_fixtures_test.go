@@ -51,9 +51,6 @@ type rawOutput struct {
 
 // TestSubworkflowFixtures_Exist verifies all required fixture files are present.
 func TestSubworkflowFixtures_Exist(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	requiredFixtures := []string{
 		"subworkflow-simple.yaml",
@@ -78,9 +75,6 @@ func TestSubworkflowFixtures_Exist(t *testing.T) {
 
 // TestSubworkflowFixtures_ValidYAML verifies all fixtures are syntactically valid YAML.
 func TestSubworkflowFixtures_ValidYAML(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	fixtures := []string{
 		"subworkflow-simple.yaml",
@@ -111,9 +105,6 @@ func TestSubworkflowFixtures_ValidYAML(t *testing.T) {
 
 // TestSubworkflowFixtures_RequiredFields verifies fixtures have required workflow fields.
 func TestSubworkflowFixtures_RequiredFields(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	fixtures := []struct {
 		filename    string
@@ -158,9 +149,6 @@ func TestSubworkflowFixtures_RequiredFields(t *testing.T) {
 
 // TestSubworkflowFixtures_ChildHasInputsAndOutputs verifies child workflow has proper I/O.
 func TestSubworkflowFixtures_ChildHasInputsAndOutputs(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	path := filepath.Join(subworkflowFixturesPath, "subworkflow-child.yaml")
 	data, err := os.ReadFile(path)
@@ -216,9 +204,6 @@ func TestSubworkflowFixtures_ChildHasInputsAndOutputs(t *testing.T) {
 
 // TestSubworkflowFixtures_SimpleParentHasCallWorkflow verifies parent has call_workflow step.
 func TestSubworkflowFixtures_SimpleParentHasCallWorkflow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	path := filepath.Join(subworkflowFixturesPath, "subworkflow-simple.yaml")
 	data, err := os.ReadFile(path)
@@ -281,9 +266,6 @@ func TestSubworkflowFixtures_SimpleParentHasCallWorkflow(t *testing.T) {
 
 // TestSubworkflowFixtures_NestedChain verifies the A -> B -> C nesting chain.
 func TestSubworkflowFixtures_NestedChain(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Verify A calls B
 	t.Run("A_calls_B", func(t *testing.T) {
@@ -364,9 +346,6 @@ func TestSubworkflowFixtures_NestedChain(t *testing.T) {
 
 // TestSubworkflowFixtures_CircularReference verifies A -> B -> A pattern.
 func TestSubworkflowFixtures_CircularReference(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Verify A calls B
 	t.Run("A_calls_B", func(t *testing.T) {
@@ -419,9 +398,6 @@ func TestSubworkflowFixtures_CircularReference(t *testing.T) {
 
 // TestSubworkflowFixtures_SelfCircularReference verifies A → A (direct self-call) pattern.
 func TestSubworkflowFixtures_SelfCircularReference(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	path := filepath.Join(subworkflowFixturesPath, "subworkflow-circular.yaml")
 	data, err := os.ReadFile(path)
@@ -463,9 +439,6 @@ func TestSubworkflowFixtures_SelfCircularReference(t *testing.T) {
 
 // TestSubworkflowFixtures_TimeoutSpecified verifies call_workflow steps have timeout.
 func TestSubworkflowFixtures_TimeoutSpecified(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	fixtures := []struct {
 		filename string

@@ -34,9 +34,6 @@ import (
 // TestSignalHandling_SIGINTGracefulShutdown verifies graceful shutdown on SIGINT
 // Strategy: Cancel context during long-running step, verify StatusCancelled
 func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string
@@ -132,9 +129,6 @@ func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
 // TestSignalHandling_SIGTERMGracefulShutdown verifies graceful shutdown on SIGTERM
 // Strategy: Cancel context during multi-step workflow, verify state preservation
 func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name           string
@@ -224,9 +218,6 @@ func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
 // TestSignalHandling_StatePreservation verifies state is persisted on interruption
 // Strategy: Interrupt workflow with intermediate outputs, verify JSON validity
 func TestSignalHandling_StatePreservation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -314,9 +305,6 @@ func TestSignalHandling_StatePreservation(t *testing.T) {
 // TestSignalHandling_ParallelBranchCancellation verifies all parallel branches cancelled
 // Strategy: Cancel during parallel execution, verify no branches complete
 func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -413,9 +401,6 @@ func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
 // TestSignalHandling_ResumabilityAfterInterruption verifies workflow can resume
 // Strategy: Cancel at step 2, then resume and verify completion
 func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -507,9 +492,6 @@ func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
 // TestSignalHandling_RapidSuccessiveSignals verifies idempotent cancellation
 // Strategy: Cancel multiple times rapidly, verify single graceful shutdown
 func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string
@@ -596,9 +578,6 @@ func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
 // TestSignalHandling_ChildProcessCleanup verifies child processes terminated
 // Strategy: Spawn child process, cancel parent, verify child also terminates
 func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tests := []struct {
 		name         string

@@ -5,20 +5,77 @@ AWF follows Go testing conventions with table-driven tests and clear separation 
 ## Running Tests
 
 ```bash
-# All tests
+# All tests (unit tests only, excludes integration and external)
 make test
 
 # Unit tests only (internal/ and pkg/)
 make test-unit
 
-# Integration tests only (tests/integration/)
+# Integration tests (requires full system setup, tagged with //go:build integration)
 make test-integration
+
+# External tests (requires external CLIs: claude, codex, gemini, opencode)
+make test-external
+
+# All tests including integration
+make test-all
 
 # With race detector
 make test-race
 
 # With coverage report
 make test-coverage
+
+# Run tests in short mode (skips resource-intensive tests)
+go test -short ./...
+```
+
+## Build Tags
+
+AWF uses Go build tags to control which tests run in different environments. This avoids runtime skips that inflate skip counts and obscure coverage metrics.
+
+### Available Build Tags
+
+| Tag | Purpose | Usage | Example |
+|-----|---------|-------|---------|
+| `integration` | Full system tests requiring setup, state persistence, CLI execution | `make test-integration` or `go test -tags=integration ./...` | End-to-end workflow execution |
+| `external` | Tests requiring external CLI tools (claude, codex, gemini, opencode) | `make test-external` or `go test -tags=external ./...` | AI provider validation |
+| `slow` | Resource-intensive tests (high memory, concurrency, long-running) | `go test -tags=slow ./...` | Memory leak detection, stress tests |
+| `!short` | Standard Go short mode exclusion for tests that take >100ms | `go test -short ./...` (excludes these) | Database operations, file I/O |
+
+### Using Build Tags
+
+Add build tags at the top of test files (before package declaration):
+
+```go
+//go:build integration
+
+package integration_test
+
+import "testing"
+
+func TestFullWorkflowExecution(t *testing.T) {
+    // This test only runs with: go test -tags=integration
+    // No need for runtime t.Skip() calls
+}
+```
+
+Multiple tags can be combined:
+
+```go
+//go:build integration && external
+
+package integration_test
+// Requires both -tags=integration,external
+```
+
+Exclude from default tests:
+
+```go
+//go:build !short
+
+package workflow_test
+// Excluded when running: go test -short ./...
 ```
 
 ## Test Structure
@@ -212,13 +269,22 @@ Coverage goals:
 
 ## Integration Tests
 
-Test full workflows end-to-end:
+Integration tests use build tags instead of runtime skips:
 
 ```go
+//go:build integration
+
+package integration_test
+
+import (
+    "os/exec"
+    "testing"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
 func TestCLI_Run_Integration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test")
-    }
+    // No runtime skip needed - build tag controls execution
 
     // Setup temp directory with workflow
     dir := t.TempDir()
@@ -233,19 +299,22 @@ func TestCLI_Run_Integration(t *testing.T) {
 }
 ```
 
-Skip integration tests in CI with short flag:
+Run integration tests explicitly:
 
 ```bash
-go test -short ./...
+# Integration tests only
+make test-integration
+
+# All tests including integration
+make test-all
 ```
 
 ## Test Helpers
 
-Common test utilities:
+Common test utilities in `tests/integration/test_helpers_test.go`:
 
 ```go
-// tests/helpers.go
-package tests
+package integration_test
 
 func TempWorkflow(t *testing.T, content string) string {
     t.Helper()
@@ -264,6 +333,64 @@ func AssertExitCode(t *testing.T, err error, expected int) {
     } else if expected != 0 {
         t.Errorf("expected exit code %d, got no error", expected)
     }
+}
+```
+
+### Skip Helper Functions
+
+For cases where runtime skip checks are necessary (environment-dependent tests):
+
+```go
+// skipIfCLINotInstalled skips test if required CLI tool is not in PATH
+func skipIfCLINotInstalled(t *testing.T, cliName string) {
+    t.Helper()
+    if _, err := exec.LookPath(cliName); err != nil {
+        t.Skipf("ENVIRONMENT: %s CLI not installed", cliName)
+    }
+}
+
+// skipIfToolNotAvailable skips test if specified command/tool is unavailable
+func skipIfToolNotAvailable(t *testing.T, toolName, checkCmd string) {
+    t.Helper()
+    cmd := exec.Command("sh", "-c", checkCmd)
+    if err := cmd.Run(); err != nil {
+        t.Skipf("ENVIRONMENT: %s not available", toolName)
+    }
+}
+
+// skipOnPlatform skips test on specified OS/arch combinations
+func skipOnPlatform(t *testing.T, goos, goarch, reason string) {
+    t.Helper()
+    if runtime.GOOS == goos && (goarch == "" || runtime.GOARCH == goarch) {
+        t.Skipf("PLATFORM: %s (OS=%s, ARCH=%s)", reason, goos, goarch)
+    }
+}
+
+// skipIfNotRoot skips test if not running with root/admin privileges
+func skipIfNotRoot(t *testing.T) {
+    t.Helper()
+    if os.Geteuid() != 0 {
+        t.Skip("PERMISSION: requires root privileges")
+    }
+}
+```
+
+**Usage:**
+
+```go
+func TestProviderValidation(t *testing.T) {
+    skipIfCLINotInstalled(t, "claude")
+    // Test code using claude CLI
+}
+
+func TestDockerWorkflow(t *testing.T) {
+    skipIfToolNotAvailable(t, "docker", "docker ps")
+    // Test code using docker
+}
+
+func TestWindowsPathHandling(t *testing.T) {
+    skipOnPlatform(t, "linux", "", "Windows-specific path handling")
+    // Windows-only test code
 }
 ```
 
@@ -304,6 +431,100 @@ func TestCLI_Run_FailingCommand_Integration(t *testing.T)
 func BenchmarkInterpolate(b *testing.B)
 ```
 
+## Skip Policy
+
+AWF minimizes runtime test skips to maintain accurate coverage metrics and test signal. Follow these guidelines:
+
+### When NOT to Skip
+
+**Use build tags instead of runtime skips for:**
+
+- Integration tests requiring system setup → `//go:build integration`
+- Tests requiring external CLI tools → `//go:build external`
+- Resource-intensive tests → `//go:build slow` or `//go:build !short`
+- Platform-specific tests → `//go:build linux` or `//go:build windows`
+
+**Example (❌ BAD - runtime skip):**
+
+```go
+func TestCLIExecution(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping integration test")
+    }
+    // test code
+}
+```
+
+**Example (✅ GOOD - build tag):**
+
+```go
+//go:build integration
+
+package integration_test
+
+func TestCLIExecution(t *testing.T) {
+    // No runtime skip needed
+    // test code
+}
+```
+
+### When to Skip
+
+Runtime skips are acceptable ONLY for:
+
+1. **Environment checks** - Missing tools, permissions, or platform features
+2. **CI-specific conditions** - Flaky external dependencies
+3. **Pending work** - Must have tracking issue
+
+### Skip Documentation Format
+
+All runtime skips MUST follow this format:
+
+```go
+t.Skip("CATEGORY: description [#issue]")
+```
+
+Categories:
+- `ENVIRONMENT` - Missing tool, permission, or platform feature
+- `PLATFORM` - OS/arch specific issue
+- `PERMISSION` - Requires root or special privileges
+- `PENDING` - Awaiting design decision or implementation
+- `FLAKY` - Known intermittent failure (use sparingly, prefer fix)
+
+**Examples:**
+
+```go
+// Environment check with helper
+skipIfCLINotInstalled(t, "claude") // Outputs: "ENVIRONMENT: claude CLI not installed"
+
+// Platform-specific skip
+skipOnPlatform(t, "windows", "", "Unix socket support") // Outputs: "PLATFORM: Unix socket support (OS=windows, ARCH=)"
+
+// Pending work (MUST link tracking issue)
+t.Skip("PENDING: max_turns validation not yet implemented [#142]")
+
+// Flaky test (discouraged - prefer fixing)
+t.Skip("FLAKY: external API timeout in CI [#156]")
+```
+
+### Skip Verification
+
+Before committing:
+
+```bash
+# Count runtime skips (target: minimize)
+grep -r "t\.Skip(" --include="*_test.go" | wc -l
+
+# Verify all skips have proper format
+grep -r "t\.Skip(" --include="*_test.go" | grep -v "ENVIRONMENT:\|PLATFORM:\|PERMISSION:\|PENDING:\|FLAKY:"
+# Should return empty (no undocumented skips)
+
+# Verify build tags work
+go test ./...                          # Unit tests only
+go test -tags=integration ./...        # Include integration tests
+go test -tags=external ./...           # Include external CLI tests
+```
+
 ## CI Integration
 
 Tests run in GitHub Actions:
@@ -318,9 +539,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-      - run: make test
-      - run: make test-race
+      - run: make test              # Unit tests only
+      - run: make test-integration  # Integration tests
+      - run: make test-race         # Race detection
 ```
+
+Integration and external tests may be run in separate CI jobs or only on specific branches to optimize CI time.
 
 ## See Also
 

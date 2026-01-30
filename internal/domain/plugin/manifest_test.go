@@ -276,59 +276,6 @@ func TestManifest_HasCapability(t *testing.T) {
 }
 
 // =============================================================================
-// Validate Tests (Stub - should return ErrNotImplemented)
-// =============================================================================
-
-func TestManifest_Validate_ReturnsNotImplemented(t *testing.T) {
-	m := plugin.Manifest{
-		Name:    "test-plugin",
-		Version: "1.0.0",
-	}
-
-	err := m.Validate()
-
-	assert.ErrorIs(t, err, plugin.ErrNotImplemented)
-}
-
-func TestManifest_Validate_ValidManifest_StillReturnsNotImplemented(t *testing.T) {
-	m := plugin.Manifest{
-		Name:         "valid-plugin",
-		Version:      "1.0.0",
-		AWFVersion:   ">=0.4.0",
-		Capabilities: []string{plugin.CapabilityOperations},
-	}
-
-	err := m.Validate()
-
-	// Stub always returns ErrNotImplemented
-	assert.ErrorIs(t, err, plugin.ErrNotImplemented)
-}
-
-func TestManifest_Validate_EmptyName_StillReturnsNotImplemented(t *testing.T) {
-	m := plugin.Manifest{
-		Name:    "",
-		Version: "1.0.0",
-	}
-
-	err := m.Validate()
-
-	// Stub returns ErrNotImplemented (validation not implemented yet)
-	assert.ErrorIs(t, err, plugin.ErrNotImplemented)
-}
-
-func TestManifest_Validate_EmptyVersion_StillReturnsNotImplemented(t *testing.T) {
-	m := plugin.Manifest{
-		Name:    "test-plugin",
-		Version: "",
-	}
-
-	err := m.Validate()
-
-	// Stub returns ErrNotImplemented (validation not implemented yet)
-	assert.ErrorIs(t, err, plugin.ErrNotImplemented)
-}
-
-// =============================================================================
 // ConfigField Tests
 // =============================================================================
 

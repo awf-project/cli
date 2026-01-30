@@ -41,9 +41,6 @@ func TestFileSystemLoader_DiscoverPlugins_ValidDirectory(t *testing.T) {
 	ctx := context.Background()
 
 	plugins, err := loader.DiscoverPlugins(ctx, fixturesPath)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("DiscoverPlugins() error = %v", err)
 	}
@@ -76,9 +73,6 @@ func TestFileSystemLoader_DiscoverPlugins_EmptyDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	plugins, err := loader.DiscoverPlugins(ctx, tmpDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("DiscoverPlugins() error = %v, want nil for empty directory", err)
 	}
@@ -92,9 +86,6 @@ func TestFileSystemLoader_DiscoverPlugins_NonExistentDirectory(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := loader.DiscoverPlugins(ctx, "/nonexistent/plugins/directory")
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("DiscoverPlugins() error = nil, want error for non-existent directory")
 	}
@@ -116,9 +107,6 @@ func TestFileSystemLoader_DiscoverPlugins_FileNotDirectory(t *testing.T) {
 	filePath := filepath.Join(fixturesPath, "valid-simple", "plugin.yaml")
 
 	_, err := loader.DiscoverPlugins(ctx, filePath)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("DiscoverPlugins() error = nil, want error when path is a file")
 	}
@@ -129,9 +117,6 @@ func TestFileSystemLoader_DiscoverPlugins_SkipsInvalidPlugins(t *testing.T) {
 	ctx := context.Background()
 
 	plugins, err := loader.DiscoverPlugins(ctx, fixturesPath)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("DiscoverPlugins() error = %v", err)
 	}
@@ -156,9 +141,6 @@ func TestFileSystemLoader_DiscoverPlugins_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	_, err := loader.DiscoverPlugins(ctx, fixturesPath)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("DiscoverPlugins() error = nil, want error for cancelled context")
 	}
@@ -198,9 +180,6 @@ capabilities: [operations]`
 	}
 
 	plugins, err := loader.DiscoverPlugins(ctx, tmpDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("DiscoverPlugins not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("DiscoverPlugins() error = %v", err)
 	}
@@ -222,9 +201,6 @@ func TestFileSystemLoader_LoadPlugin_ValidSimple(t *testing.T) {
 	pluginDir := filepath.Join(fixturesPath, "valid-simple")
 
 	info, err := loader.LoadPlugin(ctx, pluginDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("LoadPlugin() error = %v", err)
 	}
@@ -261,9 +237,6 @@ func TestFileSystemLoader_LoadPlugin_ValidFull(t *testing.T) {
 	pluginDir := filepath.Join(fixturesPath, "valid-full")
 
 	info, err := loader.LoadPlugin(ctx, pluginDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("LoadPlugin() error = %v", err)
 	}
@@ -291,9 +264,6 @@ func TestFileSystemLoader_LoadPlugin_NonExistentDirectory(t *testing.T) {
 	ctx := context.Background()
 
 	info, err := loader.LoadPlugin(ctx, "/nonexistent/plugin/dir")
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("LoadPlugin() error = nil, want error for non-existent directory")
 	}
@@ -318,9 +288,6 @@ func TestFileSystemLoader_LoadPlugin_NoManifest(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	info, err := loader.LoadPlugin(ctx, tmpDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("LoadPlugin() error = nil, want error for missing manifest")
 	}
@@ -340,9 +307,6 @@ func TestFileSystemLoader_LoadPlugin_InvalidManifest(t *testing.T) {
 	pluginDir := filepath.Join(fixturesPath, "invalid-syntax")
 
 	info, err := loader.LoadPlugin(ctx, pluginDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("LoadPlugin() error = nil, want error for invalid manifest")
 	}
@@ -367,9 +331,6 @@ func TestFileSystemLoader_LoadPlugin_MissingRequiredFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info, err := loader.LoadPlugin(ctx, tt.pluginDir)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("LoadPlugin not yet implemented")
-			}
 			if err == nil {
 				t.Fatalf("LoadPlugin() error = nil, want error for %s", tt.name)
 			}
@@ -387,9 +348,6 @@ func TestFileSystemLoader_LoadPlugin_ContextCancellation(t *testing.T) {
 
 	pluginDir := filepath.Join(fixturesPath, "valid-simple")
 	info, err := loader.LoadPlugin(ctx, pluginDir)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("LoadPlugin() error = nil, want error for cancelled context")
 	}
@@ -406,9 +364,6 @@ func TestFileSystemLoader_LoadPlugin_FileInsteadOfDirectory(t *testing.T) {
 	filePath := filepath.Join(fixturesPath, "valid-simple", "plugin.yaml")
 
 	info, err := loader.LoadPlugin(ctx, filePath)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("LoadPlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("LoadPlugin() error = nil, want error when path is a file")
 	}
@@ -434,9 +389,6 @@ func TestFileSystemLoader_ValidatePlugin_ValidPlugin(t *testing.T) {
 	}
 
 	err := loader.ValidatePlugin(info)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("ValidatePlugin() error = %v, want nil", err)
 	}
@@ -446,9 +398,6 @@ func TestFileSystemLoader_ValidatePlugin_NilInfo(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
 	err := loader.ValidatePlugin(nil)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("ValidatePlugin() error = nil, want error for nil info")
 	}
@@ -464,9 +413,6 @@ func TestFileSystemLoader_ValidatePlugin_NilManifest(t *testing.T) {
 	}
 
 	err := loader.ValidatePlugin(info)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("ValidatePlugin() error = nil, want error for nil manifest")
 	}
@@ -487,9 +433,6 @@ func TestFileSystemLoader_ValidatePlugin_InvalidCapability(t *testing.T) {
 	}
 
 	err := loader.ValidatePlugin(info)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("ValidatePlugin() error = nil, want error for invalid capability")
 	}
@@ -513,9 +456,6 @@ func TestFileSystemLoader_ValidatePlugin_EmptyCapabilities(t *testing.T) {
 	}
 
 	err := loader.ValidatePlugin(info)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err == nil {
 		t.Fatal("ValidatePlugin() error = nil, want error for empty capabilities")
 	}
@@ -547,9 +487,6 @@ func TestFileSystemLoader_ValidatePlugin_InvalidName(t *testing.T) {
 			}
 
 			err := loader.ValidatePlugin(info)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("ValidatePlugin not yet implemented")
-			}
 			if err == nil {
 				t.Fatalf("ValidatePlugin() error = nil, want error for name %q", tt.badName)
 			}
@@ -583,9 +520,6 @@ func TestFileSystemLoader_ValidatePlugin_InvalidVersion(t *testing.T) {
 			}
 
 			err := loader.ValidatePlugin(info)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("ValidatePlugin not yet implemented")
-			}
 			// Empty version should always fail
 			if tt.name == "empty" && err == nil {
 				t.Fatalf("ValidatePlugin() error = nil, want error for empty version")
@@ -623,9 +557,6 @@ func TestFileSystemLoader_ValidatePlugin_InvalidAWFVersion(t *testing.T) {
 			}
 
 			err := loader.ValidatePlugin(info)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("ValidatePlugin not yet implemented")
-			}
 			if tt.shouldFail && err == nil {
 				t.Fatalf("ValidatePlugin() error = nil, want error for awf_version %q", tt.awfVersion)
 			}
@@ -655,9 +586,6 @@ func TestFileSystemLoader_ValidatePlugin_MultipleCapabilities(t *testing.T) {
 	}
 
 	err := loader.ValidatePlugin(info)
-	if errors.Is(err, ErrLoaderNotImplemented) {
-		t.Skip("ValidatePlugin not yet implemented")
-	}
 	if err != nil {
 		t.Fatalf("ValidatePlugin() error = %v, want nil for valid multiple capabilities", err)
 	}
@@ -768,9 +696,6 @@ func TestFileSystemLoader_DiscoverPlugins_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			plugins, err := loader.DiscoverPlugins(ctx, tt.pluginsDir)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("DiscoverPlugins not yet implemented")
-			}
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DiscoverPlugins() error = %v, wantErr %v", err, tt.wantErr)
@@ -803,9 +728,6 @@ func TestFileSystemLoader_LoadPlugin_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info, err := loader.LoadPlugin(ctx, tt.pluginDir)
-			if errors.Is(err, ErrLoaderNotImplemented) {
-				t.Skip("LoadPlugin not yet implemented")
-			}
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LoadPlugin() error = %v, wantErr %v", err, tt.wantErr)

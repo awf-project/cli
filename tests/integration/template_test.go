@@ -25,9 +25,6 @@ const templatesFixturePath = "../fixtures/templates"
 // =============================================================================
 
 func TestTemplateRepository_LoadFromFixtures_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	repo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 
@@ -93,9 +90,6 @@ func TestTemplateRepository_LoadFromFixtures_Integration(t *testing.T) {
 }
 
 func TestTemplateRepository_ListTemplates_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	repo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	ctx := context.Background()
@@ -118,9 +112,6 @@ func TestTemplateRepository_ListTemplates_Integration(t *testing.T) {
 }
 
 func TestTemplateRepository_Exists_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	repo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	ctx := context.Background()
@@ -135,9 +126,6 @@ func TestTemplateRepository_Exists_Integration(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	logger := &mockLogger{}
@@ -187,9 +175,6 @@ func TestTemplateService_ExpandWorkflow_Integration(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_OverrideDefaults_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	logger := &mockLogger{}
@@ -228,9 +213,6 @@ func TestTemplateService_ExpandWorkflow_OverrideDefaults_Integration(t *testing.
 }
 
 func TestTemplateService_ValidateTemplateRef_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	logger := &mockLogger{}
@@ -281,9 +263,6 @@ func TestTemplateService_ValidateTemplateRef_Integration(t *testing.T) {
 // =============================================================================
 
 func TestWorkflowWithTemplate_Execution_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
@@ -332,9 +311,6 @@ states:
 // =============================================================================
 
 func TestTemplateService_CircularReference_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// The circular-a and circular-b fixtures reference each other
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
@@ -369,9 +345,6 @@ func TestTemplateService_CircularReference_Integration(t *testing.T) {
 }
 
 func TestTemplateService_InvalidTemplate_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 
@@ -393,9 +366,6 @@ func TestTemplateService_InvalidTemplate_Integration(t *testing.T) {
 // =============================================================================
 
 func TestMultipleTemplates_SameWorkflow_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	logger := &mockLogger{}
@@ -466,9 +436,6 @@ func TestMultipleTemplates_SameWorkflow_Integration(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ComplexParameters_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	logger := &mockLogger{}
@@ -541,9 +508,6 @@ func TestTemplateService_ComplexParameters_Integration(t *testing.T) {
 // =============================================================================
 
 func TestTemplateRepository_PathPriority_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Create temp directory with override template
 	tmpDir := t.TempDir()
@@ -604,9 +568,6 @@ states:
 // =============================================================================
 
 func TestTemplateRepository_Caching_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	repo := repository.NewYAMLTemplateRepository([]string{templatesFixturePath})
 	ctx := context.Background()

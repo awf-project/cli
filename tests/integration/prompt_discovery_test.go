@@ -23,9 +23,6 @@ import (
 // =============================================================================
 
 func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Setup: Create temp directory with local prompts only
 	tmpDir := t.TempDir()
@@ -77,9 +74,6 @@ func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Setup: Create temp directory with global prompts only
 	tmpDir := t.TempDir()
@@ -127,9 +121,6 @@ func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -190,9 +181,6 @@ func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -257,9 +245,6 @@ func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -310,9 +295,6 @@ func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -382,9 +364,6 @@ func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -425,9 +404,6 @@ func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -462,9 +438,6 @@ func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
 }
 
 func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -522,9 +495,6 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -582,9 +552,6 @@ func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptResolution_LocalPrompt_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -658,9 +625,6 @@ states:
 }
 
 func TestPromptResolution_GlobalPrompt_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -736,9 +700,6 @@ states:
 }
 
 func TestPromptResolution_LocalOverridesGlobal_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -822,9 +783,6 @@ states:
 }
 
 func TestPromptResolution_NestedPath_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -902,9 +860,6 @@ states:
 // =============================================================================
 
 func TestPromptResolution_NotFound_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -966,9 +921,6 @@ states:
 }
 
 func TestPromptResolution_PathTraversal_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -1039,9 +991,6 @@ states:
 // =============================================================================
 
 func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -1086,9 +1035,6 @@ func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 }
 
 func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -1136,9 +1082,6 @@ func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
 }
 
 func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -1181,9 +1124,6 @@ func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
 // =============================================================================
 
 func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	// Get project root
 	origDir, err := os.Getwd()

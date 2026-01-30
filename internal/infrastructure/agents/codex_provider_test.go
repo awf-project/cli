@@ -24,9 +24,6 @@ func TestCodexProvider_Name(t *testing.T) {
 
 func TestCodexProvider_Execute_HappyPath(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	tests := []struct {
 		name    string
@@ -159,9 +156,6 @@ func TestCodexProvider_Validate_CLINotInstalled(t *testing.T) {
 
 func TestCodexProvider_Validate_CLIInstalled(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	err := provider.Validate()
 	assert.NoError(t, err)
@@ -169,9 +163,6 @@ func TestCodexProvider_Validate_CLIInstalled(t *testing.T) {
 
 func TestCodexProvider_Execute_CodeWithSpecialChars(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -186,9 +177,6 @@ func TestCodexProvider_Execute_CodeWithSpecialChars(t *testing.T) {
 
 func TestCodexProvider_Execute_MultilinePrompt(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 
@@ -209,9 +197,6 @@ func TestCodexProvider_Execute_MultilinePrompt(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_HappyPath(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
@@ -234,9 +219,6 @@ func TestCodexProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{}
@@ -277,9 +259,6 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
@@ -306,9 +285,6 @@ func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_CodeGeneration(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a code generator.")
@@ -324,9 +300,6 @@ func TestCodexProvider_ExecuteConversation_CodeGeneration(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -388,9 +361,6 @@ func TestCodexProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
@@ -407,9 +377,6 @@ func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
@@ -435,9 +402,6 @@ func TestCodexProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_MultilineCode(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a code reviewer.")
@@ -458,9 +422,6 @@ func fibonacci(n int) int {
 
 func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 	provider := NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
 
 	ctx := context.Background()
 	initialState := workflow.NewConversationState("You are a helpful coding assistant.")

@@ -26,9 +26,7 @@ import (
 // TestMemoryManagement_HappyPath_SmallWorkflow verifies normal workflow execution
 // with minimal memory footprint when no special configuration is needed.
 func TestMemoryManagement_HappyPath_SmallWorkflow(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -73,9 +71,7 @@ states:
 // TestMemoryManagement_HappyPath_ConfiguredLimits verifies workflow execution
 // with memory management configuration properly respected.
 func TestMemoryManagement_HappyPath_ConfiguredLimits(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -126,9 +122,7 @@ states:
 // TestMemoryManagement_EdgeCase_ZeroIterations verifies behavior when loop
 // condition is false from the start.
 func TestMemoryManagement_EdgeCase_ZeroIterations(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -181,9 +175,7 @@ states:
 // TestMemoryManagement_EdgeCase_SingleIteration verifies memory management
 // with minimal iteration count.
 func TestMemoryManagement_EdgeCase_SingleIteration(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -227,9 +219,7 @@ states:
 // TestMemoryManagement_EdgeCase_EmptyOutput verifies handling of steps
 // that produce no output.
 func TestMemoryManagement_EdgeCase_EmptyOutput(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -272,9 +262,7 @@ states:
 // TestMemoryManagement_EdgeCase_ExactlyAtLimit verifies behavior when output
 // is exactly at the configured limit.
 func TestMemoryManagement_EdgeCase_ExactlyAtLimit(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -319,9 +307,7 @@ states:
 // TestMemoryManagement_EdgeCase_RetainedIterationsExceedsTotal verifies behavior
 // when max_retained_iterations is greater than actual iterations executed.
 func TestMemoryManagement_EdgeCase_RetainedIterationsExceedsTotal(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -374,9 +360,7 @@ states:
 // TestMemoryManagement_ErrorHandling_InvalidOutputSize verifies rejection
 // of invalid output size configurations.
 func TestMemoryManagement_ErrorHandling_InvalidOutputSize(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -422,9 +406,7 @@ states:
 // TestMemoryManagement_ErrorHandling_InvalidRetainedIterations verifies rejection
 // of invalid max_retained_iterations configurations.
 func TestMemoryManagement_ErrorHandling_InvalidRetainedIterations(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -473,9 +455,7 @@ states:
 // TestMemoryManagement_ErrorHandling_FailedStepWithTruncation verifies that
 // truncation works correctly even when steps fail.
 func TestMemoryManagement_ErrorHandling_FailedStepWithTruncation(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -529,9 +509,7 @@ states:
 // TestMemoryManagement_Integration_LoopWithOutputLimits verifies that
 // both loop iteration pruning and output truncation work together.
 func TestMemoryManagement_Integration_LoopWithOutputLimits(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -602,9 +580,7 @@ states:
 // TestMemoryManagement_Integration_SequentialLoopsWithPruning verifies memory management
 // with sequential loop execution (not nested, which AWF may not support).
 func TestMemoryManagement_Integration_SequentialLoopsWithPruning(t *testing.T) {
-	if testing.Short() {
 		t.Skip("skipping functional test in short mode")
-	}
 
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")

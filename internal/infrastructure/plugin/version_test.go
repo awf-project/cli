@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -59,9 +58,6 @@ func TestParseVersion_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseVersion(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseVersion not yet implemented")
-			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseVersion(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 				return
@@ -95,9 +91,6 @@ func TestParseVersion_Invalid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseVersion(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseVersion not yet implemented")
-			}
 			if err == nil {
 				t.Errorf("ParseVersion(%q) error = nil, want error", tt.input)
 			}
@@ -138,9 +131,6 @@ func TestVersion_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.version.String()
-			if got == ErrVersionNotImplemented.Error() {
-				t.Skip("Version.String not yet implemented")
-			}
 			if got != tt.want {
 				t.Errorf("Version.String() = %q, want %q", got, tt.want)
 			}
@@ -259,10 +249,6 @@ func TestVersion_Compare(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.v1.Compare(tt.v2)
-			// Skip if stub returns default 0 for non-equal comparison
-			if got == 0 && tt.want != 0 {
-				t.Skip("Version.Compare not yet implemented")
-			}
 			if got != tt.want {
 				t.Errorf("Version{%v}.Compare(Version{%v}) = %d, want %d", tt.v1, tt.v2, got, tt.want)
 			}
@@ -344,9 +330,6 @@ func TestParseConstraint_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseConstraint(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseConstraint not yet implemented")
-			}
 			if err != nil {
 				t.Fatalf("ParseConstraint(%q) error = %v", tt.input, err)
 			}
@@ -376,9 +359,6 @@ func TestParseConstraint_Invalid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseConstraint(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseConstraint not yet implemented")
-			}
 			if err == nil {
 				t.Errorf("ParseConstraint(%q) error = nil, want error", tt.input)
 			}
@@ -424,9 +404,6 @@ func TestParseConstraints_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseConstraints(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseConstraints not yet implemented")
-			}
 			if err != nil {
 				t.Fatalf("ParseConstraints(%q) error = %v", tt.input, err)
 			}
@@ -451,9 +428,6 @@ func TestParseConstraints_Invalid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseConstraints(tt.input)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("ParseConstraints not yet implemented")
-			}
 			if err == nil {
 				t.Errorf("ParseConstraints(%q) error = nil, want error", tt.input)
 			}
@@ -660,10 +634,6 @@ func TestConstraint_Check(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.constraint.Check(tt.version)
-			// Skip if stub returns false for expected true
-			if !got && tt.want {
-				t.Skip("Constraint.Check not yet implemented")
-			}
 			if got != tt.want {
 				t.Errorf("Constraint{%s %v}.Check(%v) = %v, want %v",
 					tt.constraint.Operator, tt.constraint.Version, tt.version, got, tt.want)
@@ -755,10 +725,6 @@ func TestConstraints_Check(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.constraints.Check(tt.version)
-			// Skip if stub returns false for expected true
-			if !got && tt.want {
-				t.Skip("Constraints.Check not yet implemented")
-			}
 			if got != tt.want {
 				t.Errorf("Constraints.Check(%v) = %v, want %v", tt.version, got, tt.want)
 			}
@@ -892,9 +858,6 @@ func TestCheckVersionConstraint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := CheckVersionConstraint(tt.constraint, tt.version)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("CheckVersionConstraint not yet implemented")
-			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CheckVersionConstraint(%q, %q) error = %v, wantErr %v",
 					tt.constraint, tt.version, err, tt.wantErr)
@@ -959,9 +922,6 @@ func TestIsCompatible(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := IsCompatible(tt.constraint, tt.awfVersion)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("IsCompatible not yet implemented")
-			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("IsCompatible(%q, %q) error = %v, wantErr %v",
 					tt.constraint, tt.awfVersion, err, tt.wantErr)
@@ -1032,9 +992,6 @@ func TestVersionConstraint_RealWorldScenarios(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := CheckVersionConstraint(tt.constraint, tt.version)
-			if errors.Is(err, ErrVersionNotImplemented) {
-				t.Skip("CheckVersionConstraint not yet implemented")
-			}
 			if err != nil {
 				t.Fatalf("CheckVersionConstraint(%q, %q) error = %v", tt.constraint, tt.version, err)
 			}
@@ -1079,9 +1036,6 @@ func TestConstraints_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.constraints.String()
-			if got == ErrVersionNotImplemented.Error() {
-				t.Skip("Constraints.String not yet implemented")
-			}
 			if got != tt.want {
 				t.Errorf("Constraints.String() = %q, want %q", got, tt.want)
 			}
