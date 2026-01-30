@@ -15,60 +15,58 @@ states:
   parallel_conversations:
     type: parallel
     strategy: all_succeed
-    branches:
-      - name: claude_research
-        steps:
-          - name: claude_convo
-            type: agent
-            provider: claude
-            mode: conversation
-            system_prompt: "You are a research assistant specializing in technical analysis."
-            initial_prompt: "Research: {{inputs.task}}"
-            options:
-              model: claude-haiku-4-5
-              max_tokens: 2000
-            conversation:
-              max_turns: 5
-              max_context_tokens: 60000
-              strategy: sliding_window
-              stop_condition: "response contains 'RESEARCH COMPLETE'"
-            timeout: 90
-            on_success: done
-
-      - name: gemini_research
-        steps:
-          - name: gemini_convo
-            type: agent
-            provider: gemini
-            mode: conversation
-            system_prompt: "You are a research assistant focusing on practical applications."
-            initial_prompt: "Investigate: {{inputs.task}}"
-            options:
-              model: gemini-pro
-            conversation:
-              max_turns: 5
-              max_context_tokens: 50000
-              strategy: sliding_window
-              stop_condition: "turn_count >= 4"
-            timeout: 90
-            on_success: done
-
-      - name: codex_research
-        steps:
-          - name: codex_convo
-            type: agent
-            provider: codex
-            mode: conversation
-            system_prompt: "You are a research assistant emphasizing code examples."
-            initial_prompt: "Analyze: {{inputs.task}}"
-            conversation:
-              max_turns: 6
-              strategy: sliding_window
-              stop_condition: "response contains 'ANALYSIS DONE'"
-            timeout: 90
-            on_success: done
+    parallel:
+      - claude_convo
+      - gemini_convo
+      - codex_convo
     on_success: synthesize
     on_failure: error
+
+  claude_convo:
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "You are a research assistant specializing in technical analysis."
+    initial_prompt: "Research: {{inputs.task}}"
+    options:
+      model: claude-haiku-4-5
+      max_tokens: 2000
+    conversation:
+      max_turns: 5
+      max_context_tokens: 60000
+      strategy: sliding_window
+      stop_condition: "response contains 'RESEARCH COMPLETE'"
+    timeout: 90
+    on_success: done
+
+  gemini_convo:
+    type: agent
+    provider: gemini
+    mode: conversation
+    system_prompt: "You are a research assistant focusing on practical applications."
+    initial_prompt: "Investigate: {{inputs.task}}"
+    options:
+      model: gemini-pro
+    conversation:
+      max_turns: 5
+      max_context_tokens: 50000
+      strategy: sliding_window
+      stop_condition: "turn_count >= 4"
+    timeout: 90
+    on_success: done
+
+  codex_convo:
+    type: agent
+    provider: codex
+    mode: conversation
+    system_prompt: "You are a research assistant emphasizing code examples."
+    initial_prompt: "Analyze: {{inputs.task}}"
+    conversation:
+      max_turns: 6
+      strategy: sliding_window
+      stop_condition: "response contains 'ANALYSIS DONE'"
+    timeout: 90
+    on_success: done
 
   synthesize:
     type: agent
@@ -78,11 +76,11 @@ states:
     initial_prompt: |
       Synthesize these research findings:
 
-      Claude findings: {{states.parallel_conversations.branches.claude_research.steps.claude_convo.Output}}
+      Claude findings: {{states.claude_convo.output}}
 
-      Gemini findings: {{states.parallel_conversations.branches.gemini_research.steps.gemini_convo.Output}}
+      Gemini findings: {{states.gemini_convo.output}}
 
-      Codex findings: {{states.parallel_conversations.branches.codex_research.steps.codex_convo.Output}}
+      Codex findings: {{states.codex_convo.output}}
     options:
       model: claude-haiku-4-5
       max_tokens: 3000
