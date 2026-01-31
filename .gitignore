@@ -38,3 +38,4 @@ storage/history.db
 # Temporary files
 *.tmp
 *.bak
+.grepai/

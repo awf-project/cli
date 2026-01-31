@@ -1,6 +1,7 @@
 package application_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -351,7 +352,11 @@ func TestOutputLimiter_Apply_StreamingMode(t *testing.T) {
 			if tt.expectOutputPath {
 				assert.NotEmpty(t, result.OutputPath, "should create output temp file")
 				assert.Empty(t, result.Output, "output should be empty when streamed")
-				// TODO(#149): Verify file exists and contains correct content
+				_, err := os.Stat(result.OutputPath)
+				require.NoError(t, err, "streamed output file should exist")
+				content, err := os.ReadFile(result.OutputPath)
+				require.NoError(t, err, "should read streamed output file")
+				assert.Equal(t, tt.output, string(content), "streamed output content should match")
 			} else {
 				assert.Empty(t, result.OutputPath, "should not stream small output")
 				assert.Equal(t, tt.output, result.Output)
@@ -361,7 +366,11 @@ func TestOutputLimiter_Apply_StreamingMode(t *testing.T) {
 			if tt.expectStderrPath {
 				assert.NotEmpty(t, result.StderrPath, "should create stderr temp file")
 				assert.Empty(t, result.Stderr, "stderr should be empty when streamed")
-				// TODO(#149): Verify file exists and contains correct content
+				_, err := os.Stat(result.StderrPath)
+				require.NoError(t, err, "streamed stderr file should exist")
+				stderrContent, err := os.ReadFile(result.StderrPath)
+				require.NoError(t, err, "should read streamed stderr file")
+				assert.Equal(t, tt.stderr, string(stderrContent), "streamed stderr content should match")
 			} else {
 				assert.Empty(t, result.StderrPath, "should not stream small stderr")
 				assert.Equal(t, tt.stderr, result.Stderr)
