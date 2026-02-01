@@ -2,15 +2,28 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // This file contains thread-safe mock implementations of domain port interfaces.
 // All mocks use sync.Mutex or sync.RWMutex for concurrent access protection.
+
+// Compile-time interface compliance verification.
+var (
+	_ ports.WorkflowRepository  = (*MockWorkflowRepository)(nil)
+	_ ports.StateStore          = (*MockStateStore)(nil)
+	_ ports.CommandExecutor     = (*MockCommandExecutor)(nil)
+	_ ports.Logger              = (*MockLogger)(nil)
+	_ ports.HistoryStore        = (*MockHistoryStore)(nil)
+	_ ports.ExpressionValidator = (*MockExpressionValidator)(nil)
+	_ ports.PluginManager       = (*MockPluginManager)(nil)
+)
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
 // It uses sync.RWMutex to protect concurrent access to the workflows map.
@@ -614,4 +627,216 @@ func (m *MockExpressionValidator) Clear() {
 	defer m.mu.Unlock()
 	m.compileErr = nil
 	m.compileFunc = nil
+}
+
+// =============================================================================
+// MockPluginManager - T007 (C037)
+// =============================================================================
+
+// MockPluginManager is a thread-safe mock implementation of ports.PluginManager.
+// It uses sync.RWMutex to protect concurrent access to the plugins map.
+// This mock consolidates duplicate implementations from plugin_test.go and plugin_service_test.go.
+//
+// Usage:
+//
+//	mgr := testutil.NewMockPluginManager()
+//	mgr.AddPlugin("test-plugin", plugin.StatusRunning)
+//	info, found := mgr.Get("test-plugin")
+type MockPluginManager struct {
+	mu            sync.RWMutex
+	plugins       map[string]*plugin.PluginInfo
+	discoverFunc  func(ctx context.Context) ([]*plugin.PluginInfo, error)
+	loadFunc      func(ctx context.Context, name string) error
+	initFunc      func(ctx context.Context, name string, config map[string]any) error
+	shutdownFunc  func(ctx context.Context, name string) error
+	shutdownError error
+}
+
+// NewMockPluginManager creates a new thread-safe mock plugin manager.
+func NewMockPluginManager() *MockPluginManager {
+	return &MockPluginManager{
+		plugins: make(map[string]*plugin.PluginInfo),
+	}
+}
+
+// Discover finds plugins in the plugins directory.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.discoverFunc != nil {
+		return m.discoverFunc(ctx)
+	}
+
+	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
+	for _, p := range m.plugins {
+		result = append(result, p)
+	}
+	return result, nil
+}
+
+// Load loads a plugin by name.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Load(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.loadFunc != nil {
+		return m.loadFunc(ctx, name)
+	}
+
+	if _, ok := m.plugins[name]; !ok {
+		return errors.New("plugin not found")
+	}
+	m.plugins[name].Status = plugin.StatusLoaded
+	return nil
+}
+
+// Init initializes a loaded plugin.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Init(ctx context.Context, name string, config map[string]any) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.initFunc != nil {
+		return m.initFunc(ctx, name, config)
+	}
+
+	if _, ok := m.plugins[name]; !ok {
+		return errors.New("plugin not found")
+	}
+	m.plugins[name].Status = plugin.StatusRunning
+	return nil
+}
+
+// Shutdown stops a running plugin.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Shutdown(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.shutdownFunc != nil {
+		return m.shutdownFunc(ctx, name)
+	}
+
+	if info, ok := m.plugins[name]; ok {
+		info.Status = plugin.StatusStopped
+	}
+	return nil
+}
+
+// ShutdownAll stops all running plugins.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) ShutdownAll(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.shutdownError != nil {
+		return m.shutdownError
+	}
+
+	for _, info := range m.plugins {
+		if info.Status == plugin.StatusRunning {
+			info.Status = plugin.StatusStopped
+		}
+	}
+	return nil
+}
+
+// Get returns plugin info by name.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	info, ok := m.plugins[name]
+	return info, ok
+}
+
+// List returns all known plugins.
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) List() []*plugin.PluginInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
+	for _, p := range m.plugins {
+		result = append(result, p)
+	}
+	return result
+}
+
+// AddPlugin adds or updates a plugin in the manager (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) AddPlugin(name string, status plugin.PluginStatus) *plugin.PluginInfo {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	info := &plugin.PluginInfo{
+		Manifest: &plugin.Manifest{
+			Name:        name,
+			Version:     "1.0.0",
+			AWFVersion:  ">=0.4.0",
+			Description: "Test plugin",
+		},
+		Status: status,
+		Path:   "/test/plugins/" + name,
+	}
+	m.plugins[name] = info
+	return info
+}
+
+// SetDiscoverFunc configures a custom function for Discover calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) SetDiscoverFunc(fn func(ctx context.Context) ([]*plugin.PluginInfo, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.discoverFunc = fn
+}
+
+// SetLoadFunc configures a custom function for Load calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) SetLoadFunc(fn func(ctx context.Context, name string) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.loadFunc = fn
+}
+
+// SetInitFunc configures a custom function for Init calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) SetInitFunc(fn func(ctx context.Context, name string, config map[string]any) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.initFunc = fn
+}
+
+// SetShutdownFunc configures a custom function for Shutdown calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) SetShutdownFunc(fn func(ctx context.Context, name string) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.shutdownFunc = fn
+}
+
+// SetShutdownError configures an error to be returned by ShutdownAll (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) SetShutdownError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.shutdownError = err
+}
+
+// Clear removes all plugins and resets configuration (test helper).
+// Thread-safe for concurrent access.
+func (m *MockPluginManager) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.plugins = make(map[string]*plugin.PluginInfo)
+	m.discoverFunc = nil
+	m.loadFunc = nil
+	m.initFunc = nil
+	m.shutdownFunc = nil
+	m.shutdownError = nil
 }

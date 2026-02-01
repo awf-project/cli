@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // ErrRPCNotImplemented indicates a stub method that needs implementation.
@@ -287,18 +288,11 @@ func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var shutdownErrors []error
-
-	for name, info := range m.plugins {
+	for _, info := range m.plugins {
 		if info.Status == plugin.StatusRunning || info.Status == plugin.StatusInitialized {
 			// For now, just transition the state
 			info.Status = plugin.StatusStopped
 		}
-		_ = name // silence unused warning for future error collection
-	}
-
-	if len(shutdownErrors) > 0 {
-		return errors.Join(shutdownErrors...)
 	}
 
 	return nil
@@ -325,12 +319,4 @@ func (m *RPCPluginManager) List() []*plugin.PluginInfo {
 }
 
 // compile-time check that RPCPluginManager implements PluginManager
-var _ interface {
-	Discover(ctx context.Context) ([]*plugin.PluginInfo, error)
-	Load(ctx context.Context, name string) error
-	Init(ctx context.Context, name string, config map[string]any) error
-	Shutdown(ctx context.Context, name string) error
-	ShutdownAll(ctx context.Context) error
-	Get(name string) (*plugin.PluginInfo, bool)
-	List() []*plugin.PluginInfo
-} = (*RPCPluginManager)(nil)
+var _ ports.PluginManager = (*RPCPluginManager)(nil)

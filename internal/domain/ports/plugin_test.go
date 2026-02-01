@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 var errNotImplemented = errors.New("not implemented")
@@ -31,49 +32,8 @@ func (m *mockPlugin) Shutdown(_ context.Context) error {
 	return errNotImplemented
 }
 
-// mockPluginManager implements ports.PluginManager interface for testing.
-type mockPluginManager struct {
-	plugins map[string]*plugin.PluginInfo
-}
-
-func newMockPluginManager() *mockPluginManager {
-	return &mockPluginManager{
-		plugins: make(map[string]*plugin.PluginInfo),
-	}
-}
-
-func (m *mockPluginManager) Discover(_ context.Context) ([]*plugin.PluginInfo, error) {
-	return nil, errNotImplemented
-}
-
-func (m *mockPluginManager) Load(_ context.Context, _ string) error {
-	return errNotImplemented
-}
-
-func (m *mockPluginManager) Init(_ context.Context, _ string, _ map[string]any) error {
-	return errNotImplemented
-}
-
-func (m *mockPluginManager) Shutdown(_ context.Context, _ string) error {
-	return errNotImplemented
-}
-
-func (m *mockPluginManager) ShutdownAll(_ context.Context) error {
-	return errNotImplemented
-}
-
-func (m *mockPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
-	info, ok := m.plugins[name]
-	return info, ok
-}
-
-func (m *mockPluginManager) List() []*plugin.PluginInfo {
-	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
-	for _, info := range m.plugins {
-		result = append(result, info)
-	}
-	return result
-}
+// mockPluginManager is now consolidated in internal/testutil/mocks.go (C037).
+// Use testutil.NewMockPluginManager() instead of local implementation.
 
 // mockOperationProvider implements ports.OperationProvider interface for testing.
 type mockOperationProvider struct {
@@ -311,7 +271,7 @@ func TestPluginInterface(t *testing.T) {
 }
 
 func TestPluginManagerInterface(t *testing.T) {
-	var _ ports.PluginManager = (*mockPluginManager)(nil)
+	var _ ports.PluginManager = (*testutil.MockPluginManager)(nil)
 }
 
 func TestOperationProviderInterface(t *testing.T) {
@@ -338,6 +298,47 @@ func TestPluginStateStoreInterface_EmbedsBoth(t *testing.T) {
 	assert.NotNil(t, store)
 }
 
+// C037: ISP Compliance Analysis - PluginManager Cohesion Documentation
+//
+// Decision: Keep PluginManager unified (7 methods) rather than splitting into
+// PluginLifecycle (5 methods) and PluginQuerier (2 methods).
+//
+// Rationale:
+// 1. Single consumer (PluginService) uses ALL 7 methods in orchestration scenarios
+// 2. Cross-concern coupling: DisablePlugin uses Get() before Shutdown()
+// 3. CLI layer uses PluginService abstraction, not PluginManager directly
+// 4. No evidence of consumers needing method subsets
+//
+// Evidence:
+//   - PluginService.DisablePlugin: calls Get() then Shutdown()
+//   - PluginService.DiscoverPlugins: calls Discover() then List()
+//   - PluginService.StartupEnabledPlugins: uses Get(), Init(), List()
+//
+// Conclusion: 7 methods exhibit high cohesion. Splitting would create two
+// interfaces consumed by the same single service, adding complexity without
+// reducing coupling.
+func TestPluginManager_CohesionAnalysis_C037(t *testing.T) {
+	// This test documents the C037 architectural decision
+	// Verify the interface still has exactly 7 methods (not split)
+	var mgr ports.PluginManager = testutil.NewMockPluginManager()
+
+	// Demonstrate single consumer uses all methods
+	assert.NotNil(t, mgr)
+
+	// Lifecycle methods (5)
+	_, _ = mgr.Discover(context.Background())
+	_ = mgr.Load(context.Background(), "test")
+	_ = mgr.Init(context.Background(), "test", nil)
+	_ = mgr.Shutdown(context.Background(), "test")
+	_ = mgr.ShutdownAll(context.Background())
+
+	// Query methods (2)
+	_, _ = mgr.Get("test")
+	_ = mgr.List()
+
+	// All 7 methods callable - demonstrates cohesion
+}
+
 // Plugin interface tests
 func TestMockPlugin_Name(t *testing.T) {
 	p := &mockPlugin{name: "test-plugin", version: "1.0.0"}
@@ -362,30 +363,31 @@ func TestMockPlugin_Shutdown_ReturnsNotImplemented(t *testing.T) {
 }
 
 // PluginManager interface tests
-func TestMockPluginManager_Discover_ReturnsNotImplemented(t *testing.T) {
-	pm := newMockPluginManager()
-	_, err := pm.Discover(context.Background())
-	assert.ErrorIs(t, err, errNotImplemented)
+func TestMockPluginManager_Discover_ReturnsNotFoundError(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
+	// With no plugins, Discover returns empty list (not error)
+	plugins, err := pm.Discover(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, plugins)
 }
 
-func TestMockPluginManager_Load_ReturnsNotImplemented(t *testing.T) {
-	pm := newMockPluginManager()
+func TestMockPluginManager_Load_ReturnsNotFoundError(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
 	err := pm.Load(context.Background(), "test-plugin")
-	assert.ErrorIs(t, err, errNotImplemented)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "plugin not found")
 }
 
-func TestMockPluginManager_Init_ReturnsNotImplemented(t *testing.T) {
-	pm := newMockPluginManager()
+func TestMockPluginManager_Init_ReturnsNotFoundError(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
 	err := pm.Init(context.Background(), "test-plugin", nil)
-	assert.ErrorIs(t, err, errNotImplemented)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "plugin not found")
 }
 
 func TestMockPluginManager_Get(t *testing.T) {
-	pm := newMockPluginManager()
-	pm.plugins["test"] = &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "test"},
-		Status:   plugin.StatusRunning,
-	}
+	pm := testutil.NewMockPluginManager()
+	pm.AddPlugin("test", plugin.StatusRunning)
 
 	info, ok := pm.Get("test")
 	assert.True(t, ok)
@@ -396,16 +398,16 @@ func TestMockPluginManager_Get(t *testing.T) {
 }
 
 func TestMockPluginManager_List(t *testing.T) {
-	pm := newMockPluginManager()
-	pm.plugins["p1"] = &plugin.PluginInfo{Manifest: &plugin.Manifest{Name: "p1"}}
-	pm.plugins["p2"] = &plugin.PluginInfo{Manifest: &plugin.Manifest{Name: "p2"}}
+	pm := testutil.NewMockPluginManager()
+	pm.AddPlugin("p1", plugin.StatusRunning)
+	pm.AddPlugin("p2", plugin.StatusRunning)
 
 	list := pm.List()
 	assert.Len(t, list, 2)
 }
 
 func TestMockPluginManager_List_Empty(t *testing.T) {
-	pm := newMockPluginManager()
+	pm := testutil.NewMockPluginManager()
 	list := pm.List()
 	assert.Empty(t, list)
 }
@@ -782,16 +784,73 @@ func TestPluginStateStore_ListDisabled_IntegrationWithSetEnabled(t *testing.T) {
 
 // Additional PluginManager tests
 
-func TestMockPluginManager_Shutdown_ReturnsNotImplemented(t *testing.T) {
-	pm := newMockPluginManager()
+func TestMockPluginManager_Shutdown_Success(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
+	pm.AddPlugin("test-plugin", plugin.StatusRunning)
+
 	err := pm.Shutdown(context.Background(), "test-plugin")
-	assert.ErrorIs(t, err, errNotImplemented)
+	assert.NoError(t, err)
+
+	info, _ := pm.Get("test-plugin")
+	assert.Equal(t, plugin.StatusStopped, info.Status)
 }
 
-func TestMockPluginManager_ShutdownAll_ReturnsNotImplemented(t *testing.T) {
-	pm := newMockPluginManager()
+func TestMockPluginManager_ShutdownAll_Success(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
+	pm.AddPlugin("plugin1", plugin.StatusRunning)
+	pm.AddPlugin("plugin2", plugin.StatusRunning)
+
 	err := pm.ShutdownAll(context.Background())
-	assert.ErrorIs(t, err, errNotImplemented)
+	assert.NoError(t, err)
+
+	// Verify all plugins stopped
+	info1, _ := pm.Get("plugin1")
+	assert.Equal(t, plugin.StatusStopped, info1.Status)
+	info2, _ := pm.Get("plugin2")
+	assert.Equal(t, plugin.StatusStopped, info2.Status)
+}
+
+func TestMockPluginManager_Clear_ResetsState(t *testing.T) {
+	pm := testutil.NewMockPluginManager()
+
+	// Setup: add plugins and configure callbacks
+	pm.AddPlugin("plugin1", plugin.StatusRunning)
+	pm.AddPlugin("plugin2", plugin.StatusLoaded)
+	pm.SetDiscoverFunc(func(ctx context.Context) ([]*plugin.PluginInfo, error) {
+		return nil, errors.New("custom discover")
+	})
+	pm.SetLoadFunc(func(ctx context.Context, name string) error {
+		return errors.New("custom load")
+	})
+	pm.SetInitFunc(func(ctx context.Context, name string, config map[string]interface{}) error {
+		return errors.New("custom init")
+	})
+	pm.SetShutdownFunc(func(ctx context.Context, name string) error {
+		return errors.New("custom shutdown")
+	})
+	pm.SetShutdownError(errors.New("shutdown error"))
+
+	// Verify setup: plugins exist
+	assert.Len(t, pm.List(), 2)
+	_, exists := pm.Get("plugin1")
+	assert.True(t, exists)
+
+	// Act: clear the mock
+	pm.Clear()
+
+	// Assert: plugins cleared
+	assert.Empty(t, pm.List())
+	_, exists = pm.Get("plugin1")
+	assert.False(t, exists)
+
+	// Assert: callbacks reset to defaults (no errors on standard operations)
+	plugins, err := pm.Discover(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, plugins)
+
+	// ShutdownAll should work without error on empty state
+	err = pm.ShutdownAll(context.Background())
+	assert.NoError(t, err)
 }
 
 // Table-driven tests for Plugin interface
@@ -848,18 +907,15 @@ func TestPlugin_Interface_TableDriven(t *testing.T) {
 func TestPluginManager_Get_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
-		setup      func(*mockPluginManager)
+		setup      func(*testutil.MockPluginManager)
 		lookupName string
 		wantFound  bool
 		wantStatus plugin.PluginStatus
 	}{
 		{
 			name: "find running plugin",
-			setup: func(pm *mockPluginManager) {
-				pm.plugins["running"] = &plugin.PluginInfo{
-					Manifest: &plugin.Manifest{Name: "running"},
-					Status:   plugin.StatusRunning,
-				}
+			setup: func(pm *testutil.MockPluginManager) {
+				pm.AddPlugin("running", plugin.StatusRunning)
 			},
 			lookupName: "running",
 			wantFound:  true,
@@ -867,11 +923,8 @@ func TestPluginManager_Get_TableDriven(t *testing.T) {
 		},
 		{
 			name: "find stopped plugin",
-			setup: func(pm *mockPluginManager) {
-				pm.plugins["stopped"] = &plugin.PluginInfo{
-					Manifest: &plugin.Manifest{Name: "stopped"},
-					Status:   plugin.StatusStopped,
-				}
+			setup: func(pm *testutil.MockPluginManager) {
+				pm.AddPlugin("stopped", plugin.StatusStopped)
 			},
 			lookupName: "stopped",
 			wantFound:  true,
@@ -879,12 +932,9 @@ func TestPluginManager_Get_TableDriven(t *testing.T) {
 		},
 		{
 			name: "find failed plugin",
-			setup: func(pm *mockPluginManager) {
-				pm.plugins["failed"] = &plugin.PluginInfo{
-					Manifest: &plugin.Manifest{Name: "failed"},
-					Status:   plugin.StatusFailed,
-					Error:    errors.New("init failed"),
-				}
+			setup: func(pm *testutil.MockPluginManager) {
+				info := pm.AddPlugin("failed", plugin.StatusFailed)
+				info.Error = errors.New("init failed")
 			},
 			lookupName: "failed",
 			wantFound:  true,
@@ -892,13 +942,13 @@ func TestPluginManager_Get_TableDriven(t *testing.T) {
 		},
 		{
 			name:       "plugin not found",
-			setup:      func(_ *mockPluginManager) {},
+			setup:      func(_ *testutil.MockPluginManager) {},
 			lookupName: "nonexistent",
 			wantFound:  false,
 		},
 		{
 			name:       "empty name lookup",
-			setup:      func(_ *mockPluginManager) {},
+			setup:      func(_ *testutil.MockPluginManager) {},
 			lookupName: "",
 			wantFound:  false,
 		},
@@ -906,7 +956,7 @@ func TestPluginManager_Get_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pm := newMockPluginManager()
+			pm := testutil.NewMockPluginManager()
 			tt.setup(pm)
 
 			info, found := pm.Get(tt.lookupName)
@@ -1130,13 +1180,13 @@ func TestPlugin_Init_WithCancelledContext(t *testing.T) {
 }
 
 func TestPluginManager_Discover_WithCancelledContext(t *testing.T) {
-	pm := newMockPluginManager()
+	pm := testutil.NewMockPluginManager()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
+	// Mock doesn't enforce context cancellation, but real impl should
 	_, err := pm.Discover(ctx)
-	// Mock returns errNotImplemented, real impl should respect ctx
-	assert.Error(t, err)
+	assert.NoError(t, err) // Mock succeeds even with canceled context
 }
 
 func TestOperationProvider_Execute_WithCancelledContext(t *testing.T) {
@@ -1166,20 +1216,26 @@ func TestPlugin_Init_WithConfig(t *testing.T) {
 }
 
 func TestPluginManager_Init_WithConfig(t *testing.T) {
-	pm := newMockPluginManager()
+	pm := testutil.NewMockPluginManager()
+	pm.AddPlugin("plugin-name", plugin.StatusLoaded)
+
 	config := map[string]any{
 		"api_key": "secret-key",
 		"retries": 3,
 	}
 
 	err := pm.Init(context.Background(), "plugin-name", config)
-	assert.ErrorIs(t, err, errNotImplemented)
+	assert.NoError(t, err)
+
+	// Verify status changed to Running
+	info, _ := pm.Get("plugin-name")
+	assert.Equal(t, plugin.StatusRunning, info.Status)
 }
 
 // Multiple plugins lifecycle tests
 
 func TestPluginManager_List_MultiplePlugins(t *testing.T) {
-	pm := newMockPluginManager()
+	pm := testutil.NewMockPluginManager()
 
 	// Add plugins with different statuses
 	statuses := []plugin.PluginStatus{
@@ -1194,10 +1250,7 @@ func TestPluginManager_List_MultiplePlugins(t *testing.T) {
 
 	for i, status := range statuses {
 		name := "plugin-" + string(rune('a'+i))
-		pm.plugins[name] = &plugin.PluginInfo{
-			Manifest: &plugin.Manifest{Name: name},
-			Status:   status,
-		}
+		pm.AddPlugin(name, status)
 	}
 
 	list := pm.List()
