@@ -67,6 +67,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables future consumers to depend on narrower contracts for improved testability
   - Added compile-time verification tests for both new interfaces
 
+- **C037**: PluginManager Interface ISP Compliance Review
+  - Architectural decision: Keep PluginManager interface unified (7 methods)
+  - Analysis confirmed high cohesion - single consumer (PluginService) uses all methods
+  - Cross-concern coupling: DisablePlugin uses Get() before Shutdown()
+  - Added cohesion analysis documentation test in `internal/domain/ports/plugin_test.go`
+  - Removed duplicate mockPluginManager implementations (consolidated to single source)
+  - Fixed unused `shutdownErrors` variable in `RPCPluginManager.ShutdownAll`
+  - Standardized compile-time interface check to 1-line pattern (was 9 lines)
+  - Impact: -88 LOC of duplicate/dead code, +50 LOC documentation
+  - Reference: ADR-001 (keep unified), ADR-002 (cohesion analysis pattern)
+
 - **C031** Implemented plugin manifest validation to replace ErrNotImplemented stub
   - Replaced `Manifest.Validate()` stub with comprehensive field validation logic
   - Name validation: enforces `^[a-z][a-z0-9-]*$` pattern (lowercase, starts with letter, alphanumeric + hyphens)

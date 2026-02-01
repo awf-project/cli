@@ -12,6 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // =============================================================================
@@ -31,8 +32,8 @@ import (
 
 func TestPluginService_OptionA_WorksWithCompositeInterface(t *testing.T) {
 	// Arrange: Create service with composite PluginStateStore
-	manager := newMockPluginManager()
-	manager.addPlugin("test-plugin", plugin.StatusDiscovered)
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
@@ -103,7 +104,7 @@ func TestPluginService_OptionB_CanUseSeparateStoreInterface(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	// Act: Create service (still using composite for now)
@@ -137,7 +138,7 @@ func TestPluginService_OptionB_CanUseSeparateConfigInterface(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	// Act: Create service (still using composite for now)
@@ -174,8 +175,8 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := newMockPluginManager()
-	manager.addPlugin("test-plugin", plugin.StatusRunning)
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	logger := newMockPluginLogger()
 
@@ -195,8 +196,8 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 	// - PluginConfig.IsEnabled (to filter)
 	config.SetEnabled(context.Background(), "enabled-plugin", true)
 	config.SetEnabled(context.Background(), "disabled-plugin", false)
-	manager.addPlugin("enabled-plugin", plugin.StatusDiscovered)
-	manager.addPlugin("disabled-plugin", plugin.StatusDiscovered)
+	manager.AddPlugin("enabled-plugin", plugin.StatusDiscovered)
+	manager.AddPlugin("disabled-plugin", plugin.StatusDiscovered)
 
 	plugins, err := svc.DiscoverPlugins(context.Background())
 	require.NoError(t, err)
@@ -211,7 +212,7 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 
 func TestPluginService_OptionA_NilCompositeInterface(t *testing.T) {
 	// Service should handle nil stateStore gracefully
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, nil, logger)
@@ -245,7 +246,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -280,7 +281,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 
 func TestPluginService_OptionA_ErrorPropagation(t *testing.T) {
 	// Errors from the composite interface should propagate correctly
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -339,9 +340,9 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// Keep current implementation using PluginStateStore composite interface
 
 	// Arrange: Full setup with all components
-	manager := newMockPluginManager()
-	manager.addPlugin("plugin-a", plugin.StatusDiscovered)
-	manager.addPlugin("plugin-b", plugin.StatusDiscovered)
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
+	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
@@ -402,7 +403,7 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestPluginService_T007_EmptyPluginName(t *testing.T) {
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -420,7 +421,7 @@ func TestPluginService_T007_EmptyPluginName(t *testing.T) {
 }
 
 func TestPluginService_T007_NonExistentPlugin(t *testing.T) {
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -438,7 +439,7 @@ func TestPluginService_T007_NonExistentPlugin(t *testing.T) {
 }
 
 func TestPluginService_T007_ContextCancellation(t *testing.T) {
-	manager := newMockPluginManager()
+	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
