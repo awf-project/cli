@@ -10,7 +10,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // Component: execution_service_integration
@@ -55,12 +55,12 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 		WithWorkflow("conv-test", wf).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(
 		&mockLogger{},
@@ -118,12 +118,12 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 		WithWorkflow("conv-input-test", wf).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -181,12 +181,12 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -233,18 +233,23 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this"] = &workflow.AgentResult{
-		Provider: "claude",
-		Output:   "Summary complete",
-		Tokens:   100,
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this" {
+			return &workflow.AgentResult{
+				Provider: "claude",
+				Output:   "Summary complete",
+				Tokens:   100,
+			}, nil
+		}
+		return &workflow.AgentResult{Provider: "claude", Output: "", Tokens: 0}, nil
+	})
 	_ = registry.Register(claude)
 
 	// ConversationManager configured but should NOT be called for single mode
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -292,17 +297,22 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Execute this task"] = &workflow.AgentResult{
-		Provider: "claude",
-		Output:   "Task executed",
-		Tokens:   80,
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Execute this task" {
+			return &workflow.AgentResult{
+				Provider: "claude",
+				Output:   "Task executed",
+				Tokens:   80,
+			}, nil
+		}
+		return &workflow.AgentResult{Provider: "claude", Output: "", Tokens: 0}, nil
+	})
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -354,12 +364,12 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 		WithWorkflow("minimal-conv", wf).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -406,8 +416,8 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -465,12 +475,12 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -523,12 +533,12 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 
@@ -604,12 +614,12 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockConversationProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	tokenizer := newMockTokenizer()
-	mockRegistry := newMockAgentRegistry()
+	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
 

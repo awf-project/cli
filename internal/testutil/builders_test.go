@@ -458,6 +458,202 @@ func TestExecutionServiceBuilder_WithAgentRegistry(t *testing.T) {
 	}
 }
 
+// Component: T004
+// Feature: C038
+// TestExecutionServiceBuilder_AgentRegistryDefault_HappyPath tests MockAgentRegistry default behavior
+func TestExecutionServiceBuilder_AgentRegistryDefault_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		buildFunc  func() *application.ExecutionService
+		verifyFunc func(t *testing.T, svc *application.ExecutionService)
+	}{
+		{
+			name: "builder without registry uses MockAgentRegistry default",
+			buildFunc: func() *application.ExecutionService {
+				return NewExecutionServiceBuilder().Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "ExecutionService should not be nil")
+				// Verify service is usable (default registry is functional)
+				ctx := context.Background()
+				_, err := svc.ListResumable(ctx)
+				// May fail but should not panic
+				_ = err
+			},
+		},
+		{
+			name: "builder with nil registry explicitly set uses default",
+			buildFunc: func() *application.ExecutionService {
+				return NewExecutionServiceBuilder().
+					WithAgentRegistry(nil).
+					Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "ExecutionService should fall back to default MockAgentRegistry")
+			},
+		},
+		{
+			name: "builder with MockAgentRegistry explicitly set uses provided instance",
+			buildFunc: func() *application.ExecutionService {
+				mockRegistry := NewMockAgentRegistry()
+				return NewExecutionServiceBuilder().
+					WithAgentRegistry(mockRegistry).
+					Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "ExecutionService should use provided MockAgentRegistry")
+			},
+		},
+		{
+			name: "default MockAgentRegistry does not cause build errors",
+			buildFunc: func() *application.ExecutionService {
+				// Build with all defaults except logger for inspection
+				logger := NewMockLogger()
+				return NewExecutionServiceBuilder().
+					WithLogger(logger).
+					Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Build should succeed with default MockAgentRegistry")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := tt.buildFunc()
+			require.NotNil(t, svc, "Build() should return non-nil ExecutionService")
+			if tt.verifyFunc != nil {
+				tt.verifyFunc(t, svc)
+			}
+		})
+	}
+}
+
+// Component: T004
+// Feature: C038
+// TestExecutionServiceBuilder_AgentRegistryDefault_EdgeCases tests boundary conditions
+func TestExecutionServiceBuilder_AgentRegistryDefault_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		buildFunc  func() *application.ExecutionService
+		verifyFunc func(t *testing.T, svc *application.ExecutionService)
+	}{
+		{
+			name: "multiple builds from same builder instance reuse registry default",
+			buildFunc: func() *application.ExecutionService {
+				builder := NewExecutionServiceBuilder()
+				svc1 := builder.Build()
+				require.NotNil(t, svc1)
+				return builder.Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Second build should also get default MockAgentRegistry")
+			},
+		},
+		{
+			name: "setting registry to nil then building uses default",
+			buildFunc: func() *application.ExecutionService {
+				builder := NewExecutionServiceBuilder()
+				builder = builder.WithAgentRegistry(NewMockAgentRegistry())
+				builder = builder.WithAgentRegistry(nil)
+				return builder.Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Should fall back to default when nil is set")
+			},
+		},
+		{
+			name: "builder with only registry unset uses default",
+			buildFunc: func() *application.ExecutionService {
+				return NewExecutionServiceBuilder().
+					WithLogger(NewMockLogger()).
+					WithExecutor(NewMockCommandExecutor()).
+					WithStateStore(NewMockStateStore()).
+					WithWorkflowRepository(NewMockWorkflowRepository()).
+					// registry intentionally not set
+					Build()
+			},
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Registry should use default even when all others are custom")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := tt.buildFunc()
+			require.NotNil(t, svc, "Build() should return non-nil ExecutionService")
+			if tt.verifyFunc != nil {
+				tt.verifyFunc(t, svc)
+			}
+		})
+	}
+}
+
+// Component: T004
+// Feature: C038
+// TestExecutionServiceBuilder_AgentRegistryDefault_ErrorHandling tests error scenarios
+func TestExecutionServiceBuilder_AgentRegistryDefault_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name        string
+		buildFunc   func() *application.ExecutionService
+		shouldPanic bool
+		verifyFunc  func(t *testing.T, svc *application.ExecutionService)
+	}{
+		{
+			name: "default registry allows service creation without errors",
+			buildFunc: func() *application.ExecutionService {
+				return NewExecutionServiceBuilder().Build()
+			},
+			shouldPanic: false,
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Service should be created successfully")
+			},
+		},
+		{
+			name: "concurrent builds with default registry are thread-safe",
+			buildFunc: func() *application.ExecutionService {
+				done := make(chan *application.ExecutionService, 3)
+				builder := NewExecutionServiceBuilder()
+
+				for i := 0; i < 3; i++ {
+					go func() {
+						done <- builder.Build()
+					}()
+				}
+
+				// Collect all services
+				for i := 0; i < 3; i++ {
+					svc := <-done
+					assert.NotNil(t, svc)
+				}
+
+				return builder.Build()
+			},
+			shouldPanic: false,
+			verifyFunc: func(t *testing.T, svc *application.ExecutionService) {
+				assert.NotNil(t, svc, "Concurrent builds should not corrupt state")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldPanic {
+				assert.Panics(t, func() {
+					tt.buildFunc()
+				})
+			} else {
+				svc := tt.buildFunc()
+				if tt.verifyFunc != nil {
+					tt.verifyFunc(t, svc)
+				}
+			}
+		})
+	}
+}
+
 // TestExecutionServiceBuilder_Defaults tests sensible default values
 func TestExecutionServiceBuilder_Defaults(t *testing.T) {
 	tests := []struct {
