@@ -23,6 +23,8 @@ var (
 	_ ports.HistoryStore        = (*MockHistoryStore)(nil)
 	_ ports.ExpressionValidator = (*MockExpressionValidator)(nil)
 	_ ports.PluginManager       = (*MockPluginManager)(nil)
+	_ ports.AgentRegistry       = (*MockAgentRegistry)(nil)
+	_ ports.AgentProvider       = (*MockAgentProvider)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -839,4 +841,226 @@ func (m *MockPluginManager) Clear() {
 	m.initFunc = nil
 	m.shutdownFunc = nil
 	m.shutdownError = nil
+}
+
+// =============================================================================
+// MockAgentRegistry - T001 (C038)
+// =============================================================================
+
+// MockAgentRegistry is a thread-safe mock implementation of ports.AgentRegistry.
+// It uses sync.RWMutex to protect concurrent access to the providers map.
+//
+// Usage:
+//
+//	registry := testutil.NewMockAgentRegistry()
+//	provider := testutil.NewMockAgentProvider("test-agent")
+//	registry.Register(provider)
+//	p, err := registry.Get("test-agent")
+type MockAgentRegistry struct {
+	mu        sync.RWMutex
+	providers map[string]ports.AgentProvider
+}
+
+// NewMockAgentRegistry creates a new thread-safe mock agent registry.
+func NewMockAgentRegistry() *MockAgentRegistry {
+	return &MockAgentRegistry{
+		providers: make(map[string]ports.AgentProvider),
+	}
+}
+
+// Register adds a provider to the registry.
+// Thread-safe for concurrent access.
+// Returns error if a provider with the same name already exists.
+func (m *MockAgentRegistry) Register(provider ports.AgentProvider) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	name := provider.Name()
+	if _, exists := m.providers[name]; exists {
+		return errors.New("provider already registered: " + name)
+	}
+
+	m.providers[name] = provider
+	return nil
+}
+
+// Get retrieves a provider by name.
+// Thread-safe for concurrent access.
+// Returns error if provider is not found.
+func (m *MockAgentRegistry) Get(name string) (ports.AgentProvider, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	provider, ok := m.providers[name]
+	if !ok {
+		return nil, errors.New("provider not found: " + name)
+	}
+
+	return provider, nil
+}
+
+// List returns all registered provider names.
+// Thread-safe for concurrent access.
+func (m *MockAgentRegistry) List() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	names := make([]string, 0, len(m.providers))
+	for name := range m.providers {
+		names = append(names, name)
+	}
+
+	return names
+}
+
+// Has checks if a provider with the given name is registered.
+// Thread-safe for concurrent access.
+func (m *MockAgentRegistry) Has(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, ok := m.providers[name]
+	return ok
+}
+
+// Clear removes all providers from the registry (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAgentRegistry) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.providers = make(map[string]ports.AgentProvider)
+}
+
+// =============================================================================
+// MockAgentProvider - T002 (C038)
+// =============================================================================
+
+// MockAgentProvider is a thread-safe mock implementation of ports.AgentProvider.
+// It uses sync.RWMutex to protect concurrent access to the mock state and
+// callback functions.
+//
+// Usage:
+//
+//	provider := testutil.NewMockAgentProvider("test-agent")
+//	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+//		return &workflow.AgentResult{
+//			Provider: "test-agent",
+//			Output:   "mock response",
+//			Tokens:   100,
+//		}, nil
+//	})
+//	result, err := provider.Execute(ctx, "test prompt", nil)
+type MockAgentProvider struct {
+	mu               sync.RWMutex
+	name             string
+	executeFunc      func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
+	conversationFunc func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	validateFunc     func() error
+}
+
+// NewMockAgentProvider creates a new thread-safe mock agent provider with the given name.
+func NewMockAgentProvider(name string) *MockAgentProvider {
+	return &MockAgentProvider{
+		name: name,
+	}
+}
+
+// Execute invokes the agent with the given prompt and options.
+// Thread-safe for concurrent access.
+// Returns a stub result if no executeFunc is configured.
+func (m *MockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, prompt, options)
+	}
+
+	// Default stub behavior
+	return &workflow.AgentResult{
+		Provider: m.name,
+		Output:   "",
+		Tokens:   0,
+	}, nil
+}
+
+// ExecuteConversation invokes the agent with conversation history for multi-turn interactions.
+// Thread-safe for concurrent access.
+// Returns a stub result if no conversationFunc is configured.
+func (m *MockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.conversationFunc != nil {
+		return m.conversationFunc(ctx, state, prompt, options)
+	}
+
+	// Default stub behavior
+	return &workflow.ConversationResult{
+		Provider: m.name,
+		State:    state,
+		Output:   "",
+	}, nil
+}
+
+// Name returns the provider identifier.
+// Thread-safe for concurrent access.
+func (m *MockAgentProvider) Name() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.name
+}
+
+// Validate checks if the provider is properly configured and available.
+// Thread-safe for concurrent access.
+// Returns nil if no validateFunc is configured.
+func (m *MockAgentProvider) Validate() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.validateFunc != nil {
+		return m.validateFunc()
+	}
+
+	return nil
+}
+
+// SetExecuteFunc sets the callback function for Execute method (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAgentProvider) SetExecuteFunc(f func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.executeFunc = f
+}
+
+// SetConversationFunc sets the callback function for ExecuteConversation method (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAgentProvider) SetConversationFunc(f func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.conversationFunc = f
+}
+
+// SetValidateFunc sets the callback function for Validate method (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAgentProvider) SetValidateFunc(f func() error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.validateFunc = f
+}
+
+// Clear resets all callback functions (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAgentProvider) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.executeFunc = nil
+	m.conversationFunc = nil
+	m.validateFunc = nil
 }

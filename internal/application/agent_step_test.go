@@ -11,61 +11,11 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // Component: execution_service
 // Feature: 39 - Agent Step Type
-
-// mockAgentProvider implements ports.AgentProvider for testing.
-type mockAgentProvider struct {
-	name       string
-	results    map[string]*workflow.AgentResult
-	execError  error
-	validateOK bool
-}
-
-func newMockAgentProvider(name string) *mockAgentProvider {
-	return &mockAgentProvider{
-		name:       name,
-		results:    make(map[string]*workflow.AgentResult),
-		validateOK: true,
-	}
-}
-
-func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
-	if m.execError != nil {
-		return nil, m.execError
-	}
-	if result, ok := m.results[prompt]; ok {
-		return result, nil
-	}
-	// Default successful result
-	return &workflow.AgentResult{
-		Provider:    m.name,
-		Output:      "Agent response",
-		Response:    map[string]any{},
-		Tokens:      100,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}, nil
-}
-
-func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockAgentProvider) Name() string {
-	return m.name
-}
-
-func (m *mockAgentProvider) Validate() error {
-	if !m.validateOK {
-		return errors.New("provider validation failed")
-	}
-	return nil
-}
 
 // ============================================================================
 // RED PHASE TESTS - Error Handling and Validation
@@ -136,8 +86,8 @@ func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -183,7 +133,7 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 	// Don't register the provider
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -239,17 +189,28 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Summary: This is a summary of the text",
-		Response:    map[string]any{"summary": "This is a summary"},
-		Tokens:      150,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Summary: This is a summary of the text",
+				Response:    map[string]any{"summary": "This is a summary"},
+				Tokens:      150,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -307,17 +268,28 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "",
-		Response:    nil,
-		Tokens:      0,
-		Error:       errors.New("API rate limit exceeded"),
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "",
+				Response:    nil,
+				Tokens:      0,
+				Error:       errors.New("API rate limit exceeded"),
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -379,17 +351,28 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["echo 'preparing data'"] = &ports.CommandResult{Stdout: "preparing data\n", ExitCode: 0}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Analyze the prepared data"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Analysis complete: Data looks good",
-		Response:    map[string]any{"status": "ok"},
-		Tokens:      75,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Analyze the prepared data" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Analysis complete: Data looks good",
+				Response:    map[string]any{"status": "ok"},
+				Tokens:      75,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
@@ -455,17 +438,28 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Summary",
-		Response:    map[string]any{},
-		Tokens:      50,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Summary",
+				Response:    map[string]any{},
+				Tokens:      50,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -514,17 +508,28 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Summary",
-		Response:    map[string]any{},
-		Tokens:      50,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Summary",
+				Response:    map[string]any{},
+				Tokens:      50,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -576,9 +581,11 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.execError = context.Canceled
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		return nil, context.Canceled
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -647,30 +654,52 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
-	claude := newMockAgentProvider("claude")
-	claude.results["Analyze sentiment"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Sentiment: Positive",
-		Response:    map[string]any{"sentiment": "positive"},
-		Tokens:      25,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Analyze sentiment" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Sentiment: Positive",
+				Response:    map[string]any{"sentiment": "positive"},
+				Tokens:      25,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
-	gemini := newMockAgentProvider("gemini")
-	gemini.results["Extract keywords"] = &workflow.AgentResult{
-		Provider:    "gemini",
-		Output:      "Keywords: AI, ML, Data",
-		Response:    map[string]any{"keywords": []string{"AI", "ML", "Data"}},
-		Tokens:      30,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	gemini := testutil.NewMockAgentProvider("gemini")
+	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Extract keywords" {
+			return &workflow.AgentResult{
+				Provider:    "gemini",
+				Output:      "Keywords: AI, ML, Data",
+				Response:    map[string]any{"keywords": []string{"AI", "ML", "Data"}},
+				Tokens:      30,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "gemini",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(gemini)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -735,18 +764,29 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	// Note: mock resolver doesn't interpolate, so prompt stays as-is
-	claude.results["Explain {{inputs.topic}} in simple terms"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Explanation of the topic",
-		Response:    map[string]any{},
-		Tokens:      100,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Explain {{inputs.topic}} in simple terms" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Explanation of the topic",
+				Response:    map[string]any{},
+				Tokens:      100,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -807,30 +847,52 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
-	claude := newMockAgentProvider("claude")
-	claude.results["Analyze this code"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Code analysis: Good structure",
-		Response:    map[string]any{"quality": "good"},
-		Tokens:      150,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Analyze this code" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Code analysis: Good structure",
+				Response:    map[string]any{"quality": "good"},
+				Tokens:      150,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
-	gemini := newMockAgentProvider("gemini")
-	gemini.results["Review the analysis"] = &workflow.AgentResult{
-		Provider:    "gemini",
-		Output:      "Review: Analysis is accurate",
-		Response:    map[string]any{"accuracy": "high"},
-		Tokens:      80,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	gemini := testutil.NewMockAgentProvider("gemini")
+	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Review the analysis" {
+			return &workflow.AgentResult{
+				Provider:    "gemini",
+				Output:      "Review: Analysis is accurate",
+				Response:    map[string]any{"accuracy": "high"},
+				Tokens:      80,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "gemini",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(gemini)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -886,8 +948,8 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 		nil,
 	)
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	// Should not panic
@@ -968,17 +1030,28 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 	execCtx.Status = workflow.StatusRunning
 	stateStore.states["test-id"] = execCtx
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Summary: Brief summary",
-		Response:    map[string]any{"summary": "Brief summary"},
-		Tokens:      50,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Summary: Brief summary",
+				Response:    map[string]any{"summary": "Brief summary"},
+				Tokens:      50,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{})
@@ -1030,17 +1103,28 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "",
-		Response:    nil,
-		Tokens:      0,
-		Error:       errors.New("API error"),
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "",
+				Response:    nil,
+				Tokens:      0,
+				Error:       errors.New("API error"),
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return &workflow.AgentResult{
+			Provider:    "claude",
+			Output:      "Agent response",
+			Tokens:      100,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		}, nil
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
@@ -1154,9 +1238,9 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 			)
 
 			if tt.setupRegistry {
-				registry := agents.NewAgentRegistry()
+				registry := testutil.NewMockAgentRegistry()
 				if tt.addProvider {
-					provider := newMockAgentProvider(tt.provider)
+					provider := testutil.NewMockAgentProvider(tt.provider)
 					_ = registry.Register(provider)
 				}
 				execSvc.SetAgentRegistry(registry)
@@ -1206,9 +1290,11 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 		},
 	}
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.execError = errors.New("network connection failed")
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		return nil, errors.New("network connection failed")
+	})
 	_ = registry.Register(claude)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})

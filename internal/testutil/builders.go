@@ -125,9 +125,13 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 		repository = NewMockWorkflowRepository()
 	}
 
-	// Note: registry and stdout/stderr are stored in builder for future extensibility
+	registry := b.registry
+	if registry == nil {
+		registry = NewMockAgentRegistry()
+	}
+
+	// Note: stdout/stderr are stored in builder for future extensibility
 	// but not currently used by ExecutionService constructor
-	_ = b.registry
 	_ = b.stdout
 	_ = b.stderr
 
@@ -145,7 +149,7 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 	historySvc := application.NewHistoryService(historyStore, logger)
 
 	// Create ExecutionService
-	return application.NewExecutionService(
+	svc := application.NewExecutionService(
 		workflowSvc,
 		executor,
 		parallelExecutor,
@@ -154,6 +158,11 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 		resolver,
 		historySvc,
 	)
+
+	// Configure agent registry (C038: Use MockAgentRegistry as default)
+	svc.SetAgentRegistry(registry)
+
+	return svc
 }
 
 // WorkflowBuilder provides a fluent API for constructing Workflow instances

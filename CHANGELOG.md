@@ -67,6 +67,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables future consumers to depend on narrower contracts for improved testability
   - Added compile-time verification tests for both new interfaces
 
+- **C038**: Fix Application Test Layer Purity
+  - Eliminated infrastructure layer imports from application test files to enforce hexagonal architecture
+  - Created centralized `MockAgentRegistry` and `MockAgentProvider` in `internal/testutil/mocks.go`
+  - Both mocks implement thread-safe patterns (sync.RWMutex) matching C037 standards
+  - Migrated 4 test files to use centralized mocks: `conversation_manager_test.go`, `agent_step_test.go`, `execution_service_conversation_test.go`, `execution_service_hooks_test.go`
+  - Removed all local mock implementations (mockAgentProvider, mockAgentRegistry wrappers)
+  - Application layer tests now depend only on domain ports interfaces, not concrete infrastructure
+  - All tests pass with race detector (`make test-race`)
+  - Impact: +220 LOC centralized mocks, -170 LOC duplicate local mocks, net +50 LOC
+  - Reference: ADR-001 (separate mocks), ADR-002 (builder already interface-typed), ADR-003 (delete local mocks)
+
 - **C037**: PluginManager Interface ISP Compliance Review
   - Architectural decision: Keep PluginManager interface unified (7 methods)
   - Analysis confirmed high cohesion - single consumer (PluginService) uses all methods

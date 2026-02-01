@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
+	"github.com/vanoix/awf/internal/testutil"
 )
 
 // =============================================================================
@@ -65,17 +65,22 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 		}).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Summarize this text"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Summary: This is the summary",
-		Response:    map[string]any{"summary": "This is the summary"},
-		Tokens:      75,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Summarize this text" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Summary: This is the summary",
+				Response:    map[string]any{"summary": "This is the summary"},
+				Tokens:      75,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return nil, errors.New("unexpected prompt: " + prompt)
+	})
 	_ = registry.Register(claude)
 
 	execSvc.SetAgentRegistry(registry)
@@ -142,17 +147,22 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 		}).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Analyze the data"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "Analysis: Data is valid",
-		Response:    map[string]any{"status": "valid"},
-		Tokens:      50,
-		Error:       nil,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Analyze the data" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "Analysis: Data is valid",
+				Response:    map[string]any{"status": "valid"},
+				Tokens:      50,
+				Error:       nil,
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return nil, errors.New("unexpected prompt: " + prompt)
+	})
 	_ = registry.Register(claude)
 
 	execSvc.SetAgentRegistry(registry)
@@ -224,17 +234,22 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 		}).
 		Build()
 
-	registry := agents.NewAgentRegistry()
-	claude := newMockAgentProvider("claude")
-	claude.results["Process the input"] = &workflow.AgentResult{
-		Provider:    "claude",
-		Output:      "",
-		Response:    nil,
-		Tokens:      0,
-		Error:       errors.New("API rate limit exceeded"),
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+		if prompt == "Process the input" {
+			return &workflow.AgentResult{
+				Provider:    "claude",
+				Output:      "",
+				Response:    nil,
+				Tokens:      0,
+				Error:       errors.New("API rate limit exceeded"),
+				StartedAt:   time.Now(),
+				CompletedAt: time.Now(),
+			}, nil
+		}
+		return nil, errors.New("unexpected prompt: " + prompt)
+	})
 	_ = registry.Register(claude)
 
 	execSvc.SetAgentRegistry(registry)

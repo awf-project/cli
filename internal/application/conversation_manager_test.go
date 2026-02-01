@@ -3,15 +3,13 @@ package application_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
+	"github.com/vanoix/awf/internal/testutil"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -69,41 +67,6 @@ func (m *mockTokenizer) ModelName() string {
 	return m.modelName
 }
 
-// mockAgentRegistry wraps agents.AgentRegistry for testing
-type mockAgentRegistry struct {
-	registry *agents.AgentRegistry
-}
-
-func newMockAgentRegistry() *mockAgentRegistry {
-	return &mockAgentRegistry{
-		registry: agents.NewAgentRegistry(),
-	}
-}
-
-func (m *mockAgentRegistry) Register(provider ports.AgentProvider) error {
-	if err := m.registry.Register(provider); err != nil {
-		return fmt.Errorf("register provider: %w", err)
-	}
-	return nil
-}
-
-func (m *mockAgentRegistry) Get(name string) (ports.AgentProvider, error) {
-	provider, err := m.registry.Get(name)
-	if err != nil {
-		return nil, fmt.Errorf("get provider %s: %w", name, err)
-	}
-	return provider, nil
-}
-
-func (m *mockAgentRegistry) List() []string {
-	return m.registry.List()
-}
-
-func (m *mockAgentRegistry) Has(name string) bool {
-	_, err := m.registry.Get(name)
-	return err == nil
-}
-
 // mockConversationProvider implements ports.AgentProvider with conversation support
 type mockConversationProvider struct {
 	name          string
@@ -155,10 +118,10 @@ func TestNewConversationManager(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -175,10 +138,10 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -221,10 +184,10 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -267,10 +230,10 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -315,10 +278,10 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 	evaluator.results[`response contains "DONE"`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -359,10 +322,10 @@ func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 	evaluator.results[`turn_count >= 3`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -406,10 +369,10 @@ func TestConversationManager_MaxTurns_Reached(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -448,10 +411,10 @@ func TestConversationManager_MaxTurns_One(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -495,10 +458,10 @@ func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	tokenizer.counts["Very long response"] = 3000
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -541,10 +504,10 @@ func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -583,10 +546,10 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -630,10 +593,10 @@ func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 	resolver := newConfigurableMockResolver()
 	resolver.results["Explain {{inputs.topic}}"] = "Explain quantum computing"
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -676,10 +639,10 @@ func TestConversationManager_Interpolation_States(t *testing.T) {
 	resolver := newConfigurableMockResolver()
 	resolver.results["Review: {{states.analyze.output}}"] = "Review: Data is clean"
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -735,10 +698,10 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 	// Don't register any providers
 
@@ -783,10 +746,10 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	provider := newMockConversationProvider("claude")
@@ -834,10 +797,10 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	tokenizer.err = errors.New("tokenizer service unavailable")
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -881,10 +844,10 @@ func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 	resolver := newConfigurableMockResolver()
 	resolver.err = errors.New("undefined variable: missing_var")
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -929,10 +892,10 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 	evaluator.err = errors.New("syntax error in expression")
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -976,10 +939,10 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -1026,10 +989,10 @@ func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -1067,10 +1030,10 @@ func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -1113,10 +1076,10 @@ func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := newMockAgentRegistry()
+	registry := testutil.NewMockAgentRegistry()
 
 	// GREEN PHASE: Register mock provider
-	mockProvider := agents.NewMockProvider("claude")
+	mockProvider := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
