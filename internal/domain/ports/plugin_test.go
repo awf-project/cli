@@ -12,6 +12,9 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 
+// Component: T004
+// Feature: C036
+
 // mockPlugin implements ports.Plugin interface for testing.
 type mockPlugin struct {
 	name    string
@@ -135,6 +138,173 @@ func (m *mockPluginRegistry) Operations() []*plugin.OperationSchema {
 	return result
 }
 
+// mockPluginStore implements ports.PluginStore interface for testing (ISP refactor - persistence only).
+type mockPluginStore struct {
+	states map[string]*plugin.PluginState
+}
+
+func newMockPluginStore() *mockPluginStore {
+	return &mockPluginStore{
+		states: make(map[string]*plugin.PluginState),
+	}
+}
+
+func (m *mockPluginStore) Save(_ context.Context) error {
+	return nil // Mock: always succeeds
+}
+
+func (m *mockPluginStore) Load(_ context.Context) error {
+	return nil // Mock: always succeeds
+}
+
+func (m *mockPluginStore) GetState(name string) *plugin.PluginState {
+	state, ok := m.states[name]
+	if !ok {
+		return nil
+	}
+	return state
+}
+
+func (m *mockPluginStore) ListDisabled() []string {
+	var disabled []string
+	for name, state := range m.states {
+		if !state.Enabled {
+			disabled = append(disabled, name)
+		}
+	}
+	return disabled
+}
+
+// mockPluginConfig implements ports.PluginConfig interface for testing (ISP refactor - configuration only).
+type mockPluginConfig struct {
+	states map[string]*plugin.PluginState
+}
+
+func newMockPluginConfig() *mockPluginConfig {
+	return &mockPluginConfig{
+		states: make(map[string]*plugin.PluginState),
+	}
+}
+
+func (m *mockPluginConfig) SetEnabled(_ context.Context, name string, enabled bool) error {
+	if _, ok := m.states[name]; !ok {
+		m.states[name] = &plugin.PluginState{
+			Enabled: enabled,
+			Config:  make(map[string]any),
+		}
+	} else {
+		m.states[name].Enabled = enabled
+	}
+	return nil
+}
+
+func (m *mockPluginConfig) IsEnabled(name string) bool {
+	state, ok := m.states[name]
+	if !ok {
+		return true // Default: enabled
+	}
+	return state.Enabled
+}
+
+func (m *mockPluginConfig) GetConfig(name string) map[string]any {
+	state, ok := m.states[name]
+	if !ok {
+		return nil
+	}
+	return state.Config
+}
+
+func (m *mockPluginConfig) SetConfig(_ context.Context, name string, config map[string]any) error {
+	if _, ok := m.states[name]; !ok {
+		m.states[name] = &plugin.PluginState{
+			Enabled: true, // Default
+			Config:  config,
+		}
+	} else {
+		m.states[name].Config = config
+	}
+	return nil
+}
+
+// mockPluginStateStore implements ports.PluginStateStore (combined interface) for testing.
+type mockPluginStateStore struct {
+	states map[string]*plugin.PluginState
+}
+
+func newMockPluginStateStore() *mockPluginStateStore {
+	return &mockPluginStateStore{
+		states: make(map[string]*plugin.PluginState),
+	}
+}
+
+// PluginStore methods
+func (m *mockPluginStateStore) Save(_ context.Context) error {
+	return nil
+}
+
+func (m *mockPluginStateStore) Load(_ context.Context) error {
+	return nil
+}
+
+func (m *mockPluginStateStore) GetState(name string) *plugin.PluginState {
+	state, ok := m.states[name]
+	if !ok {
+		return nil
+	}
+	return state
+}
+
+func (m *mockPluginStateStore) ListDisabled() []string {
+	var disabled []string
+	for name, state := range m.states {
+		if !state.Enabled {
+			disabled = append(disabled, name)
+		}
+	}
+	return disabled
+}
+
+// PluginConfig methods
+func (m *mockPluginStateStore) SetEnabled(_ context.Context, name string, enabled bool) error {
+	if _, ok := m.states[name]; !ok {
+		m.states[name] = &plugin.PluginState{
+			Enabled: enabled,
+			Config:  make(map[string]any),
+		}
+	} else {
+		m.states[name].Enabled = enabled
+	}
+	return nil
+}
+
+func (m *mockPluginStateStore) IsEnabled(name string) bool {
+	state, ok := m.states[name]
+	if !ok {
+		return true
+	}
+	return state.Enabled
+}
+
+func (m *mockPluginStateStore) GetConfig(name string) map[string]any {
+	state, ok := m.states[name]
+	if !ok {
+		return nil
+	}
+	return state.Config
+}
+
+func (m *mockPluginStateStore) SetConfig(_ context.Context, name string, config map[string]any) error {
+	if _, ok := m.states[name]; !ok {
+		m.states[name] = &plugin.PluginState{
+			Enabled: true,
+			Config:  config,
+		}
+	} else {
+		m.states[name].Config = config
+	}
+	return nil
+}
+
 // Interface compliance tests
 func TestPluginInterface(t *testing.T) {
 	var _ ports.Plugin = (*mockPlugin)(nil)
@@ -150,6 +320,22 @@ func TestOperationProviderInterface(t *testing.T) {
 
 func TestPluginRegistryInterface(t *testing.T) {
 	var _ ports.PluginRegistry = (*mockPluginRegistry)(nil)
+}
+
+// ISP Refactor (C036): Interface compliance tests for split interfaces
+func TestPluginStoreInterface(t *testing.T) {
+	var _ ports.PluginStore = (*mockPluginStore)(nil)
+}
+
+func TestPluginConfigInterface(t *testing.T) {
+	var _ ports.PluginConfig = (*mockPluginConfig)(nil)
+}
+
+func TestPluginStateStoreInterface_EmbedsBoth(t *testing.T) {
+	var _ ports.PluginStateStore = (*mockPluginStateStore)(nil)
+	// Verify backward compatibility: combined interface can be used
+	var store ports.PluginStateStore = newMockPluginStateStore()
+	assert.NotNil(t, store)
 }
 
 // Plugin interface tests
@@ -300,6 +486,298 @@ func TestMockPluginRegistry_Operations(t *testing.T) {
 
 	ops := reg.Operations()
 	assert.Len(t, ops, 2)
+}
+
+// ISP Refactor (C036): PluginStore interface tests (persistence concern)
+
+func TestPluginStore_HappyPath(t *testing.T) {
+	store := newMockPluginStore()
+	ctx := context.Background()
+
+	// Save and Load should succeed
+	err := store.Save(ctx)
+	assert.NoError(t, err)
+
+	err = store.Load(ctx)
+	assert.NoError(t, err)
+}
+
+func TestPluginStore_GetState_Found(t *testing.T) {
+	store := newMockPluginStore()
+	store.states["plugin-a"] = &plugin.PluginState{
+		Enabled: true,
+		Config:  map[string]any{"key": "value"},
+	}
+
+	state := store.GetState("plugin-a")
+	assert.NotNil(t, state)
+	assert.True(t, state.Enabled)
+	assert.Equal(t, "value", state.Config["key"])
+}
+
+func TestPluginStore_GetState_NotFound(t *testing.T) {
+	store := newMockPluginStore()
+
+	state := store.GetState("nonexistent")
+	assert.Nil(t, state)
+}
+
+func TestPluginStore_GetState_EmptyName(t *testing.T) {
+	store := newMockPluginStore()
+
+	state := store.GetState("")
+	assert.Nil(t, state)
+}
+
+func TestPluginStore_ListDisabled_MultiplePlugins(t *testing.T) {
+	store := newMockPluginStore()
+	store.states["enabled-plugin"] = &plugin.PluginState{
+		Enabled: true,
+	}
+	store.states["disabled-plugin-1"] = &plugin.PluginState{
+		Enabled: false,
+	}
+	store.states["disabled-plugin-2"] = &plugin.PluginState{
+		Enabled: false,
+	}
+
+	disabled := store.ListDisabled()
+	assert.Len(t, disabled, 2)
+	assert.Contains(t, disabled, "disabled-plugin-1")
+	assert.Contains(t, disabled, "disabled-plugin-2")
+}
+
+func TestPluginStore_ListDisabled_AllEnabled(t *testing.T) {
+	store := newMockPluginStore()
+	store.states["plugin-1"] = &plugin.PluginState{
+		Enabled: true,
+	}
+
+	disabled := store.ListDisabled()
+	assert.Empty(t, disabled)
+}
+
+func TestPluginStore_ListDisabled_Empty(t *testing.T) {
+	store := newMockPluginStore()
+
+	disabled := store.ListDisabled()
+	assert.Empty(t, disabled)
+}
+
+// ISP Refactor (C036): PluginConfig interface tests (configuration concern)
+
+func TestPluginConfig_HappyPath(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	// Enable plugin
+	err := config.SetEnabled(ctx, "plugin-a", false)
+	assert.NoError(t, err)
+
+	// Verify enabled state
+	assert.False(t, config.IsEnabled("plugin-a"))
+
+	// Set config
+	err = config.SetConfig(ctx, "plugin-a", map[string]any{"timeout": 30})
+	assert.NoError(t, err)
+
+	// Verify config
+	pluginConfig := config.GetConfig("plugin-a")
+	assert.Equal(t, 30, pluginConfig["timeout"])
+}
+
+func TestPluginConfig_SetEnabled_NewPlugin(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	err := config.SetEnabled(ctx, "new-plugin", false)
+	assert.NoError(t, err)
+	assert.False(t, config.IsEnabled("new-plugin"))
+}
+
+func TestPluginConfig_SetEnabled_ExistingPlugin(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	// Initially disable
+	_ = config.SetEnabled(ctx, "plugin", false)
+	assert.False(t, config.IsEnabled("plugin"))
+
+	// Re-enable
+	err := config.SetEnabled(ctx, "plugin", true)
+	assert.NoError(t, err)
+	assert.True(t, config.IsEnabled("plugin"))
+}
+
+func TestPluginConfig_SetEnabled_EmptyName(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	err := config.SetEnabled(ctx, "", false)
+	assert.NoError(t, err) // Mock allows it
+}
+
+func TestPluginConfig_IsEnabled_NonexistentPlugin_DefaultsToTrue(t *testing.T) {
+	config := newMockPluginConfig()
+
+	// Non-existent plugins are enabled by default
+	assert.True(t, config.IsEnabled("nonexistent"))
+}
+
+func TestPluginConfig_IsEnabled_EmptyName_DefaultsToTrue(t *testing.T) {
+	config := newMockPluginConfig()
+
+	assert.True(t, config.IsEnabled(""))
+}
+
+func TestPluginConfig_GetConfig_Found(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	expectedConfig := map[string]any{
+		"webhook_url": "https://example.com/hook",
+		"channel":     "#general",
+		"timeout":     30,
+	}
+
+	_ = config.SetConfig(ctx, "plugin", expectedConfig)
+
+	actualConfig := config.GetConfig("plugin")
+	assert.Equal(t, expectedConfig, actualConfig)
+}
+
+func TestPluginConfig_GetConfig_NotFound(t *testing.T) {
+	config := newMockPluginConfig()
+
+	pluginConfig := config.GetConfig("nonexistent")
+	assert.Nil(t, pluginConfig)
+}
+
+func TestPluginConfig_GetConfig_EmptyName(t *testing.T) {
+	config := newMockPluginConfig()
+
+	pluginConfig := config.GetConfig("")
+	assert.Nil(t, pluginConfig)
+}
+
+func TestPluginConfig_SetConfig_NewPlugin(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	newConfig := map[string]any{"api_key": "secret"}
+	err := config.SetConfig(ctx, "new-plugin", newConfig)
+	assert.NoError(t, err)
+
+	actualConfig := config.GetConfig("new-plugin")
+	assert.Equal(t, newConfig, actualConfig)
+}
+
+func TestPluginConfig_SetConfig_ExistingPlugin(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	// Initial config
+	_ = config.SetConfig(ctx, "plugin", map[string]any{"version": "1"})
+
+	// Update config
+	newConfig := map[string]any{"version": "2", "enabled": true}
+	err := config.SetConfig(ctx, "plugin", newConfig)
+	assert.NoError(t, err)
+
+	actualConfig := config.GetConfig("plugin")
+	assert.Equal(t, "2", actualConfig["version"])
+	assert.True(t, actualConfig["enabled"].(bool))
+}
+
+func TestPluginConfig_SetConfig_NilConfig(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	err := config.SetConfig(ctx, "plugin", nil)
+	assert.NoError(t, err) // Mock allows nil config
+}
+
+func TestPluginConfig_SetConfig_EmptyConfig(t *testing.T) {
+	config := newMockPluginConfig()
+	ctx := context.Background()
+
+	err := config.SetConfig(ctx, "plugin", map[string]any{})
+	assert.NoError(t, err)
+
+	actualConfig := config.GetConfig("plugin")
+	assert.NotNil(t, actualConfig)
+	assert.Empty(t, actualConfig)
+}
+
+// ISP Refactor (C036): PluginStateStore combined interface tests (backward compatibility)
+
+func TestPluginStateStore_HappyPath_Persistence(t *testing.T) {
+	store := newMockPluginStateStore()
+	ctx := context.Background()
+
+	// Test persistence methods
+	err := store.Save(ctx)
+	assert.NoError(t, err)
+
+	err = store.Load(ctx)
+	assert.NoError(t, err)
+
+	// Set state and verify
+	_ = store.SetEnabled(ctx, "plugin", false)
+	state := store.GetState("plugin")
+	assert.NotNil(t, state)
+	assert.False(t, state.Enabled)
+}
+
+func TestPluginStateStore_HappyPath_Configuration(t *testing.T) {
+	store := newMockPluginStateStore()
+	ctx := context.Background()
+
+	// Test config methods
+	err := store.SetConfig(ctx, "plugin", map[string]any{"timeout": 60})
+	assert.NoError(t, err)
+
+	pluginConfig := store.GetConfig("plugin")
+	assert.Equal(t, 60, pluginConfig["timeout"])
+}
+
+func TestPluginStateStore_CombinedUsage(t *testing.T) {
+	store := newMockPluginStateStore()
+	ctx := context.Background()
+
+	// Use both persistence and config methods
+	_ = store.SetEnabled(ctx, "plugin-a", true)
+	_ = store.SetConfig(ctx, "plugin-a", map[string]any{"url": "https://api.example.com"})
+
+	// Save state
+	err := store.Save(ctx)
+	assert.NoError(t, err)
+
+	// Verify state
+	state := store.GetState("plugin-a")
+	assert.NotNil(t, state)
+	assert.True(t, state.Enabled)
+	assert.Equal(t, "https://api.example.com", state.Config["url"])
+
+	// Verify via config interface
+	assert.True(t, store.IsEnabled("plugin-a"))
+	assert.Equal(t, "https://api.example.com", store.GetConfig("plugin-a")["url"])
+}
+
+func TestPluginStateStore_ListDisabled_IntegrationWithSetEnabled(t *testing.T) {
+	store := newMockPluginStateStore()
+	ctx := context.Background()
+
+	// Disable multiple plugins
+	_ = store.SetEnabled(ctx, "plugin-1", false)
+	_ = store.SetEnabled(ctx, "plugin-2", false)
+	_ = store.SetEnabled(ctx, "plugin-3", true)
+
+	disabled := store.ListDisabled()
+	assert.Len(t, disabled, 2)
+	assert.Contains(t, disabled, "plugin-1")
+	assert.Contains(t, disabled, "plugin-2")
+	assert.NotContains(t, disabled, "plugin-3")
 }
 
 // Additional PluginManager tests

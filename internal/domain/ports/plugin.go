@@ -67,12 +67,20 @@ type PluginLoader interface {
 	ValidatePlugin(info *plugin.PluginInfo) error
 }
 
-// PluginStateStore persists plugin enabled/disabled state and configuration.
-type PluginStateStore interface {
+// PluginStore handles plugin state persistence.
+type PluginStore interface {
 	// Save persists all plugin states to storage.
 	Save(ctx context.Context) error
 	// Load reads plugin states from storage.
 	Load(ctx context.Context) error
+	// GetState returns the full state for a plugin, or nil if not found.
+	GetState(name string) *plugin.PluginState
+	// ListDisabled returns names of all explicitly disabled plugins.
+	ListDisabled() []string
+}
+
+// PluginConfig manages plugin configuration and enabled state.
+type PluginConfig interface {
 	// SetEnabled enables or disables a plugin by name.
 	SetEnabled(ctx context.Context, name string, enabled bool) error
 	// IsEnabled returns whether a plugin is enabled.
@@ -81,8 +89,11 @@ type PluginStateStore interface {
 	GetConfig(name string) map[string]any
 	// SetConfig stores configuration for a plugin.
 	SetConfig(ctx context.Context, name string, config map[string]any) error
-	// GetState returns the full state for a plugin, or nil if not found.
-	GetState(name string) *plugin.PluginState
-	// ListDisabled returns names of all explicitly disabled plugins.
-	ListDisabled() []string
+}
+
+// PluginStateStore combines persistence and configuration interfaces.
+// Maintains backward compatibility while enabling consumers to use narrower interfaces.
+type PluginStateStore interface {
+	PluginStore
+	PluginConfig
 }

@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,10 +12,6 @@ import (
 
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
-
-// ErrStateStoreNotImplemented indicates a stub method that needs implementation.
-// Kept for backwards compatibility with tests checking for stub behavior.
-var ErrStateStoreNotImplemented = errors.New("state_store: not implemented")
 
 const pluginsFileName = "plugins.json"
 

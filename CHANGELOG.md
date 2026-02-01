@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C036**: Split PluginStateStore interface to fix ISP violation
+  - Created `PluginStore` interface for persistence operations (Save, Load, GetState, ListDisabled)
+  - Created `PluginConfig` interface for configuration management (SetEnabled, IsEnabled, GetConfig, SetConfig)
+  - Maintained backward compatibility via interface embedding in `PluginStateStore`
+  - No breaking changes to existing consumer code in application, infrastructure, or CLI layers
+  - Enables future consumers to depend on narrower contracts for improved testability
+  - Added compile-time verification tests for both new interfaces
+
 - **C031** Implemented plugin manifest validation to replace ErrNotImplemented stub
   - Replaced `Manifest.Validate()` stub with comprehensive field validation logic
   - Name validation: enforces `^[a-z][a-z0-9-]*$` pattern (lowercase, starts with letter, alphanumeric + hyphens)

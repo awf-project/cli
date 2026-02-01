@@ -10,9 +10,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 )
 
-// ErrPluginServiceNotImplemented indicates a stub method that needs implementation.
-var ErrPluginServiceNotImplemented = errors.New("plugin_service: not implemented")
-
 // ErrPluginDisabled indicates the plugin is disabled and cannot be loaded.
 var ErrPluginDisabled = errors.New("plugin is disabled")
 
