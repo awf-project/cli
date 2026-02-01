@@ -16,8 +16,16 @@ import (
 
 // --- Interface compliance tests ---
 
-func TestJSONPluginStateStore_ImplementsInterface(t *testing.T) {
+func TestJSONPluginStateStore_ImplementsPluginStateStore(t *testing.T) {
 	var _ ports.PluginStateStore = (*JSONPluginStateStore)(nil)
+}
+
+func TestJSONPluginStateStore_ImplementsPluginStore(t *testing.T) {
+	var _ ports.PluginStore = (*JSONPluginStateStore)(nil)
+}
+
+func TestJSONPluginStateStore_ImplementsPluginConfig(t *testing.T) {
+	var _ ports.PluginConfig = (*JSONPluginStateStore)(nil)
 }
 
 // --- Constructor tests ---

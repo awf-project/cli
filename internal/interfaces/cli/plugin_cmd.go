@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -11,9 +10,6 @@ import (
 	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
-
-// ErrPluginCLINotImplemented indicates a stub method that needs implementation.
-var ErrPluginCLINotImplemented = errors.New("plugin CLI: not implemented")
 
 func newPluginCommand(cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{

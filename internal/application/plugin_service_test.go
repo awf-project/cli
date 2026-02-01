@@ -112,24 +112,23 @@ func (m *mockPluginManager) addPlugin(name string, status plugin.PluginStatus) *
 	return info
 }
 
-// mockPluginStateStore implements ports.PluginStateStore for testing.
-type mockPluginStateStore struct {
-	mu            sync.RWMutex
-	states        map[string]*plugin.PluginState
-	saveFunc      func(ctx context.Context) error
-	loadFunc      func(ctx context.Context) error
-	setEnabledErr error
-	saveErr       error
-	loadErr       error
+// mockPluginStore implements ports.PluginStore for testing.
+type mockPluginStore struct {
+	mu       sync.RWMutex
+	states   map[string]*plugin.PluginState
+	saveFunc func(ctx context.Context) error
+	loadFunc func(ctx context.Context) error
+	saveErr  error
+	loadErr  error
 }
 
-func newMockPluginStateStore() *mockPluginStateStore {
-	return &mockPluginStateStore{
+func newMockPluginStore() *mockPluginStore {
+	return &mockPluginStore{
 		states: make(map[string]*plugin.PluginState),
 	}
 }
 
-func (m *mockPluginStateStore) Save(ctx context.Context) error {
+func (m *mockPluginStore) Save(ctx context.Context) error {
 	if m.saveFunc != nil {
 		return m.saveFunc(ctx)
 	}
@@ -139,7 +138,7 @@ func (m *mockPluginStateStore) Save(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockPluginStateStore) Load(ctx context.Context) error {
+func (m *mockPluginStore) Load(ctx context.Context) error {
 	if m.loadFunc != nil {
 		return m.loadFunc(ctx)
 	}
@@ -149,7 +148,38 @@ func (m *mockPluginStateStore) Load(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockPluginStateStore) SetEnabled(ctx context.Context, name string, enabled bool) error {
+func (m *mockPluginStore) GetState(name string) *plugin.PluginState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.states[name]
+}
+
+func (m *mockPluginStore) ListDisabled() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var disabled []string
+	for name, state := range m.states {
+		if !state.Enabled {
+			disabled = append(disabled, name)
+		}
+	}
+	return disabled
+}
+
+// mockPluginConfig implements ports.PluginConfig for testing.
+type mockPluginConfig struct {
+	mu            sync.RWMutex
+	states        map[string]*plugin.PluginState
+	setEnabledErr error
+}
+
+func newMockPluginConfig() *mockPluginConfig {
+	return &mockPluginConfig{
+		states: make(map[string]*plugin.PluginState),
+	}
+}
+
+func (m *mockPluginConfig) SetEnabled(ctx context.Context, name string, enabled bool) error {
 	if m.setEnabledErr != nil {
 		return m.setEnabledErr
 	}
@@ -164,7 +194,7 @@ func (m *mockPluginStateStore) SetEnabled(ctx context.Context, name string, enab
 	return nil
 }
 
-func (m *mockPluginStateStore) IsEnabled(name string) bool {
+func (m *mockPluginConfig) IsEnabled(name string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	state, ok := m.states[name]
@@ -174,7 +204,7 @@ func (m *mockPluginStateStore) IsEnabled(name string) bool {
 	return state.Enabled
 }
 
-func (m *mockPluginStateStore) GetConfig(name string) map[string]any {
+func (m *mockPluginConfig) GetConfig(name string) map[string]any {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	state, ok := m.states[name]
@@ -184,7 +214,7 @@ func (m *mockPluginStateStore) GetConfig(name string) map[string]any {
 	return state.Config
 }
 
-func (m *mockPluginStateStore) SetConfig(ctx context.Context, name string, config map[string]any) error {
+func (m *mockPluginConfig) SetConfig(ctx context.Context, name string, config map[string]any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	state, ok := m.states[name]
@@ -196,39 +226,38 @@ func (m *mockPluginStateStore) SetConfig(ctx context.Context, name string, confi
 	return nil
 }
 
-func (m *mockPluginStateStore) GetState(name string) *plugin.PluginState {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.states[name]
+// mockPluginStateStore combines both interfaces for backward compatibility.
+type mockPluginStateStore struct {
+	*mockPluginStore
+	*mockPluginConfig
 }
 
-func (m *mockPluginStateStore) ListDisabled() []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	var disabled []string
-	for name, state := range m.states {
-		if !state.Enabled {
-			disabled = append(disabled, name)
-		}
+func newMockPluginStateStore() *mockPluginStateStore {
+	store := newMockPluginStore()
+	config := newMockPluginConfig()
+	// Share the same states map between both mocks
+	config.states = store.states
+	return &mockPluginStateStore{
+		mockPluginStore:  store,
+		mockPluginConfig: config,
 	}
-	return disabled
 }
 
 func (m *mockPluginStateStore) setPluginEnabled(name string, enabled bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mockPluginStore.mu.Lock()
+	defer m.mockPluginStore.mu.Unlock()
 	state := plugin.NewPluginState()
 	state.Enabled = enabled
-	m.states[name] = state
+	m.mockPluginStore.states[name] = state
 }
 
 func (m *mockPluginStateStore) setPluginConfig(name string, config map[string]any) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	state, ok := m.states[name]
+	m.mockPluginStore.mu.Lock()
+	defer m.mockPluginStore.mu.Unlock()
+	state, ok := m.mockPluginStore.states[name]
 	if !ok {
 		state = plugin.NewPluginState()
-		m.states[name] = state
+		m.mockPluginStore.states[name] = state
 	}
 	state.Config = config
 }
