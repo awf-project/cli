@@ -88,24 +88,34 @@ func (m *retryCountingExecutor) Execute(ctx context.Context, cmd *ports.Command)
 	return &ports.CommandResult{ExitCode: 0, Stdout: "ok"}, nil
 }
 
-// conditionMockEvaluator implements ExpressionEvaluator for testing conditional expressions.
+// conditionMockEvaluator implements ports.ExpressionEvaluator for testing conditional expressions.
 // Returns configured evaluation results for testing conditional step logic.
 type conditionMockEvaluator struct {
 	evaluations map[string]bool
+	intResults  map[string]int
 }
 
 func newConditionMockEvaluator() *conditionMockEvaluator {
 	return &conditionMockEvaluator{
 		evaluations: make(map[string]bool),
+		intResults:  make(map[string]int),
 	}
 }
 
-func (m *conditionMockEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (m *conditionMockEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	if result, ok := m.evaluations[expr]; ok {
 		return result, nil
 	}
 	// Default to false for unknown expressions
 	return false, nil
+}
+
+func (m *conditionMockEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	if result, ok := m.intResults[expr]; ok {
+		return result, nil
+	}
+	// Default to 0 for unknown expressions
+	return 0, fmt.Errorf("no integer result configured for expression: %s", expr)
 }
 
 // MockOperationProvider implements ports.OperationProvider for testing operation resolution.

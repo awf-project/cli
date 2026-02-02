@@ -24,7 +24,7 @@ type InteractiveExecutor struct {
 	store            ports.StateStore
 	logger           ports.Logger
 	resolver         interpolation.Resolver
-	evaluator        ExpressionEvaluator
+	evaluator        ports.ExpressionEvaluator
 	hookExecutor     *HookExecutor
 	loopExecutor     *LoopExecutor
 	templateSvc      *TemplateService
@@ -42,7 +42,7 @@ func NewInteractiveExecutor(
 	store ports.StateStore,
 	logger ports.Logger,
 	resolver interpolation.Resolver,
-	evaluator ExpressionEvaluator,
+	evaluator ports.ExpressionEvaluator,
 	prompt ports.InteractivePrompt,
 ) *InteractiveExecutor {
 	return &InteractiveExecutor{
@@ -539,7 +539,7 @@ func (e *InteractiveExecutor) resolveNextStep(
 	// If transitions are defined, evaluate them first
 	if len(step.Transitions) > 0 && e.evaluator != nil {
 		evalFunc := func(expr string) (bool, error) {
-			return e.evaluator.Evaluate(expr, intCtx)
+			return e.evaluator.EvaluateBool(expr, intCtx)
 		}
 
 		nextStep, found, err := step.Transitions.EvaluateFirstMatch(evalFunc)

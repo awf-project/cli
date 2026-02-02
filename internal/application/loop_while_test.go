@@ -40,7 +40,7 @@ func TestLoopExecutor_ExecuteWhile_Simple(t *testing.T) {
 
 	// Condition returns true for first 3 iterations, then false
 	callCount := 0
-	evaluator.results["states.check.output != 'ready'"] = true
+	evaluator.boolResults["states.check.output != 'ready'"] = true
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -77,7 +77,7 @@ func TestLoopExecutor_ExecuteWhile_Simple(t *testing.T) {
 			callCount++
 			// After 3 calls, make condition false
 			if callCount >= 3 {
-				evaluator.results["states.check.output != 'ready'"] = false
+				evaluator.boolResults["states.check.output != 'ready'"] = false
 			}
 			return "", nil
 		},
@@ -97,7 +97,7 @@ func TestLoopExecutor_ExecuteWhile_MaxIterations(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Always return true
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -187,7 +187,7 @@ func TestLoopExecutor_ExecuteWhile_ConditionError(t *testing.T) {
 func TestLoopExecutor_ExecuteWhile_WithBreakCondition(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -221,7 +221,7 @@ func TestLoopExecutor_ExecuteWhile_WithBreakCondition(t *testing.T) {
 			callCount++
 			// After 2 iterations, trigger break
 			if callCount >= 2 {
-				evaluator.results["states.work.exit_code != 0"] = true
+				evaluator.boolResults["states.work.exit_code != 0"] = true
 			}
 			return "", nil
 		},
@@ -239,7 +239,7 @@ func TestLoopExecutor_ExecuteWhile_WithBreakCondition(t *testing.T) {
 func TestLoopExecutor_ExecuteWhile_StepError(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -290,7 +290,7 @@ func TestLoopExecutor_ExecuteWhile_StepError(t *testing.T) {
 func TestLoopExecutor_ExecuteWhile_LoopVariables(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -358,7 +358,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromInput(t *testing.T) 
 	// Test US1: while loop max_iterations from {{inputs.limit}}
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true // Condition always true (will hit max)
+	evaluator.boolResults["true"] = true // Condition always true (will hit max)
 	resolver := newConfigurableMockResolver()
 
 	// Configure resolver for max_iterations expression
@@ -412,7 +412,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromEnv(t *testing.T) {
 	// Test US1: while loop max_iterations from {{env.MAX_RETRIES}}
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{env.MAX_RETRIES}}"] = "5"
@@ -464,7 +464,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromStepOutput(t *testin
 	// Test US2: while loop max_iterations from {{states.count.output}}
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{states.setup.output}}"] = "4"
@@ -520,7 +520,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_Arithmetic(t *testing.T)
 	// Test US3: arithmetic expression in while loop max_iterations
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	// Expression resolves to "2 * 3" = 6
@@ -600,7 +600,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ConditionExitsEarly(t *t
 	callCount := 0
 
 	// Condition returns true for first 3 calls, then false
-	evaluator.results["states.check.output != 'done'"] = true
+	evaluator.boolResults["states.check.output != 'done'"] = true
 
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
@@ -610,7 +610,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ConditionExitsEarly(t *t
 		func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
 			callCount++
 			if callCount >= 3 {
-				evaluator.results["states.check.output != 'done'"] = false
+				evaluator.boolResults["states.check.output != 'done'"] = false
 			}
 			return "", nil
 		},
@@ -631,7 +631,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ResolverError(t *testing
 	// Test: resolver fails to resolve max_iterations expression
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	// Resolver returns error for undefined variable
@@ -679,7 +679,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_InvalidValue(t *testing.
 	// Test: resolved max_iterations is not a valid integer
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "not_a_number"
@@ -728,7 +728,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ZeroValue(t *testing.T) 
 	// Test: resolved max_iterations is zero (invalid, must be >= 1)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "0"
@@ -777,7 +777,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_NegativeValue(t *testing
 	// Test: resolved max_iterations is negative (invalid)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "-5"
@@ -826,7 +826,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ExceedsLimit(t *testing.
 	// Test: resolved max_iterations exceeds MaxAllowedIterations (10000)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "50000"
@@ -875,7 +875,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StaticStillWorks(t *test
 	// Test backward compatibility: static max_iterations still works for while loops
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -924,7 +924,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_BoundaryMin(t *testing.T
 	// Test boundary: max_iterations = 1 (minimum valid value)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "1"
@@ -1028,7 +1028,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WithBreakCondition(t *te
 	// Test: dynamic max_iterations combined with break condition
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true // While condition
+	evaluator.boolResults["true"] = true // While condition
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "10"
@@ -1064,7 +1064,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WithBreakCondition(t *te
 			callCount++
 			// Trigger break after 3 iterations
 			if callCount >= 3 {
-				evaluator.results["states.work.output == 'stop'"] = true
+				evaluator.boolResults["states.work.output == 'stop'"] = true
 			}
 			return "", nil
 		},
@@ -1085,7 +1085,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_WhitespaceInValue(t *tes
 	// Test: resolved value has whitespace (common with command output)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	// Simulates command output with trailing newline
@@ -1142,7 +1142,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_StepError(t *testing.T) 
 	// Test: step error during execution with dynamic max_iterations
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "10"
@@ -1198,7 +1198,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ContextCancellation(t *t
 	// Test: context cancellation with dynamic max_iterations
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "100"
@@ -1323,7 +1323,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_TableDriven(t *testing.T
 			logger := &mockLogger{}
 			evaluator := newMockExpressionEvaluator()
 			for k, v := range tt.conditionResults {
-				evaluator.results[k] = v
+				evaluator.boolResults[k] = v
 			}
 			resolver := newConfigurableMockResolver()
 

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expr-lang/expr"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -32,14 +31,14 @@ type loopExitState struct {
 // LoopExecutor executes for_each and while loop constructs.
 type LoopExecutor struct {
 	logger    ports.Logger
-	evaluator ExpressionEvaluator
+	evaluator ports.ExpressionEvaluator
 	resolver  interpolation.Resolver
 }
 
 // NewLoopExecutor creates a new LoopExecutor.
 func NewLoopExecutor(
 	logger ports.Logger,
-	evaluator ExpressionEvaluator,
+	evaluator ports.ExpressionEvaluator,
 	resolver interpolation.Resolver,
 ) *LoopExecutor {
 	return &LoopExecutor{
@@ -242,7 +241,7 @@ func (e *LoopExecutor) ExecuteForEach(
 		// Check break condition after iteration completes
 		if step.Loop.BreakCondition != "" && e.evaluator != nil {
 			intCtx = buildContext(execCtx)
-			shouldBreak, err := e.evaluator.Evaluate(step.Loop.BreakCondition, intCtx)
+			shouldBreak, err := e.evaluator.EvaluateBool(step.Loop.BreakCondition, intCtx)
 			if err != nil {
 				e.logger.Warn("break condition evaluation failed", "error", err)
 			} else if shouldBreak {
@@ -318,7 +317,7 @@ func (e *LoopExecutor) ExecuteWhile(
 		// Evaluate while condition
 		intCtx := buildContext(execCtx)
 
-		shouldContinue, err := e.evaluator.Evaluate(step.Loop.Condition, intCtx)
+		shouldContinue, err := e.evaluator.EvaluateBool(step.Loop.Condition, intCtx)
 		if err != nil {
 			// Pop context before returning on error
 			e.PopLoopContext(execCtx)
@@ -414,7 +413,7 @@ func (e *LoopExecutor) ExecuteWhile(
 		// Check break condition after iteration completes
 		if step.Loop.BreakCondition != "" && e.evaluator != nil {
 			intCtx = buildContext(execCtx)
-			shouldBreak, err := e.evaluator.Evaluate(step.Loop.BreakCondition, intCtx)
+			shouldBreak, err := e.evaluator.EvaluateBool(step.Loop.BreakCondition, intCtx)
 			if err != nil {
 				e.logger.Warn("break condition evaluation failed", "error", err)
 			} else if shouldBreak {
@@ -501,34 +500,19 @@ func (e *LoopExecutor) parseMaxIterationsValue(resolved string) (int, error) {
 }
 
 // evaluateArithmeticExpression evaluates a simple arithmetic expression
-// using the expr-lang/expr library.
+// by delegating to the injected ExpressionEvaluator port.
+// C042: Replaced direct expr-lang usage with port dependency injection.
 func (e *LoopExecutor) evaluateArithmeticExpression(exprStr string) (int, error) {
-	// Use expr-lang/expr for arithmetic evaluation
-	program, err := expr.Compile(exprStr)
-	if err != nil {
-		return 0, fmt.Errorf("max_iterations expression %q is invalid: %w", exprStr, err)
-	}
+	// Create empty context for arithmetic expression evaluation
+	// Arithmetic expressions in max_iterations typically don't need workflow context
+	ctx := &interpolation.Context{}
 
-	result, err := expr.Run(program, nil)
+	value, err := e.evaluator.EvaluateInt(exprStr, ctx)
 	if err != nil {
 		return 0, fmt.Errorf("max_iterations expression %q evaluation failed: %w", exprStr, err)
 	}
 
-	// Convert result to int
-	switch v := result.(type) {
-	case int:
-		return v, nil
-	case int64:
-		return int(v), nil
-	case float64:
-		// Check if it's a whole number
-		if v != float64(int(v)) {
-			return 0, fmt.Errorf("max_iterations value %q is invalid: must be an integer, got %v", exprStr, v)
-		}
-		return int(v), nil
-	default:
-		return 0, fmt.Errorf("max_iterations expression %q returned unexpected type %T", exprStr, result)
-	}
+	return value, nil
 }
 
 // ParseItems converts items string to slice.

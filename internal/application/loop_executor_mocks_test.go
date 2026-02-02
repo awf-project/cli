@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 
+	"github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -20,29 +21,49 @@ import (
 // - stepExecutorRecorder: Records step executions for verification
 // - counterExpressionEvaluator: Returns true for first N calls, then false
 
-// mockExpressionEvaluator implements ExpressionEvaluator for testing
+// mockExpressionEvaluator implements ports.ExpressionEvaluator for testing
+// C042: Updated to implement EvaluateBool and EvaluateInt methods
+// Delegates to real infrastructure evaluator for arithmetic expressions to support
+// loop iteration tests that require actual expression evaluation.
 type mockExpressionEvaluator struct {
-	results map[string]bool
-	calls   []string
-	err     error
+	boolResults map[string]bool
+	intResults  map[string]int
+	calls       []string
+	err         error
+	realEval    *expression.ExprEvaluator
 }
 
 func newMockExpressionEvaluator() *mockExpressionEvaluator {
 	return &mockExpressionEvaluator{
-		results: make(map[string]bool),
-		calls:   make([]string, 0),
+		boolResults: make(map[string]bool),
+		intResults:  make(map[string]int),
+		calls:       make([]string, 0),
+		realEval:    expression.NewExprEvaluator().(*expression.ExprEvaluator),
 	}
 }
 
-func (m *mockExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (m *mockExpressionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	m.calls = append(m.calls, expr)
 	if m.err != nil {
 		return false, m.err
 	}
-	if result, ok := m.results[expr]; ok {
+	if result, ok := m.boolResults[expr]; ok {
 		return result, nil
 	}
-	return false, nil
+	// Delegate to real evaluator for unconfigured expressions
+	return m.realEval.EvaluateBool(expr, ctx)
+}
+
+func (m *mockExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	m.calls = append(m.calls, expr)
+	if m.err != nil {
+		return 0, m.err
+	}
+	if result, ok := m.intResults[expr]; ok {
+		return result, nil
+	}
+	// Delegate to real evaluator for unconfigured expressions (e.g., "2 + 3")
+	return m.realEval.EvaluateInt(expr, ctx)
 }
 
 // configurableMockResolver implements interpolation.Resolver with configurable results

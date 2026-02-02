@@ -174,10 +174,8 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 
 	// Configure expression evaluator if provided (for conditional transitions)
 	if b.evaluator != nil {
-		// Type assertion to application.ExpressionEvaluator
-		if evaluator, ok := b.evaluator.(interface {
-			Evaluate(expr string, ctx *interpolation.Context) (bool, error)
-		}); ok {
+		// Type assertion to ports.ExpressionEvaluator (C042: migrated to port interface)
+		if evaluator, ok := b.evaluator.(ports.ExpressionEvaluator); ok {
 			svc.SetEvaluator(evaluator)
 		}
 	}

@@ -49,7 +49,7 @@ func TestEvaluateTurnCompletion_HappyPath_StopConditionMet(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Configure evaluator to return true for stop condition
-	evaluator.results[`response contains "DONE"`] = true
+	evaluator.boolResults[`response contains "DONE"`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := testutil.NewMockAgentRegistry()
@@ -144,7 +144,7 @@ func TestEvaluateTurnCompletion_HappyPath_ContinueConversation(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Configure evaluator to return false (don't stop)
-	evaluator.results[`turn_count >= 5`] = false
+	evaluator.boolResults[`turn_count >= 5`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	// Low token count
@@ -197,7 +197,7 @@ func TestEvaluateTurnCompletion_EdgeCase_StopConditionFalse(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Explicitly return false
-	evaluator.results[`response contains "EXIT"`] = false
+	evaluator.boolResults[`response contains "EXIT"`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := testutil.NewMockAgentRegistry()
@@ -333,7 +333,7 @@ func TestEvaluateTurnCompletion_EdgeCase_BothConditionsNotMet(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Stop condition not met
-	evaluator.results[`turn_count >= 10`] = false
+	evaluator.boolResults[`turn_count >= 10`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	// Token count below limit
@@ -381,7 +381,7 @@ func TestEvaluateTurnCompletion_EdgeCase_BothConditionsMet(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Stop condition met
-	evaluator.results[`response contains "STOP"`] = true
+	evaluator.boolResults[`response contains "STOP"`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	// Max tokens also exceeded
@@ -541,7 +541,7 @@ func TestEvaluateTurnCompletion_Verification_MultiTurnWithStopCondition(t *testi
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Stop on turn 3
-	evaluator.results[`turn_count >= 3`] = false
+	evaluator.boolResults[`turn_count >= 3`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := testutil.NewMockAgentRegistry()
@@ -623,7 +623,7 @@ func TestEvaluateTurnCompletion_Verification_ConsistentStopReason(t *testing.T) 
 		t.Run(tt.name, func(t *testing.T) {
 			logger := &mockLogger{}
 			evaluator := newMockExpressionEvaluator()
-			evaluator.results[tt.stopCondition] = tt.conditionResult
+			evaluator.boolResults[tt.stopCondition] = tt.conditionResult
 			resolver := newMockResolver()
 			tokenizer := newMockTokenizer()
 			tokenizer.counts["response"] = tt.actualTokens

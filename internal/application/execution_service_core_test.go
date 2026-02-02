@@ -2025,9 +2025,14 @@ func (s *simpleOperationProvider) Execute(ctx context.Context, name string, inpu
 	return &plugin.OperationResult{Success: true}, nil
 }
 
-// simpleExpressionEvaluator implements application.ExpressionEvaluator for testing SetEvaluator.
+// simpleExpressionEvaluator implements ports.ExpressionEvaluator for testing SetEvaluator.
+// C042: Updated to implement EvaluateBool and EvaluateInt methods.
 type simpleExpressionEvaluator struct{}
 
-func (s *simpleExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (s *simpleExpressionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	return false, nil
+}
+
+func (s *simpleExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, nil
 }

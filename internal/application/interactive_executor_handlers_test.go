@@ -11,7 +11,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/expression"
+	"github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 

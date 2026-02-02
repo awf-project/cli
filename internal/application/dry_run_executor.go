@@ -6,7 +6,6 @@ import (
 
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -15,7 +14,7 @@ import (
 type DryRunExecutor struct {
 	wfSvc       *WorkflowService
 	resolver    interpolation.Resolver
-	evaluator   expression.Evaluator
+	evaluator   ports.ExpressionEvaluator
 	templateSvc *TemplateService
 	logger      ports.Logger
 }
@@ -24,7 +23,7 @@ type DryRunExecutor struct {
 func NewDryRunExecutor(
 	wfSvc *WorkflowService,
 	resolver interpolation.Resolver,
-	evaluator expression.Evaluator,
+	evaluator ports.ExpressionEvaluator,
 	logger ports.Logger,
 ) *DryRunExecutor {
 	return &DryRunExecutor{

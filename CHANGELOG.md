@@ -83,6 +83,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C042**: Fix DIP Violations in Application Layer
+  - Moved `ExpressionEvaluator` interface from application layer to `internal/domain/ports/expression_evaluator.go`
+  - Created infrastructure adapter in `internal/infrastructure/expression/expr_evaluator.go` implementing the port
+  - Added `EvaluateInt()` method for arithmetic expression evaluation alongside existing `EvaluateBool()`
+  - Removed direct `expr-lang/expr` import from `internal/application/loop_executor.go`
+  - Removed local `ExpressionEvaluator` interface definition from `internal/application/execution_service.go`
+  - Updated `LoopExecutor` to accept `ExpressionEvaluator` via constructor injection
+  - Created `MockExpressionEvaluator` in `internal/testutil/mocks.go` with thread-safe patterns
+  - Deleted `evaluateArithmeticExpression` method from `loop_executor.go` (30 lines removed)
+  - Application layer now has zero infrastructure imports, restoring hexagonal architecture compliance
+  - Added compile-time interface verification in adapter: `var _ ports.ExpressionEvaluator = (*ExprEvaluator)(nil)`
+  - All existing tests pass without modification; 100% test coverage maintained
+  - Architecture verification test added in `tests/integration/c042_dip_compliance_test.go`
+
 - **C041**: Mock Enhancement: Context Field Merging and SetResult Deprecation Migration
   - `testutil.MockLogger.WithContext()` now properly accumulates context fields following production logger patterns
   - Context fields are merged with message-level fields when calling Debug/Info/Warn/Error methods

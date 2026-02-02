@@ -19,7 +19,7 @@ import (
 // - Integrates with AgentProvider for turn execution
 type ConversationManager struct {
 	logger        ports.Logger
-	evaluator     ExpressionEvaluator
+	evaluator     ports.ExpressionEvaluator
 	resolver      interpolation.Resolver
 	tokenizer     ports.Tokenizer
 	agentRegistry ports.AgentRegistry
@@ -34,7 +34,7 @@ type ConversationManager struct {
 // - agentRegistry: provider lookup for agent execution
 func NewConversationManager(
 	logger ports.Logger,
-	evaluator ExpressionEvaluator,
+	evaluator ports.ExpressionEvaluator,
 	resolver interpolation.Resolver,
 	tokenizer ports.Tokenizer,
 	agentRegistry ports.AgentRegistry,
@@ -137,7 +137,7 @@ func (m *ConversationManager) evaluateTurnCompletion(
 		stopCtx.Inputs["response"] = state.GetLastAssistantResponse()
 		stopCtx.Inputs["turn_count"] = state.TotalTurns
 
-		shouldStop, err := m.evaluator.Evaluate(config.StopCondition, stopCtx)
+		shouldStop, err := m.evaluator.EvaluateBool(config.StopCondition, stopCtx)
 		if err != nil {
 			// Log error but continue
 			m.logger.Warn("failed to evaluate stop condition", "error", err)

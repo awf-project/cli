@@ -191,7 +191,7 @@ func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T)
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// First iteration: true, second: false
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -227,7 +227,7 @@ func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T)
 		callCount++
 		// Make condition false after first iteration (2 steps)
 		if callCount >= 2 {
-			evaluator.results["true"] = false
+			evaluator.boolResults["true"] = false
 		}
 		return "", nil
 	}
@@ -263,7 +263,7 @@ func TestExecuteWhile_BodyStepIndices_NotUsedInStubPhase(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -340,7 +340,7 @@ func TestExecuteWhile_BodyStepIndices_WithComplexStepNames(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -411,7 +411,7 @@ func TestExecuteWhile_BodyStepIndices_WithSpecialCharacters(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -475,7 +475,7 @@ func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// True for first 2 iterations
-	evaluator.results["loop.index < 2"] = true
+	evaluator.boolResults["loop.index < 2"] = true
 
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -513,7 +513,7 @@ func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.
 		stepCount++
 		// After 2 iterations (6 steps), make condition false
 		if stepCount >= 6 {
-			evaluator.results["loop.index < 2"] = false
+			evaluator.boolResults["loop.index < 2"] = false
 		}
 		return "", nil
 	}
@@ -580,7 +580,7 @@ func TestT004_RED_ExecuteWhile_TransitionWithinBody_ShouldSkipSteps(t *testing.T
 	// Given: A while loop with transitions within the body
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -658,7 +658,7 @@ func TestT004_RED_ExecuteWhile_MultipleTransitions_ShouldUseIndices(t *testing.T
 	// Given: A loop with multiple potential transitions
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -750,7 +750,7 @@ func TestEvaluateBodyTransition_HappyPath_IntraBodyJump(t *testing.T) {
 	// Arrange: Create loop with body that contains transition target
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -824,7 +824,7 @@ func TestEvaluateBodyTransition_HappyPath_JumpToEnd(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -896,7 +896,7 @@ func TestEvaluateBodyTransition_HappyPath_MultipleJumps(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -973,7 +973,7 @@ func TestEvaluateBodyTransition_HappyPath_EarlyExit(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1047,7 +1047,7 @@ func TestEvaluateBodyTransition_HappyPath_NoTransition(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1116,7 +1116,7 @@ func TestEvaluateBodyTransition_EdgeCase_JumpToFirst(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1191,7 +1191,7 @@ func TestEvaluateBodyTransition_EdgeCase_SelfTransition(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1265,7 +1265,7 @@ func TestEvaluateBodyTransition_EdgeCase_EmptyBody(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1323,7 +1323,7 @@ func TestEvaluateBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1395,7 +1395,7 @@ func TestEvaluateBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1465,7 +1465,7 @@ func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1592,14 +1592,14 @@ func TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior(t *testing.T) 
 
 		// Update condition after 3 iterations (6 steps in GREEN: 2 steps × 3 iterations)
 		if len(executionOrder) >= 6 {
-			evaluator.results["loop.index < 3"] = false
+			evaluator.boolResults["loop.index < 3"] = false
 		}
 
 		return "", nil
 	}
 
 	// Set initial condition
-	evaluator.results["loop.index < 3"] = true
+	evaluator.boolResults["loop.index < 3"] = true
 
 	// Act
 	result, err := loopExec.ExecuteWhile(
@@ -1722,7 +1722,7 @@ func TestHandleIntraBodyJump_HappyPath_ForwardJump(t *testing.T) {
 	}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-forward-jump")
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 
 	executionOrder := []string{}
 	var stepExecutor application.StepExecutorFunc = func(
@@ -1771,7 +1771,7 @@ func TestHandleIntraBodyJump_HappyPath_JumpToEnd(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1846,7 +1846,7 @@ func TestHandleIntraBodyJump_HappyPath_NoJump(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1916,7 +1916,7 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToNextStep(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -1990,7 +1990,7 @@ func TestHandleIntraBodyJump_EdgeCase_BackwardJump(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -2070,7 +2070,7 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToFirstStep(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -2150,7 +2150,7 @@ func TestHandleIntraBodyJump_EdgeCase_SingleStepBody(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -2222,7 +2222,7 @@ func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -2305,7 +2305,7 @@ func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -2492,7 +2492,7 @@ func TestHandleIntraBodyJump_Performance_LargeBody(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 

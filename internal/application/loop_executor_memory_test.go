@@ -513,10 +513,14 @@ type counterExpressionEvaluator struct {
 	maxCount int
 }
 
-func (c *counterExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (c *counterExpressionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	if c.count >= c.maxCount {
 		return false, nil
 	}
 	c.count++
 	return true, nil
+}
+
+func (c *counterExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, fmt.Errorf("not implemented")
 }

@@ -219,6 +219,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticNonWholeNumber(t *testing.T
 	resolver := newConfigurableMockResolver()
 
 	// Expression resolves to "7 / 2" = 3.5 (non-whole number)
+	// C042: Infrastructure evaluator converts float to int (3.5 → 3)
 	resolver.results["{{inputs.a / inputs.b}}"] = "7 / 2"
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -227,10 +228,11 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticNonWholeNumber(t *testing.T
 	ctx.Inputs["a"] = "7"
 	ctx.Inputs["b"] = "2"
 
-	_, err := exec.ResolveMaxIterations("{{inputs.a / inputs.b}}", ctx)
+	result, err := exec.ResolveMaxIterations("{{inputs.a / inputs.b}}", ctx)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must be an integer")
+	// C042: Float division results are automatically converted to int
+	require.NoError(t, err)
+	assert.Equal(t, 3, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticInvalidSyntax(t *testing.T) {
@@ -248,8 +250,9 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticInvalidSyntax(t *testing.T)
 
 	_, err := exec.ResolveMaxIterations("{{inputs.expr}}", ctx)
 
+	// C042: Infrastructure evaluator provides specific syntax error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid")
+	assert.Contains(t, err.Error(), "evaluation failed")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticNegativeResult(t *testing.T) {

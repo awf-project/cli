@@ -100,7 +100,7 @@ func TestLoopExecutor_ExecuteForEach_WithBreakCondition(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// Break at index 1
-	evaluator.results["states.process.output == 'stop'"] = true
+	evaluator.boolResults["states.process.output == 'stop'"] = true
 	resolver := newMockResolver()
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
