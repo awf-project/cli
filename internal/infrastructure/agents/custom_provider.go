@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -20,14 +20,30 @@ import (
 type CustomProvider struct {
 	name            string
 	commandTemplate string
+	executor        ports.CLIExecutor
 }
 
 // NewCustomProvider creates a new CustomProvider with the given name and command template.
+// If no executor is provided, ExecCLIExecutor is used by default.
 func NewCustomProvider(name, commandTemplate string) *CustomProvider {
 	return &CustomProvider{
 		name:            name,
 		commandTemplate: commandTemplate,
+		executor:        NewExecCLIExecutor(),
 	}
+}
+
+// NewCustomProviderWithOptions creates a new CustomProvider with functional options.
+func NewCustomProviderWithOptions(name, commandTemplate string, opts ...CustomProviderOption) *CustomProvider {
+	p := &CustomProvider{
+		name:            name,
+		commandTemplate: commandTemplate,
+		executor:        NewExecCLIExecutor(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Execute invokes the custom command with the given prompt and options.
@@ -63,12 +79,13 @@ func (p *CustomProvider) Execute(ctx context.Context, prompt string, options map
 
 	// Prepare template data
 	// By default, prompt is shell-escaped for safety.
-	// Use {{.prompt}} in templates (automatically escaped).
-	// Use {{raw .prompt}} only if you need the raw, unescaped value.
-	// Example safe template: echo {{.prompt}} | agent-command
-	// Example opt-out: echo {{raw .prompt}} | agent-command
+	// Use {{.Prompt}} in templates (automatically escaped).
+	// Use {{raw .Prompt}} only if you need the raw, unescaped value.
+	// Example safe template: echo {{.Prompt}} | agent-command
+	// Example opt-out: echo {{raw .Prompt}} | agent-command
 	data := map[string]any{
-		"prompt":  interpolation.ShellEscape(prompt),
+		"Prompt":  interpolation.ShellEscape(prompt),
+		"prompt":  interpolation.ShellEscape(prompt), // Keep backward compatibility
 		"options": options,
 	}
 
@@ -81,15 +98,18 @@ func (p *CustomProvider) Execute(ctx context.Context, prompt string, options map
 
 	command := buf.String()
 
-	// Execute command
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
-	output, err := cmd.CombinedOutput()
+	// Execute command via shell
+	stdout, stderr, err := p.executor.Run(ctx, "/bin/sh", "-c", command)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("command execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:        p.name,

@@ -9,16 +9,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // OpenCodeProvider implements AgentProvider for OpenCode CLI.
 // Invokes: opencode run "prompt"
-type OpenCodeProvider struct{}
+type OpenCodeProvider struct {
+	executor ports.CLIExecutor
+}
 
 // NewOpenCodeProvider creates a new OpenCodeProvider.
+// If no executor is provided, ExecCLIExecutor is used by default.
 func NewOpenCodeProvider() *OpenCodeProvider {
-	return &OpenCodeProvider{}
+	return &OpenCodeProvider{
+		executor: NewExecCLIExecutor(),
+	}
+}
+
+// NewOpenCodeProviderWithOptions creates a new OpenCodeProvider with functional options.
+func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodeProvider {
+	p := &OpenCodeProvider{
+		executor: NewExecCLIExecutor(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Execute invokes the OpenCode CLI with the given prompt and options.
@@ -57,14 +74,17 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	}
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "opencode", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "opencode", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("opencode execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "opencode",

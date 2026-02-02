@@ -18,11 +18,13 @@ import (
 // ClaudeProvider implements AgentProvider for Claude CLI.
 // Invokes: claude -p "prompt" --output-format json
 type ClaudeProvider struct {
-	logger ports.Logger
+	logger   ports.Logger
+	executor ports.CLIExecutor
 }
 
 // NewClaudeProvider creates a new ClaudeProvider.
 // If logger is nil, a NopLogger is used.
+// If no executor is provided via options, ExecCLIExecutor is used by default.
 func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
 	var log ports.Logger
 	if len(l) > 0 && l[0] != nil {
@@ -31,8 +33,21 @@ func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
 		log = logger.NopLogger{}
 	}
 	return &ClaudeProvider{
-		logger: log,
+		logger:   log,
+		executor: NewExecCLIExecutor(),
 	}
+}
+
+// NewClaudeProviderWithOptions creates a new ClaudeProvider with functional options.
+func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider {
+	p := &ClaudeProvider{
+		logger:   logger.NopLogger{},
+		executor: NewExecCLIExecutor(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Execute invokes the Claude CLI with the given prompt and options.
@@ -77,14 +92,17 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	// Note: temperature and max_tokens are validated but not passed to CLI
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:        "claude",
@@ -166,14 +184,17 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 
 	// Add assistant turn to conversation history
