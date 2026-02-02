@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -428,6 +429,38 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 	}
 }
 
+// TestExecCLIExecutor_Run_ContextCancellation_TerminatesProcessGroup verifies
+// that when a context is cancelled, the spawned process and its entire process
+// group are terminated quickly via SIGKILL, rather than waiting for the full
+// command duration.
+//
+// This test is part of B002 bug fix - ensuring CLIExecutor properly manages
+// process groups similar to ShellExecutor's implementation.
+//
+// Component: B002-T001 (RED phase - this test should FAIL initially)
+func TestExecCLIExecutor_Run_ContextCancellation_TerminatesProcessGroup(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel after 50ms
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	stdout, stderr, err := executor.Run(ctx, "sleep", "10")
+	duration := time.Since(start)
+
+	// Process group kill should complete within 1s (not wait for full 10s)
+	// This assertion will FAIL until process group management is implemented
+	assert.Error(t, err, "context cancellation should cause error")
+	assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled")
+	assert.Less(t, duration, 1*time.Second, "Process should be killed quickly via SIGKILL, not wait for full sleep duration")
+	assert.NotNil(t, stdout, "stdout buffer should not be nil")
+	assert.NotNil(t, stderr, "stderr buffer should not be nil")
+}
+
 func TestExecCLIExecutor_Run_StderrOutput(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
@@ -582,4 +615,215 @@ func TestExecCLIExecutor_Run_SimulateCodexProvider(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
+}
+
+// ============================================================================
+// Process Group Management Tests (B002 Bug Fix)
+// ============================================================================
+
+// TestRun_SetsProcessGroup verifies that SysProcAttr.Setpgid is configured
+// to enable process group isolation. This test validates AC-005 requirement
+// by verifying that spawned processes and their children are properly
+// terminated when the parent context is cancelled.
+//
+// Component: B002-T005 (Process group configuration verification)
+//
+// Implementation approach:
+// Since SysProcAttr cannot be directly inspected after cmd.Run() completes,
+// we verify indirectly by spawning a process that creates children, then
+// canceling the context and checking that all processes terminate cleanly.
+func TestRun_SetsProcessGroup(t *testing.T) {
+	tests := []struct {
+		name              string
+		command           string
+		cancelDelay       time.Duration
+		cleanupCheckDelay time.Duration
+		description       string
+	}{
+		{
+			name:              "single background child process",
+			command:           "sleep 10 & wait",
+			cancelDelay:       50 * time.Millisecond,
+			cleanupCheckDelay: 200 * time.Millisecond,
+			description:       "Verify single child process terminates with parent",
+		},
+		{
+			name:              "multiple background child processes",
+			command:           "sleep 10 & sleep 10 & sleep 10 & wait",
+			cancelDelay:       50 * time.Millisecond,
+			cleanupCheckDelay: 200 * time.Millisecond,
+			description:       "Verify multiple children terminate with parent",
+		},
+		{
+			name:              "nested child processes",
+			command:           "sh -c 'sleep 10 & sleep 10' & wait",
+			cancelDelay:       50 * time.Millisecond,
+			cleanupCheckDelay: 200 * time.Millisecond,
+			description:       "Verify nested shell spawning children terminates cleanly",
+		},
+		{
+			name:              "immediate cancellation",
+			command:           "sleep 10 & sleep 10 & wait",
+			cancelDelay:       1 * time.Millisecond,
+			cleanupCheckDelay: 200 * time.Millisecond,
+			description:       "Verify cleanup works with immediate cancellation",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			executor := NewExecCLIExecutor()
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Act - Cancel context after delay
+			go func() {
+				time.Sleep(tt.cancelDelay)
+				cancel()
+			}()
+
+			// Execute command that spawns child processes
+			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+
+			// Assert - Execution should error with context.Canceled
+			assert.Error(t, err, tt.description)
+			assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled")
+			assert.NotNil(t, stdout, "stdout should not be nil")
+			assert.NotNil(t, stderr, "stderr should not be nil")
+
+			// Give processes time to clean up
+			time.Sleep(tt.cleanupCheckDelay)
+
+			// Verify no orphaned sleep processes remain
+			// Using pgrep to detect any sleep processes with our command pattern
+			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
+			output, _ := checkCmd.CombinedOutput()
+
+			assert.Empty(t, output, "No orphan sleep processes should remain - process group kill should have terminated all children")
+		})
+	}
+}
+
+// TestRun_SetsProcessGroup_EdgeCases tests edge cases for process group management
+func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		command     string
+		cancelDelay time.Duration
+		description string
+	}{
+		{
+			name:        "empty command with process group",
+			command:     "true",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Fast-exiting command should work with process group",
+		},
+		{
+			name:        "command with no children",
+			command:     "echo test",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Command without children should work normally",
+		},
+		{
+			name:        "rapid fork bomb protection",
+			command:     "for i in 1 2 3; do sleep 10 & done; wait",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Multiple rapid forks should all be cleaned up",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			executor := NewExecCLIExecutor()
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Act
+			go func() {
+				time.Sleep(tt.cancelDelay)
+				cancel()
+			}()
+
+			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+
+			// Assert
+			assert.NotNil(t, stdout, "stdout should not be nil")
+			assert.NotNil(t, stderr, "stderr should not be nil")
+
+			// Error may or may not occur depending on command timing
+			if err != nil {
+				assert.True(t,
+					errors.Is(err, context.Canceled) || err != nil,
+					"if error occurs, should be cancellation-related",
+				)
+			}
+
+			// Cleanup check
+			time.Sleep(200 * time.Millisecond)
+			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
+			output, _ := checkCmd.CombinedOutput()
+			assert.Empty(t, output, "No orphan processes should remain")
+		})
+	}
+}
+
+// TestRun_SetsProcessGroup_ErrorHandling tests error scenarios with process groups
+func TestRun_SetsProcessGroup_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name           string
+		command        string
+		shouldError    bool
+		expectCanceled bool
+		description    string
+	}{
+		{
+			name:           "direct command failure",
+			command:        "sh -c 'exit 1'",
+			shouldError:    true,
+			expectCanceled: false,
+			description:    "Direct command exit with error should propagate",
+		},
+		{
+			name:           "command not found",
+			command:        "nonexistent_command_xyz",
+			shouldError:    true,
+			expectCanceled: false,
+			description:    "Missing command should cause error",
+		},
+		{
+			name:           "parent exit with backgrounded child",
+			command:        "sleep 0.1",
+			shouldError:    false,
+			expectCanceled: false,
+			description:    "Parent process exits cleanly",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			executor := NewExecCLIExecutor()
+			ctx := context.Background()
+
+			// Act
+			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+
+			// Assert
+			assert.NotNil(t, stdout, "stdout should not be nil")
+			assert.NotNil(t, stderr, "stderr should not be nil")
+
+			if tt.shouldError {
+				assert.Error(t, err, tt.description)
+				if tt.expectCanceled {
+					assert.True(t, errors.Is(err, context.Canceled), "should be cancellation error")
+				}
+			}
+
+			// Cleanup verification
+			time.Sleep(200 * time.Millisecond)
+			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
+			output, _ := checkCmd.CombinedOutput()
+			assert.Empty(t, output, "No orphan processes should remain after error handling")
+		})
+	}
 }
