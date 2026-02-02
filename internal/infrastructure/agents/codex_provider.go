@@ -8,16 +8,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // CodexProvider implements AgentProvider for Codex CLI.
 // Invokes: codex --prompt "prompt" --quiet
-type CodexProvider struct{}
+type CodexProvider struct {
+	executor ports.CLIExecutor
+}
 
 // NewCodexProvider creates a new CodexProvider.
+// If no executor is provided, ExecCLIExecutor is used by default.
 func NewCodexProvider() *CodexProvider {
-	return &CodexProvider{}
+	return &CodexProvider{
+		executor: NewExecCLIExecutor(),
+	}
+}
+
+// NewCodexProviderWithOptions creates a new CodexProvider with functional options.
+func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
+	p := &CodexProvider{
+		executor: NewExecCLIExecutor(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Execute invokes the Codex CLI with the given prompt and options.
@@ -54,14 +71,17 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	}
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "codex", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "codex",
@@ -128,14 +148,17 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	}
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "codex", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 
 	// Add assistant turn to conversation history

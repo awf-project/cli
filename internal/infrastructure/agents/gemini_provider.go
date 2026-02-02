@@ -10,16 +10,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // GeminiProvider implements AgentProvider for Gemini CLI.
 // Invokes: gemini -p "prompt"
-type GeminiProvider struct{}
+type GeminiProvider struct {
+	executor ports.CLIExecutor
+}
 
 // NewGeminiProvider creates a new GeminiProvider.
+// If no executor is provided, ExecCLIExecutor is used by default.
 func NewGeminiProvider() *GeminiProvider {
-	return &GeminiProvider{}
+	return &GeminiProvider{
+		executor: NewExecCLIExecutor(),
+	}
+}
+
+// NewGeminiProviderWithOptions creates a new GeminiProvider with functional options.
+func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider {
+	p := &GeminiProvider{
+		executor: NewExecCLIExecutor(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Execute invokes the Gemini CLI with the given prompt and options.
@@ -55,14 +72,17 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	// Note: temperature and safety_settings are validated but not passed to CLI
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "gemini", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "gemini",
@@ -125,14 +145,17 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 
 	// Execute command
-	cmd := exec.CommandContext(ctx, "gemini", args...)
-	output, err := cmd.CombinedOutput()
+	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
+	// Combine stdout and stderr like CombinedOutput()
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
 	outputStr := string(output)
 
 	// Add assistant turn to conversation history

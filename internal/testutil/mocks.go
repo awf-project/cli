@@ -19,6 +19,7 @@ var (
 	_ ports.WorkflowRepository  = (*MockWorkflowRepository)(nil)
 	_ ports.StateStore          = (*MockStateStore)(nil)
 	_ ports.CommandExecutor     = (*MockCommandExecutor)(nil)
+	_ ports.CLIExecutor         = (*MockCLIExecutor)(nil)
 	_ ports.Logger              = (*MockLogger)(nil)
 	_ ports.HistoryStore        = (*MockHistoryStore)(nil)
 	_ ports.ExpressionValidator = (*MockExpressionValidator)(nil)
@@ -1063,4 +1064,96 @@ func (m *MockAgentProvider) Clear() {
 	m.executeFunc = nil
 	m.conversationFunc = nil
 	m.validateFunc = nil
+}
+
+// =============================================================================
+// MockCLIExecutor - T003
+// =============================================================================
+
+// MockCLIExecutor is a thread-safe mock implementation of ports.CLIExecutor.
+// It uses sync.Mutex to protect concurrent access to call history.
+//
+// Usage:
+//
+//	executor := testutil.NewMockCLIExecutor()
+//	executor.SetOutput([]byte("output"), []byte(""))
+//	stdout, stderr, err := executor.Run(ctx, "claude", "--version")
+type MockCLIExecutor struct {
+	mu      sync.Mutex
+	stdout  []byte
+	stderr  []byte
+	execErr error
+	calls   []MockCLICall
+}
+
+// MockCLICall records a single CLI execution call.
+type MockCLICall struct {
+	Name string
+	Args []string
+}
+
+// NewMockCLIExecutor creates a new thread-safe mock CLI executor.
+func NewMockCLIExecutor() *MockCLIExecutor {
+	return &MockCLIExecutor{
+		calls: make([]MockCLICall, 0),
+	}
+}
+
+// Run executes a binary and returns the configured output.
+func (m *MockCLIExecutor) Run(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Record the call
+	m.calls = append(m.calls, MockCLICall{Name: name, Args: args})
+
+	// Return configured error if set
+	if m.execErr != nil {
+		return nil, nil, m.execErr
+	}
+
+	// Return configured output
+	return m.stdout, m.stderr, nil
+}
+
+// SetOutput configures the mock to return specific stdout and stderr (test helper).
+func (m *MockCLIExecutor) SetOutput(stdout, stderr []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stdout = stdout
+	m.stderr = stderr
+}
+
+// SetError configures the mock to return an error on Run calls (test helper).
+func (m *MockCLIExecutor) SetError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.execErr = err
+}
+
+// GetCalls returns all recorded Run calls (test helper).
+func (m *MockCLIExecutor) GetCalls() []MockCLICall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Create deep copy to isolate internal state
+	copied := make([]MockCLICall, len(m.calls))
+	for i, call := range m.calls {
+		argsCopy := make([]string, len(call.Args))
+		copy(argsCopy, call.Args)
+		copied[i] = MockCLICall{
+			Name: call.Name,
+			Args: argsCopy,
+		}
+	}
+	return copied
+}
+
+// Clear removes all recorded calls and resets output/errors (test helper).
+func (m *MockCLIExecutor) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = make([]MockCLICall, 0)
+	m.stdout = nil
+	m.stderr = nil
+	m.execErr = nil
 }

@@ -430,3 +430,124 @@ func TestAgentRegistry_CaseSensitiveNames(t *testing.T) {
 	assert.Contains(t, list, "Provider")
 	assert.Contains(t, list, "provider")
 }
+
+// Component: T010
+// Feature: C025
+
+// ============================================================================
+// RegisterDefaults Edge Cases
+// ============================================================================
+
+func TestAgentRegistry_RegisterDefaults_PartialFailure(t *testing.T) {
+	// Pre-register one default provider (e.g., claude), then call RegisterDefaults
+	// Verify: returns aggregated error mentioning already-registered provider
+	// Verify: other default providers ARE registered (RegisterDefaults continues on error)
+	registry := NewAgentRegistry()
+
+	// Pre-register one default provider
+	claudeProvider := NewClaudeProvider()
+	err := registry.Register(claudeProvider)
+	require.NoError(t, err)
+
+	// Call RegisterDefaults - should fail for claude but register others
+	err = registry.RegisterDefaults()
+
+	// Should return error mentioning the already-registered provider
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already registered")
+	assert.Contains(t, err.Error(), "claude")
+
+	// Verify RegisterDefaults continues on error - other providers should be registered
+	list := registry.List()
+	assert.Len(t, list, 4, "All 4 default providers should be registered (1 pre-existing + 3 new)")
+	assert.Contains(t, list, "claude")
+	assert.Contains(t, list, "codex")
+	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "opencode")
+
+	// Verify each provider is retrievable
+	for _, name := range []string{"claude", "codex", "gemini", "opencode"} {
+		provider, getErr := registry.Get(name)
+		assert.NoError(t, getErr, "Provider %s should be retrievable", name)
+		assert.NotNil(t, provider)
+		assert.Equal(t, name, provider.Name())
+	}
+}
+
+func TestAgentRegistry_RegisterDefaults_EmptyRegistry(t *testing.T) {
+	// Create fresh registry, call RegisterDefaults
+	// Verify: no error returned
+	// Verify: all 4 default providers registered (claude, gemini, codex, opencode)
+	registry := NewAgentRegistry()
+
+	err := registry.RegisterDefaults()
+
+	// Should succeed without errors
+	require.NoError(t, err)
+
+	// Verify all 4 default providers are registered
+	list := registry.List()
+	assert.Len(t, list, 4)
+	assert.Contains(t, list, "claude")
+	assert.Contains(t, list, "codex")
+	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "opencode")
+
+	// Verify each provider is retrievable and functional
+	for _, name := range []string{"claude", "codex", "gemini", "opencode"} {
+		provider, getErr := registry.Get(name)
+		require.NoError(t, getErr, "Provider %s should be retrievable", name)
+		require.NotNil(t, provider)
+		assert.Equal(t, name, provider.Name())
+
+		// Verify provider has Has() check
+		assert.True(t, registry.Has(name))
+	}
+}
+
+func TestAgentRegistry_RegisterDefaults_MultiplePreRegistered(t *testing.T) {
+	// Edge case: pre-register multiple default providers
+	registry := NewAgentRegistry()
+
+	// Pre-register two default providers
+	_ = registry.Register(NewClaudeProvider())
+	_ = registry.Register(NewGeminiProvider())
+
+	err := registry.RegisterDefaults()
+
+	// Should return aggregated error for both failures
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "claude")
+	assert.Contains(t, err.Error(), "gemini")
+
+	// All 4 providers should still be registered
+	list := registry.List()
+	assert.Len(t, list, 4)
+	assert.Contains(t, list, "claude")
+	assert.Contains(t, list, "codex")
+	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "opencode")
+}
+
+func TestAgentRegistry_RegisterDefaults_AllPreRegistered(t *testing.T) {
+	// Edge case: all default providers already registered
+	registry := NewAgentRegistry()
+
+	// Register all defaults manually
+	err1 := registry.RegisterDefaults()
+	require.NoError(t, err1)
+
+	// Try to register defaults again
+	err2 := registry.RegisterDefaults()
+
+	// Should fail with aggregated error for all 4 providers
+	assert.Error(t, err2)
+	assert.Contains(t, err2.Error(), "claude")
+	assert.Contains(t, err2.Error(), "codex")
+	assert.Contains(t, err2.Error(), "gemini")
+	assert.Contains(t, err2.Error(), "opencode")
+
+	// Should still have exactly 4 providers (no duplicates)
+	list := registry.List()
+	assert.Len(t, list, 4)
+}
