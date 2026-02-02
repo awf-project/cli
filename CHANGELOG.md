@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **C041**: Removed TODO(#150) comment from MockLogger.WithContext implementation
+  - Replaced stub implementation with full context accumulation logic
+  - Method now properly merges context fields with log message fields
+  - Completes technical debt cleanup for issue #150
+
 - **F051**: Multi-Turn Conversation Workflow Failures
   - Fixed empty prompt bug preventing conversations from continuing past first turn
   - Consolidated duplicate code in ConversationManager by replacing inline logic with existing helper methods
@@ -70,6 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated CONTRIBUTING.md with code quality requirements for PRs
 
 ### Changed
+
+- **C041**: Mock Enhancement: Context Field Merging and SetResult Deprecation Migration
+  - `testutil.MockLogger.WithContext()` now properly accumulates context fields following production logger patterns
+  - Context fields are merged with message-level fields when calling Debug/Info/Warn/Error methods
+  - Implemented thread-safe context storage using sync.RWMutex for concurrent access
+  - Migrated 14 deprecated `SetResult()` calls to `SetCommandResult()` across test files:
+    - 11 calls in `internal/testutil/mocks_test.go`
+    - 3 calls in `pkg/plugin/sdk/testing_test.go`
+  - Added `SetCommandResult()` method to `MockOperationProvider` following delegation pattern
+  - Updated 4 documentation examples in `internal/testutil/doc.go` to use non-deprecated API
+  - Deprecated methods remain as thin wrappers for backward compatibility (marked with TODO(#150))
+  - All tests pass race detector validation confirming thread safety
 
 - **C036**: Split PluginStateStore interface to fix ISP violation
   - Created `PluginStore` interface for persistence operations (Save, Load, GetState, ListDisabled)
