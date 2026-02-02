@@ -17,6 +17,18 @@ import (
 	"github.com/vanoix/awf/pkg/validation"
 )
 
+// ConversationExecutor defines the interface for executing multi-turn conversations.
+// This interface allows for dependency injection and testing with mocks.
+type ConversationExecutor interface {
+	ExecuteConversation(
+		ctx context.Context,
+		step *workflow.Step,
+		config *workflow.ConversationConfig,
+		execCtx *workflow.ExecutionContext,
+		buildContext ContextBuilderFunc,
+	) (*workflow.ConversationResult, error)
+}
+
 // ExecutionService orchestrates workflow execution.
 type ExecutionService struct {
 	workflowSvc       *WorkflowService
@@ -34,7 +46,7 @@ type ExecutionService struct {
 	templateSvc       *TemplateService
 	operationProvider ports.OperationProvider
 	agentRegistry     ports.AgentRegistry
-	conversationMgr   *ConversationManager // F033: Multi-turn conversation orchestration
+	conversationMgr   ConversationExecutor // F033: Multi-turn conversation orchestration (interface for testability)
 	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
 }
 
@@ -74,7 +86,8 @@ func (s *ExecutionService) SetEvaluator(evaluator ExpressionEvaluator) {
 
 // SetConversationManager configures the conversation manager for F033 multi-turn conversations.
 // When set, agent-type steps with mode: conversation can execute managed conversations.
-func (s *ExecutionService) SetConversationManager(mgr *ConversationManager) {
+// Accepts ConversationExecutor interface to allow dependency injection and testing with mocks.
+func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 	s.conversationMgr = mgr
 }
 
@@ -1861,15 +1874,79 @@ func (s *ExecutionService) executeAgentStep(
 //  4. Map ConversationResult to StepState
 //  5. Execute hooks and resolve next step
 //
-// Stub: Returns error until ConversationManager implementation is complete.
+// F051: T009 - Implement delegation to ConversationManager
 func (s *ExecutionService) executeConversationStep(
 	ctx context.Context,
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
-	// F033: Component 8/14 - Stub implementation
-	// This method will be implemented after ConversationManager tests pass (GREEN phase)
-	return "", errors.New("executeConversationStep: not implemented")
+	startTime := time.Now()
+
+	// 1. Validate conversation manager is configured
+	if s.conversationMgr == nil {
+		return "", errors.New("conversation manager not configured")
+	}
+
+	// 2. Validate agent config exists
+	if step.Agent == nil {
+		return "", errors.New("agent config is nil")
+	}
+
+	// 3. Validate conversation config exists
+	if step.Agent.Conversation == nil {
+		return "", errors.New("conversation config is nil")
+	}
+
+	// 4. Create buildContext closure for interpolation
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return s.buildInterpolationContext(ec)
+	}
+
+	// 5. Delegate to ConversationManager
+	s.logger.Debug("executing conversation step", "step", step.Name, "provider", step.Agent.Provider)
+	result, err := s.conversationMgr.ExecuteConversation(
+		ctx,
+		step,
+		step.Agent.Conversation,
+		execCtx,
+		buildContext,
+	)
+
+	// 6. Map ConversationResult to StepState
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Attempt:     1,
+	}
+
+	if result != nil {
+		state.Output = result.Output
+		state.Response = result.Response
+		state.TokensUsed = result.TokensTotal
+		state.Conversation = result.State
+	}
+
+	// 7. Handle execution error
+	if err != nil {
+		state.Status = workflow.StatusFailed
+		state.Error = err.Error()
+		execCtx.SetStepState(step.Name, state)
+		return "", fmt.Errorf("conversation execution failed: %w", err)
+	}
+
+	// 8. Mark as completed
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	// 9. Execute post-hooks on success
+	intCtx := s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	// 10. Resolve next step using transitions or OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
 }
 
 // resolveOperationInputs resolves all string values in operation inputs via interpolation.

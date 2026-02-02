@@ -981,6 +981,234 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 }
 
 // =============================================================================
+// Unit Tests for Helper Methods - Component T001
+// =============================================================================
+
+// TestConversationManager_ValidateConversationInputs_HappyPath tests the
+// validateConversationInputs helper method with valid inputs.
+func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	// Register mock provider so validation can proceed past provider lookup
+	mockProvider := testutil.NewMockAgentProvider("claude")
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Test",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         5,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	// Call ExecuteConversation which uses validateConversationInputs internally
+	// This verifies the refactored validation is working correctly
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	// Validation passes (step and config are valid)
+	// Execution may fail due to stub implementation, but that's expected in RED phase
+	// The key test is that we don't get a validation error about nil inputs
+	if err != nil {
+		assert.NotContains(t, err.Error(), "nil", "should not fail validation")
+		assert.NotContains(t, err.Error(), "config is nil", "should not fail validation")
+	}
+	// Result may be nil in RED phase due to incomplete implementation
+	_ = result
+}
+
+// TestConversationManager_ValidateConversationInputs_NilStep tests validation
+// with nil step - should fail early with validation error.
+func TestConversationManager_ValidateConversationInputs_NilStep(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         5,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), nil, config, execCtx, buildContext)
+
+	// Should fail validation immediately
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+	assert.Nil(t, result)
+}
+
+// TestConversationManager_ValidateConversationInputs_NilAgentConfig tests
+// validation with nil agent config - should fail early.
+func TestConversationManager_ValidateConversationInputs_NilAgentConfig(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name:  "chat",
+		Type:  workflow.StepTypeAgent,
+		Agent: nil, // Nil agent config
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         5,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	// Should fail validation immediately
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+	assert.Nil(t, result)
+}
+
+// TestConversationManager_ValidateConversationInputs_NilConfig tests validation
+// with nil config - should fail early.
+func TestConversationManager_ValidateConversationInputs_NilConfig(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Test",
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext)
+
+	// Should fail validation immediately
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "config")
+	assert.Nil(t, result)
+}
+
+// TestConversationManager_ValidateConversationInputs_AllNil tests validation
+// with all nil inputs - should fail with appropriate error.
+func TestConversationManager_ValidateConversationInputs_AllNil(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), nil, nil, execCtx, buildContext)
+
+	// Should fail validation immediately
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+	assert.Nil(t, result)
+}
+
+// TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderName
+// tests validation with empty provider name (valid step/config structure but
+// invalid provider).
+func TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderName(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := testutil.NewMockAgentRegistry()
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "", // Empty provider name
+			Prompt:   "Test",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         5,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	// Validation passes (step and config are not nil), but should fail at provider lookup
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Nil(t, result)
+}
+
+// =============================================================================
 // Edge Case Tests - Nil Config
 // =============================================================================
 

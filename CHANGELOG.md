@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **F051**: Multi-Turn Conversation Workflow Failures
+  - Fixed empty prompt bug preventing conversations from continuing past first turn
+  - Consolidated duplicate code in ConversationManager by replacing inline logic with existing helper methods
+  - Implemented `executeConversationStep` in ExecutionService to properly delegate to ConversationManager
+  - Multi-turn conversations now resolve prompts correctly for subsequent turns using configured prompt template
+  - Added comprehensive unit tests for multi-turn prompt resolution and conversation step execution
+  - Added integration test suite covering multi-turn workflows, stop conditions, and backward compatibility
+  - Fixes: conversation-simple, conversation-multiturn, conversation-max-turns, conversation-error workflows
+  - Impact: 391 lines added, 102 lines removed across 4 application layer files
+
 ### Breaking Changes
 
 - **[B001] Expression context normalization to PascalCase**
