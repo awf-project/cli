@@ -1154,7 +1154,7 @@ func TestMockCommandExecutor_Execute_HappyPath(t *testing.T) {
 		{
 			name: "simple command execution",
 			setupFunc: func(exec *testutil.MockCommandExecutor) {
-				exec.SetResult(&ports.CommandResult{
+				exec.SetCommandResult("", &ports.CommandResult{
 					Stdout:   "output",
 					Stderr:   "",
 					ExitCode: 0,
@@ -1171,7 +1171,7 @@ func TestMockCommandExecutor_Execute_HappyPath(t *testing.T) {
 		{
 			name: "command with error output",
 			setupFunc: func(exec *testutil.MockCommandExecutor) {
-				exec.SetResult(&ports.CommandResult{
+				exec.SetCommandResult("", &ports.CommandResult{
 					Stdout:   "",
 					Stderr:   "error message",
 					ExitCode: 1,
@@ -1187,7 +1187,7 @@ func TestMockCommandExecutor_Execute_HappyPath(t *testing.T) {
 		{
 			name: "command with both stdout and stderr",
 			setupFunc: func(exec *testutil.MockCommandExecutor) {
-				exec.SetResult(&ports.CommandResult{
+				exec.SetCommandResult("", &ports.CommandResult{
 					Stdout:   "normal output",
 					Stderr:   "warning",
 					ExitCode: 0,
@@ -1252,7 +1252,7 @@ func TestMockCommandExecutor_Execute_ErrorInjection(t *testing.T) {
 func TestMockCommandExecutor_CallRecording(t *testing.T) {
 	// Arrange
 	executor := testutil.NewMockCommandExecutor()
-	executor.SetResult(&ports.CommandResult{Stdout: "ok", ExitCode: 0})
+	executor.SetCommandResult("", &ports.CommandResult{Stdout: "ok", ExitCode: 0})
 	ctx := context.Background()
 
 	commands := []*ports.Command{
@@ -1282,7 +1282,7 @@ func TestMockCommandExecutor_CallRecording(t *testing.T) {
 func TestMockCommandExecutor_ConcurrentAccess(t *testing.T) {
 	// Arrange
 	executor := testutil.NewMockCommandExecutor()
-	executor.SetResult(&ports.CommandResult{Stdout: "output", ExitCode: 0})
+	executor.SetCommandResult("", &ports.CommandResult{Stdout: "output", ExitCode: 0})
 	ctx := context.Background()
 	numGoroutines := 50
 
@@ -1316,7 +1316,7 @@ func TestMockCommandExecutor_EdgeCases(t *testing.T) {
 			name: "execute with nil command",
 			test: func(t *testing.T) {
 				executor := testutil.NewMockCommandExecutor()
-				executor.SetResult(&ports.CommandResult{ExitCode: 0})
+				executor.SetCommandResult("", &ports.CommandResult{ExitCode: 0})
 				ctx := context.Background()
 
 				result, err := executor.Execute(ctx, nil)
@@ -1342,7 +1342,7 @@ func TestMockCommandExecutor_EdgeCases(t *testing.T) {
 			name: "command with empty program",
 			test: func(t *testing.T) {
 				executor := testutil.NewMockCommandExecutor()
-				executor.SetResult(&ports.CommandResult{ExitCode: 0})
+				executor.SetCommandResult("", &ports.CommandResult{ExitCode: 0})
 				ctx := context.Background()
 				cmd := &ports.Command{Program: ""}
 
@@ -1358,7 +1358,7 @@ func TestMockCommandExecutor_EdgeCases(t *testing.T) {
 			test: func(t *testing.T) {
 				executor := testutil.NewMockCommandExecutor()
 				largeOutput := string(make([]byte, 10000))
-				executor.SetResult(&ports.CommandResult{
+				executor.SetCommandResult("", &ports.CommandResult{
 					Stdout:   largeOutput,
 					ExitCode: 0,
 				})
@@ -1374,7 +1374,7 @@ func TestMockCommandExecutor_EdgeCases(t *testing.T) {
 			name: "multiple executions of same command",
 			test: func(t *testing.T) {
 				executor := testutil.NewMockCommandExecutor()
-				executor.SetResult(&ports.CommandResult{Stdout: "ok", ExitCode: 0})
+				executor.SetCommandResult("", &ports.CommandResult{Stdout: "ok", ExitCode: 0})
 				ctx := context.Background()
 				cmd := &ports.Command{Program: "repeated-cmd"}
 
@@ -1401,7 +1401,7 @@ func TestMockCommandExecutor_EdgeCases(t *testing.T) {
 func TestMockCommandExecutor_Clear(t *testing.T) {
 	// Arrange
 	executor := testutil.NewMockCommandExecutor()
-	executor.SetResult(&ports.CommandResult{Stdout: "output", ExitCode: 0})
+	executor.SetCommandResult("", &ports.CommandResult{Stdout: "output", ExitCode: 0})
 	executor.SetExecuteError(errors.New("error"))
 	ctx := context.Background()
 
@@ -1429,7 +1429,7 @@ func TestMockCommandExecutor_Clear(t *testing.T) {
 func TestMockCommandExecutor_GetCalls_IsolatedCopy(t *testing.T) {
 	// Arrange
 	executor := testutil.NewMockCommandExecutor()
-	executor.SetResult(&ports.CommandResult{ExitCode: 0})
+	executor.SetCommandResult("", &ports.CommandResult{ExitCode: 0})
 	ctx := context.Background()
 
 	cmd := &ports.Command{Program: "test-cmd"}
@@ -1699,6 +1699,177 @@ func TestMockLogger_GetMessagesByLevel(t *testing.T) {
 }
 
 func TestMockLogger_WithContext(t *testing.T) {
+	t.Run("InterfaceCompliance", func(t *testing.T) {
+		// T005 Requirement 1: Test WithContext returns non-nil Logger (interface compliance)
+		logger := testutil.NewMockLogger()
+		ctx := map[string]any{
+			"request_id": "req-123",
+			"user_id":    456,
+		}
+
+		// Act
+		contextLogger := logger.WithContext(ctx)
+
+		// Assert - verify interface compliance
+		assert.NotNil(t, contextLogger, "WithContext should return a non-nil logger")
+		assert.Implements(t, (*ports.Logger)(nil), contextLogger, "Returned logger should implement ports.Logger interface")
+
+		// Verify the returned logger can be used for logging
+		contextLogger.Info("test message")
+		messages := logger.GetMessages()
+		assert.NotEmpty(t, messages, "Context logger should capture messages")
+	})
+
+	t.Run("ContextAccumulation", func(t *testing.T) {
+		// T005 Requirement 2: Test context fields accumulate across chained calls
+		logger := testutil.NewMockLogger()
+		ctx1 := map[string]any{"key1": "val1"}
+		ctx2 := map[string]any{"key2": "val2"}
+		ctx3 := map[string]any{"key3": "val3"}
+
+		// Act - chain multiple WithContext calls
+		logger1 := logger.WithContext(ctx1)
+		logger2 := logger1.WithContext(ctx2)
+		logger3 := logger2.WithContext(ctx3)
+		logger3.Info("test")
+
+		// Assert - all context fields should be present
+		messages := logger.GetMessages()
+		require.Len(t, messages, 1)
+		msg := messages[0]
+		assert.Contains(t, msg.Fields, "key1", "First context should be preserved")
+		assert.Contains(t, msg.Fields, "val1")
+		assert.Contains(t, msg.Fields, "key2", "Second context should be added")
+		assert.Contains(t, msg.Fields, "val2")
+		assert.Contains(t, msg.Fields, "key3", "Third context should be added")
+		assert.Contains(t, msg.Fields, "val3")
+	})
+
+	t.Run("OriginalLoggerImmutability", func(t *testing.T) {
+		// T005 Requirement 3: Test original logger unchanged (immutability)
+		logger := testutil.NewMockLogger()
+		ctx := map[string]any{"context_key": "context_val"}
+
+		// Act - create context logger but use original
+		_ = logger.WithContext(ctx)
+		logger.Info("original message", "msg_key", "msg_val")
+
+		// Assert - original logger should not have context fields
+		messages := logger.GetMessages()
+		require.Len(t, messages, 1)
+		msg := messages[0]
+		assert.NotContains(t, msg.Fields, "context_key", "Original logger should remain unchanged")
+		assert.Contains(t, msg.Fields, "msg_key", "Original logger should work normally")
+	})
+
+	t.Run("LogMessagesIncludeContext", func(t *testing.T) {
+		// T005 Requirement 4: Test log messages include context fields
+		logger := testutil.NewMockLogger()
+		ctx := map[string]any{
+			"trace_id": "trace-123",
+			"span_id":  "span-456",
+		}
+
+		contextLogger := logger.WithContext(ctx)
+
+		// Test all log levels include context
+		contextLogger.Debug("debug msg", "debug_key", "debug_val")
+		contextLogger.Info("info msg", "info_key", "info_val")
+		contextLogger.Warn("warn msg", "warn_key", "warn_val")
+		contextLogger.Error("error msg", "error_key", "error_val")
+
+		// Assert - all messages should include context fields
+		messages := logger.GetMessages()
+		require.Len(t, messages, 4)
+
+		for i, msg := range messages {
+			assert.Contains(t, msg.Fields, "trace_id", "Message %d should include trace_id", i)
+			assert.Contains(t, msg.Fields, "trace-123", "Message %d should include trace_id value", i)
+			assert.Contains(t, msg.Fields, "span_id", "Message %d should include span_id", i)
+			assert.Contains(t, msg.Fields, "span-456", "Message %d should include span_id value", i)
+		}
+	})
+
+	t.Run("ConcurrentAccess50Goroutines", func(t *testing.T) {
+		// T005 Requirement 5: Test thread-safety with 50 concurrent goroutines
+		logger := testutil.NewMockLogger()
+		numGoroutines := 50
+
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+
+		// Act - spawn 50 goroutines creating context loggers and logging
+		for i := 0; i < numGoroutines; i++ {
+			go func(id int) {
+				defer wg.Done()
+				ctx := map[string]any{
+					"goroutine_id": id,
+					"iteration":    fmt.Sprintf("iter-%d", id),
+				}
+				contextLogger := logger.WithContext(ctx)
+				contextLogger.Info(fmt.Sprintf("concurrent message %d", id), "extra", id*2)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Assert - all 50 messages should be captured without race conditions
+		messages := logger.GetMessages()
+		assert.Len(t, messages, numGoroutines, "All 50 concurrent goroutines should log successfully")
+
+		// Verify no data corruption - each message has unique goroutine_id
+		goroutineIDs := make(map[int]bool)
+		for _, msg := range messages {
+			for i := 0; i < len(msg.Fields)-1; i += 2 {
+				if msg.Fields[i] == "goroutine_id" {
+					if id, ok := msg.Fields[i+1].(int); ok {
+						goroutineIDs[id] = true
+					}
+				}
+			}
+		}
+		assert.Len(t, goroutineIDs, numGoroutines, "Each goroutine should have unique ID")
+	})
+
+	t.Run("EdgeCaseNilMap", func(t *testing.T) {
+		// T005 Requirement 6a: Test edge case - nil map
+		logger := testutil.NewMockLogger()
+
+		// Act - nil context should not panic
+		contextLogger := logger.WithContext(nil)
+		contextLogger.Info("message with nil context", "key", "val")
+
+		// Assert
+		messages := logger.GetMessages()
+		require.Len(t, messages, 1)
+		assert.Equal(t, "message with nil context", messages[0].Msg)
+		assert.Contains(t, messages[0].Fields, "key")
+	})
+
+	t.Run("EdgeCaseEmptyMap", func(t *testing.T) {
+		// T005 Requirement 6b: Test edge case - empty map
+		logger := testutil.NewMockLogger()
+		emptyCtx := map[string]any{}
+
+		// Act
+		contextLogger := logger.WithContext(emptyCtx)
+		contextLogger.Info("message with empty context", "key", "val")
+
+		// Assert
+		messages := logger.GetMessages()
+		require.Len(t, messages, 1)
+		msg := messages[0]
+		assert.Equal(t, "message with empty context", msg.Msg)
+		assert.Contains(t, msg.Fields, "key", "Message fields should still work")
+		assert.Contains(t, msg.Fields, "val")
+	})
+}
+
+// =============================================================================
+// T001: ctxFields field tests
+// =============================================================================
+
+func TestMockLogger_CtxFields_HappyPath_SingleContext(t *testing.T) {
 	// Arrange
 	logger := testutil.NewMockLogger()
 	ctx := map[string]any{
@@ -1708,16 +1879,640 @@ func TestMockLogger_WithContext(t *testing.T) {
 
 	// Act
 	contextLogger := logger.WithContext(ctx)
+	contextLogger.Info("operation completed", "duration_ms", 150)
 
 	// Assert
-	assert.NotNil(t, contextLogger, "WithContext should return a logger")
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	assert.Equal(t, "INFO", msg.Level)
+	assert.Equal(t, "operation completed", msg.Msg)
+
+	// Verify context fields are merged with message fields
+	// Expected fields: [request_id, req-123, user_id, 456, duration_ms, 150]
+	assert.Contains(t, msg.Fields, "request_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "req-123", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "user_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, 456, "Context field value should be present")
+	assert.Contains(t, msg.Fields, "duration_ms", "Message field key should be present")
+	assert.Contains(t, msg.Fields, 150, "Message field value should be present")
+}
+
+func TestMockLogger_CtxFields_HappyPath_ChainedContexts(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx1 := map[string]any{"request_id": "req-123"}
+	ctx2 := map[string]any{"span_id": "span-456"}
+
+	// Act - chain multiple contexts
+	logger1 := logger.WithContext(ctx1)
+	logger2 := logger1.WithContext(ctx2)
+	logger2.Info("nested operation")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	// Verify both context layers are present
+	assert.Contains(t, msg.Fields, "request_id", "First context should be preserved")
+	assert.Contains(t, msg.Fields, "req-123", "First context value should be preserved")
+	assert.Contains(t, msg.Fields, "span_id", "Second context should be added")
+	assert.Contains(t, msg.Fields, "span-456", "Second context value should be added")
+}
+
+func TestMockLogger_CtxFields_HappyPath_EmptyContext(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	emptyCtx := map[string]any{}
+
+	// Act
+	contextLogger := logger.WithContext(emptyCtx)
+	contextLogger.Info("message with empty context", "key", "value")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	// Empty context should not add extra fields, only message fields
+	assert.Contains(t, msg.Fields, "key", "Message fields should be present")
+	assert.Contains(t, msg.Fields, "value", "Message fields should be present")
+}
+
+func TestMockLogger_CtxFields_EdgeCase_NilContext(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+
+	// Act - nil context map should not panic
+	contextLogger := logger.WithContext(nil)
+	contextLogger.Info("message with nil context")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message even with nil context")
+	assert.Equal(t, "message with nil context", messages[0].Msg)
+}
+
+func TestMockLogger_CtxFields_EdgeCase_NilValues(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{
+		"optional_field": nil,
+		"present_field":  "value",
+	}
+
+	// Act
+	contextLogger := logger.WithContext(ctx)
+	contextLogger.Info("message with nil context values")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture message with nil context values")
+
+	msg := messages[0]
+	assert.Contains(t, msg.Fields, "optional_field", "Nil value key should be present")
+	assert.Contains(t, msg.Fields, "present_field", "Non-nil value key should be present")
+	assert.Contains(t, msg.Fields, "value", "Non-nil value should be present")
+}
+
+func TestMockLogger_CtxFields_EdgeCase_ComplexTypes(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{
+		"string":  "text",
+		"int":     42,
+		"float":   3.14,
+		"bool":    true,
+		"slice":   []string{"a", "b", "c"},
+		"map":     map[string]int{"count": 5},
+		"pointer": &struct{ Name string }{Name: "test"},
+	}
+
+	// Act
+	contextLogger := logger.WithContext(ctx)
+	contextLogger.Info("message with complex types")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture message with complex types")
+
+	msg := messages[0]
+	// Verify all types are preserved
+	assert.Contains(t, msg.Fields, "string", "String key should be present")
+	assert.Contains(t, msg.Fields, "int", "Int key should be present")
+	assert.Contains(t, msg.Fields, "float", "Float key should be present")
+	assert.Contains(t, msg.Fields, "bool", "Bool key should be present")
+	assert.Contains(t, msg.Fields, "slice", "Slice key should be present")
+	assert.Contains(t, msg.Fields, "map", "Map key should be present")
+	assert.Contains(t, msg.Fields, "pointer", "Pointer key should be present")
+}
+
+func TestMockLogger_CtxFields_EdgeCase_DuplicateKeys(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"key": "context_value"}
+
+	// Act - message field with same key as context field
+	contextLogger := logger.WithContext(ctx)
+	contextLogger.Info("message", "key", "message_value")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture message")
+
+	msg := messages[0]
+	// Both values should be present (order may vary)
+	assert.Contains(t, msg.Fields, "key", "Key should be present")
+	assert.Contains(t, msg.Fields, "context_value", "Context value should be present")
+	assert.Contains(t, msg.Fields, "message_value", "Message value should be present")
+}
+
+func TestMockLogger_CtxFields_ErrorHandling_AllLevels(t *testing.T) {
+	tests := []struct {
+		name    string
+		logFunc func(logger ports.Logger, msg string, fields ...any)
+		level   string
+	}{
+		{
+			name: "Debug with context",
+			logFunc: func(logger ports.Logger, msg string, fields ...any) {
+				logger.Debug(msg, fields...)
+			},
+			level: "DEBUG",
+		},
+		{
+			name: "Info with context",
+			logFunc: func(logger ports.Logger, msg string, fields ...any) {
+				logger.Info(msg, fields...)
+			},
+			level: "INFO",
+		},
+		{
+			name: "Warn with context",
+			logFunc: func(logger ports.Logger, msg string, fields ...any) {
+				logger.Warn(msg, fields...)
+			},
+			level: "WARN",
+		},
+		{
+			name: "Error with context",
+			logFunc: func(logger ports.Logger, msg string, fields ...any) {
+				logger.Error(msg, fields...)
+			},
+			level: "ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			logger := testutil.NewMockLogger()
+			ctx := map[string]any{"context_key": "context_val"}
+
+			// Act
+			contextLogger := logger.WithContext(ctx)
+			tt.logFunc(contextLogger, "test message", "msg_key", "msg_val")
+
+			// Assert
+			messages := logger.GetMessages()
+			require.Len(t, messages, 1, "Should capture one message")
+
+			msg := messages[0]
+			assert.Equal(t, tt.level, msg.Level)
+			assert.Contains(t, msg.Fields, "context_key", "Context fields should be present")
+			assert.Contains(t, msg.Fields, "msg_key", "Message fields should be present")
+		})
+	}
+}
+
+func TestMockLogger_CtxFields_Concurrency_MultipleContextLoggers(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	numGoroutines := 50 // Updated to match T005 requirement
+
+	// Act - create multiple context loggers concurrently
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			ctx := map[string]any{"goroutine_id": id}
+			contextLogger := logger.WithContext(ctx)
+			contextLogger.Info(fmt.Sprintf("message-%d", id))
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert
+	messages := logger.GetMessages()
+	assert.Len(t, messages, numGoroutines, "All concurrent context loggers should capture messages")
+
+	// Verify each message has its own context
+	goroutineIDs := make(map[int]bool)
+	for _, msg := range messages {
+		// Each message should have a unique goroutine_id in its fields
+		hasGoroutineID := false
+		for _, field := range msg.Fields {
+			if field == "goroutine_id" {
+				hasGoroutineID = true
+			}
+			if id, ok := field.(int); ok && id >= 0 && id < numGoroutines {
+				goroutineIDs[id] = true
+			}
+		}
+		assert.True(t, hasGoroutineID, "Each message should have goroutine_id context")
+	}
+
+	// Verify all goroutine IDs were logged
+	assert.Len(t, goroutineIDs, numGoroutines, "All goroutines should have logged with their ID")
+}
+
+func TestMockLogger_CtxFields_Immutability_OriginalLoggerUnaffected(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"request_id": "req-123"}
+
+	// Act
+	contextLogger := logger.WithContext(ctx)
+
+	// Log with original logger (no context)
+	logger.Info("original logger message", "key1", "val1")
 
 	// Log with context logger
-	contextLogger.Info("test message")
+	contextLogger.Info("context logger message", "key2", "val2")
 
+	// Assert
 	messages := logger.GetMessages()
-	assert.NotEmpty(t, messages, "Context logger should capture messages")
-	// Note: actual context implementation will be tested when implemented
+	require.Len(t, messages, 2, "Should capture both messages")
+
+	// First message (original logger) should NOT have context fields
+	msg1 := messages[0]
+	assert.Equal(t, "original logger message", msg1.Msg)
+	assert.NotContains(t, msg1.Fields, "request_id", "Original logger should not have context")
+	assert.Contains(t, msg1.Fields, "key1", "Original logger should have its own fields")
+
+	// Second message (context logger) should have context fields
+	msg2 := messages[1]
+	assert.Equal(t, "context logger message", msg2.Msg)
+	assert.Contains(t, msg2.Fields, "request_id", "Context logger should have context")
+	assert.Contains(t, msg2.Fields, "key2", "Context logger should have its own fields")
+}
+
+func TestMockLogger_CtxFields_FieldOrdering_ContextBeforeMessage(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{
+		"ctx_key1": "ctx_val1",
+		"ctx_key2": "ctx_val2",
+	}
+
+	// Act
+	contextLogger := logger.WithContext(ctx)
+	contextLogger.Info("test", "msg_key1", "msg_val1", "msg_key2", "msg_val2")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	// Verify context fields appear before message fields
+	// Fields structure: [ctx_key1, ctx_val1, ctx_key2, ctx_val2, msg_key1, msg_val1, msg_key2, msg_val2]
+	assert.GreaterOrEqual(t, len(msg.Fields), 8, "Should have at least 8 fields (4 context + 4 message)")
+
+	// Find indices of context and message keys
+	ctxKeyIndex := -1
+	msgKeyIndex := -1
+	for i, field := range msg.Fields {
+		if field == "ctx_key1" {
+			ctxKeyIndex = i
+		}
+		if field == "msg_key1" {
+			msgKeyIndex = i
+		}
+	}
+
+	if ctxKeyIndex != -1 && msgKeyIndex != -1 {
+		assert.Less(t, ctxKeyIndex, msgKeyIndex, "Context fields should appear before message fields")
+	}
+}
+
+// =============================================================================
+// T003: Log Methods Field Merging Tests (Component T003 - C041)
+// =============================================================================
+
+func TestMockLogger_T003_Debug_MergesCtxFieldsWithMessageFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"trace_id": "abc123", "user_id": 42}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act
+	contextLogger.Debug("debug message", "key1", "val1", "key2", 100)
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	assert.Equal(t, "DEBUG", msg.Level)
+	assert.Equal(t, "debug message", msg.Msg)
+
+	// Verify context fields are prepended to message fields
+	assert.Contains(t, msg.Fields, "trace_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "abc123", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "user_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, 42, "Context field value should be present")
+	assert.Contains(t, msg.Fields, "key1", "Message field key should be present")
+	assert.Contains(t, msg.Fields, "val1", "Message field value should be present")
+	assert.Contains(t, msg.Fields, "key2", "Message field key should be present")
+	assert.Contains(t, msg.Fields, 100, "Message field value should be present")
+
+	// Verify total field count (4 context fields + 4 message fields = 8)
+	assert.Len(t, msg.Fields, 8, "Should have exactly 8 fields")
+}
+
+func TestMockLogger_T003_Info_MergesCtxFieldsWithMessageFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"request_id": "req-456"}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act
+	contextLogger.Info("info message", "status", "success")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	assert.Equal(t, "INFO", msg.Level)
+	assert.Equal(t, "info message", msg.Msg)
+
+	// Verify context fields are prepended
+	assert.Contains(t, msg.Fields, "request_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "req-456", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "status", "Message field key should be present")
+	assert.Contains(t, msg.Fields, "success", "Message field value should be present")
+
+	// Verify total field count (2 context fields + 2 message fields = 4)
+	assert.Len(t, msg.Fields, 4, "Should have exactly 4 fields")
+}
+
+func TestMockLogger_T003_Warn_MergesCtxFieldsWithMessageFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"service": "api", "environment": "staging"}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act
+	contextLogger.Warn("warning message", "retry_count", 3)
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	assert.Equal(t, "WARN", msg.Level)
+	assert.Equal(t, "warning message", msg.Msg)
+
+	// Verify context fields are prepended
+	assert.Contains(t, msg.Fields, "service", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "api", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "environment", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "staging", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "retry_count", "Message field key should be present")
+	assert.Contains(t, msg.Fields, 3, "Message field value should be present")
+
+	// Verify total field count (4 context fields + 2 message fields = 6)
+	assert.Len(t, msg.Fields, 6, "Should have exactly 6 fields")
+}
+
+func TestMockLogger_T003_Error_MergesCtxFieldsWithMessageFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"correlation_id": "corr-789", "hostname": "server-01"}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act
+	contextLogger.Error("error message", "error_code", "ERR_500", "details", "connection timeout")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	assert.Equal(t, "ERROR", msg.Level)
+	assert.Equal(t, "error message", msg.Msg)
+
+	// Verify context fields are prepended
+	assert.Contains(t, msg.Fields, "correlation_id", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "corr-789", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "hostname", "Context field key should be present")
+	assert.Contains(t, msg.Fields, "server-01", "Context field value should be present")
+	assert.Contains(t, msg.Fields, "error_code", "Message field key should be present")
+	assert.Contains(t, msg.Fields, "ERR_500", "Message field value should be present")
+	assert.Contains(t, msg.Fields, "details", "Message field key should be present")
+	assert.Contains(t, msg.Fields, "connection timeout", "Message field value should be present")
+
+	// Verify total field count (4 context fields + 4 message fields = 8)
+	assert.Len(t, msg.Fields, 8, "Should have exactly 8 fields")
+}
+
+func TestMockLogger_T003_AllLevels_WithoutContextFields(t *testing.T) {
+	// Arrange - logger WITHOUT context
+	logger := testutil.NewMockLogger()
+
+	// Act - log at all levels without context
+	logger.Debug("debug no ctx", "d_key", "d_val")
+	logger.Info("info no ctx", "i_key", "i_val")
+	logger.Warn("warn no ctx", "w_key", "w_val")
+	logger.Error("error no ctx", "e_key", "e_val")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 4, "Should capture 4 messages")
+
+	// Verify each message has ONLY message fields (no context fields)
+	for i, msg := range messages {
+		assert.Len(t, msg.Fields, 2, "Message %d should have exactly 2 fields (no context)", i)
+	}
+
+	// Verify Debug
+	assert.Equal(t, "DEBUG", messages[0].Level)
+	assert.Contains(t, messages[0].Fields, "d_key")
+	assert.Contains(t, messages[0].Fields, "d_val")
+
+	// Verify Info
+	assert.Equal(t, "INFO", messages[1].Level)
+	assert.Contains(t, messages[1].Fields, "i_key")
+	assert.Contains(t, messages[1].Fields, "i_val")
+
+	// Verify Warn
+	assert.Equal(t, "WARN", messages[2].Level)
+	assert.Contains(t, messages[2].Fields, "w_key")
+	assert.Contains(t, messages[2].Fields, "w_val")
+
+	// Verify Error
+	assert.Equal(t, "ERROR", messages[3].Level)
+	assert.Contains(t, messages[3].Fields, "e_key")
+	assert.Contains(t, messages[3].Fields, "e_val")
+}
+
+func TestMockLogger_T003_EdgeCase_EmptyContextEmptyFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	emptyCtx := map[string]any{}
+	contextLogger := logger.WithContext(emptyCtx)
+
+	// Act - log with no message fields
+	contextLogger.Debug("debug empty")
+	contextLogger.Info("info empty")
+	contextLogger.Warn("warn empty")
+	contextLogger.Error("error empty")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 4, "Should capture 4 messages")
+
+	// All messages should have empty Fields
+	for i, msg := range messages {
+		assert.Empty(t, msg.Fields, "Message %d should have empty fields", i)
+	}
+}
+
+func TestMockLogger_T003_EdgeCase_OnlyContextFieldsNoMessageFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"ctx_only": "value"}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act - log without message fields
+	contextLogger.Debug("debug ctx only")
+	contextLogger.Info("info ctx only")
+	contextLogger.Warn("warn ctx only")
+	contextLogger.Error("error ctx only")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 4, "Should capture 4 messages")
+
+	// All messages should have ONLY context fields
+	for i, msg := range messages {
+		assert.Len(t, msg.Fields, 2, "Message %d should have exactly 2 fields (context only)", i)
+		assert.Contains(t, msg.Fields, "ctx_only", "Context field key should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "value", "Context field value should be present in message %d", i)
+	}
+}
+
+func TestMockLogger_T003_EdgeCase_ChainedContextMerging(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx1 := map[string]any{"level1": "a"}
+	ctx2 := map[string]any{"level2": "b"}
+
+	// Act - chain contexts and log at all levels
+	logger1 := logger.WithContext(ctx1)
+	logger2 := logger1.WithContext(ctx2)
+
+	logger2.Debug("chained debug", "msg", "d")
+	logger2.Info("chained info", "msg", "i")
+	logger2.Warn("chained warn", "msg", "w")
+	logger2.Error("chained error", "msg", "e")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 4, "Should capture 4 messages")
+
+	// All messages should have both context levels plus message fields
+	for i, msg := range messages {
+		assert.Len(t, msg.Fields, 6, "Message %d should have 6 fields (2 ctx1 + 2 ctx2 + 2 msg)", i)
+		assert.Contains(t, msg.Fields, "level1", "First context should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "a", "First context value should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "level2", "Second context should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "b", "Second context value should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "msg", "Message field key should be present in message %d", i)
+	}
+}
+
+func TestMockLogger_T003_EdgeCase_LargeNumberOfFields(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{
+		"ctx1": "val1",
+		"ctx2": "val2",
+		"ctx3": "val3",
+	}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act - log with many message fields
+	messageFields := []any{
+		"field1", 1,
+		"field2", 2,
+		"field3", 3,
+		"field4", 4,
+		"field5", 5,
+	}
+
+	contextLogger.Debug("large fields debug", messageFields...)
+	contextLogger.Info("large fields info", messageFields...)
+	contextLogger.Warn("large fields warn", messageFields...)
+	contextLogger.Error("large fields error", messageFields...)
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 4, "Should capture 4 messages")
+
+	// Each message should have 6 context fields + 10 message fields = 16 total
+	for i, msg := range messages {
+		assert.Len(t, msg.Fields, 16, "Message %d should have 16 fields (6 ctx + 10 msg)", i)
+
+		// Verify context fields are present
+		assert.Contains(t, msg.Fields, "ctx1", "Context field should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "ctx2", "Context field should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "ctx3", "Context field should be present in message %d", i)
+
+		// Verify message fields are present
+		assert.Contains(t, msg.Fields, "field1", "Message field should be present in message %d", i)
+		assert.Contains(t, msg.Fields, "field5", "Message field should be present in message %d", i)
+	}
+}
+
+func TestMockLogger_T003_FieldOrderingPreservation(t *testing.T) {
+	// Arrange
+	logger := testutil.NewMockLogger()
+	ctx := map[string]any{"ctx_key": "ctx_val"}
+	contextLogger := logger.WithContext(ctx)
+
+	// Act
+	contextLogger.Debug("test", "msg_key", "msg_val")
+
+	// Assert
+	messages := logger.GetMessages()
+	require.Len(t, messages, 1, "Should capture one message")
+
+	msg := messages[0]
+	// Fields should be: [ctx_key, ctx_val, msg_key, msg_val]
+	assert.Len(t, msg.Fields, 4, "Should have exactly 4 fields")
+
+	// Find indices to verify ordering
+	ctxKeyIdx := -1
+	msgKeyIdx := -1
+	for i, field := range msg.Fields {
+		if field == "ctx_key" {
+			ctxKeyIdx = i
+		}
+		if field == "msg_key" {
+			msgKeyIdx = i
+		}
+	}
+
+	assert.NotEqual(t, -1, ctxKeyIdx, "Context key should be found")
+	assert.NotEqual(t, -1, msgKeyIdx, "Message key should be found")
+	assert.Less(t, ctxKeyIdx, msgKeyIdx, "Context fields must appear before message fields")
 }
 
 func TestMockLogger_ConcurrentAccess(t *testing.T) {

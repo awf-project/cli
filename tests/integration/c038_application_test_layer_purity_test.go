@@ -425,8 +425,8 @@ func TestIntegration_BuilderWithMocks(t *testing.T) {
 	// (actual execution would require workflow and state setup, tested elsewhere)
 }
 
-// TestArchitectureCompliance_NoInfrastructureImports validates test purity
-func TestArchitectureCompliance_NoInfrastructureImports(t *testing.T) {
+// TestArchitectureCompliance_C038_NoInfrastructureImports validates test purity
+func TestArchitectureCompliance_C038_NoInfrastructureImports(t *testing.T) {
 	// This test exists to document that these mocks enable application tests
 	// to run without importing internal/infrastructure/agents package.
 	//

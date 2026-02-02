@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -170,7 +171,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)

@@ -58,7 +58,7 @@
 //
 //	store := testutil.NewMockStateStore()
 //	executor := testutil.NewMockCommandExecutor()
-//	executor.SetResult("success", nil)
+//	executor.SetCommandResult("", &ports.CommandResult{Stdout: "success", ExitCode: 0})
 //
 //	logger := testutil.NewMockLogger()
 //
@@ -146,7 +146,7 @@
 //	func TestWorkflowExecution(t *testing.T) {
 //	    // Arrange: Build service with test fixtures
 //	    executor := testutil.NewMockCommandExecutor()
-//	    executor.SetResult("success", nil)
+//	    executor.SetCommandResult("", &ports.CommandResult{Stdout: "success", ExitCode: 0})
 //
 //	    workflow := testutil.SimpleWorkflow("test")
 //
@@ -200,7 +200,7 @@
 // After (testutil mock):
 //
 //	executor := testutil.NewMockCommandExecutor()
-//	executor.SetResult("success", nil)
+//	executor.SetCommandResult("", &ports.CommandResult{Stdout: "success", ExitCode: 0})
 //
 // ## Replacing Manual Service Setup
 //
@@ -223,7 +223,7 @@
 // After (2-3 lines):
 //
 //	executor := testutil.NewMockCommandExecutor()
-//	executor.SetResult("success", nil)
+//	executor.SetCommandResult("", &ports.CommandResult{Stdout: "success", ExitCode: 0})
 //	svc := testutil.NewExecutionServiceBuilder().
 //	    WithExecutor(executor).
 //	    Build(t)

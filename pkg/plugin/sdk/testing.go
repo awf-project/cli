@@ -175,8 +175,16 @@ func (m *MockOperationProvider) HandleOperation(ctx context.Context, name string
 	return NewSuccessResult("ok", nil), nil
 }
 
-// SetResult configures the result for an operation.
+// SetResult configures the mock to return a specific result for all operations (test helper).
+//
+// Deprecated: Use SetCommandResult for operation-specific results. Migration tracked in #150.
 func (m *MockOperationProvider) SetResult(operation string, result *OperationResult) {
+	// Legacy behavior: delegates to SetCommandResult
+	m.SetCommandResult(operation, result)
+}
+
+// SetCommandResult configures the mock to return a specific result for a given operation (test helper).
+func (m *MockOperationProvider) SetCommandResult(operation string, result *OperationResult) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.Results[operation] = result
