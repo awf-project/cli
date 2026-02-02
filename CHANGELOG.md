@@ -249,6 +249,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
+
+- **[B002] CLIExecutor Missing Process Group Management**
+  - Fixed orphan process accumulation when agent provider processes (claude, codex, gemini, opencode) persist after workflow cancellation
+  - Added process group isolation using `SysProcAttr.Setpgid` and `syscall.Kill(-pid, SIGKILL)` pattern from ShellExecutor
+  - Processes now terminate within 100ms of context cancellation, preventing memory leaks
+  - Impact: Prevents accumulation of orphaned agent processes consuming system memory
+  - Technical: Applied same 3-step pattern from ShellExecutor (Setpgid, Cancel callback, WaitDelay)
+  - Testing: Added 5 unit tests and 2 integration tests verifying process group cleanup
+  - Cleanup: Removed dead nil checks (bytes.Buffer.Bytes() never returns nil)
+
 - **F049**: Storage Directory Documentation Mismatch
   - Removed unused `.awf/storage/states/` and `.awf/storage/logs/` directory creation from `awf init` command
   - Updated documentation to accurately reflect XDG-compliant storage paths (`~/.local/share/awf/` or `$XDG_DATA_HOME/awf/`)
