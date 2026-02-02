@@ -66,6 +66,12 @@ func (s *ExecutionService) SetAgentRegistry(registry ports.AgentRegistry) {
 	s.agentRegistry = registry
 }
 
+// SetEvaluator configures the expression evaluator for conditional transitions.
+// When set, enables evaluation of "when" clauses in workflow transitions.
+func (s *ExecutionService) SetEvaluator(evaluator ExpressionEvaluator) {
+	s.evaluator = evaluator
+}
+
 // SetConversationManager configures the conversation manager for F033 multi-turn conversations.
 // When set, agent-type steps with mode: conversation can execute managed conversations.
 func (s *ExecutionService) SetConversationManager(mgr *ConversationManager) {

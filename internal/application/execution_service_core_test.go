@@ -8,8 +8,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanoix/awf/internal/application"
+	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // =============================================================================
@@ -1882,4 +1886,148 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 	// Should succeed without trying to execute empty command
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+// =============================================================================
+// C027 Component T001: ExecutionService Setter Tests
+// Feature: C027 - Application Layer Test Coverage Improvement
+// =============================================================================
+//
+// This section contains tests for ExecutionService setters that previously
+// had zero coverage:
+// - SetOperationProvider
+// - SetAgentRegistry
+// - SetEvaluator
+// - SetConversationManager
+//
+// Test pattern follows existing setter tests from plugin_operation_test.go
+// and agent_step_test.go. Each setter has two test scenarios: valid value and nil value.
+// =============================================================================
+
+// TestExecutionService_SetOperationProvider_Valid verifies that a valid
+// ports.OperationProvider can be set without panicking.
+func TestExecutionService_SetOperationProvider_Valid(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// Create a simple mock provider (minimal implementation)
+	provider := &simpleOperationProvider{}
+
+	// SetOperationProvider should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetOperationProvider(provider)
+	})
+}
+
+// TestExecutionService_SetOperationProvider_Nil verifies that setting
+// nil operation provider is handled gracefully (does not panic).
+func TestExecutionService_SetOperationProvider_Nil(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// SetOperationProvider with nil should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetOperationProvider(nil)
+	})
+}
+
+// TestExecutionService_SetAgentRegistry_Valid verifies that a valid
+// ports.AgentRegistry can be set without panicking.
+func TestExecutionService_SetAgentRegistry_Valid(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// Create mock registry with test provider
+	registry := testutil.NewMockAgentRegistry()
+	claude := testutil.NewMockAgentProvider("claude")
+	_ = registry.Register(claude)
+
+	// SetAgentRegistry should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetAgentRegistry(registry)
+	})
+}
+
+// TestExecutionService_SetAgentRegistry_Nil verifies that setting
+// nil agent registry is handled gracefully (does not panic).
+func TestExecutionService_SetAgentRegistry_Nil(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// SetAgentRegistry with nil should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetAgentRegistry(nil)
+	})
+}
+
+// TestExecutionService_SetEvaluator_Valid verifies that a valid
+// ExpressionEvaluator can be set without panicking.
+func TestExecutionService_SetEvaluator_Valid(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// Create a simple mock evaluator
+	evaluator := &simpleExpressionEvaluator{}
+
+	// SetEvaluator should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetEvaluator(evaluator)
+	})
+}
+
+// TestExecutionService_SetEvaluator_Nil verifies that setting
+// nil expression evaluator is handled gracefully (does not panic).
+func TestExecutionService_SetEvaluator_Nil(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// SetEvaluator with nil should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetEvaluator(nil)
+	})
+}
+
+// TestExecutionService_SetConversationManager_Valid verifies that a valid
+// ConversationManager can be set without panicking.
+func TestExecutionService_SetConversationManager_Valid(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// Create a minimal ConversationManager instance
+	mgr := &application.ConversationManager{}
+
+	// SetConversationManager should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetConversationManager(mgr)
+	})
+}
+
+// TestExecutionService_SetConversationManager_Nil verifies that setting
+// nil conversation manager is handled gracefully (does not panic).
+func TestExecutionService_SetConversationManager_Nil(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	// SetConversationManager with nil should not panic
+	assert.NotPanics(t, func() {
+		execSvc.SetConversationManager(nil)
+	})
+}
+
+// =============================================================================
+// Helper mocks for setter tests
+// =============================================================================
+
+// simpleOperationProvider implements ports.OperationProvider for testing SetOperationProvider.
+type simpleOperationProvider struct{}
+
+func (s *simpleOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+	return nil, false
+}
+
+func (s *simpleOperationProvider) ListOperations() []*plugin.OperationSchema {
+	return nil
+}
+
+func (s *simpleOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+	return &plugin.OperationResult{Success: true}, nil
+}
+
+// simpleExpressionEvaluator implements application.ExpressionEvaluator for testing SetEvaluator.
+type simpleExpressionEvaluator struct{}
+
+func (s *simpleExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+	return false, nil
 }

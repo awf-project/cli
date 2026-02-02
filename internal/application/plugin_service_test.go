@@ -76,6 +76,7 @@ type mockPluginConfig struct {
 	mu            sync.RWMutex
 	states        map[string]*plugin.PluginState
 	setEnabledErr error
+	setConfigErr  error
 }
 
 func newMockPluginConfig() *mockPluginConfig {
@@ -120,6 +121,9 @@ func (m *mockPluginConfig) GetConfig(name string) map[string]any {
 }
 
 func (m *mockPluginConfig) SetConfig(ctx context.Context, name string, config map[string]any) error {
+	if m.setConfigErr != nil {
+		return m.setConfigErr
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	state, ok := m.states[name]
@@ -1155,4 +1159,177 @@ func TestPluginService_NilStateStore_IsPluginEnabled(t *testing.T) {
 
 	// Default: enabled when no state store
 	assert.True(t, enabled)
+}
+
+// =============================================================================
+// Plugin Lifecycle Error Path Tests (C027-T006)
+// =============================================================================
+
+// TestPluginService_ShutdownPlugin_ContextCanceled tests ShutdownPlugin with canceled context
+func TestPluginService_ShutdownPlugin_ContextCanceled(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := svc.ShutdownPlugin(ctx, "test-plugin")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, err.Error(), "context cancelled")
+}
+
+// TestPluginService_ShutdownPlugin_ManagerError tests ShutdownPlugin when manager returns error
+func TestPluginService_ShutdownPlugin_ManagerError(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+	shutdownErr := errors.New("shutdown hardware failure")
+	manager.SetShutdownFunc(func(ctx context.Context, name string) error {
+		return shutdownErr
+	})
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	err := svc.ShutdownPlugin(context.Background(), "test-plugin")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "shutdown hardware failure")
+	assert.ErrorIs(t, err, shutdownErr)
+}
+
+// TestPluginService_EnablePlugin_ContextCanceled tests EnablePlugin with canceled context
+func TestPluginService_EnablePlugin_ContextCanceled(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusDisabled)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel before calling EnablePlugin
+
+	err := svc.EnablePlugin(ctx, "test-plugin")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, err.Error(), "context cancelled")
+}
+
+// TestPluginService_DisablePlugin_ContextCanceled tests DisablePlugin with canceled context
+func TestPluginService_DisablePlugin_ContextCanceled(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel before calling DisablePlugin
+
+	err := svc.DisablePlugin(ctx, "test-plugin")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, err.Error(), "context cancelled")
+}
+
+// TestPluginService_DisablePlugin_ShutdownError tests DisablePlugin when shutdown during disable fails
+func TestPluginService_DisablePlugin_ShutdownError(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+	shutdownErr := errors.New("plugin shutdown failed")
+	manager.SetShutdownFunc(func(ctx context.Context, name string) error {
+		return shutdownErr
+	})
+
+	stateStore := newMockPluginStateStore()
+	stateStore.setPluginEnabled("test-plugin", true)
+
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	err := svc.DisablePlugin(context.Background(), "test-plugin")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "shutdown plugin")
+	assert.ErrorIs(t, err, shutdownErr)
+	// State should remain enabled since shutdown failed
+	assert.True(t, stateStore.IsEnabled("test-plugin"))
+}
+
+// TestPluginService_DisablePlugin_SetEnabledError tests DisablePlugin when SetEnabled fails
+func TestPluginService_DisablePlugin_SetEnabledError(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	stateStore.setPluginEnabled("test-plugin", true)
+	persistErr := errors.New("database connection lost")
+	stateStore.setEnabledErr = persistErr
+
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	err := svc.DisablePlugin(context.Background(), "test-plugin")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "disable plugin")
+	assert.ErrorIs(t, err, persistErr)
+	// Plugin should be stopped even if state persistence failed
+	info, found := manager.Get("test-plugin")
+	require.True(t, found)
+	assert.Equal(t, plugin.StatusStopped, info.Status)
+}
+
+// TestPluginService_SetPluginConfig_ContextCanceled tests SetPluginConfig with canceled context
+func TestPluginService_SetPluginConfig_ContextCanceled(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel before calling SetPluginConfig
+
+	config := map[string]any{"key": "value"}
+	err := svc.SetPluginConfig(ctx, "test-plugin", config)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, err.Error(), "context cancelled")
+}
+
+// TestPluginService_SetPluginConfig_SetConfigError tests SetPluginConfig when SetConfig fails
+func TestPluginService_SetPluginConfig_SetConfigError(t *testing.T) {
+	manager := testutil.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	configErr := errors.New("disk write failed")
+	stateStore.setConfigErr = configErr
+
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	config := map[string]any{"timeout": 30}
+	err := svc.SetPluginConfig(context.Background(), "test-plugin", config)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "set config for plugin")
+	assert.ErrorIs(t, err, configErr)
 }

@@ -169,6 +169,47 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 	}
 }
 
+// NewTestHarnessWithEvaluator creates a new ServiceTestHarness with default mock dependencies
+// and configures the provided expression evaluator for conditional transitions.
+// All dependencies are thread-safe testutil mocks with sensible defaults.
+//
+// Parameters:
+//   - t: testing.T instance for test context
+//   - evaluator: application.ExpressionEvaluator implementation for evaluating "when" clauses
+//
+// Returns a harness ready for configuration via With*() methods.
+func NewTestHarnessWithEvaluator(t *testing.T, evaluator application.ExpressionEvaluator) *ServiceTestHarness {
+	// Create default mock dependencies
+	repository := testutil.NewMockWorkflowRepository()
+	store := testutil.NewMockStateStore()
+	executor := testutil.NewMockCommandExecutor()
+	logger := testutil.NewMockLogger()
+
+	// Configure executor with default success result for all commands
+	executor.SetCommandResult("", &ports.CommandResult{
+		Stdout:   "",
+		Stderr:   "",
+		ExitCode: 0,
+	})
+
+	// Create ExecutionServiceBuilder with the mocks and evaluator
+	builder := testutil.NewExecutionServiceBuilder().
+		WithWorkflowRepository(repository).
+		WithStateStore(store).
+		WithExecutor(executor).
+		WithLogger(logger).
+		WithEvaluator(evaluator)
+
+	return &ServiceTestHarness{
+		t:          t,
+		builder:    builder,
+		repository: repository,
+		store:      store,
+		executor:   executor,
+		logger:     logger,
+	}
+}
+
 // WithWorkflow registers a workflow in the mock repository.
 // Convenience method that delegates to repository.AddWorkflow(name, wf).
 //

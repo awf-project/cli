@@ -29,11 +29,15 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 	tmpl := template.New("cmd").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
-			"escape":  escapeTemplateFunc,
-			"json":    jsonTemplateFunc,
-			"loop":    r.makeLoopAccessor(ctx),
-			"context": r.makeContextAccessor(ctx),
-			"error":   r.makeErrorAccessor(ctx),
+			"escape":   escapeTemplateFunc,
+			"json":     jsonTemplateFunc,
+			"inputs":   r.makeInputsAccessor(ctx),
+			"states":   r.makeStatesAccessor(ctx),
+			"workflow": r.makeWorkflowAccessor(ctx),
+			"env":      r.makeEnvAccessor(ctx),
+			"loop":     r.makeLoopAccessor(ctx),
+			"context":  r.makeContextAccessor(ctx),
+			"error":    r.makeErrorAccessor(ctx),
 		})
 
 	// Parse template
@@ -219,5 +223,37 @@ func (r *TemplateResolver) makeErrorAccessor(ctx *Context) func() (map[string]an
 			"exit_code": ctx.Error.ExitCode,
 			"state":     ctx.Error.State,
 		}, nil
+	}
+}
+
+// makeInputsAccessor returns a function that provides the inputs map.
+// This allows {{inputs.name}} syntax without the leading dot.
+func (r *TemplateResolver) makeInputsAccessor(ctx *Context) func() map[string]any {
+	return func() map[string]any {
+		return ctx.Inputs
+	}
+}
+
+// makeStatesAccessor returns a function that provides the states map.
+// This allows {{states.step_name.output}} syntax without the leading dot.
+func (r *TemplateResolver) makeStatesAccessor(ctx *Context) func() map[string]StepStateData {
+	return func() map[string]StepStateData {
+		return ctx.States
+	}
+}
+
+// makeWorkflowAccessor returns a function that provides workflow metadata.
+// This allows {{workflow.id}}, {{workflow.name}} syntax without the leading dot.
+func (r *TemplateResolver) makeWorkflowAccessor(ctx *Context) func() WorkflowData {
+	return func() WorkflowData {
+		return ctx.Workflow
+	}
+}
+
+// makeEnvAccessor returns a function that provides environment variables.
+// This allows {{env.VAR_NAME}} syntax without the leading dot.
+func (r *TemplateResolver) makeEnvAccessor(ctx *Context) func() map[string]string {
+	return func() map[string]string {
+		return ctx.Env
 	}
 }
