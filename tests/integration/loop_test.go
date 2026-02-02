@@ -17,6 +17,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -55,7 +56,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -109,7 +110,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -143,13 +144,13 @@ states:
     type: for_each
     items: '["1", "2", "stop", "4", "5"]'
     max_iterations: 10
-    break_when: 'states.check.output == "stop"'
+    break_when: 'states.check.Output == "stop"'
     body:
       - check
     on_complete: done
   check:
     type: step
-    command: 'echo "{{.loop.Item}}" >> ` + logFile + ` && echo "{{.loop.Item}}"'
+    command: 'echo "{{.loop.Item}}" >> ` + logFile + ` && printf "%s" "{{.loop.Item}}"'
     capture:
       stdout: output
     on_success: process_items
@@ -165,7 +166,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -229,7 +230,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -272,7 +273,7 @@ states:
     type: while
     while: 'true'
     max_iterations: 10
-    break_when: 'states.increment.exit_code != 0'
+    break_when: 'states.increment.ExitCode != 0'
     body:
       - increment
     on_complete: done
@@ -297,7 +298,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -385,7 +386,7 @@ states:
     type: while
     while: 'true'
     max_iterations: 100
-    break_when: 'states.check.output == "ready"'
+    break_when: 'states.check.Output == "ready"'
     body:
       - check
     on_complete: done
@@ -395,9 +396,9 @@ states:
       COUNT=$(wc -l < ` + logFile + ` 2>/dev/null || echo 0)
       echo "poll" >> ` + logFile + `
       if [ "$COUNT" -ge 3 ]; then
-        echo "ready"
+        printf "%s" "ready"
       else
-        echo "waiting"
+        printf "%s" "waiting"
       fi
     capture:
       stdout: output
@@ -417,7 +418,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -437,6 +438,97 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	assert.Equal(t, "poll\npoll\npoll\npoll\n", string(data)) // 4 polls before ready
+}
+
+// Feature: B003
+//
+// TestWhileLoop_CustomOutputBreak_B003_Integration tests the B003 bug fix:
+// while loop break_when with custom Output values (not just "ready"/"stop")
+// This test reproduces the exact scenario from bug report B003 where
+// break_when: 'states.run_tests.Output == "TESTS_PASSED"' was not evaluated correctly.
+//
+// Expected behavior: Loop should break after first iteration when Output = "TESTS_PASSED"
+// Bug behavior (with simpleExpressionEvaluator): Loop runs all max_iterations
+func TestWhileLoop_CustomOutputBreak_B003_Integration(t *testing.T) {
+	tmpDir := t.TempDir()
+	iterationFile := filepath.Join(tmpDir, "iterations.log")
+
+	wfYAML := `name: while-custom-break
+version: "1.0.0"
+states:
+  initial: test_loop
+  test_loop:
+    type: while
+    while: 'true'
+    max_iterations: 5
+    break_when: 'states.run_tests.Output == "TESTS_PASSED"'
+    body:
+      - run_tests
+    on_complete: done
+  run_tests:
+    type: step
+    command: |
+      # Log iteration
+      echo "iteration" >> ` + iterationFile + `
+      # First iteration outputs TESTS_PASSED
+      COUNT=$(wc -l < ` + iterationFile + ` 2>/dev/null || echo 0)
+      if [ "$COUNT" -ge 1 ]; then
+        printf "%s" "TESTS_PASSED"
+      else
+        printf "%s" "TESTS_FAILED"
+      fi
+    capture:
+      stdout: Output
+    on_success: test_loop
+  done:
+    type: terminal
+    status: success
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "while-custom-break.yaml"), []byte(wfYAML), 0o644)
+	require.NoError(t, err)
+	// Create empty iteration log
+	err = os.WriteFile(iterationFile, []byte{}, 0o644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &mockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execCtx, err := execSvc.Run(ctx, "while-custom-break", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// BUG: With simpleExpressionEvaluator, this test will FAIL because:
+	// - Mock only recognizes hardcoded "ready" and "stop" values
+	// - "TESTS_PASSED" is not in the hardcoded list
+	// - Loop runs all 5 iterations instead of breaking after 1
+	//
+	// EXPECTED: Loop should break after 1 iteration when Output = "TESTS_PASSED"
+	data, err := os.ReadFile(iterationFile)
+	require.NoError(t, err)
+
+	// This assertion will FAIL with mock evaluator (will see 5 iterations)
+	// This assertion will PASS with real expression.NewExprEvaluator()
+	assert.Equal(t, "iteration\n", string(data),
+		"Loop should break after first iteration when states.run_tests.Output == 'TESTS_PASSED'")
+
+	// Verify the Output state was captured correctly
+	testState, exists := execCtx.States["run_tests"]
+	require.True(t, exists, "run_tests state should exist")
+	assert.Equal(t, "TESTS_PASSED", testState.Output, "Output should be TESTS_PASSED")
 }
 
 // =============================================================================
@@ -481,7 +573,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -528,7 +620,7 @@ func TestLoopFixtures_Integration(t *testing.T) {
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -587,7 +679,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -640,7 +732,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1207,7 +1299,7 @@ states:
     type: while
     while: 'true'
     max_iterations: 5
-    break_when: 'states.increment.exit_code != 0'
+    break_when: 'states.increment.ExitCode != 0'
     body:
       - increment
     on_complete: done
@@ -1233,7 +1325,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1735,7 +1827,7 @@ states:
     type: while
     while: 'true'
     max_iterations: 5
-    break_when: 'states.increment.exit_code != 0'
+    break_when: 'states.increment.ExitCode != 0'
     body:
       - increment
     on_complete: outer_loop
@@ -1761,7 +1853,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -2308,7 +2400,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluator()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)

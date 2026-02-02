@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **B003**: Fixed while loop `break_when` condition not evaluating correctly
+  - Root cause: Integration tests used `simpleExpressionEvaluator` mock with outdated lowercase keys (`output`, `exit_code`) and hardcoded value matching
+  - Solution: Replaced mock with real `expression.NewExprEvaluator()` across all integration tests, updated expressions to PascalCase per B001 convention
+  - Impact: `break_when` conditions now work with arbitrary Output values, not just hardcoded "ready"/"stop"
+  - Files: 57+ evaluator replacements in tests/integration/ (loop_test.go, loop_dynamic_test.go, loop_json_serialization_test.go, loop_transitions_test.go, subworkflow_functional_test.go)
+  - Removed deprecated test helpers: `simpleExpressionEvaluator`, `simpleExpressionEvaluatorT009`
+
 - **C041**: Removed TODO(#150) comment from MockLogger.WithContext implementation
   - Replaced stub implementation with full context accumulation logic
   - Method now properly merges context fields with log message fields

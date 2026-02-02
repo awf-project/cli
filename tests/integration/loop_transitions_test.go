@@ -18,6 +18,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -1128,63 +1129,6 @@ func (m *mockLoggerT009) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
-// simpleExpressionEvaluatorT009 evaluates basic expressions for T009 tests
-type simpleExpressionEvaluatorT009 struct{}
-
-func newSimpleExpressionEvaluatorT009() *simpleExpressionEvaluatorT009 {
-	return &simpleExpressionEvaluatorT009{}
-}
-
-func (e *simpleExpressionEvaluatorT009) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
-	// Handle common test expressions
-	switch expr {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	}
-
-	// Handle contains expressions: 'states.X.Output contains "value"'
-	if ctx != nil && ctx.States != nil {
-		for stepName, state := range ctx.States {
-			// Pattern: states.X.Output contains "VALUE"
-			prefix := "states." + stepName + ".Output contains \""
-			if strings.HasPrefix(expr, prefix) && strings.HasSuffix(expr, "\"") {
-				searchValue := strings.TrimPrefix(expr, prefix)
-				searchValue = strings.TrimSuffix(searchValue, "\"")
-				return strings.Contains(state.Output, searchValue), nil
-			}
-
-			// Pattern: states.X.output contains "VALUE" (lowercase)
-			prefixLower := "states." + stepName + ".output contains \""
-			if strings.HasPrefix(expr, prefixLower) && strings.HasSuffix(expr, "\"") {
-				searchValue := strings.TrimPrefix(expr, prefixLower)
-				searchValue = strings.TrimSuffix(searchValue, "\"")
-				return strings.Contains(state.Output, searchValue), nil
-			}
-
-			// Pattern: states.X.exit_code == 0
-			if expr == "states."+stepName+".exit_code == 0" {
-				return state.ExitCode == 0, nil
-			}
-
-			// Pattern: states.X.exit_code != 0
-			if expr == "states."+stepName+".exit_code != 0" {
-				return state.ExitCode != 0, nil
-			}
-
-			// Pattern: states.X.output == "value"
-			if strings.HasPrefix(expr, "states."+stepName+".output == \"") {
-				expectedValue := strings.TrimPrefix(expr, "states."+stepName+".output == \"")
-				expectedValue = strings.TrimSuffix(expectedValue, "\"")
-				actualValue := strings.TrimSpace(state.Output)
-				return actualValue == expectedValue, nil
-			}
-		}
-	}
-
-	return false, nil
-}
 
 // =============================================================================
 // Tests
@@ -1220,7 +1164,7 @@ func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1299,7 +1243,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1373,7 +1317,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1472,7 +1416,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1559,7 +1503,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1631,7 +1575,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1706,7 +1650,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLoggerT009{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := newSimpleExpressionEvaluatorT009()
+	evaluator := expression.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
 	parallelExec := application.NewParallelExecutor(logger)
