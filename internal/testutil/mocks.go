@@ -422,8 +422,9 @@ func (m *MockCommandExecutor) Clear() {
 //	logger.Info("test message", "key", "value")
 //	messages := logger.GetMessages()
 type MockLogger struct {
-	mu       sync.Mutex
-	messages []LogMessage
+	mu        *sync.Mutex
+	messages  *[]LogMessage
+	ctxFields []any // Context fields accumulated via WithContext()
 }
 
 // LogMessage represents a captured log message with level and content.
@@ -435,8 +436,10 @@ type LogMessage struct {
 
 // NewMockLogger creates a new thread-safe mock logger.
 func NewMockLogger() *MockLogger {
+	messages := make([]LogMessage, 0)
 	return &MockLogger{
-		messages: make([]LogMessage, 0),
+		mu:       &sync.Mutex{},
+		messages: &messages,
 	}
 }
 
@@ -444,10 +447,14 @@ func NewMockLogger() *MockLogger {
 func (m *MockLogger) Debug(msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{
+	// Prepend context fields before message fields
+	allFields := make([]any, 0, len(m.ctxFields)+len(fields))
+	allFields = append(allFields, m.ctxFields...)
+	allFields = append(allFields, fields...)
+	*m.messages = append(*m.messages, LogMessage{
 		Level:  "DEBUG",
 		Msg:    msg,
-		Fields: fields,
+		Fields: allFields,
 	})
 }
 
@@ -455,10 +462,14 @@ func (m *MockLogger) Debug(msg string, fields ...any) {
 func (m *MockLogger) Info(msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{
+	// Prepend context fields before message fields
+	allFields := make([]any, 0, len(m.ctxFields)+len(fields))
+	allFields = append(allFields, m.ctxFields...)
+	allFields = append(allFields, fields...)
+	*m.messages = append(*m.messages, LogMessage{
 		Level:  "INFO",
 		Msg:    msg,
-		Fields: fields,
+		Fields: allFields,
 	})
 }
 
@@ -466,10 +477,14 @@ func (m *MockLogger) Info(msg string, fields ...any) {
 func (m *MockLogger) Warn(msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{
+	// Prepend context fields before message fields
+	allFields := make([]any, 0, len(m.ctxFields)+len(fields))
+	allFields = append(allFields, m.ctxFields...)
+	allFields = append(allFields, fields...)
+	*m.messages = append(*m.messages, LogMessage{
 		Level:  "WARN",
 		Msg:    msg,
-		Fields: fields,
+		Fields: allFields,
 	})
 }
 
@@ -477,24 +492,40 @@ func (m *MockLogger) Warn(msg string, fields ...any) {
 func (m *MockLogger) Error(msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{
+	// Prepend context fields before message fields
+	allFields := make([]any, 0, len(m.ctxFields)+len(fields))
+	allFields = append(allFields, m.ctxFields...)
+	allFields = append(allFields, fields...)
+	*m.messages = append(*m.messages, LogMessage{
 		Level:  "ERROR",
 		Msg:    msg,
-		Fields: fields,
+		Fields: allFields,
 	})
 }
 
 // WithContext returns a logger with additional context fields.
+// Creates a new immutable logger instance with accumulated context.
 func (m *MockLogger) WithContext(ctx map[string]any) ports.Logger {
-	// TODO(#150): implement context support
-	return m
+	// Convert map to alternating key-value pairs
+	ctxFields := make([]any, 0, len(ctx)*2)
+	for k, v := range ctx {
+		ctxFields = append(ctxFields, k, v)
+	}
+
+	// Create new logger with accumulated context fields
+	// Share mutex and messages pointer to maintain thread safety
+	return &MockLogger{
+		mu:        m.mu,       // Share mutex
+		messages:  m.messages, // Share messages pointer
+		ctxFields: append(m.ctxFields, ctxFields...),
+	}
 }
 
 // GetMessages returns all captured log messages (test helper).
 func (m *MockLogger) GetMessages() []LogMessage {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]LogMessage{}, m.messages...)
+	return append([]LogMessage{}, *m.messages...)
 }
 
 // GetMessagesByLevel returns captured messages filtered by level (test helper).
@@ -502,7 +533,7 @@ func (m *MockLogger) GetMessagesByLevel(level string) []LogMessage {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	filtered := make([]LogMessage, 0)
-	for _, msg := range m.messages {
+	for _, msg := range *m.messages {
 		if msg.Level == level {
 			filtered = append(filtered, msg)
 		}
@@ -514,7 +545,7 @@ func (m *MockLogger) GetMessagesByLevel(level string) []LogMessage {
 func (m *MockLogger) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = make([]LogMessage, 0)
+	*m.messages = make([]LogMessage, 0)
 }
 
 // MockHistoryStore is a thread-safe mock implementation of ports.HistoryStore.

@@ -268,7 +268,7 @@ func TestMockOperationProvider_HandleOperation_DefaultSuccess(t *testing.T) {
 func TestMockOperationProvider_HandleOperation_ConfiguredResult(t *testing.T) {
 	mock := sdk.NewMockOperationProvider("custom.op")
 	expectedResult := sdk.NewSuccessResult("custom output", map[string]any{"data": 123})
-	mock.SetResult("custom.op", expectedResult)
+	mock.SetCommandResult("custom.op", expectedResult)
 
 	result, err := mock.HandleOperation(context.Background(), "custom.op", map[string]any{"input": "value"})
 
@@ -305,7 +305,7 @@ func TestMockOperationProvider_SetResult(t *testing.T) {
 	mock := sdk.NewMockOperationProvider()
 	result := sdk.NewSuccessResult("test", nil)
 
-	mock.SetResult("op1", result)
+	mock.SetCommandResult("op1", result)
 
 	r, err := mock.HandleOperation(context.Background(), "op1", nil)
 	assert.NoError(t, err)
@@ -336,12 +336,12 @@ func TestMockOperationProvider_ThreadSafety(t *testing.T) {
 		}(i)
 	}
 
-	// Concurrent SetResult calls
+	// Concurrent SetCommandResult calls
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			mock.SetResult("op1", sdk.NewSuccessResult("concurrent", nil))
+			mock.SetCommandResult("op1", sdk.NewSuccessResult("concurrent", nil))
 		}()
 	}
 
