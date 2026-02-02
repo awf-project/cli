@@ -656,3 +656,458 @@ func TestExecuteLoopStep_ForEach_BreakCondition(t *testing.T) {
 	require.NoError(t, err, "for_each loop with break condition should succeed")
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 }
+
+// ============================================================================
+// HandleMaxIterationFailure Tests (C027-T005)
+// ============================================================================
+
+// TestHandleMaxIterationFailure_WithFailures tests HandleMaxIterationFailure when loop has step failures
+func TestHandleMaxIterationFailure_WithFailures(t *testing.T) {
+	// Given: A loop result with step failures
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"body_step": {
+						Name:   "body_step",
+						Status: workflow.StatusFailed,
+						Error:  "command failed",
+					},
+				},
+			},
+		},
+		TotalCount: 10,
+	}
+
+	step := &workflow.Step{
+		Name: "test_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"body_step"},
+			MaxIterations: 10,
+		},
+		OnFailure: "", // No OnFailure configured
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"test_loop": step,
+			"body_step": {
+				Name:    "body_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo test",
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "test_loop",
+		Status: workflow.StatusRunning,
+	}
+
+	// Create execution service using testutil harness
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	nextStep, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Should return error with "with step failures" message
+	require.Error(t, err, "should return error when no OnFailure configured")
+	assert.Contains(t, err.Error(), "with step failures", "error should mention step failures")
+	assert.Empty(t, nextStep, "should not return next step when error occurs")
+
+	// And: Loop state should be set to Failed
+	assert.Equal(t, workflow.StatusFailed, loopState.Status)
+	assert.Contains(t, loopState.Error, "with step failures")
+}
+
+// TestHandleMaxIterationFailure_WithComplexSteps tests HandleMaxIterationFailure when loop has complex nested steps
+func TestHandleMaxIterationFailure_WithComplexSteps(t *testing.T) {
+	// Given: A loop result with complex nested steps (while loop inside)
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"nested_while": {
+						Name:   "nested_while",
+						Status: workflow.StatusCompleted,
+					},
+				},
+			},
+		},
+		TotalCount: 5,
+	}
+
+	step := &workflow.Step{
+		Name: "outer_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"nested_while"},
+			MaxIterations: 5,
+		},
+		OnFailure: "", // No OnFailure configured
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"outer_loop": step,
+			"nested_while": {
+				Name: "nested_while",
+				Type: workflow.StepTypeWhile, // Complex step type
+				Loop: &workflow.LoopConfig{
+					Type:          workflow.LoopTypeWhile,
+					Body:          []string{"inner_step"},
+					MaxIterations: 3,
+				},
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "outer_loop",
+		Status: workflow.StatusRunning,
+	}
+
+	// Create execution service using testutil harness
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	nextStep, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Should return error with "with nested complexity" message
+	require.Error(t, err, "should return error when no OnFailure configured")
+	assert.Contains(t, err.Error(), "with nested complexity", "error should mention nested complexity")
+	assert.Empty(t, nextStep, "should not return next step when error occurs")
+
+	// And: Loop state should be set to Failed
+	assert.Equal(t, workflow.StatusFailed, loopState.Status)
+	assert.Contains(t, loopState.Error, "with nested complexity")
+}
+
+// TestHandleMaxIterationFailure_WithOnFailureTransition tests HandleMaxIterationFailure when step has OnFailure configured
+func TestHandleMaxIterationFailure_WithOnFailureTransition(t *testing.T) {
+	// Given: A loop result with failures and OnFailure configured
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"body_step": {
+						Name:   "body_step",
+						Status: workflow.StatusFailed,
+						Error:  "command failed",
+					},
+				},
+			},
+		},
+		TotalCount: 10,
+	}
+
+	step := &workflow.Step{
+		Name: "test_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"body_step"},
+			MaxIterations: 10,
+		},
+		OnFailure: "error_handler", // OnFailure configured
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"test_loop": step,
+			"body_step": {
+				Name:    "body_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "false",
+			},
+			"error_handler": {
+				Name: "error_handler",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "test_loop",
+		Status: workflow.StatusRunning,
+	}
+
+	// Create execution service using testutil harness
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	nextStep, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Should return OnFailure step without error
+	require.NoError(t, err, "should not return error when OnFailure configured")
+	assert.Equal(t, "error_handler", nextStep, "should return OnFailure step")
+
+	// And: Loop state should be set to Failed
+	assert.Equal(t, workflow.StatusFailed, loopState.Status)
+	assert.Contains(t, loopState.Error, "with step failures")
+}
+
+// TestHandleMaxIterationFailure_NoOnFailureReturnsError tests HandleMaxIterationFailure when no OnFailure is configured
+func TestHandleMaxIterationFailure_NoOnFailureReturnsError(t *testing.T) {
+	// Given: A loop result with failures and NO OnFailure configured
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"body_step": {
+						Name:   "body_step",
+						Status: workflow.StatusFailed,
+					},
+				},
+			},
+		},
+		TotalCount: 5,
+	}
+
+	step := &workflow.Step{
+		Name: "test_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"body_step"},
+			MaxIterations: 5,
+		},
+		OnFailure: "", // Explicitly no OnFailure
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"test_loop": step,
+			"body_step": {
+				Name:    "body_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "exit 1",
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "test_loop",
+		Status: workflow.StatusRunning,
+	}
+
+	// Create execution service using testutil harness
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	nextStep, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Should return error and empty next step
+	require.Error(t, err, "should return error when no OnFailure configured")
+	assert.Empty(t, nextStep, "should not return next step")
+	assert.Contains(t, err.Error(), "test_loop", "error should mention loop name")
+	assert.Contains(t, err.Error(), "loop reached maximum iterations", "error should mention max iterations")
+}
+
+// TestHandleMaxIterationFailure_ExecutesPostHooks tests HandleMaxIterationFailure executes post-hooks
+func TestHandleMaxIterationFailure_ExecutesPostHooks(t *testing.T) {
+	// Given: A loop with post-hooks configured
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"body_step": {
+						Name:   "body_step",
+						Status: workflow.StatusFailed,
+					},
+				},
+			},
+		},
+		TotalCount: 3,
+	}
+
+	step := &workflow.Step{
+		Name: "test_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"body_step"},
+			MaxIterations: 3,
+		},
+		Hooks: workflow.StepHooks{
+			Post: workflow.Hook{
+				workflow.HookAction{Command: "echo 'cleanup after failure'"},
+			},
+		},
+		OnFailure: "error_handler",
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"test_loop": step,
+			"body_step": {
+				Name:    "body_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "false",
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "test_loop",
+		Status: workflow.StatusRunning,
+	}
+
+	// Create execution service using testutil harness
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	nextStep, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Should execute post-hooks
+	require.NoError(t, err, "should not error with OnFailure configured")
+	assert.Equal(t, "error_handler", nextStep)
+
+	// Verify hook was executed by checking executor calls
+	calls := mocks.Executor.GetCalls()
+	hookExecuted := false
+	for _, call := range calls {
+		if call.Program == "echo 'cleanup after failure'" {
+			hookExecuted = true
+			break
+		}
+	}
+	assert.True(t, hookExecuted, "post-hook should have been executed")
+}
+
+// TestHandleMaxIterationFailure_UpdatesLoopState tests HandleMaxIterationFailure updates loop state correctly
+func TestHandleMaxIterationFailure_UpdatesLoopState(t *testing.T) {
+	// Given: A loop result with both failures and complex steps
+	loopResult := &workflow.LoopResult{
+		Iterations: []workflow.IterationResult{
+			{
+				StepResults: map[string]*workflow.StepState{
+					"body_step": {
+						Name:   "body_step",
+						Status: workflow.StatusFailed,
+						Error:  "step failed",
+					},
+				},
+			},
+		},
+		TotalCount: 7,
+	}
+
+	step := &workflow.Step{
+		Name: "test_loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeWhile,
+			Body:          []string{"body_step"},
+			MaxIterations: 7,
+		},
+		OnFailure: "cleanup",
+	}
+
+	wf := &workflow.Workflow{
+		Name: "test-workflow",
+		Steps: map[string]*workflow.Step{
+			"test_loop": step,
+			"body_step": {
+				Name:    "body_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "exit 1",
+			},
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	loopState := workflow.StepState{
+		Name:   "test_loop",
+		Status: workflow.StatusRunning,
+		Output: "initial output",
+	}
+
+	// Create execution service using testutil harness
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-workflow", wf).
+		Build()
+
+	// When: HandleMaxIterationFailure is called
+	_, err := execSvc.HandleMaxIterationFailure(
+		context.Background(),
+		loopResult,
+		step,
+		wf,
+		execCtx,
+		&loopState,
+	)
+
+	// Then: Loop state should be updated correctly
+	require.NoError(t, err)
+
+	// Verify loop state updates
+	assert.Equal(t, workflow.StatusFailed, loopState.Status, "status should be Failed")
+	assert.NotEmpty(t, loopState.Error, "error message should be set")
+	assert.Contains(t, loopState.Error, "loop reached maximum iterations", "error should contain base message")
+	assert.Contains(t, loopState.Error, "with step failures", "error should mention failures")
+
+	// Verify state was saved to execution context
+	savedState, exists := execCtx.GetStepState("test_loop")
+	assert.True(t, exists, "state should be saved to execution context")
+	assert.Equal(t, workflow.StatusFailed, savedState.Status)
+	assert.Equal(t, loopState.Error, savedState.Error)
+}

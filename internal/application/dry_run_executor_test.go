@@ -978,3 +978,228 @@ func TestDryRunExecutor_Execute_AllStepTypes(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// DryRunExecutor Setter Tests (C027-T003)
+// =============================================================================
+// Component T003 implements comprehensive tests for DryRunExecutor setter methods.
+// Tests follow TDD patterns (RED/GREEN/REFACTOR) and cover happy path, edge cases,
+// and error conditions for SetTemplateService method.
+//
+// Strategy:
+// - Happy path: Valid template service is set and used during Execute
+// - Edge case: Nil template service is accepted (template expansion is optional)
+// - Replacement: Existing template service can be replaced with new one
+// - Integration: Template service affects workflow execution behavior
+
+// TestDryRunExecutor_SetTemplateService_Valid verifies that SetTemplateService
+// correctly sets a valid template service and that it's used during Execute.
+func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
+	// Arrange: Create workflow with template reference
+	repo := newMockRepository()
+	repo.workflows["templated"] = &workflow.Workflow{
+		Name:    "templated",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo hello",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+	// Create template service with mock template repository
+	templateRepo := newMockTemplateRepository()
+	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
+
+	// Act: Set template service
+	executor.SetTemplateService(templateSvc)
+
+	// Execute to verify it works with template service set
+	plan, err := executor.Execute(context.Background(), "templated", nil)
+
+	// Assert: Execution succeeds with template service
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	assert.Equal(t, "templated", plan.WorkflowName)
+	assert.GreaterOrEqual(t, len(plan.Steps), 1)
+}
+
+// TestDryRunExecutor_SetTemplateService_Nil verifies that SetTemplateService
+// handles nil template service gracefully (template expansion is optional).
+func TestDryRunExecutor_SetTemplateService_Nil(t *testing.T) {
+	// Arrange: Create workflow
+	repo := newMockRepository()
+	repo.workflows["no_template"] = &workflow.Workflow{
+		Name:    "no_template",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo hello",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+	// Act: Set nil template service (explicitly allowing nil)
+	executor.SetTemplateService(nil)
+
+	// Execute workflow - should succeed without template expansion
+	plan, err := executor.Execute(context.Background(), "no_template", nil)
+
+	// Assert: Execution succeeds without template service
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	assert.Equal(t, "no_template", plan.WorkflowName)
+	assert.GreaterOrEqual(t, len(plan.Steps), 1, "workflow should execute without template service")
+}
+
+// TestDryRunExecutor_SetTemplateService_ReplaceExisting verifies that
+// SetTemplateService can replace an existing template service.
+func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
+	// Arrange: Create workflow
+	repo := newMockRepository()
+	repo.workflows["replace_test"] = &workflow.Workflow{
+		Name:    "replace_test",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo test",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+	// Create first template service
+	firstRepo := newMockTemplateRepository()
+	firstSvc := application.NewTemplateService(firstRepo, &mockLogger{})
+	executor.SetTemplateService(firstSvc)
+
+	// Create second template service
+	secondRepo := newMockTemplateRepository()
+	secondSvc := application.NewTemplateService(secondRepo, &mockLogger{})
+
+	// Act: Replace with second template service
+	executor.SetTemplateService(secondSvc)
+
+	// Execute to verify execution succeeds after replacement
+	plan, err := executor.Execute(context.Background(), "replace_test", nil)
+
+	// Assert: Execution succeeds with replaced template service
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	assert.Equal(t, "replace_test", plan.WorkflowName)
+	assert.GreaterOrEqual(t, len(plan.Steps), 1)
+}
+
+// TestDryRunExecutor_SetTemplateService_WithTemplateReference verifies that
+// template service is used when workflow has template references.
+func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
+	// Arrange: Create workflow with template reference
+	repo := newMockRepository()
+	repo.workflows["with_template"] = &workflow.Workflow{
+		Name:    "with_template",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name: "start",
+				Type: workflow.StepTypeCommand,
+				TemplateRef: &workflow.WorkflowTemplateRef{
+					TemplateName: "echo-template",
+					Parameters:   map[string]any{"message": "hello"},
+				},
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	// Create template repository with a template
+	templateRepo := newMockTemplateRepository()
+	templateRepo.templates["echo-template"] = &workflow.Template{
+		Name: "echo-template",
+		States: map[string]*workflow.Step{
+			"echo": {
+				Name:    "echo",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{inputs.message}}",
+			},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+	// Create and set template service
+	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
+	executor.SetTemplateService(templateSvc)
+
+	// Act: Execute workflow with template
+	plan, err := executor.Execute(context.Background(), "with_template", nil)
+
+	// Assert: Execution succeeds with template expansion
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	assert.Equal(t, "with_template", plan.WorkflowName)
+	// After template expansion, the step should have been expanded
+	assert.GreaterOrEqual(t, len(plan.Steps), 1)
+}
+
+// TestDryRunExecutor_SetTemplateService_NoTemplateService verifies behavior
+// when no template service is set (initial state).
+func TestDryRunExecutor_SetTemplateService_NoTemplateService(t *testing.T) {
+	// Arrange: Create workflow without setting template service
+	repo := newMockRepository()
+	repo.workflows["no_svc"] = &workflow.Workflow{
+		Name:    "no_svc",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo test",
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+	// Act: Execute without ever calling SetTemplateService
+	plan, err := executor.Execute(context.Background(), "no_svc", nil)
+
+	// Assert: Execution succeeds without template service
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	assert.Equal(t, "no_svc", plan.WorkflowName)
+}

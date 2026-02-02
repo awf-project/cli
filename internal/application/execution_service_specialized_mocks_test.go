@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -105,4 +106,72 @@ func (m *conditionMockEvaluator) Evaluate(expr string, ctx *interpolation.Contex
 	}
 	// Default to false for unknown expressions
 	return false, nil
+}
+
+// MockOperationProvider implements ports.OperationProvider for testing operation resolution.
+// Tracks operation execution calls to verify interpolation behavior.
+type MockOperationProvider struct {
+	operations       map[string]*MockOperation
+	ExecuteCallCount int
+	LastOperation    string
+	LastInputs       map[string]any
+}
+
+func (m *MockOperationProvider) SetOperation(name string, op *MockOperation) {
+	if m.operations == nil {
+		m.operations = make(map[string]*MockOperation)
+	}
+	m.operations[name] = op
+}
+
+func (m *MockOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+	_, found := m.operations[name]
+	if !found {
+		return nil, false
+	}
+	// Return a basic schema for the operation
+	return &plugin.OperationSchema{
+		Name:        name,
+		Description: "Mock operation for testing",
+	}, found
+}
+
+func (m *MockOperationProvider) ListOperations() []*plugin.OperationSchema {
+	schemas := make([]*plugin.OperationSchema, 0, len(m.operations))
+	for name := range m.operations {
+		schemas = append(schemas, &plugin.OperationSchema{
+			Name:        name,
+			Description: "Mock operation for testing",
+		})
+	}
+	return schemas
+}
+
+func (m *MockOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+	m.ExecuteCallCount++
+	m.LastOperation = name
+	m.LastInputs = inputs
+
+	op, found := m.operations[name]
+	if !found {
+		return nil, fmt.Errorf("operation not found: %s", name)
+	}
+
+	return op.Execute(ctx, inputs)
+}
+
+// MockOperation implements a mock operation for testing.
+type MockOperation struct {
+	ExecuteFunc func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+}
+
+func (m *MockOperation) Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+	if m.ExecuteFunc != nil {
+		return m.ExecuteFunc(ctx, inputs)
+	}
+	// Default success result
+	return &plugin.OperationResult{
+		Success: true,
+		Outputs: make(map[string]any),
+	}, nil
 }

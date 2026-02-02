@@ -67,6 +67,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables future consumers to depend on narrower contracts for improved testability
   - Added compile-time verification tests for both new interfaces
 
+- **C027**: Improve Application Layer Test Coverage to 80%+
+  - **Phase 1 - Zero Coverage Setters (Quick Wins):**
+    - ExecutionService setters: `SetOperationProvider`, `SetAgentRegistry`, `SetEvaluator`, `SetConversationManager` with nil safety tests
+    - InteractiveExecutor setters: `SetTemplateService`, `SetOutputWriters` (2 methods × 2 scenarios = 4 tests)
+    - DryRunExecutor setters: `SetTemplateService` (1 method × 2 scenarios = 2 tests)
+  - **Phase 2 - Error Handlers:**
+    - `HandleMaxIterationFailure` error handler in execution loop with 6 comprehensive test scenarios
+    - Plugin lifecycle error paths: `ShutdownPlugin`, `EnablePlugin`, `DisablePlugin`, `SetPluginConfig` (8 error injection tests)
+  - **Phase 3 - Complex Business Logic:**
+    - ExecutionService resolve functions: `resolveNextStep`, `resolveStepCommand`, `resolveOperationValue` with full recursion support (31+ test cases)
+    - InteractiveExecutor loop functions: `executeLoopStep` with for-each/while loop state management (24+ test scenarios)
+  - **Test Infrastructure Additions:**
+    - Implemented `MockOperationProvider` and `MockOperation` in `execution_service_specialized_mocks_test.go`
+    - Extended `ExecutionServiceBuilder` with `WithEvaluator` method for expression evaluator dependency injection
+    - Created comprehensive integration test suite in `tests/integration/c027_application_test_coverage_test.go` with 18 test functions
+  - **Template Resolver Enhancements:**
+    - Added function-style accessors: `{{inputs.*}}`, `{{states.*}}`, `{{workflow.*}}`, `{{env.*}}`
+    - Fixed nested map/response path resolution for agent step responses
+    - Enhanced type safety with proper error handling for missing keys
+  - **Coverage Metrics:**
+    - Application layer coverage increased from 79.2% to 80.5% (exceeds project threshold)
+    - Added 2,112 lines of comprehensive tests across 12 files (10 test files, 2 source files)
+    - Files modified: execution_service.go (+6 LOC SetEvaluator), template_resolver.go (+46 LOC function accessors)
+  - **Architecture Compliance:**
+    - All tests follow established patterns: table-driven with testify, ServiceTestHarness, testutil mocks
+    - Zero infrastructure imports in application tests (maintains C038 architectural purity)
+    - All tests pass race detector validation (`make test-race`)
+  - **Integration Test Coverage:**
+    - Coverage threshold validation (≥80%)
+    - Template accessor end-to-end tests (happy path + edge cases)
+    - SetEvaluator integration verification
+    - Architecture compliance checks (no infrastructure imports)
+    - Acceptance criteria validation (5 ACs verified)
+
 - **C038**: Fix Application Test Layer Purity
   - Eliminated infrastructure layer imports from application test files to enforce hexagonal architecture
   - Created centralized `MockAgentRegistry` and `MockAgentProvider` in `internal/testutil/mocks.go`

@@ -608,9 +608,15 @@ func (m *loopTestLogger) WithContext(ctx map[string]any) ports.Logger {
 
 type loopTestCommandExecutor struct {
 	executeErr error
+	onExecute  func(cmd string) // Callback for tracking command execution
 }
 
 func (m *loopTestCommandExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	// Call the onExecute callback if set
+	if m.onExecute != nil {
+		m.onExecute(cmd.Program)
+	}
+
 	if m.executeErr != nil {
 		return nil, m.executeErr
 	}

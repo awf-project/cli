@@ -24,6 +24,7 @@ type ExecutionServiceBuilder struct {
 	store      ports.StateStore
 	repository ports.WorkflowRepository
 	registry   ports.AgentRegistry
+	evaluator  interface{} // application.ExpressionEvaluator - kept as interface{} to avoid circular import
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -84,6 +85,15 @@ func (b *ExecutionServiceBuilder) WithAgentRegistry(registry ports.AgentRegistry
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.registry = registry
+	return b
+}
+
+// WithEvaluator configures the expression evaluator for conditional transitions.
+// Accepts application.ExpressionEvaluator interface for evaluating "when" clauses.
+func (b *ExecutionServiceBuilder) WithEvaluator(evaluator interface{}) *ExecutionServiceBuilder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.evaluator = evaluator
 	return b
 }
 
@@ -161,6 +171,16 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 
 	// Configure agent registry (C038: Use MockAgentRegistry as default)
 	svc.SetAgentRegistry(registry)
+
+	// Configure expression evaluator if provided (for conditional transitions)
+	if b.evaluator != nil {
+		// Type assertion to application.ExpressionEvaluator
+		if evaluator, ok := b.evaluator.(interface {
+			Evaluate(expr string, ctx *interpolation.Context) (bool, error)
+		}); ok {
+			svc.SetEvaluator(evaluator)
+		}
+	}
 
 	return svc
 }
