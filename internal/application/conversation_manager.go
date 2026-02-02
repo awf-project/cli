@@ -203,11 +203,8 @@ func (m *ConversationManager) ExecuteConversation(
 	buildContext ContextBuilderFunc,
 ) (*workflow.ConversationResult, error) {
 	// Validate inputs
-	if step == nil || step.Agent == nil {
-		return nil, errors.New("step or agent config is nil")
-	}
-	if config == nil {
-		return nil, errors.New("conversation config is nil")
+	if err := m.validateConversationInputs(step, config); err != nil {
+		return nil, err
 	}
 
 	// Get provider from registry
@@ -216,19 +213,8 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, err
 	}
 
-	// Initialize conversation state with system prompt
-	systemPrompt := step.Agent.SystemPrompt
-	state := workflow.NewConversationState(systemPrompt)
-
-	// Determine initial prompt (InitialPrompt takes precedence over Prompt)
-	initialPrompt := step.Agent.Prompt
-	if step.Agent.InitialPrompt != "" {
-		initialPrompt = step.Agent.InitialPrompt
-	}
-
-	// Resolve initial prompt with interpolation
-	intCtx := buildContext(execCtx)
-	resolvedPrompt, err := m.resolver.Resolve(initialPrompt, intCtx)
+	// Initialize conversation state
+	state, resolvedPrompt, err := m.initializeConversationState(step, execCtx, buildContext)
 	if err != nil {
 		return nil, err
 	}
@@ -247,15 +233,8 @@ func (m *ConversationManager) ExecuteConversation(
 
 	var lastResult *workflow.ConversationResult
 	for turnCount := 0; turnCount < maxTurns; turnCount++ {
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
 		// Execute one turn with provider
-		result, err := provider.ExecuteConversation(ctx, state, resolvedPrompt, options)
+		result, err := m.executeTurn(ctx, provider, state, resolvedPrompt, options)
 		if err != nil {
 			return nil, err
 		}
@@ -264,35 +243,17 @@ func (m *ConversationManager) ExecuteConversation(
 		state = result.State
 		lastResult = result
 
-		// Check stop condition if configured
-		if config.StopCondition != "" {
-			// Build context with current state for evaluation
-			stopCtx := buildContext(execCtx)
-			// Add conversation-specific variables for stop condition evaluation
-			if stopCtx.Inputs == nil {
-				stopCtx.Inputs = make(map[string]any)
-			}
-			stopCtx.Inputs["response"] = state.GetLastAssistantResponse()
-			stopCtx.Inputs["turn_count"] = state.TotalTurns
-
-			shouldStop, err := m.evaluator.Evaluate(config.StopCondition, stopCtx)
-			if err != nil {
-				// Log error but continue
-				m.logger.Warn("failed to evaluate stop condition", "error", err)
-			} else if shouldStop {
-				state.StoppedBy = workflow.StopReasonCondition
-				break
-			}
-		}
-
-		// Check max tokens if configured
-		if config.MaxContextTokens > 0 && state.TotalTokens >= config.MaxContextTokens {
-			state.StoppedBy = workflow.StopReasonMaxTokens
+		// Check if conversation should stop (stop condition or max tokens)
+		if m.evaluateTurnCompletion(config, state, execCtx, buildContext) {
 			break
 		}
 
-		// For subsequent turns, use empty prompt (conversation continues with history)
-		resolvedPrompt = ""
+		// For subsequent turns, resolve the configured prompt with interpolation
+		intCtx := buildContext(execCtx)
+		resolvedPrompt, err = m.resolver.Resolve(step.Agent.Prompt, intCtx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Set stop reason if not already set

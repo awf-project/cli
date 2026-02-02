@@ -62,9 +62,13 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
+
+	// Create a simple evaluator that always returns false (never stops on condition)
+	evaluator := &simpleExpressionEvaluator{}
+
 	convMgr := application.NewConversationManager(
 		&mockLogger{},
-		nil,
+		evaluator,
 		newMockResolver(),
 		tokenizer,
 		mockRegistry,
@@ -75,11 +79,15 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 
 	ctx, err := execSvc.Run(context.Background(), "conv-test", nil)
 
-	// STUB: Should fail with "not implemented" until GREEN phase
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
-	assert.Equal(t, "refine", ctx.CurrentStep)
+	// F051: T009 - executeConversationStep is now implemented
+	// The test should succeed since ConversationManager is properly configured
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify conversation step was executed
+	state, exists := ctx.GetStepState("refine")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
 // TestExecutionService_ConversationStep_WithInputInterpolation tests that
@@ -125,7 +133,7 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
@@ -136,10 +144,14 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 
 	ctx, err := execSvc.Run(context.Background(), "conv-input-test", inputs)
 
-	// STUB: Should fail with "not implemented" until GREEN phase
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	// F051: T009 - executeConversationStep is now implemented
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify conversation step executed with interpolated input
+	state, exists := ctx.GetStepState("analyze")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
 // TestExecutionService_ConversationStep_WithHooks tests that pre/post hooks
@@ -188,7 +200,7 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("conv-hooks", wf).
@@ -199,10 +211,10 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 
 	ctx, err := execSvc.Run(context.Background(), "conv-hooks", nil)
 
-	// STUB: Should fail with "not implemented" after pre-hook executes
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	// F051: T009 - executeConversationStep is now implemented
+	// Hooks should execute successfully
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
 
 // =============================================================================
@@ -251,7 +263,7 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("single-mode", wf).
@@ -314,7 +326,7 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("default-mode", wf).
@@ -371,17 +383,21 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
 	ctx, err := execSvc.Run(context.Background(), "minimal-conv", nil)
 
-	// STUB: Should fail with "not implemented"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	// F051: T009 - executeConversationStep is now implemented
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify minimal conversation config works
+	state, exists := ctx.GetStepState("chat")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
 // =============================================================================
@@ -435,9 +451,9 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 
 	ctx, err := execSvc.Run(context.Background(), "no-mgr", nil)
 
-	// Should fail (stub implementation will still error even if manager is nil)
+	// F051: T009 - Should fail with "conversation manager not configured" error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
+	assert.Contains(t, err.Error(), "conversation manager not configured")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
 	assert.Equal(t, "chat", ctx.CurrentStep)
 }
@@ -482,7 +498,7 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	execSvc := application.NewExecutionService(
@@ -499,10 +515,15 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 
 	ctx, err := execSvc.Run(context.Background(), "conv-failure", nil)
 
-	// STUB: Should fail and NOT follow OnFailure (stub returns error directly)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Equal(t, workflow.StatusFailed, ctx.Status)
+	// F051: T009 - executeConversationStep is now implemented
+	// Should complete successfully (mock provider succeeds)
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+	// Verify conversation step completed
+	state, exists := ctx.GetStepState("chat")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
 // TestExecutionService_ConversationStep_ContextCancellation tests that
@@ -540,7 +561,7 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	execSvc := application.NewExecutionService(
@@ -561,17 +582,14 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 
 	execCtx, err := execSvc.Run(ctx, "conv-cancel", nil)
 
-	// STUB: Will fail - in GREEN phase this will respect context cancellation
+	// F051: T009 - executeConversationStep is now implemented and respects context cancellation
 	require.Error(t, err)
-	// In RED phase, stub returns "not implemented" before checking context
-	// In GREEN phase, context cancellation will be detected first
+	// Should detect context cancellation
 	assert.True(t,
 		errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			err.Error() == "executeConversationStep: not implemented" ||
-			err.Error() == "chat: executeConversationStep: not implemented",
-		"expected context error or stub error, got: %v", err)
-	// Status can be Failed or Cancelled depending on which error is hit first
+			errors.Is(err, context.DeadlineExceeded),
+		"expected context error, got: %v", err)
+	// Status should be Cancelled when context is cancelled
 	assert.True(t,
 		execCtx.Status == workflow.StatusFailed || execCtx.Status == workflow.StatusCancelled,
 		"expected Failed or Cancelled status, got: %v", execCtx.Status)
@@ -621,7 +639,7 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 	tokenizer := newMockTokenizer()
 	mockRegistry := testutil.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, nil, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
 	executor := newMockExecutor()
 	executor.results["echo 'setup complete'"] = &ports.CommandResult{
@@ -648,13 +666,18 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 
 	execCtx, err := execSvc.Run(context.Background(), "conv-context", inputs)
 
-	// STUB: Should fail but setup step should have completed
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
+	// F051: T009 - executeConversationStep is now implemented
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-	// Verify setup step completed before conversation step failed
+	// Verify both setup step and conversation step completed
 	setupState, ok := execCtx.GetStepState("setup")
 	require.True(t, ok)
 	assert.Equal(t, workflow.StatusCompleted, setupState.Status)
 	assert.Equal(t, "setup complete\n", setupState.Output)
+
+	// Verify conversation step also completed
+	convState, ok := execCtx.GetStepState("chat")
+	require.True(t, ok)
+	assert.Equal(t, workflow.StatusCompleted, convState.Status)
 }
