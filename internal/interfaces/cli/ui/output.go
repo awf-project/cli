@@ -2,13 +2,27 @@ package ui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
+	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	errfmt "github.com/vanoix/awf/internal/infrastructure/errors"
+)
+
+// Type aliases for error formatting interfaces
+type (
+	ErrorFormatter = ports.ErrorFormatter
+)
+
+// Factory functions for error formatters
+var (
+	NewHumanErrorFormatter = errfmt.NewHumanErrorFormatter
 )
 
 // OutputFormat defines the output format for CLI commands.
@@ -54,8 +68,9 @@ func ParseOutputFormat(s string) (OutputFormat, error) {
 
 // ErrorResponse is the JSON structure for errors.
 type ErrorResponse struct {
-	Error string `json:"error"`
-	Code  int    `json:"code"`
+	Error     string `json:"error"`
+	Code      int    `json:"code"`
+	ErrorCode string `json:"error_code,omitempty"` // Hierarchical error code (e.g., "USER.INPUT.MISSING_FILE")
 }
 
 // WorkflowInfo is the JSON structure for list command.
@@ -331,7 +346,16 @@ func (w *OutputWriter) WriteValidationTable(result *ValidationResultTable) error
 }
 
 // WriteError outputs an error in the appropriate format.
+// Detects StructuredError and uses formatters for enhanced error output.
 func (w *OutputWriter) WriteError(err error, code int) error {
+	// Check if error is a StructuredError
+	var structuredErr *domerrors.StructuredError
+	if errors.As(err, &structuredErr) {
+		// Use structured error handling
+		return w.writeStructuredError(structuredErr, code)
+	}
+
+	// Fallback: legacy error handling for plain errors
 	if w.format == FormatJSON {
 		return w.writeJSON(ErrorResponse{
 			Error: err.Error(),
@@ -342,6 +366,30 @@ func (w *OutputWriter) WriteError(err error, code int) error {
 	// Text format: write to errOut
 	_, _ = fmt.Fprintf(w.errOut, "Error: %s\n", err.Error())
 	return nil
+}
+
+// writeStructuredError handles formatting of StructuredError instances.
+// Uses HumanErrorFormatter for text output and JSON for machine-readable output.
+func (w *OutputWriter) writeStructuredError(err *domerrors.StructuredError, code int) error {
+	if w.format == FormatJSON {
+		return w.writeJSON(ErrorResponse{
+			Error:     err.Error(),
+			Code:      code,
+			ErrorCode: string(err.Code),
+		})
+	}
+
+	// Text format: use HumanErrorFormatter for rich output
+	formatter := w.newHumanErrorFormatter()
+	formatted := formatter.FormatError(err)
+	_, _ = fmt.Fprintln(w.errOut, formatted)
+	return nil
+}
+
+// newHumanErrorFormatter creates a HumanErrorFormatter using the output writer's color settings.
+// Extracted as a method to facilitate testing and maintain separation of concerns.
+func (w *OutputWriter) newHumanErrorFormatter() ErrorFormatter {
+	return NewHumanErrorFormatter(!w.noColor)
 }
 
 // WritePrompts outputs prompt file list.

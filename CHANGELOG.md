@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **C047**: Structured Error Codes Taxonomy
+  - Implemented hierarchical error code system with `CATEGORY.SUBCATEGORY.SPECIFIC` format (e.g., `USER.INPUT.MISSING_FILE`, `WORKFLOW.VALIDATION.CYCLE_DETECTED`)
+  - Created `StructuredError` domain type with Code, Message, Details, Cause, and Timestamp fields
+  - Defined 14 error codes mapped to existing exit codes: 1=USER.*, 2=WORKFLOW.*, 3=EXECUTION.*, 4=SYSTEM.*
+  - Added `ErrorFormatter` port interface with JSON and human-readable adapters in infrastructure layer
+  - Implemented `awf error <code>` CLI command for error code lookup with descriptions, resolution hints, and related codes
+  - Enhanced `categorizeError()` with two-phase detection: checks for `StructuredError` via `errors.As()` first, falls back to legacy string matching
+  - Extended `WriteError()` in UI layer to detect and format `StructuredError` instances with error codes
+  - JSON output mode produces structured error objects with code, message, details, and timestamp fields
+  - Human-readable output includes `[ERROR_CODE]` prefix for reference and programmatic parsing
+  - Error catalog in domain layer (`catalog.go`) maps codes to descriptions, resolutions, and related error codes
+  - Package documentation added to `internal/domain/errors/` and `internal/infrastructure/errors/`
+  - Comprehensive integration tests in `tests/integration/c047_error_codes_test.go` covering AC1-AC4 acceptance criteria
+  - Backward compatible: existing errors continue to work via string matching fallback during migration period
+  - Domain layer imports only stdlib (errors, fmt, time, strings) maintaining hexagonal architecture purity
+  - Files added: 15 new files (domain entities, ports, adapters, tests), 8 files modified (CLI integration, application service)
+  - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
+
 ### Fixed
 
 - **B003**: Fixed while loop `break_when` condition not evaluating correctly

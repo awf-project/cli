@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/testutil"
@@ -4138,4 +4139,773 @@ func TestMockExpressionEvaluator_RealWorldIntExpressions(t *testing.T) {
 			assert.Equal(t, 42, result)
 		})
 	}
+}
+
+// =============================================================================
+// MockErrorFormatter Tests - Component T006 (C047)
+// =============================================================================
+
+// Feature: C047 Structured Error Codes Taxonomy
+// Component: T006 MockErrorFormatter Tests
+
+func TestMockErrorFormatter_NewMockErrorFormatter(t *testing.T) {
+	// Arrange & Act
+	formatter := testutil.NewMockErrorFormatter()
+
+	// Assert
+	require.NotNil(t, formatter, "NewMockErrorFormatter should return non-nil instance")
+
+	// Verify default behavior returns empty string
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+	result := formatter.FormatError(err)
+	assert.Equal(t, "", result, "Default FormatError should return empty string")
+}
+
+// =============================================================================
+// FormatError - Happy Path Tests
+// =============================================================================
+
+func TestMockErrorFormatter_FormatError_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockErrorFormatter)
+		inputError *domainerrors.StructuredError
+		want       string
+	}{
+		{
+			name: "format error with simple message",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"workflow file not found",
+				nil,
+				nil,
+			),
+			want: "workflow file not found",
+		},
+		{
+			name: "format error with code and message",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf("[%s] %s", err.Code, err.Message)
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+				"invalid YAML syntax",
+				nil,
+				nil,
+			),
+			want: "[WORKFLOW.PARSE.YAML_SYNTAX] invalid YAML syntax",
+		},
+		{
+			name: "format error with details",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if path, ok := err.Details["path"].(string); ok {
+						return fmt.Sprintf("%s: %s", err.Message, path)
+					}
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"file not found",
+				map[string]any{"path": "/workflow.yaml"},
+				nil,
+			),
+			want: "file not found: /workflow.yaml",
+		},
+		{
+			name: "format error as JSON-like string",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf(`{"code":%q,"message":%q}`, err.Code, err.Message)
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeExecutionCommandFailed,
+				"command failed",
+				nil,
+				nil,
+			),
+			want: `{"code":"EXECUTION.COMMAND.FAILED","message":"command failed"}`,
+		},
+		{
+			name: "format error with cause chain",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if err.Cause != nil {
+						return fmt.Sprintf("%s: %v", err.Message, err.Cause)
+					}
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeSystemIOReadFailed,
+				"failed to read file",
+				nil,
+				errors.New("permission denied"),
+			),
+			want: "failed to read file: permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			formatter := testutil.NewMockErrorFormatter()
+			tt.setupFunc(formatter)
+
+			// Act
+			result := formatter.FormatError(tt.inputError)
+
+			// Assert
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// =============================================================================
+// FormatError - Edge Cases
+// =============================================================================
+
+func TestMockErrorFormatter_FormatError_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockErrorFormatter)
+		inputError *domainerrors.StructuredError
+		want       string
+	}{
+		{
+			name: "nil details map",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf("%s (details: %v)", err.Message, len(err.Details))
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"error message",
+				nil,
+				nil,
+			),
+			want: "error message (details: 0)",
+		},
+		{
+			name: "empty details map",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf("%s (details: %v)", err.Message, len(err.Details))
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"error message",
+				map[string]any{},
+				nil,
+			),
+			want: "error message (details: 0)",
+		},
+		{
+			name: "nil cause",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf("%s (has cause: %v)", err.Message, err.Cause != nil)
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"error message",
+				nil,
+				nil,
+			),
+			want: "error message (has cause: false)",
+		},
+		{
+			name: "empty message",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if err.Message == "" {
+						return fmt.Sprintf("[%s]", err.Code)
+					}
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"",
+				nil,
+				nil,
+			),
+			want: "[USER.INPUT.MISSING_FILE]",
+		},
+		{
+			name: "complex details structure",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return fmt.Sprintf("%s (keys: %d)", err.Message, len(err.Details))
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeWorkflowValidationInvalidTransition,
+				"invalid state",
+				map[string]any{
+					"from":  "step1",
+					"to":    "step2",
+					"line":  42,
+					"extra": []string{"a", "b", "c"},
+				},
+				nil,
+			),
+			want: "invalid state (keys: 4)",
+		},
+		{
+			name: "unicode characters in message",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"文件未找到 (file not found)",
+				nil,
+				nil,
+			),
+			want: "文件未找到 (file not found)",
+		},
+		{
+			name: "very long message",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if len(err.Message) > 20 {
+						return err.Message[:20] + "..."
+					}
+					return err.Message
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"This is a very long error message that contains lots of details about what went wrong",
+				nil,
+				nil,
+			),
+			want: "This is a very long ...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			formatter := testutil.NewMockErrorFormatter()
+			tt.setupFunc(formatter)
+
+			// Act
+			result := formatter.FormatError(tt.inputError)
+
+			// Assert
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// =============================================================================
+// FormatError - Error Handling
+// =============================================================================
+
+func TestMockErrorFormatter_FormatError_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockErrorFormatter)
+		inputError *domainerrors.StructuredError
+		want       string
+	}{
+		{
+			name: "format function handles nil error gracefully",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if err == nil {
+						return "ERROR: nil error"
+					}
+					return err.Message
+				})
+			},
+			inputError: nil,
+			want:       "ERROR: nil error",
+		},
+		{
+			name: "format function handles missing details key",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if val, ok := err.Details["nonexistent"].(string); ok {
+						return val
+					}
+					return "key not found"
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"error",
+				map[string]any{"other": "value"},
+				nil,
+			),
+			want: "key not found",
+		},
+		{
+			name: "format function handles type assertion failure",
+			setupFunc: func(formatter *testutil.MockErrorFormatter) {
+				formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+					if val, ok := err.Details["number"].(string); ok {
+						return val
+					}
+					return "type mismatch"
+				})
+			},
+			inputError: domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"error",
+				map[string]any{"number": 42},
+				nil,
+			),
+			want: "type mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			formatter := testutil.NewMockErrorFormatter()
+			tt.setupFunc(formatter)
+
+			// Act
+			result := formatter.FormatError(tt.inputError)
+
+			// Assert
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// =============================================================================
+// Configuration Methods Tests
+// =============================================================================
+
+func TestMockErrorFormatter_SetFormatFunc(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	callCount := 0
+	err1 := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"first error",
+		nil,
+		nil,
+	)
+	err2 := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+		"second error",
+		nil,
+		nil,
+	)
+
+	// Act
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		callCount++
+		return fmt.Sprintf("Error #%d: %s", callCount, err.Message)
+	})
+
+	result1 := formatter.FormatError(err1)
+	result2 := formatter.FormatError(err2)
+
+	// Assert
+	assert.Equal(t, "Error #1: first error", result1)
+	assert.Equal(t, "Error #2: second error", result2)
+	assert.Equal(t, 2, callCount, "Format function should be called twice")
+}
+
+func TestMockErrorFormatter_SetFormatFunc_ReplacesPreviousFunction(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act - set first function
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "first format"
+	})
+	result1 := formatter.FormatError(err)
+
+	// Act - replace with second function
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "second format"
+	})
+	result2 := formatter.FormatError(err)
+
+	// Assert
+	assert.Equal(t, "first format", result1)
+	assert.Equal(t, "second format", result2, "Second SetFormatFunc should replace first")
+}
+
+func TestMockErrorFormatter_SetFormatFunc_WithNil(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "formatted"
+	})
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act - set nil function
+	formatter.SetFormatFunc(nil)
+	result := formatter.FormatError(err)
+
+	// Assert
+	assert.Equal(t, "", result, "Setting nil function should revert to default empty string behavior")
+}
+
+func TestMockErrorFormatter_Clear(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return fmt.Sprintf("[%s] %s", err.Code, err.Message)
+	})
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Verify function is set
+	result1 := formatter.FormatError(err)
+	assert.Equal(t, "[USER.INPUT.MISSING_FILE] test error", result1)
+
+	// Act - clear the function
+	formatter.Clear()
+	result2 := formatter.FormatError(err)
+
+	// Assert
+	assert.Equal(t, "", result2, "Clear should reset to default empty string behavior")
+}
+
+func TestMockErrorFormatter_Clear_MultipleTimes(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act & Assert - multiple Clear calls should be safe
+	formatter.Clear()
+	result1 := formatter.FormatError(err)
+	assert.Equal(t, "", result1)
+
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "formatted"
+	})
+	formatter.Clear()
+	result2 := formatter.FormatError(err)
+	assert.Equal(t, "", result2)
+
+	formatter.Clear()
+	formatter.Clear()
+	result3 := formatter.FormatError(err)
+	assert.Equal(t, "", result3, "Multiple Clear calls should be idempotent")
+}
+
+// =============================================================================
+// Thread Safety Tests
+// =============================================================================
+
+func TestMockErrorFormatter_ThreadSafety_FormatError(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return fmt.Sprintf("[%s] %s", err.Code, err.Message)
+	})
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Act - concurrent FormatError calls
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			err := domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("error %d", n),
+				nil,
+				nil,
+			)
+			_ = formatter.FormatError(err)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition (verified by -race flag)
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"final error",
+		nil,
+		nil,
+	)
+	result := formatter.FormatError(err)
+	assert.Equal(t, "[USER.INPUT.MISSING_FILE] final error", result)
+}
+
+func TestMockErrorFormatter_ThreadSafety_SetFormatFunc(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	var wg sync.WaitGroup
+	iterations := 50
+
+	// Act - concurrent SetFormatFunc calls
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+				return fmt.Sprintf("format %d: %s", n, err.Message)
+			})
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition, final function is set
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test",
+		nil,
+		nil,
+	)
+	result := formatter.FormatError(err)
+	assert.Contains(t, result, "test", "Should contain the message")
+}
+
+func TestMockErrorFormatter_ThreadSafety_MixedOperations(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return err.Message
+	})
+	var wg sync.WaitGroup
+	iterations := 50
+
+	// Act - concurrent mixed operations
+	for i := 0; i < iterations; i++ {
+		wg.Add(3)
+
+		// FormatError
+		go func(n int) {
+			defer wg.Done()
+			err := domainerrors.NewStructuredError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("error %d", n),
+				nil,
+				nil,
+			)
+			_ = formatter.FormatError(err)
+		}(i)
+
+		// SetFormatFunc
+		go func(n int) {
+			defer wg.Done()
+			formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+				return fmt.Sprintf("%d: %s", n, err.Message)
+			})
+		}(i)
+
+		// Clear
+		go func() {
+			defer wg.Done()
+			formatter.Clear()
+		}()
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition
+	assert.True(t, true, "Concurrent mixed operations should not cause races")
+}
+
+// =============================================================================
+// State Isolation Tests
+// =============================================================================
+
+func TestMockErrorFormatter_StateIsolation(t *testing.T) {
+	// Arrange
+	formatter1 := testutil.NewMockErrorFormatter()
+	formatter2 := testutil.NewMockErrorFormatter()
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act - configure each differently
+	formatter1.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "formatter1: " + err.Message
+	})
+
+	formatter2.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		return "formatter2: " + err.Message
+	})
+
+	result1 := formatter1.FormatError(err)
+	result2 := formatter2.FormatError(err)
+
+	// Assert - state should be isolated
+	assert.Equal(t, "formatter1: test error", result1)
+	assert.Equal(t, "formatter2: test error", result2)
+}
+
+// =============================================================================
+// Real-World Usage Scenarios
+// =============================================================================
+
+func TestMockErrorFormatter_RealWorld_JSONFormatter(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		// Simulate JSON formatter
+		return fmt.Sprintf(`{"error_code":%q,"message":%q,"exit_code":%d}`,
+			err.Code, err.Message, err.ExitCode())
+	})
+
+	tests := []struct {
+		name       string
+		inputError *domainerrors.StructuredError
+		want       string
+	}{
+		{
+			name: "user error",
+			inputError: domainerrors.NewUserError(
+				domainerrors.ErrorCodeUserInputMissingFile,
+				"workflow file not found",
+				nil,
+				nil,
+			),
+			want: `{"error_code":"USER.INPUT.MISSING_FILE","message":"workflow file not found","exit_code":1}`,
+		},
+		{
+			name: "workflow error",
+			inputError: domainerrors.NewWorkflowError(
+				domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+				"invalid YAML syntax",
+				nil,
+				nil,
+			),
+			want: `{"error_code":"WORKFLOW.PARSE.YAML_SYNTAX","message":"invalid YAML syntax","exit_code":2}`,
+		},
+		{
+			name: "execution error",
+			inputError: domainerrors.NewExecutionError(
+				domainerrors.ErrorCodeExecutionCommandFailed,
+				"command failed",
+				nil,
+				nil,
+			),
+			want: `{"error_code":"EXECUTION.COMMAND.FAILED","message":"command failed","exit_code":3}`,
+		},
+		{
+			name: "system error",
+			inputError: domainerrors.NewSystemError(
+				domainerrors.ErrorCodeSystemIOReadFailed,
+				"failed to read file",
+				nil,
+				nil,
+			),
+			want: `{"error_code":"SYSTEM.IO.READ_FAILED","message":"failed to read file","exit_code":4}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			result := formatter.FormatError(tt.inputError)
+
+			// Assert
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+func TestMockErrorFormatter_RealWorld_HumanReadableFormatter(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		// Simulate human-readable formatter
+		output := fmt.Sprintf("ERROR [%s]: %s", err.Code, err.Message)
+		if len(err.Details) > 0 {
+			output += "\nDetails:"
+			for k, v := range err.Details {
+				output += fmt.Sprintf("\n  %s: %v", k, v)
+			}
+		}
+		return output
+	})
+
+	// Act
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+		"invalid YAML syntax",
+		map[string]any{
+			"line":   42,
+			"column": 10,
+			"file":   "workflow.yaml",
+		},
+		nil,
+	)
+	result := formatter.FormatError(err)
+
+	// Assert
+	assert.Contains(t, result, "ERROR [WORKFLOW.PARSE.YAML_SYNTAX]: invalid YAML syntax")
+	assert.Contains(t, result, "Details:")
+	assert.Contains(t, result, "line: 42")
+	assert.Contains(t, result, "column: 10")
+	assert.Contains(t, result, "file: workflow.yaml")
+}
+
+func TestMockErrorFormatter_RealWorld_CompactFormatter(t *testing.T) {
+	// Arrange
+	formatter := testutil.NewMockErrorFormatter()
+	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+		// Simulate compact formatter (code only)
+		return string(err.Code)
+	})
+
+	// Act
+	err := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeExecutionCommandTimeout,
+		"command timed out after 30s",
+		map[string]any{"timeout": "30s", "command": "long-running-task"},
+		nil,
+	)
+	result := formatter.FormatError(err)
+
+	// Assert
+	assert.Equal(t, "EXECUTION.COMMAND.TIMEOUT", result)
 }
