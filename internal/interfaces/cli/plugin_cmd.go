@@ -80,7 +80,7 @@ Examples:
 
 func runPluginList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Initialize plugin system (read-only mode)
 	result, err := initPluginSystemReadOnly(ctx, cfg)
@@ -134,7 +134,7 @@ func runPluginList(cmd *cobra.Command, cfg *Config) error {
 
 func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
 	ctx := context.Background()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
@@ -179,7 +179,7 @@ func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
 
 func runPluginDisable(cmd *cobra.Command, cfg *Config, name string) error {
 	ctx := context.Background()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,

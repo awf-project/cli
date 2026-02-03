@@ -49,7 +49,7 @@ Examples:
 // runConfigShow displays the project configuration.
 func runConfigShow(cmd *cobra.Command, cfg *Config) error {
 	configPath := xdg.LocalConfigPath()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Check if config file exists
 	_, err := os.Stat(configPath)

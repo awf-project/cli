@@ -869,7 +869,7 @@ func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 	_, err := execSvc.Run(context.Background(), "missing-child-parent", nil)
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, application.ErrSubWorkflowNotFound)
+	assert.Contains(t, err.Error(), "workflow file not found")
 }
 
 // =============================================================================

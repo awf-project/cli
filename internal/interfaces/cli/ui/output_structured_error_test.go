@@ -84,7 +84,7 @@ func TestOutputWriter_WriteError_StructuredError_JSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 			err := w.WriteError(tt.structuredErr, tt.exitCode)
 			require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestOutputWriter_WriteError_StructuredError_Text(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
 			errBuf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+			w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 			err := w.WriteError(tt.structuredErr, tt.exitCode)
 			require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestOutputWriter_WriteError_StructuredError_EmptyDetails(t *testing.T) {
 	)
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(structuredErr, 1)
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestOutputWriter_WriteError_StructuredError_WithCause(t *testing.T) {
 	)
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(structuredErr, 4)
 	require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestOutputWriter_WriteError_StructuredError_WrappedInChain(t *testing.T) {
 	wrappedErr := errors.New("validation failed: " + structuredErr.Error())
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	// WriteError should still detect wrapped StructuredError via errors.As()
 	// This test will fail in RED phase since stub doesn't properly detect wrapped errors
@@ -284,7 +284,7 @@ func TestOutputWriter_WriteError_StructuredError_AllErrorCodes(t *testing.T) {
 			)
 
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 			err := w.WriteError(structuredErr, tc.exitCode)
 			require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestOutputWriter_WriteError_PlainError_JSON(t *testing.T) {
 	plainErr := errors.New("something went wrong")
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(plainErr, 1)
 	require.NoError(t, err)
@@ -329,7 +329,7 @@ func TestOutputWriter_WriteError_PlainError_Text(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 	err := w.WriteError(plainErr, 3)
 	require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestOutputWriter_WriteError_NilError(t *testing.T) {
 	// Edge case: nil error should not panic
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 	// This may panic in stub implementation - that's expected for RED phase
 	// In GREEN phase, should handle gracefully or document as precondition
@@ -368,7 +368,7 @@ func TestOutputWriter_WriteError_MixedErrorTypes(t *testing.T) {
 	// Test handling both StructuredError and plain errors in sequence
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatJSON, true, false)
 
 	// First: StructuredError
 	structuredErr := domerrors.NewStructuredError(
@@ -425,7 +425,7 @@ func TestOutputWriter_WriteError_StructuredError_AllFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
 			errBuf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, errBuf, tt.format, true)
+			w := ui.NewOutputWriter(buf, errBuf, tt.format, true, false)
 
 			err := w.WriteError(structuredErr, 2)
 			require.NoError(t, err)
@@ -454,7 +454,7 @@ func TestOutputWriter_WriteError_StructuredError_WithTimestamp(t *testing.T) {
 	assert.WithinDuration(t, now, structuredErr.Timestamp, time.Second)
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(structuredErr, 3)
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestOutputWriter_WriteError_StructuredError_WithDetails(t *testing.T) {
 	)
 
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(structuredErr, 4)
 	require.NoError(t, err)
@@ -508,7 +508,7 @@ func TestOutputWriter_WriteError_StructuredError_UsesFormatter_Text(t *testing.T
 
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, false) // Color enabled (noColor=false)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, false, false) // Color enabled (noColor=false)
 
 	err := w.WriteError(structuredErr, 2)
 	require.NoError(t, err)
@@ -543,7 +543,7 @@ func TestOutputWriter_WriteError_StructuredError_FormatterWithDetails_Text(t *te
 
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 	err := w.WriteError(structuredErr, 1)
 	require.NoError(t, err)
@@ -573,7 +573,7 @@ func TestOutputWriter_WriteError_StructuredError_FormatterWithCause_Text(t *test
 
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 	err := w.WriteError(structuredErr, 4)
 	require.NoError(t, err)

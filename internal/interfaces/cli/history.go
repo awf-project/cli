@@ -72,13 +72,13 @@ Examples:
 
 func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since string, limit int, showStats bool) error {
 	ctx := context.Background()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Open history store
 	historyPath := filepath.Join(cfg.StoragePath, "history.db")
 	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	if err != nil {
-		return writer.WriteError(fmt.Errorf("open history store: %w", err), 4) // system error
+		return writeErrorAndExit(writer, fmt.Errorf("open history store: %w", err), ExitSystem)
 	}
 	defer func() { _ = historyStore.Close() }()
 
@@ -97,7 +97,7 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	if since != "" {
 		t, parseErr := time.Parse("2006-01-02", since)
 		if parseErr != nil {
-			return writer.WriteError(fmt.Errorf("invalid --since format, expected YYYY-MM-DD: %w", parseErr), 1) // user error
+			return writeErrorAndExit(writer, fmt.Errorf("invalid --since format, expected YYYY-MM-DD: %w", parseErr), ExitUser)
 		}
 		filter.Since = t
 	}
@@ -105,20 +105,20 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	if showStats {
 		stats, statsErr := historySvc.GetStats(ctx, filter)
 		if statsErr != nil {
-			return writer.WriteError(fmt.Errorf("get stats: %w", statsErr), 4)
+			return writeErrorAndExit(writer, fmt.Errorf("get stats: %w", statsErr), ExitSystem)
 		}
-		return writeHistoryStats(writer, cfg, stats)
+		return writeHistoryStats(writer, stats)
 	}
 
 	records, err := historySvc.List(ctx, filter)
 	if err != nil {
-		return writer.WriteError(fmt.Errorf("list history: %w", err), 4)
+		return writeErrorAndExit(writer, fmt.Errorf("list history: %w", err), ExitSystem)
 	}
 
-	return writeHistoryRecords(writer, cfg, records)
+	return writeHistoryRecords(writer, records)
 }
 
-func writeHistoryStats(writer *ui.OutputWriter, cfg *Config, stats *workflow.HistoryStats) error {
+func writeHistoryStats(writer *ui.OutputWriter, stats *workflow.HistoryStats) error {
 	info := HistoryStatsInfo{
 		TotalExecutions: stats.TotalExecutions,
 		SuccessCount:    stats.SuccessCount,
@@ -145,7 +145,7 @@ func writeHistoryStats(writer *ui.OutputWriter, cfg *Config, stats *workflow.His
 	return nil
 }
 
-func writeHistoryRecords(writer *ui.OutputWriter, cfg *Config, records []*workflow.ExecutionRecord) error {
+func writeHistoryRecords(writer *ui.OutputWriter, records []*workflow.ExecutionRecord) error {
 	infos := make([]HistoryInfo, len(records))
 	for i, r := range records {
 		infos[i] = HistoryInfo{

@@ -205,7 +205,7 @@ func TestOutputWriter_WritePrompts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
 			var errOut bytes.Buffer
-			writer := ui.NewOutputWriter(&out, &errOut, tt.format, true)
+			writer := ui.NewOutputWriter(&out, &errOut, tt.format, true, false)
 
 			err := writer.WritePrompts(tt.prompts)
 			require.NoError(t, err)
@@ -461,7 +461,7 @@ func TestOutputWriter_WritePrompts_SourceColumn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
 			var errOut bytes.Buffer
-			writer := ui.NewOutputWriter(&out, &errOut, tt.format, true)
+			writer := ui.NewOutputWriter(&out, &errOut, tt.format, true, false)
 
 			err := writer.WritePrompts(tt.prompts)
 			require.NoError(t, err)
@@ -481,7 +481,7 @@ func TestPromptInfo_Source_DistinguishesLocalFromGlobal(t *testing.T) {
 
 	// Test JSON output
 	var jsonOut bytes.Buffer
-	jsonWriter := ui.NewOutputWriter(&jsonOut, &bytes.Buffer{}, ui.FormatJSON, true)
+	jsonWriter := ui.NewOutputWriter(&jsonOut, &bytes.Buffer{}, ui.FormatJSON, true, false)
 	err := jsonWriter.WritePrompts(prompts)
 	require.NoError(t, err)
 
@@ -512,7 +512,7 @@ func TestPromptInfo_Source_WithNestedPaths(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatText, true, false)
 
 	err := writer.WritePrompts(prompts)
 	require.NoError(t, err)
@@ -527,7 +527,7 @@ func TestPromptInfo_Source_WithNestedPaths(t *testing.T) {
 func TestPromptInfo_Source_EmptyList(t *testing.T) {
 	// Ensures empty prompt list doesn't cause issues with source column
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatText, true, false)
 
 	err := writer.WritePrompts([]ui.PromptInfo{})
 	require.NoError(t, err)
@@ -547,7 +547,7 @@ func TestPromptInfo_Source_OrderPreservation(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatJSON, true)
+	writer := ui.NewOutputWriter(&out, &bytes.Buffer{}, ui.FormatJSON, true, false)
 
 	err := writer.WritePrompts(prompts)
 	require.NoError(t, err)

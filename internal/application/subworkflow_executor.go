@@ -66,12 +66,9 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	}
 
 	// 3. Load sub-workflow
-	subWorkflow, err := s.workflowSvc.GetWorkflow(ctx, config.Workflow)
+	_, err := s.workflowSvc.GetWorkflow(ctx, config.Workflow)
 	if err != nil {
 		return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, err)
-	}
-	if subWorkflow == nil {
-		return "", fmt.Errorf("step %s: %w: %s", step.Name, ErrSubWorkflowNotFound, config.Workflow)
 	}
 
 	// 4. Push current workflow to call stack

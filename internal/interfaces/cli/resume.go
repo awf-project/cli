@@ -63,14 +63,14 @@ Examples:
 
 func runResumeList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 
 	// List all state IDs and filter resumable
 	ids, err := stateStore.List(ctx)
 	if err != nil {
-		return fmt.Errorf("list states: %w", err)
+		return writeErrorAndExit(writer, fmt.Errorf("list states: %w", err), ExitSystem)
 	}
 
 	// Preallocate for expected resumable workflows
@@ -140,7 +140,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 
 	// Create output components
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
@@ -290,14 +290,13 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	duration := time.Since(startTime).Round(time.Millisecond)
 
 	if execErr != nil {
-		formatter.Error(fmt.Sprintf("Resume failed: %s", execErr))
-		if execCtx != nil {
-			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-		}
 		if cfg.OutputMode == OutputBuffered && execCtx != nil {
 			showStepOutputs(formatter, execCtx)
 		}
-		return &exitError{code: categorizeError(execErr), err: execErr}
+		if execCtx != nil {
+			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
+		}
+		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
 	if cfg.OutputMode != OutputBuffered && execCtx != nil {

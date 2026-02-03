@@ -62,6 +62,7 @@ Examples:
 	pf.BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output")
 	pf.BoolVarP(&cfg.Quiet, "quiet", "q", false, "Suppress non-error output")
 	pf.BoolVar(&cfg.NoColor, "no-color", false, "Disable colored output")
+	pf.BoolVar(&cfg.NoHints, "no-hints", false, "Disable error hint suggestions")
 	pf.StringVar(&cfg.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 	pf.StringVar(&cfg.ConfigPath, "config", "", "Path to config file")
 	pf.StringVar(&cfg.StoragePath, "storage", cfg.StoragePath, "Path to storage directory")

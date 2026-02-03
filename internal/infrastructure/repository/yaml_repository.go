@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
@@ -31,40 +32,75 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // workflow not found
+			return nil, domerrors.NewUserError(
+				domerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("workflow file not found: %s", name),
+				map[string]any{"path": filePath},
+				err,
+			)
 		}
-		return nil, WrapParseError(filePath, err)
+		// File read error (not a YAML syntax error, but use SYSTEM.IO.READ_FAILED instead)
+		return nil, domerrors.NewSystemError(
+			domerrors.ErrorCodeSystemIOReadFailed,
+			fmt.Sprintf("failed to read workflow file: %s", filePath),
+			map[string]any{"path": filePath},
+			err,
+		)
 	}
 
 	// Parse YAML
 	var yamlWf yamlWorkflow
 	if unmarshalErr := yaml.Unmarshal(data, &yamlWf); unmarshalErr != nil {
-		return nil, WrapParseError(filePath, unmarshalErr)
+		return nil, WrapParseError(filePath, unmarshalErr).ToStructuredError()
 	}
 
 	// Parse states (custom handling for inline steps)
 	if parseErr := r.parseStates(data, &yamlWf); parseErr != nil {
-		return nil, WrapParseError(filePath, parseErr)
+		return nil, WrapParseError(filePath, parseErr).ToStructuredError()
 	}
 
 	// Validate required fields
 	if yamlWf.Name == "" {
-		return nil, NewParseError(filePath, "name", "required field missing")
+		return nil, NewParseError(filePath, "name", "required field missing").ToStructuredError()
 	}
 	if yamlWf.States.Initial == "" {
-		return nil, NewParseError(filePath, "states.initial", "required field missing")
+		return nil, NewParseError(filePath, "states.initial", "required field missing").ToStructuredError()
 	}
 
 	// Map to domain
 	wf, err := mapToDomain(filePath, &yamlWf)
 	if err != nil {
+		// Check if it's a ParseError and convert to StructuredError
+		var pe *ParseError
+		if errors.As(err, &pe) {
+			return nil, pe.ToStructuredError()
+		}
 		return nil, err
 	}
 
 	// Domain validation
 	validator := expression.NewExprValidator()
 	if err := wf.Validate(validator.Compile); err != nil {
-		return nil, NewParseError(filePath, "", err.Error())
+		// Convert domain StateReferenceError to StructuredError
+		var stateRefErr *workflow.StateReferenceError
+		if errors.As(err, &stateRefErr) {
+			availableAny := make([]any, len(stateRefErr.AvailableStates))
+			for i, s := range stateRefErr.AvailableStates {
+				availableAny[i] = s
+			}
+			return nil, domerrors.NewWorkflowError(
+				domerrors.ErrorCodeWorkflowValidationMissingState,
+				stateRefErr.Error(),
+				map[string]any{
+					"state":            stateRefErr.ReferencedState,
+					"available_states": availableAny,
+					"step":             stateRefErr.StepName,
+					"field":            stateRefErr.Field,
+				},
+				err,
+			)
+		}
+		return nil, NewParseError(filePath, "", err.Error()).ToStructuredError()
 	}
 
 	return wf, nil

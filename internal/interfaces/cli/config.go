@@ -50,6 +50,7 @@ type Config struct {
 	Verbose      bool
 	Quiet        bool
 	NoColor      bool
+	NoHints      bool
 	OutputMode   OutputMode
 	OutputFormat ui.OutputFormat
 	LogLevel     string
@@ -64,6 +65,7 @@ func DefaultConfig() *Config {
 		Verbose:      false,
 		Quiet:        false,
 		NoColor:      false,
+		NoHints:      false,
 		OutputMode:   OutputSilent,
 		OutputFormat: ui.FormatText,
 		LogLevel:     "info",

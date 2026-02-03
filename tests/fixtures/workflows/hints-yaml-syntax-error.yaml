@@ -1,0 +1,9 @@
+# Test fixture for YAML syntax error hints
+name: yaml-syntax-error
+states:
+  initial: start
+  start:
+    type: step
+    command: echo "test"
+    invalid_field_causes_error: [
+      missing: closing bracket

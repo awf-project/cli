@@ -33,7 +33,7 @@ func TestWriteDryRun_AllFormats(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
-			w := ui.NewOutputWriter(buf, buf, tt.format, false)
+			w := ui.NewOutputWriter(buf, buf, tt.format, false, false)
 
 			formatter := ui.NewDryRunFormatter(buf, false)
 			err := w.WriteDryRun(plan, formatter)
@@ -82,7 +82,7 @@ func TestWriteResumableList_AllFormats(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
-			w := ui.NewOutputWriter(buf, buf, tt.format, false)
+			w := ui.NewOutputWriter(buf, buf, tt.format, false, false)
 
 			err := w.WriteResumableList(infos)
 			if err != nil {
@@ -104,7 +104,7 @@ func TestWriteResumableList_EmptyList(t *testing.T) {
 
 	for _, format := range formats {
 		buf := &bytes.Buffer{}
-		w := ui.NewOutputWriter(buf, buf, format, false)
+		w := ui.NewOutputWriter(buf, buf, format, false, false)
 
 		err := w.WriteResumableList(infos)
 		if err != nil {

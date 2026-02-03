@@ -52,7 +52,7 @@ func TestMockWorkflowRepository_NewMockWorkflowRepository(t *testing.T) {
 	// Verify it's usable immediately
 	ctx := context.Background()
 	wf, err := repo.Load(ctx, "nonexistent")
-	assert.NoError(t, err, "Load on empty repository should not error")
+	assert.Error(t, err, "Load on empty repository should return error for nonexistent workflow")
 	assert.Nil(t, wf, "Load on empty repository should return nil for nonexistent workflow")
 
 	names, err := repo.List(ctx)
@@ -90,22 +90,22 @@ func TestMockWorkflowRepository_Load_HappyPath(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "load nonexistent workflow returns nil",
+			name: "load nonexistent workflow returns error",
 			setupFunc: func(repo *testutil.MockWorkflowRepository) {
 				repo.AddWorkflow("other-wf", &workflow.Workflow{Name: "other-wf"})
 			},
 			workflowName: "nonexistent",
 			want:         nil,
-			wantErr:      false,
+			wantErr:      true,
 		},
 		{
-			name: "load from empty repository returns nil",
+			name: "load from empty repository returns error",
 			setupFunc: func(repo *testutil.MockWorkflowRepository) {
 				// No workflows added
 			},
 			workflowName: "any",
 			want:         nil,
-			wantErr:      false,
+			wantErr:      true,
 		},
 	}
 
@@ -396,9 +396,9 @@ func TestMockWorkflowRepository_Clear(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, names)
 
-	// Assert - errors are cleared
+	// Assert - workflows are no longer loadable after clear
 	wf, err := repo.Load(ctx, "wf1")
-	assert.NoError(t, err, "Load error should be cleared")
+	assert.Error(t, err, "Load should return error for cleared workflow")
 	assert.Nil(t, wf)
 
 	exists, err := repo.Exists(ctx, "wf1")

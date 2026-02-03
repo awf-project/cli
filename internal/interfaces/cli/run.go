@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,12 +139,6 @@ func workflowHelpFunc(cfg *Config) func(*cobra.Command, []string) {
 			defaultHelp(cmd)
 			return
 		}
-		if wf == nil {
-			// Workflow not found (repository returns nil, nil for non-existent workflows)
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: workflow '%s' not found\n\n", workflowName)
-			defaultHelp(cmd)
-			return
-		}
 
 		// Render workflow-specific help
 		noColor := cfg != nil && cfg.NoColor
@@ -168,7 +163,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Create output writer for JSON/quiet formats
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Create formatter for text output
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
@@ -220,13 +215,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Load workflow once for input collection check and later execution
 	wf, err := repo.Load(ctx, workflowName)
 	if err != nil {
-		return fmt.Errorf("workflow not found: %w", err)
+		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
 
 	// Collect missing inputs interactively if needed (F046)
 	inputs, err = collectMissingInputsIfNeeded(cmd, wf, inputs, cfg, logger)
 	if err != nil {
-		return fmt.Errorf("input collection failed: %w", err)
+		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
 
 	// Create history store and service
@@ -351,15 +346,14 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	duration := time.Since(startTime).Round(time.Millisecond)
 
 	if execErr != nil {
-		formatter.Error(fmt.Sprintf("Workflow failed: %s", execErr))
-		if execCtx != nil {
-			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-		}
 		// Show buffered output on error
 		if cfg.OutputMode == OutputBuffered && execCtx != nil {
 			showStepOutputs(formatter, execCtx)
 		}
-		return &exitError{code: categorizeError(execErr), err: execErr}
+		if execCtx != nil {
+			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
+		}
+		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
 	// F037: Show success feedback for steps with no output (silent/streaming modes)
@@ -391,7 +385,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	}
 
 	// Create output writer for JSON/quiet formats
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Create formatter for text output
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
@@ -428,7 +422,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	// Execute dry-run
 	plan, err := dryRunExec.Execute(cmd.Context(), workflowName, inputs)
 	if err != nil {
-		return fmt.Errorf("dry-run failed: %w", err)
+		return writeErrorAndExit(writer, fmt.Errorf("dry-run failed: %w", err), categorizeError(err))
 	}
 
 	// Output the plan
@@ -514,7 +508,9 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		if errors.Is(execErr, context.Canceled) {
 			return nil // Not an error for interactive abort
 		}
-		return &exitError{code: categorizeError(execErr), err: execErr}
+		// Create writer for error routing
+		writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), ui.FormatText, cfg.NoColor, cfg.NoHints)
+		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
 	return nil
@@ -711,8 +707,9 @@ func categorizeError(err error) int {
 
 // exitError wraps an error with an exit code.
 type exitError struct {
-	code int
-	err  error
+	code    int
+	err     error
+	handled bool // error message was already written to output
 }
 
 func (e *exitError) Error() string {
@@ -721,6 +718,19 @@ func (e *exitError) Error() string {
 
 func (e *exitError) ExitCode() int {
 	return e.code
+}
+
+func (e *exitError) Handled() bool {
+	return e.handled
+}
+
+// writeErrorAndExit writes the error through WriteError and returns an exitError
+// marked as handled so main.go won't double-print.
+func writeErrorAndExit(writer *ui.OutputWriter, err error, exitCode int) error {
+	if writeErr := writer.WriteError(err, exitCode); writeErr != nil {
+		return writeErr
+	}
+	return &exitError{code: exitCode, err: err, handled: true}
 }
 
 // cliLogger implements ports.Logger for CLI output.
@@ -763,12 +773,8 @@ func (l *cliLogger) Error(msg string, keysAndValues ...any) {
 
 func (l *cliLogger) WithContext(ctx map[string]any) ports.Logger {
 	merged := make(map[string]any)
-	for k, v := range l.context {
-		merged[k] = v
-	}
-	for k, v := range ctx {
-		merged[k] = v
-	}
+	maps.Copy(merged, l.context)
+	maps.Copy(merged, ctx)
 	return &cliLogger{
 		formatter: l.formatter,
 		verbose:   l.verbose,
@@ -905,8 +911,9 @@ func runSingleStep(
 	duration := time.Since(startTime).Round(time.Millisecond)
 
 	if execErr != nil {
-		formatter.Error(fmt.Sprintf("Step execution failed: %s", execErr))
-		return &exitError{code: categorizeError(execErr), err: execErr}
+		// Create writer for error routing
+		writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), ui.FormatText, cfg.NoColor, cfg.NoHints)
+		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
 	// Display result
@@ -1004,14 +1011,10 @@ func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
 	result := make(map[string]any)
 
 	// Copy config inputs first (lower priority)
-	for k, v := range configInputs {
-		result[k] = v
-	}
+	maps.Copy(result, configInputs)
 
 	// Apply CLI inputs (higher priority, overwrites config)
-	for k, v := range cliInputs {
-		result[k] = v
-	}
+	maps.Copy(result, cliInputs)
 
 	return result
 }
@@ -1036,7 +1039,25 @@ func collectMissingInputsIfNeeded(
 
 	// Check if stdin is a terminal
 	if !isTerminal(cmd.InOrStdin()) {
-		return nil, fmt.Errorf("missing required inputs and stdin is not a terminal; provide inputs via --input flags")
+		// Build lists for MissingInputHintGenerator
+		var missingInputs, requiredInputs []string
+		for _, input := range wf.Inputs {
+			if input.Required {
+				requiredInputs = append(requiredInputs, input.Name)
+				if _, exists := inputs[input.Name]; !exists {
+					missingInputs = append(missingInputs, input.Name)
+				}
+			}
+		}
+		return nil, domerrors.NewUserError(
+			domerrors.ErrorCodeUserInputValidationFailed,
+			"missing required inputs and stdin is not a terminal; provide inputs via --input flags",
+			map[string]any{
+				"missing_inputs":  missingInputs,
+				"required_inputs": requiredInputs,
+			},
+			nil,
+		)
 	}
 
 	// Create collector and service

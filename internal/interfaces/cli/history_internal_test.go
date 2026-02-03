@@ -63,7 +63,7 @@ func TestFormatDuration(t *testing.T) {
 
 func TestWriteHistoryStats_Text(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
 	stats := &workflow.HistoryStats{
 		TotalExecutions: 100,
@@ -73,8 +73,7 @@ func TestWriteHistoryStats_Text(t *testing.T) {
 		AvgDurationMs:   1500,
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatText, NoColor: true}
-	err := writeHistoryStats(writer, cfg, stats)
+	err := writeHistoryStats(writer, stats)
 	require.NoError(t, err)
 
 	output := out.String()
@@ -88,7 +87,7 @@ func TestWriteHistoryStats_Text(t *testing.T) {
 
 func TestWriteHistoryStats_TextNoExecutions(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
 	stats := &workflow.HistoryStats{
 		TotalExecutions: 0,
@@ -98,8 +97,7 @@ func TestWriteHistoryStats_TextNoExecutions(t *testing.T) {
 		AvgDurationMs:   0,
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatText, NoColor: true}
-	err := writeHistoryStats(writer, cfg, stats)
+	err := writeHistoryStats(writer, stats)
 	require.NoError(t, err)
 
 	output := out.String()
@@ -109,7 +107,7 @@ func TestWriteHistoryStats_TextNoExecutions(t *testing.T) {
 
 func TestWriteHistoryStats_JSON(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatJSON, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatJSON, true, false)
 
 	stats := &workflow.HistoryStats{
 		TotalExecutions: 50,
@@ -119,8 +117,7 @@ func TestWriteHistoryStats_JSON(t *testing.T) {
 		AvgDurationMs:   2000,
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatJSON, NoColor: true}
-	err := writeHistoryStats(writer, cfg, stats)
+	err := writeHistoryStats(writer, stats)
 	require.NoError(t, err)
 
 	output := out.String()
@@ -133,10 +130,9 @@ func TestWriteHistoryStats_JSON(t *testing.T) {
 
 func TestWriteHistoryRecords_Empty(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
-	cfg := &Config{OutputFormat: ui.FormatText, NoColor: true}
-	err := writeHistoryRecords(writer, cfg, []*workflow.ExecutionRecord{})
+	err := writeHistoryRecords(writer, []*workflow.ExecutionRecord{})
 	require.NoError(t, err)
 
 	output := out.String()
@@ -145,7 +141,7 @@ func TestWriteHistoryRecords_Empty(t *testing.T) {
 
 func TestWriteHistoryRecords_Text(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
 	now := time.Now()
 	records := []*workflow.ExecutionRecord{
@@ -172,8 +168,7 @@ func TestWriteHistoryRecords_Text(t *testing.T) {
 		},
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatText, NoColor: true}
-	err := writeHistoryRecords(writer, cfg, records)
+	err := writeHistoryRecords(writer, records)
 	require.NoError(t, err)
 
 	output := out.String()
@@ -189,7 +184,7 @@ func TestWriteHistoryRecords_Text(t *testing.T) {
 
 func TestWriteHistoryRecords_JSON(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatJSON, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatJSON, true, false)
 
 	now := time.Now()
 	records := []*workflow.ExecutionRecord{
@@ -205,8 +200,7 @@ func TestWriteHistoryRecords_JSON(t *testing.T) {
 		},
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatJSON, NoColor: true}
-	err := writeHistoryRecords(writer, cfg, records)
+	err := writeHistoryRecords(writer, records)
 	require.NoError(t, err)
 
 	output := out.String()
@@ -218,7 +212,7 @@ func TestWriteHistoryRecords_JSON(t *testing.T) {
 
 func TestWriteHistoryRecords_TruncatesLongValues(t *testing.T) {
 	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true)
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
 	now := time.Now()
 	records := []*workflow.ExecutionRecord{
@@ -234,8 +228,7 @@ func TestWriteHistoryRecords_TruncatesLongValues(t *testing.T) {
 		},
 	}
 
-	cfg := &Config{OutputFormat: ui.FormatText, NoColor: true}
-	err := writeHistoryRecords(writer, cfg, records)
+	err := writeHistoryRecords(writer, records)
 	require.NoError(t, err)
 
 	output := out.String()

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **C048**: Actionable error message hints
+  - Error messages now include contextual suggestions: "Did you mean?", line/column references, required inputs, and resolution steps
+  - Covers file not found, YAML syntax errors, invalid state references, missing inputs, and command failures
+  - Added `--no-hints` global flag to suppress suggestions
+  - JSON output includes `hints` array
+
 - **C047**: Structured Error Codes Taxonomy
   - Implemented hierarchical error code system with `CATEGORY.SUBCATEGORY.SPECIFIC` format (e.g., `USER.INPUT.MISSING_FILE`, `WORKFLOW.VALIDATION.CYCLE_DETECTED`)
   - Created `StructuredError` domain type with Code, Message, Details, Cause, and Timestamp fields

@@ -447,7 +447,7 @@ func TestHarnessFunctional_MissingWorkflow_ReturnsError(t *testing.T) {
 
 	// Assert: Error returned
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "workflow not found")
+	assert.Contains(t, err.Error(), "workflow file not found")
 }
 
 func TestHarnessFunctional_MissingCommandResult_UsesDefaults(t *testing.T) {

@@ -40,9 +40,6 @@ func (s *ExecutionService) ExecuteSingleStep(
 	if err != nil {
 		return nil, fmt.Errorf("load workflow: %w", err)
 	}
-	if wf == nil {
-		return nil, fmt.Errorf("workflow not found: %s", workflowName)
-	}
 
 	// expand template references in workflow steps
 	if s.templateSvc != nil {

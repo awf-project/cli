@@ -100,9 +100,6 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 	if err != nil {
 		return nil, fmt.Errorf("failed to load workflow: %w", err)
 	}
-	if wf == nil {
-		return nil, fmt.Errorf("workflow '%s' not found", workflowName)
-	}
 
 	// Expand templates if template service is available
 	if e.templateSvc != nil {

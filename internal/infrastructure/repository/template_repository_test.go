@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
@@ -403,9 +404,10 @@ func TestYAMLTemplateRepository_GetTemplate_InvalidSyntax(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, tmpl)
 
-	// Should be a ParseError
-	var parseErr *ParseError
-	require.ErrorAs(t, err, &parseErr)
+	// Should be a StructuredError with WORKFLOW.PARSE.YAML_SYNTAX code
+	var structErr *domerrors.StructuredError
+	require.ErrorAs(t, err, &structErr)
+	assert.Equal(t, domerrors.ErrorCodeWorkflowParseYAMLSyntax, structErr.Code)
 }
 
 func TestYAMLTemplateRepository_GetTemplate_MissingName(t *testing.T) {

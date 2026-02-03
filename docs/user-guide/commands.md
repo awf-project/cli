@@ -31,6 +31,7 @@ These flags work with all commands:
 | `--verbose, -v` | Enable verbose output |
 | `--quiet, -q` | Suppress non-error output |
 | `--no-color` | Disable colored output |
+| `--no-hints` | Disable error hint suggestions |
 | `--format, -f` | Output format (text, json, table, quiet) |
 | `--config` | Path to config file |
 | `--storage` | Path to storage directory |

@@ -272,7 +272,7 @@ func TestC047_StructuredError_JSONFormat(t *testing.T) {
 
 	// Create OutputWriter with JSON format
 	var stdout, stderr bytes.Buffer
-	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false)
+	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false, false)
 
 	// Act - write error
 	writer.WriteError(testErr, 1)
@@ -314,7 +314,7 @@ func TestC047_StructuredError_HumanFormat(t *testing.T) {
 
 	// Create OutputWriter with text format
 	var stdout, stderr bytes.Buffer
-	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatText, true) // no color for testing
+	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatText, true, false) // no color for testing
 
 	// Act - write error
 	writer.WriteError(testErr, 2)
@@ -563,7 +563,7 @@ func TestC047_ErrorCatalog_Completeness(t *testing.T) {
 // Then: JSON includes code, message, details, timestamp, all properly serialized
 func TestC047_ErrorFormatter_JSONStructure(t *testing.T) {
 	// Arrange
-	formatter := errfmt.NewJSONErrorFormatter()
+	formatter := errfmt.NewJSONErrorFormatter(false)
 	testTime := time.Date(2025, 1, 15, 10, 30, 45, 0, time.UTC)
 
 	testErr := &domainerrors.StructuredError{
@@ -632,7 +632,7 @@ func TestC047_ErrorFormatter_HumanReadable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			formatter := errfmt.NewHumanErrorFormatter(tt.colorEnabled)
+			formatter := errfmt.NewHumanErrorFormatter(tt.colorEnabled, false)
 			testErr := domainerrors.NewStructuredError(
 				domainerrors.ErrorCodeSystemIOPermissionDenied,
 				"cannot write to file",
@@ -694,7 +694,7 @@ func TestC047_WriteError_StructuredDetection(t *testing.T) {
 	)
 
 	var stdout, stderr bytes.Buffer
-	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false)
+	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false, false)
 
 	// Act
 	writer.WriteError(testErr, 2)
@@ -772,7 +772,7 @@ func TestC047_EndToEnd_AcceptanceCriteria(t *testing.T) {
 		)
 
 		var stdout, stderr bytes.Buffer
-		writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false)
+		writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false, false)
 		writer.WriteError(testErr, 1)
 
 		var result map[string]interface{}
@@ -794,7 +794,7 @@ func TestC047_EndToEnd_AcceptanceCriteria(t *testing.T) {
 		)
 
 		var stdout, stderr bytes.Buffer
-		writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatText, true)
+		writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatText, true, false)
 		writer.WriteError(testErr, 2)
 
 		output := stderr.String()

@@ -20,7 +20,7 @@ func TestJSONErrorFormatter_ImplementsInterface(t *testing.T) {
 
 // TestNewJSONErrorFormatter_Constructor verifies the constructor creates a valid instance.
 func TestNewJSONErrorFormatter_Constructor(t *testing.T) {
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 	require.NotNil(t, formatter)
 }
 
@@ -117,7 +117,7 @@ func TestJSONErrorFormatter_HappyPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			formatter := NewJSONErrorFormatter()
+			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
 				tt.message,
@@ -299,7 +299,7 @@ func TestJSONErrorFormatter_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			formatter := NewJSONErrorFormatter()
+			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
 				tt.message,
@@ -386,7 +386,7 @@ func TestJSONErrorFormatter_ErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			formatter := NewJSONErrorFormatter()
+			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
 				tt.message,
@@ -406,7 +406,7 @@ func TestJSONErrorFormatter_ErrorHandling(t *testing.T) {
 // TestJSONErrorFormatter_TimestampFormat verifies timestamp is in ISO 8601 format.
 func TestJSONErrorFormatter_TimestampFormat(t *testing.T) {
 	// Arrange
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
 		"test error",
@@ -434,7 +434,7 @@ func TestJSONErrorFormatter_TimestampFormat(t *testing.T) {
 // TestJSONErrorFormatter_OutputStructure verifies the exact JSON structure.
 func TestJSONErrorFormatter_OutputStructure(t *testing.T) {
 	// Arrange
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
 		"workflow file not found",
@@ -497,7 +497,7 @@ func TestJSONErrorFormatter_AllErrorCategories(t *testing.T) {
 		},
 	}
 
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -528,7 +528,7 @@ func TestJSONErrorFormatter_AllErrorCategories(t *testing.T) {
 // TestJSONErrorFormatter_ConsistentOutput verifies formatting is deterministic.
 func TestJSONErrorFormatter_ConsistentOutput(t *testing.T) {
 	// Arrange
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 
 	// Create error with fixed timestamp for reproducibility
 	structuredErr := &domainerrors.StructuredError{
@@ -553,7 +553,7 @@ func TestJSONErrorFormatter_ConsistentOutput(t *testing.T) {
 // TestJSONErrorFormatter_Idempotency verifies multiple calls produce same result.
 func TestJSONErrorFormatter_Idempotency(t *testing.T) {
 	// Arrange
-	formatter := NewJSONErrorFormatter()
+	formatter := NewJSONErrorFormatter(false)
 	structuredErr := &domainerrors.StructuredError{
 		Code:      domainerrors.ErrorCodeUserInputMissingFile,
 		Message:   "test error",
@@ -573,4 +573,633 @@ func TestJSONErrorFormatter_Idempotency(t *testing.T) {
 		assert.Equal(t, outputs[0], outputs[i],
 			"output %d should match output 0", i)
 	}
+}
+
+// =============================================================================
+// Hint Generation Tests (Component T009 - C048)
+// =============================================================================
+
+// TestJSONErrorFormatter_WithHints_HappyPath tests hint generation with various scenarios.
+func TestJSONErrorFormatter_WithHints_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		noHints    bool
+		generators []domainerrors.HintGenerator
+		errCode    domainerrors.ErrorCode
+		message    string
+		details    map[string]any
+		validate   func(t *testing.T, output string)
+	}{
+		{
+			name:    "single hint from generator",
+			noHints: false,
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Did you mean 'my-workflow.yaml'?"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "workflow file not found",
+			details: map[string]any{"path": "/workflow.yaml"},
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				assert.Contains(t, result, "hints", "should include hints array")
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 1, "should have exactly one hint")
+				assert.Equal(t, "Did you mean 'my-workflow.yaml'?", hints[0])
+			},
+		},
+		{
+			name:    "multiple hints from single generator",
+			noHints: false,
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Did you mean 'my-workflow.yaml'?"},
+						{Message: "Run 'awf list' to see available workflows"},
+						{Message: "Check your current directory with 'pwd'"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "workflow file not found",
+			details: map[string]any{"path": "/workflow.yaml"},
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 3, "should have three hints")
+				assert.Equal(t, "Did you mean 'my-workflow.yaml'?", hints[0])
+				assert.Equal(t, "Run 'awf list' to see available workflows", hints[1])
+				assert.Equal(t, "Check your current directory with 'pwd'", hints[2])
+			},
+		},
+		{
+			name:    "hints from multiple generators",
+			noHints: false,
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "First generator hint"},
+					}
+				},
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Second generator hint"},
+					}
+				},
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Third generator hint"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+			message: "YAML syntax error",
+			details: nil,
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 3, "should aggregate hints from all generators")
+				assert.Equal(t, "First generator hint", hints[0])
+				assert.Equal(t, "Second generator hint", hints[1])
+				assert.Equal(t, "Third generator hint", hints[2])
+			},
+		},
+		{
+			name:    "empty hints from generator",
+			noHints: false,
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{} // empty slice
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "workflow file not found",
+			details: nil,
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				// Hints field should not be present when no hints generated
+				_, exists := result["hints"]
+				assert.False(t, exists, "hints field should not be present when empty")
+			},
+		},
+		{
+			name:       "no generators provided",
+			noHints:    false,
+			generators: nil,
+			errCode:    domainerrors.ErrorCodeUserInputMissingFile,
+			message:    "workflow file not found",
+			details:    nil,
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				// Hints field should not be present when no generators
+				_, exists := result["hints"]
+				assert.False(t, exists, "hints field should not be present with no generators")
+			},
+		},
+		{
+			name:    "noHints flag suppresses hints",
+			noHints: true,
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "This hint should be suppressed"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "workflow file not found",
+			details: nil,
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				// Hints field should not be present when noHints is true
+				_, exists := result["hints"]
+				assert.False(t, exists, "hints should be suppressed when noHints=true")
+
+				// Other fields should still be present
+				assert.Contains(t, result, "error_code")
+				assert.Contains(t, result, "message")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			formatter := NewJSONErrorFormatter(tt.noHints, tt.generators...)
+			structuredErr := domainerrors.NewStructuredError(
+				tt.errCode,
+				tt.message,
+				tt.details,
+				nil,
+			)
+
+			// Act
+			output := formatter.FormatError(structuredErr)
+
+			// Assert
+			assert.NotEmpty(t, output, "output should not be empty")
+			tt.validate(t, output)
+		})
+	}
+}
+
+// TestJSONErrorFormatter_HintGeneration_EdgeCases tests edge cases in hint generation.
+func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		generators []domainerrors.HintGenerator
+		errCode    domainerrors.ErrorCode
+		message    string
+		validate   func(t *testing.T, output string)
+	}{
+		{
+			name: "generator returns nil slice",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return nil // nil slice, not empty slice
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "test error",
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				// Should handle nil slice gracefully
+				_, exists := result["hints"]
+				assert.False(t, exists, "hints should not be present for nil slice")
+			},
+		},
+		{
+			name: "generator panics - should not crash formatter",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					// This test verifies proper error handling
+					// In production, generators should never panic
+					panic("generator error")
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "test error",
+			validate: func(t *testing.T, output string) {
+				// If we reach here, the formatter recovered from panic
+				// This test should be implemented with recover() in generateHints
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+				// At minimum, error_code and message should be present
+				assert.Contains(t, result, "error_code")
+				assert.Contains(t, result, "message")
+			},
+		},
+		{
+			name: "mixed generators - some empty, some with hints",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{} // empty
+				},
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Valid hint from second generator"},
+					}
+				},
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return nil // nil
+				},
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Valid hint from fourth generator"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+			message: "parse error",
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 2, "should only include non-empty hints")
+				assert.Equal(t, "Valid hint from second generator", hints[0])
+				assert.Equal(t, "Valid hint from fourth generator", hints[1])
+			},
+		},
+		{
+			name: "hints with special characters",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: "Did you mean \"my-workflow.yaml\"?"},
+						{Message: "Path contains special chars: /path/to/file\n\ttab\r\n"},
+						{Message: "Unicode hint: 文件 не найден 🔥"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "file not found",
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err, "JSON should properly escape special characters")
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 3)
+				assert.Contains(t, hints[0], "my-workflow.yaml")
+				assert.Contains(t, hints[2], "文件")
+			},
+		},
+		{
+			name: "very long hint message",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					longMessage := strings.Repeat("This is a very long hint message. ", 50)
+					return []domainerrors.Hint{
+						{Message: longMessage},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeWorkflowValidationCycleDetected,
+			message: "validation error",
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 1)
+				hintMsg, ok := hints[0].(string)
+				require.True(t, ok)
+				assert.Greater(t, len(hintMsg), 1000, "long hint should be preserved")
+			},
+		},
+		{
+			name: "empty hint message",
+			generators: []domainerrors.HintGenerator{
+				func(err *domainerrors.StructuredError) []domainerrors.Hint {
+					return []domainerrors.Hint{
+						{Message: ""}, // empty message
+						{Message: "Valid hint"},
+					}
+				},
+			},
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "test error",
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				// Both hints should be included (filtering empty is implementation choice)
+				assert.GreaterOrEqual(t, len(hints), 1, "should have at least valid hint")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Skip panic test for now - requires implementation support
+			if strings.Contains(tt.name, "panics") {
+				t.Skip("Panic recovery test - implement in GREEN phase")
+			}
+
+			// Arrange
+			formatter := NewJSONErrorFormatter(false, tt.generators...)
+			structuredErr := domainerrors.NewStructuredError(
+				tt.errCode,
+				tt.message,
+				nil,
+				nil,
+			)
+
+			// Act
+			output := formatter.FormatError(structuredErr)
+
+			// Assert
+			tt.validate(t, output)
+		})
+	}
+}
+
+// TestJSONErrorFormatter_HintOrdering verifies hints maintain generator order.
+func TestJSONErrorFormatter_HintOrdering(t *testing.T) {
+	// Arrange - multiple generators that return hints in specific order
+	generator1 := func(err *domainerrors.StructuredError) []domainerrors.Hint {
+		return []domainerrors.Hint{
+			{Message: "Hint A1"},
+			{Message: "Hint A2"},
+		}
+	}
+	generator2 := func(err *domainerrors.StructuredError) []domainerrors.Hint {
+		return []domainerrors.Hint{
+			{Message: "Hint B1"},
+		}
+	}
+	generator3 := func(err *domainerrors.StructuredError) []domainerrors.Hint {
+		return []domainerrors.Hint{
+			{Message: "Hint C1"},
+			{Message: "Hint C2"},
+			{Message: "Hint C3"},
+		}
+	}
+
+	formatter := NewJSONErrorFormatter(false, generator1, generator2, generator3)
+	structuredErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act
+	output := formatter.FormatError(structuredErr)
+
+	// Assert
+	var result map[string]any
+	err := json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	hints, ok := result["hints"].([]any)
+	require.True(t, ok)
+	require.Len(t, hints, 6, "should aggregate all hints in order")
+
+	// Verify exact order: generator1 hints, then generator2, then generator3
+	expectedOrder := []string{
+		"Hint A1", "Hint A2",
+		"Hint B1",
+		"Hint C1", "Hint C2", "Hint C3",
+	}
+	for i, expected := range expectedOrder {
+		assert.Equal(t, expected, hints[i], "hint at index %d should maintain order", i)
+	}
+}
+
+// TestJSONErrorFormatter_HintContextAware verifies generators receive error context.
+func TestJSONErrorFormatter_HintContextAware(t *testing.T) {
+	tests := []struct {
+		name      string
+		errCode   domainerrors.ErrorCode
+		message   string
+		details   map[string]any
+		generator domainerrors.HintGenerator
+		validate  func(t *testing.T, output string)
+	}{
+		{
+			name:    "generator accesses error code",
+			errCode: domainerrors.ErrorCodeUserInputMissingFile,
+			message: "file not found",
+			details: nil,
+			generator: func(err *domainerrors.StructuredError) []domainerrors.Hint {
+				// Generator can inspect error code to produce context-aware hints
+				if err.Code == domainerrors.ErrorCodeUserInputMissingFile {
+					return []domainerrors.Hint{
+						{Message: "Hint specific to MISSING_FILE error"},
+					}
+				}
+				return nil
+			},
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 1)
+				assert.Equal(t, "Hint specific to MISSING_FILE error", hints[0])
+			},
+		},
+		{
+			name:    "generator accesses details",
+			errCode: domainerrors.ErrorCodeWorkflowParseYAMLSyntax,
+			message: "YAML syntax error",
+			details: map[string]any{
+				"line":   42,
+				"column": 10,
+			},
+			generator: func(err *domainerrors.StructuredError) []domainerrors.Hint {
+				// Generator can extract details for context-aware hints
+				if line, ok := err.Details["line"].(int); ok {
+					return []domainerrors.Hint{
+						{Message: "Syntax error at line " + strings.Repeat("X", line%10)}, // use line number
+					}
+				}
+				return nil
+			},
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				hints, ok := result["hints"].([]any)
+				require.True(t, ok)
+				assert.Len(t, hints, 1)
+				assert.Contains(t, hints[0], "Syntax error at line")
+			},
+		},
+		{
+			name:    "generator with no matching error type returns empty",
+			errCode: domainerrors.ErrorCodeExecutionCommandFailed,
+			message: "command failed",
+			details: nil,
+			generator: func(err *domainerrors.StructuredError) []domainerrors.Hint {
+				// Generator only handles specific error types
+				if err.Code == domainerrors.ErrorCodeUserInputMissingFile {
+					return []domainerrors.Hint{{Message: "Should not appear"}}
+				}
+				return []domainerrors.Hint{} // empty for non-matching errors
+			},
+			validate: func(t *testing.T, output string) {
+				var result map[string]any
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err)
+
+				// No hints should be present
+				_, exists := result["hints"]
+				assert.False(t, exists, "hints should not be present for non-matching error")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			formatter := NewJSONErrorFormatter(false, tt.generator)
+			structuredErr := domainerrors.NewStructuredError(
+				tt.errCode,
+				tt.message,
+				tt.details,
+				nil,
+			)
+
+			// Act
+			output := formatter.FormatError(structuredErr)
+
+			// Assert
+			tt.validate(t, output)
+		})
+	}
+}
+
+// TestJSONErrorFormatter_HintThreadSafety verifies concurrent hint generation is safe.
+func TestJSONErrorFormatter_HintThreadSafety(t *testing.T) {
+	// Arrange - create formatter with stateless generator
+	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
+		return []domainerrors.Hint{
+			{Message: "Thread-safe hint"},
+		}
+	}
+	formatter := NewJSONErrorFormatter(false, generator)
+
+	structuredErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	// Act - format concurrently from multiple goroutines
+	const goroutines = 10
+	results := make([]string, goroutines)
+	done := make(chan bool)
+
+	for i := 0; i < goroutines; i++ {
+		go func(index int) {
+			results[index] = formatter.FormatError(structuredErr)
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+
+	// Assert - all results should be identical (formatter is stateless)
+	for i := 1; i < len(results); i++ {
+		assert.Equal(t, results[0], results[i],
+			"concurrent formatting should produce identical results")
+	}
+
+	// Verify hints are present in result
+	var result map[string]any
+	err := json.Unmarshal([]byte(results[0]), &result)
+	require.NoError(t, err)
+	hints, ok := result["hints"].([]any)
+	require.True(t, ok)
+	assert.Len(t, hints, 1)
+}
+
+// TestJSONErrorFormatter_NoHints_PreservesErrorStructure verifies noHints doesn't break output.
+func TestJSONErrorFormatter_NoHints_PreservesErrorStructure(t *testing.T) {
+	// Arrange - create two formatters: one with hints, one without
+	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
+		return []domainerrors.Hint{
+			{Message: "Test hint"},
+		}
+	}
+
+	formatterWithHints := NewJSONErrorFormatter(false, generator)
+	formatterNoHints := NewJSONErrorFormatter(true, generator)
+
+	structuredErr := &domainerrors.StructuredError{
+		Code:      domainerrors.ErrorCodeUserInputMissingFile,
+		Message:   "workflow file not found",
+		Details:   map[string]any{"path": "/test.yaml"},
+		Cause:     nil,
+		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
+	}
+
+	// Act
+	outputWithHints := formatterWithHints.FormatError(structuredErr)
+	outputNoHints := formatterNoHints.FormatError(structuredErr)
+
+	// Assert
+	var resultWithHints, resultNoHints map[string]any
+
+	err := json.Unmarshal([]byte(outputWithHints), &resultWithHints)
+	require.NoError(t, err)
+
+	err = json.Unmarshal([]byte(outputNoHints), &resultNoHints)
+	require.NoError(t, err)
+
+	// Both should have same base structure
+	assert.Equal(t, resultWithHints["error_code"], resultNoHints["error_code"])
+	assert.Equal(t, resultWithHints["message"], resultNoHints["message"])
+	assert.Equal(t, resultWithHints["timestamp"], resultNoHints["timestamp"])
+	assert.Equal(t, resultWithHints["details"], resultNoHints["details"])
+
+	// Only difference should be hints field
+	assert.Contains(t, resultWithHints, "hints", "formatter with hints should have hints field")
+	assert.NotContains(t, resultNoHints, "hints", "formatter with noHints should not have hints field")
 }

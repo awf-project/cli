@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
@@ -148,9 +149,19 @@ func TestYAMLRepository_Load_NonExistent(t *testing.T) {
 	repo := NewYAMLRepository(fixturesPath)
 
 	wf, err := repo.Load(context.Background(), "nonexistent")
-	if err != nil {
-		t.Errorf("Load() error = %v, want nil", err)
+	if err == nil {
+		t.Fatal("Load() error = nil, want error for non-existent file")
 	}
+
+	// Check it's a StructuredError with USER.INPUT.MISSING_FILE code
+	structErr, ok := err.(*domerrors.StructuredError)
+	if !ok {
+		t.Fatalf("error type = %T, want *domerrors.StructuredError", err)
+	}
+	if structErr.Code != domerrors.ErrorCodeUserInputMissingFile {
+		t.Errorf("error code = %v, want %v", structErr.Code, domerrors.ErrorCodeUserInputMissingFile)
+	}
+
 	if wf != nil {
 		t.Errorf("Load() = %v, want nil", wf)
 	}
@@ -164,12 +175,21 @@ func TestYAMLRepository_Load_InvalidSyntax(t *testing.T) {
 		t.Fatal("Load() error = nil, want error")
 	}
 
-	// Check it's a ParseError
-	parseErr, ok := err.(*ParseError)
+	// Check it's a StructuredError with WORKFLOW.PARSE.YAML_SYNTAX code
+	structErr, ok := err.(*domerrors.StructuredError)
 	if !ok {
-		t.Errorf("error type = %T, want *ParseError", err)
-	} else if parseErr.File == "" {
-		t.Error("ParseError.File is empty")
+		t.Fatalf("error type = %T, want *domerrors.StructuredError", err)
+	}
+	if structErr.Code != domerrors.ErrorCodeWorkflowParseYAMLSyntax {
+		t.Errorf("error code = %v, want %v", structErr.Code, domerrors.ErrorCodeWorkflowParseYAMLSyntax)
+	}
+
+	// Check that file detail is present
+	if structErr.Details == nil {
+		t.Fatal("StructuredError.Details is nil")
+	}
+	if _, ok := structErr.Details["file"]; !ok {
+		t.Error("StructuredError.Details[\"file\"] not present")
 	}
 }
 
@@ -181,11 +201,23 @@ func TestYAMLRepository_Load_MissingName(t *testing.T) {
 		t.Fatal("Load() error = nil, want error")
 	}
 
-	parseErr, ok := err.(*ParseError)
+	// Check it's a StructuredError with WORKFLOW.PARSE.YAML_SYNTAX code
+	structErr, ok := err.(*domerrors.StructuredError)
 	if !ok {
-		t.Errorf("error type = %T, want *ParseError", err)
-	} else if parseErr.Field != "name" {
-		t.Errorf("ParseError.Field = %q, want %q", parseErr.Field, "name")
+		t.Fatalf("error type = %T, want *domerrors.StructuredError", err)
+	}
+	if structErr.Code != domerrors.ErrorCodeWorkflowParseYAMLSyntax {
+		t.Errorf("error code = %v, want %v", structErr.Code, domerrors.ErrorCodeWorkflowParseYAMLSyntax)
+	}
+
+	// Check that field detail is present
+	if structErr.Details == nil {
+		t.Fatal("StructuredError.Details is nil")
+	}
+	if field, ok := structErr.Details["field"]; !ok {
+		t.Error("StructuredError.Details[\"field\"] not present")
+	} else if field != "name" {
+		t.Errorf("StructuredError.Details[\"field\"] = %q, want %q", field, "name")
 	}
 }
 

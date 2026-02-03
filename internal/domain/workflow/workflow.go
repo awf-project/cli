@@ -35,6 +35,35 @@ func (w *Workflow) GetStep(name string) (*Step, bool) {
 	return step, ok
 }
 
+// StateReferenceError represents a reference to an undefined state.
+// This domain error carries structured information about invalid state references
+// for conversion to StructuredError in the application layer.
+type StateReferenceError struct {
+	StepName        string
+	ReferencedState string
+	AvailableStates []string
+	Field           string // "initial", "on_success", "on_failure", "transition", "loop_body", "on_complete"
+}
+
+func (e *StateReferenceError) Error() string {
+	switch e.Field {
+	case "initial":
+		return fmt.Sprintf("initial state '%s' not found in steps", e.ReferencedState)
+	case "on_success":
+		return fmt.Sprintf("step '%s': on_success references unknown state '%s'", e.StepName, e.ReferencedState)
+	case "on_failure":
+		return fmt.Sprintf("step '%s': on_failure references unknown state '%s'", e.StepName, e.ReferencedState)
+	case "transition":
+		return fmt.Sprintf("step '%s': transition references unknown state '%s'", e.StepName, e.ReferencedState)
+	case "loop_body":
+		return fmt.Sprintf("step '%s': loop body references unknown step '%s'", e.StepName, e.ReferencedState)
+	case "on_complete":
+		return fmt.Sprintf("step '%s': on_complete references unknown state '%s'", e.StepName, e.ReferencedState)
+	default:
+		return fmt.Sprintf("step '%s': references unknown state '%s'", e.StepName, e.ReferencedState)
+	}
+}
+
 // Validate checks if the workflow configuration is valid.
 // The validator parameter is used to check expression syntax in agent configurations.
 //
@@ -49,7 +78,16 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 
 	// Check initial state exists
 	if _, ok := w.Steps[w.Initial]; !ok {
-		return fmt.Errorf("initial state '%s' not found in steps", w.Initial)
+		availableStates := make([]string, 0, len(w.Steps))
+		for stateName := range w.Steps {
+			availableStates = append(availableStates, stateName)
+		}
+		return &StateReferenceError{
+			StepName:        "",
+			ReferencedState: w.Initial,
+			AvailableStates: availableStates,
+			Field:           "initial",
+		}
 	}
 
 	// Check at least one terminal state exists
@@ -103,7 +141,16 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 			// (will be handled gracefully at runtime per ADR-005)
 			if !isLoopBodyStep {
 				if _, ok := w.Steps[tr.Goto]; !ok {
-					return fmt.Errorf("step '%s': transition %d references unknown state '%s'", name, i, tr.Goto)
+					availableStates := make([]string, 0, len(w.Steps))
+					for stateName := range w.Steps {
+						availableStates = append(availableStates, stateName)
+					}
+					return &StateReferenceError{
+						StepName:        name,
+						ReferencedState: tr.Goto,
+						AvailableStates: availableStates,
+						Field:           "transition",
+					}
 				}
 			}
 		}
@@ -111,12 +158,30 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 		// Validate legacy state references exist
 		if step.OnSuccess != "" {
 			if _, ok := w.Steps[step.OnSuccess]; !ok {
-				return fmt.Errorf("step '%s': on_success references unknown state '%s'", name, step.OnSuccess)
+				availableStates := make([]string, 0, len(w.Steps))
+				for stateName := range w.Steps {
+					availableStates = append(availableStates, stateName)
+				}
+				return &StateReferenceError{
+					StepName:        name,
+					ReferencedState: step.OnSuccess,
+					AvailableStates: availableStates,
+					Field:           "on_success",
+				}
 			}
 		}
 		if step.OnFailure != "" {
 			if _, ok := w.Steps[step.OnFailure]; !ok {
-				return fmt.Errorf("step '%s': on_failure references unknown state '%s'", name, step.OnFailure)
+				availableStates := make([]string, 0, len(w.Steps))
+				for stateName := range w.Steps {
+					availableStates = append(availableStates, stateName)
+				}
+				return &StateReferenceError{
+					StepName:        name,
+					ReferencedState: step.OnFailure,
+					AvailableStates: availableStates,
+					Field:           "on_failure",
+				}
 			}
 		}
 
@@ -124,12 +189,30 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 		if step.Loop != nil && len(step.Loop.Body) > 0 {
 			for _, bodyStepName := range step.Loop.Body {
 				if _, ok := w.Steps[bodyStepName]; !ok {
-					return fmt.Errorf("step '%s': loop body references unknown step '%s'", name, bodyStepName)
+					availableStates := make([]string, 0, len(w.Steps))
+					for stateName := range w.Steps {
+						availableStates = append(availableStates, stateName)
+					}
+					return &StateReferenceError{
+						StepName:        name,
+						ReferencedState: bodyStepName,
+						AvailableStates: availableStates,
+						Field:           "loop_body",
+					}
 				}
 			}
 			if step.Loop.OnComplete != "" {
 				if _, ok := w.Steps[step.Loop.OnComplete]; !ok {
-					return fmt.Errorf("step '%s': on_complete references unknown state '%s'", name, step.Loop.OnComplete)
+					availableStates := make([]string, 0, len(w.Steps))
+					for stateName := range w.Steps {
+						availableStates = append(availableStates, stateName)
+					}
+					return &StateReferenceError{
+						StepName:        name,
+						ReferencedState: step.Loop.OnComplete,
+						AvailableStates: availableStates,
+						Field:           "on_complete",
+					}
 				}
 			}
 		}

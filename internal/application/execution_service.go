@@ -186,9 +186,6 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		if err != nil {
 			return nil, fmt.Errorf("load workflow: %w", err)
 		}
-		if wf == nil {
-			return nil, fmt.Errorf("workflow not found: %s", workflowName)
-		}
 	}
 
 	// expand template references in workflow steps
@@ -1378,9 +1375,6 @@ func (s *ExecutionService) Resume(
 	wf, err := s.workflowSvc.GetWorkflow(ctx, execCtx.WorkflowName)
 	if err != nil {
 		return nil, fmt.Errorf("load workflow: %w", err)
-	}
-	if wf == nil {
-		return nil, fmt.Errorf("workflow '%s' not found", execCtx.WorkflowName)
 	}
 
 	// 4. Validate current step exists

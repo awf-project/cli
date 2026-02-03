@@ -54,9 +54,6 @@ func (e *DryRunExecutor) Execute(ctx context.Context, workflowName string, input
 	if err != nil {
 		return nil, fmt.Errorf("failed to load workflow: %w", err)
 	}
-	if wf == nil {
-		return nil, fmt.Errorf("workflow '%s' not found", workflowName)
-	}
 
 	// Expand templates if template service is available
 	if e.templateSvc != nil {
