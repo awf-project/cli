@@ -13,6 +13,7 @@
 | `awf status <id>` | Show execution status |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
+| `awf error [code]` | Look up error code documentation |
 | `awf history` | Show workflow execution history |
 | `awf plugin list` | List installed plugins |
 | `awf plugin enable <name>` | Enable a plugin |
@@ -608,6 +609,60 @@ dnf install graphviz
 ```
 
 DOT format output works without Graphviz.
+
+---
+
+## awf error
+
+Look up error code documentation and display detailed information.
+
+```bash
+awf error [code] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `code` | Error code or prefix to look up (optional) |
+
+### Description
+
+Without arguments, lists all available error codes with descriptions and resolutions.
+With a code argument, displays detailed information for that specific error code.
+Supports prefix matching to show all codes in a category.
+
+Error codes follow a three-level hierarchy: `CATEGORY.SUBCATEGORY.SPECIFIC`
+
+### Examples
+
+```bash
+# List all error codes
+awf error
+
+# Look up a specific error code
+awf error USER.INPUT.MISSING_FILE
+
+# Prefix match - show all workflow validation errors
+awf error WORKFLOW.VALIDATION
+
+# JSON output for programmatic use
+awf error EXECUTION.COMMAND.FAILED -f json
+```
+
+### Output Fields
+
+| Field | Description |
+|-------|-------------|
+| Code | Error code identifier (e.g., `USER.INPUT.MISSING_FILE`) |
+| Description | What the error means |
+| Resolution | How to fix the error |
+| Related Codes | Other related error codes |
+
+### See Also
+
+- [Error Codes Reference](../reference/error-codes.md) - Complete error code taxonomy
+- [Exit Codes](../reference/exit-codes.md) - Exit code categories
 
 ---
 

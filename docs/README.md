@@ -8,7 +8,7 @@ Welcome to the AWF (AI Workflow CLI) documentation.
 |---------|-------------|
 | [Getting Started](getting-started/) | Installation and first steps |
 | [User Guide](user-guide/) | Commands, workflow syntax, templates |
-| [Reference](reference/) | Exit codes, interpolation, validation, loops |
+| [Reference](reference/) | Exit codes, error codes, interpolation, validation, loops |
 | [Development](development/) | Architecture, contributing, testing |
 
 ## Getting Started
@@ -37,6 +37,7 @@ Learn how to use AWF effectively:
 Technical reference documentation:
 
 - [Exit Codes](reference/exit-codes.md) - Error codes and their meanings
+- [Error Codes](reference/error-codes.md) - Structured error taxonomy and lookup guide
 - [Variable Interpolation](reference/interpolation.md) - Template variables and syntax
 - [Input Validation](reference/validation.md) - Validation rules for workflow inputs
 - [Loop Reference](reference/loop.md) - Loop control flow and transitions

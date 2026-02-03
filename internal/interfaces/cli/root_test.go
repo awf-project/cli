@@ -103,7 +103,7 @@ func TestRootCommandHasVersionSubcommand(t *testing.T) {
 func TestRootCommand_HasAllSubcommands(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
-	expectedCommands := []string{"version", "list", "run", "status", "validate", "diagram"}
+	expectedCommands := []string{"version", "list", "run", "status", "validate", "diagram", "error"}
 
 	for _, expected := range expectedCommands {
 		found := false
@@ -315,5 +315,221 @@ func TestDefaultConfig_ViaNewApp(t *testing.T) {
 	app := cli.NewApp(cfg)
 	if app == nil {
 		t.Error("NewApp should accept DefaultConfig")
+	}
+}
+
+// Component T011: Error Command Registration Tests
+
+func TestRootCommand_HasErrorSubcommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var errorCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "error" {
+			errorCmd = sub
+			break
+		}
+	}
+
+	if errorCmd == nil {
+		t.Fatal("expected root command to have 'error' subcommand")
+	}
+}
+
+func TestRootCommand_ErrorCommandStructure(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var errorCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "error" {
+			errorCmd = sub
+			break
+		}
+	}
+
+	if errorCmd == nil {
+		t.Fatal("expected root command to have 'error' subcommand")
+	}
+
+	// Verify basic command structure
+	if errorCmd.Use == "" {
+		t.Error("error command should have 'Use' field set")
+	}
+	if !strings.Contains(errorCmd.Use, "error") {
+		t.Errorf("error command Use should contain 'error', got: %s", errorCmd.Use)
+	}
+
+	if errorCmd.Short == "" {
+		t.Error("error command should have Short description")
+	}
+
+	if errorCmd.Long == "" {
+		t.Error("error command should have Long description")
+	}
+}
+
+func TestRootCommand_ErrorCommandHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"error", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify key elements are in help output
+	expectedPhrases := []string{
+		"error",
+		"Look up error code",
+		"documentation",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(output, phrase) {
+			t.Errorf("expected error help to contain '%s', got:\n%s", phrase, output)
+		}
+	}
+}
+
+func TestRootCommand_ErrorCommandAcceptsOptionalArg(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var errorCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "error" {
+			errorCmd = sub
+			break
+		}
+	}
+
+	if errorCmd == nil {
+		t.Fatal("expected root command to have 'error' subcommand")
+	}
+
+	// Verify command accepts 0 or 1 arguments
+	// MaximumNArgs(1) means Args validator should accept 0 or 1 args
+	if errorCmd.Args == nil {
+		t.Error("error command should have Args validator set")
+	}
+
+	// Test with no args (should pass validation)
+	err := errorCmd.Args(errorCmd, []string{})
+	if err != nil {
+		t.Errorf("error command should accept 0 args, got error: %v", err)
+	}
+
+	// Test with 1 arg (should pass validation)
+	err = errorCmd.Args(errorCmd, []string{"USER.INPUT.MISSING_FILE"})
+	if err != nil {
+		t.Errorf("error command should accept 1 arg, got error: %v", err)
+	}
+
+	// Test with 2 args (should fail validation)
+	err = errorCmd.Args(errorCmd, []string{"arg1", "arg2"})
+	if err == nil {
+		t.Error("error command should reject 2 args")
+	}
+}
+
+func TestRootCommand_ErrorCommandExamplesSyntax(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var errorCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "error" {
+			errorCmd = sub
+			break
+		}
+	}
+
+	if errorCmd == nil {
+		t.Fatal("expected root command to have 'error' subcommand")
+	}
+
+	// Verify examples are present in Long description
+	if !strings.Contains(errorCmd.Long, "Examples:") {
+		t.Error("error command Long description should contain 'Examples:' section")
+	}
+
+	// Verify example commands are properly formatted
+	expectedExamples := []string{
+		"awf error",
+		"awf error USER.INPUT.MISSING_FILE",
+	}
+
+	for _, example := range expectedExamples {
+		if !strings.Contains(errorCmd.Long, example) {
+			t.Errorf("error command examples should contain '%s'", example)
+		}
+	}
+}
+
+func TestRootCommand_ErrorCommandIntegration(t *testing.T) {
+	// Integration test: verify error command can be executed through root command
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetArgs([]string{"error", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("error command should be executable through root, got error: %v", err)
+	}
+
+	output := buf.String()
+	if output == "" && errBuf.String() == "" {
+		t.Error("error command should produce output")
+	}
+}
+
+func TestRootCommand_ErrorCommandWithFormat(t *testing.T) {
+	// Test that error command inherits global format flag
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+
+	// Test with JSON format flag
+	cmd.SetArgs([]string{"--format", "json", "error", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("error command should work with global --format flag, got error: %v", err)
+	}
+}
+
+func TestRootCommand_ErrorCommandPosition(t *testing.T) {
+	// Verify error command is registered in the correct position
+	// Should be after config, diagram, etc.
+	cmd := cli.NewRootCommand()
+
+	subcommands := cmd.Commands()
+	errorCmdIndex := -1
+
+	for i, sub := range subcommands {
+		if sub.Name() == "error" {
+			errorCmdIndex = i
+			break
+		}
+	}
+
+	if errorCmdIndex == -1 {
+		t.Fatal("error command not found in subcommands")
+	}
+
+	// Verify it's registered (position doesn't matter much, but it should exist)
+	if errorCmdIndex < 0 {
+		t.Error("error command should be registered")
 	}
 }

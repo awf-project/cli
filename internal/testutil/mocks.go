@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
@@ -29,6 +30,7 @@ var (
 	_ ports.PluginManager       = (*MockPluginManager)(nil)
 	_ ports.AgentRegistry       = (*MockAgentRegistry)(nil)
 	_ ports.AgentProvider       = (*MockAgentProvider)(nil)
+	_ ports.ErrorFormatter      = (*MockErrorFormatter)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1405,4 +1407,59 @@ func (m *MockCLIExecutor) Clear() {
 	m.stdout = nil
 	m.stderr = nil
 	m.execErr = nil
+}
+
+// =============================================================================
+// MockErrorFormatter - T006 (C047)
+// =============================================================================
+
+// MockErrorFormatter is a thread-safe mock implementation of ports.ErrorFormatter.
+// It uses sync.Mutex to protect concurrent access to the format function.
+//
+// Usage:
+//
+//	formatter := testutil.NewMockErrorFormatter()
+//	formatter.SetFormatFunc(func(err *domainerrors.StructuredError) string {
+//		return fmt.Sprintf("[%s] %s", err.Code, err.Message)
+//	})
+//	output := formatter.FormatError(structuredErr)
+type MockErrorFormatter struct {
+	mu         sync.Mutex
+	formatFunc func(err *domainerrors.StructuredError) string
+}
+
+// NewMockErrorFormatter creates a new thread-safe mock error formatter.
+func NewMockErrorFormatter() *MockErrorFormatter {
+	return &MockErrorFormatter{}
+}
+
+// FormatError formats a structured error using the configured format function.
+// Thread-safe for concurrent access.
+// Returns empty string if no formatFunc is configured.
+func (m *MockErrorFormatter) FormatError(err *domainerrors.StructuredError) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.formatFunc != nil {
+		return m.formatFunc(err)
+	}
+
+	// Default stub behavior: return empty string
+	return ""
+}
+
+// SetFormatFunc configures a custom function for FormatError calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockErrorFormatter) SetFormatFunc(fn func(err *domainerrors.StructuredError) string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.formatFunc = fn
+}
+
+// Clear resets the format function (test helper).
+// Thread-safe for concurrent access.
+func (m *MockErrorFormatter) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.formatFunc = nil
 }

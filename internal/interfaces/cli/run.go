@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/application"
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/agents"
@@ -666,7 +667,30 @@ func buildStepInfos(execCtx *workflow.ExecutionContext) []ui.StepInfo {
 	return steps
 }
 
+// categorizeError maps errors to exit codes using a two-phase approach:
+//  1. Check for StructuredError via errors.As() and use its ExitCode()
+//  2. Fall back to legacy string matching for unconverted errors
+//
+// This enables incremental migration from string-based to structured errors
+// while preserving backward compatibility (ADR-003).
+//
+// Exit code mapping:
+//   - 1 (ExitUser): User input errors
+//   - 2 (ExitWorkflow): Workflow definition errors
+//   - 3 (ExitExecution): Runtime execution errors (default)
+//   - 4 (ExitSystem): System/infrastructure errors
 func categorizeError(err error) int {
+	if err == nil {
+		return ExitExecution
+	}
+
+	// Phase 1 - Check for StructuredError first
+	var structuredErr *domerrors.StructuredError
+	if errors.As(err, &structuredErr) {
+		return structuredErr.ExitCode()
+	}
+
+	// Phase 2 - Fall back to legacy string matching
 	errStr := err.Error()
 
 	switch {

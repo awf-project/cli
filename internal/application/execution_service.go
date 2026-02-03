@@ -811,11 +811,14 @@ func (s *ExecutionService) executeLoopStep(
 		// - Escape: on_failure transitions ELSEWHERE → propagate failure to break loop
 		if nextStep != "" && nextStep != step.Name {
 			// Step wanted to transition elsewhere while in failed state - escape pattern
-			if state, exists := execCtx.GetStepState(stepName); exists && state.Status == workflow.StatusFailed {
-				if state.Error != "" {
-					return "", fmt.Errorf("step %s failed: %s", stepName, state.Error)
+			// Skip escape detection for continue_on_error steps (they intentionally proceed despite failure)
+			if !bodyStep.ContinueOnError {
+				if state, exists := execCtx.GetStepState(stepName); exists && state.Status == workflow.StatusFailed {
+					if state.Error != "" {
+						return "", fmt.Errorf("step %s failed: %s", stepName, state.Error)
+					}
+					return "", fmt.Errorf("step %s failed with exit code %d", stepName, state.ExitCode)
 				}
-				return "", fmt.Errorf("step %s failed with exit code %d", stepName, state.ExitCode)
 			}
 		}
 		// F048: Return nextStep to enable transition handling in loop executor

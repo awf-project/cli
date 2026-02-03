@@ -95,6 +95,7 @@ Examples:
 	cmd.AddCommand(newPluginCommand(cfg))
 	cmd.AddCommand(newConfigCommand(cfg))
 	cmd.AddCommand(newDiagramCommand(cfg))
+	cmd.AddCommand(newErrorCommand(cfg))
 
 	return cmd
 }

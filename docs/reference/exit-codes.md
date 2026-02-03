@@ -165,18 +165,23 @@ awf run deploy -f json
   "success": false,
   "error": {
     "code": 3,
+    "error_code": "EXECUTION.COMMAND.FAILED",
     "type": "execution_error",
     "message": "step 'build' failed with exit code 1",
     "step": "build",
     "details": {
       "exit_code": 1,
       "output": "make: *** No rule to make target 'build'."
-    }
+    },
+    "timestamp": "2025-01-15T10:30:45Z"
   }
 }
 ```
 
+When a structured error code is available, the `error_code` field contains the hierarchical error code (e.g., `EXECUTION.COMMAND.FAILED`). See [Error Codes](error-codes.md) for the full taxonomy.
+
 ## See Also
 
+- [Error Codes](error-codes.md) - Structured error taxonomy and detailed error codes
 - [Commands](../user-guide/commands.md) - CLI command reference
 - [Workflow Syntax](../user-guide/workflow-syntax.md) - Workflow definition

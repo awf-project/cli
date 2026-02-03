@@ -74,6 +74,7 @@ See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 | `awf run <workflow>` | Execute a workflow |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
+| `awf error [code]` | Lookup error codes with descriptions and resolutions |
 | `awf list` | List available workflows |
 | `awf resume` | Resume interrupted workflow |
 | `awf history` | Show execution history |
@@ -129,7 +130,7 @@ See [Examples](docs/user-guide/examples.md) for more workflows.
 |---------|-------------|
 | [Getting Started](docs/getting-started/) | Installation and first steps |
 | [User Guide](docs/user-guide/) | Commands, workflow syntax, templates |
-| [Reference](docs/reference/) | Exit codes, interpolation, validation |
+| [Reference](docs/reference/) | Exit codes, error codes, interpolation, validation |
 | [Development](docs/development/) | Architecture, contributing, testing |
 
 ## Architecture
