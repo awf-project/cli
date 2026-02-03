@@ -624,7 +624,7 @@ awf history [flags]
 | Flag | Description |
 |------|-------------|
 | `--workflow, -w` | Filter by workflow name |
-| `--status, -s` | Filter by status (success, failed, interrupted) |
+| `--status, -s` | Filter by status (success, failed, cancelled) |
 | `--since` | Show executions since date (YYYY-MM-DD) |
 | `--limit, -n` | Maximum entries to show (default: 20) |
 | `--stats` | Show statistics only |

@@ -1,0 +1,258 @@
+//go:build integration
+
+package integration_test
+
+// Feature: C043
+//
+// This file contains functional tests for C043: Quick Wins Code Cleanup.
+// This feature addresses code quality issues: documentation consistency,
+// formatting compliance, and issue tracking references.
+//
+// Tasks covered:
+// 1. Documentation fix: status filter value alignment in commands.md
+// 2. Issue tracking: WARNING comments linked to GitHub issues
+// 3. Formatting compliance: gofmt verification
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// =============================================================================
+// Happy Path Tests - Verification of acceptance criteria
+// =============================================================================
+
+// TestDocumentation_StatusFilterAlignment_Integration verifies that the
+// status filter documentation in commands.md uses "cancelled" consistently
+// with the actual implementation (StatusCancelled constant).
+//
+// Given: The commands.md documentation file
+// When: Checking the --status flag documentation
+// Then: Status filter should show "cancelled" not "interrupted"
+func TestDocumentation_StatusFilterAlignment_Integration(t *testing.T) {
+	repoRoot := getRepoRoot(t)
+	commandsPath := filepath.Join(repoRoot, "docs/user-guide/commands.md")
+
+	content, err := os.ReadFile(commandsPath)
+	require.NoError(t, err, "should be able to read commands.md")
+
+	lines := strings.Split(string(content), "\n")
+
+	// Find the --status flag documentation line (around line 627)
+	var statusLine string
+	for i, line := range lines {
+		if strings.Contains(line, "--status") && strings.Contains(line, "Filter by status") {
+			statusLine = lines[i]
+			break
+		}
+	}
+
+	require.NotEmpty(t, statusLine, "should find --status flag documentation")
+
+	// Verify it contains "cancelled" as the status value
+	assert.Contains(t, statusLine, "cancelled", "status filter should reference 'cancelled' status")
+	assert.Contains(t, statusLine, "success", "status filter should reference 'success' status")
+	assert.Contains(t, statusLine, "failed", "status filter should reference 'failed' status")
+
+	// Verify the status enum reference doesn't use "interrupted"
+	// Note: "interrupted" may still appear in descriptive text (e.g., "Resume an interrupted workflow")
+	// but should NOT appear in the status enum values list
+	statusEnumPattern := regexp.MustCompile(`\(([^)]+)\)`)
+	matches := statusEnumPattern.FindStringSubmatch(statusLine)
+	if len(matches) > 1 {
+		enumValues := matches[1]
+		assert.NotContains(t, enumValues, "interrupted",
+			"status filter enum values should not include 'interrupted', implementation uses 'cancelled'")
+	}
+}
+
+// TestWarningComments_IssueTracking_Integration verifies that WARNING comments
+// about unimplemented features include GitHub issue references for tracking.
+//
+// Given: Test files with WARNING comments
+// When: Checking checkUnknownKeys WARNING comments
+// Then: All WARNING comments should include issue reference (e.g., "See #169")
+func TestWarningComments_IssueTracking_Integration(t *testing.T) {
+	repoRoot := getRepoRoot(t)
+	loaderTestPath := filepath.Join(repoRoot, "internal/infrastructure/config/loader_test.go")
+
+	content, err := os.ReadFile(loaderTestPath)
+	require.NoError(t, err, "should be able to read loader_test.go")
+
+	lines := strings.Split(string(content), "\n")
+
+	// Pattern to match WARNING comments about checkUnknownKeys
+	warningPattern := regexp.MustCompile(`//\s*WARNING:.*checkUnknownKeys`)
+	issueRefPattern := regexp.MustCompile(`See\s+#\d+`)
+
+	warningCount := 0
+	warningsWithIssue := 0
+
+	for _, line := range lines {
+		if warningPattern.MatchString(line) {
+			warningCount++
+			if issueRefPattern.MatchString(line) {
+				warningsWithIssue++
+			}
+		}
+	}
+
+	require.Greater(t, warningCount, 0, "should find WARNING comments about checkUnknownKeys")
+	assert.Equal(t, warningCount, warningsWithIssue,
+		"all WARNING comments should include GitHub issue reference (format: 'See #XXX')")
+}
+
+// TestFormatting_GofmtCompliance_Integration verifies that all Go source files
+// pass gofmt formatting checks (zero diff).
+//
+// Given: All Go source files in the project
+// When: Running gofmt -d on the codebase
+// Then: No formatting differences should be reported
+func TestFormatting_GofmtCompliance_Integration(t *testing.T) {
+	repoRoot := getRepoRoot(t)
+
+	// Run gofmt -d on the entire project
+	cmd := exec.Command("gofmt", "-d", ".")
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "gofmt should execute successfully")
+
+	// gofmt -d outputs diff if files need formatting, empty output means all files are formatted
+	assert.Empty(t, string(output),
+		"all Go files should pass gofmt (zero diff). Run 'make fmt' to fix formatting issues.")
+}
+
+// =============================================================================
+// Edge Cases - Documentation semantics
+// =============================================================================
+
+// TestDocumentation_DescriptiveInterruptedText_Integration verifies that
+// descriptive uses of "interrupted" in documentation are preserved where
+// semantically correct.
+//
+// Given: The commands.md documentation file
+// When: Checking descriptive text about workflow resumption
+// Then: "interrupted" should be used for describing user actions (Ctrl+C)
+//
+//	but "cancelled" should be used for status enum values
+func TestDocumentation_DescriptiveInterruptedText_Integration(t *testing.T) {
+	repoRoot := getRepoRoot(t)
+	commandsPath := filepath.Join(repoRoot, "docs/user-guide/commands.md")
+
+	content, err := os.ReadFile(commandsPath)
+	require.NoError(t, err, "should be able to read commands.md")
+
+	text := string(content)
+
+	// Count occurrences of "interrupted" in the documentation
+	interruptedCount := strings.Count(strings.ToLower(text), "interrupted")
+
+	// Per ADR-001: Some occurrences of "interrupted" are correct descriptive English
+	// (e.g., "Resume an interrupted workflow") and should be preserved.
+	// Only the status filter enum value should use "cancelled".
+	if interruptedCount > 0 {
+		t.Logf("Found %d occurrence(s) of 'interrupted' in documentation", interruptedCount)
+		t.Logf("This is acceptable if used in descriptive context (e.g., 'Resume an interrupted workflow')")
+		t.Logf("Status enum values should use 'cancelled' per implementation")
+	}
+
+	// No assertion here - this is informational to document ADR-001 trade-off
+}
+
+// =============================================================================
+// Integration Tests - Quality pipeline verification
+// =============================================================================
+
+// TestQualityPipeline_AllChecksPass_Integration verifies that the entire
+// quality pipeline (fmt + vet + lint + test) passes after C043 changes.
+//
+// Given: All C043 code cleanup changes applied
+// When: Running make quality
+// Then: All checks should pass with zero failures
+func TestQualityPipeline_AllChecksPass_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping quality pipeline test in short mode")
+	}
+
+	repoRoot := getRepoRoot(t)
+
+	tests := []struct {
+		name    string
+		target  string
+		timeout string
+	}{
+		{"fmt", "fmt", "30s"},
+		{"vet", "vet", "30s"},
+		{"lint", "lint", "60s"},
+		{"test", "test", "120s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command("make", tt.target)
+			cmd.Dir = repoRoot
+
+			output, err := cmd.CombinedOutput()
+			assert.NoError(t, err,
+				"make %s should pass. Output:\n%s", tt.target, string(output))
+		})
+	}
+}
+
+// =============================================================================
+// Error Handling Tests - File existence verification
+// =============================================================================
+
+// TestFileExistence_RequiredFiles_Integration verifies that all files
+// referenced in C043 tasks exist at their expected paths.
+//
+// Given: File paths from C043 specification
+// When: Checking file existence
+// Then: All referenced files should exist
+func TestFileExistence_RequiredFiles_Integration(t *testing.T) {
+	repoRoot := getRepoRoot(t)
+
+	requiredFiles := []string{
+		"docs/user-guide/commands.md",
+		"internal/infrastructure/config/loader_test.go",
+	}
+
+	for _, file := range requiredFiles {
+		path := filepath.Join(repoRoot, file)
+		_, err := os.Stat(path)
+		assert.NoError(t, err, "file should exist: %s", file)
+	}
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+// getRepoRoot returns the repository root directory.
+// It walks up from the current directory until it finds a go.mod file.
+func getRepoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	require.NoError(t, err, "should get current directory")
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("could not find repository root (no go.mod found)")
+		}
+		dir = parent
+	}
+}

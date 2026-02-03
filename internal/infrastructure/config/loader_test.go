@@ -484,7 +484,7 @@ func TestYAMLConfigLoader_Load_UnknownKeys_WarningCalled(t *testing.T) {
 		t.Errorf("Inputs[project] = %v, want %q", cfg.Inputs["project"], "test-project")
 	}
 
-	// WARNING: This test will FAIL until checkUnknownKeys is implemented
+	// WARNING: This test will FAIL until checkUnknownKeys is implemented. See #169
 	// The stub currently does nothing, so warnings will be empty
 	if len(warnings) == 0 {
 		t.Error("Expected warning callback to be called for unknown keys, but no warnings were recorded")
@@ -509,7 +509,7 @@ func TestYAMLConfigLoader_Load_UnknownKeys_WarningContent(t *testing.T) {
 	// Should warn about each unknown key: unknown_key, deprecated_setting, future_feature
 	expectedUnknownKeys := []string{"unknown_key", "deprecated_setting", "future_feature"}
 
-	// WARNING: This test will FAIL until checkUnknownKeys is implemented
+	// WARNING: This test will FAIL until checkUnknownKeys is implemented. See #169
 	if len(warnings) != len(expectedUnknownKeys) {
 		t.Errorf("got %d warnings, want %d for unknown keys %v",
 			len(warnings), len(expectedUnknownKeys), expectedUnknownKeys)
@@ -624,7 +624,7 @@ typo_key: should_warn
 		t.Errorf("Inputs[project] = %v, want %q", cfg.Inputs["project"], "my-project")
 	}
 
-	// WARNING: This test will FAIL until checkUnknownKeys is implemented
+	// WARNING: This test will FAIL until checkUnknownKeys is implemented. See #169
 	if len(warnings) != 1 {
 		t.Errorf("got %d warnings, want 1 for single unknown key 'typo_key'", len(warnings))
 	}
@@ -726,7 +726,7 @@ unknown2: value2
 		t.Errorf("Inputs = %v, want empty for config with only unknown keys", cfg.Inputs)
 	}
 
-	// WARNING: This test will FAIL until checkUnknownKeys is implemented
+	// WARNING: This test will FAIL until checkUnknownKeys is implemented. See #169
 	if len(warnings) != 2 {
 		t.Errorf("got %d warnings, want 2 for unknown keys 'unknown1', 'unknown2'", len(warnings))
 	}
