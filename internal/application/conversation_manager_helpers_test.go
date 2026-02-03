@@ -15,7 +15,7 @@ import (
 // Test Mocks and Helpers
 // =============================================================================
 
-// Note: mockLogger is defined in template_service_helpers_test.go and shared across package tests
+// Note: mockLogger is defined in service_test.go and shared across package tests
 
 // newMockLogger creates a new mock logger instance
 func newMockLogger() *mockLogger {

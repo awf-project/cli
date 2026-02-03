@@ -1,4 +1,4 @@
-package application
+package application_test
 
 import (
 	"context"
@@ -6,93 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/internal/testutil"
 )
-
-// =============================================================================
-// Test Mocks and Helpers
-// =============================================================================
-
-// mockTemplateRepository implements ports.TemplateRepository for testing.
-type mockTemplateRepository struct {
-	templates map[string]*workflow.Template
-}
-
-func newMockTemplateRepository() *mockTemplateRepository {
-	return &mockTemplateRepository{
-		templates: make(map[string]*workflow.Template),
-	}
-}
-
-func (m *mockTemplateRepository) GetTemplate(_ context.Context, name string) (*workflow.Template, error) {
-	if tmpl, ok := m.templates[name]; ok {
-		return tmpl, nil
-	}
-	return nil, &repository.TemplateNotFoundError{TemplateName: name}
-}
-
-func (m *mockTemplateRepository) ListTemplates(_ context.Context) ([]string, error) {
-	names := make([]string, 0, len(m.templates))
-	for name := range m.templates {
-		names = append(names, name)
-	}
-	return names, nil
-}
-
-func (m *mockTemplateRepository) Exists(_ context.Context, name string) bool {
-	_, ok := m.templates[name]
-	return ok
-}
-
-func (m *mockTemplateRepository) addTemplate(tmpl *workflow.Template) {
-	m.templates[tmpl.Name] = tmpl
-}
-
-// mockLogger implements ports.Logger for testing.
-type mockLogger struct {
-	warnings []string
-	errors   []string
-}
-
-func (m *mockLogger) Debug(msg string, fields ...any) {}
-func (m *mockLogger) Info(msg string, fields ...any)  {}
-func (m *mockLogger) Warn(msg string, fields ...any) {
-	if m.warnings == nil {
-		m.warnings = []string{}
-	}
-	m.warnings = append(m.warnings, msg)
-}
-
-func (m *mockLogger) Error(msg string, fields ...any) {
-	if m.errors == nil {
-		m.errors = []string{}
-	}
-	m.errors = append(m.errors, msg)
-}
-
-func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
-	return m
-}
-
-// newSimpleEchoTemplate creates a basic template for testing.
-func newSimpleEchoTemplate() *workflow.Template {
-	return &workflow.Template{
-		Name: "simple-echo",
-		Parameters: []workflow.TemplateParam{
-			{Name: "message", Required: true},
-			{Name: "prefix", Required: false, Default: "[INFO]"},
-		},
-		States: map[string]*workflow.Step{
-			"echo": {
-				Name:    "echo",
-				Type:    workflow.StepTypeCommand,
-				Command: "echo '{{parameters.prefix}} {{parameters.message}}'",
-			},
-		},
-	}
-}
 
 // =============================================================================
 // Feature: C005 - Helper Method Tests for TemplateService
@@ -105,11 +22,11 @@ func newSimpleEchoTemplate() *workflow.Template {
 
 func TestTemplateService_validateAndLoadTemplate_HappyPath(t *testing.T) {
 	// Arrange: setup template repository and service
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	simpleTemplate := newSimpleEchoTemplate()
-	repo.addTemplate(simpleTemplate)
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo.AddTemplate(simpleTemplate.Name, simpleTemplate)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	ref := &workflow.WorkflowTemplateRef{
 		TemplateName: "simple-echo",
@@ -165,27 +82,30 @@ func TestTemplateService_validateAndLoadTemplate_CircularDetection(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			repo.addTemplate(&workflow.Template{
+			repo := testutil.NewMockTemplateRepository()
+			tmplA := &workflow.Template{
 				Name: "template-a",
 				States: map[string]*workflow.Step{
 					"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo a"},
 				},
-			})
-			repo.addTemplate(&workflow.Template{
+			}
+			repo.AddTemplate(tmplA.Name, tmplA)
+			tmplB := &workflow.Template{
 				Name: "template-b",
 				States: map[string]*workflow.Step{
 					"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo b"},
 				},
-			})
-			repo.addTemplate(&workflow.Template{
+			}
+			repo.AddTemplate(tmplB.Name, tmplB)
+			tmplC := &workflow.Template{
 				Name: "template-c",
 				States: map[string]*workflow.Step{
 					"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo c"},
 				},
-			})
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			}
+			repo.AddTemplate(tmplC.Name, tmplC)
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			ref := &workflow.WorkflowTemplateRef{
 				TemplateName: tt.templateName,
@@ -232,9 +152,9 @@ func TestTemplateService_validateAndLoadTemplate_LoadErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			ref := &workflow.WorkflowTemplateRef{
 				TemplateName: tt.templateName,
@@ -254,10 +174,11 @@ func TestTemplateService_validateAndLoadTemplate_LoadErrors(t *testing.T) {
 
 func TestTemplateService_validateAndLoadTemplate_ContextCancellation(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	ref := &workflow.WorkflowTemplateRef{
 		TemplateName: "simple-echo",
@@ -280,10 +201,11 @@ func TestTemplateService_validateAndLoadTemplate_ContextCancellation(t *testing.
 
 func TestTemplateService_validateAndLoadTemplate_VisitedMapUnmodified(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	ref := &workflow.WorkflowTemplateRef{
 		TemplateName: "simple-echo",
@@ -368,9 +290,9 @@ func TestTemplateService_selectPrimaryStep_HappyPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			// Act
 			step, err := svc.SelectPrimaryStep(tt.template)
@@ -419,9 +341,9 @@ func TestTemplateService_selectPrimaryStep_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			// Act
 			step, err := svc.SelectPrimaryStep(tt.template)
@@ -436,9 +358,9 @@ func TestTemplateService_selectPrimaryStep_ErrorCases(t *testing.T) {
 
 func TestTemplateService_selectPrimaryStep_SingleStep(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	template := &workflow.Template{
 		Name: "single-step",
@@ -466,7 +388,7 @@ func TestTemplateService_selectPrimaryStep_SingleStep(t *testing.T) {
 
 func TestTemplateService_expandNestedTemplate_HappyPath(t *testing.T) {
 	// Arrange: setup nested template structure
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 
 	// Leaf template (no further nesting)
 	leafTemplate := &workflow.Template{
@@ -479,10 +401,10 @@ func TestTemplateService_expandNestedTemplate_HappyPath(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(leafTemplate)
+	repo.AddTemplate(leafTemplate.Name, leafTemplate)
 
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	// Step with nested template reference
 	templateStep := &workflow.Step{
@@ -505,9 +427,9 @@ func TestTemplateService_expandNestedTemplate_HappyPath(t *testing.T) {
 
 func TestTemplateService_expandNestedTemplate_NoNestedRef(t *testing.T) {
 	// Arrange: step without nested template
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	templateStep := &workflow.Step{
 		Name:        "simple-step",
@@ -526,10 +448,10 @@ func TestTemplateService_expandNestedTemplate_NoNestedRef(t *testing.T) {
 
 func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 	// Arrange: create deeply nested template chain
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 
 	// Level 0 (leaf)
-	repo.addTemplate(&workflow.Template{
+	tmpl0 := &workflow.Template{
 		Name: "level-0",
 		States: map[string]*workflow.Step{
 			"step": {
@@ -538,10 +460,11 @@ func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 				Command: "echo level-0",
 			},
 		},
-	})
+	}
+	repo.AddTemplate(tmpl0.Name, tmpl0)
 
 	// Level 1
-	repo.addTemplate(&workflow.Template{
+	tmpl1 := &workflow.Template{
 		Name: "level-1",
 		States: map[string]*workflow.Step{
 			"step": {
@@ -552,10 +475,11 @@ func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	repo.AddTemplate(tmpl1.Name, tmpl1)
 
 	// Level 2
-	repo.addTemplate(&workflow.Template{
+	tmpl2 := &workflow.Template{
 		Name: "level-2",
 		States: map[string]*workflow.Step{
 			"step": {
@@ -566,10 +490,11 @@ func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	repo.AddTemplate(tmpl2.Name, tmpl2)
 
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	templateStep := &workflow.Step{
 		Name: "root-step",
@@ -590,10 +515,10 @@ func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 
 func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
 	// Arrange: create circular template reference
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 
 	// Template A references B
-	repo.addTemplate(&workflow.Template{
+	tmplA := &workflow.Template{
 		Name: "template-a",
 		States: map[string]*workflow.Step{
 			"step": {
@@ -604,10 +529,11 @@ func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	repo.AddTemplate(tmplA.Name, tmplA)
 
 	// Template B references A (circular)
-	repo.addTemplate(&workflow.Template{
+	tmplB := &workflow.Template{
 		Name: "template-b",
 		States: map[string]*workflow.Step{
 			"step": {
@@ -618,10 +544,11 @@ func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	repo.AddTemplate(tmplB.Name, tmplB)
 
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	templateStep := &workflow.Step{
 		Name: "root-step",
@@ -643,9 +570,9 @@ func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
 
 func TestTemplateService_expandNestedTemplate_TemplateNotFound(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	templateStep := &workflow.Step{
 		Name: "step-with-missing-ref",
@@ -661,16 +588,17 @@ func TestTemplateService_expandNestedTemplate_TemplateNotFound(t *testing.T) {
 
 	// Assert
 	require.Error(t, err)
-	var notFoundErr *repository.TemplateNotFoundError
+	var notFoundErr *workflow.TemplateNotFoundError
 	require.ErrorAs(t, err, &notFoundErr)
 }
 
 func TestTemplateService_expandNestedTemplate_ContextCancellation(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	templateStep := &workflow.Step{
 		Name: "step",
@@ -698,9 +626,9 @@ func TestTemplateService_expandNestedTemplate_ContextCancellation(t *testing.T) 
 
 func TestTemplateService_applyTemplateFields_HappyPath(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{
 		Name:      "workflow-step",
@@ -767,9 +695,9 @@ func TestTemplateService_applyTemplateFields_FieldPrecedence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			step := &workflow.Step{Name: "workflow-step"}
 			templateStep := &workflow.Step{Name: "template-step"}
@@ -807,9 +735,9 @@ func TestTemplateService_applyTemplateFields_FieldPrecedence(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_RetryMerging(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{
 		Name: "workflow-step",
@@ -846,9 +774,9 @@ func TestTemplateService_applyTemplateFields_RetryMerging(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_CaptureMerging(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{
 		Name: "workflow-step",
@@ -883,9 +811,9 @@ func TestTemplateService_applyTemplateFields_CaptureMerging(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_TransitionsPreserved(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{
 		Name:      "workflow-step",
@@ -942,9 +870,9 @@ func TestTemplateService_applyTemplateFields_ParameterSubstitution(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			step := &workflow.Step{Name: "workflow-step"}
 			templateStep := &workflow.Step{
@@ -993,9 +921,9 @@ func TestTemplateService_applyTemplateFields_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			// Act
 			err := svc.ApplyTemplateFields(tt.step, tt.templateStep, tt.params)
@@ -1013,9 +941,9 @@ func TestTemplateService_applyTemplateFields_ErrorCases(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_EmptyParams(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{Name: "workflow-step"}
 	templateStep := &workflow.Step{
@@ -1035,9 +963,9 @@ func TestTemplateService_applyTemplateFields_EmptyParams(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_NilParams(t *testing.T) {
 	// Arrange
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
-	svc := NewTemplateService(repo, logger)
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
+	svc := application.NewTemplateService(repo, logger)
 
 	step := &workflow.Step{Name: "workflow-step"}
 	templateStep := &workflow.Step{
@@ -1083,9 +1011,9 @@ func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			repo := newMockTemplateRepository()
-			logger := &mockLogger{}
-			svc := NewTemplateService(repo, logger)
+			repo := testutil.NewMockTemplateRepository()
+			logger := testutil.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
 
 			step := &workflow.Step{
 				Name:    "workflow-step",

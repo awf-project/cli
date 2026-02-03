@@ -55,7 +55,7 @@ func (m *mockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.
 	return m.result, m.err
 }
 
-// Note: mockLogger is defined in template_service_helpers_test.go and shared across package tests
+// Note: mockLogger is defined in service_test.go and shared across package tests
 
 // =============================================================================
 // executeStep Helper Tests - Component T010

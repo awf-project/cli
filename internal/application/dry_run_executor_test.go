@@ -1017,7 +1017,7 @@ func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Create template service with mock template repository
-	templateRepo := newMockTemplateRepository()
+	templateRepo := testutil.NewMockTemplateRepository()
 	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
 
 	// Act: Set template service
@@ -1095,12 +1095,12 @@ func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Create first template service
-	firstRepo := newMockTemplateRepository()
+	firstRepo := testutil.NewMockTemplateRepository()
 	firstSvc := application.NewTemplateService(firstRepo, &mockLogger{})
 	executor.SetTemplateService(firstSvc)
 
 	// Create second template service
-	secondRepo := newMockTemplateRepository()
+	secondRepo := testutil.NewMockTemplateRepository()
 	secondSvc := application.NewTemplateService(secondRepo, &mockLogger{})
 
 	// Act: Replace with second template service
@@ -1139,8 +1139,8 @@ func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
 	}
 
 	// Create template repository with a template
-	templateRepo := newMockTemplateRepository()
-	templateRepo.templates["echo-template"] = &workflow.Template{
+	templateRepo := testutil.NewMockTemplateRepository()
+	templateRepo.AddTemplate("echo-template", &workflow.Template{
 		Name: "echo-template",
 		States: map[string]*workflow.Step{
 			"echo": {
@@ -1149,7 +1149,7 @@ func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
 				Command: "echo {{inputs.message}}",
 			},
 		},
-	}
+	})
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()

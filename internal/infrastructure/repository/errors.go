@@ -1,6 +1,10 @@
 package repository
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vanoix/awf/internal/domain/workflow"
+)
 
 // ParseError represents an error during YAML parsing.
 type ParseError struct {
@@ -60,15 +64,7 @@ func ParseErrorWithLine(file string, line, column int, message string) *ParseErr
 	}
 }
 
-// TemplateNotFoundError indicates a referenced template does not exist.
-type TemplateNotFoundError struct {
-	TemplateName string // name of the missing template
-	ReferencedBy string // file or step that referenced it
-}
-
-func (e *TemplateNotFoundError) Error() string {
-	if e.ReferencedBy != "" {
-		return fmt.Sprintf("template %q not found (referenced by %s)", e.TemplateName, e.ReferencedBy)
-	}
-	return fmt.Sprintf("template %q not found", e.TemplateName)
-}
+// TemplateNotFoundError is an alias for workflow.TemplateNotFoundError for backward compatibility.
+// This allows existing infrastructure code to continue using repository.TemplateNotFoundError
+// while the canonical definition lives in the domain layer where it belongs.
+type TemplateNotFoundError = workflow.TemplateNotFoundError

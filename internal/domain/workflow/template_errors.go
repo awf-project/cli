@@ -21,3 +21,16 @@ type MissingParameterError struct {
 func (e *MissingParameterError) Error() string {
 	return fmt.Sprintf("template %q missing required parameter %q", e.TemplateName, e.ParameterName)
 }
+
+// TemplateNotFoundError indicates a referenced template does not exist.
+type TemplateNotFoundError struct {
+	TemplateName string // name of the missing template
+	ReferencedBy string // file or step that referenced it
+}
+
+func (e *TemplateNotFoundError) Error() string {
+	if e.ReferencedBy != "" {
+		return fmt.Sprintf("template %q not found (referenced by %s)", e.TemplateName, e.ReferencedBy)
+	}
+	return fmt.Sprintf("template %q not found", e.TemplateName)
+}

@@ -18,6 +18,7 @@ import (
 // Compile-time interface compliance verification.
 var (
 	_ ports.WorkflowRepository  = (*MockWorkflowRepository)(nil)
+	_ ports.TemplateRepository  = (*MockTemplateRepository)(nil)
 	_ ports.StateStore          = (*MockStateStore)(nil)
 	_ ports.CommandExecutor     = (*MockCommandExecutor)(nil)
 	_ ports.CLIExecutor         = (*MockCLIExecutor)(nil)
@@ -144,6 +145,116 @@ func (m *MockWorkflowRepository) Clear() {
 	m.loadErr = nil
 	m.listErr = nil
 	m.existsErr = nil
+}
+
+// =============================================================================
+// MockTemplateRepository - T004 (C044)
+// =============================================================================
+
+// MockTemplateRepository is a thread-safe mock implementation of ports.TemplateRepository.
+// It uses sync.RWMutex to protect concurrent access to the templates map.
+//
+// Usage:
+//
+//	repo := testutil.NewMockTemplateRepository()
+//	repo.AddTemplate("test", &workflow.Template{Name: "test"})
+//	tpl, err := repo.GetTemplate(ctx, "test")
+type MockTemplateRepository struct {
+	mu        sync.RWMutex
+	templates map[string]*workflow.Template
+	getErr    error
+	listErr   error
+}
+
+// NewMockTemplateRepository creates a new thread-safe mock template repository.
+func NewMockTemplateRepository() *MockTemplateRepository {
+	return &MockTemplateRepository{
+		templates: make(map[string]*workflow.Template),
+	}
+}
+
+// GetTemplate retrieves a template by name. Returns TemplateNotFoundError if template does not exist.
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) GetTemplate(ctx context.Context, name string) (*workflow.Template, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+
+	tpl, exists := m.templates[name]
+	if !exists {
+		return nil, &workflow.TemplateNotFoundError{TemplateName: name}
+	}
+
+	return tpl, nil
+}
+
+// ListTemplates returns all template names in the repository.
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) ListTemplates(ctx context.Context) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+
+	names := make([]string, 0, len(m.templates))
+	for name := range m.templates {
+		names = append(names, name)
+	}
+
+	return names, nil
+}
+
+// Exists checks if a template with the given name exists.
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) Exists(ctx context.Context, name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, exists := m.templates[name]
+	return exists
+}
+
+// AddTemplate adds or updates a template in the repository (test helper).
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) AddTemplate(name string, tpl *workflow.Template) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.templates[name] = tpl
+}
+
+// SetGetError configures an error to be returned by GetTemplate (test helper).
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) SetGetError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.getErr = err
+}
+
+// SetListError configures an error to be returned by ListTemplates (test helper).
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) SetListError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.listErr = err
+}
+
+// Clear removes all templates and resets error configuration (test helper).
+// Thread-safe for concurrent access.
+func (m *MockTemplateRepository) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.templates = make(map[string]*workflow.Template)
+	m.getErr = nil
+	m.listErr = nil
 }
 
 // =============================================================================
