@@ -303,7 +303,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 
 				// Note: passing nil context is undefined behavior in production
 				// but mock should handle it gracefully
-				stdout, stderr, err := executor.Run(context.TODO(), "tool", "arg")
+				stdout, stderr, err := executor.Run(context.Background(), "tool", "arg")
 
 				assert.NoError(t, err, "Mock should handle nil context")
 				assert.Equal(t, "output", string(stdout))
