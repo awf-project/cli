@@ -83,6 +83,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C044**: Fix Test Layer Purity Violations in Template Service Tests
+  - Moved `TemplateNotFoundError` from infrastructure layer to `internal/domain/workflow/template_errors.go`
+  - Created centralized `MockTemplateRepository` in `internal/testutil/mocks.go` with thread-safe patterns
+  - Migrated `template_service_test.go` and `template_service_helpers_test.go` to use testutil mocks
+  - Removed all `internal/infrastructure/repository` imports from application layer test files
+  - Deleted 88 lines of duplicate local mock implementations (`mockTemplateRepository`, `mockLogger`)
+  - Added type alias in infrastructure layer for backward compatibility: `type TemplateNotFoundError = workflow.TemplateNotFoundError`
+  - Created architecture guard test in `template_service_architecture_test.go` to prevent regression
+  - Application layer tests now depend only on domain ports and testutil, enforcing hexagonal architecture
+  - Added comprehensive unit tests for `TemplateNotFoundError` in `internal/domain/workflow/template_errors_test.go`
+  - Added unit tests for `MockTemplateRepository` in `internal/testutil/mocks_template_repository_test.go`
+  - Added integration tests in `tests/integration/c044_template_test_layer_purity_test.go` validating mock functionality and import purity
+  - All tests pass with race detector (`make test-race`)
+  - Impact: +370 LOC (mocks, tests, guard), -90 LOC (duplicate local mocks, infrastructure imports), net +280 LOC
+
 - **C043**: Code Quality Quick Wins
   - Fixed documentation inconsistency in `docs/user-guide/commands.md` where status filter value incorrectly listed "interrupted" instead of "cancelled" to match implementation (`StatusCancelled` constant)
   - Added GitHub issue #169 tracking references to four WARNING comments documenting unimplemented `checkUnknownKeys` feature in `internal/infrastructure/config/loader_test.go`

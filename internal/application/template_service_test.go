@@ -7,49 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
+	"github.com/vanoix/awf/internal/testutil"
 )
-
-// =============================================================================
-// Mock Implementations
-// =============================================================================
-
-// mockTemplateRepository implements ports.TemplateRepository for testing.
-type mockTemplateRepository struct {
-	templates map[string]*workflow.Template
-}
-
-func newMockTemplateRepository() *mockTemplateRepository {
-	return &mockTemplateRepository{
-		templates: make(map[string]*workflow.Template),
-	}
-}
-
-func (m *mockTemplateRepository) GetTemplate(_ context.Context, name string) (*workflow.Template, error) {
-	if tmpl, ok := m.templates[name]; ok {
-		return tmpl, nil
-	}
-	return nil, &repository.TemplateNotFoundError{TemplateName: name}
-}
-
-func (m *mockTemplateRepository) ListTemplates(_ context.Context) ([]string, error) {
-	names := make([]string, 0, len(m.templates))
-	for name := range m.templates {
-		names = append(names, name)
-	}
-	return names, nil
-}
-
-func (m *mockTemplateRepository) Exists(_ context.Context, name string) bool {
-	_, ok := m.templates[name]
-	return ok
-}
-
-func (m *mockTemplateRepository) addTemplate(tmpl *workflow.Template) {
-	m.templates[tmpl.Name] = tmpl
-}
 
 // =============================================================================
 // Test Helpers
@@ -127,8 +87,8 @@ func newWorkflowWithTemplateRef(templateName string, params map[string]any) *wor
 // =============================================================================
 
 func TestNewTemplateService(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 	require.NotNil(t, svc)
@@ -139,9 +99,10 @@ func TestNewTemplateService(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_Simple(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -172,9 +133,10 @@ func TestTemplateService_ExpandWorkflow_Simple(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_OverrideDefaults(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -193,9 +155,10 @@ func TestTemplateService_ExpandWorkflow_OverrideDefaults(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_AIAnalyzeTemplate(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newAIAnalyzeTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newAIAnalyzeTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -222,8 +185,8 @@ func TestTemplateService_ExpandWorkflow_AIAnalyzeTemplate(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_NoTemplateRefs(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -253,10 +216,12 @@ func TestTemplateService_ExpandWorkflow_NoTemplateRefs(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_MultipleTemplateRefs(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	repo.addTemplate(newAIAnalyzeTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	tmpl = newAIAnalyzeTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -305,7 +270,7 @@ func TestTemplateService_ExpandWorkflow_MultipleTemplateRefs(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_PreservesStepDir(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-dir",
 		Parameters: []workflow.TemplateParam{},
@@ -318,8 +283,8 @@ func TestTemplateService_ExpandWorkflow_PreservesStepDir(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -349,7 +314,7 @@ func TestTemplateService_ExpandWorkflow_PreservesStepDir(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_InheritsTemplateDir(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-dir",
 		Parameters: []workflow.TemplateParam{},
@@ -362,8 +327,8 @@ func TestTemplateService_ExpandWorkflow_InheritsTemplateDir(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -397,8 +362,8 @@ func TestTemplateService_ExpandWorkflow_InheritsTemplateDir(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_TemplateNotFound(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -407,15 +372,16 @@ func TestTemplateService_ExpandWorkflow_TemplateNotFound(t *testing.T) {
 	err := svc.ExpandWorkflow(context.Background(), wf)
 	require.Error(t, err)
 
-	var notFound *repository.TemplateNotFoundError
+	var notFound *workflow.TemplateNotFoundError
 	require.ErrorAs(t, err, &notFound)
 	assert.Equal(t, "nonexistent", notFound.TemplateName)
 }
 
 func TestTemplateService_ExpandWorkflow_MissingRequiredParam(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -434,7 +400,7 @@ func TestTemplateService_ExpandWorkflow_MissingRequiredParam(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_MissingAllRequiredParams(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name: "multi-required",
 		Parameters: []workflow.TemplateParam{
@@ -450,8 +416,8 @@ func TestTemplateService_ExpandWorkflow_MissingAllRequiredParams(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -466,7 +432,7 @@ func TestTemplateService_ExpandWorkflow_MissingAllRequiredParams(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_CircularReference(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 
 	// Create templates that reference each other
 	tmplA := &workflow.Template{
@@ -497,9 +463,9 @@ func TestTemplateService_ExpandWorkflow_CircularReference(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmplA)
-	repo.addTemplate(tmplB)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmplA.Name, tmplA)
+	repo.AddTemplate(tmplB.Name, tmplB)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -514,7 +480,7 @@ func TestTemplateService_ExpandWorkflow_CircularReference(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_SelfReference(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 
 	// Template that references itself
 	tmpl := &workflow.Template{
@@ -531,8 +497,8 @@ func TestTemplateService_ExpandWorkflow_SelfReference(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -550,9 +516,10 @@ func TestTemplateService_ExpandWorkflow_SelfReference(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ValidateTemplateRef_Valid(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -568,9 +535,10 @@ func TestTemplateService_ValidateTemplateRef_Valid(t *testing.T) {
 }
 
 func TestTemplateService_ValidateTemplateRef_WithDefaults(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newAIAnalyzeTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newAIAnalyzeTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -587,8 +555,8 @@ func TestTemplateService_ValidateTemplateRef_WithDefaults(t *testing.T) {
 }
 
 func TestTemplateService_ValidateTemplateRef_TemplateNotFound(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -600,14 +568,15 @@ func TestTemplateService_ValidateTemplateRef_TemplateNotFound(t *testing.T) {
 	err := svc.ValidateTemplateRef(context.Background(), ref)
 	require.Error(t, err)
 
-	var notFound *repository.TemplateNotFoundError
+	var notFound *workflow.TemplateNotFoundError
 	require.ErrorAs(t, err, &notFound)
 }
 
 func TestTemplateService_ValidateTemplateRef_MissingRequired(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -624,9 +593,10 @@ func TestTemplateService_ValidateTemplateRef_MissingRequired(t *testing.T) {
 }
 
 func TestTemplateService_ValidateTemplateRef_ExtraParams(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -702,7 +672,7 @@ func TestTemplateService_ParameterSubstitution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockTemplateRepository()
+			repo := testutil.NewMockTemplateRepository()
 
 			// Build params list from map
 			params := make([]workflow.TemplateParam, 0, len(tt.params))
@@ -721,8 +691,8 @@ func TestTemplateService_ParameterSubstitution(t *testing.T) {
 					},
 				},
 			}
-			repo.addTemplate(tmpl)
-			logger := &mockLogger{}
+			repo.AddTemplate(tmpl.Name, tmpl)
+			logger := testutil.NewMockLogger()
 
 			svc := application.NewTemplateService(repo, logger)
 
@@ -741,7 +711,7 @@ func TestTemplateService_ParameterSubstitution(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_InheritsRetry(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-retry",
 		Parameters: []workflow.TemplateParam{},
@@ -758,8 +728,8 @@ func TestTemplateService_ExpandWorkflow_InheritsRetry(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -788,7 +758,7 @@ func TestTemplateService_ExpandWorkflow_InheritsRetry(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_InheritsCapture(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-capture",
 		Parameters: []workflow.TemplateParam{},
@@ -805,8 +775,8 @@ func TestTemplateService_ExpandWorkflow_InheritsCapture(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -835,7 +805,7 @@ func TestTemplateService_ExpandWorkflow_InheritsCapture(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_InheritsTimeout(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-timeout",
 		Parameters: []workflow.TemplateParam{},
@@ -848,8 +818,8 @@ func TestTemplateService_ExpandWorkflow_InheritsTimeout(t *testing.T) {
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -878,7 +848,7 @@ func TestTemplateService_ExpandWorkflow_InheritsTimeout(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_StepTimeoutOverridesTemplate(t *testing.T) {
-	repo := newMockTemplateRepository()
+	repo := testutil.NewMockTemplateRepository()
 	tmpl := &workflow.Template{
 		Name:       "with-timeout",
 		Parameters: []workflow.TemplateParam{},
@@ -891,8 +861,8 @@ func TestTemplateService_ExpandWorkflow_StepTimeoutOverridesTemplate(t *testing.
 			},
 		},
 	}
-	repo.addTemplate(tmpl)
-	logger := &mockLogger{}
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -926,8 +896,8 @@ func TestTemplateService_ExpandWorkflow_StepTimeoutOverridesTemplate(t *testing.
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_NilWorkflow(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -940,8 +910,8 @@ func TestTemplateService_ExpandWorkflow_NilWorkflow(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_EmptySteps(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -956,8 +926,8 @@ func TestTemplateService_ExpandWorkflow_EmptySteps(t *testing.T) {
 }
 
 func TestTemplateService_ExpandWorkflow_NilTemplateRef(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -986,9 +956,10 @@ func TestTemplateService_ExpandWorkflow_NilTemplateRef(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ExpandWorkflow_ContextCanceled(t *testing.T) {
-	repo := newMockTemplateRepository()
-	repo.addTemplate(newSimpleEchoTemplate())
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	tmpl := newSimpleEchoTemplate()
+	repo.AddTemplate(tmpl.Name, tmpl)
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -1009,8 +980,8 @@ func TestTemplateService_ExpandWorkflow_ContextCanceled(t *testing.T) {
 // =============================================================================
 
 func TestTemplateService_ImplementsExpectedBehavior(t *testing.T) {
-	repo := newMockTemplateRepository()
-	logger := &mockLogger{}
+	repo := testutil.NewMockTemplateRepository()
+	logger := testutil.NewMockLogger()
 
 	svc := application.NewTemplateService(repo, logger)
 
@@ -1022,6 +993,3 @@ func TestTemplateService_ImplementsExpectedBehavior(t *testing.T) {
 
 	var _ TemplateExpander = svc
 }
-
-// Ensure mock implements the ports.TemplateRepository interface
-var _ ports.TemplateRepository = (*mockTemplateRepository)(nil)
