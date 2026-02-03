@@ -5,6 +5,7 @@ package integration_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -12,9 +13,9 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -111,6 +112,33 @@ func skipIfToolMissing(t *testing.T, toolName string) {
 }
 
 // =============================================================================
+// Repository Root Helper
+// =============================================================================
+
+// getRepoRoot returns the repository root directory.
+// It walks up from the current directory until it finds a go.mod file.
+func getRepoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("should get current directory: %v", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("could not find repository root (no go.mod found)")
+		}
+		dir = parent
+	}
+}
+
+// =============================================================================
 // Workflow Service Setup
 // =============================================================================
 
@@ -125,8 +153,8 @@ func setupTestWorkflowService(t *testing.T, workflowsDir, statesDir string) (*ap
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	// Expression evaluator for loop conditions (real evaluator per B003)
-	evaluator := expression.NewExprEvaluator()
+	// Expression evaluator for loop conditions (infrastructure adapter per C042)
+	evaluator := infraExpr.NewExprEvaluator()
 
 	// Wire up services
 	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger)

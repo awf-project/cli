@@ -83,6 +83,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C045**: Add Package-Level Documentation to Core Packages
+  - Created `internal/domain/workflow/doc.go` documenting workflow entities, state machine, and 65+ types across 12 categories (Workflow, Step, State, Context, Configuration, Results, Hooks, Templates, Conversations, Validation, Errors, Constants)
+  - Created `internal/domain/ports/doc.go` cataloging 26 port interfaces grouped by architectural concern (Repository, Execution, Agent, Plugin, Interactive, Logging, History)
+  - Created `internal/application/doc.go` describing 19+ application services grouped by responsibility (Core Orchestration, Specialized Executors, Supporting Services, Utilities)
+  - Removed duplicate package comment from `internal/application/plugin_service.go` to comply with Go's one-package-comment convention
+  - Added integration test suite in `tests/integration/c045_package_documentation_test.go` using `go/parser` to verify doc.go format compliance
+  - Improved developer onboarding with `go doc ./internal/domain/workflow`, `go doc ./internal/domain/ports`, `go doc ./internal/application`
+  - All documentation follows existing style from `internal/testutil/doc.go` and `internal/infrastructure/config/doc.go`
+
 - **C044**: Fix Test Layer Purity Violations in Template Service Tests
   - Moved `TemplateNotFoundError` from infrastructure layer to `internal/domain/workflow/template_errors.go`
   - Created centralized `MockTemplateRepository` in `internal/testutil/mocks.go` with thread-safe patterns

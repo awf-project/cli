@@ -523,27 +523,6 @@ func TestArchitectureCompliance_C044_NoInfrastructureImports(t *testing.T) {
 // Helper Functions
 // =============================================================================
 
-// getRepoRoot returns the repository root directory.
-// It walks up from the current directory until it finds a go.mod file.
-func getRepoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	require.NoError(t, err, "should get current directory")
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find repository root (no go.mod found)")
-		}
-		dir = parent
-	}
-}
-
 // extractImportsFromFile extracts import statements from a Go source file
 func extractImportsFromFile(filename string) ([]string, error) {
 	content, err := os.ReadFile(filename)

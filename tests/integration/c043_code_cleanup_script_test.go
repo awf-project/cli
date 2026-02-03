@@ -43,23 +43,3 @@ func TestC043_VerificationScript_Integration(t *testing.T) {
 
 	t.Logf("C043 verification output:\n%s", string(output))
 }
-
-// getRepoRoot returns the repository root directory.
-func getRepoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	require.NoError(t, err, "should get current directory")
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find repository root (no go.mod found)")
-		}
-		dir = parent
-	}
-}
