@@ -19,6 +19,8 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 - **Dry-Run Mode** - Preview execution plan without running commands
 - **Interactive Mode** - Step-by-step execution with prompts
 - **Interactive Input Collection** - Automatically prompt for missing required inputs in terminal sessions
+- **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
+- **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
 - **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation

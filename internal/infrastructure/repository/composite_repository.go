@@ -2,9 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
@@ -42,13 +45,22 @@ func (r *CompositeRepository) Load(ctx context.Context, name string) (*workflow.
 		repo := r.repos[sp.Source]
 		wf, err := repo.Load(ctx, name)
 		if err != nil {
-			return nil, err
+			// Check if this is a "not found" error - if so, continue to next repo
+			var se *domerrors.StructuredError
+			if errors.As(err, &se) && se.Code == domerrors.ErrorCodeUserInputMissingFile {
+				continue // not found in this repo, try next
+			}
+			return nil, err // real error, propagate
 		}
-		if wf != nil {
-			return wf, nil
-		}
+		return wf, nil
 	}
-	return nil, nil
+	// Not found in any repository
+	return nil, domerrors.NewUserError(
+		domerrors.ErrorCodeUserInputMissingFile,
+		fmt.Sprintf("workflow not found: %s", name),
+		map[string]any{"path": name},
+		nil,
+	)
 }
 
 // List returns unique workflow names from all sources

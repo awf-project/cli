@@ -12,6 +12,10 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		// Check for exitError with specific exit code
 		if exitErr, ok := err.(interface{ ExitCode() int }); ok {
+			// Skip printing if error was already formatted by WriteError
+			if handled, ok := err.(interface{ Handled() bool }); !ok || !handled.Handled() {
+				fmt.Fprintln(os.Stderr, err)
+			}
 			os.Exit(exitErr.ExitCode())
 		}
 		// Default to user error for unknown errors

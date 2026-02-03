@@ -34,7 +34,7 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
 
 	// Create output writer
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Create composite repository with XDG paths
 	repo := NewWorkflowRepository()
@@ -45,7 +45,7 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
 		}
-		return fmt.Errorf("failed to list workflows: %w", err)
+		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
 	if len(infos) == 0 {
@@ -85,7 +85,7 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 			Source: info.Source.String(),
 		}
 
-		if loadErr == nil && wf != nil {
+		if loadErr == nil {
 			wfInfo.Version = wf.Version
 			wfInfo.Description = wf.Description
 		}
@@ -128,7 +128,7 @@ Examples:
 }
 
 func runListPrompts(cmd *cobra.Command, cfg *Config) error {
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,

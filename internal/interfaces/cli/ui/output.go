@@ -234,16 +234,18 @@ type OutputWriter struct {
 	errOut    io.Writer
 	format    OutputFormat
 	noColor   bool
+	noHints   bool
 	colorizer *Colorizer
 }
 
 // NewOutputWriter creates a writer for the specified format.
-func NewOutputWriter(out, errOut io.Writer, format OutputFormat, noColor bool) *OutputWriter {
+func NewOutputWriter(out, errOut io.Writer, format OutputFormat, noColor, noHints bool) *OutputWriter {
 	return &OutputWriter{
 		out:       out,
 		errOut:    errOut,
 		format:    format,
 		noColor:   noColor,
+		noHints:   noHints,
 		colorizer: NewColorizer(!noColor),
 	}
 }
@@ -388,8 +390,21 @@ func (w *OutputWriter) writeStructuredError(err *domerrors.StructuredError, code
 
 // newHumanErrorFormatter creates a HumanErrorFormatter using the output writer's color settings.
 // Extracted as a method to facilitate testing and maintain separation of concerns.
+//
+// Includes all 5 hint generators for C048:
+//   - FileNotFoundHintGenerator: "did you mean?" for missing files
+//   - YAMLSyntaxHintGenerator: line/column references for syntax errors
+//   - InvalidStateHintGenerator: closest state match suggestions
+//   - MissingInputHintGenerator: required inputs with examples
+//   - CommandFailureHintGenerator: permission/path verification guidance
 func (w *OutputWriter) newHumanErrorFormatter() ErrorFormatter {
-	return NewHumanErrorFormatter(!w.noColor)
+	return NewHumanErrorFormatter(!w.noColor, w.noHints,
+		errfmt.FileNotFoundHintGenerator,
+		errfmt.YAMLSyntaxHintGenerator,
+		errfmt.InvalidStateHintGenerator,
+		errfmt.MissingInputHintGenerator,
+		errfmt.CommandFailureHintGenerator,
+	)
 }
 
 // WritePrompts outputs prompt file list.

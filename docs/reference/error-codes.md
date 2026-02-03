@@ -282,14 +282,18 @@ awf run deploy
 
 ### Human-Readable Format
 
-Default CLI output includes the error code for reference:
+Default CLI output shows error messages:
+
+```bash
+awf run deploy
+# Error: workflow file not found
+```
+
+When structured error codes are used (currently being implemented for all commands), output will include the error code:
 
 ```bash
 awf run deploy
 # Error [WORKFLOW.VALIDATION.CYCLE_DETECTED]: cycle detected: step1 -> step2 -> step1
-#
-# Resolution: Review state transitions to identify and break the cycle.
-# See: awf error WORKFLOW.VALIDATION.CYCLE_DETECTED
 ```
 
 ### JSON Format
@@ -427,6 +431,149 @@ If you're migrating from AWF versions before v0.4.0, the error code taxonomy pre
 | 4 (System Error) | `SYSTEM.IO.*` | Infrastructure errors |
 
 Exit codes remain unchanged, but error messages now include structured error codes for programmatic handling.
+
+## Actionable Error Hints
+
+AWF includes a context-aware hint system that provides actionable suggestions to help resolve errors quickly. Hints are displayed automatically after error details and can be suppressed using the `--no-hints` flag.
+
+### Hint Display Format
+
+Hints appear as dimmed text below the error message:
+
+```bash
+$ awf run my-workfow.yaml
+[USER.INPUT.MISSING_FILE] workflow not found
+  Details:
+    path: my-workfow.yaml
+
+  Hint: Did you mean 'my-workflow.yaml'?
+  Hint: Run 'awf list' to see available workflows
+```
+
+### Suppressing Hints
+
+Use `--no-hints` to disable hint suggestions (useful for CI/CD scripts):
+
+```bash
+$ awf run missing.yaml --no-hints
+[USER.INPUT.MISSING_FILE] workflow not found
+  Details:
+    path: missing.yaml
+```
+
+### Hint Types
+
+#### File Not Found Hints
+
+Suggests similar filenames using fuzzy matching:
+
+```bash
+$ awf run deploy-prd.yaml
+[USER.INPUT.MISSING_FILE] workflow not found
+  Details:
+    path: deploy-prd.yaml
+
+  Hint: Did you mean 'deploy-prod.yaml'?
+  Hint: Run 'awf list' to see available workflows
+```
+
+#### YAML Syntax Hints
+
+Points to the exact line and column of syntax errors:
+
+```bash
+$ awf validate broken.yaml
+[WORKFLOW.PARSE.YAML_SYNTAX] invalid YAML syntax
+  Details:
+    column: 5
+    line: 12
+
+  Hint: Check line 12, column 5 for syntax errors
+  Hint: Validate with: yamllint broken.yaml
+```
+
+#### Invalid State Reference Hints
+
+Suggests the closest matching state name:
+
+```bash
+$ awf validate deploy.yaml
+[WORKFLOW.VALIDATION.MISSING_STATE] state 'proces' not defined
+  Details:
+    available_states: [start, process, cleanup, done]
+    state: proces
+
+  Hint: Did you mean 'process'?
+  Hint: Available states: start, process, cleanup, done
+```
+
+#### Missing Input Hints
+
+Lists required inputs with example usage:
+
+```bash
+$ awf run deploy.yaml
+[USER.INPUT.VALIDATION_FAILED] required input missing
+  Details:
+    input: user_name
+
+  Hint: Required inputs: user_name (string), user_email (string)
+  Hint: Example: awf run deploy.yaml --input user_name=john --input user_email=john@example.com
+```
+
+#### Command Execution Hints
+
+Provides context for exit codes:
+
+```bash
+$ awf run deploy.yaml
+[EXECUTION.COMMAND.FAILED] command exited with code 127
+  Details:
+    command: nonexistent-command
+    exit_code: 127
+
+  Hint: Exit code 127 indicates command not found
+  Hint: Check if 'nonexistent-command' is installed and in PATH
+```
+
+```bash
+$ awf run deploy.yaml
+[EXECUTION.COMMAND.FAILED] command exited with code 126
+  Details:
+    command: ./deploy.sh
+    exit_code: 126
+
+  Hint: Exit code 126 indicates permission denied
+  Hint: Check file permissions with: ls -l ./deploy.sh
+  Hint: Add execute permission: chmod +x ./deploy.sh
+```
+
+### JSON Format Hints
+
+Hints are included in JSON output as an array:
+
+```bash
+$ awf run missing.yaml --format json
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": 1,
+    "error_code": "USER.INPUT.MISSING_FILE",
+    "message": "workflow not found",
+    "details": {
+      "path": "missing.yaml"
+    },
+    "hints": [
+      "Did you mean 'missing-workflow.yaml'?",
+      "Run 'awf list' to see available workflows"
+    ],
+    "timestamp": "2026-01-15T10:30:45Z"
+  }
+}
+```
 
 ## See Also
 

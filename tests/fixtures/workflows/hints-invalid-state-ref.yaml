@@ -1,0 +1,26 @@
+# Test fixture for invalid state reference hints
+name: invalid-state-ref
+description: Test workflow with typo in state reference
+version: "1.0.0"
+
+states:
+  initial: start
+
+  start:
+    type: step
+    command: echo "starting"
+    on_success: proces  # Typo: should be "process"
+    on_failure: error
+
+  process:
+    type: step
+    command: echo "processing"
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure

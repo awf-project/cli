@@ -1,0 +1,33 @@
+# Test fixture for missing input hints
+name: missing-input-example
+description: Test workflow requiring inputs
+version: "1.0.0"
+
+inputs:
+  - name: user_name
+    type: string
+    description: The name of the user
+    required: true
+
+  - name: user_email
+    type: string
+    description: The email address
+    required: true
+
+  - name: verbose
+    type: boolean
+    description: Enable verbose output
+    required: false
+    default: false
+
+states:
+  initial: greet
+
+  greet:
+    type: step
+    command: echo "Hello {{inputs.user_name}} ({{inputs.user_email}})"
+    on_success: done
+
+  done:
+    type: terminal
+    status: success

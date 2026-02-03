@@ -2,8 +2,10 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/expression"
@@ -56,11 +58,27 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	if err != nil {
 		return fmt.Errorf("load workflow %s: %w", name, err)
 	}
-	if wf == nil {
-		return nil
-	}
 	validator := expression.NewExprValidator()
 	if err := wf.Validate(validator.Compile); err != nil {
+		// Convert domain StateReferenceError to StructuredError
+		var stateRefErr *workflow.StateReferenceError
+		if errors.As(err, &stateRefErr) {
+			availableAny := make([]any, len(stateRefErr.AvailableStates))
+			for i, s := range stateRefErr.AvailableStates {
+				availableAny[i] = s
+			}
+			return domerrors.NewWorkflowError(
+				domerrors.ErrorCodeWorkflowValidationMissingState,
+				stateRefErr.Error(),
+				map[string]any{
+					"state":            stateRefErr.ReferencedState,
+					"available_states": availableAny,
+					"step":             stateRefErr.StepName,
+					"field":            stateRefErr.Field,
+				},
+				err,
+			)
+		}
 		return fmt.Errorf("validate workflow %s: %w", name, err)
 	}
 	return nil

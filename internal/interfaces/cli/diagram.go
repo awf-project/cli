@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vanoix/awf/internal/infrastructure/diagram"
+	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // diagramOptions holds command-specific flags for the diagram command.
@@ -63,7 +64,7 @@ Examples:
 
 // runDiagram executes the diagram generation.
 // Follows the validate.go pattern: load workflow via repository, generate DOT, output.
-func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagramOptions) error {
+func runDiagram(cmd *cobra.Command, cfg *Config, workflowName string, opts *diagramOptions) error {
 	ctx := context.Background()
 
 	// Validate direction option
@@ -76,10 +77,9 @@ func runDiagram(cmd *cobra.Command, _ *Config, workflowName string, opts *diagra
 	repo := NewWorkflowRepository()
 	wf, err := repo.Load(ctx, workflowName)
 	if err != nil {
-		return fmt.Errorf("failed to load workflow: %w", err)
-	}
-	if wf == nil {
-		return fmt.Errorf("workflow not found: %s", workflowName)
+		// Create writer for error routing
+		writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), ui.FormatText, cfg.NoColor, cfg.NoHints)
+		return writeErrorAndExit(writer, fmt.Errorf("failed to load workflow: %w", err), ExitUser)
 	}
 
 	// Build diagram config from CLI options

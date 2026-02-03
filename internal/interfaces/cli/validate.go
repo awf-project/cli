@@ -40,7 +40,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	ctx := context.Background()
 
 	// Create output writer
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Initialize repository
 	repo := NewWorkflowRepository()
@@ -51,17 +51,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	// Load workflow first to check existence
 	wf, err := svc.GetWorkflow(ctx, workflowName)
 	if err != nil {
-		if writer.IsJSONFormat() {
-			return writer.WriteError(err, ExitUser)
-		}
-		return fmt.Errorf("failed to load workflow: %w", err)
-	}
-	if wf == nil {
-		err := fmt.Errorf("workflow not found: %s", workflowName)
-		if writer.IsJSONFormat() {
-			return writer.WriteError(err, ExitUser)
-		}
-		return err
+		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
 	// Validate workflow structure
@@ -79,9 +69,9 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 			} else {
 				// Create a multi-line error with all validation errors
 				var sb strings.Builder
-				sb.WriteString(fmt.Sprintf("validation failed with %d errors:", len(result.Errors)))
+				fmt.Fprintf(&sb, "validation failed with %d errors:", len(result.Errors))
 				for _, err := range result.Errors {
-					sb.WriteString(fmt.Sprintf("\n  %s", err.Error()))
+					fmt.Fprintf(&sb, "\n  %s", err.Error())
 				}
 				validationErr = fmt.Errorf("%s", sb.String())
 			}
@@ -180,8 +170,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	})
 
 	if validationErr != nil {
-		formatter.Error(fmt.Sprintf("Validation failed: %s", validationErr))
-		return &exitError{code: ExitWorkflow, err: validationErr}
+		return writeErrorAndExit(writer, validationErr, ExitWorkflow)
 	}
 
 	// Show success

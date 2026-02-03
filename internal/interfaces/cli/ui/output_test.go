@@ -13,7 +13,7 @@ import (
 
 func TestOutputWriter_WriteWorkflows_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	workflows := []ui.WorkflowInfo{
 		{Name: "test-wf", Source: "local", Version: "1.0.0", Description: "Test workflow"},
@@ -33,7 +33,7 @@ func TestOutputWriter_WriteWorkflows_JSON(t *testing.T) {
 
 func TestOutputWriter_WriteWorkflows_Table(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	workflows := []ui.WorkflowInfo{
 		{Name: "deploy", Source: "local", Version: "1.0.0", Description: "Deploy app"},
@@ -53,7 +53,7 @@ func TestOutputWriter_WriteWorkflows_Table(t *testing.T) {
 
 func TestOutputWriter_WriteWorkflows_Quiet(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
 
 	workflows := []ui.WorkflowInfo{
 		{Name: "wf1"}, {Name: "wf2"}, {Name: "wf3"},
@@ -68,7 +68,7 @@ func TestOutputWriter_WriteWorkflows_Quiet(t *testing.T) {
 
 func TestOutputWriter_WriteWorkflows_Text(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 	workflows := []ui.WorkflowInfo{
 		{Name: "deploy", Source: "local", Version: "1.0.0"},
@@ -83,7 +83,7 @@ func TestOutputWriter_WriteWorkflows_Text(t *testing.T) {
 
 func TestOutputWriter_WriteExecution_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	exec := ui.ExecutionInfo{
 		WorkflowID:   "abc123",
@@ -108,7 +108,7 @@ func TestOutputWriter_WriteExecution_JSON(t *testing.T) {
 
 func TestOutputWriter_WriteExecution_Quiet(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
 
 	exec := ui.ExecutionInfo{
 		WorkflowID: "abc123",
@@ -123,7 +123,7 @@ func TestOutputWriter_WriteExecution_Quiet(t *testing.T) {
 
 func TestOutputWriter_WriteExecution_Table(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	exec := ui.ExecutionInfo{
 		WorkflowID:   "abc123",
@@ -150,7 +150,7 @@ func TestOutputWriter_WriteExecution_Table(t *testing.T) {
 
 func TestOutputWriter_WriteRunResult_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	result := ui.RunResult{
 		WorkflowID: "abc123",
@@ -170,7 +170,7 @@ func TestOutputWriter_WriteRunResult_JSON(t *testing.T) {
 
 func TestOutputWriter_WriteRunResult_Quiet(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
 
 	result := ui.RunResult{
 		WorkflowID: "abc123",
@@ -185,7 +185,7 @@ func TestOutputWriter_WriteRunResult_Quiet(t *testing.T) {
 
 func TestOutputWriter_WriteRunResult_Table(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	result := ui.RunResult{
 		WorkflowID: "abc123",
@@ -214,7 +214,7 @@ func TestOutputWriter_WriteRunResult_Table(t *testing.T) {
 
 func TestOutputWriter_WriteValidation_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	result := ui.ValidationResult{
 		Valid:    true,
@@ -233,7 +233,7 @@ func TestOutputWriter_WriteValidation_JSON(t *testing.T) {
 
 func TestOutputWriter_WriteValidation_JSON_WithErrors(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	result := ui.ValidationResult{
 		Valid:    false,
@@ -253,7 +253,7 @@ func TestOutputWriter_WriteValidation_JSON_WithErrors(t *testing.T) {
 
 func TestOutputWriter_WriteValidation_Table(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	result := ui.ValidationResult{
 		Valid:    true,
@@ -274,7 +274,7 @@ func TestOutputWriter_WriteValidation_Table(t *testing.T) {
 
 func TestOutputWriter_WriteValidationTable(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	result := ui.ValidationResultTable{
 		Valid:    true,
@@ -305,7 +305,7 @@ func TestOutputWriter_WriteValidationTable(t *testing.T) {
 
 func TestOutputWriter_WriteError_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	err := w.WriteError(errors.New("something failed"), 2)
 	require.NoError(t, err)
@@ -320,7 +320,7 @@ func TestOutputWriter_WriteError_JSON(t *testing.T) {
 func TestOutputWriter_WriteError_Text(t *testing.T) {
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, errBuf, ui.FormatText, true, false)
 
 	err := w.WriteError(errors.New("something failed"), 1)
 	require.NoError(t, err)
@@ -342,7 +342,7 @@ func TestOutputWriter_IsJSONFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		buf := new(bytes.Buffer)
-		w := ui.NewOutputWriter(buf, buf, tt.format, true)
+		w := ui.NewOutputWriter(buf, buf, tt.format, true, false)
 		assert.Equal(t, tt.want, w.IsJSONFormat())
 	}
 }
@@ -409,7 +409,7 @@ func TestOutputWriter_WriteExecution_Text(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 			err := w.WriteExecution(&tt.exec)
 			require.NoError(t, err)
@@ -452,7 +452,7 @@ func TestOutputWriter_WriteRunResult_Text(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 			err := w.WriteRunResult(&tt.result)
 			require.NoError(t, err)
@@ -493,7 +493,7 @@ func TestOutputWriter_WriteValidation_Text(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 			err := w.WriteValidation(tt.result)
 			require.NoError(t, err)
@@ -589,7 +589,7 @@ func TestOutputFormat_String(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	plugins := []ui.PluginInfo{
 		{
@@ -617,7 +617,7 @@ func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_JSON_Multiple(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	plugins := []ui.PluginInfo{
 		{Name: "plugin-a", Version: "1.0.0", Status: "running", Enabled: true},
@@ -636,7 +636,7 @@ func TestOutputWriter_WritePlugins_JSON_Multiple(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_JSON_Empty(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
 
 	plugins := []ui.PluginInfo{}
 
@@ -651,7 +651,7 @@ func TestOutputWriter_WritePlugins_JSON_Empty(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Table(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	plugins := []ui.PluginInfo{
 		{
@@ -684,7 +684,7 @@ func TestOutputWriter_WritePlugins_Table(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Table_Empty(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
 
 	plugins := []ui.PluginInfo{}
 
@@ -697,7 +697,7 @@ func TestOutputWriter_WritePlugins_Table_Empty(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Text(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 	plugins := []ui.PluginInfo{
 		{
@@ -721,7 +721,7 @@ func TestOutputWriter_WritePlugins_Text(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Text_Empty(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 	plugins := []ui.PluginInfo{}
 
@@ -734,7 +734,7 @@ func TestOutputWriter_WritePlugins_Text_Empty(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Quiet(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
 
 	plugins := []ui.PluginInfo{
 		{Name: "plugin-1"},
@@ -751,7 +751,7 @@ func TestOutputWriter_WritePlugins_Quiet(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_Quiet_Empty(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
 
 	plugins := []ui.PluginInfo{}
 
@@ -783,7 +783,7 @@ func TestOutputWriter_WritePlugins_ShowsEnabledStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 			plugins := []ui.PluginInfo{
 				{Name: "test-plugin", Version: "1.0.0", Status: "discovered", Enabled: tt.enabled},
@@ -800,7 +800,7 @@ func TestOutputWriter_WritePlugins_ShowsEnabledStatus(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_ShowsCapabilities(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 	plugins := []ui.PluginInfo{
 		{
@@ -822,7 +822,7 @@ func TestOutputWriter_WritePlugins_ShowsCapabilities(t *testing.T) {
 
 func TestOutputWriter_WritePlugins_EmptyCapabilities(t *testing.T) {
 	buf := new(bytes.Buffer)
-	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
 
 	plugins := []ui.PluginInfo{
 		{
@@ -860,7 +860,7 @@ func TestOutputWriter_WritePlugins_AllFormats(t *testing.T) {
 	for _, tt := range formats {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			w := ui.NewOutputWriter(buf, buf, tt.format, true)
+			w := ui.NewOutputWriter(buf, buf, tt.format, true, false)
 
 			err := w.WritePlugins(plugins)
 			require.NoError(t, err)

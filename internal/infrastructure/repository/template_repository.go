@@ -96,17 +96,17 @@ func (r *YAMLTemplateRepository) Exists(_ context.Context, name string) bool {
 func (r *YAMLTemplateRepository) loadTemplate(path string) (*workflow.Template, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, WrapParseError(path, err)
+		return nil, WrapParseError(path, err).ToStructuredError()
 	}
 
 	var yt yamlTemplate
 	if err := yaml.Unmarshal(data, &yt); err != nil {
-		return nil, WrapParseError(path, err)
+		return nil, WrapParseError(path, err).ToStructuredError()
 	}
 
 	// Parse states section (same as workflow, has initial + inline steps)
 	if err := r.parseStates(data, &yt); err != nil {
-		return nil, WrapParseError(path, err)
+		return nil, WrapParseError(path, err).ToStructuredError()
 	}
 
 	return mapTemplate(path, &yt)

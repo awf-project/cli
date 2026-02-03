@@ -34,7 +34,7 @@ func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 	ctx := context.Background()
 
 	// Create output writer
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Load state
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
@@ -43,14 +43,14 @@ func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
 		}
-		return fmt.Errorf("failed to load state: %w", err)
+		return writeErrorAndExit(writer, err, ExitUser)
 	}
 	if execCtx == nil {
 		err := fmt.Errorf("workflow execution not found: %s", workflowID)
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
 		}
-		return err
+		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
 	// JSON/quiet/table format: use OutputWriter

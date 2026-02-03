@@ -1,0 +1,24 @@
+# Test fixture for file-not-found hints
+# This file exists to trigger "did you mean?" suggestions
+# when hints-file-tyop.yaml (with typo) is requested
+
+name: hints-file-example
+description: Test workflow for hint generation
+version: "1.0.0"
+
+inputs:
+  - name: test_input
+    type: string
+    required: false
+
+states:
+  initial: start
+
+  start:
+    type: step
+    command: echo "test"
+    on_success: done
+
+  done:
+    type: terminal
+    status: success

@@ -3,9 +3,11 @@ package application_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vanoix/awf/internal/application"
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -24,7 +26,13 @@ func (m *mockRepository) Load(ctx context.Context, name string) (*workflow.Workf
 	if wf, ok := m.workflows[name]; ok {
 		return wf, nil
 	}
-	return nil, nil
+	// Return StructuredError matching real repository behavior
+	return nil, domerrors.NewUserError(
+		domerrors.ErrorCodeUserInputMissingFile,
+		fmt.Sprintf("workflow file not found: %s", name),
+		map[string]any{"path": name},
+		nil,
+	)
 }
 
 func (m *mockRepository) List(ctx context.Context) ([]string, error) {
@@ -226,11 +234,14 @@ func TestWorkflowServiceGetWorkflowNotFound(t *testing.T) {
 	svc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
 
 	wf, err := svc.GetWorkflow(context.Background(), "nonexistent")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err == nil {
+		t.Error("expected error for nonexistent workflow")
 	}
 	if wf != nil {
-		t.Error("expected nil for nonexistent workflow")
+		t.Error("expected nil workflow when error occurs")
+	}
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error message, got: %v", err)
 	}
 }
 

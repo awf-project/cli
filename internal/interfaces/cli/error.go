@@ -35,7 +35,7 @@ Examples:
 
 // runError executes the error code lookup command.
 func runError(cmd *cobra.Command, cfg *Config, args []string) error {
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor)
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// List all error codes if no argument provided
 	if len(args) == 0 {

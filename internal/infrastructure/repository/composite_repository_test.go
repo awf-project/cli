@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
 func TestCompositeRepository_Load(t *testing.T) {
@@ -72,10 +74,15 @@ states:
 		assert.Equal(t, "global-only", wf.Name)
 	})
 
-	t.Run("returns nil for non-existent workflow", func(t *testing.T) {
+	t.Run("returns error for non-existent workflow", func(t *testing.T) {
 		wf, err := repo.Load(ctx, "non-existent")
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.Nil(t, wf)
+
+		// Should be a StructuredError with USER.INPUT.MISSING_FILE code
+		var se *domerrors.StructuredError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, domerrors.ErrorCodeUserInputMissingFile, se.Code)
 	})
 }
 
@@ -238,10 +245,15 @@ func TestCompositeRepository_EmptyPaths(t *testing.T) {
 		assert.Empty(t, names)
 	})
 
-	t.Run("Load returns nil for no paths", func(t *testing.T) {
+	t.Run("Load returns error for no paths", func(t *testing.T) {
 		wf, err := repo.Load(ctx, "anything")
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.Nil(t, wf)
+
+		// Should be a StructuredError with USER.INPUT.MISSING_FILE code
+		var se *domerrors.StructuredError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, domerrors.ErrorCodeUserInputMissingFile, se.Code)
 	})
 }
 

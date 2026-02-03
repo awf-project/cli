@@ -1,0 +1,22 @@
+# Test fixture for command execution failure hints
+name: command-not-found
+description: Test workflow with non-existent command
+version: "1.0.0"
+
+states:
+  initial: bad_command
+
+  bad_command:
+    type: step
+    command: nonexistentcommand12345 --help
+    timeout: 5s
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
