@@ -1,4 +1,3 @@
-// Package application provides application services for orchestrating domain operations.
 package application
 
 import (
