@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C043**: Code Quality Quick Wins
+  - Fixed documentation inconsistency in `docs/user-guide/commands.md` where status filter value incorrectly listed "interrupted" instead of "cancelled" to match implementation (`StatusCancelled` constant)
+  - Added GitHub issue #169 tracking references to four WARNING comments documenting unimplemented `checkUnknownKeys` feature in `internal/infrastructure/config/loader_test.go`
+  - Updated comments at lines 487, 512, 627, and 729 to include "TODO(#169)" for technical debt tracking
+  - Improved traceability of known limitations and future enhancements
+
 - **C042**: Fix DIP Violations in Application Layer
   - Moved `ExpressionEvaluator` interface from application layer to `internal/domain/ports/expression_evaluator.go`
   - Created infrastructure adapter in `internal/infrastructure/expression/expr_evaluator.go` implementing the port
