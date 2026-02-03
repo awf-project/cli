@@ -100,21 +100,18 @@ func (m *mockTokenizer) ModelName() string {
 }
 
 // mockEvaluator is a test double for expression evaluator
+// C042: Updated to implement ports.ExpressionEvaluator interface
 type mockEvaluator struct {
 	result bool
 	err    error
 }
 
-func (m *mockEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (m *mockEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	return m.result, m.err
 }
 
 func (m *mockEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
 	return 0, nil
-}
-
-func (m *mockEvaluator) EvaluateString(expr string, ctx *interpolation.Context) (string, error) {
-	return "", nil
 }
 
 // mockResolverWithError is a test double for interpolation resolver that can return errors

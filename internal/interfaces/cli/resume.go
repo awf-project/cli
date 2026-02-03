@@ -11,9 +11,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraexpression "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -202,7 +202,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraexpression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Setup agent registry for F039 agent step execution

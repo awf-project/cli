@@ -9,6 +9,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // This file contains thread-safe mock implementations of domain port interfaces.
@@ -23,6 +24,7 @@ var (
 	_ ports.Logger              = (*MockLogger)(nil)
 	_ ports.HistoryStore        = (*MockHistoryStore)(nil)
 	_ ports.ExpressionValidator = (*MockExpressionValidator)(nil)
+	_ ports.ExpressionEvaluator = (*MockExpressionEvaluator)(nil)
 	_ ports.PluginManager       = (*MockPluginManager)(nil)
 	_ ports.AgentRegistry       = (*MockAgentRegistry)(nil)
 	_ ports.AgentProvider       = (*MockAgentProvider)(nil)
@@ -661,6 +663,111 @@ func (m *MockExpressionValidator) Clear() {
 	defer m.mu.Unlock()
 	m.compileErr = nil
 	m.compileFunc = nil
+}
+
+// =============================================================================
+// MockExpressionEvaluator - T005 (C042)
+// =============================================================================
+
+// MockExpressionEvaluator is a thread-safe mock implementation of ports.ExpressionEvaluator.
+// It uses sync.Mutex to protect concurrent access to configuration.
+//
+// Usage:
+//
+//	evaluator := testutil.NewMockExpressionEvaluator()
+//	evaluator.SetBoolResult(true, nil)
+//	result, err := evaluator.EvaluateBool("inputs.count > 5", ctx)
+type MockExpressionEvaluator struct {
+	mu               sync.Mutex
+	boolResult       bool
+	boolErr          error
+	intResult        int
+	intErr           error
+	evaluateBoolFunc func(string, *interpolation.Context) (bool, error)
+	evaluateIntFunc  func(string, *interpolation.Context) (int, error)
+}
+
+// NewMockExpressionEvaluator creates a new thread-safe mock expression evaluator.
+func NewMockExpressionEvaluator() *MockExpressionEvaluator {
+	return &MockExpressionEvaluator{}
+}
+
+// EvaluateBool evaluates a boolean expression against the provided context.
+func (m *MockExpressionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.evaluateBoolFunc != nil {
+		return m.evaluateBoolFunc(expr, ctx)
+	}
+
+	if m.boolErr != nil {
+		return false, m.boolErr
+	}
+
+	return m.boolResult, nil
+}
+
+// EvaluateInt evaluates an arithmetic expression against the provided context.
+func (m *MockExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.evaluateIntFunc != nil {
+		return m.evaluateIntFunc(expr, ctx)
+	}
+
+	if m.intErr != nil {
+		return 0, m.intErr
+	}
+
+	return m.intResult, nil
+}
+
+// SetBoolResult configures the mock to return a specific result for EvaluateBool calls (test helper).
+func (m *MockExpressionEvaluator) SetBoolResult(result bool, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.boolResult = result
+	m.boolErr = err
+	m.evaluateBoolFunc = nil
+}
+
+// SetIntResult configures the mock to return a specific result for EvaluateInt calls (test helper).
+func (m *MockExpressionEvaluator) SetIntResult(result int, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.intResult = result
+	m.intErr = err
+	m.evaluateIntFunc = nil
+}
+
+// SetEvaluateBoolFunc configures a custom function to handle EvaluateBool calls (test helper).
+func (m *MockExpressionEvaluator) SetEvaluateBoolFunc(fn func(string, *interpolation.Context) (bool, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.evaluateBoolFunc = fn
+	m.boolErr = nil
+}
+
+// SetEvaluateIntFunc configures a custom function to handle EvaluateInt calls (test helper).
+func (m *MockExpressionEvaluator) SetEvaluateIntFunc(fn func(string, *interpolation.Context) (int, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.evaluateIntFunc = fn
+	m.intErr = nil
+}
+
+// Clear resets the mock to default state (test helper).
+func (m *MockExpressionEvaluator) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.boolResult = false
+	m.boolErr = nil
+	m.intResult = 0
+	m.intErr = nil
+	m.evaluateBoolFunc = nil
+	m.evaluateIntFunc = nil
 }
 
 // =============================================================================

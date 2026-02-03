@@ -275,7 +275,7 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results[`response contains "DONE"`] = true
+	evaluator.boolResults[`response contains "DONE"`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := testutil.NewMockAgentRegistry()
@@ -319,7 +319,7 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results[`turn_count >= 3`] = true
+	evaluator.boolResults[`turn_count >= 3`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
 	registry := testutil.NewMockAgentRegistry()

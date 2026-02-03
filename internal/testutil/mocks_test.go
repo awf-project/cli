@@ -12,6 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // =============================================================================
@@ -3174,4 +3175,967 @@ func TestMockExpressionValidator_StateIsolation(t *testing.T) {
 	require.Error(t, err2)
 	assert.Equal(t, "error1", err1.Error())
 	assert.Equal(t, "error2", err2.Error())
+}
+
+// =============================================================================
+// MockExpressionEvaluator Tests - Component T005 (C042)
+// =============================================================================
+
+// Feature: C042 Fix DIP Violations in Application Layer
+// Component: T005 MockExpressionEvaluator Tests
+
+func TestMockExpressionEvaluator_NewMockExpressionEvaluator(t *testing.T) {
+	// Arrange & Act
+	evaluator := testutil.NewMockExpressionEvaluator()
+
+	// Assert
+	require.NotNil(t, evaluator, "NewMockExpressionEvaluator should return non-nil instance")
+
+	// Verify default behavior
+	ctx := &interpolation.Context{}
+	result, err := evaluator.EvaluateBool("true", ctx)
+	assert.NoError(t, err, "Default EvaluateBool should succeed")
+	assert.False(t, result, "Default EvaluateBool should return false")
+
+	intResult, err := evaluator.EvaluateInt("42", ctx)
+	assert.NoError(t, err, "Default EvaluateInt should succeed")
+	assert.Equal(t, 0, intResult, "Default EvaluateInt should return 0")
+}
+
+// =============================================================================
+// EvaluateBool - Happy Path Tests
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateBool_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		wantResult bool
+		wantErr    bool
+	}{
+		{
+			name: "evaluateBool returns true",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(true, nil)
+			},
+			expression: "inputs.count > 5",
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateBool returns false",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(false, nil)
+			},
+			expression: "inputs.count <= 5",
+			wantResult: false,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateBool with custom function returning true",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+					return expr == "true", nil
+				})
+			},
+			expression: "true",
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateBool with custom function returning false",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+					return expr == "true", nil
+				})
+			},
+			expression: "false",
+			wantResult: false,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateBool(tt.expression, ctx)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// EvaluateBool - Edge Cases
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateBool_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		context    *interpolation.Context
+		wantResult bool
+		wantErr    bool
+	}{
+		{
+			name: "empty expression with default behavior",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				// Default behavior
+			},
+			expression: "",
+			context:    &interpolation.Context{},
+			wantResult: false,
+			wantErr:    false,
+		},
+		{
+			name: "nil context with default behavior",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(true, nil)
+			},
+			expression: "true",
+			context:    nil,
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name: "complex expression handled by function",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+					// Simulate complex logic
+					return len(expr) > 10, nil
+				})
+			},
+			expression: "this is a very long expression",
+			context:    &interpolation.Context{},
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name: "context-dependent evaluation",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+					if ctx != nil && ctx.Inputs != nil {
+						if val, ok := ctx.Inputs["enabled"]; ok {
+							if b, ok := val.(bool); ok {
+								return b, nil
+							}
+						}
+					}
+					return false, nil
+				})
+			},
+			expression: "inputs.enabled",
+			context: &interpolation.Context{
+				Inputs: map[string]any{"enabled": true},
+			},
+			wantResult: true,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+
+			// Act
+			result, err := evaluator.EvaluateBool(tt.expression, tt.context)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// EvaluateBool - Error Handling
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateBool_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		wantErr    error
+	}{
+		{
+			name: "evaluateBool with configured error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(false, errors.New("evaluation failed"))
+			},
+			expression: "invalid",
+			wantErr:    errors.New("evaluation failed"),
+		},
+		{
+			name: "evaluateBool with syntax error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(false, errors.New("syntax error"))
+			},
+			expression: "malformed expression",
+			wantErr:    errors.New("syntax error"),
+		},
+		{
+			name: "evaluateBool with type mismatch error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetBoolResult(false, errors.New("type mismatch: expected bool, got int"))
+			},
+			expression: "inputs.count",
+			wantErr:    errors.New("type mismatch: expected bool, got int"),
+		},
+		{
+			name: "evaluateBool function returns error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+					return false, fmt.Errorf("runtime error: %s", expr)
+				})
+			},
+			expression: "bad expr",
+			wantErr:    errors.New("runtime error: bad expr"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateBool(tt.expression, ctx)
+
+			// Assert
+			assert.Error(t, err)
+			assert.EqualError(t, err, tt.wantErr.Error())
+			assert.False(t, result, "Result should be false on error")
+		})
+	}
+}
+
+// =============================================================================
+// EvaluateInt - Happy Path Tests
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateInt_HappyPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		wantResult int
+		wantErr    bool
+	}{
+		{
+			name: "evaluateInt returns positive number",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(42, nil)
+			},
+			expression: "inputs.count",
+			wantResult: 42,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateInt returns zero",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(0, nil)
+			},
+			expression: "0",
+			wantResult: 0,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateInt returns negative number",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(-10, nil)
+			},
+			expression: "-10",
+			wantResult: -10,
+			wantErr:    false,
+		},
+		{
+			name: "evaluateInt with custom function",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+					return len(expr), nil
+				})
+			},
+			expression: "12345",
+			wantResult: 5,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateInt(tt.expression, ctx)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// EvaluateInt - Edge Cases
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateInt_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		context    *interpolation.Context
+		wantResult int
+		wantErr    bool
+	}{
+		{
+			name: "empty expression with default behavior",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				// Default behavior
+			},
+			expression: "",
+			context:    &interpolation.Context{},
+			wantResult: 0,
+			wantErr:    false,
+		},
+		{
+			name: "nil context with default behavior",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(100, nil)
+			},
+			expression: "100",
+			context:    nil,
+			wantResult: 100,
+			wantErr:    false,
+		},
+		{
+			name: "large positive number",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(2147483647, nil) // Max int32
+			},
+			expression: "2147483647",
+			context:    &interpolation.Context{},
+			wantResult: 2147483647,
+			wantErr:    false,
+		},
+		{
+			name: "large negative number",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(-2147483648, nil) // Min int32
+			},
+			expression: "-2147483648",
+			context:    &interpolation.Context{},
+			wantResult: -2147483648,
+			wantErr:    false,
+		},
+		{
+			name: "context-dependent calculation",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+					if ctx != nil && ctx.Inputs != nil {
+						if val, ok := ctx.Inputs["count"]; ok {
+							if i, ok := val.(int); ok {
+								return i * 2, nil
+							}
+						}
+					}
+					return 0, nil
+				})
+			},
+			expression: "inputs.count * 2",
+			context: &interpolation.Context{
+				Inputs: map[string]any{"count": 21},
+			},
+			wantResult: 42,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+
+			// Act
+			result, err := evaluator.EvaluateInt(tt.expression, tt.context)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// EvaluateInt - Error Handling
+// =============================================================================
+
+func TestMockExpressionEvaluator_EvaluateInt_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*testutil.MockExpressionEvaluator)
+		expression string
+		wantErr    error
+	}{
+		{
+			name: "evaluateInt with configured error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(0, errors.New("evaluation failed"))
+			},
+			expression: "invalid",
+			wantErr:    errors.New("evaluation failed"),
+		},
+		{
+			name: "evaluateInt with syntax error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(0, errors.New("syntax error"))
+			},
+			expression: "malformed",
+			wantErr:    errors.New("syntax error"),
+		},
+		{
+			name: "evaluateInt with type mismatch error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(0, errors.New("type mismatch: expected int, got string"))
+			},
+			expression: "inputs.name",
+			wantErr:    errors.New("type mismatch: expected int, got string"),
+		},
+		{
+			name: "evaluateInt with division by zero",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetIntResult(0, errors.New("division by zero"))
+			},
+			expression: "10 / 0",
+			wantErr:    errors.New("division by zero"),
+		},
+		{
+			name: "evaluateInt function returns error",
+			setupFunc: func(evaluator *testutil.MockExpressionEvaluator) {
+				evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+					return 0, fmt.Errorf("runtime error: %s", expr)
+				})
+			},
+			expression: "bad expr",
+			wantErr:    errors.New("runtime error: bad expr"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			tt.setupFunc(evaluator)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateInt(tt.expression, ctx)
+
+			// Assert
+			assert.Error(t, err)
+			assert.EqualError(t, err, tt.wantErr.Error())
+			assert.Equal(t, 0, result, "Result should be 0 on error")
+		})
+	}
+}
+
+// =============================================================================
+// Configuration Methods Tests
+// =============================================================================
+
+func TestMockExpressionEvaluator_SetBoolResult(t *testing.T) {
+	tests := []struct {
+		name       string
+		result     bool
+		err        error
+		wantResult bool
+		wantErr    bool
+	}{
+		{
+			name:       "set bool result true without error",
+			result:     true,
+			err:        nil,
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name:       "set bool result false without error",
+			result:     false,
+			err:        nil,
+			wantResult: false,
+			wantErr:    false,
+		},
+		{
+			name:       "set bool result with error",
+			result:     false,
+			err:        errors.New("test error"),
+			wantResult: false,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			ctx := &interpolation.Context{}
+
+			// Act
+			evaluator.SetBoolResult(tt.result, tt.err)
+			result, err := evaluator.EvaluateBool("test", ctx)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+func TestMockExpressionEvaluator_SetIntResult(t *testing.T) {
+	tests := []struct {
+		name       string
+		result     int
+		err        error
+		wantResult int
+		wantErr    bool
+	}{
+		{
+			name:       "set int result positive without error",
+			result:     42,
+			err:        nil,
+			wantResult: 42,
+			wantErr:    false,
+		},
+		{
+			name:       "set int result zero without error",
+			result:     0,
+			err:        nil,
+			wantResult: 0,
+			wantErr:    false,
+		},
+		{
+			name:       "set int result negative without error",
+			result:     -10,
+			err:        nil,
+			wantResult: -10,
+			wantErr:    false,
+		},
+		{
+			name:       "set int result with error",
+			result:     0,
+			err:        errors.New("test error"),
+			wantResult: 0,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			ctx := &interpolation.Context{}
+
+			// Act
+			evaluator.SetIntResult(tt.result, tt.err)
+			result, err := evaluator.EvaluateInt("test", ctx)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantResult, result)
+			}
+		})
+	}
+}
+
+func TestMockExpressionEvaluator_SetEvaluateBoolFunc(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+	callCount := 0
+
+	// Act
+	evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+		callCount++
+		return expr == "true", nil
+	})
+
+	result1, err1 := evaluator.EvaluateBool("true", ctx)
+	result2, err2 := evaluator.EvaluateBool("false", ctx)
+
+	// Assert
+	assert.NoError(t, err1)
+	assert.True(t, result1)
+	assert.NoError(t, err2)
+	assert.False(t, result2)
+	assert.Equal(t, 2, callCount, "Function should be called twice")
+}
+
+func TestMockExpressionEvaluator_SetEvaluateIntFunc(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+	callCount := 0
+
+	// Act
+	evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+		callCount++
+		return len(expr), nil
+	})
+
+	result1, err1 := evaluator.EvaluateInt("12345", ctx)
+	result2, err2 := evaluator.EvaluateInt("abc", ctx)
+
+	// Assert
+	assert.NoError(t, err1)
+	assert.Equal(t, 5, result1)
+	assert.NoError(t, err2)
+	assert.Equal(t, 3, result2)
+	assert.Equal(t, 2, callCount, "Function should be called twice")
+}
+
+func TestMockExpressionEvaluator_Clear(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	evaluator.SetBoolResult(true, errors.New("bool error"))
+	evaluator.SetIntResult(42, errors.New("int error"))
+	evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+		return true, errors.New("func error")
+	})
+	evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+		return 100, errors.New("func error")
+	})
+
+	// Act
+	evaluator.Clear()
+
+	// Assert
+	boolResult, boolErr := evaluator.EvaluateBool("test", ctx)
+	assert.NoError(t, boolErr, "EvaluateBool should succeed after Clear")
+	assert.False(t, boolResult, "EvaluateBool should return default false after Clear")
+
+	intResult, intErr := evaluator.EvaluateInt("test", ctx)
+	assert.NoError(t, intErr, "EvaluateInt should succeed after Clear")
+	assert.Equal(t, 0, intResult, "EvaluateInt should return default 0 after Clear")
+}
+
+func TestMockExpressionEvaluator_SetBoolResultOverridesFunc(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+		return true, nil
+	})
+
+	// Act - SetBoolResult should override function
+	evaluator.SetBoolResult(false, nil)
+	result, err := evaluator.EvaluateBool("test", ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.False(t, result, "SetBoolResult should override function")
+}
+
+func TestMockExpressionEvaluator_SetIntResultOverridesFunc(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+		return 100, nil
+	})
+
+	// Act - SetIntResult should override function
+	evaluator.SetIntResult(42, nil)
+	result, err := evaluator.EvaluateInt("test", ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, 42, result, "SetIntResult should override function")
+}
+
+func TestMockExpressionEvaluator_SetBoolFuncOverridesResult(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	evaluator.SetBoolResult(false, nil)
+
+	// Act - SetEvaluateBoolFunc should override static result
+	evaluator.SetEvaluateBoolFunc(func(expr string, ctx *interpolation.Context) (bool, error) {
+		return true, nil
+	})
+	result, err := evaluator.EvaluateBool("test", ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.True(t, result, "SetEvaluateBoolFunc should override static result")
+}
+
+func TestMockExpressionEvaluator_SetIntFuncOverridesResult(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	evaluator.SetIntResult(42, nil)
+
+	// Act - SetEvaluateIntFunc should override static result
+	evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+		return 100, nil
+	})
+	result, err := evaluator.EvaluateInt("test", ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, 100, result, "SetEvaluateIntFunc should override static result")
+}
+
+// =============================================================================
+// Thread Safety Tests
+// =============================================================================
+
+func TestMockExpressionEvaluator_ThreadSafety_EvaluateBool(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator.SetBoolResult(true, nil)
+	ctx := &interpolation.Context{}
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Act - concurrent EvaluateBool calls
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_, _ = evaluator.EvaluateBool(fmt.Sprintf("expr %d", n), ctx)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition (verified by -race flag)
+	result, err := evaluator.EvaluateBool("final", ctx)
+	assert.NoError(t, err)
+	assert.True(t, result)
+}
+
+func TestMockExpressionEvaluator_ThreadSafety_EvaluateInt(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator.SetIntResult(42, nil)
+	ctx := &interpolation.Context{}
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Act - concurrent EvaluateInt calls
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_, _ = evaluator.EvaluateInt(fmt.Sprintf("expr %d", n), ctx)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition (verified by -race flag)
+	result, err := evaluator.EvaluateInt("final", ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, 42, result)
+}
+
+func TestMockExpressionEvaluator_ThreadSafety_MixedOperations(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator.SetBoolResult(true, nil)
+	evaluator.SetIntResult(42, nil)
+	ctx := &interpolation.Context{}
+	var wg sync.WaitGroup
+	iterations := 50
+
+	// Act - concurrent mixed operations
+	for i := 0; i < iterations; i++ {
+		wg.Add(2)
+
+		// EvaluateBool
+		go func(n int) {
+			defer wg.Done()
+			_, _ = evaluator.EvaluateBool(fmt.Sprintf("bool %d", n), ctx)
+		}(i)
+
+		// EvaluateInt
+		go func(n int) {
+			defer wg.Done()
+			_, _ = evaluator.EvaluateInt(fmt.Sprintf("int %d", n), ctx)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Assert - no race condition
+	boolResult, boolErr := evaluator.EvaluateBool("final bool", ctx)
+	assert.NoError(t, boolErr)
+	assert.True(t, boolResult)
+
+	intResult, intErr := evaluator.EvaluateInt("final int", ctx)
+	assert.NoError(t, intErr)
+	assert.Equal(t, 42, intResult)
+}
+
+// =============================================================================
+// State Isolation Tests
+// =============================================================================
+
+func TestMockExpressionEvaluator_StateIsolation(t *testing.T) {
+	// Arrange
+	evaluator1 := testutil.NewMockExpressionEvaluator()
+	evaluator2 := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	// Act - configure each differently
+	evaluator1.SetBoolResult(true, nil)
+	evaluator1.SetIntResult(42, nil)
+
+	evaluator2.SetBoolResult(false, nil)
+	evaluator2.SetIntResult(100, nil)
+
+	result1Bool, err1Bool := evaluator1.EvaluateBool("test", ctx)
+	result1Int, err1Int := evaluator1.EvaluateInt("test", ctx)
+
+	result2Bool, err2Bool := evaluator2.EvaluateBool("test", ctx)
+	result2Int, err2Int := evaluator2.EvaluateInt("test", ctx)
+
+	// Assert - state should be isolated
+	assert.NoError(t, err1Bool)
+	assert.True(t, result1Bool)
+	assert.NoError(t, err1Int)
+	assert.Equal(t, 42, result1Int)
+
+	assert.NoError(t, err2Bool)
+	assert.False(t, result2Bool)
+	assert.NoError(t, err2Int)
+	assert.Equal(t, 100, result2Int)
+}
+
+func TestMockExpressionEvaluator_MultipleClears(t *testing.T) {
+	// Arrange
+	evaluator := testutil.NewMockExpressionEvaluator()
+	ctx := &interpolation.Context{}
+
+	// Act & Assert - multiple Clear calls should be safe
+	evaluator.Clear()
+	result, err := evaluator.EvaluateBool("test1", ctx)
+	assert.NoError(t, err)
+	assert.False(t, result)
+
+	evaluator.SetBoolResult(true, errors.New("error"))
+	evaluator.Clear()
+	result, err = evaluator.EvaluateBool("test2", ctx)
+	assert.NoError(t, err)
+	assert.False(t, result)
+
+	evaluator.Clear()
+	evaluator.Clear()
+	result, err = evaluator.EvaluateBool("test3", ctx)
+	assert.NoError(t, err)
+	assert.False(t, result, "Multiple Clear calls should be idempotent")
+}
+
+// =============================================================================
+// Real-World Usage Scenarios
+// =============================================================================
+
+func TestMockExpressionEvaluator_RealWorldBoolExpressions(t *testing.T) {
+	expressions := []string{
+		"inputs.count > 5",
+		"states.step1.output == 'success'",
+		"workflow.duration < 60",
+		"error.type == 'timeout'",
+		"inputs.enabled && states.previous.result",
+	}
+
+	for _, expr := range expressions {
+		t.Run(expr, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			evaluator.SetBoolResult(true, nil)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateBool(expr, ctx)
+
+			// Assert
+			assert.NoError(t, err, "Real-world bool expressions should succeed")
+			assert.True(t, result)
+		})
+	}
+}
+
+func TestMockExpressionEvaluator_RealWorldIntExpressions(t *testing.T) {
+	expressions := []string{
+		"inputs.count",
+		"states.step1.retries",
+		"workflow.duration",
+		"(inputs.x + inputs.y) * 2",
+		"len(inputs.items)",
+	}
+
+	for _, expr := range expressions {
+		t.Run(expr, func(t *testing.T) {
+			// Arrange
+			evaluator := testutil.NewMockExpressionEvaluator()
+			evaluator.SetIntResult(42, nil)
+			ctx := &interpolation.Context{}
+
+			// Act
+			result, err := evaluator.EvaluateInt(expr, ctx)
+
+			// Assert
+			assert.NoError(t, err, "Real-world int expressions should succeed")
+			assert.Equal(t, 42, result)
+		})
+	}
 }

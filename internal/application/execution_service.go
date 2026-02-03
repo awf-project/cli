@@ -37,7 +37,7 @@ type ExecutionService struct {
 	store             ports.StateStore
 	logger            ports.Logger
 	resolver          interpolation.Resolver
-	evaluator         ExpressionEvaluator
+	evaluator         ports.ExpressionEvaluator
 	hookExecutor      *HookExecutor
 	loopExecutor      *LoopExecutor
 	stdoutWriter      io.Writer
@@ -48,11 +48,6 @@ type ExecutionService struct {
 	agentRegistry     ports.AgentRegistry
 	conversationMgr   ConversationExecutor // F033: Multi-turn conversation orchestration (interface for testability)
 	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
-}
-
-// ExpressionEvaluator evaluates conditional expressions.
-type ExpressionEvaluator interface {
-	Evaluate(expr string, ctx *interpolation.Context) (bool, error)
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -80,7 +75,7 @@ func (s *ExecutionService) SetAgentRegistry(registry ports.AgentRegistry) {
 
 // SetEvaluator configures the expression evaluator for conditional transitions.
 // When set, enables evaluation of "when" clauses in workflow transitions.
-func (s *ExecutionService) SetEvaluator(evaluator ExpressionEvaluator) {
+func (s *ExecutionService) SetEvaluator(evaluator ports.ExpressionEvaluator) {
 	s.evaluator = evaluator
 }
 
@@ -126,7 +121,7 @@ func NewExecutionServiceWithEvaluator(
 	logger ports.Logger,
 	resolver interpolation.Resolver,
 	historySvc *HistoryService,
-	evaluator ExpressionEvaluator,
+	evaluator ports.ExpressionEvaluator,
 ) *ExecutionService {
 	return &ExecutionService{
 		workflowSvc:      wfSvc,
@@ -399,7 +394,7 @@ func (s *ExecutionService) resolveNextStep(
 	// If transitions are defined, evaluate them first
 	if len(step.Transitions) > 0 && s.evaluator != nil {
 		evalFunc := func(expr string) (bool, error) {
-			return s.evaluator.Evaluate(expr, intCtx)
+			return s.evaluator.EvaluateBool(expr, intCtx)
 		}
 
 		nextStep, found, err := step.Transitions.EvaluateFirstMatch(evalFunc)

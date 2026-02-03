@@ -175,10 +175,10 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 //
 // Parameters:
 //   - t: testing.T instance for test context
-//   - evaluator: application.ExpressionEvaluator implementation for evaluating "when" clauses
+//   - evaluator: ports.ExpressionEvaluator implementation for evaluating "when" clauses
 //
 // Returns a harness ready for configuration via With*() methods.
-func NewTestHarnessWithEvaluator(t *testing.T, evaluator application.ExpressionEvaluator) *ServiceTestHarness {
+func NewTestHarnessWithEvaluator(t *testing.T, evaluator ports.ExpressionEvaluator) *ServiceTestHarness {
 	// Create default mock dependencies
 	repository := testutil.NewMockWorkflowRepository()
 	store := testutil.NewMockStateStore()

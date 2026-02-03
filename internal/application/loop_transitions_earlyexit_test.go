@@ -43,7 +43,7 @@ func TestEarlyExitTransition_HappyPath_ExitFromFirstStep(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -125,7 +125,7 @@ func TestEarlyExitTransition_HappyPath_ExitFromMiddleStep(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -204,7 +204,7 @@ func TestEarlyExitTransition_HappyPath_ExitFromLastStep(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -286,7 +286,7 @@ func TestEarlyExitTransition_HappyPath_NoEarlyExit(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["states.step2.Output == 'done'"] = true
+	evaluator.boolResults["states.step2.Output == 'done'"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -357,7 +357,7 @@ func TestEarlyExitTransition_EdgeCase_ExitOnSecondIteration(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -436,7 +436,7 @@ func TestEarlyExitTransition_EdgeCase_MultipleExternalSteps(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -521,7 +521,7 @@ func TestEarlyExitTransition_EdgeCase_SingleStepBodyEarlyExit(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -587,7 +587,7 @@ func TestEarlyExitTransition_EdgeCase_EmptyNextStepValue(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -664,7 +664,7 @@ func TestEarlyExitTransition_ErrorHandling_StepErrorWithTransition(t *testing.T)
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -823,7 +823,7 @@ func TestEarlyExitTransition_SpecReproduction(t *testing.T) {
 	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
-	evaluator.results["true"] = true
+	evaluator.boolResults["true"] = true
 	resolver := newConfigurableMockResolver()
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 

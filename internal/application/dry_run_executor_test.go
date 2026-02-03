@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/expression"
+	"github.com/vanoix/awf/internal/testutil"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -53,7 +53,7 @@ func TestDryRunExecutor_Execute_LinearWorkflow(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	inputs := map[string]any{"file": "test.txt"}
@@ -89,7 +89,7 @@ func TestDryRunExecutor_Execute_WithParallelStep(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "parallel", nil)
@@ -139,7 +139,7 @@ func TestDryRunExecutor_Execute_ForEachLoop(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	inputs := map[string]any{"files": []string{"a.txt", "b.txt"}}
@@ -192,7 +192,7 @@ func TestDryRunExecutor_Execute_WhileLoop(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "while", nil)
@@ -238,7 +238,7 @@ func TestDryRunExecutor_Execute_ConditionalTransitions(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "conditional", nil)
@@ -280,7 +280,7 @@ func TestDryRunExecutor_Execute_WithHooks(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "hooks", nil)
@@ -323,7 +323,7 @@ func TestDryRunExecutor_Execute_InputResolution(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	inputs := map[string]any{"name": "test"}
@@ -359,7 +359,7 @@ func TestDryRunExecutor_Execute_MissingRequiredInput(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	_, err := executor.Execute(context.Background(), "required", nil)
@@ -373,7 +373,7 @@ func TestDryRunExecutor_Execute_WorkflowNotFound(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	_, err := executor.Execute(context.Background(), "nonexistent", nil)
@@ -410,7 +410,7 @@ func TestDryRunExecutor_Execute_RetryConfig(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "retry", nil)
@@ -455,7 +455,7 @@ func TestDryRunExecutor_Execute_CaptureConfig(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "capture", nil)
@@ -496,7 +496,7 @@ func TestDryRunExecutor_Execute_TimeoutConfig(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "timeout", nil)
@@ -535,7 +535,7 @@ func TestDryRunExecutor_Execute_ContinueOnError(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "continue", nil)
@@ -573,7 +573,7 @@ func TestDryRunExecutor_Execute_WorkingDirectory(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "dir", nil)
@@ -612,7 +612,7 @@ func TestDryRunExecutor_Execute_StepDescription(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "desc", nil)
@@ -670,7 +670,7 @@ func TestDryRunExecutor_Execute_NestedLoops(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "nested", nil)
@@ -712,7 +712,7 @@ func TestDryRunExecutor_Execute_ParallelWithMaxConcurrent(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "concurrent", nil)
@@ -754,7 +754,7 @@ func TestDryRunExecutor_Execute_CommandInterpolation(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	inputs := map[string]any{"file": "test.txt"}
@@ -784,7 +784,7 @@ func TestDryRunExecutor_Execute_ContextCancellation(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -818,7 +818,7 @@ func TestDryRunExecutor_Execute_WithWorkflowHooks(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "wfhooks", nil)
@@ -855,7 +855,7 @@ func TestDryRunExecutor_Execute_TerminalStates(t *testing.T) {
 
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 			resolver := interpolation.NewTemplateResolver()
-			evaluator := expression.NewExprEvaluator()
+			evaluator := testutil.NewMockExpressionEvaluator()
 			executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 			plan, err := executor.Execute(context.Background(), "terminal", nil)
@@ -894,7 +894,7 @@ func TestDryRunExecutor_Execute_LoopBreakCondition(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	plan, err := executor.Execute(context.Background(), "break", nil)
@@ -966,7 +966,7 @@ func TestDryRunExecutor_Execute_AllStepTypes(t *testing.T) {
 
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 			resolver := interpolation.NewTemplateResolver()
-			evaluator := expression.NewExprEvaluator()
+			evaluator := testutil.NewMockExpressionEvaluator()
 			executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 			plan, err := executor.Execute(context.Background(), "test", nil)
@@ -1013,7 +1013,7 @@ func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Create template service with mock template repository
@@ -1054,7 +1054,7 @@ func TestDryRunExecutor_SetTemplateService_Nil(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Act: Set nil template service (explicitly allowing nil)
@@ -1091,7 +1091,7 @@ func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Create first template service
@@ -1153,7 +1153,7 @@ func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Create and set template service
@@ -1192,7 +1192,7 @@ func TestDryRunExecutor_SetTemplateService_NoTemplateService(t *testing.T) {
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
 	// Act: Execute without ever calling SetTemplateService

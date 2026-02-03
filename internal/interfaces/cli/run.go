@@ -17,11 +17,11 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/agents"
 	"github.com/vanoix/awf/internal/infrastructure/config"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infra_expression "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 	"golang.org/x/term"
 )
@@ -251,7 +251,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infra_expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Setup agent registry for F039 agent step execution
@@ -409,7 +409,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 		silent:    cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable,
 	}
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infra_expression.NewExprEvaluator()
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
@@ -477,7 +477,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		silent:    false,
 	}
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infra_expression.NewExprEvaluator()
 
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
@@ -849,7 +849,7 @@ func runSingleStep(
 	// Create services
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infra_expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Setup agent registry for F039 agent step execution
