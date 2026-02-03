@@ -251,7 +251,7 @@ func TestExecCLIExecutor_Run_NilContext(t *testing.T) {
 	}()
 
 	// If no panic, should return error
-	_, _, err := executor.Run(context.TODO(), "echo", "test")
+	_, _, err := executor.Run(context.Background(), "echo", "test")
 	if err != nil {
 		assert.Error(t, err, "nil context should cause error")
 	}

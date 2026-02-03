@@ -83,6 +83,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C046**: Replace context.TODO() with context.Background() in Test Files
+  - Replaced `context.TODO()` with `context.Background()` in `internal/testutil/mocks_cli_executor_test.go:306` and `internal/infrastructure/agents/cli_executor_test.go:254`
+  - Improves semantic accuracy by using the appropriate context function for test scenarios
+  - `context.Background()` correctly indicates an intentional empty context for testing, not a pending implementation
+  - Aligns with Go documentation: `context.Background()` is the recommended choice for tests, main functions, and initialization
+  - Zero production impact: both functions return identical `context.emptyCtx` values at runtime
+  - Follows established codebase pattern: 127+ test functions already use `context.Background()`
+
 - **C045**: Add Package-Level Documentation to Core Packages
   - Created `internal/domain/workflow/doc.go` documenting workflow entities, state machine, and 65+ types across 12 categories (Workflow, Step, State, Context, Configuration, Results, Hooks, Templates, Conversations, Validation, Errors, Constants)
   - Created `internal/domain/ports/doc.go` cataloging 26 port interfaces grouped by architectural concern (Repository, Execution, Agent, Plugin, Interactive, Logging, History)
