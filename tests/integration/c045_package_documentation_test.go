@@ -302,7 +302,7 @@ func TestPackageDocumentation_MalformedFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	malformedPath := filepath.Join(tmpDir, "malformed.go")
 
-	err := os.WriteFile(malformedPath, []byte("package test\n\nfunc ( invalid syntax"), 0644)
+	err := os.WriteFile(malformedPath, []byte("package test\n\nfunc ( invalid syntax"), 0o644)
 	require.NoError(t, err)
 
 	// Should fail to parse
@@ -316,7 +316,7 @@ func TestPackageDocumentation_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	emptyPath := filepath.Join(tmpDir, "empty.go")
 
-	err := os.WriteFile(emptyPath, []byte(""), 0644)
+	err := os.WriteFile(emptyPath, []byte(""), 0o644)
 	require.NoError(t, err)
 
 	// Should fail to parse empty file
@@ -331,7 +331,7 @@ func TestPackageDocumentation_NoPackageComment(t *testing.T) {
 	noCommentPath := filepath.Join(tmpDir, "nocomment.go")
 
 	// File with package but no comment
-	err := os.WriteFile(noCommentPath, []byte("package test\n"), 0644)
+	err := os.WriteFile(noCommentPath, []byte("package test\n"), 0o644)
 	require.NoError(t, err)
 
 	fset := token.NewFileSet()

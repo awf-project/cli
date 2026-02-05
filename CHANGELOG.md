@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **C049**: Refactored `InteractivePrompt` interface following Interface Segregation Principle
+  - Split 11-method monolithic interface into 3 focused interfaces: `StepPresenter` (4 methods), `StatusPresenter` (4 methods), `UserInteraction` (3 methods)
+  - Composite `InteractivePrompt` embeds all three for backward compatibility
+  - Added compile-time interface satisfaction checks for `CLIPrompt`
+  - AST-based integration test verifies ISP compliance
+  - Zero breaking changes: all existing consumers compile unchanged
+
 ### Added
 
 - **C048**: Actionable error message hints

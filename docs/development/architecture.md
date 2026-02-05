@@ -99,6 +99,34 @@ type PluginManager interface {
     Init(name string, config map[string]interface{}) error
     Shutdown(name string) error
 }
+
+// Interactive mode ports follow ISP with focused interfaces:
+type StepPresenter interface {
+    ShowHeader(workflowName string)
+    ShowStepDetails(info *workflow.InteractiveStepInfo)
+    ShowExecuting(stepName string)
+    ShowStepResult(state *workflow.StepState, nextStep string)
+}
+
+type StatusPresenter interface {
+    ShowAborted()
+    ShowSkipped(stepName string, nextStep string)
+    ShowCompleted(status workflow.ExecutionStatus)
+    ShowError(err error)
+}
+
+type UserInteraction interface {
+    PromptAction(hasRetry bool) (workflow.InteractiveAction, error)
+    EditInput(name string, current any) (any, error)
+    ShowContext(ctx *workflow.RuntimeContext)
+}
+
+// Composite for backward compatibility (io.ReadWriter pattern):
+type InteractivePrompt interface {
+    StepPresenter
+    StatusPresenter
+    UserInteraction
+}
 ```
 
 ### Application Layer

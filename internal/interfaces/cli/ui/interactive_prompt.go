@@ -12,8 +12,13 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// Ensure CLIPrompt implements InteractivePrompt.
-var _ ports.InteractivePrompt = (*CLIPrompt)(nil)
+// Ensure CLIPrompt implements InteractivePrompt and all focused interfaces.
+var (
+	_ ports.InteractivePrompt = (*CLIPrompt)(nil)
+	_ ports.StepPresenter     = (*CLIPrompt)(nil)
+	_ ports.StatusPresenter   = (*CLIPrompt)(nil)
+	_ ports.UserInteraction   = (*CLIPrompt)(nil)
+)
 
 // CLIPrompt implements InteractivePrompt for terminal-based interaction.
 type CLIPrompt struct {

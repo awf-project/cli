@@ -74,7 +74,7 @@ func FileNotFoundHintGenerator(err *errors.StructuredError) []errors.Hint {
 		filename string
 		distance int
 	}
-	var candidates []candidate
+	candidates := make([]candidate, 0, len(entries))
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -201,7 +201,7 @@ func InvalidStateHintGenerator(err *errors.StructuredError) []errors.Hint {
 	}
 
 	// Convert to []string, validating each element
-	var availableStates []string
+	availableStates := make([]string, 0, len(availableStatesInterface))
 	for _, stateInterface := range availableStatesInterface {
 		stateStr, ok := stateInterface.(string)
 		if !ok {
@@ -221,7 +221,7 @@ func InvalidStateHintGenerator(err *errors.StructuredError) []errors.Hint {
 		stateName string
 		distance  int
 	}
-	var candidates []candidate
+	candidates := make([]candidate, 0, len(availableStates))
 
 	for _, stateName := range availableStates {
 		distance := stringutil.LevenshteinDistance(missingState, stateName)
