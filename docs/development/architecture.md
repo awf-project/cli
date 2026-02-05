@@ -94,10 +94,20 @@ type Executor interface {
 }
 
 type PluginManager interface {
-    Discover() ([]*plugin.Manifest, error)
-    Load(name string) error
-    Init(name string, config map[string]interface{}) error
-    Shutdown(name string) error
+    // Discover finds plugins in the plugins directory.
+    Discover(ctx context.Context) ([]*plugin.PluginInfo, error)
+    // Load loads a plugin by name.
+    Load(ctx context.Context, name string) error
+    // Init initializes a loaded plugin.
+    Init(ctx context.Context, name string, config map[string]any) error
+    // Shutdown stops a running plugin.
+    Shutdown(ctx context.Context, name string) error
+    // ShutdownAll stops all running plugins.
+    ShutdownAll(ctx context.Context) error
+    // Get returns plugin info by name.
+    Get(name string) (*plugin.PluginInfo, bool)
+    // List returns all known plugins.
+    List() []*plugin.PluginInfo
 }
 
 // Interactive mode ports follow ISP with focused interfaces:
@@ -332,6 +342,20 @@ Context Cancellation
 - **Interfaces:** End-to-end CLI tests
 
 See [Testing](testing.md) for details.
+
+## Interface Design Decisions
+
+### PluginManager: Keep Unified (C050)
+
+The PluginManager interface (7 methods) was evaluated for ISP compliance and kept unified.
+
+**Rationale:**
+- Single consumer: Only PluginService uses PluginManager, calling all 7 methods
+- Cross-concern coupling: DisablePlugin uses both Get() (query) and Shutdown() (lifecycle) together
+- 7 methods is within acceptable threshold (Go stdlib net.Conn has 8)
+- Plugin subsystem already has 8 focused interfaces averaging 3.75 methods each
+
+**Contrast with C049:** InteractivePrompt (11 methods, 3 consumers) was split into focused interfaces because different consumers needed distinct method subsets.
 
 ## See Also
 

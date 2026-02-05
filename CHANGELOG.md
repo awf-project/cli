@@ -118,6 +118,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C050**: PluginManager Interface ISP Compliance Review (Reaffirmed)
+  - Reaffirmed C037 decision: Keep PluginManager unified (7 methods) after full ISP analysis
+  - Single consumer (PluginService) uses all 7 methods with cross-concern coupling in DisablePlugin
+  - Added AST-based structural tests verifying method counts for all 8 plugin interfaces
+  - Created integration test suite in `tests/integration/c050_isp_compliance_test.go`
+  - Removed dead code: `ErrVersionNotImplemented` (version.go), `ErrLoaderNotImplemented` (loader.go)
+  - Updated architecture.md with current 7-method PluginManager definition and Interface Design Decisions section
+  - All tests pass with race detector (`make test-race`)
+  - Impact: +570 LOC (tests, documentation), -20 LOC (dead error variables), net +550 LOC
+
 - **C046**: Replace context.TODO() with context.Background() in Test Files
   - Replaced `context.TODO()` with `context.Background()` in `internal/testutil/mocks_cli_executor_test.go:306` and `internal/infrastructure/agents/cli_executor_test.go:254`
   - Improves semantic accuracy by using the appropriate context function for test scenarios

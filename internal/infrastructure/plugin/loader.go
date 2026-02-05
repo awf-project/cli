@@ -52,10 +52,6 @@ func WrapLoaderError(op, path string, cause error) *LoaderError {
 	}
 }
 
-// ErrLoaderNotImplemented indicates a stub method that needs implementation.
-// Kept for test compatibility during TDD RED phase.
-var ErrLoaderNotImplemented = fmt.Errorf("loader: not implemented")
-
 // ManifestFileName is the expected filename for plugin manifests.
 const ManifestFileName = "plugin.yaml"
 

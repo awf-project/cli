@@ -3,9 +3,13 @@ package ports_test
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/testutil"
@@ -337,6 +341,351 @@ func TestPluginManager_CohesionAnalysis_C037(t *testing.T) {
 	_ = mgr.List()
 
 	// All 7 methods callable - demonstrates cohesion
+}
+
+// Feature: C050
+// AST-based ISP compliance tests verifying PluginManager interface structure
+
+// TestPluginManager_MethodCount_C050 verifies that PluginManager has exactly 7 methods
+// using AST parsing. This test structurally enforces the C050 architectural decision
+// to keep PluginManager unified rather than split it per ISP.
+func TestPluginManager_MethodCount_C050(t *testing.T) {
+	// Given: The plugin.go file in the same package
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+	require.NoError(t, err, "should parse plugin.go")
+
+	// When: Inspecting the AST for PluginManager interface
+	var methodCount int
+	var found bool
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "PluginManager" {
+			if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+				found = true
+				methodCount = len(iface.Methods.List)
+			}
+		}
+		return true
+	})
+
+	// Then: PluginManager should exist and have exactly 7 methods
+	assert.True(t, found, "PluginManager interface should exist in plugin.go")
+	assert.Equal(t, 7, methodCount,
+		"PluginManager should have exactly 7 methods (C050 decision: keep unified, not split per ISP)")
+}
+
+// TestPluginManager_NoEmbedding_C050 verifies that PluginManager is a standalone
+// interface with no embedded interfaces, ensuring it maintains single-interface cohesion.
+func TestPluginManager_NoEmbedding_C050(t *testing.T) {
+	// Given: The plugin.go file in the same package
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+	require.NoError(t, err, "should parse plugin.go")
+
+	// When: Inspecting method declarations in PluginManager
+	var hasEmbedding bool
+	var found bool
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "PluginManager" {
+			if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+				found = true
+				// Check each field in the interface
+				for _, field := range iface.Methods.List {
+					// If Names is nil or empty, it's an embedded interface
+					if len(field.Names) == 0 {
+						hasEmbedding = true
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	// Then: PluginManager should exist and have no embedded interfaces
+	assert.True(t, found, "PluginManager interface should exist in plugin.go")
+	assert.False(t, hasEmbedding,
+		"PluginManager should have no embedded interfaces (C050: standalone single-interface design)")
+}
+
+// TestPluginManager_MethodNames_C050 verifies the exact method names in PluginManager
+// match the expected interface contract.
+func TestPluginManager_MethodNames_C050(t *testing.T) {
+	// Given: The plugin.go file in the same package
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+	require.NoError(t, err, "should parse plugin.go")
+
+	// When: Extracting method names from PluginManager interface
+	var methodNames []string
+	var found bool
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "PluginManager" {
+			if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+				found = true
+				for _, field := range iface.Methods.List {
+					for _, name := range field.Names {
+						methodNames = append(methodNames, name.Name)
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	// Then: PluginManager should have expected lifecycle and query methods
+	assert.True(t, found, "PluginManager interface should exist in plugin.go")
+
+	expectedMethods := []string{
+		"Discover",    // Discovery
+		"Load",        // Lifecycle
+		"Init",        // Lifecycle
+		"Shutdown",    // Lifecycle
+		"ShutdownAll", // Lifecycle
+		"Get",         // Query
+		"List",        // Query
+	}
+
+	assert.ElementsMatch(t, expectedMethods, methodNames,
+		"PluginManager should have exactly these 7 methods (C050 decision)")
+}
+
+// TestPluginInterfaces_MethodCounts_C050 documents all 8 plugin interface method counts.
+// This test serves as living documentation, catching unintended interface changes.
+// C050: ISP compliance review - comprehensive interface structure validation.
+func TestPluginInterfaces_MethodCounts_C050(t *testing.T) {
+	// Given: The plugin.go file in the same package
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+	require.NoError(t, err, "should parse plugin.go")
+
+	// When: Testing all 8 plugin interfaces
+	tests := []struct {
+		name        string
+		wantMethods int
+		reason      string
+	}{
+		{
+			name:        "Plugin",
+			wantMethods: 4,
+			reason:      "4 methods: Name, Version, Init, Shutdown",
+		},
+		{
+			name:        "PluginManager",
+			wantMethods: 7,
+			reason:      "7 methods: Discover, Load, Init, Shutdown, ShutdownAll, Get, List (C050: kept unified)",
+		},
+		{
+			name:        "OperationProvider",
+			wantMethods: 3,
+			reason:      "3 methods: GetOperation, ListOperations, Execute",
+		},
+		{
+			name:        "PluginRegistry",
+			wantMethods: 3,
+			reason:      "3 methods: RegisterOperation, UnregisterOperation, Operations",
+		},
+		{
+			name:        "PluginLoader",
+			wantMethods: 3,
+			reason:      "3 methods: DiscoverPlugins, LoadPlugin, ValidatePlugin",
+		},
+		{
+			name:        "PluginStore",
+			wantMethods: 4,
+			reason:      "4 methods: Save, Load, GetState, ListDisabled",
+		},
+		{
+			name:        "PluginConfig",
+			wantMethods: 4,
+			reason:      "4 methods: SetEnabled, IsEnabled, GetConfig, SetConfig",
+		},
+		{
+			name:        "PluginStateStore",
+			wantMethods: 0,
+			reason:      "0 direct methods (composite: embeds PluginStore + PluginConfig)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// When: Finding and counting interface methods
+			var methodCount int
+			var found bool
+			ast.Inspect(node, func(n ast.Node) bool {
+				if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == tt.name {
+					if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+						found = true
+						// Count only direct methods (fields with names)
+						// Embedded interfaces have no field names
+						for _, field := range iface.Methods.List {
+							if len(field.Names) > 0 {
+								methodCount++
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			// Then: Interface should exist and have expected method count
+			assert.True(t, found, "%s interface should exist in plugin.go", tt.name)
+			assert.Equal(t, tt.wantMethods, methodCount,
+				"%s should have %d direct methods: %s", tt.name, tt.wantMethods, tt.reason)
+		})
+	}
+}
+
+// Helper function to count interface methods and embeddings from AST
+func countInterfaceMethodsAndEmbeddings(node *ast.File, interfaceName string) (found bool, methodCount, embeddedCount int) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == interfaceName {
+			if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+				found = true
+				for _, field := range iface.Methods.List {
+					if len(field.Names) > 0 {
+						methodCount++
+					} else {
+						embeddedCount++
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found, methodCount, embeddedCount
+}
+
+// TestPluginInterfaces_MethodCounts_EdgeCases_C050 verifies edge cases in AST-based
+// method counting to ensure robust handling of nonexistent interfaces and parsing errors.
+func TestPluginInterfaces_MethodCounts_EdgeCases_C050(t *testing.T) {
+	t.Run("NonexistentInterface", func(t *testing.T) {
+		// Given: A parsed plugin.go AST
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+		require.NoError(t, err, "should parse plugin.go")
+
+		// When: Searching for a nonexistent interface
+		found, methodCount, _ := countInterfaceMethodsAndEmbeddings(node, "NonExistentInterface")
+
+		// Then: Interface should not be found
+		assert.False(t, found, "nonexistent interface should not be found")
+		assert.Equal(t, 0, methodCount, "method count should be 0 for nonexistent interface")
+	})
+
+	t.Run("ParseErrorHandling", func(t *testing.T) {
+		// Given: An attempt to parse a nonexistent file
+		fset := token.NewFileSet()
+		_, err := parser.ParseFile(fset, "nonexistent_file.go", nil, 0)
+
+		// Then: Should return a parse error
+		assert.Error(t, err, "parsing nonexistent file should return error")
+	})
+
+	t.Run("EmptyInterfaceEmbedding", func(t *testing.T) {
+		// Given: The PluginStateStore interface (0 direct methods, only embedding)
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, "plugin.go", nil, 0)
+		require.NoError(t, err, "should parse plugin.go")
+
+		// When: Counting methods for PluginStateStore
+		found, methodCount, embeddedCount := countInterfaceMethodsAndEmbeddings(node, "PluginStateStore")
+
+		// Then: Should have 0 direct methods but 2 embedded interfaces
+		assert.True(t, found, "PluginStateStore should exist")
+		assert.Equal(t, 0, methodCount, "PluginStateStore should have 0 direct methods")
+		assert.Equal(t, 2, embeddedCount, "PluginStateStore should embed 2 interfaces (PluginStore + PluginConfig)")
+	})
+}
+
+// Helper function to check if a type name is an interface in AST
+func isTypeAnInterface(node *ast.File, typeName string) (found, isInterface bool) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == typeName {
+			found = true
+			_, isInterface = ts.Type.(*ast.InterfaceType)
+		}
+		return true
+	})
+	return found, isInterface
+}
+
+// Helper function to count methods in an empty interface, handling nil safely
+func countMethodsInEmptyInterface(node *ast.File, interfaceName string) (found bool, methodCount int) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == interfaceName {
+			if iface, ok := ts.Type.(*ast.InterfaceType); ok {
+				found = true
+				if iface.Methods != nil && iface.Methods.List != nil {
+					for _, field := range iface.Methods.List {
+						if len(field.Names) > 0 {
+							methodCount++
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found, methodCount
+}
+
+// TestPluginInterfaces_MethodCounts_ErrorHandling_C050 verifies error handling
+// in the AST-based method counting logic.
+func TestPluginInterfaces_MethodCounts_ErrorHandling_C050(t *testing.T) {
+	t.Run("MalformedGoFile", func(t *testing.T) {
+		// Given: A malformed Go source file
+		malformedSource := `package ports
+
+type BrokenInterface interface {
+	MissingClosingBrace()
+`
+		// When: Attempting to parse the malformed source
+		fset := token.NewFileSet()
+		_, err := parser.ParseFile(fset, "malformed.go", malformedSource, 0)
+
+		// Then: Should return a parse error
+		assert.Error(t, err, "parsing malformed Go source should return error")
+	})
+
+	t.Run("NonInterfaceType", func(t *testing.T) {
+		// Given: A Go file with a struct named like an interface
+		sourceWithStruct := `package ports
+
+type NotAnInterface struct {
+	Field1 string
+	Field2 int
+}
+`
+		// When: Parsing and looking for "NotAnInterface"
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, "struct.go", sourceWithStruct, 0)
+		require.NoError(t, err, "should parse valid Go source")
+
+		found, isInterface := isTypeAnInterface(node, "NotAnInterface")
+
+		// Then: Should find the type but recognize it's not an interface
+		assert.True(t, found, "NotAnInterface type should be found")
+		assert.False(t, isInterface, "NotAnInterface should not be an interface type")
+	})
+
+	t.Run("NilMethodsList", func(t *testing.T) {
+		// Given: An empty interface (no methods)
+		emptyInterfaceSource := `package ports
+
+type EmptyInterface interface {
+}
+`
+		// When: Parsing and counting methods
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, "empty.go", emptyInterfaceSource, 0)
+		require.NoError(t, err, "should parse valid Go source")
+
+		found, methodCount := countMethodsInEmptyInterface(node, "EmptyInterface")
+
+		// Then: Should find the interface with 0 methods
+		assert.True(t, found, "EmptyInterface should be found")
+		assert.Equal(t, 0, methodCount, "EmptyInterface should have 0 methods")
+	})
 }
 
 // Plugin interface tests
