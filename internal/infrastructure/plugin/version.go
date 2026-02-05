@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// ErrVersionNotImplemented indicates a stub method that needs implementation.
-var ErrVersionNotImplemented = errors.New("version: not implemented")
-
 // Version comparison operators supported by the constraint parser.
 const (
 	OpEqual          = "==" // Exact match
