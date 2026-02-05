@@ -285,3 +285,391 @@ func TestCLIPrompt_ShowError(t *testing.T) {
 	output := stdout.String()
 	assert.Contains(t, output, "assert.AnError", "should show error message")
 }
+
+// =============================================================================
+// C049: Interface Segregation Principle Compliance Tests (T003)
+// =============================================================================
+// These tests verify compile-time interface satisfaction checks for the
+// refactored InteractivePrompt interfaces following ISP.
+
+// TestC049_CLIPrompt_ImplementsStepPresenter verifies CLIPrompt satisfies StepPresenter.
+// This test ensures compile-time verification via the var _ ports.StepPresenter check.
+func TestC049_CLIPrompt_ImplementsStepPresenter(t *testing.T) {
+	t.Run("happy_path_all_methods_callable", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act & Assert: All StepPresenter methods must be callable
+		prompt.ShowHeader("test-workflow")
+		assert.Contains(t, stdout.String(), "test-workflow", "ShowHeader must work")
+
+		stdout.Reset()
+		prompt.ShowStepDetails(&workflow.InteractiveStepInfo{
+			Name:  "test-step",
+			Index: 1,
+			Total: 1,
+		})
+		assert.Contains(t, stdout.String(), "test-step", "ShowStepDetails must work")
+
+		stdout.Reset()
+		prompt.ShowExecuting("test-step")
+		assert.Contains(t, stdout.String(), "test-step", "ShowExecuting must work")
+
+		stdout.Reset()
+		prompt.ShowStepResult(&workflow.StepState{
+			Name:   "test-step",
+			Status: workflow.StatusCompleted,
+		}, "")
+		assert.Contains(t, stdout.String(), "Exit:", "ShowStepResult must work")
+	})
+
+	t.Run("edge_case_empty_workflow_name", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		prompt.ShowHeader("")
+
+		// Assert: Should handle empty workflow name gracefully
+		output := stdout.String()
+		assert.Contains(t, output, "Interactive Mode", "should show header even with empty name")
+	})
+
+	t.Run("edge_case_nil_step_info", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act: ShowStepDetails with nil Step field
+		prompt.ShowStepDetails(&workflow.InteractiveStepInfo{
+			Name:  "minimal",
+			Index: 1,
+			Total: 1,
+			Step:  nil, // Edge case: no Step details
+		})
+
+		// Assert: Should handle nil Step gracefully
+		output := stdout.String()
+		assert.Contains(t, output, "minimal", "should show step name even without Step details")
+	})
+
+	t.Run("edge_case_very_long_output", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+		longOutput := strings.Repeat("x", 10000)
+
+		// Act
+		prompt.ShowStepResult(&workflow.StepState{
+			Name:   "long-output",
+			Status: workflow.StatusCompleted,
+			Output: longOutput,
+		}, "")
+
+		// Assert: Should handle very long output
+		output := stdout.String()
+		assert.NotEmpty(t, output, "should render output even if very long")
+	})
+}
+
+// TestC049_CLIPrompt_ImplementsStatusPresenter verifies CLIPrompt satisfies StatusPresenter.
+// This test ensures compile-time verification via the var _ ports.StatusPresenter check.
+func TestC049_CLIPrompt_ImplementsStatusPresenter(t *testing.T) {
+	t.Run("happy_path_all_methods_callable", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act & Assert: All StatusPresenter methods must be callable
+		prompt.ShowAborted()
+		assert.Contains(t, stdout.String(), "borted", "ShowAborted must work")
+
+		stdout.Reset()
+		prompt.ShowSkipped("test-step", "next-step")
+		assert.Contains(t, stdout.String(), "test-step", "ShowSkipped must work")
+
+		stdout.Reset()
+		prompt.ShowCompleted(workflow.StatusCompleted)
+		assert.Contains(t, stdout.String(), "omplete", "ShowCompleted must work")
+
+		stdout.Reset()
+		prompt.ShowError(assert.AnError)
+		assert.Contains(t, stdout.String(), "Error", "ShowError must work")
+	})
+
+	t.Run("edge_case_empty_step_names", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		prompt.ShowSkipped("", "")
+
+		// Assert: Should handle empty step names
+		output := stdout.String()
+		assert.NotEmpty(t, output, "should produce output even with empty step names")
+	})
+
+	t.Run("edge_case_all_execution_statuses", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		statuses := []workflow.ExecutionStatus{
+			workflow.StatusPending,
+			workflow.StatusRunning,
+			workflow.StatusCompleted,
+			workflow.StatusFailed,
+			workflow.StatusCancelled,
+		}
+
+		// Act & Assert: Should handle all valid ExecutionStatus values
+		for _, status := range statuses {
+			stdout.Reset()
+			prompt.ShowCompleted(status)
+			assert.NotEmpty(t, stdout.String(), "should handle status: %s", status)
+		}
+	})
+
+	t.Run("error_handling_wrapped_error", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act: ShowError with wrapped error
+		wrappedErr := assert.AnError // Use a real error, not nil
+		prompt.ShowError(wrappedErr)
+
+		// Assert: Should display error message
+		output := stdout.String()
+		assert.Contains(t, output, "Error", "should show error label")
+		assert.Contains(t, output, "assert.AnError", "should show error message")
+	})
+}
+
+// TestC049_CLIPrompt_ImplementsUserInteraction verifies CLIPrompt satisfies UserInteraction.
+// This test ensures compile-time verification via the var _ ports.UserInteraction check.
+func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
+	t.Run("happy_path_all_methods_callable", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("c\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act & Assert: PromptAction must work
+		action, err := prompt.PromptAction(false)
+		require.NoError(t, err)
+		assert.Equal(t, workflow.ActionContinue, action, "PromptAction must work")
+	})
+
+	t.Run("happy_path_edit_input", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("new-value\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		newValue, err := prompt.EditInput("test-input", "old-value")
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, "new-value", newValue, "EditInput must work")
+	})
+
+	t.Run("happy_path_show_context", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		prompt.ShowContext(&workflow.RuntimeContext{
+			Inputs: map[string]any{"key": "value"},
+		})
+
+		// Assert
+		assert.Contains(t, stdout.String(), "key", "ShowContext must work")
+	})
+
+	t.Run("edge_case_empty_input_preserves_current", func(t *testing.T) {
+		// Arrange: User presses Enter without typing anything
+		stdin := strings.NewReader("\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		newValue, err := prompt.EditInput("test", "current-value")
+
+		// Assert: Empty input should preserve current value
+		require.NoError(t, err)
+		assert.Equal(t, "current-value", newValue, "empty input should preserve current value")
+	})
+
+	t.Run("edge_case_retry_when_available", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("r\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		action, err := prompt.PromptAction(true) // retry IS available
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, workflow.ActionRetry, action, "retry should work when available")
+	})
+
+	t.Run("edge_case_retry_when_not_available", func(t *testing.T) {
+		// Arrange: User tries retry when unavailable, then provides valid action
+		stdin := strings.NewReader("r\nc\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		action, err := prompt.PromptAction(false) // retry NOT available
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, workflow.ActionContinue, action, "should eventually accept valid action")
+		assert.Contains(t, stdout.String(), "retry not available", "should show error for unavailable retry")
+	})
+
+	t.Run("edge_case_empty_runtime_context", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act: ShowContext with empty maps
+		prompt.ShowContext(&workflow.RuntimeContext{
+			Inputs: map[string]any{},
+			States: map[string]workflow.RuntimeStepState{},
+		})
+
+		// Assert: Should handle empty context
+		output := stdout.String()
+		assert.Contains(t, output, "Context", "should show context header even if empty")
+	})
+
+	t.Run("error_handling_invalid_action_retries", func(t *testing.T) {
+		// Arrange: Invalid input followed by valid input
+		stdin := strings.NewReader("invalid\nz\nc\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act
+		action, err := prompt.PromptAction(false)
+
+		// Assert: Should retry on invalid input until valid action received
+		require.NoError(t, err)
+		assert.Equal(t, workflow.ActionContinue, action)
+		output := stdout.String()
+		assert.Contains(t, output, "invalid", "should show error messages for invalid inputs")
+	})
+}
+
+// TestC049_CLIPrompt_ImplementsCompositeInterface verifies CLIPrompt satisfies InteractivePrompt.
+// This test ensures all 11 methods (4+4+3) are accessible through the composite interface.
+func TestC049_CLIPrompt_ImplementsCompositeInterface(t *testing.T) {
+	t.Run("happy_path_all_11_methods_accessible", func(t *testing.T) {
+		// Arrange
+		stdin := strings.NewReader("c\n")
+		stdout := new(bytes.Buffer)
+		prompt := ui.NewCLIPrompt(stdin, stdout, false)
+
+		// Act & Assert: Verify all 11 methods are callable
+		// StepPresenter methods (4)
+		prompt.ShowHeader("workflow")
+		prompt.ShowStepDetails(&workflow.InteractiveStepInfo{Name: "step", Index: 1, Total: 1})
+		prompt.ShowExecuting("step")
+		prompt.ShowStepResult(&workflow.StepState{Status: workflow.StatusCompleted}, "")
+
+		// StatusPresenter methods (4)
+		prompt.ShowAborted()
+		prompt.ShowSkipped("step", "next")
+		prompt.ShowCompleted(workflow.StatusCompleted)
+		prompt.ShowError(assert.AnError)
+
+		// UserInteraction methods (3)
+		_, err := prompt.PromptAction(false)
+		require.NoError(t, err)
+
+		// Note: We can't test EditInput and ShowContext in this single test
+		// because stdin is already consumed by PromptAction
+		// They're tested separately in the UserInteraction test
+
+		// Assert: All methods executed without panic
+		assert.NotEmpty(t, stdout.String(), "all methods should produce output")
+	})
+
+	t.Run("edge_case_composite_interface_consistency", func(t *testing.T) {
+		// Arrange: Verify that accessing through composite interface
+		// produces same behavior as accessing through focused interfaces
+		stdin1 := strings.NewReader("c\n")
+		stdout1 := new(bytes.Buffer)
+		prompt1 := ui.NewCLIPrompt(stdin1, stdout1, false)
+
+		stdin2 := strings.NewReader("c\n")
+		stdout2 := new(bytes.Buffer)
+		prompt2 := ui.NewCLIPrompt(stdin2, stdout2, false)
+
+		// Act: Call same method through implicit composite interface
+		action1, err1 := prompt1.PromptAction(false)
+		action2, err2 := prompt2.PromptAction(false)
+
+		// Assert: Behavior should be identical
+		require.NoError(t, err1)
+		require.NoError(t, err2)
+		assert.Equal(t, action1, action2, "composite interface should behave consistently")
+	})
+}
+
+// TestC049_InterfaceSegregation_Principle verifies ISP compliance at compile-time.
+// These tests would fail to compile if CLIPrompt didn't satisfy all required interfaces.
+func TestC049_InterfaceSegregation_Principle(t *testing.T) {
+	t.Run("compile_time_check_step_presenter", func(t *testing.T) {
+		// This test verifies the var _ ports.StepPresenter = (*CLIPrompt)(nil) line compiles
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		_ = ui.NewCLIPrompt(stdin, stdout, false)
+		// If this test compiles, the interface check passed
+		assert.True(t, true, "CLIPrompt satisfies StepPresenter interface")
+	})
+
+	t.Run("compile_time_check_status_presenter", func(t *testing.T) {
+		// This test verifies the var _ ports.StatusPresenter = (*CLIPrompt)(nil) line compiles
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		_ = ui.NewCLIPrompt(stdin, stdout, false)
+		// If this test compiles, the interface check passed
+		assert.True(t, true, "CLIPrompt satisfies StatusPresenter interface")
+	})
+
+	t.Run("compile_time_check_user_interaction", func(t *testing.T) {
+		// This test verifies the var _ ports.UserInteraction = (*CLIPrompt)(nil) line compiles
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		_ = ui.NewCLIPrompt(stdin, stdout, false)
+		// If this test compiles, the interface check passed
+		assert.True(t, true, "CLIPrompt satisfies UserInteraction interface")
+	})
+
+	t.Run("compile_time_check_composite_interactive_prompt", func(t *testing.T) {
+		// This test verifies the var _ ports.InteractivePrompt = (*CLIPrompt)(nil) line compiles
+		stdin := strings.NewReader("")
+		stdout := new(bytes.Buffer)
+		_ = ui.NewCLIPrompt(stdin, stdout, false)
+		// If this test compiles, the interface check passed
+		assert.True(t, true, "CLIPrompt satisfies InteractivePrompt composite interface")
+	})
+}

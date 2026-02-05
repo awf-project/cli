@@ -203,8 +203,7 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 				// Fall through to execute
 
 			case workflow.ActionInspect, workflow.ActionEdit:
-				// Not yet implemented - treated as continue
-				// Fall through to execute
+				// Handled in handleInteractivePrompt loop; defensive fallback to execute
 			}
 		}
 

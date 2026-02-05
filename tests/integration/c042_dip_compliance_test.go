@@ -389,3 +389,23 @@ func hasCompileTimeInterfaceCheck(t *testing.T, filePath, interfaceName, typeNam
 	pattern := "var _ " + interfaceName
 	return strings.Contains(string(content), pattern)
 }
+
+// hasCompileTimeInterfaceCheckFlexible checks for compile-time interface verification
+// in both individual var statement and var() block formats.
+func hasCompileTimeInterfaceCheckFlexible(t *testing.T, filePath, interfaceName, typeName string) bool {
+	t.Helper()
+
+	content, err := os.ReadFile(filePath)
+	require.NoError(t, err, "should read file %s", filePath)
+
+	// Check for the pattern: _ InterfaceName = (*TypeName)(nil)
+	// This matches both:
+	// 1. Individual statement: var _ ports.Interface = (*Type)(nil)
+	// 2. Block format: \t_ ports.Interface     = (*Type)(nil)
+	// We just need to find the interface assignment, regardless of prefix whitespace
+	pattern := "_ " + interfaceName
+	typePattern := "(*" + typeName + ")(nil)"
+
+	contentStr := string(content)
+	return strings.Contains(contentStr, pattern) && strings.Contains(contentStr, typePattern)
+}
