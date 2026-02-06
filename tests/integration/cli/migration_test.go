@@ -76,11 +76,6 @@ func TestIntegrationTestMigration_BuildTagsPresent(t *testing.T) {
 	// Given: Integration test directory
 	targetDir := filepath.Join(repoRoot, "tests", "integration", "cli")
 
-	// Skip test if directory doesn't exist yet (before migration)
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		t.Skip("Integration test directory not created yet")
-	}
-
 	require.DirExists(t, targetDir, "integration test directory should exist")
 
 	// When: Scanning all Go files in integration directory
@@ -118,11 +113,6 @@ func TestIntegrationTestMigration_PackageNaming(t *testing.T) {
 
 	// Given: Integration test directory
 	targetDir := filepath.Join(repoRoot, "tests", "integration", "cli")
-
-	// Skip test if directory doesn't exist yet
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		t.Skip("Integration test directory not created yet")
-	}
 
 	require.DirExists(t, targetDir, "integration test directory should exist")
 
@@ -201,11 +191,6 @@ func TestIntegrationTestMigration_NoUnitTestsInIntegration(t *testing.T) {
 
 	// Given: Integration test directory
 	targetDir := filepath.Join(repoRoot, "tests", "integration", "cli")
-
-	// Skip test if directory doesn't exist yet
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		t.Skip("Integration test directory not created yet")
-	}
 
 	require.DirExists(t, targetDir, "integration test directory should exist")
 
@@ -306,11 +291,6 @@ func TestIntegrationTestMigration_ImportsUpdated(t *testing.T) {
 	// Given: Integration test directory
 	targetDir := filepath.Join(repoRoot, "tests", "integration", "cli")
 
-	// Skip test if directory doesn't exist yet
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		t.Skip("Integration test directory not created yet")
-	}
-
 	require.DirExists(t, targetDir, "integration test directory should exist")
 
 	// When: Scanning all test files for imports
@@ -357,11 +337,6 @@ func TestIntegrationTestMigration_NoThreadUnsafePatterns(t *testing.T) {
 
 	// Given: Integration test directory
 	targetDir := filepath.Join(repoRoot, "tests", "integration", "cli")
-
-	// Skip test if directory doesn't exist yet
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		t.Skip("Integration test directory not created yet")
-	}
 
 	require.DirExists(t, targetDir, "integration test directory should exist")
 

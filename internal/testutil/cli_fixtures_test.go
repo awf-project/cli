@@ -447,23 +447,3 @@ func TestIntegration_AllFixtureConstants_AreNonEmpty(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
-// TestCreateTestWorkflow_NonExistentBaseDir tests behavior when base directory doesn't exist
-func TestCreateTestWorkflow_NonExistentBaseDir(t *testing.T) {
-	// Note: This test verifies current stub behavior
-	// The stub implementation will likely panic or fail when directory doesn't exist
-	// This is expected behavior - CreateTestWorkflow should only be called after SetupTestDir
-
-	// We don't test invalid usage patterns in the stub
-	t.Skip("Skipping negative test - stub doesn't handle error cases")
-}
-
-// TestSetupWorkflowsDir_NilMap tests behavior with nil map (edge case)
-func TestSetupWorkflowsDir_NilMap(t *testing.T) {
-	// Note: This tests an edge case that the stub may not handle
-	t.Skip("Skipping edge case - will be tested after implementation")
-}

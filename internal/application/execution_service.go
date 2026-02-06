@@ -1238,8 +1238,9 @@ func (s *ExecutionService) IsProblematicMaxIterationPattern(
 	return hadFailures || hasComplexSteps
 }
 
-// HandleMaxIterationFailure handles the failure case when a loop hits max iterations with problematic patterns.
-// It updates the loop state, executes post-hooks, and returns the appropriate next step or error.
+// HandleMaxIterationFailure handles the case when a loop hits max iterations with problematic patterns.
+// If OnComplete is configured, completes successfully via that transition (e.g., retry patterns).
+// Otherwise, treats as failure and returns error or transitions via OnFailure.
 func (s *ExecutionService) HandleMaxIterationFailure(
 	ctx context.Context,
 	result *workflow.LoopResult,
@@ -1251,7 +1252,22 @@ func (s *ExecutionService) HandleMaxIterationFailure(
 	// Use extracted helper to determine pattern type
 	hadFailures, hasComplexSteps := s.detectLoopPatterns(result, wf)
 
-	// Update loop state with failure status
+	// If OnComplete is configured, treat max iterations as successful completion
+	// This supports retry patterns where on_failure loops back until max iterations
+	if step.Loop != nil && step.Loop.OnComplete != "" {
+		loopState.Status = workflow.StatusCompleted
+		if result != nil {
+			loopState.Output = fmt.Sprintf("completed %d iterations", result.TotalCount)
+		}
+		execCtx.SetStepState(step.Name, *loopState)
+
+		// Use extracted helper to execute post-hooks
+		s.executeLoopPostHooks(ctx, step, execCtx)
+
+		return step.Loop.OnComplete, nil
+	}
+
+	// No OnComplete configured - treat as failure
 	loopState.Status = workflow.StatusFailed
 
 	// Use extracted helper to build error message

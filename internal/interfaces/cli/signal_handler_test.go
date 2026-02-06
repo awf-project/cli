@@ -315,28 +315,6 @@ func TestSetupSignalHandler_Boundary_ZeroDelayBetweenSetupAndCleanup(t *testing.
 	// This tests race condition between goroutine start and cleanup
 }
 
-func TestSetupSignalHandler_Boundary_CallbackPanicsDoesNotCrashHandler(t *testing.T) {
-	// Arrange
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	panicCallback := func() {
-		panic("intentional panic in callback")
-	}
-
-	// Act: Setup signal handler with panicking callback
-	cleanup := setupSignalHandler(ctx, cancel, panicCallback)
-	defer cleanup()
-
-	// Note: This test verifies that a panicking callback doesn't crash the handler
-	// In the real implementation, the panic may still crash, so this test
-	// documents the expected behavior (panic should be handled or propagated)
-
-	// For now, we skip sending signal to avoid crashing the test
-	// This test documents that callback panics are a concern
-	t.Skip("This test would crash - documents that callback panics need handling")
-}
-
 func TestSetupSignalHandler_Integration_WorkflowCompletionScenario(t *testing.T) {
 	// Arrange: Simulate a workflow execution scenario
 	beforeGoroutines := runtime.NumGoroutine()

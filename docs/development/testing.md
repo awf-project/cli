@@ -468,7 +468,7 @@ func BenchmarkInterpolate(b *testing.B)
 
 ## Skip Policy
 
-AWF minimizes runtime test skips to maintain accurate coverage metrics and test signal. Follow these guidelines:
+AWF minimizes runtime test skips to maintain accurate coverage metrics and test signal. This policy was enforced by C053, which cleaned up 50+ problematic `t.Skip()` calls: removing dead code, deleting empty stubs, implementing missing nil-guard behavior, and converting unconditional skips to proper `testing.Short()` patterns. Follow these guidelines:
 
 ### When NOT to Skip
 

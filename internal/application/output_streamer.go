@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/vanoix/awf/internal/domain/workflow"
@@ -12,7 +13,8 @@ import (
 // OutputStreamer handles streaming large outputs to temporary files.
 // C019: Prevents OOM from unbounded StepState.Output/Stderr growth by streaming to disk.
 type OutputStreamer struct {
-	config workflow.OutputLimits
+	config  workflow.OutputLimits
+	counter uint64 // atomic counter for unique filenames
 }
 
 // NewOutputStreamer creates a new OutputStreamer with the given configuration.
@@ -43,10 +45,11 @@ func (s *OutputStreamer) StreamOutput(content string) (string, error) {
 	}
 
 	// Create unique temp file with awf-output prefix
-	// Use timestamp and PID for uniqueness to prevent collisions
+	// Use atomic counter, timestamp, and PID for uniqueness to prevent collisions
+	count := atomic.AddUint64(&s.counter, 1)
 	timestamp := time.Now().UnixNano()
 	pid := os.Getpid()
-	filename := fmt.Sprintf("awf-output-%d-%d.txt", pid, timestamp)
+	filename := fmt.Sprintf("awf-output-%d-%d-%d.txt", pid, timestamp, count)
 	path := filepath.Join(tempDir, filename)
 
 	// Write content to file with restrictive permissions

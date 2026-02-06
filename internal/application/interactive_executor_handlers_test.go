@@ -771,17 +771,44 @@ func TestHandleSuccess_MultipleTransitions_ReturnsFirstMatch(t *testing.T) {
 // Edge Cases and Error Scenarios
 // =============================================================================
 
-func TestHandleExecutionError_NilStep_Panics(t *testing.T) {
-	// Feature: C005
-	// Defensive test: nil step should be handled gracefully or panic explicitly
-	// This test documents expected behavior for invalid input
-	t.Skip("Implementation should handle nil step - define expected behavior")
+func TestHandleExecutionError_NilStep_ReturnsError(t *testing.T) {
+	// Feature: C053 - T008
+	// Defensive test: nil step should return descriptive error per ADR-002
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+	executor := application.NewInteractiveExecutor(
+		wfSvc, newMockExecutor(), newMockParallelExecutor(),
+		newMockStateStore(), &mockLogger{}, newMockResolver(), nil, newMockPrompt(),
+	)
+	_, err := executor.HandleExecutionError(context.Background(), nil, &workflow.StepState{}, errors.New("test"), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "step cannot be nil")
 }
 
-func TestHandleNonZeroExit_NilResult_Panics(t *testing.T) {
-	// Feature: C005
-	// Defensive test: nil result should be handled gracefully or panic explicitly
-	t.Skip("Implementation should handle nil result - define expected behavior")
+func TestHandleNonZeroExit_NilStep_ReturnsError(t *testing.T) {
+	// Feature: C053 - T008
+	// Defensive test: nil step should return descriptive error per ADR-002
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+	executor := application.NewInteractiveExecutor(
+		wfSvc, newMockExecutor(), newMockParallelExecutor(),
+		newMockStateStore(), &mockLogger{}, newMockResolver(), nil, newMockPrompt(),
+	)
+	_, err := executor.HandleNonZeroExit(context.Background(), nil, &workflow.StepState{}, &ports.CommandResult{ExitCode: 1}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "step cannot be nil")
+}
+
+func TestHandleNonZeroExit_NilResult_ReturnsError(t *testing.T) {
+	// Feature: C053 - T008
+	// Defensive test: nil result should return descriptive error per ADR-002
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+	executor := application.NewInteractiveExecutor(
+		wfSvc, newMockExecutor(), newMockParallelExecutor(),
+		newMockStateStore(), &mockLogger{}, newMockResolver(), nil, newMockPrompt(),
+	)
+	step := &workflow.Step{Name: "test_step", Command: "echo test"}
+	_, err := executor.HandleNonZeroExit(context.Background(), step, &workflow.StepState{}, nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "result cannot be nil")
 }
 
 func TestHandleSuccess_NilEvaluator_WithTransitions_ReturnsError(t *testing.T) {

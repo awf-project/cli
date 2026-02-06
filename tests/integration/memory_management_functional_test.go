@@ -644,12 +644,3 @@ states:
 	require.True(t, exists)
 	assert.Equal(t, workflow.StatusCompleted, secondState.Status)
 }
-
-// TestMemoryManagement_Integration_ResumeWithPruning verifies that workflow
-// resumption works correctly with iteration pruning enabled.
-func TestMemoryManagement_Integration_ResumeWithPruning(t *testing.T) {
-	t.Skip("Resume functionality with pruning requires additional state serialization logic")
-	// TODO(#130): Implement when resume + pruning interaction is clarified
-	// Key question: Should pruned iterations be restored on resume?
-	// Current assumption: No - resume starts fresh with current retention window
-}

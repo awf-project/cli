@@ -564,6 +564,9 @@ func (e *InteractiveExecutor) HandleExecutionError(
 	execErr error,
 	intCtx *interpolation.Context,
 ) (string, error) {
+	if step == nil {
+		return "", fmt.Errorf("HandleExecutionError: step cannot be nil")
+	}
 	// Execute post-hooks even on failure
 	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
@@ -589,6 +592,12 @@ func (e *InteractiveExecutor) HandleNonZeroExit(
 	result *ports.CommandResult,
 	intCtx *interpolation.Context,
 ) (string, error) {
+	if step == nil {
+		return "", fmt.Errorf("HandleNonZeroExit: step cannot be nil")
+	}
+	if result == nil {
+		return "", fmt.Errorf("HandleNonZeroExit: result cannot be nil")
+	}
 	// Execute post-hooks
 	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)

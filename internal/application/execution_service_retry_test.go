@@ -459,7 +459,9 @@ func TestExecutionService_Run_WithRetry_MultipleStepsWithRetry(t *testing.T) {
 // SKIP: This test is slow due to buildInterpolationContext overhead per iteration.
 // Retry pattern behavior is covered by unit tests in loop_executor_transitions_test.go
 func TestStepExecutorCallback_RetryPattern_ReturnsLoopNameAndNil(t *testing.T) {
-	t.Skip("Slow integration test - retry pattern covered by loop_executor unit tests")
+	if testing.Short() {
+		t.Skip("skipping slow retry pattern integration test")
+	}
 
 	// Arrange: Setup workflow with retry pattern (on_failure -> loop)
 	repo := newMockRepository()

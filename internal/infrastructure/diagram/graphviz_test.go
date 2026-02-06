@@ -9,15 +9,6 @@ import (
 func TestCheckGraphviz_ReturnsBoolean(t *testing.T) {
 	// CheckGraphviz should return a boolean indicating if dot is available.
 	// The actual result depends on the system, but it should not panic.
-	defer func() {
-		if r := recover(); r != nil {
-			// Expected: stub panics with "not implemented"
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-		}
-	}()
-
 	_ = CheckGraphviz()
 }
 
@@ -25,15 +16,6 @@ func TestCheckGraphviz_DetectsDotCommand(t *testing.T) {
 	// This test verifies that CheckGraphviz correctly detects the dot command.
 	// On systems with graphviz installed, it should return true.
 	// On systems without graphviz, it should return false.
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	result := CheckGraphviz()
 
 	// Result should be consistent - calling twice should return same value
@@ -44,15 +26,6 @@ func TestCheckGraphviz_DetectsDotCommand(t *testing.T) {
 }
 
 func TestExport_PNGFormat(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test.png")
 
@@ -68,15 +41,6 @@ func TestExport_PNGFormat(t *testing.T) {
 }
 
 func TestExport_SVGFormat(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test.svg")
 
@@ -90,15 +54,6 @@ func TestExport_SVGFormat(t *testing.T) {
 }
 
 func TestExport_PDFFormat(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test.pdf")
 
@@ -112,15 +67,6 @@ func TestExport_PDFFormat(t *testing.T) {
 }
 
 func TestExport_DOTFormat_NoConversion(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test.dot")
 
@@ -156,15 +102,6 @@ func TestExport_FormatDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r != nil {
-					if r != "not implemented" {
-						t.Errorf("unexpected panic: %v", r)
-					}
-					t.Skip("stub not implemented yet")
-				}
-			}()
-
 			dot := `digraph G { a -> b; }`
 			outputPath := filepath.Join(t.TempDir(), "test"+tt.extension)
 
@@ -175,15 +112,6 @@ func TestExport_FormatDetection(t *testing.T) {
 }
 
 func TestExport_EmptyDOT(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	outputPath := filepath.Join(t.TempDir(), "empty.dot")
 
 	err := Export("", outputPath)
@@ -194,15 +122,6 @@ func TestExport_EmptyDOT(t *testing.T) {
 }
 
 func TestExport_InvalidDOT_WithGraphviz(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	// Invalid DOT syntax
 	invalidDOT := `digraph G { invalid syntax here }`
 	outputPath := filepath.Join(t.TempDir(), "invalid.png")
@@ -219,15 +138,6 @@ func TestExport_InvalidDOT_WithGraphviz(t *testing.T) {
 func TestExport_GraphvizNotInstalled_Error(t *testing.T) {
 	// This test verifies the error message when graphviz is not installed
 	// and an image format is requested.
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	if CheckGraphviz() {
 		t.Skip("graphviz is installed, cannot test missing graphviz error")
 	}
@@ -249,15 +159,6 @@ func TestExport_GraphvizNotInstalled_Error(t *testing.T) {
 }
 
 func TestExport_OutputPathWithSpaces(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "path with spaces", "test.dot")
@@ -274,15 +175,6 @@ func TestExport_OutputPathWithSpaces(t *testing.T) {
 }
 
 func TestExport_OutputPathWithSpecialChars(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test-file_v1.2.dot")
 
@@ -293,15 +185,6 @@ func TestExport_OutputPathWithSpecialChars(t *testing.T) {
 }
 
 func TestExport_DOTWithUnicodeLabels(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	// DOT with unicode characters in labels
 	dot := `digraph G {
 		start [label="Début"];
@@ -326,15 +209,6 @@ func TestExport_DOTWithUnicodeLabels(t *testing.T) {
 }
 
 func TestExport_LargeDOT(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	// Generate a large DOT with 100 nodes
 	var dot string
 	dot = "digraph G {\n"
@@ -355,15 +229,6 @@ func TestExport_LargeDOT(t *testing.T) {
 }
 
 func TestExport_UnknownExtension(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "test.xyz")
 
@@ -376,15 +241,6 @@ func TestExport_UnknownExtension(t *testing.T) {
 }
 
 func TestExport_NoExtension(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := filepath.Join(t.TempDir(), "noextension")
 
@@ -397,15 +253,6 @@ func TestExport_NoExtension(t *testing.T) {
 }
 
 func TestExport_EmptyPath(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 
 	err := Export(dot, "")
@@ -417,15 +264,6 @@ func TestExport_EmptyPath(t *testing.T) {
 }
 
 func TestExport_NonexistentDirectory(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	dot := `digraph G { a -> b; }`
 	outputPath := "/nonexistent/path/that/does/not/exist/test.dot"
 
@@ -438,15 +276,6 @@ func TestExport_NonexistentDirectory(t *testing.T) {
 }
 
 func TestExport_ComplexDOTStructure(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			if r != "not implemented" {
-				t.Errorf("unexpected panic: %v", r)
-			}
-			t.Skip("stub not implemented yet")
-		}
-	}()
-
 	// Complex DOT with subgraphs, styling, and various attributes
 	dot := `digraph workflow {
 		rankdir=LR;

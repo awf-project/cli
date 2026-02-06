@@ -854,26 +854,6 @@ func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
 }
 
 // =============================================================================
-// Edge Case: Zero Max Turns
-// =============================================================================
-
-func TestFeature33_EdgeCase_ZeroMaxTurns(t *testing.T) {
-	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
-	skipInCI(t)
-
-	// Given: Conversation with max_turns=0 (invalid)
-	// This tests validation behavior
-
-	// Note: This would require a separate fixture with max_turns: 0
-	// For now, this test documents expected behavior:
-	// - max_turns: 0 should be rejected during validation
-	// - OR treated as unlimited/default value
-
-	// Test implementation depends on validation strategy chosen
-	t.Skip("Requires validation strategy decision for max_turns: 0")
-}
-
-// =============================================================================
 // Integration: Diagram Generation with Conversation Steps
 // =============================================================================
 
@@ -941,26 +921,6 @@ func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
 	// - Conversation mode indication
 	// - Max turns configuration
 	// - Stop condition description
-}
-
-// =============================================================================
-// Performance: Large Conversation History
-// =============================================================================
-
-func TestFeature33_Performance_LargeConversationHistory(t *testing.T) {
-	// Skip in CI: Requires real AI provider with many billable API calls (performance stress test)
-	skipInCI(t)
-
-	// Given: Conversation with many turns (stress test)
-	// Note: This tests performance and memory handling
-
-	// This test would require:
-	// - Fixture with high max_turns (e.g., 50+)
-	// - Verification that state persistence handles large JSON
-	// - Memory usage remains reasonable
-
-	// Deferred until performance requirements defined
-	t.Skip("Performance test - requires max_turns stress test fixture")
 }
 
 // =============================================================================

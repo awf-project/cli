@@ -796,28 +796,6 @@ func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name: "generator panics - should not crash formatter",
-			generators: []domainerrors.HintGenerator{
-				func(err *domainerrors.StructuredError) []domainerrors.Hint {
-					// This test verifies proper error handling
-					// In production, generators should never panic
-					panic("generator error")
-				},
-			},
-			errCode: domainerrors.ErrorCodeUserInputMissingFile,
-			message: "test error",
-			validate: func(t *testing.T, output string) {
-				// If we reach here, the formatter recovered from panic
-				// This test should be implemented with recover() in generateHints
-				var result map[string]any
-				err := json.Unmarshal([]byte(output), &result)
-				require.NoError(t, err)
-				// At minimum, error_code and message should be present
-				assert.Contains(t, result, "error_code")
-				assert.Contains(t, result, "message")
-			},
-		},
-		{
 			name: "mixed generators - some empty, some with hints",
 			generators: []domainerrors.HintGenerator{
 				func(err *domainerrors.StructuredError) []domainerrors.Hint {
@@ -928,11 +906,6 @@ func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Skip panic test for now - requires implementation support
-			if strings.Contains(tt.name, "panics") {
-				t.Skip("Panic recovery test - implement in GREEN phase")
-			}
-
 			// Arrange
 			formatter := NewJSONErrorFormatter(false, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(

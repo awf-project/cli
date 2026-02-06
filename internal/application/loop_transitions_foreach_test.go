@@ -33,16 +33,6 @@ import (
 // Git History: Maintains traceability per ADR-004
 // =============================================================================
 
-// ForEach transition behavior end-to-end.
-func TestExecuteForEach_TransitionSupport(t *testing.T) {
-	t.Skip("Transition logic is identical for ForEach and While loops - covered by While tests")
-
-	// The actual implementation is tested through:
-	// 1. TestEvaluateBodyTransition_* tests (all scenarios)
-	// 2. TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior
-	// 3. Integration tests will verify ForEach-specific behavior
-}
-
 // =============================================================================
 // Happy Path Tests: Intra-Body Skip Forward/Backward and Early Exit
 // =============================================================================
