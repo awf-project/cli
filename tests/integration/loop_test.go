@@ -608,14 +608,6 @@ func TestLoopFixtures_Integration(t *testing.T) {
 	foreachPath := filepath.Join(fixturesPath, "loop-foreach.yaml")
 	whilePath := filepath.Join(fixturesPath, "loop-while.yaml")
 
-	// Skip if fixtures don't exist yet
-	if _, err := os.Stat(foreachPath); os.IsNotExist(err) {
-		t.Skip("loop fixtures not yet created")
-	}
-	if _, err := os.Stat(whilePath); os.IsNotExist(err) {
-		t.Skip("loop fixtures not yet created")
-	}
-
 	repo := repository.NewYAMLRepository(fixturesPath)
 	store := newMockStateStore()
 	exec := executor.NewShellExecutor()

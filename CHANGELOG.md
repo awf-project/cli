@@ -87,6 +87,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixes: conversation-simple, conversation-multiturn, conversation-max-turns, conversation-error workflows
   - Impact: 391 lines added, 102 lines removed across 4 application layer files
 
+### Chores
+
+- **C053**: Clean up 50+ problematic test skips across codebase
+  - Removed 12 commented-out `t.Skip()` lines from T009 tests
+  - Removed 19 dead `defer recover()` blocks from graphviz tests
+  - Removed 7 dead conditional skips for existing directories/fixtures
+  - Deleted 7 untestable/duplicate test stubs
+  - Deleted 8 feature placeholder tests
+  - Implemented nil-guard checks in `HandleExecutionError` and `HandleNonZeroExit`
+  - Converted 1 unconditional skip to `testing.Short()` pattern
+
 ### Breaking Changes
 
 - **[B001] Expression context normalization to PascalCase**

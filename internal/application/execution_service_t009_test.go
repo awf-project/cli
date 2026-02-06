@@ -39,8 +39,6 @@ import (
 // executeConversationStep successfully delegates a single-turn conversation
 // to ConversationManager and maps the result to StepState.
 func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) {
-	// t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -107,8 +105,6 @@ func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) 
 // TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess tests that
 // executeConversationStep handles multi-turn conversations correctly.
 func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -180,8 +176,6 @@ func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
 // executeConversationStep passes buildContext function to ConversationManager
 // for interpolating InitialPrompt with workflow inputs and step states.
 func TestExecuteConversationStep_T009_HappyPath_WithInputInterpolation(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "analyze",
@@ -241,8 +235,6 @@ func TestExecuteConversationStep_T009_HappyPath_WithInputInterpolation(t *testin
 // TestExecuteConversationStep_T009_EdgeCase_MinimalConfig tests that
 // executeConversationStep works with minimal conversation config (defaults).
 func TestExecuteConversationStep_T009_EdgeCase_MinimalConfig(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -286,8 +278,6 @@ func TestExecuteConversationStep_T009_EdgeCase_MinimalConfig(t *testing.T) {
 // TestExecuteConversationStep_T009_EdgeCase_EmptyOutput tests handling of
 // conversations where final turn produces empty assistant response.
 func TestExecuteConversationStep_T009_EdgeCase_EmptyOutput(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -343,8 +333,6 @@ func TestExecuteConversationStep_T009_EdgeCase_EmptyOutput(t *testing.T) {
 // TestExecuteConversationStep_T009_EdgeCase_ContextCancellation tests that
 // executeConversationStep respects context cancellation.
 func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -393,8 +381,6 @@ func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T)
 // TestExecuteConversationStep_T009_Error_NoConversationManager tests that
 // executeConversationStep returns error when ConversationManager is nil.
 func TestExecuteConversationStep_T009_Error_NoConversationManager(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -426,8 +412,6 @@ func TestExecuteConversationStep_T009_Error_NoConversationManager(t *testing.T) 
 // TestExecuteConversationStep_T009_Error_NilConversationConfig tests that
 // executeConversationStep returns error when step.Agent.Conversation is nil.
 func TestExecuteConversationStep_T009_Error_NilConversationConfig(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -459,8 +443,6 @@ func TestExecuteConversationStep_T009_Error_NilConversationConfig(t *testing.T) 
 // TestExecuteConversationStep_T009_Error_NilAgentConfig tests that
 // executeConversationStep returns error when step.Agent is nil.
 func TestExecuteConversationStep_T009_Error_NilAgentConfig(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name:  "chat",
@@ -487,8 +469,6 @@ func TestExecuteConversationStep_T009_Error_NilAgentConfig(t *testing.T) {
 // TestExecuteConversationStep_T009_Error_ConversationManagerFailure tests that
 // executeConversationStep propagates errors from ConversationManager.
 func TestExecuteConversationStep_T009_Error_ConversationManagerFailure(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -524,8 +504,6 @@ func TestExecuteConversationStep_T009_Error_ConversationManagerFailure(t *testin
 // TestExecuteConversationStep_T009_Error_ProviderNotFound tests error handling
 // when agent provider is not registered in the registry.
 func TestExecuteConversationStep_T009_Error_ProviderNotFound(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",
@@ -561,8 +539,6 @@ func TestExecuteConversationStep_T009_Error_ProviderNotFound(t *testing.T) {
 // TestExecuteConversationStep_T009_Error_InterpolationFailure tests error handling
 // when initial prompt interpolation fails.
 func TestExecuteConversationStep_T009_Error_InterpolationFailure(t *testing.T) {
-	// 	t.Skip("T009: RED phase - implement executeConversationStep delegation")
-
 	// Arrange
 	step := &workflow.Step{
 		Name: "chat",

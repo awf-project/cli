@@ -1517,23 +1517,6 @@ func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
 	require.Contains(t, err.Error(), "indices 0 and 2")
 }
 
-// TestEvaluateBodyTransition_ErrorHandling_NilBodyStepIndices tests nil index map.
-// Given: bodyStepIndices is nil (should never happen but test robustness)
-// When: Transition is returned
-// Then: Should handle gracefully without panic
-func TestEvaluateBodyTransition_ErrorHandling_NilBodyStepIndices(t *testing.T) {
-	// This is a theoretical edge case - in practice, buildBodyStepIndices
-	// always returns a valid map (empty for empty body). But we test
-	// the evaluateBodyTransition function's robustness if called incorrectly.
-
-	t.Skip("evaluateBodyTransition is private and always called with valid map from buildBodyStepIndices")
-
-	// If we could test directly:
-	// shouldBreak, newIdx := evaluateBodyTransition("target", nil, []string{"step1"}, 0)
-	// assert.False(t, shouldBreak, "Should not panic on nil map")
-	// assert.Equal(t, -1, newIdx, "Should return -1 for invalid state")
-}
-
 // =============================================================================
 // Integration Tests: ExecuteForEach Transition Support
 // =============================================================================
@@ -2366,27 +2349,6 @@ func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
 	assert.Equal(t, []string{"step1"}, executionOrder,
 		"Should stop after step1 error, regardless of nextStep value")
 	_ = result // May be nil on error
-}
-
-// TestHandleIntraBodyJump_ErrorHandling_NegativeIndexInput tests behavior
-// when newIdx is negative (but not -1).
-// Given: handleIntraBodyJump receives newIdx = -2
-// When: Called with invalid negative index
-// Then: Should handle gracefully (likely return -1 for no jump)
-func TestHandleIntraBodyJump_ErrorHandling_NegativeIndexInput(t *testing.T) {
-	// Note: This is a theoretical edge case testing the function's robustness.
-	// In practice, evaluateBodyTransition should never pass negative indices
-	// other than -1, but testing defensive programming is good practice.
-
-	// This test is challenging to write because handleIntraBodyJump is private.
-	// We would test this if the function were exported or via integration tests
-	// that somehow trigger this condition.
-
-	// For now, documenting expected behavior:
-	// - newIdx < 0 (other than -1): treat as -1 (no jump)
-	// - The function should not crash or return invalid indices
-
-	t.Skip("Cannot test private function directly; behavior verified via integration tests")
 }
 
 // =============================================================================
