@@ -153,7 +153,9 @@ See [Architecture](docs/development/architecture.md) for details.
 make build          # Build binary
 make test           # Run all tests
 make lint           # Run linter
+make lint-arch      # Check architecture constraints
 make test-coverage  # Generate coverage report
+make quality        # Run all quality checks
 ```
 
 See [Testing Guide](docs/development/testing.md) for conventions.

@@ -245,7 +245,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	exprValidator := infra_expression.NewExprValidator()
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := infra_expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
@@ -407,7 +408,8 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	exprEvaluator := infra_expression.NewExprEvaluator()
 
 	// Create services
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	exprValidator := infra_expression.NewExprValidator()
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	dryRunExec := application.NewDryRunExecutor(wfSvc, resolver, exprEvaluator, logger)
 
 	// Setup template service for workflow template expansion
@@ -475,7 +477,8 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	exprEvaluator := infra_expression.NewExprEvaluator()
 
 	// Create services
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	exprValidator := infra_expression.NewExprValidator()
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 
 	// Create interactive prompt
@@ -877,7 +880,8 @@ func runSingleStep(
 	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	exprValidator := infra_expression.NewExprValidator()
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := infra_expression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)

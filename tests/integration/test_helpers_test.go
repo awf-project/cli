@@ -157,7 +157,7 @@ func setupTestWorkflowService(t *testing.T, workflowsDir, statesDir string) (*ap
 	evaluator := infraExpr.NewExprEvaluator()
 
 	// Wire up services
-	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, stateStore, logger, resolver, nil, evaluator,

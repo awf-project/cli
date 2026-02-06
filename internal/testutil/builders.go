@@ -25,6 +25,7 @@ type ExecutionServiceBuilder struct {
 	repository ports.WorkflowRepository
 	registry   ports.AgentRegistry
 	evaluator  interface{} // application.ExpressionEvaluator - kept as interface{} to avoid circular import
+	validator  ports.ExpressionValidator
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -97,6 +98,15 @@ func (b *ExecutionServiceBuilder) WithEvaluator(evaluator interface{}) *Executio
 	return b
 }
 
+// WithValidator configures the expression validator for workflow validation.
+// If nil, no expression validation will be performed (safe for tests not exercising ValidateWorkflow).
+func (b *ExecutionServiceBuilder) WithValidator(validator ports.ExpressionValidator) *ExecutionServiceBuilder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.validator = validator
+	return b
+}
+
 // WithOutputWriters configures stdout and stderr writers for the ExecutionService.
 // If nil, default writers will be used (typically os.Stdout/os.Stderr).
 func (b *ExecutionServiceBuilder) WithOutputWriters(stdout, stderr io.Writer) *ExecutionServiceBuilder {
@@ -145,8 +155,9 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 	_ = b.stdout
 	_ = b.stderr
 
-	// Create WorkflowService
-	workflowSvc := application.NewWorkflowService(repository, store, executor, logger)
+	// Create WorkflowService with expression validator
+	// Use injected validator (nil is safe for tests not exercising ValidateWorkflow)
+	workflowSvc := application.NewWorkflowService(repository, store, executor, logger, b.validator)
 
 	// Create ParallelExecutor
 	parallelExecutor := application.NewParallelExecutor(logger)

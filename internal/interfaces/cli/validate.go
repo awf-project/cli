@@ -10,6 +10,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/analyzer"
+	"github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
@@ -45,8 +46,11 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	// Initialize repository
 	repo := NewWorkflowRepository()
 
+	// Create validator
+	validator := expression.NewExprValidator()
+
 	// Create service
-	svc := application.NewWorkflowService(repo, nil, nil, nil)
+	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
 
 	// Load workflow first to check existence
 	wf, err := svc.GetWorkflow(ctx, workflowName)

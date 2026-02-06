@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C051**: Fixed DIP violation in application layer
+  - Removed direct `infrastructure/expression` import from `service.go`
+  - `WorkflowService` now receives `ExpressionValidator` via constructor injection
+  - Application layer has zero infrastructure dependencies (verified by C042 integration tests)
+
 - **C049**: Refactored `InteractivePrompt` interface following Interface Segregation Principle
   - Split 11-method monolithic interface into 3 focused interfaces: `StepPresenter` (4 methods), `StatusPresenter` (4 methods), `UserInteraction` (3 methods)
   - Composite `InteractivePrompt` embeds all three for backward compatibility
@@ -17,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+
+- **C051**: Architecture enforcement with go-arch-lint
+  - Added `.go-arch-lint.yml` configuration defining hexagonal architecture constraints
+  - New `make lint-arch` target replaces `check-domain` with comprehensive AST-based validation
+  - New `make lint-arch-map` target shows component-to-package mapping
+  - Added `.github/workflows/quality.yml` for CI architecture enforcement
 
 - **C048**: Actionable error message hints
   - Error messages now include contextual suggestions: "Did you mean?", line/column references, required inputs, and resolution steps

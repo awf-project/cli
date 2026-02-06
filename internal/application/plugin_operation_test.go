@@ -89,7 +89,7 @@ func TestExecutionService_PluginOperation_NoProviderConfigured(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -133,7 +133,7 @@ func TestExecutionService_PluginOperation_OperationNotFound(t *testing.T) {
 	provider := newMockOperationProvider()
 	// Don't add the operation - it won't exist
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -185,7 +185,7 @@ func TestExecutionService_PluginOperation_BasicExecution(t *testing.T) {
 		Outputs: map[string]any{"sent": true},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -238,7 +238,7 @@ func TestExecutionService_PluginOperation_WithOnFailure(t *testing.T) {
 		Error:   "Channel not found",
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -298,7 +298,7 @@ func TestExecutionService_PluginOperation_InMixedWorkflow(t *testing.T) {
 		Outputs: map[string]any{"sent": true},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		executor,
@@ -392,6 +392,7 @@ func TestExecutionService_SetOperationProvider(t *testing.T) {
 		newMockStateStore(),
 		newMockExecutor(),
 		&mockLogger{},
+		nil,
 	)
 	execSvc := application.NewExecutionService(
 		wfSvc,
@@ -429,7 +430,7 @@ func TestExecutionService_SetOperationProvider(t *testing.T) {
 	}
 
 	// Create new service with the test repo
-	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc2 := application.NewExecutionService(
 		wfSvc2,
 		newMockExecutor(),
@@ -507,7 +508,7 @@ func TestExecutionService_PluginOperation_MultipleOperationTypes(t *testing.T) {
 				}
 			}
 
-			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(
 				wfSvc,
 				newMockExecutor(),
@@ -566,7 +567,7 @@ func TestExecutionService_Resume_WithOperationStep(t *testing.T) {
 		Outputs: map[string]any{"sent": true},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -622,7 +623,7 @@ func TestExecutionService_PluginOperation_SuccessfulExecution(t *testing.T) {
 		Outputs: map[string]any{"message_id": "12345"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -680,7 +681,7 @@ func TestExecutionService_PluginOperation_OperationFailure(t *testing.T) {
 		Error:   "Channel not found",
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -735,7 +736,7 @@ func TestExecutionService_PluginOperation_InputInterpolation(t *testing.T) {
 		Outputs: map[string]any{},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -787,7 +788,7 @@ func TestExecutionService_PluginOperation_OutputCapture(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -843,7 +844,7 @@ func TestExecutionService_PluginOperation_Timeout(t *testing.T) {
 	provider.addOperation("slow.operation", "Slow operation", "test-plugin")
 	// Note: In the actual implementation, this would timeout
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -917,7 +918,7 @@ func TestExecutionService_PluginOperation_ErrorMessages(t *testing.T) {
 				},
 			}
 
-			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(
 				wfSvc,
 				newMockExecutor(),

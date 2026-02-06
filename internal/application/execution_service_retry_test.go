@@ -60,7 +60,7 @@ func TestExecutionService_Run_WithRetry_SucceedsOnRetry(t *testing.T) {
 		{ExitCode: 0, Stdout: "success on retry"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-success", nil)
@@ -112,7 +112,7 @@ func TestExecutionService_Run_WithRetry_ExhaustsAttempts(t *testing.T) {
 		{ExitCode: 1, Stderr: "fail 3"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-exhausted", nil)
@@ -163,7 +163,7 @@ func TestExecutionService_Run_WithRetry_ContextCancelled(t *testing.T) {
 		{ExitCode: 1, Stderr: "fail"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// Cancel after 100ms (before many retries can happen)
@@ -205,7 +205,7 @@ func TestExecutionService_Run_NoRetryConfig(t *testing.T) {
 		{ExitCode: 1, Stderr: "failed"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "no-retry", nil)
@@ -249,7 +249,7 @@ func TestExecutionService_Run_WithRetry_OnlySpecificExitCodes(t *testing.T) {
 		{ExitCode: 3, Stderr: "not retryable"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-codes", nil)
@@ -295,7 +295,7 @@ func TestExecutionService_Run_WithRetry_RetryableExitCodeSucceeds(t *testing.T) 
 		{ExitCode: 0, Stdout: "finally worked"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "retry-specific-code", nil)
@@ -335,7 +335,7 @@ func TestExecutionService_Run_WithRetry_MaxAttemptsOne(t *testing.T) {
 		{ExitCode: 1, Stderr: "failed"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "no-retry-one", nil)
@@ -377,7 +377,7 @@ func TestExecutionService_Run_WithRetry_ExponentialBackoff(t *testing.T) {
 		{ExitCode: 0, Stdout: "success"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	start := time.Now()
@@ -443,7 +443,7 @@ func TestExecutionService_Run_WithRetry_MultipleStepsWithRetry(t *testing.T) {
 		{ExitCode: 0, Stdout: "ok"},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	ctx, err := execSvc.Run(context.Background(), "multi-retry", nil)
@@ -502,7 +502,7 @@ func TestStepExecutorCallback_RetryPattern_ReturnsLoopNameAndNil(t *testing.T) {
 	evaluator.evaluations["true"] = true
 	evaluator.evaluations["false"] = false
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc,
 		executor,

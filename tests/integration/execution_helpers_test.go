@@ -18,6 +18,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -113,7 +114,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -191,7 +192,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -257,7 +258,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -322,7 +323,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -391,7 +392,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -484,7 +485,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -577,7 +578,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -647,7 +648,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -714,7 +715,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -799,7 +800,7 @@ states:
 	shellExec := executor.NewShellExecutor()
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+	wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
@@ -909,7 +910,7 @@ states:
 			shellExec := executor.NewShellExecutor()
 			resolver := interpolation.NewTemplateResolver()
 
-			wfSvc := application.NewWorkflowService(repo, store, shellExec, log)
+			wfSvc := application.NewWorkflowService(repo, store, shellExec, log, infraExpr.NewExprValidator())
 			parallelExec := application.NewParallelExecutor(log)
 			execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 

@@ -45,7 +45,7 @@ func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -90,7 +90,7 @@ func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -136,7 +136,7 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 	registry := testutil.NewMockAgentRegistry()
 	// Don't register the provider
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -213,7 +213,7 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -292,7 +292,7 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -375,7 +375,7 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		executor,
@@ -462,7 +462,7 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -532,7 +532,7 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -588,7 +588,7 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -702,7 +702,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	})
 	_ = registry.Register(gemini)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -789,7 +789,7 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -895,7 +895,7 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	})
 	_ = registry.Register(gemini)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -937,6 +937,7 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 		newMockStateStore(),
 		newMockExecutor(),
 		&mockLogger{},
+		nil,
 	)
 	execSvc := application.NewExecutionService(
 		wfSvc,
@@ -977,7 +978,7 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 		},
 	}
 
-	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc2 := application.NewExecutionService(
 		wfSvc2,
 		newMockExecutor(),
@@ -1054,7 +1055,7 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, stateStore, newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -1127,7 +1128,7 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -1226,7 +1227,7 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 				},
 			}
 
-			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(
 				wfSvc,
 				newMockExecutor(),
@@ -1297,7 +1298,7 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 	})
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),

@@ -15,6 +15,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -111,7 +112,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -172,7 +173,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -240,7 +241,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -306,7 +307,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -367,7 +368,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -429,7 +430,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -488,7 +489,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 
@@ -544,7 +545,7 @@ states:
 	logger := &retryMockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
 

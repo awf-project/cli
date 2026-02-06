@@ -165,5 +165,16 @@ func (s *Step) Validate(validator ExpressionCompiler) error {
 		return errors.New("unknown step type")
 	}
 
+	// Validate transition expressions (only if validator is provided)
+	if validator != nil {
+		for i, tr := range s.Transitions {
+			if tr.When != "" {
+				if err := validator(tr.When); err != nil {
+					return fmt.Errorf("transition %d expression '%s': %w", i, tr.When, err)
+				}
+			}
+		}
+	}
+
 	return nil
 }

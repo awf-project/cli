@@ -8,15 +8,15 @@ import (
 	domerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
 // WorkflowService orchestrates workflow operations.
 type WorkflowService struct {
-	repo     ports.WorkflowRepository
-	store    ports.StateStore
-	executor ports.CommandExecutor
-	logger   ports.Logger
+	repo      ports.WorkflowRepository
+	store     ports.StateStore
+	executor  ports.CommandExecutor
+	logger    ports.Logger
+	validator ports.ExpressionValidator
 }
 
 // NewWorkflowService creates a new workflow service with injected dependencies.
@@ -25,12 +25,14 @@ func NewWorkflowService(
 	store ports.StateStore,
 	executor ports.CommandExecutor,
 	logger ports.Logger,
+	validator ports.ExpressionValidator,
 ) *WorkflowService {
 	return &WorkflowService{
-		repo:     repo,
-		store:    store,
-		executor: executor,
-		logger:   logger,
+		repo:      repo,
+		store:     store,
+		executor:  executor,
+		logger:    logger,
+		validator: validator,
 	}
 }
 
@@ -58,8 +60,7 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	if err != nil {
 		return fmt.Errorf("load workflow %s: %w", name, err)
 	}
-	validator := expression.NewExprValidator()
-	if err := wf.Validate(validator.Compile); err != nil {
+	if err := wf.Validate(s.validator.Compile); err != nil {
 		// Convert domain StateReferenceError to StructuredError
 		var stateRefErr *workflow.StateReferenceError
 		if errors.As(err, &stateRefErr) {

@@ -150,6 +150,17 @@ func (m *mockResolver) Resolve(template string, ctx *interpolation.Context) (str
 	return template, nil
 }
 
+// mockExpressionValidator is a simple mock that always returns nil (valid).
+type mockExpressionValidator struct{}
+
+func newMockExpressionValidator() *mockExpressionValidator {
+	return &mockExpressionValidator{}
+}
+
+func (m *mockExpressionValidator) Compile(expression string) error {
+	return nil
+}
+
 // mockParallelExecutor is a simple mock that executes branches sequentially.
 type mockParallelExecutor struct{}
 
@@ -184,7 +195,7 @@ func TestNewWorkflowService(t *testing.T) {
 	exec := newMockExecutor()
 	log := &mockLogger{}
 
-	svc := application.NewWorkflowService(repo, store, exec, log)
+	svc := application.NewWorkflowService(repo, store, exec, log, newMockExpressionValidator())
 	if svc == nil {
 		t.Error("expected service to be created")
 	}
@@ -195,7 +206,7 @@ func TestWorkflowServiceListWorkflows(t *testing.T) {
 	repo.workflows["wf1"] = &workflow.Workflow{Name: "wf1"}
 	repo.workflows["wf2"] = &workflow.Workflow{Name: "wf2"}
 
-	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
 	names, err := svc.ListWorkflows(context.Background())
 	if err != nil {
@@ -216,7 +227,7 @@ func TestWorkflowServiceGetWorkflow(t *testing.T) {
 		},
 	}
 
-	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
 	wf, err := svc.GetWorkflow(context.Background(), "test")
 	if err != nil {
@@ -231,7 +242,7 @@ func TestWorkflowServiceGetWorkflow(t *testing.T) {
 }
 
 func TestWorkflowServiceGetWorkflowNotFound(t *testing.T) {
-	svc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	svc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
 	wf, err := svc.GetWorkflow(context.Background(), "nonexistent")
 	if err == nil {
@@ -259,7 +270,7 @@ func TestWorkflowServiceValidateWorkflow(t *testing.T) {
 		// missing Initial - should fail validation
 	}
 
-	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
 	// Valid workflow
 	err := svc.ValidateWorkflow(context.Background(), "valid")
@@ -278,7 +289,7 @@ func TestWorkflowServiceWorkflowExists(t *testing.T) {
 	repo := newMockRepository()
 	repo.workflows["exists"] = &workflow.Workflow{Name: "exists"}
 
-	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
 	exists, err := svc.WorkflowExists(context.Background(), "exists")
 	if err != nil {

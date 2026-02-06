@@ -1,0 +1,22 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  arch-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Architecture lint
+        run: |
+          go install github.com/fe3dback/go-arch-lint@latest
+          go-arch-lint check --project-path . --arch-file .go-arch-lint.yml

@@ -234,18 +234,24 @@ External communication adapters.
 Services receive dependencies through constructors:
 
 ```go
-func NewExecutionService(
+func NewWorkflowService(
     repo ports.Repository,
     store ports.StateStore,
     executor ports.Executor,
-) *ExecutionService {
-    return &ExecutionService{
-        repo:     repo,
-        store:    store,
-        executor: executor,
+    logger ports.Logger,
+    validator ports.ExpressionValidator,
+) *WorkflowService {
+    return &WorkflowService{
+        repo:      repo,
+        store:     store,
+        executor:  executor,
+        logger:    logger,
+        validator: validator,
     }
 }
 ```
+
+All dependencies are domain port interfaces, never infrastructure implementations. The interfaces layer (CLI) wires concrete adapters at the composition root.
 
 ### State Machine
 
@@ -344,6 +350,86 @@ Context Cancellation
 See [Testing](testing.md) for details.
 
 ## Interface Design Decisions
+
+### ExpressionValidator: Constructor Injection (C051)
+
+The `WorkflowService` previously instantiated `expression.NewExprValidator()` directly, violating the Dependency Inversion Principle by importing infrastructure from the application layer. This was fixed by:
+
+1. Adding `validator ports.ExpressionValidator` as a constructor parameter
+2. Removing the `internal/infrastructure/expression` import from `service.go`
+3. Wiring the concrete `ExpressionValidator` adapter at CLI call sites (composition root)
+
+The `ExpressionValidator` port interface was already defined in `internal/domain/ports/expression_validator.go`. The fix makes the application layer depend only on the port abstraction.
+
+### Architecture Enforcement (C051)
+
+Architecture constraints are enforced automatically using [go-arch-lint](https://github.com/fe3dback/go-arch-lint), configured in `.go-arch-lint.yml`. This provides AST-based validation of the full dependency graph across all layers.
+
+**Usage**:
+```bash
+make lint-arch       # Check architecture constraints
+make lint-arch-map   # Show component-to-package mapping
+```
+
+**Integration**:
+- `lint-arch` target is integrated into `make quality` gate
+- Runs in CI via `.github/workflows/quality.yml` on every push
+- Blocks merge if violations detected
+- All dependencies checked via AST analysis (deepScan mode)
+
+**Configuration Structure** (`.go-arch-lint.yml`):
+
+| Section | Purpose |
+|---------|---------|
+| `version: 3` | Configuration version |
+| `workdir: internal` | Scope for component paths |
+| `commonVendors` | Shared libraries (all components) |
+| `commonComponents` | Shared packages (all components) |
+| `vendors` | Vendor library definitions |
+| `components` | 18 components across 4 layers |
+| `deps` | Dependency rules per component |
+
+**Validation Rules by Layer**:
+
+| Layer | Count | Max Dependencies | Rationale |
+|-------|-------|---------|-----------|
+| Domain | 4 | stdlib + sync only | Pure business logic |
+| Application | 1 | domain only + stdlib | Orchestration, no infra |
+| Infrastructure | 11 | domain + vendors + stdlib | Concrete implementations |
+| Interfaces | 2 | all layers + stdlib | Delivery/wiring |
+| Testutil | 1 | domain + selected infra | Test helpers |
+
+**Example: Application Layer Rule**:
+```yaml
+application:
+  mayDependOn:
+    - domain-workflow
+    - domain-ports
+    - domain-errors
+    - domain-plugin
+  canUse:
+    - go-stdlib
+    - go-sync
+```
+
+This means the application layer **can** depend on domain components and stdlib only — any attempt to import from infrastructure, vendor libraries, or other layers will fail the build.
+
+**Debugging Component Mapping**:
+```bash
+$ make lint-arch-map
+Component mapping:
+  domain-workflow     → internal/domain/workflow
+  domain-ports        → internal/domain/ports
+  application         → internal/application
+  infra-expression    → internal/infrastructure/expression
+  interfaces-cli      → internal/interfaces/cli
+  ... (14 more)
+```
+
+**C042 + C051 Alignment**:
+- **C042** tests verify DIP compliance at runtime via integration tests
+- **C051** enforces DIP compliance at build time via static analysis
+- Together they provide defense-in-depth: testing catches logic errors, linting catches architectural violations
 
 ### PluginManager: Keep Unified (C050)
 

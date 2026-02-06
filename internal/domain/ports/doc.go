@@ -94,12 +94,16 @@
 //	func NewWorkflowService(
 //	    repo ports.WorkflowRepository,
 //	    store ports.StateStore,
+//	    executor ports.Executor,
 //	    logger ports.Logger,
+//	    validator ports.ExpressionValidator,
 //	) *WorkflowService {
 //	    return &WorkflowService{
-//	        repo:   repo,
-//	        store:  store,
-//	        logger: logger,
+//	        repo:      repo,
+//	        store:     store,
+//	        executor:  executor,
+//	        logger:    logger,
+//	        validator: validator,
 //	    }
 //	}
 //
@@ -110,7 +114,7 @@
 //	    mockStore := testutil.NewMockStateStore()
 //	    mockLogger := testutil.NewMockLogger()
 //
-//	    service := NewWorkflowService(mockRepo, mockStore, mockLogger)
+//	    service := NewWorkflowService(mockRepo, mockStore, mockExecutor, mockLogger, mockValidator)
 //	    // Test service behavior
 //	}
 //

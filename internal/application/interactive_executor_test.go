@@ -108,7 +108,7 @@ func TestInteractiveExecutor_Run_ContinueThroughAllSteps(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue, workflow.ActionContinue, workflow.ActionContinue)
@@ -139,7 +139,7 @@ func TestInteractiveExecutor_Run_AbortStopsExecution(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue, workflow.ActionAbort)
@@ -169,7 +169,7 @@ func TestInteractiveExecutor_Run_SkipJumpsToOnSuccess(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Skip first step, continue second
@@ -199,7 +199,7 @@ func TestInteractiveExecutor_Run_InspectShowsContext(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Inspect, then continue
@@ -229,7 +229,7 @@ func TestInteractiveExecutor_Run_EditModifiesInput(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionEdit, workflow.ActionContinue)
@@ -260,7 +260,7 @@ func TestInteractiveExecutor_Run_RetryReExecutesStep(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Continue step1 → execute → at step2, retry → go back to step1 → continue → execute → at step2 → continue → execute → done
@@ -298,7 +298,7 @@ func TestInteractiveExecutor_SetBreakpoints_PausesOnlyAtSpecified(t *testing.T) 
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Only one continue needed since we only breakpoint at step2
@@ -323,7 +323,7 @@ func TestInteractiveExecutor_Run_WorkflowNotFound(t *testing.T) {
 	repo := newMockRepository()
 	// No workflows added
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt()
@@ -350,7 +350,7 @@ func TestInteractiveExecutor_Run_ContextCancelled(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -388,7 +388,7 @@ func TestInteractiveExecutor_Run_ShowsStepDetails(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -426,7 +426,7 @@ func TestInteractiveExecutor_Run_ParallelStep(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Continue at parallel step (runs all branches without individual prompts)
@@ -486,7 +486,7 @@ func TestInteractiveExecutor_SetTemplateService_Valid(t *testing.T) {
 	templateRepo := testutil.NewMockTemplateRepository()
 	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -526,7 +526,7 @@ func TestInteractiveExecutor_SetTemplateService_Nil(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -565,7 +565,7 @@ func TestInteractiveExecutor_SetTemplateService_Replacement(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -625,7 +625,7 @@ func TestInteractiveExecutor_SetOutputWriters_ValidWriters(t *testing.T) {
 		ExitCode: 0,
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -666,7 +666,7 @@ func TestInteractiveExecutor_SetOutputWriters_NilWriters(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -727,7 +727,7 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 				},
 			}
 
-			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			resolver := interpolation.NewTemplateResolver()
 			evaluator := expression.NewExprEvaluator()
 			prompt := newMockPrompt(workflow.ActionContinue)
@@ -804,7 +804,7 @@ func TestInteractiveExecutor_executeLoopStep_ForEach(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Need ActionContinue for each iteration
@@ -871,7 +871,7 @@ func TestInteractiveExecutor_executeLoopStep_While(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Need continues for loop iterations
@@ -945,7 +945,7 @@ func TestInteractiveExecutor_executeLoopStep_NestedLoop(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Need continues for: 2 outer * 2 inner = 4 body executions
@@ -1011,7 +1011,7 @@ func TestInteractiveExecutor_executeLoopStep_LoopBodyError(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -1072,7 +1072,7 @@ func TestInteractiveExecutor_executeLoopStep_Timeout(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)
@@ -1135,7 +1135,7 @@ func TestInteractiveExecutor_executeLoopStep_OnCompleteTransition(t *testing.T) 
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Need continues for: 2 body iterations + summary step
@@ -1206,7 +1206,7 @@ func TestInteractiveExecutor_convertLoopData_SingleLevel(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue, workflow.ActionContinue, workflow.ActionContinue)
@@ -1276,7 +1276,7 @@ func TestInteractiveExecutor_convertLoopData_Nested(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	// Need 6 continues: 2 outer * 2 inner * 1 body + final
@@ -1331,7 +1331,7 @@ func TestInteractiveExecutor_convertLoopData_Nil(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 	prompt := newMockPrompt(workflow.ActionContinue)

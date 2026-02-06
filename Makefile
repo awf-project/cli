@@ -1,4 +1,4 @@
-.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint fmt vet clean tidy verify check-domain quality fix
+.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint fmt vet clean tidy verify lint-arch lint-arch-map quality fix
 
 .DEFAULT_GOAL := help
 
@@ -29,7 +29,8 @@ help:
 	@echo "  lint             Run golangci-lint"
 	@echo "  quality          Run all quality checks (lint+fmt+vet+test)"
 	@echo "  fix              Auto-fix linter issues"
-	@echo "  check-domain     Verify domain layer purity"
+	@echo "  lint-arch        Check architecture constraints (go-arch-lint)"
+	@echo "  lint-arch-map    Show component-to-package mapping"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  tidy             Tidy go modules"
@@ -102,7 +103,7 @@ vet:
 	go vet ./...
 
 # Run all quality checks
-quality: lint fmt vet test
+quality: lint fmt vet lint-arch test
 	@echo "All quality checks passed"
 
 # Auto-fix linter issues
@@ -121,7 +122,10 @@ tidy:
 verify:
 	go mod verify
 
-# Check domain purity (no external deps)
-check-domain:
-	@echo "Checking domain layer imports..."
-	@go list -f '{{.ImportPath}}: {{.Imports}}' ./internal/domain/... | grep -v "github.com/vanoix/awf" || true
+# Architecture lint with go-arch-lint (replaces check-domain)
+lint-arch:
+	go-arch-lint check --project-path . --arch-file .go-arch-lint.yml
+
+# Show component-to-package mapping
+lint-arch-map:
+	go-arch-lint mapping --project-path . --arch-file .go-arch-lint.yml

@@ -40,31 +40,32 @@ golangci-lint run  # Direct invocation
 
 ### CI Integration
 
-GitHub Actions workflow (`.github/workflows/ci.yaml`) runs quality checks on every push:
-
-```yaml
-- name: Lint
-  uses: golangci/golangci-lint-action@v9
-  with:
-    version: latest
-    args: --timeout=5m
-```
+GitHub Actions runs quality checks on every push via `.github/workflows/quality.yml`:
 
 **Quality Gates**:
-1. `make lint` must pass (all 17 linters)
-2. `make fmt` must leave no changes (gofumpt formatting)
-3. `make test` must pass (all tests)
+1. **Format check** - `make fmt` must leave no changes (gofumpt)
+2. **Vet** - `go vet ./...` must pass
+3. **Lint** - `make lint` must pass (all 17 linters via golangci-lint)
+4. **Architecture lint** - `make lint-arch` must pass (go-arch-lint) ← **C051**
+5. **Unit tests** - `make test-unit` with `-race` detector
+6. **Integration tests** - `make test-integration` with coverage ≥80%
+7. **Coverage check** - Coverage must be ≥80%
 
-CI fails if any gate fails, blocking merge.
+CI fails if any gate fails, blocking merge. Architecture linting now catches dependency constraint violations before code review.
+
+**Old workflow** (ci.yaml): Separate workflow with individual tool invocations
+**New workflow** (quality.yml): Consolidated quality checks including architecture enforcement
 
 ### Makefile Targets
 
 | Target | Description | Use Case |
 |--------|-------------|----------|
 | `make lint` | Run golangci-lint with all 17 linters | Before committing |
+| `make lint-arch` | Check architecture constraints with go-arch-lint | Before committing |
+| `make lint-arch-map` | Show component-to-package mapping | Debugging architecture issues |
 | `make fmt` | Format code with gofumpt | Before committing |
 | `make vet` | Run go vet static analysis | Before committing |
-| `make quality` | Run lint + fmt + vet + test | Final check before PR |
+| `make quality` | Run lint + fmt + vet + lint-arch + test | Final check before PR |
 | `make fix` | Auto-fix linter issues | After running `make lint` |
 
 **Typical Workflow**:
@@ -81,10 +82,13 @@ make lint
 # 4. Fix auto-fixable issues
 make fix
 
-# 5. Run all quality checks
+# 5. Check architecture constraints
+make lint-arch
+
+# 6. Run all quality checks (lint + fmt + vet + lint-arch + test)
 make quality
 
-# 6. Commit if all checks pass
+# 7. Commit if all checks pass
 git add .
 git commit -m "feat(workflow): add validation"
 ```
@@ -245,7 +249,7 @@ cmd := exec.Command("sh", "-c", safeInput)  // ✅ Escaped
 
 ### Architecture Linters
 
-#### depguard - Dependency Constraints
+#### depguard - Dependency Constraints (golangci-lint)
 **Purpose**: Enforces hexagonal architecture by preventing invalid imports in domain layer.
 
 **Example violation**:
@@ -261,6 +265,48 @@ import "github.com/spf13/cobra"  // ❌ Domain depends on CLI framework
 - `go.uber.org/zap` - Concrete logger
 - `github.com/fatih/color` - UI components
 - `github.com/schollz/progressbar/v3` - UI components
+
+#### go-arch-lint - Full Architecture Validation (C051)
+**Purpose**: AST-based architecture constraint enforcement using `.go-arch-lint.yml` configuration. Validates the complete hexagonal architecture dependency graph beyond what depguard can enforce.
+
+**Features**:
+- Component-to-package mapping verification
+- Multi-layer dependency rules (domain, application, infrastructure, interfaces)
+- Vendor dependency whitelisting per component
+- Customizable depth scanning with deepScan mode
+
+**Usage**:
+```bash
+make lint-arch       # Check all architecture constraints
+make lint-arch-map   # View component-to-package mapping
+```
+
+**Example constraint**:
+```yaml
+application:
+  mayDependOn:
+    - domain-workflow
+    - domain-ports
+    - domain-errors
+  canUse:
+    - go-stdlib
+    - go-sync
+```
+
+The application layer can depend on domain components and stdlib only — no infrastructure or third-party vendor libraries.
+
+**Configuration**: `.go-arch-lint.yml` at project root defines:
+- 18 components across 4 layers (4 domain, 1 app, 11 infra, 2 interfaces)
+- Dependency rules for each component
+- Vendor allowlist
+- Exclusions for test files
+
+**Benefits over depguard**:
+- Full dependency graph validation (not just domain layer)
+- Component-aware rules that scale with architecture
+- Infrastructure-application separation enforcement
+- Prevents coupling violations across all layers
+- Automatic CI integration via `make quality` target
 
 ### Modern Go Quality Linters (Late-2025)
 
@@ -708,14 +754,20 @@ For remaining issues:
 
 ### CI Pipeline Integration
 
-GitHub Actions runs the same checks locally:
+GitHub Actions runs quality checks via two workflows:
 
 ```yaml
-# .github/workflows/ci.yaml
+# .github/workflows/ci.yaml - Lint, test, build
 - name: Lint
   uses: golangci/golangci-lint-action@v9
   with:
     version: latest
+
+# .github/workflows/quality.yml - Architecture enforcement
+- name: Architecture lint
+  run: |
+    go install github.com/fe3dback/go-arch-lint@latest
+    go-arch-lint check --project-path . --arch-file .go-arch-lint.yml
 ```
 
 **Local == CI**: If `make quality` passes locally, CI will pass.
@@ -734,6 +786,7 @@ make lint  # Check for issues
 ## References
 
 - [golangci-lint documentation](https://golangci-lint.run/)
+- [go-arch-lint repository](https://github.com/fe3dback/go-arch-lint)
 - [gofumpt repository](https://github.com/mvdan/gofumpt)
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
