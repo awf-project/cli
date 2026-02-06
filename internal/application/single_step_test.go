@@ -34,7 +34,7 @@ func TestExecuteSingleStep_Success(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["echo hello"] = &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	result, err := execSvc.ExecuteSingleStep(context.Background(), "test", "start", nil, nil)
@@ -66,7 +66,7 @@ func TestExecuteSingleStep_StepNotFound(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "test", "nonexistent", nil, nil)
@@ -76,7 +76,7 @@ func TestExecuteSingleStep_StepNotFound(t *testing.T) {
 }
 
 func TestExecuteSingleStep_WorkflowNotFound(t *testing.T) {
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "nonexistent", "step", nil, nil)
@@ -108,7 +108,7 @@ func TestExecuteSingleStep_WithInputs(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["echo test-value"] = &ports.CommandResult{Stdout: "test-value\n", ExitCode: 0}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	// Use a resolver that actually interpolates
 	resolver := &interpolatingMockResolver{
 		mapping: map[string]string{
@@ -153,7 +153,7 @@ func TestExecuteSingleStep_WithMocks(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["echo mocked-data"] = &ports.CommandResult{Stdout: "mocked-data\n", ExitCode: 0}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	// Use a resolver that interpolates the mocked state
 	resolver := &interpolatingMockResolver{
 		mapping: map[string]string{
@@ -201,7 +201,7 @@ func TestExecuteSingleStep_ExecutesHooks(t *testing.T) {
 		executedCommands: []string{},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "hook-test", "start", nil, nil)
@@ -225,7 +225,7 @@ func TestExecuteSingleStep_TerminalStepError(t *testing.T) {
 		},
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	_, err := execSvc.ExecuteSingleStep(context.Background(), "terminal-test", "done", nil, nil)
@@ -255,7 +255,7 @@ func TestExecuteSingleStep_CommandFails(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["exit 1"] = &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	result, err := execSvc.ExecuteSingleStep(context.Background(), "fail-test", "fail", nil, nil)

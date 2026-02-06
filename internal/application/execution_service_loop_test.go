@@ -106,7 +106,7 @@ func TestExecuteLoopStep_While_HappyPath(t *testing.T) {
 	evaluator.evaluations["true"] = true
 	evaluator.evaluations["false"] = false
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
@@ -163,7 +163,7 @@ func TestExecuteLoopStep_NestedForEach(t *testing.T) {
 	executor.results["echo 1"] = &ports.CommandResult{Stdout: "1\n", ExitCode: 0}
 	executor.results["echo 2"] = &ports.CommandResult{Stdout: "2\n", ExitCode: 0}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
@@ -226,7 +226,7 @@ func TestExecuteLoopStep_WhileContainingForEach(t *testing.T) {
 	evaluator.evaluations["false"] = false
 	evaluator.evaluations["loop.index == 1"] = true
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
@@ -271,7 +271,7 @@ func TestExecuteLoopStep_ForEach_BodyStepError(t *testing.T) {
 	executor := newMockExecutor()
 	executor.results["false"] = &ports.CommandResult{Stdout: "", ExitCode: 1}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
@@ -321,7 +321,7 @@ func TestExecuteLoopStep_While_BodyStepError(t *testing.T) {
 	evaluator.evaluations["true"] = true
 	evaluator.evaluations["false"] = false
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
@@ -359,7 +359,7 @@ func TestExecuteLoopStep_ForEach_BodyStepNotFound(t *testing.T) {
 
 	executor := newMockExecutor()
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
@@ -404,7 +404,7 @@ func TestExecuteLoopStep_ForEach_EmptyItems(t *testing.T) {
 
 	executor := newMockExecutor()
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
@@ -452,7 +452,7 @@ func TestExecuteLoopStep_While_ConditionFalseInitially(t *testing.T) {
 	evaluator := newConditionMockEvaluator()
 	evaluator.evaluations["false"] = false
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
@@ -498,7 +498,7 @@ func TestExecuteLoopStep_ForEach_MaxIterationsLimit(t *testing.T) {
 	executor.results["echo a"] = &ports.CommandResult{Stdout: "a\n", ExitCode: 0}
 	executor.results["echo b"] = &ports.CommandResult{Stdout: "b\n", ExitCode: 0}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
@@ -549,7 +549,7 @@ func TestExecuteLoopStep_While_MaxIterationsReached(t *testing.T) {
 	evaluator.evaluations["true"] = true
 	evaluator.evaluations["false"] = false
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
@@ -593,7 +593,7 @@ func TestExecuteLoopStep_ContextCancellation(t *testing.T) {
 
 	executor := newMockExecutor()
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing with a cancelled context
@@ -646,7 +646,7 @@ func TestExecuteLoopStep_ForEach_BreakCondition(t *testing.T) {
 	// Break condition evaluates to true after second item
 	evaluator.evaluations["loop.index == 1"] = true
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow

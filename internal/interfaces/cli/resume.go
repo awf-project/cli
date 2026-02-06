@@ -200,7 +200,8 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	historySvc := application.NewHistoryService(historyStore, logger)
 
 	// Create services
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger)
+	exprValidator := infraexpression.NewExprValidator()
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 	exprEvaluator := infraexpression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)

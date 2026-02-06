@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -58,7 +59,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -112,7 +113,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -168,7 +169,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -232,7 +233,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -300,7 +301,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -354,7 +355,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := &alwaysTrueEvaluator{}
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -420,7 +421,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -497,7 +498,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -575,7 +576,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -622,7 +623,7 @@ func TestLoopFixtures_Integration(t *testing.T) {
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -681,7 +682,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -734,7 +735,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -932,7 +933,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -998,7 +999,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1065,7 +1066,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1127,7 +1128,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1194,7 +1195,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1257,7 +1258,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1327,7 +1328,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1388,7 +1389,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1452,7 +1453,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1524,7 +1525,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1596,7 +1597,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1680,7 +1681,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1765,7 +1766,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1855,7 +1856,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -1946,7 +1947,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2018,7 +2019,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2095,7 +2096,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2166,7 +2167,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2245,7 +2246,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2320,7 +2321,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2402,7 +2403,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := expression.NewExprEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2468,7 +2469,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2552,7 +2553,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2621,7 +2622,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := &alwaysTrueEvaluator{}
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2702,7 +2703,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2785,7 +2786,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2858,7 +2859,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -2932,7 +2933,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := &alwaysTrueEvaluator{}
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3016,7 +3017,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3086,7 +3087,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3156,7 +3157,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := &alwaysTrueEvaluator{}
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3225,7 +3226,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3301,7 +3302,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3388,7 +3389,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newLoopContextEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3495,7 +3496,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newF048TransitionsEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3589,7 +3590,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newF048TransitionsEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3690,7 +3691,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newF048TransitionsEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3793,7 +3794,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newF048TransitionsEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,
@@ -3892,7 +3893,7 @@ states:
 	resolver := interpolation.NewTemplateResolver()
 	evaluator := newF048TransitionsEvaluator()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionServiceWithEvaluator(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil, evaluator,

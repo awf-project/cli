@@ -26,7 +26,7 @@ import (
 func TestHandleExecutionError_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has OnFailure transition
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -67,7 +67,7 @@ func TestHandleExecutionError_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 func TestHandleExecutionError_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has ContinueOnError=true
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -109,7 +109,7 @@ func TestHandleExecutionError_WithContinueOnError_ReturnsOnSuccess(t *testing.T)
 func TestHandleExecutionError_WithoutOnFailureOrContinue_ReturnsError(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has neither OnFailure nor ContinueOnError
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -153,7 +153,7 @@ func TestHandleExecutionError_PostHooksExecuted(t *testing.T) {
 	// This is critical behavior that must be preserved during refactoring
 
 	// Arrange: Setup executor with mock hook executor
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -200,7 +200,7 @@ func TestHandleExecutionError_EmptyOnFailure_ContinueOnErrorFalse_ReturnsError(t
 	// Feature: C005
 	// Edge case: OnFailure is set but empty string
 	// Arrange
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -246,7 +246,7 @@ func TestHandleExecutionError_EmptyOnFailure_ContinueOnErrorFalse_ReturnsError(t
 func TestHandleNonZeroExit_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has OnFailure transition
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -292,7 +292,7 @@ func TestHandleNonZeroExit_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 func TestHandleNonZeroExit_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has ContinueOnError=true
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -339,7 +339,7 @@ func TestHandleNonZeroExit_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 func TestHandleNonZeroExit_WithoutOnFailureOrContinue_ReturnsError(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has neither OnFailure nor ContinueOnError
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -387,7 +387,7 @@ func TestHandleNonZeroExit_PostHooksExecuted(t *testing.T) {
 	// Feature: C005
 	// Test verifies that post-hooks are executed even when exit code is non-zero
 	// Arrange
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -449,7 +449,7 @@ func TestHandleNonZeroExit_DifferentExitCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+			wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			executor := application.NewInteractiveExecutor(
 				wfSvc,
 				newMockExecutor(),
@@ -500,7 +500,7 @@ func TestHandleNonZeroExit_DifferentExitCodes(t *testing.T) {
 func TestHandleSuccess_WithTransitions_EvaluatesAndReturnsMatch(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has transitions
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -546,7 +546,7 @@ func TestHandleSuccess_WithTransitions_EvaluatesAndReturnsMatch(t *testing.T) {
 func TestHandleSuccess_WithTransitionsNoMatch_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has transitions that don't match
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -592,7 +592,7 @@ func TestHandleSuccess_WithTransitionsNoMatch_ReturnsOnSuccess(t *testing.T) {
 func TestHandleSuccess_WithoutTransitions_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
 	// Arrange: Setup executor with step that has no transitions, only OnSuccess
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -633,7 +633,7 @@ func TestHandleSuccess_EmptyOnSuccess_ReturnsEmptyString(t *testing.T) {
 	// Feature: C005
 	// Edge case: OnSuccess is empty (terminal step)
 	// Arrange
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -674,7 +674,7 @@ func TestHandleSuccess_PostHooksExecuted(t *testing.T) {
 	// Feature: C005
 	// Test verifies that post-hooks are executed on success
 	// Arrange
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -720,7 +720,7 @@ func TestHandleSuccess_MultipleTransitions_ReturnsFirstMatch(t *testing.T) {
 	// Feature: C005
 	// Test that first matching transition is returned (order matters)
 	// Arrange
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),
@@ -788,7 +788,7 @@ func TestHandleSuccess_NilEvaluator_WithTransitions_ReturnsError(t *testing.T) {
 	// Feature: C005
 	// Test that evaluator is required when transitions are defined
 	// Arrange: Create executor without evaluator (pass nil)
-	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
 		newMockExecutor(),

@@ -1,0 +1,409 @@
+version: 3
+workdir: internal
+
+allow:
+  depOnAnyVendor: false
+  deepScan: false
+
+excludeFiles:
+  - ".*_test\\.go$"
+
+exclude:
+  - ../tests
+
+commonVendors:
+  - go-stdlib
+
+commonComponents:
+  - pkg-expression
+  - pkg-interpolation
+  - pkg-plugin-sdk
+  - pkg-retry
+  - pkg-stringutil
+  - pkg-validation
+
+vendors:
+  go-stdlib:
+    in:
+      - fmt
+      - context
+      - encoding/**
+      - errors
+      - io
+      - io/**
+      - net/**
+      - os
+      - os/**
+      - path
+      - path/**
+      - regexp
+      - runtime
+      - strings
+      - strconv
+      - sync
+      - sync/**
+      - time
+      - log
+      - log/**
+      - slices
+      - sort
+      - math/**
+      - bytes
+      - bufio
+      - database/**
+      - embed
+      - text/**
+      - testing
+      - testing/**
+      - syscall
+
+  go-sync:
+    in:
+      - golang.org/x/sync/**
+      - golang.org/x/time/**
+
+  yaml:
+    in:
+      - gopkg.in/yaml.v3
+
+  cobra:
+    in:
+      - github.com/spf13/cobra
+      - github.com/spf13/pflag
+
+  zap:
+    in:
+      - go.uber.org/zap
+      - go.uber.org/zap/**
+
+  color:
+    in:
+      - github.com/fatih/color
+
+  uuid:
+    in:
+      - github.com/google/uuid
+
+  testify:
+    in:
+      - github.com/stretchr/testify/**
+
+  progressbar:
+    in:
+      - github.com/schollz/progressbar/**
+
+  expr:
+    in:
+      - github.com/expr-lang/expr
+      - github.com/expr-lang/expr/**
+
+  sqlite:
+    in:
+      - github.com/mattn/go-sqlite3
+      - modernc.org/sqlite
+
+  tiktoken:
+    in:
+      - github.com/pkoukk/tiktoken-go
+
+  go-term:
+    in:
+      - golang.org/x/term
+
+  errgroup:
+    in:
+      - golang.org/x/sync/errgroup
+
+components:
+  # DOMAIN LAYER
+  domain-workflow:
+    in: domain/workflow
+
+  domain-ports:
+    in: domain/ports
+
+  domain-errors:
+    in: domain/errors
+
+  domain-plugin:
+    in: domain/plugin
+
+  # PUBLIC PACKAGES
+  pkg-expression:
+    in: ../pkg/expression
+
+  pkg-interpolation:
+    in: ../pkg/interpolation
+
+  pkg-plugin-sdk:
+    in: ../pkg/plugin/sdk
+
+  pkg-retry:
+    in: ../pkg/retry
+
+  pkg-stringutil:
+    in: ../pkg/stringutil
+
+  pkg-validation:
+    in: ../pkg/validation
+
+  # APPLICATION LAYER
+  application:
+    in: application
+
+  # INFRASTRUCTURE LAYER
+  infra-agents:
+    in: infrastructure/agents
+
+  infra-analyzer:
+    in: infrastructure/analyzer
+
+  infra-config:
+    in: infrastructure/config
+
+  infra-diagram:
+    in: infrastructure/diagram
+
+  infra-errors:
+    in: infrastructure/errors
+
+  infra-executor:
+    in: infrastructure/executor
+
+  infra-expression:
+    in: infrastructure/expression
+
+  infra-logger:
+    in: infrastructure/logger
+
+  infra-plugin:
+    in: infrastructure/plugin
+
+  infra-repository:
+    in: infrastructure/repository
+
+  infra-store:
+    in: infrastructure/store
+
+  infra-tokenizer:
+    in: infrastructure/tokenizer
+
+  infra-xdg:
+    in: infrastructure/xdg
+
+  # INTERFACES LAYER
+  interfaces-cli:
+    in: interfaces/cli
+
+  interfaces-cli-ui:
+    in: interfaces/cli/ui
+
+  # TEST UTILITIES
+  testutil:
+    in: testutil
+
+deps:
+  # DOMAIN — only stdlib (+ pkg via commonComponents)
+  domain-workflow:
+    canUse:
+      - go-stdlib
+      - go-sync
+  domain-ports:
+    mayDependOn:
+      - domain-workflow
+      - domain-errors
+      - domain-plugin
+    canUse:
+      - go-stdlib
+  domain-errors:
+    canUse:
+      - go-stdlib
+  domain-plugin:
+    canUse:
+      - go-stdlib
+
+  # APPLICATION — domain only (NO infrastructure)
+  application:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+    canUse:
+      - go-stdlib
+      - go-sync
+      - uuid
+
+  # INFRASTRUCTURE — domain + vendors
+  infra-agents:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - go-sync
+      - zap
+      - yaml
+      - uuid
+
+  infra-analyzer:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+
+  infra-config:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - yaml
+      - zap
+
+  infra-diagram:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+
+  infra-errors:
+    mayDependOn:
+      - domain-errors
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - color
+
+  infra-executor:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - go-sync
+
+  infra-expression:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - expr
+
+  infra-logger:
+    mayDependOn:
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - zap
+      - color
+
+  infra-plugin:
+    mayDependOn:
+      - domain-plugin
+      - domain-ports
+      - domain-errors
+    canUse:
+      - go-stdlib
+      - yaml
+
+  infra-repository:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - infra-expression
+    canUse:
+      - go-stdlib
+      - yaml
+
+  infra-store:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+    canUse:
+      - go-stdlib
+      - sqlite
+
+  infra-tokenizer:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - tiktoken
+
+  infra-xdg:
+    canUse:
+      - go-stdlib
+
+  # INTERFACES — wiring layer (app + infra + domain)
+  interfaces-cli:
+    mayDependOn:
+      - application
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - infra-agents
+      - infra-analyzer
+      - infra-config
+      - infra-diagram
+      - infra-errors
+      - infra-executor
+      - infra-expression
+      - infra-logger
+      - infra-plugin
+      - infra-repository
+      - infra-store
+      - infra-tokenizer
+      - infra-xdg
+      - interfaces-cli-ui
+    canUse:
+      - go-stdlib
+      - go-sync
+      - cobra
+      - yaml
+      - zap
+      - color
+      - uuid
+      - progressbar
+      - go-term
+
+  interfaces-cli-ui:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - infra-errors
+    canUse:
+      - go-stdlib
+      - color
+      - progressbar
+      - zap
+
+  # TESTUTIL — test helpers (can depend on domain + some infra)
+  testutil:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - application
+      - infra-repository
+      - infra-store
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - testify
+      - yaml

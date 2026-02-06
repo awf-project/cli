@@ -16,6 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/pkg/interpolation"
@@ -468,7 +469,7 @@ states:
 	defer historyStore.Close()
 	historySvc := application.NewHistoryService(historyStore, logger)
 
-	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, stateStore, logger, resolver, historySvc)
 

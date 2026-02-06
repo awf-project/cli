@@ -6,6 +6,11 @@ AWF follows a standard Go project layout aligned with hexagonal architecture.
 
 ```
 awf/
+├── .github/
+│   └── workflows/
+│       ├── ci.yaml              # Build, lint, test pipeline
+│       └── quality.yml          # Architecture lint enforcement
+│
 ├── cmd/
 │   └── awf/
 │       └── main.go              # CLI entry point
@@ -107,7 +112,8 @@ awf/
 ├── Makefile                     # Build commands
 ├── go.mod                       # Go module definition
 ├── go.sum                       # Dependency checksums
-├── .golangci.yml                # Linter configuration
+├── .golangci.yml                # Linter configuration (golangci-lint)
+├── .go-arch-lint.yml            # Architecture constraint rules (go-arch-lint)
 ├── .awf.yaml                    # AWF configuration file
 │
 ├── README.md                    # Project overview

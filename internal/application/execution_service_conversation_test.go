@@ -436,7 +436,7 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 	claude := testutil.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -500,7 +500,7 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -563,7 +563,7 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 	mockRegistry.Register(claude)
 	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		newMockExecutor(),
@@ -647,7 +647,7 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 		ExitCode: 0,
 	}
 
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{})
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
 		wfSvc,
 		executor,

@@ -13,6 +13,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
+	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
@@ -36,7 +37,7 @@ func TestLoopJSONChild_HappyPath_ValidJSONInput(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -79,7 +80,7 @@ func TestLoopJSONChild_HappyPath_NestedJSON(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -120,7 +121,7 @@ func TestLoopJSONChild_HappyPath_JSONArray(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -160,7 +161,7 @@ func TestLoopJSONChild_EdgeCase_EmptyFields(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -200,7 +201,7 @@ func TestLoopJSONChild_EdgeCase_UnicodeCharacters(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -239,7 +240,7 @@ func TestLoopJSONChild_EdgeCase_MinimalJSON(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -279,7 +280,7 @@ func TestLoopJSONChild_ErrorHandling_GoMapFormat(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -322,7 +323,7 @@ func TestLoopJSONChild_ErrorHandling_InvalidJSON(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -376,7 +377,7 @@ func TestLoopJSONChild_ErrorHandling_MissingRequiredInput(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -414,7 +415,7 @@ func TestLoopJSONChild_EdgeCase_IndexParameter(t *testing.T) {
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
 	execSvc := application.NewExecutionService(
 		wfSvc, exec, parallelExec, store, logger, resolver, nil,
@@ -466,7 +467,7 @@ func TestLoopJSONChild_Integration_LoadsAndValidates(t *testing.T) {
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 
-	wfSvc := application.NewWorkflowService(repo, store, exec, logger)
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -222,7 +222,7 @@
 //
 // Orchestrate workflow execution with injected dependencies:
 //
-//	wfSvc := NewWorkflowService(repo, store, executor, logger)
+//	wfSvc := NewWorkflowService(repo, store, executor, logger, validator)
 //	execSvc := NewExecutionService(wfSvc, executor, parallelExec, store, logger, resolver, historySvc)
 //
 //	// Validate workflow before execution
