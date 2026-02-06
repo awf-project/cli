@@ -252,6 +252,41 @@ func TestJSONStore_RaceSaveLoad(t *testing.T) {
 }
 ```
 
+## Deterministic Assertions
+
+Test assertions must be deterministic — they should produce the same result on every run regardless of system state, parallel jobs, or CI environment.
+
+### Avoid Testing OS Guarantees
+
+Do not write assertions that verify operating system behavior (e.g., process group signal delivery, file descriptor cleanup). Test your application's response to those behaviors instead.
+
+**Example (bad — tests OS behavior with system-wide search):**
+
+```go
+// Searches ALL system processes — matches unrelated commands from parallel CI jobs
+time.Sleep(200 * time.Millisecond)
+cmd := exec.CommandContext(ctx, "pgrep", "-f", "sleep 10")
+output, _ := cmd.Output()
+assert.Empty(t, output, "orphan processes should be cleaned up")
+```
+
+**Example (good — tests application behavior deterministically):**
+
+```go
+// Verify the application correctly propagates context cancellation
+assert.True(t, errors.Is(err, context.Canceled))
+
+// Verify process group configuration is set (structural check)
+assert.True(t, cmd.SysProcAttr.Setpgid)
+```
+
+### Guidelines
+
+- Assert on application-level return values, errors, and state — not on system-level side effects
+- Avoid `time.Sleep` before assertions — if timing is needed, use channels or `sync.WaitGroup`
+- Never use system-wide searches (`pgrep`, `ps aux`) in tests — they match unrelated processes
+- Prefer structural assertions (configuration is set) over behavioral assertions (effect was observed)
+
 ## Coverage
 
 Generate coverage report:

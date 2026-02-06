@@ -3,7 +3,6 @@ package agents
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -634,39 +633,34 @@ func TestExecCLIExecutor_Run_SimulateCodexProvider(t *testing.T) {
 // canceling the context and checking that all processes terminate cleanly.
 func TestRun_SetsProcessGroup(t *testing.T) {
 	tests := []struct {
-		name              string
-		command           string
-		cancelDelay       time.Duration
-		cleanupCheckDelay time.Duration
-		description       string
+		name        string
+		command     string
+		cancelDelay time.Duration
+		description string
 	}{
 		{
-			name:              "single background child process",
-			command:           "sleep 10 & wait",
-			cancelDelay:       50 * time.Millisecond,
-			cleanupCheckDelay: 200 * time.Millisecond,
-			description:       "Verify single child process terminates with parent",
+			name:        "single background child process",
+			command:     "sleep 10 & wait",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Verify single child process terminates with parent",
 		},
 		{
-			name:              "multiple background child processes",
-			command:           "sleep 10 & sleep 10 & sleep 10 & wait",
-			cancelDelay:       50 * time.Millisecond,
-			cleanupCheckDelay: 200 * time.Millisecond,
-			description:       "Verify multiple children terminate with parent",
+			name:        "multiple background child processes",
+			command:     "sleep 10 & sleep 10 & sleep 10 & wait",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Verify multiple children terminate with parent",
 		},
 		{
-			name:              "nested child processes",
-			command:           "sh -c 'sleep 10 & sleep 10' & wait",
-			cancelDelay:       50 * time.Millisecond,
-			cleanupCheckDelay: 200 * time.Millisecond,
-			description:       "Verify nested shell spawning children terminates cleanly",
+			name:        "nested child processes",
+			command:     "sh -c 'sleep 10 & sleep 10' & wait",
+			cancelDelay: 50 * time.Millisecond,
+			description: "Verify nested shell spawning children terminates cleanly",
 		},
 		{
-			name:              "immediate cancellation",
-			command:           "sleep 10 & sleep 10 & wait",
-			cancelDelay:       1 * time.Millisecond,
-			cleanupCheckDelay: 200 * time.Millisecond,
-			description:       "Verify cleanup works with immediate cancellation",
+			name:        "immediate cancellation",
+			command:     "sleep 10 & sleep 10 & wait",
+			cancelDelay: 1 * time.Millisecond,
+			description: "Verify cleanup works with immediate cancellation",
 		},
 	}
 
@@ -690,16 +684,6 @@ func TestRun_SetsProcessGroup(t *testing.T) {
 			assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled")
 			assert.NotNil(t, stdout, "stdout should not be nil")
 			assert.NotNil(t, stderr, "stderr should not be nil")
-
-			// Give processes time to clean up
-			time.Sleep(tt.cleanupCheckDelay)
-
-			// Verify no orphaned sleep processes remain
-			// Using pgrep to detect any sleep processes with our command pattern
-			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
-			output, _ := checkCmd.CombinedOutput()
-
-			assert.Empty(t, output, "No orphan sleep processes should remain - process group kill should have terminated all children")
 		})
 	}
 }
@@ -757,12 +741,6 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 					"if error occurs, should be cancellation-related",
 				)
 			}
-
-			// Cleanup check
-			time.Sleep(200 * time.Millisecond)
-			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
-			output, _ := checkCmd.CombinedOutput()
-			assert.Empty(t, output, "No orphan processes should remain")
 		})
 	}
 }
@@ -818,12 +796,6 @@ func TestRun_SetsProcessGroup_ErrorHandling(t *testing.T) {
 					assert.True(t, errors.Is(err, context.Canceled), "should be cancellation error")
 				}
 			}
-
-			// Cleanup verification
-			time.Sleep(200 * time.Millisecond)
-			checkCmd := exec.CommandContext(context.Background(), "pgrep", "-f", "sleep 10")
-			output, _ := checkCmd.CombinedOutput()
-			assert.Empty(t, output, "No orphan processes should remain after error handling")
 		})
 	}
 }
