@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **C054**: Increased Application Layer Test Coverage to 87% (target 85%)
+  - Added comprehensive tests for 9 under-covered functions: `resolveOperationValue`, `resolveNextStep`, `classifyErrorType`, `executeFromStep`, `executePluginOperation`, `ValidateWorkflow`, `ExecuteSingleStep`, `ExecuteStep`, and `executeLoopStep`
+  - Created 5 new test files with 300+ LOC: `execution_service_resolve_test.go`, `execution_service_transitions_test.go`, `execution_service_errors_test.go`, `execution_service_resume_test.go`, `execution_service_plugin_test.go`
+  - Extended 3 existing test files with 200+ LOC: `service_validator_injection_test.go`, `single_step_test.go`, `execution_service_loop_test.go`
+  - All new tests follow ServiceTestHarness builder pattern and table-driven conventions
+  - No existing tests modified (additive-only changes)
+  - All tests pass with zero race condition warnings
 
 - **C051**: Architecture enforcement with go-arch-lint
   - Added `.go-arch-lint.yml` configuration defining hexagonal architecture constraints

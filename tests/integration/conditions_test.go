@@ -16,7 +16,6 @@ import (
 	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -231,7 +230,7 @@ states:
 			shellExecutor := executor.NewShellExecutor()
 			parallelExecutor := application.NewParallelExecutor(log)
 			resolver := interpolation.NewTemplateResolver()
-			exprEvaluator := expression.NewExprEvaluator()
+			exprEvaluator := infraExpr.NewExprEvaluator()
 
 			// Create services
 			wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
@@ -262,7 +261,7 @@ states:
 }
 
 func TestExpressionEvaluator_Integration(t *testing.T) {
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	tests := []struct {
 		name    string
@@ -296,7 +295,7 @@ func TestExpressionEvaluator_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := evaluator.Evaluate(tt.expr, tt.ctx)
+			got, err := evaluator.EvaluateBool(tt.expr, tt.ctx)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -353,7 +352,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -427,7 +426,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -479,7 +478,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -562,7 +561,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -623,7 +622,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -706,7 +705,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(
@@ -779,7 +778,7 @@ states:
 	shellExecutor := executor.NewShellExecutor()
 	parallelExecutor := application.NewParallelExecutor(log)
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := expression.NewExprEvaluator()
+	exprEvaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
 	execSvc := application.NewExecutionServiceWithEvaluator(

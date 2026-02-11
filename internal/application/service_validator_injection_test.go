@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vanoix/awf/internal/application"
+	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/testutil"
 )
@@ -416,4 +417,192 @@ func TestValidateWorkflow_ContextCancellation(t *testing.T) {
 	// This test documents the expected behavior if context checking is added.
 	// For now, we just verify the method doesn't panic with cancelled context.
 	_ = err // Validation may succeed or fail depending on implementation
+}
+
+// TestValidateWorkflow_StateReferenceErrorConversion tests that StateReferenceError
+// from domain validation is converted to a structured workflow error (coverage: lines 65-81).
+func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
+	// Arrange
+	repo := testutil.NewMockWorkflowRepository()
+	validator := testutil.NewMockExpressionValidator()
+
+	// Add workflow with invalid state reference in OnSuccess
+	repo.AddWorkflow("invalid-state-ref", &workflow.Workflow{
+		Name:    "invalid-state-ref",
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo test",
+				OnSuccess: "nonexistent", // Invalid state reference
+			},
+			"success": {Name: "success", Type: workflow.StepTypeTerminal},
+		},
+	})
+
+	svc := application.NewWorkflowService(
+		repo,
+		testutil.NewMockStateStore(),
+		testutil.NewMockCommandExecutor(),
+		testutil.NewMockLogger(),
+		validator,
+	)
+
+	// Act
+	err := svc.ValidateWorkflow(context.Background(), "invalid-state-ref")
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected validation to fail with StateReferenceError, got nil")
+	}
+
+	// Verify it's a StructuredError with the correct error code
+	var structuredErr *domainerrors.StructuredError
+	if !errors.As(err, &structuredErr) {
+		t.Fatalf("expected StructuredError, got %T: %v", err, err)
+	}
+
+	if structuredErr.Code != domainerrors.ErrorCodeWorkflowValidationMissingState {
+		t.Errorf("expected error code %s, got %s",
+			domainerrors.ErrorCodeWorkflowValidationMissingState,
+			structuredErr.Code)
+	}
+
+	// Verify error details contain required fields
+	details := structuredErr.Details
+	if details == nil {
+		t.Fatal("expected Details to be non-nil")
+	}
+
+	requiredFields := []string{"state", "available_states", "step", "field"}
+	for _, field := range requiredFields {
+		if _, ok := details[field]; !ok {
+			t.Errorf("expected Details to contain %q field, but it was missing", field)
+		}
+	}
+
+	// Verify specific values
+	if state, ok := details["state"].(string); !ok || state != "nonexistent" {
+		t.Errorf("expected state to be 'nonexistent', got %v", details["state"])
+	}
+
+	if step, ok := details["step"].(string); !ok || step != "start" {
+		t.Errorf("expected step to be 'start', got %v", details["step"])
+	}
+
+	if field, ok := details["field"].(string); !ok || field != "on_success" {
+		t.Errorf("expected field to be 'on_success', got %v", details["field"])
+	}
+}
+
+// TestValidateWorkflow_LoadErrorPropagation tests that repository load errors
+// are properly wrapped and propagated (coverage: line 61).
+func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
+	// Arrange
+	repo := testutil.NewMockWorkflowRepository()
+	validator := testutil.NewMockExpressionValidator()
+
+	// Configure repo to return error on Load
+	expectedErr := errors.New("disk IO error")
+	repo.SetLoadError(expectedErr)
+
+	svc := application.NewWorkflowService(
+		repo,
+		testutil.NewMockStateStore(),
+		testutil.NewMockCommandExecutor(),
+		testutil.NewMockLogger(),
+		validator,
+	)
+
+	// Act
+	err := svc.ValidateWorkflow(context.Background(), "test-workflow")
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error from Load, got nil")
+	}
+
+	// Verify error is wrapped with "load workflow" prefix
+	expectedPrefix := "load workflow test-workflow:"
+	if !errors.Is(err, expectedErr) {
+		t.Errorf("expected error chain to contain original error: %v", err)
+	}
+
+	errMsg := err.Error()
+	if len(errMsg) < len(expectedPrefix) || errMsg[:len(expectedPrefix)] != expectedPrefix {
+		t.Errorf("expected error message to start with %q, got: %s", expectedPrefix, errMsg)
+	}
+}
+
+// TestValidateWorkflow_GeneralValidationError tests that non-StateReferenceError
+// validation errors are properly wrapped (coverage: line 83).
+func TestValidateWorkflow_GeneralValidationError(t *testing.T) {
+	// Arrange
+	repo := testutil.NewMockWorkflowRepository()
+	validator := testutil.NewMockExpressionValidator()
+
+	// Add workflow with general validation error (empty name)
+	repo.AddWorkflow("invalid", &workflow.Workflow{
+		Name:    "", // Invalid: empty name triggers general validation error
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {Name: "start", Type: workflow.StepTypeTerminal},
+		},
+	})
+
+	svc := application.NewWorkflowService(
+		repo,
+		testutil.NewMockStateStore(),
+		testutil.NewMockCommandExecutor(),
+		testutil.NewMockLogger(),
+		validator,
+	)
+
+	// Act
+	err := svc.ValidateWorkflow(context.Background(), "invalid")
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected validation error for empty workflow name, got nil")
+	}
+
+	// Verify error is wrapped with "validate workflow" prefix
+	// This should NOT be a StateReferenceError
+	var stateRefErr *workflow.StateReferenceError
+	if errors.As(err, &stateRefErr) {
+		t.Fatal("expected general validation error, got StateReferenceError")
+	}
+
+	// Verify error message contains the wrapper prefix
+	expectedPrefix := "validate workflow invalid:"
+	errMsg := err.Error()
+	if len(errMsg) < len(expectedPrefix) || errMsg[:len(expectedPrefix)] != expectedPrefix {
+		t.Errorf("expected error message to start with %q, got: %s", expectedPrefix, errMsg)
+	}
+
+	// Verify the underlying validation error is included
+	if !errors.Is(err, errors.New("workflow name is required")) &&
+		!contains(errMsg, "workflow name is required") {
+		t.Errorf("expected error to mention 'workflow name is required', got: %s", errMsg)
+	}
+}
+
+// contains is a helper function to check if a string contains a substring.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					containsMiddle(s, substr))))
+}
+
+func containsMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
-	"github.com/vanoix/awf/pkg/expression"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -57,7 +56,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -111,7 +110,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -167,7 +166,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -231,7 +230,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -299,7 +298,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -419,7 +418,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -496,7 +495,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -574,7 +573,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -613,7 +612,7 @@ func TestLoopFixtures_Integration(t *testing.T) {
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -672,7 +671,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -725,7 +724,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -751,7 +750,7 @@ states:
 // alwaysTrueEvaluator always returns true (for testing max_iterations)
 type alwaysTrueEvaluator struct{}
 
-func (e *alwaysTrueEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (e *alwaysTrueEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	return true, nil
 }
 
@@ -771,7 +770,7 @@ func newLoopContextEvaluator() *loopContextEvaluator {
 	return &loopContextEvaluator{}
 }
 
-func (e *loopContextEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (e *loopContextEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	// Handle static expressions
 	switch expr {
 	case "true":
@@ -827,7 +826,7 @@ func newF048TransitionsEvaluator() *f048TransitionsEvaluator {
 	return &f048TransitionsEvaluator{}
 }
 
-func (e *f048TransitionsEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (e *f048TransitionsEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	// Handle static expressions
 	switch expr {
 	case "true":
@@ -1318,7 +1317,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -1846,7 +1845,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)
@@ -2393,7 +2392,7 @@ states:
 	exec := executor.NewShellExecutor()
 	logger := &mockLogger{}
 	resolver := interpolation.NewTemplateResolver()
-	evaluator := expression.NewExprEvaluator()
+	evaluator := infraExpr.NewExprEvaluator()
 
 	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
 	parallelExec := application.NewParallelExecutor(logger)

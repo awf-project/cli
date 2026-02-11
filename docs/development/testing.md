@@ -221,6 +221,50 @@ func TestExecutionWithMock(t *testing.T) {
 }
 ```
 
+## ServiceTestHarness (Application Layer)
+
+The `ServiceTestHarness` (introduced in C012) is the standard way to set up `ExecutionService` tests. It provides a fluent builder API that wires all internal composition through port interfaces, keeping tests black-box.
+
+**Location**: `internal/application/testutil_test.go`
+
+```go
+func TestExecuteStep_Timeout(t *testing.T) {
+    harness := NewTestHarness(t).
+        WithWorkflow(&workflow.Workflow{
+            Name:    "test",
+            Initial: "step1",
+            States: map[string]workflow.State{
+                "step1": &workflow.StepState{
+                    Name:    "step1",
+                    Command: "sleep 10",
+                    Timeout: 1,
+                },
+                "done": &workflow.TerminalState{Name: "done"},
+            },
+        }).
+        WithCommandResult("sleep 10", ports.Result{Output: "", ExitCode: 1})
+
+    svc, _ := harness.Build()
+    result, err := svc.Run(context.Background(), "test", nil)
+    require.NoError(t, err)
+    assert.Equal(t, workflow.StatusFailed, result.Status)
+}
+```
+
+**Builder methods**:
+
+| Method | Purpose |
+|--------|---------|
+| `NewTestHarness(t)` | Create harness with default thread-safe mocks |
+| `NewTestHarnessWithEvaluator(t, eval)` | Create harness with a real expression evaluator |
+| `.WithWorkflow(wf)` | Configure workflow for the mock repository |
+| `.WithCommandResult(cmd, result)` | Set expected command output |
+| `.WithStateStore(store)` | Override the default state store |
+| `.WithExecutor(exec)` | Override the default executor |
+| `.Build()` | Build the `ExecutionService` and return mocks |
+
+**Test file naming**: Application layer test files follow the `execution_service_{concern}_test.go` convention, grouping tests by functional concern (e.g., `_loop_test.go`, `_transitions_test.go`, `_errors_test.go`).
+
 ## Race Detection
 
 Test concurrent code with race detector:
@@ -296,9 +340,9 @@ make test-coverage
 # Opens coverage.html in browser
 ```
 
-Coverage goals:
+Coverage goals (C054 achieved in v0.4.0):
 - Domain layer: >90%
-- Application layer: >80%
+- Application layer: **87%** (target 85%, achieved via C054)
 - Infrastructure layer: >70%
 - CLI: Integration tests cover main paths
 

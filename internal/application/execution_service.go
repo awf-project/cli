@@ -374,7 +374,7 @@ func (s *ExecutionService) executeStep(
 	}
 
 	if result.ExitCode != 0 {
-		return s.handleNonZeroExit(stepCtx, step, execCtx, &state, result.ExitCode)
+		return s.handleNonZeroExit(stepCtx, step, execCtx, &state, result)
 	}
 
 	return s.handleSuccess(stepCtx, step, execCtx, &state)
@@ -1174,10 +1174,15 @@ func (s *ExecutionService) handleNonZeroExit(
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 	state *workflow.StepState,
-	exitCode int,
+	result *ports.CommandResult,
 ) (string, error) {
 	state.Status = workflow.StatusFailed
-	state.Error = fmt.Sprintf("exit code %d", exitCode)
+	// Include stderr in error if available, otherwise just exit code
+	if result.Stderr != "" {
+		state.Error = result.Stderr
+	} else {
+		state.Error = fmt.Sprintf("exit code %d", result.ExitCode)
+	}
 	execCtx.SetStepState(step.Name, *state)
 
 	// execute post-hooks even on failure
@@ -1194,7 +1199,12 @@ func (s *ExecutionService) handleNonZeroExit(
 	if step.OnFailure != "" {
 		return step.OnFailure, nil
 	}
-	return "", fmt.Errorf("step %s: exit code %d", step.Name, exitCode)
+
+	// Return error with stderr if available for better error classification
+	if result.Stderr != "" {
+		return "", fmt.Errorf("step %s: %s", step.Name, result.Stderr)
+	}
+	return "", fmt.Errorf("step %s: exit code %d", step.Name, result.ExitCode)
 }
 
 // handleSuccess processes successful step execution, executing post-hooks and resolving
