@@ -77,7 +77,7 @@ func (s *ExecutionService) ExecuteSingleStep(
 	}
 
 	// Execute pre-hooks
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); hookErr != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -122,7 +122,7 @@ func (s *ExecutionService) ExecuteSingleStep(
 	}
 
 	// Execute post-hooks (always, even on failure)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); err != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 

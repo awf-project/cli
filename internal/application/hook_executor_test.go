@@ -72,10 +72,10 @@ func TestHookExecutor_ExecuteHooks_EmptyHook(t *testing.T) {
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
 
-	err := hookExec.ExecuteHooks(context.Background(), nil, nil)
+	err := hookExec.ExecuteHooks(context.Background(), nil, nil, false)
 	assert.NoError(t, err)
 
-	err = hookExec.ExecuteHooks(context.Background(), workflow.Hook{}, nil)
+	err = hookExec.ExecuteHooks(context.Background(), workflow.Hook{}, nil, false)
 	assert.NoError(t, err)
 }
 
@@ -92,7 +92,7 @@ func TestHookExecutor_ExecuteHooks_LogAction(t *testing.T) {
 	logger.On("Info", "Starting workflow...", mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err)
 	logger.AssertCalled(t, "Info", "Starting workflow...", mock.Anything)
@@ -114,7 +114,7 @@ func TestHookExecutor_ExecuteHooks_CommandAction(t *testing.T) {
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err)
 	executor.AssertExpectations(t)
@@ -142,7 +142,7 @@ func TestHookExecutor_ExecuteHooks_MultipleActions(t *testing.T) {
 	})).Return(&ports.CommandResult{ExitCode: 0}, nil)
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err)
 	logger.AssertCalled(t, "Info", "Step 1", mock.Anything)
@@ -168,7 +168,7 @@ func TestHookExecutor_ExecuteHooks_VariableInterpolation(t *testing.T) {
 	logger.On("Info", "Processing test.txt", mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, intCtx)
+	err := hookExec.ExecuteHooks(context.Background(), hook, intCtx, false)
 
 	require.NoError(t, err)
 	logger.AssertCalled(t, "Info", "Processing test.txt", mock.Anything)
@@ -194,7 +194,7 @@ func TestHookExecutor_ExecuteHooks_CommandFailure_ContinueByDefault(t *testing.T
 	logger.On("Info", "After failure", mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err) // continues despite failure
 	logger.AssertCalled(t, "Warn", mock.Anything, mock.Anything)
@@ -218,8 +218,7 @@ func TestHookExecutor_ExecuteHooks_CommandFailure_FailOnError(t *testing.T) {
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	hookExec.SetFailOnError(true)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, true)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "command failed")
@@ -244,7 +243,7 @@ func TestHookExecutor_ExecuteHooks_NonZeroExitCode(t *testing.T) {
 	logger.On("Warn", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err) // continues by default
 	logger.AssertCalled(t, "Warn", mock.Anything, mock.Anything)
@@ -264,7 +263,7 @@ func TestHookExecutor_ExecuteHooks_InterpolationError(t *testing.T) {
 	logger.On("Warn", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(context.Background(), hook, nil)
+	err := hookExec.ExecuteHooks(context.Background(), hook, nil, false)
 
 	require.NoError(t, err) // continues by default
 	logger.AssertCalled(t, "Warn", mock.Anything, mock.Anything)
@@ -289,7 +288,7 @@ func TestHookExecutor_ExecuteHooks_ContextCancellation(t *testing.T) {
 	logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 	hookExec := NewHookExecutor(executor, logger, resolver)
-	err := hookExec.ExecuteHooks(ctx, hook, nil)
+	err := hookExec.ExecuteHooks(ctx, hook, nil, false)
 
 	// Context cancellation should propagate
 	require.Error(t, err)

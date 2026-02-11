@@ -11,10 +11,9 @@ import (
 
 // HookExecutor executes workflow and step hooks.
 type HookExecutor struct {
-	executor    ports.CommandExecutor
-	logger      ports.Logger
-	resolver    interpolation.Resolver
-	failOnError bool
+	executor ports.CommandExecutor
+	logger   ports.Logger
+	resolver interpolation.Resolver
 }
 
 // NewHookExecutor creates a new hook executor.
@@ -24,25 +23,20 @@ func NewHookExecutor(
 	resolver interpolation.Resolver,
 ) *HookExecutor {
 	return &HookExecutor{
-		executor:    executor,
-		logger:      logger,
-		resolver:    resolver,
-		failOnError: false,
+		executor: executor,
+		logger:   logger,
+		resolver: resolver,
 	}
 }
 
-// SetFailOnError configures whether hook failures should stop execution.
-func (h *HookExecutor) SetFailOnError(fail bool) {
-	h.failOnError = fail
-}
-
 // ExecuteHooks executes a list of hook actions sequentially.
-// By default, errors are logged but execution continues.
+// If failOnError is false, errors are logged but execution continues.
 // If failOnError is true, execution stops on first error.
 func (h *HookExecutor) ExecuteHooks(
 	ctx context.Context,
 	hook workflow.Hook,
 	intCtx *interpolation.Context,
+	failOnError bool,
 ) error {
 	if len(hook) == 0 {
 		return nil
@@ -55,7 +49,7 @@ func (h *HookExecutor) ExecuteHooks(
 				return fmt.Errorf("hook cancelled: %w", ctx.Err())
 			}
 
-			if h.failOnError {
+			if failOnError {
 				return err
 			}
 			// Log warning and continue

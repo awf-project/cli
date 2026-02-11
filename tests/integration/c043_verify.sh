@@ -26,8 +26,8 @@ else
     exit 1
 fi
 
-# Test 2: WARNING Comments Issue Tracking
-echo "[2/4] Testing WARNING comments have issue references..."
+# Test 2: No stale WARNING comments (C055 cleanup)
+echo "[2/4] Verifying no stale WARNING comments about checkUnknownKeys..."
 LOADER_TEST="internal/infrastructure/config/loader_test.go"
 if ! [ -f "$LOADER_TEST" ]; then
     echo "  ✗ FAIL: $LOADER_TEST not found"
@@ -35,12 +35,11 @@ if ! [ -f "$LOADER_TEST" ]; then
 fi
 
 WARNING_COUNT=$(grep -c "WARNING:.*checkUnknownKeys" "$LOADER_TEST" || true)
-ISSUE_REF_COUNT=$(grep "WARNING:.*checkUnknownKeys" "$LOADER_TEST" | grep -c "See #" || true)
 
-if [ "$WARNING_COUNT" -gt 0 ] && [ "$WARNING_COUNT" -eq "$ISSUE_REF_COUNT" ]; then
-    echo "  ✓ PASS: All $WARNING_COUNT WARNING comments include issue references"
+if [ "$WARNING_COUNT" -eq 0 ]; then
+    echo "  ✓ PASS: No stale WARNING comments about checkUnknownKeys"
 else
-    echo "  ✗ FAIL: Found $WARNING_COUNT WARNING comments but only $ISSUE_REF_COUNT have issue references"
+    echo "  ✗ FAIL: Found $WARNING_COUNT stale WARNING comments about checkUnknownKeys (should be 0 after C055)"
     exit 1
 fi
 
