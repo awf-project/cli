@@ -225,15 +225,12 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 	// execute workflow_start hooks
 	intCtx := s.buildInterpolationContext(execCtx)
-	s.hookExecutor.SetFailOnError(true)
-	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
-		s.hookExecutor.SetFailOnError(false)
+	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
 		s.recordHistory(execCtx)
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
-	s.hookExecutor.SetFailOnError(false)
 
 	// execution loop
 	var execErr error
@@ -313,7 +310,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
 			s.recordHistory(execCtx)
-			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
+			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
 			return execCtx, execErr
@@ -325,14 +322,14 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			Message: execErr.Error(),
 			State:   execCtx.CurrentStep,
 		}
-		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx); err != nil {
+		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx, false); err != nil {
 			s.logger.Warn("workflow_error hook failed", "error", err)
 		}
 		return execCtx, execErr
 	}
 
 	// workflow completed successfully
-	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
 	return execCtx, nil
@@ -664,7 +661,7 @@ func (s *ExecutionService) executeParallelStep(
 	intCtx := s.buildInterpolationContext(execCtx)
 
 	// execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -729,7 +726,7 @@ func (s *ExecutionService) executeParallelStep(
 
 		// execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -744,7 +741,7 @@ func (s *ExecutionService) executeParallelStep(
 
 	// execute post-hooks on success
 	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -773,7 +770,7 @@ func (s *ExecutionService) executeLoopStep(
 
 	// Execute pre-hooks
 	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -858,7 +855,7 @@ func (s *ExecutionService) executeLoopStep(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -883,7 +880,7 @@ func (s *ExecutionService) executeLoopStep(
 
 	// Execute post-hooks
 	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -985,13 +982,9 @@ func (s *ExecutionService) executeLoopPostHooks(ctx context.Context, step *workf
 	// Build interpolation context for hook execution
 	intCtx := s.buildInterpolationContext(execCtx)
 
-	// Temporarily enable failOnError to detect hook failures for logging purposes
+	// Execute post-hooks with failOnError to detect failures for logging purposes
 	// (we still don't propagate the error to the caller)
-	s.hookExecutor.SetFailOnError(true)
-	defer s.hookExecutor.SetFailOnError(false)
-
-	// Execute post-hooks and log any failures (don't propagate errors)
-	if err := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, true); err != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 }
@@ -1015,7 +1008,7 @@ func (s *ExecutionService) prepareStepExecution(
 	intCtx = s.buildInterpolationContext(execCtx)
 
 	// execute pre-hooks
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); hookErr != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -1152,7 +1145,7 @@ func (s *ExecutionService) handleExecutionError(
 
 	// execute post-hooks even on failure
 	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); err != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -1187,7 +1180,7 @@ func (s *ExecutionService) handleNonZeroExit(
 
 	// execute post-hooks even on failure
 	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); err != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -1221,7 +1214,7 @@ func (s *ExecutionService) handleSuccess(
 
 	// execute post-hooks on success
 	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); err != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -1421,15 +1414,12 @@ func (s *ExecutionService) Resume(
 
 	// execute workflow_start hooks (on resume we might want these again)
 	intCtx := s.buildInterpolationContext(execCtx)
-	s.hookExecutor.SetFailOnError(true)
-	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx); err != nil {
-		s.hookExecutor.SetFailOnError(false)
+	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
 		s.recordHistory(execCtx)
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
-	s.hookExecutor.SetFailOnError(false)
 
 	// Continue execution from current step
 	return s.executeFromStep(ctx, wf, execCtx)
@@ -1542,7 +1532,7 @@ func (s *ExecutionService) executeFromStep(
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
 			s.recordHistory(execCtx)
-			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx); err != nil {
+			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
 			return execCtx, execErr
@@ -1554,14 +1544,14 @@ func (s *ExecutionService) executeFromStep(
 			Message: execErr.Error(),
 			State:   execCtx.CurrentStep,
 		}
-		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx); err != nil {
+		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx, false); err != nil {
 			s.logger.Warn("workflow_error hook failed", "error", err)
 		}
 		return execCtx, execErr
 	}
 
 	// workflow completed successfully
-	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
 	return execCtx, nil
@@ -1605,7 +1595,7 @@ func (s *ExecutionService) executePluginOperation(
 	intCtx := s.buildInterpolationContext(execCtx)
 
 	// Execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -1648,7 +1638,7 @@ func (s *ExecutionService) executePluginOperation(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -1671,7 +1661,7 @@ func (s *ExecutionService) executePluginOperation(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -1694,7 +1684,7 @@ func (s *ExecutionService) executePluginOperation(
 
 	// Execute post-hooks on success
 	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -1753,7 +1743,7 @@ func (s *ExecutionService) executeAgentStep(
 	intCtx := s.buildInterpolationContext(execCtx)
 
 	// Execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -1830,7 +1820,7 @@ func (s *ExecutionService) executeAgentStep(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -1851,7 +1841,7 @@ func (s *ExecutionService) executeAgentStep(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -1870,7 +1860,7 @@ func (s *ExecutionService) executeAgentStep(
 
 	// Execute post-hooks on success
 	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -1959,7 +1949,7 @@ func (s *ExecutionService) executeConversationStep(
 
 	// 9. Execute post-hooks on success
 	intCtx := s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 

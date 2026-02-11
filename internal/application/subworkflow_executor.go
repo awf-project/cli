@@ -100,7 +100,7 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	}
 
 	// Execute pre-hooks
-	if err := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -160,7 +160,7 @@ func (s *ExecutionService) executeCallWorkflowStep(
 
 		// Execute post-hooks even on failure
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -181,7 +181,7 @@ func (s *ExecutionService) executeCallWorkflowStep(
 
 		// Execute post-hooks
 		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -200,7 +200,7 @@ func (s *ExecutionService) executeCallWorkflowStep(
 
 	// Execute post-hooks on success
 	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 

@@ -453,7 +453,7 @@ func (e *InteractiveExecutor) executeStep(
 	intCtx := e.buildInterpolationContext(execCtx)
 
 	// Execute pre-hooks
-	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		e.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -568,7 +568,7 @@ func (e *InteractiveExecutor) HandleExecutionError(
 		return "", fmt.Errorf("HandleExecutionError: step cannot be nil")
 	}
 	// Execute post-hooks even on failure
-	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, false); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -599,7 +599,7 @@ func (e *InteractiveExecutor) HandleNonZeroExit(
 		return "", fmt.Errorf("HandleNonZeroExit: result cannot be nil")
 	}
 	// Execute post-hooks
-	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, false); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -623,7 +623,7 @@ func (e *InteractiveExecutor) HandleSuccess(
 	intCtx *interpolation.Context,
 ) (string, error) {
 	// Execute post-hooks
-	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, false); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -651,7 +651,7 @@ func (e *InteractiveExecutor) executeParallelStep(
 	intCtx := e.buildInterpolationContext(execCtx)
 
 	// Execute pre-hooks
-	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		e.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -707,7 +707,7 @@ func (e *InteractiveExecutor) executeParallelStep(
 
 		// Execute post-hooks
 		intCtx = e.buildInterpolationContext(execCtx)
-		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -722,7 +722,7 @@ func (e *InteractiveExecutor) executeParallelStep(
 
 	// Execute post-hooks
 	intCtx = e.buildInterpolationContext(execCtx)
-	if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 
@@ -748,7 +748,7 @@ func (e *InteractiveExecutor) executeLoopStep(
 
 	// Execute pre-hooks
 	intCtx := e.buildInterpolationContext(execCtx)
-	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx); err != nil {
+	if err := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
 		e.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
@@ -799,7 +799,7 @@ func (e *InteractiveExecutor) executeLoopStep(
 
 		// Execute post-hooks
 		intCtx = e.buildInterpolationContext(execCtx)
-		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
@@ -817,7 +817,7 @@ func (e *InteractiveExecutor) executeLoopStep(
 
 	// Execute post-hooks
 	intCtx = e.buildInterpolationContext(execCtx)
-	if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx); hookErr != nil {
+	if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 	}
 

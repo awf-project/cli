@@ -73,12 +73,13 @@ func TestDocumentation_StatusFilterAlignment_Integration(t *testing.T) {
 	}
 }
 
-// TestWarningComments_IssueTracking_Integration verifies that WARNING comments
-// about unimplemented features include GitHub issue references for tracking.
+// TestWarningComments_IssueTracking_Integration verifies that no stale WARNING
+// comments about checkUnknownKeys remain in loader_test.go.
+// C055 removed these comments after checkUnknownKeys was implemented (issue #169).
 //
-// Given: Test files with WARNING comments
-// When: Checking checkUnknownKeys WARNING comments
-// Then: All WARNING comments should include issue reference (e.g., "See #169")
+// Given: loader_test.go with checkUnknownKeys tests
+// When: Searching for WARNING comments about checkUnknownKeys
+// Then: Zero WARNING comments should be found
 func TestWarningComments_IssueTracking_Integration(t *testing.T) {
 	repoRoot := getRepoRoot(t)
 	loaderTestPath := filepath.Join(repoRoot, "internal/infrastructure/config/loader_test.go")
@@ -88,25 +89,17 @@ func TestWarningComments_IssueTracking_Integration(t *testing.T) {
 
 	lines := strings.Split(string(content), "\n")
 
-	// Pattern to match WARNING comments about checkUnknownKeys
 	warningPattern := regexp.MustCompile(`//\s*WARNING:.*checkUnknownKeys`)
-	issueRefPattern := regexp.MustCompile(`See\s+#\d+`)
 
 	warningCount := 0
-	warningsWithIssue := 0
-
 	for _, line := range lines {
 		if warningPattern.MatchString(line) {
 			warningCount++
-			if issueRefPattern.MatchString(line) {
-				warningsWithIssue++
-			}
 		}
 	}
 
-	require.Greater(t, warningCount, 0, "should find WARNING comments about checkUnknownKeys")
-	assert.Equal(t, warningCount, warningsWithIssue,
-		"all WARNING comments should include GitHub issue reference (format: 'See #XXX')")
+	assert.Equal(t, 0, warningCount,
+		"no stale WARNING comments about checkUnknownKeys should remain (C055 cleanup)")
 }
 
 // TestFormatting_GofmtCompliance_Integration verifies that all Go source files
