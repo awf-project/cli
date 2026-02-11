@@ -602,7 +602,10 @@ func TestExecutionService_handleNonZeroExit(t *testing.T) {
 			stepCtx := context.Background()
 
 			// Act: Call handleNonZeroExit
-			nextStep, err := svc.handleNonZeroExit(stepCtx, tt.step, tt.execCtx, &tt.state, tt.exitCode)
+			result := &ports.CommandResult{
+				ExitCode: tt.exitCode,
+			}
+			nextStep, err := svc.handleNonZeroExit(stepCtx, tt.step, tt.execCtx, &tt.state, result)
 
 			// Assert: Verify behavior
 			if tt.expectError {

@@ -2,7 +2,10 @@ package application_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -288,4 +291,365 @@ func (r *interpolatingMockResolver) Resolve(template string, ctx *interpolation.
 		return resolved, nil
 	}
 	return template, nil
+}
+
+// =============================================================================
+// ExecuteSingleStep Extended Tests - T008
+// Feature: C054 - Increase Application Layer Test Coverage
+// Component: T008 - Extend ExecuteSingleStep tests
+// =============================================================================
+//
+// These tests target uncovered paths in ExecuteSingleStep to increase coverage
+// from 62.3% to 80%+. Focus areas:
+// - Template service expansion errors (lines 46-48)
+// - Dir interpolation (success and error paths, lines 94-103)
+// - Step timeout enforcement (lines 72-76)
+//
+// Tests follow existing manual mock wiring pattern (pre-C012) to maintain
+// consistency with existing tests in this file. New tests are additive only.
+// =============================================================================
+
+func TestExecuteSingleStep_TemplateExpansionError(t *testing.T) {
+	tests := []struct {
+		name          string
+		workflow      *workflow.Workflow
+		expectedError string
+	}{
+		{
+			name: "template service returns expansion error",
+			workflow: &workflow.Workflow{
+				Name:    "template-error-test",
+				Initial: "start",
+				Steps: map[string]*workflow.Step{
+					"start": {
+						Name:      "start",
+						Type:      workflow.StepTypeCommand,
+						Command:   "echo test",
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			},
+			expectedError: "expand templates: load template failing-template: template not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange: Create workflow with template reference
+			repo := newMockRepository()
+
+			// Add template reference to trigger template expansion
+			wfWithTemplate := *tt.workflow
+			wfWithTemplate.Steps["start"].TemplateRef = &workflow.WorkflowTemplateRef{
+				TemplateName: "failing-template",
+			}
+			repo.workflows[tt.workflow.Name] = &wfWithTemplate
+
+			// Create template service with failing template repository
+			templateRepo := &mockTemplateRepository{
+				getError: errors.New("template not found"),
+			}
+			templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+			execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+			execSvc.SetTemplateService(templateSvc)
+
+			// Act: Execute single step
+			result, err := execSvc.ExecuteSingleStep(context.Background(), tt.workflow.Name, "start", nil, nil)
+
+			// Assert: Verify error returned
+			require.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), tt.expectedError)
+		})
+	}
+}
+
+func TestExecuteSingleStep_DirInterpolation(t *testing.T) {
+	tests := []struct {
+		name           string
+		workdir        string
+		expectedDir    string
+		commandMapping map[string]string
+	}{
+		{
+			name:        "dir interpolated from input",
+			workdir:     "/tmp/workspace",
+			expectedDir: "/tmp/workspace",
+			commandMapping: map[string]string{
+				"pwd": "pwd",
+			},
+		},
+		{
+			name:        "dir interpolated with nested path",
+			workdir:     "/home/user/project",
+			expectedDir: "/home/user/project",
+			commandMapping: map[string]string{
+				"ls -la": "ls -la",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange: Workflow with step.Dir containing template
+			repo := newMockRepository()
+			repo.workflows["dir-test"] = &workflow.Workflow{
+				Name:    "dir-test",
+				Initial: "work",
+				Inputs:  []workflow.Input{{Name: "workdir", Type: "string"}},
+				Steps: map[string]*workflow.Step{
+					"work": {
+						Name:      "work",
+						Type:      workflow.StepTypeCommand,
+						Command:   "pwd",
+						Dir:       "{{inputs.workdir}}",
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			}
+
+			executor := &dirCapturingExecutor{
+				capturedDir: "",
+				result:      &ports.CommandResult{Stdout: tt.expectedDir + "\n", ExitCode: 0},
+			}
+
+			// Resolver that handles Dir interpolation
+			resolver := &interpolatingMockResolver{
+				mapping: map[string]string{
+					"{{inputs.workdir}}": tt.expectedDir,
+					"pwd":                "pwd",
+				},
+			}
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
+
+			// Act: Execute step with workdir input
+			inputs := map[string]any{"workdir": tt.workdir}
+			result, err := execSvc.ExecuteSingleStep(context.Background(), "dir-test", "work", inputs, nil)
+
+			// Assert: Verify dir was interpolated correctly
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, workflow.StatusCompleted, result.Status)
+			assert.Equal(t, tt.expectedDir, executor.capturedDir, "command should be executed in interpolated directory")
+		})
+	}
+}
+
+func TestExecuteSingleStep_DirInterpolationError(t *testing.T) {
+	tests := []struct {
+		name          string
+		dir           string
+		resolverError error
+		expectedError string
+	}{
+		{
+			name:          "dir interpolation fails with invalid template",
+			dir:           "{{inputs.missing}}",
+			resolverError: errors.New("undefined variable: inputs.missing"),
+			expectedError: "interpolate dir:",
+		},
+		{
+			name:          "dir interpolation fails with malformed template",
+			dir:           "{{invalid",
+			resolverError: errors.New("unclosed template"),
+			expectedError: "interpolate dir:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange: Workflow with step.Dir that will fail interpolation
+			repo := newMockRepository()
+			repo.workflows["dir-error-test"] = &workflow.Workflow{
+				Name:    "dir-error-test",
+				Initial: "work",
+				Steps: map[string]*workflow.Step{
+					"work": {
+						Name:      "work",
+						Type:      workflow.StepTypeCommand,
+						Command:   "pwd",
+						Dir:       tt.dir,
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			}
+
+			// Resolver that returns error for dir, but succeeds for command
+			resolver := &selectiveErrorResolver{
+				commandMapping: map[string]string{
+					"pwd": "pwd",
+				},
+				dirError: tt.resolverError,
+			}
+
+			executor := newMockExecutor()
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
+
+			// Act: Execute step with dir interpolation error
+			result, err := execSvc.ExecuteSingleStep(context.Background(), "dir-error-test", "work", nil, nil)
+
+			// Assert: Verify error returned with correct prefix
+			require.Error(t, err)
+			require.NotNil(t, result, "result should be returned even on error")
+			assert.Contains(t, err.Error(), tt.expectedError)
+			assert.Equal(t, workflow.StatusFailed, result.Status)
+			assert.Contains(t, result.Error, "interpolate dir:")
+		})
+	}
+}
+
+func TestExecuteSingleStep_StepTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		timeout        int
+		executorDelay  time.Duration
+		expectTimeout  bool
+		expectedStatus workflow.ExecutionStatus
+	}{
+		{
+			name:           "command completes within timeout",
+			timeout:        2,
+			executorDelay:  100 * time.Millisecond,
+			expectTimeout:  false,
+			expectedStatus: workflow.StatusCompleted,
+		},
+		{
+			name:           "command exceeds timeout",
+			timeout:        1,
+			executorDelay:  2 * time.Second,
+			expectTimeout:  true,
+			expectedStatus: workflow.StatusFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange: Workflow with step timeout
+			repo := newMockRepository()
+			repo.workflows["timeout-test"] = &workflow.Workflow{
+				Name:    "timeout-test",
+				Initial: "slow",
+				Steps: map[string]*workflow.Step{
+					"slow": {
+						Name:      "slow",
+						Type:      workflow.StepTypeCommand,
+						Command:   "sleep 10",
+						Timeout:   tt.timeout,
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			}
+
+			// Executor that simulates delay
+			executor := &delayedExecutor{
+				delay: tt.executorDelay,
+			}
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
+
+			// Act: Execute step with timeout
+			result, err := execSvc.ExecuteSingleStep(context.Background(), "timeout-test", "slow", nil, nil)
+
+			// Assert: Verify timeout behavior
+			if tt.expectTimeout {
+				// Timeout results in failed status with context deadline error
+				require.NoError(t, err, "ExecuteSingleStep returns result, not error")
+				require.NotNil(t, result)
+				assert.Equal(t, tt.expectedStatus, result.Status)
+				assert.Contains(t, result.Error, "context deadline exceeded")
+			} else {
+				// Success case
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, tt.expectedStatus, result.Status)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Test Helpers for ExecuteSingleStep Extended Tests
+// =============================================================================
+
+// dirCapturingExecutor captures the Dir field from Command to verify interpolation
+type dirCapturingExecutor struct {
+	capturedDir string
+	result      *ports.CommandResult
+}
+
+func (d *dirCapturingExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	d.capturedDir = cmd.Dir
+	return d.result, nil
+}
+
+// selectiveErrorResolver returns error for dir interpolation but succeeds for commands
+type selectiveErrorResolver struct {
+	commandMapping map[string]string
+	dirError       error
+}
+
+func (s *selectiveErrorResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	// Check if this is a dir template (contains inputs.workdir or similar patterns)
+	if s.dirError != nil && (strings.Contains(template, "{{inputs.") || strings.Contains(template, "{{invalid")) {
+		return "", s.dirError
+	}
+
+	// Otherwise resolve normally using mapping
+	if resolved, ok := s.commandMapping[template]; ok {
+		return resolved, nil
+	}
+	return template, nil
+}
+
+// delayedExecutor simulates command execution delay for timeout testing
+type delayedExecutor struct {
+	delay time.Duration
+}
+
+func (d *delayedExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	select {
+	case <-time.After(d.delay):
+		return &ports.CommandResult{Stdout: "completed", ExitCode: 0}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// mockTemplateRepository is a failing template repository for testing template expansion errors
+type mockTemplateRepository struct {
+	getError error
+}
+
+func (m *mockTemplateRepository) GetTemplate(ctx context.Context, name string) (*workflow.Template, error) {
+	return nil, m.getError
+}
+
+func (m *mockTemplateRepository) ListTemplates(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockTemplateRepository) Exists(ctx context.Context, name string) bool {
+	return false
 }

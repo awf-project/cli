@@ -1111,3 +1111,324 @@ func TestHandleMaxIterationFailure_UpdatesLoopState(t *testing.T) {
 	assert.Equal(t, workflow.StatusFailed, savedState.Status)
 	assert.Equal(t, loopState.Error, savedState.Error)
 }
+
+// ============================================================================
+// Component T009: Break/Continue Transition Tests
+// ============================================================================
+
+// TestExecuteLoopStep_BreakTransitionToExternalStep tests that a loop correctly
+// handles early exit when a body step transitions to a step outside the loop.
+// This tests the path at execution_service.go:891-893 where result.NextStep
+// is returned for early loop exit.
+func TestExecuteLoopStep_BreakTransitionToExternalStep(t *testing.T) {
+	// Given: A workflow with a for_each loop where body step transitions to external step
+	wf := &workflow.Workflow{
+		Name:    "test-break-transition",
+		Initial: "loop_step",
+		Steps: map[string]*workflow.Step{
+			"loop_step": {
+				Name: "loop_step",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type:          workflow.LoopTypeForEach,
+					Items:         `["a", "b", "c"]`,
+					Body:          []string{"break_step"},
+					MaxIterations: 10,
+					OnComplete:    "normal_completion", // This should NOT be used
+				},
+			},
+			"break_step": {
+				Name:      "break_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo processing",
+				OnSuccess: "external_step", // Break out to external step
+			},
+			"external_step": {
+				Name:      "external_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo external",
+				OnSuccess: "done",
+			},
+			"normal_completion": {
+				Name:      "normal_completion",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo normal",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-break-transition", wf).
+		WithCommandResult("echo processing", &ports.CommandResult{Stdout: "processing\n", ExitCode: 0}).
+		WithCommandResult("echo external", &ports.CommandResult{Stdout: "external\n", ExitCode: 0}).
+		Build()
+
+	// When: Executing the workflow
+	execCtx, err := execSvc.Run(context.Background(), "test-break-transition", nil)
+
+	// Then: Should complete successfully via early exit
+	require.NoError(t, err, "loop with break transition should succeed")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// And: Loop step should be completed (not failed)
+	loopState, exists := execCtx.GetStepState("loop_step")
+	require.True(t, exists, "loop step state should exist")
+	assert.Equal(t, workflow.StatusCompleted, loopState.Status, "loop should have completed status")
+
+	// And: Loop should have only executed 1 iteration before breaking
+	assert.Contains(t, loopState.Output, "1 iteration", "loop should break after first iteration")
+
+	// And: External step should have executed (proving break worked)
+	externalState, exists := execCtx.GetStepState("external_step")
+	require.True(t, exists, "external step should have executed after break")
+	assert.Equal(t, workflow.StatusCompleted, externalState.Status)
+	assert.Equal(t, "external\n", externalState.Output)
+
+	// And: Normal completion step should NOT have executed
+	_, normalExists := execCtx.GetStepState("normal_completion")
+	assert.False(t, normalExists, "normal completion step should not execute on break")
+}
+
+// TestExecuteLoopStep_ContinueTransitionToLoopStart tests that a loop correctly
+// handles the continue pattern where a body step transitions back to the loop step.
+// This tests the logic at execution_service.go:809-820 where nextStep == step.Name
+// is treated as a retry/continue pattern.
+func TestExecuteLoopStep_ContinueTransitionToLoopStart(t *testing.T) {
+	// Given: A workflow with a for_each loop where body step transitions back to loop (retry pattern)
+	wf := &workflow.Workflow{
+		Name:    "test-continue-pattern",
+		Initial: "loop_step",
+		Steps: map[string]*workflow.Step{
+			"loop_step": {
+				Name: "loop_step",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type:          workflow.LoopTypeForEach,
+					Items:         `["a", "b", "c"]`,
+					Body:          []string{"retry_step"},
+					MaxIterations: 10,
+					OnComplete:    "completion_step",
+				},
+			},
+			"retry_step": {
+				Name:      "retry_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo retry",
+				OnSuccess: "loop_step", // Transition back to loop (retry pattern)
+			},
+			"completion_step": {
+				Name:      "completion_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo complete",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-continue-pattern", wf).
+		WithCommandResult("echo retry", &ports.CommandResult{Stdout: "retry\n", ExitCode: 0}).
+		WithCommandResult("echo complete", &ports.CommandResult{Stdout: "complete\n", ExitCode: 0}).
+		Build()
+
+	// When: Executing the workflow
+	execCtx, err := execSvc.Run(context.Background(), "test-continue-pattern", nil)
+
+	// Then: Should complete successfully after iterating through all items
+	require.NoError(t, err, "loop with retry pattern should succeed")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// And: Loop step should be completed
+	loopState, exists := execCtx.GetStepState("loop_step")
+	require.True(t, exists, "loop step state should exist")
+	assert.Equal(t, workflow.StatusCompleted, loopState.Status)
+
+	// And: Loop should have completed all 3 items (a, b, c) despite retry transitions
+	// Each item should have been processed once
+	assert.Contains(t, loopState.Output, "3 iterations", "loop should complete all iterations")
+
+	// And: Completion step should execute via OnComplete (proving loop didn't break early)
+	completionState, exists := execCtx.GetStepState("completion_step")
+	require.True(t, exists, "completion_step should have executed via OnComplete")
+	assert.Equal(t, workflow.StatusCompleted, completionState.Status)
+	assert.Equal(t, "complete\n", completionState.Output)
+}
+
+// TestExecuteLoopStep_BreakWithContinueOnError tests that a failed body step
+// with ContinueOnError=true doesn't trigger escape detection when transitioning
+// to an external step. This tests the logic at execution_service.go:812 where
+// escape detection is skipped for continue_on_error steps.
+func TestExecuteLoopStep_BreakWithContinueOnError(t *testing.T) {
+	// Given: A workflow with a loop where body step has ContinueOnError and transitions externally
+	wf := &workflow.Workflow{
+		Name:    "test-continue-on-error-break",
+		Initial: "loop_step",
+		Steps: map[string]*workflow.Step{
+			"loop_step": {
+				Name: "loop_step",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type:          workflow.LoopTypeForEach,
+					Items:         `["a", "b"]`,
+					Body:          []string{"failing_step"},
+					MaxIterations: 10,
+					OnComplete:    "should_not_run",
+				},
+			},
+			"failing_step": {
+				Name:            "failing_step",
+				Type:            workflow.StepTypeCommand,
+				Command:         "exit 1", // Command fails
+				ContinueOnError: true,     // But step continues despite failure
+				OnSuccess:       "recovery_step",
+				OnFailure:       "recovery_step", // Transition to external step even on failure
+			},
+			"recovery_step": {
+				Name:      "recovery_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo recovered",
+				OnSuccess: "done",
+			},
+			"should_not_run": {
+				Name:      "should_not_run",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo should-not-run",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-continue-on-error-break", wf).
+		WithCommandResult("exit 1", &ports.CommandResult{Stdout: "", Stderr: "error", ExitCode: 1}).
+		WithCommandResult("echo recovered", &ports.CommandResult{Stdout: "recovered\n", ExitCode: 0}).
+		Build()
+
+	// When: Executing the workflow
+	execCtx, err := execSvc.Run(context.Background(), "test-continue-on-error-break", nil)
+
+	// Then: Should complete successfully (error not propagated due to ContinueOnError)
+	require.NoError(t, err, "loop with ContinueOnError break should not propagate error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// And: Loop should be completed (not failed)
+	loopState, exists := execCtx.GetStepState("loop_step")
+	require.True(t, exists, "loop step state should exist")
+	assert.Equal(t, workflow.StatusCompleted, loopState.Status, "loop should complete despite body step failure")
+
+	// And: Loop should have only executed 1 iteration before breaking
+	assert.Contains(t, loopState.Output, "1 iteration", "loop should break after first iteration")
+
+	// And: Recovery step should execute (proving escape worked without error)
+	recoveryState, exists := execCtx.GetStepState("recovery_step")
+	require.True(t, exists, "recovery step should have executed")
+	assert.Equal(t, workflow.StatusCompleted, recoveryState.Status)
+	assert.Equal(t, "recovered\n", recoveryState.Output)
+
+	// And: OnComplete step should NOT execute (break took precedence)
+	_, shouldNotRunExists := execCtx.GetStepState("should_not_run")
+	assert.False(t, shouldNotRunExists, "OnComplete step should not execute on early break")
+
+	// And: Failing step should have failed status but workflow continues
+	failingState, exists := execCtx.GetStepState("failing_step")
+	require.True(t, exists, "failing step state should exist")
+	assert.Equal(t, workflow.StatusFailed, failingState.Status, "failing step should show failed status")
+	assert.Equal(t, 1, failingState.ExitCode, "failing step should have exit code 1")
+}
+
+// TestExecuteLoopStep_MaxIterationBoundaryWithEarlyExit tests the interaction
+// between max iteration limit and early exit via NextStep. Verifies that if
+// a loop reaches max iterations on the same iteration where it breaks early,
+// the NextStep takes precedence over OnComplete.
+func TestExecuteLoopStep_MaxIterationBoundaryWithEarlyExit(t *testing.T) {
+	// Given: A workflow with a loop that breaks on the exact max iteration boundary
+	wf := &workflow.Workflow{
+		Name:    "test-max-iter-boundary",
+		Initial: "loop_step",
+		Steps: map[string]*workflow.Step{
+			"loop_step": {
+				Name: "loop_step",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type:          workflow.LoopTypeForEach,
+					Items:         `["a", "b", "c", "d", "e"]`, // 5 items
+					Body:          []string{"boundary_step"},
+					MaxIterations: 3, // Only 3 iterations allowed
+					OnComplete:    "normal_end",
+				},
+			},
+			"boundary_step": {
+				Name:      "boundary_step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo item",
+				OnSuccess: "early_exit", // Always try to break out
+			},
+			"early_exit": {
+				Name:      "early_exit",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo early",
+				OnSuccess: "done",
+			},
+			"normal_end": {
+				Name:      "normal_end",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo normal",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("test-max-iter-boundary", wf).
+		WithCommandResult("echo item", &ports.CommandResult{Stdout: "item\n", ExitCode: 0}).
+		WithCommandResult("echo early", &ports.CommandResult{Stdout: "early\n", ExitCode: 0}).
+		Build()
+
+	// When: Executing the workflow
+	execCtx, err := execSvc.Run(context.Background(), "test-max-iter-boundary", nil)
+
+	// Then: Should complete successfully (no max iterations error)
+	require.NoError(t, err, "loop should exit early without max iterations error")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	// And: Loop should be completed
+	loopState, exists := execCtx.GetStepState("loop_step")
+	require.True(t, exists, "loop step state should exist")
+	assert.Equal(t, workflow.StatusCompleted, loopState.Status)
+
+	// And: Loop should have only executed 1 iteration before breaking
+	assert.Contains(t, loopState.Output, "1 iteration", "loop should break after first iteration")
+
+	// And: Early exit step should execute (NextStep takes precedence)
+	earlyExitState, exists := execCtx.GetStepState("early_exit")
+	require.True(t, exists, "early_exit step should have executed")
+	assert.Equal(t, workflow.StatusCompleted, earlyExitState.Status)
+	assert.Equal(t, "early\n", earlyExitState.Output)
+
+	// And: Normal OnComplete step should NOT execute
+	_, normalEndExists := execCtx.GetStepState("normal_end")
+	assert.False(t, normalEndExists, "OnComplete should not execute when NextStep breaks early")
+
+	// And: Loop should not have error about max iterations
+	assert.Empty(t, loopState.Error, "loop should have no error when breaking early on max iteration")
+
+	// And: No mention of max iterations in error (loop exited early, not via limit)
+	assert.NotContains(t, loopState.Error, "maximum iterations", "should not mention max iterations when NextStep breaks early")
+}
