@@ -1,6 +1,6 @@
 # AWF - AI Workflow CLI
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
 
 A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.
@@ -56,7 +56,7 @@ states:
   initial: greet
   greet:
     type: step
-    command: echo "Hello, {{.inputs.name}}!"
+    command: echo "Hello, {{inputs.name}}!"
     on_success: done
   done:
     type: terminal
@@ -78,12 +78,16 @@ See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 | `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
 | `awf error [code]` | Lookup error codes with descriptions and resolutions |
 | `awf list` | List available workflows |
+| `awf list prompts` | List available prompt files |
 | `awf resume` | Resume interrupted workflow |
 | `awf history` | Show execution history |
 | `awf status <id>` | Check workflow status |
+| `awf config show` | Display project configuration |
 | `awf plugin list` | List installed plugins |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf version` | Show version information |
+| `awf completion <shell>` | Generate shell autocompletion |
 
 See [Command Reference](docs/user-guide/commands.md) for all options.
 
@@ -104,12 +108,12 @@ states:
   initial: read
   read:
     type: step
-    command: cat "{{.inputs.file}}"
+    command: cat "{{inputs.file}}"
     on_success: analyze
     on_failure: error
   analyze:
     type: step
-    command: claude -c "Review: {{.states.read.Output}}"
+    command: claude -c "Review: {{states.read.Output}}"
     timeout: 120
     on_success: done
     on_failure: error
