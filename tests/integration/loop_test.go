@@ -604,8 +604,8 @@ func TestLoopFixtures_Integration(t *testing.T) {
 	fixturesPath := "../fixtures/workflows"
 
 	// Check if loop fixtures exist
-	foreachPath := filepath.Join(fixturesPath, "loop-foreach.yaml")
-	whilePath := filepath.Join(fixturesPath, "loop-while.yaml")
+	_ = filepath.Join(fixturesPath, "loop-foreach.yaml")
+	_ = filepath.Join(fixturesPath, "loop-while.yaml")
 
 	repo := repository.NewYAMLRepository(fixturesPath)
 	store := newMockStateStore()
@@ -754,6 +754,10 @@ func (e *alwaysTrueEvaluator) EvaluateBool(expr string, ctx *interpolation.Conte
 	return true, nil
 }
 
+func (e *alwaysTrueEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, nil
+}
+
 // =============================================================================
 // Feature: F042 - Loop Context Variables Functional Tests
 // =============================================================================
@@ -818,6 +822,20 @@ func (e *loopContextEvaluator) EvaluateBool(expr string, ctx *interpolation.Cont
 	return false, nil
 }
 
+func (e *loopContextEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	if ctx != nil && ctx.Loop != nil {
+		switch expr {
+		case "loop.index":
+			return ctx.Loop.Index, nil
+		case "loop.index1":
+			return ctx.Loop.Index1(), nil
+		case "loop.length":
+			return ctx.Loop.Length, nil
+		}
+	}
+	return 0, nil
+}
+
 // f048TransitionsEvaluator evaluates expressions for F048 transition tests
 // Supports "contains" pattern for checking step outputs
 type f048TransitionsEvaluator struct{}
@@ -853,6 +871,10 @@ func (e *f048TransitionsEvaluator) EvaluateBool(expr string, ctx *interpolation.
 	}
 
 	return false, nil
+}
+
+func (e *f048TransitionsEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, nil
 }
 
 // contains checks if haystack contains needle

@@ -40,26 +40,22 @@ awf/
 │   │   ├── state_manager.go     # State persistence
 │   │   └── template_service.go  # Template resolution
 │   │
-│   ├── infrastructure/          # External adapters
-│   │   ├── repository/          # Workflow loaders
-│   │   │   ├── yaml.go          # YAML file repository
-│   │   │   └── yaml_test.go
-│   │   ├── state/               # State storage
-│   │   │   ├── json.go          # JSON file store
-│   │   │   └── json_test.go
-│   │   ├── executor/            # Command execution
-│   │   │   ├── shell.go         # Shell executor
-│   │   │   └── shell_test.go
-│   │   ├── store/               # Data storage
-│   │   │   ├── sqlite_history_store.go      # SQLite history adapter
-│   │   │   └── sqlite_history_store_test.go
-│   │   ├── logger/              # Logging
-│   │   │   └── zap.go           # Zap logger adapter
-│   │   └── xdg/                 # XDG directories
-│   │       └── xdg.go           # XDG path discovery
+│   ├── infrastructure/          # External adapters (each with doc.go)
+│   │   ├── agents/              # AI agent providers (Claude, Gemini, Codex)
+│   │   ├── config/              # Configuration file loading
+│   │   ├── diagram/             # Workflow diagram generation (DOT)
+│   │   ├── errors/              # Error formatting adapters
+│   │   ├── executor/            # Shell command executor
+│   │   ├── expression/          # Expression evaluator adapter
+│   │   ├── logger/              # Zap logger adapter
+│   │   ├── plugin/              # RPC plugin manager
+│   │   ├── repository/          # YAML workflow loaders
+│   │   ├── store/               # SQLite history, JSON state store
+│   │   ├── tokenizer/           # Token counting
+│   │   └── xdg/                 # XDG directory discovery
 │   │
 │   └── interfaces/              # External interfaces
-│       └── cli/                 # CLI commands
+│       └── cli/                 # CLI commands (with doc.go)
 │           ├── root.go          # Root command
 │           ├── run.go           # run command
 │           ├── validate.go      # validate command
@@ -69,10 +65,10 @@ awf/
 │           ├── resume.go        # resume command
 │           ├── history.go       # history command
 │           ├── version.go       # version command
-│           └── ui/              # UI components
+│           └── ui/              # UI components (with doc.go)
 │               ├── colors.go    # Color output
-│               ├── progress.go  # Progress bars
-│               └── format.go    # Output formatting
+│               ├── output.go    # Output formatting
+│               └── formatter.go # Field formatting
 │
 ├── pkg/                         # Public packages
 │   ├── interpolation/           # Template interpolation
@@ -142,6 +138,28 @@ func main() {
 }
 ```
 
+### Package Documentation
+
+Every major package includes a `doc.go` file providing package-level documentation accessible via `go doc`:
+
+```bash
+go doc ./internal/domain/workflow
+go doc ./internal/infrastructure/agents
+go doc ./internal/interfaces/cli
+# ... and 18 other documented packages
+```
+
+**Documentation coverage**: 21 packages (100% of domain, application, infrastructure, and interface layers)
+
+Each `doc.go` file includes:
+- Package purpose and architecture role
+- Key types with brief descriptions
+- Port implementations (which domain interfaces are satisfied)
+- Usage examples
+- Links to related packages
+
+See [Package Documentation Guide](../reference/package-documentation.md) for details on discovering and maintaining package docs.
+
 ### Domain Entities
 
 **`internal/domain/workflow/workflow.go`** - Core workflow struct
@@ -154,9 +172,11 @@ func main() {
 
 ### Infrastructure Adapters
 
-**`internal/infrastructure/repository/yaml.go`** - YAML workflow loader
+**`internal/infrastructure/repository/yaml_repository.go`** - YAML workflow loader
 
-**`internal/infrastructure/state/json.go`** - JSON state persistence
+**`internal/infrastructure/store/json_store.go`** - JSON state persistence
+
+**`internal/infrastructure/store/sqlite_history_store.go`** - SQLite execution history
 
 **`internal/infrastructure/executor/shell.go`** - Shell command execution
 
@@ -168,10 +188,11 @@ func main() {
 
 | Pattern | Location | Example |
 |---------|----------|---------|
+| `doc.go` | Every major package | `infrastructure/agents/doc.go` |
 | `*_service.go` | Application layer | `workflow_service.go` |
 | `*_test.go` | Same directory as tested file | `yaml_test.go` |
 | Interfaces | `ports/` directory | `repository.go` |
-| Adapters | Infrastructure subdirectories | `repository/yaml.go` |
+| Adapters | Infrastructure subdirectories | `repository/yaml_repository.go` |
 
 ## Import Paths
 

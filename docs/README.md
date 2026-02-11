@@ -41,6 +41,7 @@ Technical reference documentation:
 - [Variable Interpolation](reference/interpolation.md) - Template variables and syntax
 - [Input Validation](reference/validation.md) - Validation rules for workflow inputs
 - [Loop Reference](reference/loop.md) - Loop control flow and transitions
+- [Package Documentation](reference/package-documentation.md) - Discovering code documentation with `go doc`
 
 ## Development
 

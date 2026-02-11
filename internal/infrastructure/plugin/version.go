@@ -1,4 +1,3 @@
-// Package plugin provides infrastructure implementations for the plugin system.
 package plugin
 
 import (

@@ -731,6 +731,41 @@ func RunCmd(cmd *cobra.Command, args []string) error {
 execute workflow deploy: validate workflow: validate states: state "step1" missing command
 ```
 
+### Package Documentation (C056)
+
+All major packages include `doc.go` files providing discoverable documentation via `go doc`:
+
+**When to add package documentation**:
+- Creating a new package in domain, application, infrastructure, or interfaces layers
+- Modifying exported APIs in existing documented packages
+
+**Documentation checklist**:
+- [ ] `doc.go` file created with `// Package <name>` comment
+- [ ] Package purpose documented (1-2 sentences)
+- [ ] Architecture role explained (which layer, what concern)
+- [ ] Key types listed with brief descriptions
+- [ ] At least one usage example provided
+- [ ] `go doc ./package` produces readable output
+- [ ] Internal package comments removed (single source of truth: doc.go)
+
+**Example minimal doc.go** (concise style for simple packages):
+```go
+// Package executor provides shell command execution.
+//
+// The ShellExecutor implements ports.CommandExecutor, enabling AWF to invoke
+// arbitrary shell commands with environment context and process group management.
+//
+// Usage:
+//
+//	executor := executor.NewShellExecutor(logger)
+//	result, err := executor.Execute(ctx, cmd)
+//
+// See [ports.CommandExecutor] for the interface definition.
+package executor
+```
+
+For documentation depth guidelines, see [Package Documentation Guide](../reference/package-documentation.md).
+
 ### Pre-Commit Checklist
 
 Before committing, run:
@@ -751,6 +786,11 @@ For remaining issues:
 2. Consult "Common Issues" section above
 3. Fix manually or add justified `//nolint`
 4. Verify fix: `make lint`
+
+If adding a new package:
+1. Create `doc.go` with package documentation
+2. Run `go doc ./<package>` to verify output
+3. Update related packages' "See also" references if applicable
 
 ### CI Pipeline Integration
 

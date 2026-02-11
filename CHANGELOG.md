@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
+  - Created `doc.go` files for 9 undocumented packages: `agents`, `executor`, `expression`, `logger`, `plugin`, `repository`, `store`, `cli`, `cli/ui`
+  - Three documentation tiers scaled by package complexity: concise (~20-30 lines), medium (~40-50 lines), comprehensive (~60-80 lines)
+  - Removed 5 stale package comments from `agents/helpers.go` and 4 `plugin/` files to consolidate documentation per Go convention
+  - All 17 key packages now have `doc.go` files (previously 8 of 17)
+  - AST-based integration test validates all 9 new files follow Go doc conventions
+  - `go doc ./internal/infrastructure/<package>` now displays meaningful output for every infrastructure package
+
 - **C054**: Increased Application Layer Test Coverage to 87% (target 85%)
   - Added comprehensive tests for 9 under-covered functions: `resolveOperationValue`, `resolveNextStep`, `classifyErrorType`, `executeFromStep`, `executePluginOperation`, `ValidateWorkflow`, `ExecuteSingleStep`, `ExecuteStep`, and `executeLoopStep`
   - Created 5 new test files with 300+ LOC: `execution_service_resolve_test.go`, `execution_service_transitions_test.go`, `execution_service_errors_test.go`, `execution_service_resume_test.go`, `execution_service_plugin_test.go`
@@ -134,6 +142,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
+  - Created `doc.go` files for 9 undocumented packages: `agents`, `executor`, `expression`, `logger`, `plugin`, `repository`, `store`, `cli`, `cli/ui`
+  - Three documentation tiers scaled by package complexity: concise (~20-30 lines), medium (~40-50 lines), comprehensive (~60-80 lines)
+  - Removed 5 stale package comments to consolidate documentation per Go convention
+  - All 17 key packages now have `doc.go` files (previously 8 of 17)
 
 - **F052**: Renovate Dependency Management
   - Automated dependency updates via Renovate bot for Go modules and GitHub Actions

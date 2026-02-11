@@ -115,7 +115,7 @@ func newF048ExpressionEvaluator() *f048ExpressionEvaluator {
 	return &f048ExpressionEvaluator{}
 }
 
-func (e *f048ExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (e *f048ExpressionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	// Handle simple literals
 	switch expr {
 	case "true":
@@ -156,6 +156,10 @@ func (e *f048ExpressionEvaluator) Evaluate(expr string, ctx *interpolation.Conte
 	}
 
 	return false, nil
+}
+
+func (e *f048ExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, nil
 }
 
 // setupF048Test creates a test environment with workflow service and dependencies

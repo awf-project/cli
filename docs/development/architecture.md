@@ -22,7 +22,7 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                  INFRASTRUCTURE LAYER                       │
-│   YAMLRepository │ JSONStateStore │ RPCPluginManager        │
+│   YAMLRepository │ JSONStateStore │ AgentProviders │ RPC    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -165,12 +165,17 @@ Implements domain ports with concrete technologies.
 **Location:** `internal/infrastructure/`
 
 **Adapters:**
-- `repository/` - YAML file loader implementing `Repository`
-- `state/` - JSON file store implementing `StateStore`
+- `agents/` - AI agent providers (Claude, Gemini, Codex, OpenCode, Custom) implementing `AgentProvider`
+- `config/` - Configuration file loading
+- `diagram/` - Workflow diagram generation (DOT/Graphviz)
+- `errors/` - Error formatting adapters implementing `ErrorFormatter`
 - `executor/` - Shell executor implementing `Executor`
+- `expression/` - Expression evaluator implementing `ExpressionEvaluator` and `ExpressionValidator`
+- `logger/` - Zap logger implementation (console, JSON, multi-logger, secret masking)
 - `plugin/` - RPC plugin manager, manifest parser, state store
-- `logger/` - Zap logger implementation
-- `store/` - SQLite history storage
+- `repository/` - YAML file loader implementing `Repository`
+- `store/` - JSON state store implementing `StateStore`, SQLite history storage
+- `tokenizer/` - Token counting for conversation context management
 - `xdg/` - XDG directory discovery
 
 **Implementation Details:**
