@@ -1,4 +1,3 @@
-// Package agents provides shared helper functions for agent providers.
 package agents
 
 import (

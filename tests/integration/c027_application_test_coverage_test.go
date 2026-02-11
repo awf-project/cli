@@ -470,9 +470,13 @@ type mockExpressionEvaluatorC027 struct {
 	evaluate func(expr string, ctx *interpolation.Context) (bool, error)
 }
 
-func (m *mockExpressionEvaluatorC027) Evaluate(expr string, ctx *interpolation.Context) (bool, error) {
+func (m *mockExpressionEvaluatorC027) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
 	if m.evaluate != nil {
 		return m.evaluate(expr, ctx)
 	}
 	return true, nil
+}
+
+func (m *mockExpressionEvaluatorC027) EvaluateInt(expr string, ctx *interpolation.Context) (int, error) {
+	return 0, nil
 }
