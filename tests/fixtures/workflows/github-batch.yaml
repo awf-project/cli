@@ -1,0 +1,41 @@
+# Feature: F054 - GitHub CLI Plugin Batch Operations Test Fixture
+# This workflow tests batch GitHub operations with best_effort strategy
+# Test expects 5 operations: issues 1,2,999999,4,5 where 999999 will fail
+
+name: github-batch-test
+version: "1.0"
+
+inputs:
+  issues:
+    type: string
+    required: true
+    description: "Comma-separated issue numbers (not used, operations are hardcoded)"
+
+states:
+  # Batch operation with best_effort strategy - 5 operations, 1 will fail
+  test_batch:
+    type: step
+    operation: github.batch
+    inputs:
+      strategy: best_effort
+      operations:
+        - name: github.add_labels
+          number: 1
+          labels: ["test-batch"]
+        - name: github.add_labels
+          number: 2
+          labels: ["test-batch"]
+        - name: github.add_labels
+          number: 999999
+          labels: ["test-batch"]
+        - name: github.add_labels
+          number: 4
+          labels: ["test-batch"]
+        - name: github.add_labels
+          number: 5
+          labels: ["test-batch"]
+    next: test_complete
+
+  # Completion state
+  test_complete:
+    type: terminal

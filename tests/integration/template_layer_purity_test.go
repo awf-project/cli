@@ -451,9 +451,9 @@ func TestTemplateServiceTests_NoLocalMocks(t *testing.T) {
 // C038 Integration Tests
 // =============================================================================
 
-// TestC038RegressionGuards_StillPass verifies that existing C038 regression tests
+// TestRegressionGuards_StillPass verifies that existing C038 regression tests
 // continue to pass after C044 implementation
-func TestC038RegressionGuards_StillPass(t *testing.T) {
+func TestRegressionGuards_StillPass(t *testing.T) {
 	repoRoot := getRepoRoot(t)
 	// Verify C038 architecture guard test file exists
 	c038GuardFile := filepath.Join(repoRoot, "internal/application/execution_service_architecture_test.go")

@@ -381,8 +381,8 @@ func TestArchitectureCompliance_NoInfrastructureImports(t *testing.T) {
 	})
 }
 
-// TestC027AcceptanceCriteria validates all acceptance criteria are met
-func TestC027AcceptanceCriteria(t *testing.T) {
+// TestAcceptanceCriteria validates all acceptance criteria are met
+func TestAcceptanceCriteria(t *testing.T) {
 	projectRoot, err := findProjectRootC027()
 	require.NoError(t, err)
 

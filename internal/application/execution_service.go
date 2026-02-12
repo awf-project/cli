@@ -1617,9 +1617,10 @@ func (s *ExecutionService) executePluginOperation(
 		Attempt:     1,
 	}
 
-	// Serialize operation outputs to step output
+	// Serialize operation outputs to step output and Response (for interpolation)
 	if result != nil && result.Outputs != nil {
 		state.Output = s.serializeOperationOutputs(result.Outputs)
+		state.Response = result.Outputs
 	}
 
 	// Handle execution error (e.g., context cancelled, provider error)
@@ -1634,6 +1635,7 @@ func (s *ExecutionService) executePluginOperation(
 
 		state.Status = workflow.StatusFailed
 		state.Error = execErr.Error()
+		s.logger.Warn("operation failed", "step", step.Name, "operation", step.Operation, "error", execErr)
 		execCtx.SetStepState(step.Name, state)
 
 		// Execute post-hooks even on failure
@@ -1657,6 +1659,7 @@ func (s *ExecutionService) executePluginOperation(
 		if result.Error != "" {
 			state.Error = result.Error
 		}
+		s.logger.Warn("operation returned failure", "step", step.Name, "operation", step.Operation, "error", result.Error)
 		execCtx.SetStepState(step.Name, state)
 
 		// Execute post-hooks even on failure

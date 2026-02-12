@@ -23,11 +23,11 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
-// TestC042_NoExprLangImportInApplicationLayer verifies that no file in the
+// TestNoExprLangImportInApplicationLayer verifies that no file in the
 // application layer directly imports the expr-lang/expr library.
 // This is a critical DIP compliance test - if this fails, it means the
 // application layer has a direct infrastructure dependency.
-func TestC042_NoExprLangImportInApplicationLayer(t *testing.T) {
+func TestNoExprLangImportInApplicationLayer(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -58,10 +58,10 @@ func TestC042_NoExprLangImportInApplicationLayer(t *testing.T) {
 	}
 }
 
-// TestC042_NoInfrastructureImportsInApplicationLayer verifies that no file
+// TestNoInfrastructureImportsInApplicationLayer verifies that no file
 // in the application layer imports from internal/infrastructure/.
 // This ensures complete hexagonal architecture compliance for the application layer.
-func TestC042_NoInfrastructureImportsInApplicationLayer(t *testing.T) {
+func TestNoInfrastructureImportsInApplicationLayer(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -107,9 +107,9 @@ func TestC042_NoInfrastructureImportsInApplicationLayer(t *testing.T) {
 	}
 }
 
-// TestC042_ExpressionEvaluatorPortExists verifies that the ExpressionEvaluator
+// TestExpressionEvaluatorPortExists verifies that the ExpressionEvaluator
 // interface exists in the domain/ports layer with the correct method signatures.
-func TestC042_ExpressionEvaluatorPortExists(t *testing.T) {
+func TestExpressionEvaluatorPortExists(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -153,9 +153,9 @@ func TestC042_ExpressionEvaluatorPortExists(t *testing.T) {
 	assert.True(t, hasEvaluateInt, "ExpressionEvaluator should have EvaluateInt method")
 }
 
-// TestC042_LoopExecutorUsesPort verifies that LoopExecutor uses the
+// TestLoopExecutorUsesPort verifies that LoopExecutor uses the
 // ports.ExpressionEvaluator interface rather than direct expr-lang types.
-func TestC042_LoopExecutorUsesPort(t *testing.T) {
+func TestLoopExecutorUsesPort(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -178,10 +178,10 @@ func TestC042_LoopExecutorUsesPort(t *testing.T) {
 	assert.True(t, usesPortInterface, "loop_executor.go should use ExpressionEvaluator from ports")
 }
 
-// TestC042_InfrastructureAdapterImplementsPort verifies that the infrastructure
+// TestInfrastructureAdapterImplementsPort verifies that the infrastructure
 // adapter correctly implements the ports.ExpressionEvaluator interface with
 // compile-time verification.
-func TestC042_InfrastructureAdapterImplementsPort(t *testing.T) {
+func TestInfrastructureAdapterImplementsPort(t *testing.T) {
 	// Compile-time verification using var _ pattern
 	var _ ports.ExpressionEvaluator = (*expression.ExprEvaluator)(nil)
 
@@ -198,8 +198,8 @@ func TestC042_InfrastructureAdapterImplementsPort(t *testing.T) {
 	assert.True(t, hasCheck, "adapter should have compile-time interface verification: var _ ports.ExpressionEvaluator = (*ExprEvaluator)(nil)")
 }
 
-// TestC042_PortCompliance_ExpressionEvaluator validates the adapter implementation
-func TestC042_PortCompliance_ExpressionEvaluator(t *testing.T) {
+// TestPortCompliance_ExpressionEvaluator validates the adapter implementation
+func TestPortCompliance_ExpressionEvaluator(t *testing.T) {
 	// Verify compile-time interface compliance
 	var _ ports.ExpressionEvaluator = (*expression.ExprEvaluator)(nil)
 
@@ -228,8 +228,8 @@ func TestC042_PortCompliance_ExpressionEvaluator(t *testing.T) {
 	})
 }
 
-// TestC042_ApplicationLayerPurity validates overall architecture compliance
-func TestC042_ApplicationLayerPurity(t *testing.T) {
+// TestApplicationLayerPurity validates overall architecture compliance
+func TestApplicationLayerPurity(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 

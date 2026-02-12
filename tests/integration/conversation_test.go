@@ -46,7 +46,7 @@ import (
 // AC1: Conversation Mode Recognition - Validation
 // =============================================================================
 
-func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
+func TestConversationModeRecognizedByValidator(t *testing.T) {
 	// CI-enabled: Only validates YAML syntax, no external API calls required
 
 	// Given: Conversation workflow fixtures exist
@@ -121,7 +121,7 @@ func TestFeature33_ConversationModeRecognizedByValidator(t *testing.T) {
 // AC1: Conversation Mode - List Command
 // =============================================================================
 
-func TestFeature33_ConversationWorkflowsListedSuccessfully(t *testing.T) {
+func TestConversationWorkflowsListedSuccessfully(t *testing.T) {
 	// CI-enabled: Only lists workflow files, no external API calls required
 
 	// Given: Workflow directory with conversation workflows
@@ -149,7 +149,7 @@ func TestFeature33_ConversationWorkflowsListedSuccessfully(t *testing.T) {
 // AC1 + AC2: Basic Conversation Execution - Simple Workflow
 // =============================================================================
 
-func TestFeature33_BasicConversation_SimpleWorkflow(t *testing.T) {
+func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 	// Skip in CI: Requires real Claude API provider with ANTHROPIC_API_KEY and billable API calls
 	skipInCI(t)
 
@@ -208,7 +208,7 @@ func TestFeature33_BasicConversation_SimpleWorkflow(t *testing.T) {
 // AC1 + AC8: Dry-Run Shows Conversation Configuration
 // =============================================================================
 
-func TestFeature33_DryRun_ConversationConfiguration(t *testing.T) {
+func TestDryRun_ConversationConfiguration(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -253,7 +253,7 @@ func TestFeature33_DryRun_ConversationConfiguration(t *testing.T) {
 // AC6: Max Turns Limit - Multi-Turn Workflow
 // =============================================================================
 
-func TestFeature33_MaxTurns_MultiTurnWorkflow(t *testing.T) {
+func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -310,7 +310,7 @@ func TestFeature33_MaxTurns_MultiTurnWorkflow(t *testing.T) {
 // AC3 + AC5: Context Window Management - Truncation with System Prompt
 // =============================================================================
 
-func TestFeature33_ContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
+func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -380,7 +380,7 @@ func TestFeature33_ContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 // AC4: Token Counting - Input and Output Tracking
 // =============================================================================
 
-func TestFeature33_TokenCounting_InputOutputTracking(t *testing.T) {
+func TestTokenCounting_InputOutputTracking(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -453,7 +453,7 @@ func TestFeature33_TokenCounting_InputOutputTracking(t *testing.T) {
 // AC7: Stop Condition - Expression Evaluation
 // =============================================================================
 
-func TestFeature33_StopCondition_ExpressionEvaluation(t *testing.T) {
+func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -514,7 +514,7 @@ func TestFeature33_StopCondition_ExpressionEvaluation(t *testing.T) {
 // AC6: Max Turns - Boundary Enforcement
 // =============================================================================
 
-func TestFeature33_MaxTurns_BoundaryEnforcement(t *testing.T) {
+func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -570,7 +570,7 @@ func TestFeature33_MaxTurns_BoundaryEnforcement(t *testing.T) {
 // AC9: Injecting Context - Continue From Previous Conversation
 // =============================================================================
 
-func TestFeature33_InjectContext_ContinueConversation(t *testing.T) {
+func TestInjectContext_ContinueConversation(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -631,7 +631,7 @@ func TestFeature33_InjectContext_ContinueConversation(t *testing.T) {
 // AC8: State Interpolation - Access Conversation Data
 // =============================================================================
 
-func TestFeature33_StateInterpolation_ConversationAccess(t *testing.T) {
+func TestStateInterpolation_ConversationAccess(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -687,7 +687,7 @@ func TestFeature33_StateInterpolation_ConversationAccess(t *testing.T) {
 // AC: Parallel Conversations - Multiple Concurrent Conversations
 // =============================================================================
 
-func TestFeature33_ParallelConversations_ConcurrentExecution(t *testing.T) {
+func TestParallelConversations_ConcurrentExecution(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -748,7 +748,7 @@ func TestFeature33_ParallelConversations_ConcurrentExecution(t *testing.T) {
 // AC: Error Handling - Conversation Errors and Recovery
 // =============================================================================
 
-func TestFeature33_ErrorHandling_ConversationErrors(t *testing.T) {
+func TestErrorHandling_ConversationErrors(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -807,7 +807,7 @@ func TestFeature33_ErrorHandling_ConversationErrors(t *testing.T) {
 // Edge Case: Empty Conversation Configuration
 // =============================================================================
 
-func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
+func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -857,7 +857,7 @@ func TestFeature33_EdgeCase_EmptyConversationConfig(t *testing.T) {
 // Integration: Diagram Generation with Conversation Steps
 // =============================================================================
 
-func TestFeature33_DiagramGeneration_ConversationSteps(t *testing.T) {
+func TestDiagramGeneration_ConversationSteps(t *testing.T) {
 	// CI-enabled: Only generates DOT diagram from YAML, no external API calls required
 
 	// Given: Conversation workflow
@@ -887,7 +887,7 @@ func TestFeature33_DiagramGeneration_ConversationSteps(t *testing.T) {
 // Integration: Help Command Shows Conversation Workflows
 // =============================================================================
 
-func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
+func TestHelpCommand_ConversationWorkflows(t *testing.T) {
 	// CI-enabled: Only displays workflow help from YAML, no external API calls required
 
 	// Given: Conversation workflow exists
@@ -927,7 +927,7 @@ func TestFeature33_HelpCommand_ConversationWorkflows(t *testing.T) {
 // Backwards Compatibility: Stateless Mode Still Works
 // =============================================================================
 
-func TestFeature33_BackwardsCompatibility_StatelessMode(t *testing.T) {
+func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
 
@@ -971,4 +971,245 @@ func TestFeature33_BackwardsCompatibility_StatelessMode(t *testing.T) {
 	// Stateless mode should NOT have conversation field
 	_, hasConversation := analyzeStep["conversation"]
 	assert.False(t, hasConversation, "Stateless mode should not create conversation field")
+}
+
+// =============================================================================
+// Multi-Turn Conversation Without Empty Prompt Error (F051 regression)
+// =============================================================================
+
+func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
+	// Skip in CI: Requires real Claude API provider
+	skipInCI(t)
+
+	// Given: Multi-turn conversation workflow (conversation-multiturn.yaml)
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
+	tmpDir := t.TempDir()
+
+	// When: Execute multi-turn workflow
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{
+		"run",
+		"conversation-multiturn",
+		"--input", "initial_request=test multi-turn flow",
+		"--storage", tmpDir,
+	})
+
+	err := cmd.Execute()
+
+	// Then: Should complete without "prompt cannot be empty" error
+	require.NoError(t, err, "Multi-turn conversation should execute successfully")
+
+	// Verify output does not contain "prompt cannot be empty" error
+	output := buf.String()
+	assert.NotContains(t, output, "prompt cannot be empty", "Should not encounter empty prompt error")
+
+	// Verify state shows multiple turns completed
+	stateFiles, err := filepath.Glob(filepath.Join(tmpDir, "states", "*.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, stateFiles, "Should create state file")
+
+	stateData, err := os.ReadFile(stateFiles[0])
+	require.NoError(t, err)
+
+	var state map[string]interface{}
+	err = json.Unmarshal(stateData, &state)
+	require.NoError(t, err)
+
+	// Verify conversation completed multiple turns
+	states := state["states"].(map[string]interface{})
+	firstTurn := states["first_turn"].(map[string]interface{})
+	conversation := firstTurn["conversation"].(map[string]interface{})
+
+	totalTurns := conversation["total_turns"].(float64)
+	assert.Greater(t, totalTurns, 1.0, "Should complete more than 1 turn")
+}
+
+// =============================================================================
+// ExecuteConversationStep Delegation
+// =============================================================================
+
+func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
+	// Skip in CI: Requires real Claude API provider
+	skipInCI(t)
+
+	// Given: Simple conversation workflow
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
+	tmpDir := t.TempDir()
+
+	// When: Execute conversation via ExecutionService
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{
+		"run",
+		"conversation-simple",
+		"--input", "task=test delegation",
+		"--storage", tmpDir,
+	})
+
+	err := cmd.Execute()
+
+	// Then: ExecutionService delegates to ConversationManager
+	require.NoError(t, err, "Conversation should execute via delegation")
+
+	// Verify state structure matches ConversationManager output
+	stateFiles, err := filepath.Glob(filepath.Join(tmpDir, "states", "*.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, stateFiles)
+
+	stateData, err := os.ReadFile(stateFiles[0])
+	require.NoError(t, err)
+
+	var state map[string]interface{}
+	err = json.Unmarshal(stateData, &state)
+	require.NoError(t, err)
+
+	states := state["states"].(map[string]interface{})
+	reviewStep := states["review"].(map[string]interface{})
+
+	// Verify conversation field exists (delegated from ConversationManager)
+	conversation, ok := reviewStep["conversation"].(map[string]interface{})
+	require.True(t, ok, "Should have conversation field from ConversationManager")
+	assert.NotNil(t, conversation, "Conversation should be populated")
+
+	// Verify conversation has required fields from ConversationManager
+	_, hasTurns := conversation["turns"]
+	assert.True(t, hasTurns, "Conversation should have turns from ConversationManager")
+
+	_, hasStoppedBy := conversation["stopped_by"]
+	assert.True(t, hasStoppedBy, "Conversation should have stopped_by from ConversationManager")
+}
+
+// =============================================================================
+// All Conversation Fixtures Execute Successfully
+// =============================================================================
+
+func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
+	// Skip in CI: Requires real Claude API provider
+	skipInCI(t)
+
+	fixtures := []struct {
+		name         string
+		workflow     string
+		input        map[string]string
+		shouldPass   bool
+		expectedStop string // "max_turns", "condition", or ""
+		stepName     string // Step name to check for conversation state
+	}{
+		{
+			name:         "simple_conversation",
+			workflow:     "conversation-simple",
+			input:        map[string]string{"task": "hello"},
+			shouldPass:   true,
+			expectedStop: "condition",
+			stepName:     "review",
+		},
+		{
+			name:         "multiturn_conversation",
+			workflow:     "conversation-multiturn",
+			input:        map[string]string{"initial_request": "test"},
+			shouldPass:   true,
+			expectedStop: "max_turns",
+			stepName:     "first_turn",
+		},
+		{
+			name:         "context_window_management",
+			workflow:     "conversation-window",
+			input:        map[string]string{"task": "review"},
+			shouldPass:   true,
+			expectedStop: "condition",
+			stepName:     "review",
+		},
+		{
+			name:         "max_turns_limit",
+			workflow:     "conversation-max-turns",
+			input:        map[string]string{"task": "iterate"},
+			shouldPass:   true,
+			expectedStop: "max_turns",
+			stepName:     "single_turn",
+		},
+		{
+			name:         "parallel_conversations",
+			workflow:     "conversation-parallel",
+			input:        map[string]string{"question": "test"},
+			shouldPass:   true,
+			expectedStop: "",
+			stepName:     "parallel_conversations",
+		},
+		{
+			name:         "error_handling",
+			workflow:     "conversation-error",
+			input:        map[string]string{"task": "test errors"},
+			shouldPass:   false, // Expected to fail at handle_failure step
+			expectedStop: "",
+			stepName:     "conversation_with_retry",
+		},
+	}
+
+	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
+
+	for _, tc := range fixtures {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			// Build CLI args
+			args := []string{
+				"run",
+				tc.workflow,
+				"--storage", tmpDir,
+			}
+			for k, v := range tc.input {
+				args = append(args, "--input", k+"="+v)
+			}
+
+			// Execute workflow
+			cmd := cli.NewRootCommand()
+			buf := new(bytes.Buffer)
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+			cmd.SetArgs(args)
+
+			err := cmd.Execute()
+			output := buf.String()
+
+			if tc.shouldPass {
+				require.NoError(t, err, "Workflow %s should complete successfully", tc.workflow)
+				assert.NotContains(t, output, "prompt cannot be empty", "Should not have empty prompt error")
+
+				// Verify state file
+				stateFiles, err := filepath.Glob(filepath.Join(tmpDir, "states", "*.json"))
+				require.NoError(t, err)
+				require.NotEmpty(t, stateFiles, "Should create state file for %s", tc.workflow)
+
+				// Verify stopped_by field matches expected
+				if tc.expectedStop != "" {
+					stateData, err := os.ReadFile(stateFiles[0])
+					require.NoError(t, err)
+
+					var state map[string]interface{}
+					err = json.Unmarshal(stateData, &state)
+					require.NoError(t, err)
+
+					// Check conversation state based on workflow structure
+					states := state["states"].(map[string]interface{})
+					if step, ok := states[tc.stepName].(map[string]interface{}); ok {
+						if conversation, ok := step["conversation"].(map[string]interface{}); ok {
+							stoppedBy, _ := conversation["stopped_by"].(string)
+							assert.Equal(t, tc.expectedStop, stoppedBy,
+								"Workflow %s should stop by %s", tc.workflow, tc.expectedStop)
+						}
+					}
+				}
+			} else {
+				// Error workflows may fail gracefully
+				if err != nil {
+					assert.NotEmpty(t, output, "Should provide error details")
+				}
+			}
+		})
+	}
 }
