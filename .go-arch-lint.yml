@@ -170,6 +170,9 @@ components:
   infra-executor:
     in: infrastructure/executor
 
+  infra-github:
+    in: infrastructure/github
+
   infra-expression:
     in: infrastructure/expression
 
@@ -291,6 +294,17 @@ deps:
       - go-stdlib
       - go-sync
 
+  infra-github:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - go-sync
+
   infra-expression:
     mayDependOn:
       - domain-workflow
@@ -362,6 +376,7 @@ deps:
       - infra-errors
       - infra-executor
       - infra-expression
+      - infra-github
       - infra-logger
       - infra-plugin
       - infra-repository

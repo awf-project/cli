@@ -61,6 +61,7 @@ states:
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
 | `while` | Repeat until condition is false |
+| `operation` | Execute a declarative plugin operation (e.g., GitHub) |
 | `call_workflow` | Invoke another workflow as a sub-workflow |
 
 ---
@@ -256,6 +257,198 @@ analyze:
 The `{{prompt}}` placeholder is replaced with the resolved prompt. Note that prompt text is automatically shell-escaped to prevent injection.
 
 **See Also:** [Agent Steps Guide](agent-steps.md) for detailed examples and best practices.
+
+---
+
+## Operation State
+
+Execute a declarative plugin operation. Operations provide structured access to external services (e.g., GitHub) without shell scripting. Inputs are validated against the operation schema and outputs are accessible via `{{.states.step_name.Response.field}}`.
+
+### Basic Operation Step
+
+```yaml
+get_issue:
+  type: operation
+  operation: github.get_issue
+  inputs:
+    number: "{{.inputs.issue_number}}"
+  on_success: process
+  on_failure: error
+```
+
+### Operation Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `operation` | string | Yes | Operation name (e.g., `github.get_issue`) |
+| `inputs` | map | Varies | Input parameters (validated against operation schema) |
+| `on_success` | string | No | Next state on success |
+| `on_failure` | string | No | Next state on failure |
+| `retry` | object | No | Retry configuration (same as step retry) |
+
+### Operation Output
+
+Operation results are captured as structured data:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `{{.states.step_name.Output}}` | string | Raw JSON response |
+| `{{.states.step_name.Response.field}}` | any | Parsed field from structured output |
+
+### Output Interpolation
+
+Chain operations by referencing previous step outputs:
+
+```yaml
+states:
+  initial: get_issue
+
+  get_issue:
+    type: operation
+    operation: github.get_issue
+    inputs:
+      number: "{{.inputs.issue_number}}"
+    on_success: show_title
+    on_failure: error
+
+  show_title:
+    type: step
+    command: echo "Issue: {{.states.get_issue.Response.title}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
+```
+
+### GitHub Operations
+
+AWF includes a built-in GitHub plugin with 9 declarative operations. Authentication is handled automatically via `gh` CLI or `GITHUB_TOKEN` environment variable. The repository is auto-detected from git remote when the `repo` input is omitted.
+
+#### Issue & PR Operations
+
+| Operation | Description | Required Inputs | Outputs |
+|-----------|-------------|-----------------|---------|
+| `github.get_issue` | Retrieve issue data | `number` | `number`, `title`, `body`, `state`, `labels` |
+| `github.get_pr` | Retrieve pull request data | `number` | `number`, `title`, `body`, `state`, `headRefName`, `baseRefName`, `mergeable`, `mergedAt`, `labels` |
+| `github.create_issue` | Create a new issue | `title` | `number`, `url` |
+| `github.create_pr` | Create a new pull request | `title`, `head`, `base` | `number`, `url`, `already_exists` |
+| `github.add_labels` | Add labels to issue or PR | `number`, `labels` | `labels` |
+| `github.add_comment` | Add a comment | `number`, `body` | `comment_id`, `url` |
+| `github.list_comments` | List comments | `number` | `comments`, `total` |
+
+#### Project Operations
+
+| Operation | Description | Required Inputs | Outputs |
+|-----------|-------------|-----------------|---------|
+| `github.set_project_status` | Set project field value | `number`, `project`, `field`, `value` | `project_id`, `item_id`, `field_name`, `value` |
+
+#### Common Optional Inputs
+
+All GitHub operations accept these optional inputs:
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `repo` | string | Repository in `owner/repo` format (auto-detected from git remote if omitted) |
+| `fields` | array | Fields to include in output (limits data returned, supported by get operations) |
+
+#### Examples
+
+**Retrieve an issue:**
+
+```yaml
+get_issue:
+  type: operation
+  operation: github.get_issue
+  inputs:
+    number: 42
+  on_success: next
+  on_failure: error
+```
+
+**Create a pull request:**
+
+```yaml
+create_pr:
+  type: operation
+  operation: github.create_pr
+  inputs:
+    title: "feat: add login page"
+    head: feature/login
+    base: main
+    body: "Implements the login UI"
+    draft: true
+  on_success: next
+  on_failure: error
+```
+
+**Add labels to an issue:**
+
+```yaml
+label_issue:
+  type: operation
+  operation: github.add_labels
+  inputs:
+    number: "{{.inputs.issue_number}}"
+    labels: ["bug", "priority-high"]
+  on_success: done
+  on_failure: error
+```
+
+### Batch Operations
+
+Execute multiple GitHub operations concurrently using `github.batch`. Batch operations support configurable concurrency and failure strategies.
+
+```yaml
+label_multiple:
+  type: operation
+  operation: github.batch
+  inputs:
+    strategy: best_effort
+    concurrency: 3
+    operations:
+      - name: github.add_labels
+        number: 1
+        labels: ["reviewed"]
+      - name: github.add_labels
+        number: 2
+        labels: ["reviewed"]
+      - name: github.add_labels
+        number: 3
+        labels: ["reviewed"]
+  on_success: done
+  on_failure: error
+```
+
+#### Batch Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `operations` | array | - | Array of operation definitions (each with `name` and operation-specific inputs) |
+| `strategy` | string | `best_effort` | Execution strategy |
+| `concurrency` | int | 3 | Maximum concurrent operations |
+
+#### Batch Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `all_succeed` | All operations must succeed; cancels remaining on first failure |
+| `any_succeed` | Succeed if at least one operation succeeds |
+| `best_effort` | Complete all operations, collect all results regardless of failures |
+
+#### Batch Outputs
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `total` | int | Total operations attempted |
+| `succeeded` | int | Successfully completed count |
+| `failed` | int | Failed operation count |
+| `results` | array | Individual operation results |
 
 ---
 

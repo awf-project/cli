@@ -22,7 +22,7 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                  INFRASTRUCTURE LAYER                       │
-│   YAMLRepository │ JSONStateStore │ AgentProviders │ RPC    │
+│   YAMLRepository │ JSONStateStore │ AgentProviders │ GitHub │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -171,6 +171,7 @@ Implements domain ports with concrete technologies.
 - `errors/` - Error formatting adapters implementing `ErrorFormatter`
 - `executor/` - Shell executor implementing `Executor`
 - `expression/` - Expression evaluator implementing `ExpressionEvaluator` and `ExpressionValidator`
+- `github/` - Built-in GitHub operation provider implementing `OperationProvider` (issue/PR/label/project operations, batch executor, auth fallback)
 - `logger/` - Zap logger implementation (console, JSON, multi-logger, secret masking)
 - `plugin/` - RPC plugin manager, manifest parser, state store
 - `repository/` - YAML file loader implementing `Repository`
@@ -391,7 +392,7 @@ make lint-arch-map   # Show component-to-package mapping
 | `commonVendors` | Shared libraries (all components) |
 | `commonComponents` | Shared packages (all components) |
 | `vendors` | Vendor library definitions |
-| `components` | 18 components across 4 layers |
+| `components` | 19 components across 4 layers |
 | `deps` | Dependency rules per component |
 
 **Validation Rules by Layer**:
@@ -400,7 +401,7 @@ make lint-arch-map   # Show component-to-package mapping
 |-------|-------|---------|-----------|
 | Domain | 4 | stdlib + sync only | Pure business logic |
 | Application | 1 | domain only + stdlib | Orchestration, no infra |
-| Infrastructure | 11 | domain + vendors + stdlib | Concrete implementations |
+| Infrastructure | 12 | domain + vendors + stdlib | Concrete implementations |
 | Interfaces | 2 | all layers + stdlib | Delivery/wiring |
 | Testutil | 1 | domain + selected infra | Test helpers |
 

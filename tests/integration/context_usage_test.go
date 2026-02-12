@@ -471,9 +471,9 @@ func TestContextUsage_SemanticCorrectness(t *testing.T) {
 // Acceptance Criteria Validation
 // =============================================================================
 
-// TestC046_AcceptanceCriteria validates that all acceptance criteria
+// TestContextUsageAcceptanceCriteria validates that all acceptance criteria
 // from the C046 specification are met.
-func TestC046_AcceptanceCriteria(t *testing.T) {
+func TestContextUsageAcceptanceCriteria(t *testing.T) {
 	t.Run("AC1: context.Background() works in all test scenarios", func(t *testing.T) {
 		// This test validates that the replacement from context.TODO()
 		// to context.Background() maintains correct behavior

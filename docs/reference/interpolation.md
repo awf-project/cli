@@ -41,9 +41,10 @@ states:
 Access output, exit code, and token usage from previous steps:
 
 ```yaml
-{{.states.step_name.Output}}        # Command output
-{{.states.step_name.ExitCode}}      # Exit code (0 for success, non-zero for failure)
-{{.states.step_name.TokensUsed}}    # Tokens consumed by agent steps
+{{.states.step_name.Output}}            # Command output (raw text or JSON)
+{{.states.step_name.ExitCode}}          # Exit code (0 for success, non-zero for failure)
+{{.states.step_name.TokensUsed}}        # Tokens consumed by agent steps
+{{.states.step_name.Response.field}}    # Parsed field from operation/agent structured output
 ```
 
 #### Output
@@ -94,6 +95,45 @@ transitions:
 ```
 
 **Note**: Replaced deprecated `states.step_name.Tokens` field. If migrating from earlier versions, update workflow YAML expressions from `{{.states.step_name.Tokens}}` to `{{.states.step_name.TokensUsed}}`.
+
+#### Response (Operation Outputs)
+
+Operation steps (e.g., `github.get_issue`) return structured data accessible via `Response`:
+
+```yaml
+{{.states.step_name.Response.title}}       # Parsed field from operation result
+{{.states.step_name.Response.number}}      # Numeric field
+{{.states.step_name.Response.labels}}      # Array field
+```
+
+Use `Output` for raw JSON, `Response.field` for parsed fields:
+
+```yaml
+states:
+  initial: get_issue
+
+  get_issue:
+    type: operation
+    operation: github.get_issue
+    inputs:
+      number: "{{.inputs.issue_number}}"
+    on_success: show_title
+    on_failure: error
+
+  show_title:
+    type: step
+    command: echo "Issue: {{.states.get_issue.Response.title}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+  error:
+    type: terminal
+    status: failure
+```
+
+See [Workflow Syntax - Operation State](../user-guide/workflow-syntax.md#operation-state) for the full list of available operations and their output fields.
 
 ### Workflow Metadata
 

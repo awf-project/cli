@@ -1,0 +1,24 @@
+# Feature: F054 - GitHub CLI Plugin Integration Test Fixture
+# This workflow tests basic GitHub operations (get_issue, create_pr, etc.)
+
+name: github-operations-test
+version: "1.0"
+
+inputs:
+  issue_number:
+    type: string
+    required: true
+    description: "Issue number for testing"
+
+states:
+  # Get issue operation test
+  test_get_issue:
+    type: step
+    operation: github.get_issue
+    inputs:
+      number: "{{inputs.issue_number}}"
+    next: test_output
+
+  # Output verification
+  test_output:
+    type: terminal

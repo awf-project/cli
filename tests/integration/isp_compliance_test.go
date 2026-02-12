@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestC049_InteractivePromptInterfaceCount verifies that interactive.go contains
+// TestInteractivePromptInterfaceCount verifies that interactive.go contains
 // exactly 4 interface definitions: 3 focused interfaces + 1 composite interface.
-func TestC049_InteractivePromptInterfaceCount(t *testing.T) {
+func TestInteractivePromptInterfaceCount(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -50,9 +50,9 @@ func TestC049_InteractivePromptInterfaceCount(t *testing.T) {
 	assert.Len(t, interfaces, 4, "should have exactly 4 interfaces (3 focused + 1 composite)")
 }
 
-// TestC049_FocusedInterfaceMethodCounts verifies that each focused interface
+// TestFocusedInterfaceMethodCounts verifies that each focused interface
 // has ≤4 methods, satisfying the ISP ≤4 method constraint from acceptance criteria.
-func TestC049_FocusedInterfaceMethodCounts(t *testing.T) {
+func TestFocusedInterfaceMethodCounts(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -89,10 +89,10 @@ func TestC049_FocusedInterfaceMethodCounts(t *testing.T) {
 		"UserInteraction should have ≤4 methods")
 }
 
-// TestC049_CompositeInterfaceEmbedding verifies that InteractivePrompt
+// TestCompositeInterfaceEmbedding verifies that InteractivePrompt
 // embeds exactly 3 interfaces (StepPresenter, StatusPresenter, UserInteraction)
 // and has no direct methods of its own.
-func TestC049_CompositeInterfaceEmbedding(t *testing.T) {
+func TestCompositeInterfaceEmbedding(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 
@@ -135,9 +135,9 @@ func TestC049_CompositeInterfaceEmbedding(t *testing.T) {
 		"InteractivePrompt should have no direct methods (composition only)")
 }
 
-// TestC049_CLIPromptCompileTimeChecks verifies that the CLIPrompt implementation
+// TestCLIPromptCompileTimeChecks verifies that the CLIPrompt implementation
 // has compile-time interface satisfaction checks for all 4 interfaces.
-func TestC049_CLIPromptCompileTimeChecks(t *testing.T) {
+func TestCLIPromptCompileTimeChecks(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	require.NoError(t, err, "should find repository root")
 

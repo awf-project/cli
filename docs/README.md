@@ -28,6 +28,7 @@ Learn how to use AWF effectively:
 - [Conversation Mode](user-guide/conversation-steps.md) - Multi-turn conversations with context window management
 - [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference
+  - [GitHub Operations](user-guide/workflow-syntax.md#github-operations) - Built-in GitHub plugin with declarative operations
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
 - [Examples](user-guide/examples.md) - Real-world workflow examples

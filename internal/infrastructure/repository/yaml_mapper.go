@@ -76,6 +76,16 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		return nil, NewParseError(filePath, "states."+name+".type", err.Error())
 	}
 
+	// For operation-type steps, "inputs:" in YAML maps to CallInputs (yaml:"inputs")
+	// but should populate OperationInputs. Remap when OperationInputs is empty.
+	operationInputs := y.OperationInputs
+	if stepType == workflow.StepTypeOperation && len(operationInputs) == 0 && len(y.CallInputs) > 0 {
+		operationInputs = make(map[string]any, len(y.CallInputs))
+		for k, v := range y.CallInputs {
+			operationInputs[k] = v
+		}
+	}
+
 	step := &workflow.Step{
 		Name:            name,
 		Type:            stepType,
@@ -83,7 +93,7 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		Command:         y.Command,
 		Dir:             y.Dir,
 		Operation:       y.Operation,
-		OperationInputs: y.OperationInputs,
+		OperationInputs: operationInputs,
 		Branches:        y.Parallel,
 		Strategy:        y.Strategy,
 		MaxConcurrent:   y.MaxConcurrent,

@@ -1,0 +1,34 @@
+# Feature: F054 - GitHub CLI Plugin Project Status Test Fixture
+# This workflow tests project status management operations
+
+name: github-project-test
+version: "1.0"
+
+inputs:
+  issue:
+    type: string
+    required: true
+    description: "Issue number"
+  project:
+    type: string
+    required: true
+    description: "Project name"
+  status:
+    type: string
+    required: true
+    description: "Status value"
+
+states:
+  # Stub: set project status operation
+  set_status:
+    type: step
+    operation: github.set_project_status
+    inputs:
+      issue: "{{inputs.issue}}"
+      project: "{{inputs.project}}"
+      status: "{{inputs.status}}"
+    next: test_complete
+
+  # Stub: completion
+  test_complete:
+    type: terminal

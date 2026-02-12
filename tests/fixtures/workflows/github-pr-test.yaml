@@ -1,0 +1,39 @@
+# Feature: F054 - GitHub CLI Plugin PR Creation Test Fixture
+# This workflow tests PR creation operations
+
+name: github-pr-test
+version: "1.0"
+
+inputs:
+  title:
+    type: string
+    required: true
+    description: "PR title"
+  body:
+    type: string
+    required: true
+    description: "PR body"
+  base:
+    type: string
+    required: true
+    description: "Base branch"
+  head:
+    type: string
+    required: true
+    description: "Head branch"
+
+states:
+  # Stub: create PR operation
+  create_pr:
+    type: step
+    operation: github.create_pr
+    inputs:
+      title: "{{inputs.title}}"
+      body: "{{inputs.body}}"
+      base: "{{inputs.base}}"
+      head: "{{inputs.head}}"
+    next: test_complete
+
+  # Stub: completion
+  test_complete:
+    type: terminal

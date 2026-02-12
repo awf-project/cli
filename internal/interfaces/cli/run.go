@@ -20,6 +20,7 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/config"
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	infra_expression "github.com/vanoix/awf/internal/infrastructure/expression"
+	"github.com/vanoix/awf/internal/infrastructure/github"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
@@ -257,6 +258,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+
+	// Setup GitHub operation provider for F054 GitHub CLI plugin
+	githubClient := github.NewClient(logger)
+	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
+	execSvc.SetOperationProvider(githubProvider)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -892,6 +898,11 @@ func runSingleStep(
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+
+	// Setup GitHub operation provider for F054 GitHub CLI plugin
+	githubClient := github.NewClient(logger)
+	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
+	execSvc.SetOperationProvider(githubProvider)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{

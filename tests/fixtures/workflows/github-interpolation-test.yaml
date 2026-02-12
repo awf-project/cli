@@ -1,0 +1,34 @@
+# Feature: F054 - GitHub CLI Plugin Output Interpolation Test Fixture
+# This workflow tests output interpolation from GitHub operations
+
+name: github-interpolation-test
+version: "1.0"
+
+inputs:
+  issue_number:
+    type: string
+    required: true
+    description: "Issue number for testing"
+
+states:
+  # Step 1: Get issue data
+  test_get_issue:
+    type: step
+    operation: github.get_issue
+    inputs:
+      issue: "{{inputs.issue_number}}"
+    next: use_issue_data
+
+  # Step 2: Use interpolated response from step 1
+  use_issue_data:
+    type: step
+    operation: shell.exec
+    inputs:
+      command: "echo Issue title: {{states.test_get_issue.response.title}}"
+    outputs:
+      issue_title_from_prev_step: "{{states.test_get_issue.response.title}}"
+    next: test_complete
+
+  # Completion
+  test_complete:
+    type: terminal

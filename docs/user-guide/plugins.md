@@ -1,17 +1,43 @@
 # Plugins
 
-AWF supports plugins to extend functionality with custom operations.
+AWF supports plugins to extend functionality with custom operations. AWF ships with a **built-in GitHub plugin** for common GitHub operations, and supports **external RPC plugins** for additional integrations.
 
-## Overview
+## Built-in GitHub Plugin
 
-Plugins are standalone executables that communicate with AWF via RPC (HashiCorp go-plugin). This architecture provides:
+AWF includes a built-in GitHub operation provider that offers 9 declarative operations for interacting with GitHub issues, pull requests, labels, comments, and projects. Unlike external RPC plugins, the GitHub plugin runs in-process with zero IPC overhead.
+
+**Key features:**
+- 9 operations: `get_issue`, `get_pr`, `create_issue`, `create_pr`, `add_labels`, `add_comment`, `list_comments`, `set_project_status`, `batch`
+- Automatic authentication via `gh` CLI or `GITHUB_TOKEN` environment variable
+- Repository auto-detection from git remote
+- Batch execution with configurable concurrency and failure strategies
+
+```yaml
+get_issue:
+  type: operation
+  operation: github.get_issue
+  inputs:
+    number: 42
+  on_success: process
+  on_failure: error
+```
+
+See [Workflow Syntax - Operation State](workflow-syntax.md#operation-state) for complete reference and examples.
+
+---
+
+## External RPC Plugins
+
+### Overview
+
+External plugins are standalone executables that communicate with AWF via RPC (HashiCorp go-plugin). This architecture provides:
 
 - **Process isolation** - Plugins run in separate processes
 - **Cross-platform support** - No CGO or platform-specific binaries
 - **Safe updates** - Replace plugins without recompiling AWF
 - **Graceful failures** - Plugin crashes don't affect AWF core
 
-## Plugin Directory
+### Plugin Directory
 
 AWF discovers plugins from:
 
@@ -30,7 +56,7 @@ plugins/
     └── awf-plugin-slack    # Executable binary
 ```
 
-## Plugin Manifest
+### Plugin Manifest
 
 Every plugin requires a `plugin.yaml` manifest:
 
@@ -48,7 +74,7 @@ config:
     description: Slack webhook URL
 ```
 
-### Manifest Fields
+#### Manifest Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -59,7 +85,7 @@ config:
 | `capabilities` | array | Yes | List: `operations`, `commands`, `validators` |
 | `config` | object | No | Configuration schema |
 
-### Config Field Schema
+#### Config Field Schema
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -68,9 +94,9 @@ config:
 | `default` | any | Default value |
 | `description` | string | Help text |
 
-## Managing Plugins
+### Managing Plugins
 
-### List Plugins
+#### List Plugins
 
 ```bash
 awf plugin list
@@ -84,7 +110,7 @@ awf-plugin-slack    1.0.0    enabled  operations    Slack notifications
 awf-plugin-github   2.1.0    disabled operations    GitHub API integration
 ```
 
-### Enable/Disable Plugins
+#### Enable/Disable Plugins
 
 ```bash
 # Disable a plugin
@@ -96,7 +122,7 @@ awf plugin enable awf-plugin-slack
 
 Plugin state persists across AWF restarts.
 
-## Using Plugin Operations
+### Using Plugin Operations
 
 Plugins register custom operations that can be used in workflow steps:
 
@@ -130,7 +156,7 @@ states:
     status: failure
 ```
 
-### Operation Syntax
+#### Operation Syntax
 
 ```yaml
 step_name:
@@ -143,7 +169,7 @@ step_name:
 - `operation` - Plugin operation in format `plugin_name.operation_name`
 - `inputs` - Operation-specific parameters (supports variable interpolation)
 
-## Plugin Configuration
+### Plugin Configuration
 
 Configure plugins via environment variables or config file:
 
@@ -158,11 +184,11 @@ plugins:
 
 Environment variables in config values are expanded at runtime.
 
-## Plugin Development
+### Plugin Development
 
 Use the `pkg/plugin/sdk` package to create your own plugins.
 
-### Quick Start
+#### Quick Start
 
 ```go
 package main

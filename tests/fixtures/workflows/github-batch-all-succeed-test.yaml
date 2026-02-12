@@ -1,0 +1,33 @@
+# Feature: F054 - GitHub CLI Plugin Batch Operations Test Fixture (All Succeed Strategy)
+# This workflow tests batch GitHub operations with all_succeed strategy
+
+name: github-batch-all-succeed-test
+version: "1.0"
+
+inputs:
+  issues:
+    type: string
+    required: true
+    description: "Comma-separated issue numbers"
+  strategy:
+    type: string
+    required: false
+    default: "all_succeed"
+    description: "Batch strategy"
+
+states:
+  # Stub: batch operation with all_succeed strategy
+  test_batch:
+    type: step
+    operation: github.batch
+    inputs:
+      strategy: "{{inputs.strategy}}"
+      operations:
+        - type: github.add_labels
+          issue: "1"
+          labels: ["test"]
+    next: test_complete
+
+  # Stub: completion
+  test_complete:
+    type: terminal

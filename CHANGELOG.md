@@ -37,6 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F054**: GitHub CLI plugin for declarative operations
+  - New `github` operation provider with 9 operation types: `get_issue`, `get_pr`, `create_pr`, `create_issue`, `add_labels`, `set_project_status`, `list_comments`, `add_comment`, `batch`
+  - Batch executor with 3 strategies: `all_succeed` (fail-fast), `any_succeed` (first-wins), `best_effort` (run-all)
+  - Configurable concurrency limiting via semaphore pattern (default: 3)
+  - Authentication fallback chain: gh CLI → GITHUB_TOKEN → structured error with remediation hints
+  - Auto-detection of repository from git remote when `repo` parameter omitted
+  - Field selection via `fields` parameter to limit output data
+  - Structured outputs accessible via `{{states.step_name.output.field}}` interpolation
+  - Schema-driven input validation for all operation types
+  - Wired into CLI via `GitHubOperationProvider` registered in `run.go`
+
 - **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
   - Created `doc.go` files for 9 undocumented packages: `agents`, `executor`, `expression`, `logger`, `plugin`, `repository`, `store`, `cli`, `cli/ui`
   - Three documentation tiers scaled by package complexity: concise (~20-30 lines), medium (~40-50 lines), comprehensive (~60-80 lines)

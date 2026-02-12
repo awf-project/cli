@@ -204,12 +204,12 @@ func setupF048Test(t *testing.T, workflowYAML string) (*application.ExecutionSer
 // HAPPY PATH TESTS
 // =============================================================================
 
-// TestF048_HappyPath_SkipStepsInBody validates the main scenario from spec
+// TestHappyPath_SkipStepsInBody validates the main scenario from spec
 //
 // GIVEN a while loop with body steps containing transitions
 // WHEN check_tests_passed outputs "TESTS_PASSED"
 // THEN it should transition to run_fmt, skipping prepare_impl_prompt and implement_item
-func TestF048_HappyPath_SkipStepsInBody(t *testing.T) {
+func TestHappyPath_SkipStepsInBody(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -282,11 +282,11 @@ states:
 	assert.NotContains(t, output, "implement", "implement should be skipped")
 }
 
-// TestF048_HappyPath_ForEachWithTransitions validates transitions work in foreach loops
+// TestHappyPath_ForEachWithTransitions validates transitions work in foreach loops
 // NOTE: This test is commented out because foreach is not yet supported.
 // The test validates transitions within foreach loop bodies once the feature is available.
 /*
-func TestF048_HappyPath_ForEachWithTransitions(t *testing.T) {
+func TestHappyPath_ForEachWithTransitions(t *testing.T) {
 	// Skipped - foreach not yet implemented
 }
 */
@@ -295,12 +295,12 @@ func TestF048_HappyPath_ForEachWithTransitions(t *testing.T) {
 // EDGE CASE TESTS
 // =============================================================================
 
-// TestF048_EdgeCase_SkipToLastStep validates transition to the last step in body
+// TestEdgeCase_SkipToLastStep validates transition to the last step in body
 //
 // GIVEN a loop with transition to the last body step
 // WHEN the transition is triggered
 // THEN it should skip all intermediate steps
-func TestF048_EdgeCase_SkipToLastStep(t *testing.T) {
+func TestEdgeCase_SkipToLastStep(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -362,12 +362,12 @@ states:
 	assert.NotContains(t, output, "middle2", "middle2 should be skipped")
 }
 
-// TestF048_EdgeCase_EarlyLoopExit validates transition outside loop body
+// TestEdgeCase_EarlyLoopExit validates transition outside loop body
 //
 // GIVEN a loop with transition to a step outside the body
 // WHEN the transition is triggered
 // THEN the loop should exit early and continue to the target step
-func TestF048_EdgeCase_EarlyLoopExit(t *testing.T) {
+func TestEdgeCase_EarlyLoopExit(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -434,12 +434,12 @@ states:
 	assert.Equal(t, 1, checkCount, "loop should exit after first iteration")
 }
 
-// TestF048_EdgeCase_SingleStepBodyWithTransition validates single step body behavior
+// TestEdgeCase_SingleStepBodyWithTransition validates single step body behavior
 //
 // GIVEN a loop with only one step in body
 // WHEN that step has a transition outside the loop
 // THEN the transition should be honored (early exit)
-func TestF048_EdgeCase_SingleStepBodyWithTransition(t *testing.T) {
+func TestEdgeCase_SingleStepBodyWithTransition(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -492,10 +492,10 @@ states:
 	assert.Equal(t, "cleanup", lines[1])
 }
 
-// TestF048_EdgeCase_EmptyLoopBody validates behavior with empty body
+// TestEdgeCase_EmptyLoopBody validates behavior with empty body
 // NOTE: Empty body is correctly rejected by validation - this is expected behavior
 /*
-func TestF048_EdgeCase_EmptyLoopBody(t *testing.T) {
+func TestEdgeCase_EmptyLoopBody(t *testing.T) {
 	// Skipped - empty body is invalid and correctly rejected
 }
 */
@@ -504,12 +504,12 @@ func TestF048_EdgeCase_EmptyLoopBody(t *testing.T) {
 // ERROR HANDLING TESTS
 // =============================================================================
 
-// TestF048_ErrorHandling_InvalidTransitionTarget validates graceful degradation
+// TestErrorHandling_InvalidTransitionTarget validates graceful degradation
 //
 // GIVEN a loop with transition to non-existent step
 // WHEN the transition is evaluated
 // THEN it should log a warning and continue sequential execution (ADR-005)
-func TestF048_ErrorHandling_InvalidTransitionTarget(t *testing.T) {
+func TestErrorHandling_InvalidTransitionTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -560,12 +560,12 @@ states:
 	assert.Contains(t, output, "step_b")
 }
 
-// TestF048_ErrorHandling_TransitionWithError validates error propagation
+// TestErrorHandling_TransitionWithError validates error propagation
 //
 // GIVEN a body step that fails with an error
 // WHEN the step has transitions
 // THEN the error should be propagated and transitions should not be evaluated
-func TestF048_ErrorHandling_TransitionWithError(t *testing.T) {
+func TestErrorHandling_TransitionWithError(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -625,7 +625,7 @@ states:
 // INTEGRATION TESTS
 // =============================================================================
 
-// TestF048_Integration_FixtureWorkflow validates the complete loop-while-transitions.yaml fixture
+// TestIntegration_FixtureWorkflow validates the complete loop-while-transitions.yaml fixture
 //
 // GIVEN the official F048 test fixture workflow
 // WHEN executed with passing tests
@@ -833,7 +833,7 @@ states:
 	assert.Equal(t, 2, len(lines), "should execute only 2 steps (first and last)")
 }
 
-func TestF048_Integration_FixtureWorkflow(t *testing.T) {
+func TestIntegration_FixtureWorkflow(t *testing.T) {
 	// Load the actual fixture
 	fixtureDir := "../../tests/fixtures/workflows"
 	tmpDir := t.TempDir()
@@ -888,12 +888,12 @@ func TestF048_Integration_FixtureWorkflow(t *testing.T) {
 	assert.NotContains(t, states, "implement_item", "should skip when tests pass")
 }
 
-// TestF048_Integration_BackwardCompatibility validates loops without transitions still work
+// TestIntegration_BackwardCompatibility validates loops without transitions still work
 //
 // GIVEN a loop without any transitions in body steps
 // WHEN the loop executes
 // THEN it should work exactly as before (sequential execution)
-func TestF048_Integration_BackwardCompatibility(t *testing.T) {
+func TestIntegration_BackwardCompatibility(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -947,12 +947,12 @@ states:
 	assert.Equal(t, "a\nb\nc\n", output, "should execute all steps sequentially")
 }
 
-// TestF048_Integration_ConditionalTransitions validates complex conditional logic
+// TestIntegration_ConditionalTransitions validates complex conditional logic
 //
 // GIVEN a loop with conditional transitions based on iteration state
 // WHEN different conditions are met across iterations
 // THEN appropriate steps should be skipped or executed per iteration
-func TestF048_Integration_ConditionalTransitions(t *testing.T) {
+func TestIntegration_ConditionalTransitions(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -1137,11 +1137,11 @@ func (m *mockLoggerT009) WithContext(ctx map[string]any) ports.Logger {
 // Tests
 // =============================================================================
 
-// TestF048_WhileLoopBodyTransition_HappyPath tests the main scenario from the bug report
+// TestWhileLoopBodyTransition_HappyPath tests the main scenario from the bug report
 // GIVEN a while loop with body steps containing transitions
 // WHEN check_tests_passed outputs "TESTS_PASSED"
 // THEN it should transition to run_fmt, skipping prepare_impl_prompt and implement_item
-func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
+func TestWhileLoopBodyTransition_HappyPath(t *testing.T) {
 	// Arrange: Load the fixture workflow
 	fixtureDir := "../../tests/fixtures/workflows"
 	tmpDir := t.TempDir()
@@ -1200,11 +1200,11 @@ func TestF048_WhileLoopBodyTransition_HappyPath(t *testing.T) {
 	assert.NotContains(t, states, "implement_item", "implement_item should be skipped")
 }
 
-// TestF048_WhileLoopBodyTransition_EdgeCase_SkipToEnd tests transitioning to last step in body
+// TestWhileLoopBodyTransition_EdgeCase_SkipToEnd tests transitioning to last step in body
 // GIVEN a while loop with transition to the last body step
 // WHEN the transition is triggered
 // THEN it should skip all intermediate steps and execute the last step
-func TestF048_WhileLoopBodyTransition_EdgeCase_SkipToEnd(t *testing.T) {
+func TestWhileLoopBodyTransition_EdgeCase_SkipToEnd(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1273,11 +1273,11 @@ states:
 	assert.NotContains(t, output, "middle", "middle step should be skipped")
 }
 
-// TestF048_WhileLoopBodyTransition_EdgeCase_EarlyExit tests transition outside loop body
+// TestWhileLoopBodyTransition_EdgeCase_EarlyExit tests transition outside loop body
 // GIVEN a while loop with transition to a step outside the body
 // WHEN the transition is triggered
 // THEN the loop should exit early and continue to the target step
-func TestF048_WhileLoopBodyTransition_EdgeCase_EarlyExit(t *testing.T) {
+func TestWhileLoopBodyTransition_EdgeCase_EarlyExit(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1347,11 +1347,11 @@ states:
 	assert.NotContains(t, output, "continue", "continue step should be skipped")
 }
 
-// TestF048_WhileLoopBodyTransition_EdgeCase_ConditionalSkip tests conditional transitions
+// TestWhileLoopBodyTransition_EdgeCase_ConditionalSkip tests conditional transitions
 // GIVEN a while loop with conditional transitions in body
 // WHEN different conditions are met across iterations
 // THEN appropriate steps should be skipped or executed
-func TestF048_WhileLoopBodyTransition_EdgeCase_ConditionalSkip(t *testing.T) {
+func TestWhileLoopBodyTransition_EdgeCase_ConditionalSkip(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 	counterFile := filepath.Join(tmpDir, "counter")
@@ -1465,11 +1465,11 @@ states:
 	assert.Equal(t, 1, skipCount, "action_skip should execute only in iteration 1")
 }
 
-// TestF048_WhileLoopBodyTransition_ErrorHandling_InvalidTarget tests graceful degradation
+// TestWhileLoopBodyTransition_ErrorHandling_InvalidTarget tests graceful degradation
 // GIVEN a while loop with transition to non-existent step
 // WHEN the transition is evaluated
 // THEN it should log a warning and continue sequential execution
-func TestF048_WhileLoopBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
+func TestWhileLoopBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1536,11 +1536,11 @@ states:
 	assert.True(t, len(logger.logs) > 0, "Should have logged a warning")
 }
 
-// TestF048_WhileLoopBodyTransition_EdgeCase_SingleStepBody tests loop with single step body
+// TestWhileLoopBodyTransition_EdgeCase_SingleStepBody tests loop with single step body
 // GIVEN a while loop with only one step in body
 // WHEN that step has a transition
 // THEN the transition should be honored (early exit scenario)
-func TestF048_WhileLoopBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
+func TestWhileLoopBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 
@@ -1608,11 +1608,11 @@ states:
 	assert.Equal(t, "cleanup", lines[1])
 }
 
-// TestF048_WhileLoopBodyTransition_EdgeCase_NoTransitions tests backward compatibility
+// TestWhileLoopBodyTransition_EdgeCase_NoTransitions tests backward compatibility
 // GIVEN a while loop without any transitions in body steps
 // WHEN the loop executes
 // THEN it should work exactly as before (sequential execution)
-func TestF048_WhileLoopBodyTransition_EdgeCase_NoTransitions(t *testing.T) {
+func TestWhileLoopBodyTransition_EdgeCase_NoTransitions(t *testing.T) {
 	tmpDir := t.TempDir()
 	executionLog := filepath.Join(tmpDir, "execution.log")
 

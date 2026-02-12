@@ -47,6 +47,7 @@ awf/
 │   │   ├── errors/              # Error formatting adapters
 │   │   ├── executor/            # Shell command executor
 │   │   ├── expression/          # Expression evaluator adapter
+│   │   ├── github/              # Built-in GitHub operation provider
 │   │   ├── logger/              # Zap logger adapter
 │   │   ├── plugin/              # RPC plugin manager
 │   │   ├── repository/          # YAML workflow loaders

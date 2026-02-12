@@ -36,11 +36,11 @@ const (
 	expectedErrorCodeCount = 14
 )
 
-// TestC047_ErrorCommand_ListAllCodes validates the error command lists all error codes
+// TestErrorCommand_ListAllCodes validates the error command lists all error codes
 // Given: no arguments to awf error
 // When: command executes
 // Then: all 14 error codes from catalog are listed
-func TestC047_ErrorCommand_ListAllCodes(t *testing.T) {
+func TestErrorCommand_ListAllCodes(t *testing.T) {
 	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 
@@ -67,11 +67,11 @@ func TestC047_ErrorCommand_ListAllCodes(t *testing.T) {
 	assert.Contains(t, outputStr, "Resolution:", "Output should include resolution headers")
 }
 
-// TestC047_ErrorCommand_LookupSpecificCode validates error command displays specific code details
+// TestErrorCommand_LookupSpecificCode validates error command displays specific code details
 // Given: valid error code argument (e.g., USER.INPUT.MISSING_FILE)
 // When: command executes
 // Then: description, resolution, and related codes are displayed
-func TestC047_ErrorCommand_LookupSpecificCode(t *testing.T) {
+func TestErrorCommand_LookupSpecificCode(t *testing.T) {
 	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	testCode := domainerrors.ErrorCodeUserInputMissingFile
@@ -100,11 +100,11 @@ func TestC047_ErrorCommand_LookupSpecificCode(t *testing.T) {
 	}
 }
 
-// TestC047_ErrorCommand_PrefixMatch validates prefix matching for error codes
+// TestErrorCommand_PrefixMatch validates prefix matching for error codes
 // Given: partial error code prefix (e.g., WORKFLOW.VALIDATION)
 // When: command executes
 // Then: all matching codes are displayed
-func TestC047_ErrorCommand_PrefixMatch(t *testing.T) {
+func TestErrorCommand_PrefixMatch(t *testing.T) {
 	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	prefix := "WORKFLOW.VALIDATION"
@@ -134,11 +134,11 @@ func TestC047_ErrorCommand_PrefixMatch(t *testing.T) {
 		"Output should not contain non-matching codes")
 }
 
-// TestC047_ErrorCommand_InvalidCode validates error handling for unknown codes
+// TestErrorCommand_InvalidCode validates error handling for unknown codes
 // Given: non-existent error code
 // When: command executes
 // Then: error message indicates code not found
-func TestC047_ErrorCommand_InvalidCode(t *testing.T) {
+func TestErrorCommand_InvalidCode(t *testing.T) {
 	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	invalidCode := "INVALID.CODE.HERE"
@@ -158,11 +158,11 @@ func TestC047_ErrorCommand_InvalidCode(t *testing.T) {
 		"Output should mention the invalid code")
 }
 
-// TestC047_ErrorCommand_JSONOutput validates JSON format for error command
+// TestErrorCommand_JSONOutput validates JSON format for error command
 // Given: --output=json flag with error code argument
 // When: command executes
 // Then: JSON object with code/description/resolution/related_codes
-func TestC047_ErrorCommand_JSONOutput(t *testing.T) {
+func TestErrorCommand_JSONOutput(t *testing.T) {
 	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	testCode := domainerrors.ErrorCodeUserInputMissingFile
@@ -193,11 +193,11 @@ func TestC047_ErrorCommand_JSONOutput(t *testing.T) {
 	}
 }
 
-// TestC047_StructuredError_ExitCodeMapping validates exit code mapping for each category
+// TestStructuredError_ExitCodeMapping validates exit code mapping for each category
 // Given: workflows that trigger each error category
 // When: workflows execute and fail
 // Then: exit codes match category (USER→1, WORKFLOW→2, EXECUTION→3, SYSTEM→4)
-func TestC047_StructuredError_ExitCodeMapping(t *testing.T) {
+func TestStructuredError_ExitCodeMapping(t *testing.T) {
 	tests := []struct {
 		name         string
 		workflowFile string
@@ -257,11 +257,11 @@ func TestC047_StructuredError_ExitCodeMapping(t *testing.T) {
 	}
 }
 
-// TestC047_StructuredError_JSONFormat validates JSON output includes error_code field
+// TestStructuredError_JSONFormat validates JSON output includes error_code field
 // Given: workflow failure with --output=json
 // When: error is written to output
 // Then: JSON includes "error_code" field with hierarchical code
-func TestC047_StructuredError_JSONFormat(t *testing.T) {
+func TestStructuredError_JSONFormat(t *testing.T) {
 	// Arrange - create a test StructuredError
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
@@ -297,11 +297,11 @@ func TestC047_StructuredError_JSONFormat(t *testing.T) {
 		"JSON should include error message")
 }
 
-// TestC047_StructuredError_HumanFormat validates human-readable output includes error code
+// TestStructuredError_HumanFormat validates human-readable output includes error code
 // Given: workflow failure with text output format
 // When: error is written to stderr
 // Then: output includes [ERROR_CODE] reference
-func TestC047_StructuredError_HumanFormat(t *testing.T) {
+func TestStructuredError_HumanFormat(t *testing.T) {
 	// Arrange - create a test StructuredError
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeWorkflowValidationCycleDetected,
@@ -337,11 +337,11 @@ func TestC047_StructuredError_HumanFormat(t *testing.T) {
 		"Human-readable output should include detail keys")
 }
 
-// TestC047_CategorizeError_StructuredErrorPath validates categorizeError detects StructuredError
+// TestCategorizeError_StructuredErrorPath validates categorizeError detects StructuredError
 // Given: StructuredError with defined ErrorCode
 // When: categorizeError is called
 // Then: exit code matches ErrorCode.ExitCode() mapping
-func TestC047_CategorizeError_StructuredErrorPath(t *testing.T) {
+func TestCategorizeError_StructuredErrorPath(t *testing.T) {
 	tests := []struct {
 		name         string
 		errorCode    domainerrors.ErrorCode
@@ -389,11 +389,11 @@ func TestC047_CategorizeError_StructuredErrorPath(t *testing.T) {
 	}
 }
 
-// TestC047_CategorizeError_FallbackPath validates string matching fallback for plain errors
+// TestCategorizeError_FallbackPath validates string matching fallback for plain errors
 // Given: plain error (not StructuredError) with recognizable message
 // When: categorizeError is called
 // Then: exit code matches string pattern mapping (backward compatible)
-func TestC047_CategorizeError_FallbackPath(t *testing.T) {
+func TestCategorizeError_FallbackPath(t *testing.T) {
 	// Note: This test validates the fallback path in categorizeError()
 	// It uses the CLI integration test fixtures that trigger plain errors
 	binPath := buildBinaryIfNeeded(t)
@@ -443,11 +443,11 @@ func TestC047_CategorizeError_FallbackPath(t *testing.T) {
 	}
 }
 
-// TestC047_BackwardCompatibility_PlainErrors validates existing error behavior preserved
+// TestBackwardCompatibility_PlainErrors validates existing error behavior preserved
 // Given: workflows using legacy error patterns (no StructuredError)
 // When: workflows execute
 // Then: exit codes and error messages match pre-C047 behavior
-func TestC047_BackwardCompatibility_PlainErrors(t *testing.T) {
+func TestBackwardCompatibility_PlainErrors(t *testing.T) {
 	// This test verifies that plain errors still work correctly
 	// using existing integration test workflows
 	binPath := buildBinaryIfNeeded(t)
@@ -489,11 +489,11 @@ func TestC047_BackwardCompatibility_PlainErrors(t *testing.T) {
 	}
 }
 
-// TestC047_DomainLayerPurity_StdlibOnly validates domain/errors imports only stdlib
+// TestDomainLayerPurity_StdlibOnly validates domain/errors imports only stdlib
 // Given: domain/errors package
 // When: package is compiled
 // Then: no external dependencies beyond standard library
-func TestC047_DomainLayerPurity_StdlibOnly(t *testing.T) {
+func TestDomainLayerPurity_StdlibOnly(t *testing.T) {
 	// Arrange
 	domainErrorsPath := filepath.Join("..", "..", "internal", "domain", "errors")
 
@@ -525,11 +525,11 @@ func TestC047_DomainLayerPurity_StdlibOnly(t *testing.T) {
 	t.Log("Domain layer purity verified: only stdlib imports")
 }
 
-// TestC047_ErrorCatalog_Completeness validates every ErrorCode has catalog entry
+// TestErrorCatalog_Completeness validates every ErrorCode has catalog entry
 // Given: all defined ErrorCode constants
 // When: catalog is queried
 // Then: every code has description, resolution, and related codes
-func TestC047_ErrorCatalog_Completeness(t *testing.T) {
+func TestErrorCatalog_Completeness(t *testing.T) {
 	// Arrange - get all defined error codes
 	allCodes := domainerrors.AllErrorCodes()
 	require.GreaterOrEqual(t, len(allCodes), expectedErrorCodeCount,
@@ -557,11 +557,11 @@ func TestC047_ErrorCatalog_Completeness(t *testing.T) {
 	}
 }
 
-// TestC047_ErrorFormatter_JSONStructure validates JSONErrorFormatter output structure
+// TestErrorFormatter_JSONStructure validates JSONErrorFormatter output structure
 // Given: StructuredError with all fields populated
 // When: formatter formats the error
 // Then: JSON includes code, message, details, timestamp, all properly serialized
-func TestC047_ErrorFormatter_JSONStructure(t *testing.T) {
+func TestErrorFormatter_JSONStructure(t *testing.T) {
 	// Arrange
 	formatter := errfmt.NewJSONErrorFormatter(false)
 	testTime := time.Date(2025, 1, 15, 10, 30, 45, 0, time.UTC)
@@ -607,11 +607,11 @@ func TestC047_ErrorFormatter_JSONStructure(t *testing.T) {
 	assert.NoError(t, err, "Timestamp should be RFC3339 formatted")
 }
 
-// TestC047_ErrorFormatter_HumanReadable validates HumanErrorFormatter colorized output
+// TestErrorFormatter_HumanReadable validates HumanErrorFormatter colorized output
 // Given: StructuredError with details
 // When: formatter formats the error with colors enabled
 // Then: output includes ANSI color codes and [ERROR_CODE] prefix
-func TestC047_ErrorFormatter_HumanReadable(t *testing.T) {
+func TestErrorFormatter_HumanReadable(t *testing.T) {
 	tests := []struct {
 		name            string
 		colorEnabled    bool
@@ -677,11 +677,11 @@ func TestC047_ErrorFormatter_HumanReadable(t *testing.T) {
 	}
 }
 
-// TestC047_WriteError_StructuredDetection validates WriteError detects StructuredError type
+// TestWriteError_StructuredDetection validates WriteError detects StructuredError type
 // Given: StructuredError passed to WriteError
 // When: output format is JSON
 // Then: error_code field is populated in ErrorResponse
-func TestC047_WriteError_StructuredDetection(t *testing.T) {
+func TestWriteError_StructuredDetection(t *testing.T) {
 	// Arrange
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeWorkflowValidationMissingState,
@@ -719,7 +719,7 @@ func TestC047_WriteError_StructuredDetection(t *testing.T) {
 	assert.Equal(t, 2, errorResponse.Code, "Exit code should be preserved")
 }
 
-// TestC047_EndToEnd_AcceptanceCriteria validates all acceptance criteria from spec
+// TestEndToEnd_AcceptanceCriteria validates all acceptance criteria from spec
 // Given: full awf CLI installation
 // When: various workflows are executed
 // Then: all acceptance criteria pass:
@@ -729,7 +729,7 @@ func TestC047_WriteError_StructuredDetection(t *testing.T) {
 //   - Human output includes error code reference
 //   - awf error command returns explanations
 //   - All existing tests pass
-func TestC047_EndToEnd_AcceptanceCriteria(t *testing.T) {
+func TestEndToEnd_AcceptanceCriteria(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
 
 	t.Run("AC1: Machine-readable error codes", func(t *testing.T) {
@@ -852,11 +852,11 @@ func buildBinaryIfNeeded(t *testing.T) string {
 	return binPath
 }
 
-// TestC047_ErrorFormatter_InterfaceCompliance validates compile-time interface compliance
+// TestErrorFormatter_InterfaceCompliance validates compile-time interface compliance
 // Given: ErrorFormatter implementations
 // When: code compiles
 // Then: all implementations satisfy the ErrorFormatter port interface
-func TestC047_ErrorFormatter_InterfaceCompliance(t *testing.T) {
+func TestErrorFormatter_InterfaceCompliance(t *testing.T) {
 	// Compile-time verification of interface compliance
 	var _ ports.ErrorFormatter = (*errfmt.JSONErrorFormatter)(nil)
 	var _ ports.ErrorFormatter = (*errfmt.HumanErrorFormatter)(nil)

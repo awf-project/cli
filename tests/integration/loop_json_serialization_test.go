@@ -33,10 +33,10 @@ import (
 // AC3: Unit tests cover serialization scenarios (see pkg/interpolation tests)
 // AC4: Existing workflows work without workarounds
 
-// TestF047_HappyPath_CallWorkflowWithJSONObjects tests AC1:
+// TestHappyPath_CallWorkflowWithJSONObjects tests AC1:
 // for_each loop passing JSON objects to call_workflow via {{.loop.Item}}
 // Feature: F047
-func TestF047_HappyPath_CallWorkflowWithJSONObjects(t *testing.T) {
+func TestHappyPath_CallWorkflowWithJSONObjects(t *testing.T) {
 	// Given: Parent workflow iterates over JSON objects and calls child workflow
 	tmpDir := t.TempDir()
 	outputDir := filepath.Join(tmpDir, "output")
@@ -133,10 +133,10 @@ states:
 	assert.NotContains(t, callChildState.Output, "Go map format", "child should not receive Go map format")
 }
 
-// TestF047_HappyPath_NestedObjectsAndArrays tests AC2:
+// TestHappyPath_NestedObjectsAndArrays tests AC2:
 // Complex nested structures serialize correctly
 // Feature: F047
-func TestF047_HappyPath_NestedObjectsAndArrays(t *testing.T) {
+func TestHappyPath_NestedObjectsAndArrays(t *testing.T) {
 	// Given: Workflow with deeply nested JSON structures
 	tmpDir := t.TempDir()
 
@@ -214,9 +214,9 @@ states:
 	assert.Contains(t, validateState.Output, "Valid:", "nested JSON should validate")
 }
 
-// TestF047_EdgeCase_EmptyObjectsAndArrays tests edge cases with empty structures
+// TestEdgeCase_EmptyObjectsAndArrays tests edge cases with empty structures
 // Feature: F047
-func TestF047_EdgeCase_EmptyObjectsAndArrays(t *testing.T) {
+func TestEdgeCase_EmptyObjectsAndArrays(t *testing.T) {
 	// Given: Items with empty objects and arrays
 	tmpDir := t.TempDir()
 
@@ -272,9 +272,9 @@ states:
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 }
 
-// TestF047_EdgeCase_PrimitiveTypes tests AC4: primitives pass through unchanged
+// TestEdgeCase_PrimitiveTypes tests AC4: primitives pass through unchanged
 // Feature: F047
-func TestF047_EdgeCase_PrimitiveTypes(t *testing.T) {
+func TestEdgeCase_PrimitiveTypes(t *testing.T) {
 	// Given: Loop items are primitive types (not objects)
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "output.txt")
@@ -362,9 +362,9 @@ states:
 	}
 }
 
-// TestF047_EdgeCase_UnicodeAndSpecialCharacters tests unicode handling
+// TestEdgeCase_UnicodeAndSpecialCharacters tests unicode handling
 // Feature: F047
-func TestF047_EdgeCase_UnicodeAndSpecialCharacters(t *testing.T) {
+func TestEdgeCase_UnicodeAndSpecialCharacters(t *testing.T) {
 	// Given: Items with unicode characters
 	tmpDir := t.TempDir()
 
@@ -427,9 +427,9 @@ states:
 	assert.Contains(t, validateState.Output, "Unicode preserved")
 }
 
-// TestF047_Integration_RealWorldWorkflowPattern tests a realistic scenario
+// TestIntegration_RealWorldWorkflowPattern tests a realistic scenario
 // Feature: F047
-func TestF047_Integration_RealWorldWorkflowPattern(t *testing.T) {
+func TestIntegration_RealWorldWorkflowPattern(t *testing.T) {
 	// Given: A realistic PR review workflow pattern
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "review-results.txt")
@@ -527,10 +527,10 @@ states:
 	assert.Len(t, lines, 3, "should have reviewed 3 files")
 }
 
-// TestF047_BackwardCompatibility_ExistingWorkflows tests AC4:
+// TestJSONSerialization_BackwardCompatibility tests AC4:
 // Workflows created before F047 continue to work unchanged
 // Feature: F047
-func TestF047_BackwardCompatibility_ExistingWorkflows(t *testing.T) {
+func TestJSONSerialization_BackwardCompatibility(t *testing.T) {
 	// Given: Pre-F047 workflows with simple string/number items
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "output.txt")
