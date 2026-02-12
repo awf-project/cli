@@ -114,6 +114,17 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 		}
 	}
 
+	// Build set of steps that are parallel branch children
+	// B004: Parallel branch children have transitions discarded by execution engine
+	parallelBranchSteps := make(map[string]bool)
+	for _, step := range w.Steps {
+		if step.Type == StepTypeParallel {
+			for _, branchName := range step.Branches {
+				parallelBranchSteps[branchName] = true
+			}
+		}
+	}
+
 	// Validate each step
 	for name, step := range w.Steps {
 		if err := step.Validate(validator); err != nil {
@@ -122,7 +133,8 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 
 		// Non-terminal steps must have some way to transition
 		// Either: OnSuccess/OnFailure (legacy) OR Transitions (conditional)
-		if step.Type == StepTypeCommand {
+		// B004: Parallel branch children are exempt (transitions discarded by executor)
+		if step.Type == StepTypeCommand && !parallelBranchSteps[name] {
 			hasLegacyTransitions := step.OnSuccess != "" || step.OnFailure != ""
 			hasConditionalTransitions := len(step.Transitions) > 0
 			if !hasLegacyTransitions && !hasConditionalTransitions {

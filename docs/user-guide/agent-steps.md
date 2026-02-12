@@ -331,17 +331,21 @@ Run multiple agents concurrently:
 ```yaml
 parallel_analysis:
   type: parallel
+  parallel:
+    - claude_review
+    - codex_suggest
   strategy: all_succeed
-  steps:
-    - name: claude_review
-      type: agent
-      provider: claude
-      prompt: "Analyze for security: {{.inputs.code}}"
-    - name: codex_suggest
-      type: agent
-      provider: codex
-      prompt: "Optimize performance: {{.inputs.code}}"
   on_success: aggregate
+
+claude_review:
+  type: agent
+  provider: claude
+  prompt: "Analyze for security: {{.inputs.code}}"
+
+codex_suggest:
+  type: agent
+  provider: codex
+  prompt: "Optimize performance: {{.inputs.code}}"
 
 aggregate:
   type: step

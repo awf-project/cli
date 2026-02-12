@@ -283,33 +283,44 @@ error:
 
 ## Parallel State
 
-Execute multiple steps concurrently.
+Execute multiple steps concurrently. Branch children are defined as separate states and referenced by name in the `parallel` field.
 
 ```yaml
 parallel_build:
   type: parallel
+  parallel:
+    - lint
+    - test
+    - build
   strategy: all_succeed
   max_concurrent: 3
-  steps:
-    - name: lint
-      command: golangci-lint run
-    - name: test
-      command: go test ./...
-    - name: build
-      command: go build ./cmd/...
   on_success: deploy
   on_failure: error
+
+lint:
+  type: step
+  command: golangci-lint run
+
+test:
+  type: step
+  command: go test ./...
+
+build:
+  type: step
+  command: go build ./cmd/...
 ```
+
+Branch children (`lint`, `test`, `build` above) do not need `on_success`/`on_failure` or `transitions` — the parallel executor controls flow after each branch completes. If provided, transitions are accepted but ignored at runtime.
 
 ### Parallel Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `steps` | array | - | List of steps to execute concurrently |
+| `parallel` | array | - | List of step names to execute concurrently |
 | `strategy` | string | `all_succeed` | Execution strategy |
 | `max_concurrent` | int | unlimited | Maximum concurrent steps |
-| `on_success` | string | - | Next state on success |
-| `on_failure` | string | - | Next state on failure |
+| `on_success` | string | - | Next state when all branches complete successfully |
+| `on_failure` | string | - | Next state on branch failure |
 
 ### Parallel Strategies
 
@@ -322,8 +333,8 @@ parallel_build:
 ### Accessing Parallel Results
 
 ```yaml
-# Access individual step outputs
-command: echo "{{.states.parallel_build.steps.lint.Output}}"
+# Branch children are top-level states — access their output directly
+command: echo "{{.states.lint.Output}}"
 ```
 
 ---

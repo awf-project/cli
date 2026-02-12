@@ -119,17 +119,26 @@ states:
 
   build_all:
     type: parallel
+    parallel:
+      - lint
+      - test
+      - build
     strategy: all_succeed
     max_concurrent: 3
-    steps:
-      - name: lint
-        command: golangci-lint run
-      - name: test
-        command: go test ./...
-      - name: build
-        command: go build ./cmd/...
     on_success: deploy
     on_failure: error
+
+  lint:
+    type: step
+    command: golangci-lint run
+
+  test:
+    type: step
+    command: go test ./...
+
+  build:
+    type: step
+    command: go build ./cmd/...
 
   deploy:
     type: step
@@ -453,27 +462,33 @@ states:
 
   parallel_analysis:
     type: parallel
+    parallel:
+      - security_review
+      - performance_review
+      - style_review
     strategy: all_succeed
-    steps:
-      - name: security_review
-        type: agent
-        provider: claude
-        prompt: |
-          Security review:
-          {{.inputs.code}}
-      - name: performance_review
-        type: agent
-        provider: codex
-        prompt: |
-          Performance analysis:
-          {{.inputs.code}}
-      - name: style_review
-        type: agent
-        provider: gemini
-        prompt: |
-          Code style review:
-          {{.inputs.code}}
     on_success: aggregate
+
+  security_review:
+    type: agent
+    provider: claude
+    prompt: |
+      Security review:
+      {{.inputs.code}}
+
+  performance_review:
+    type: agent
+    provider: codex
+    prompt: |
+      Performance analysis:
+      {{.inputs.code}}
+
+  style_review:
+    type: agent
+    provider: gemini
+    prompt: |
+      Code style review:
+      {{.inputs.code}}
 
   aggregate:
     type: step

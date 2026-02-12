@@ -914,6 +914,370 @@ states:
 }
 
 // =============================================================================
+// B004 Bug Fix: Parallel Branch Validation (Integration Level)
+// Tests validate YAML → domain validation flow for parallel branch children
+// without required transitions (exemption from transition requirements)
+// =============================================================================
+
+// TestParallelValidation_BranchChildrenWithoutTransitions validates B004 fix:
+// parallel branch children should not require on_success/on_failure transitions.
+// This integration test validates the full YAML parsing → domain validation pipeline.
+func TestParallelValidation_BranchChildrenWithoutTransitions(t *testing.T) {
+	// Given: A parallel workflow where branch children have no transitions
+	workflowYAML := `name: b004-no-child-transitions
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  task_a:
+    type: step
+    command: echo "Task A"
+  task_b:
+    type: step
+    command: echo "Task B"
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tmpDir := t.TempDir()
+	wfPath := filepath.Join(tmpDir, "workflow.yaml")
+	require.NoError(t, os.WriteFile(wfPath, []byte(workflowYAML), 0o644))
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := testutil.NewMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := testutil.NewMockLogger()
+
+	svc := testutil.NewExecutionServiceBuilder().
+		WithWorkflowRepository(repo).
+		WithStateStore(store).
+		WithExecutor(exec).
+		WithLogger(logger).
+		Build()
+
+	// When: The workflow is executed
+	execCtx, err := svc.Run(ctx, "workflow", nil)
+
+	// Then: No validation error, workflow completes successfully
+	require.NoError(t, err)
+	require.NotNil(t, execCtx)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.Equal(t, "done", execCtx.CurrentStep)
+}
+
+// TestParallelValidation_AcceptanceCriteria validates all B004 acceptance criteria
+// using a table-driven approach to ensure complete coverage.
+func TestParallelValidation_AcceptanceCriteria(t *testing.T) {
+	tests := []struct {
+		name           string
+		workflowYAML   string
+		expectedStatus workflow.ExecutionStatus
+		expectedStep   string
+		wantErr        bool
+		description    string
+	}{
+		{
+			name: "AC1: parallel branch children without transitions (exemption)",
+			workflowYAML: `name: ac1-no-transitions
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  task_a:
+    type: step
+    command: echo "Task A"
+  task_b:
+    type: step
+    command: echo "Task B"
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Parallel branch children should not require transitions",
+		},
+		{
+			name: "AC2: parallel branch children with optional transitions",
+			workflowYAML: `name: ac2-optional-transitions
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  task_a:
+    type: step
+    command: echo "Task A"
+    on_success: done
+    on_failure: error
+  task_b:
+    type: step
+    command: echo "Task B"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Parallel branch children may still define transitions",
+		},
+		{
+			name: "AC2: mixed - some branches with transitions, some without",
+			workflowYAML: `name: ac2-mixed-transitions
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+      - task_c
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  task_a:
+    type: step
+    command: echo "Task A with transitions"
+    on_success: done
+    on_failure: error
+  task_b:
+    type: step
+    command: echo "Task B without transitions"
+  task_c:
+    type: step
+    command: echo "Task C with transitions"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Mixed: some branches with transitions, some without",
+		},
+		{
+			name: "AC4: regression - non-parallel command step requires transitions",
+			workflowYAML: `name: ac4-regression-non-parallel
+version: "1.0.0"
+states:
+  initial: regular_step
+  regular_step:
+    type: step
+    command: echo "Regular step"
+  done:
+    type: terminal
+    status: success`,
+			expectedStatus: workflow.StatusPending,
+			expectedStep:   "",
+			wantErr:        true,
+			description:    "Non-parallel command steps must still require transitions (regression test)",
+		},
+		{
+			name: "AC3: existing workflows with transitions continue to validate",
+			workflowYAML: `name: ac3-existing-workflow
+version: "1.0.0"
+states:
+  initial: parallel_step
+  parallel_step:
+    type: parallel
+    parallel:
+      - branch_a
+      - branch_b
+      - branch_c
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  branch_a:
+    type: step
+    command: echo "Branch A"
+    on_success: done
+    on_failure: error
+  branch_b:
+    type: step
+    command: echo "Branch B"
+    on_success: done
+    on_failure: error
+  branch_c:
+    type: step
+    command: echo "Branch C"
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Existing workflows with transitions should continue working",
+		},
+		{
+			name: "nested parallel: branch children without transitions",
+			workflowYAML: `name: nested-parallel-no-transitions
+version: "1.0.0"
+states:
+  initial: outer_parallel
+  outer_parallel:
+    type: parallel
+    parallel:
+      - inner_parallel
+      - task_x
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  inner_parallel:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+  task_a:
+    type: step
+    command: echo "Inner Task A"
+  task_b:
+    type: step
+    command: echo "Inner Task B"
+  task_x:
+    type: step
+    command: echo "Task X"
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Nested parallel: all branch children at all levels should not require transitions",
+		},
+		{
+			name: "multiple parallel steps in sequence",
+			workflowYAML: `name: sequential-parallel-steps
+version: "1.0.0"
+states:
+  initial: parallel_1
+  parallel_1:
+    type: parallel
+    parallel:
+      - task_a
+      - task_b
+    strategy: all_succeed
+    on_success: parallel_2
+    on_failure: error
+  task_a:
+    type: step
+    command: echo "Task A"
+  task_b:
+    type: step
+    command: echo "Task B"
+  parallel_2:
+    type: parallel
+    parallel:
+      - task_c
+      - task_d
+    strategy: all_succeed
+    on_success: done
+    on_failure: error
+  task_c:
+    type: step
+    command: echo "Task C"
+  task_d:
+    type: step
+    command: echo "Task D"
+  done:
+    type: terminal
+    status: success
+  error:
+    type: terminal
+    status: failure`,
+			expectedStatus: workflow.StatusCompleted,
+			expectedStep:   "done",
+			wantErr:        false,
+			description:    "Multiple parallel steps in sequence with transitionless branch children",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			tmpDir := t.TempDir()
+			wfPath := filepath.Join(tmpDir, "workflow.yaml")
+			require.NoError(t, os.WriteFile(wfPath, []byte(tt.workflowYAML), 0o644))
+
+			repo := repository.NewYAMLRepository(tmpDir)
+			store := testutil.NewMockStateStore()
+			exec := executor.NewShellExecutor()
+			logger := testutil.NewMockLogger()
+
+			svc := testutil.NewExecutionServiceBuilder().
+				WithWorkflowRepository(repo).
+				WithStateStore(store).
+				WithExecutor(exec).
+				WithLogger(logger).
+				Build()
+
+			// Act
+			execCtx, err := svc.Run(ctx, "workflow", nil)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err, tt.description)
+			} else {
+				require.NoError(t, err, tt.description)
+				require.NotNil(t, execCtx)
+				assert.Equal(t, tt.expectedStatus, execCtx.Status, tt.description)
+				assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, tt.description)
+			}
+		})
+	}
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 

@@ -151,6 +151,206 @@ func TestWorkflowValidation(t *testing.T) {
 			wantErr: true,
 			errMsg:  "step 'middle': command step must have OnSuccess/OnFailure or Transitions",
 		},
+		// B004: Parallel branch children exemption tests
+		{
+			name: "B004: parallel branch child without transitions - valid",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel",
+				Steps: map[string]*workflow.Step{
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"task_a", "task_b"},
+						OnSuccess: "end",
+					},
+					"task_a": {Name: "task_a", Type: workflow.StepTypeCommand, Command: "echo A"},
+					"task_b": {Name: "task_b", Type: workflow.StepTypeCommand, Command: "echo B"},
+					"end":    {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: parallel branch child with transitions - still valid",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel",
+				Steps: map[string]*workflow.Step{
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"task_a", "task_b"},
+						OnSuccess: "end",
+					},
+					"task_a": {Name: "task_a", Type: workflow.StepTypeCommand, Command: "echo A", OnSuccess: "end"},
+					"task_b": {Name: "task_b", Type: workflow.StepTypeCommand, Command: "echo B", OnFailure: "end"},
+					"end":    {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: multiple parallel steps with branch children without transitions",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel1",
+				Steps: map[string]*workflow.Step{
+					"parallel1": {
+						Name:      "parallel1",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"task_a", "task_b"},
+						OnSuccess: "parallel2",
+					},
+					"task_a": {Name: "task_a", Type: workflow.StepTypeCommand, Command: "echo A"},
+					"task_b": {Name: "task_b", Type: workflow.StepTypeCommand, Command: "echo B"},
+					"parallel2": {
+						Name:      "parallel2",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"task_c", "task_d"},
+						OnSuccess: "end",
+					},
+					"task_c": {Name: "task_c", Type: workflow.StepTypeCommand, Command: "echo C"},
+					"task_d": {Name: "task_d", Type: workflow.StepTypeCommand, Command: "echo D"},
+					"end":    {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: parallel step with empty branches - invalid",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel",
+				Steps: map[string]*workflow.Step{
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{},
+						OnSuccess: "end",
+					},
+					"end": {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: true,
+			errMsg:  "step 'parallel': branches are required for parallel-type steps",
+		},
+		{
+			name: "B004: mix of parallel branch children and regular steps",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "start",
+				Steps: map[string]*workflow.Step{
+					"start": {Name: "start", Type: workflow.StepTypeCommand, Command: "echo start", OnSuccess: "parallel"},
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"branch_a", "branch_b"},
+						OnSuccess: "regular",
+					},
+					"branch_a": {Name: "branch_a", Type: workflow.StepTypeCommand, Command: "echo A"},
+					"branch_b": {Name: "branch_b", Type: workflow.StepTypeCommand, Command: "echo B"},
+					"regular":  {Name: "regular", Type: workflow.StepTypeCommand, Command: "echo regular", OnSuccess: "end"},
+					"end":      {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: regular command step still requires transitions",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel",
+				Steps: map[string]*workflow.Step{
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"branch_a"},
+						OnSuccess: "regular",
+					},
+					"branch_a": {Name: "branch_a", Type: workflow.StepTypeCommand, Command: "echo A"},
+					"regular":  {Name: "regular", Type: workflow.StepTypeCommand, Command: "echo regular"}, // missing transitions
+					"end":      {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: true,
+			errMsg:  "step 'regular': command step must have OnSuccess/OnFailure or Transitions",
+		},
+		{
+			name: "B004: parallel branch child using conditional transitions - valid",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "parallel",
+				Steps: map[string]*workflow.Step{
+					"parallel": {
+						Name:      "parallel",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"conditional_task"},
+						OnSuccess: "end",
+					},
+					"conditional_task": {
+						Name:    "conditional_task",
+						Type:    workflow.StepTypeCommand,
+						Command: "test",
+						Transitions: workflow.Transitions{
+							{When: "output == 'success'", Goto: "end"},
+						},
+					},
+					"end": {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: three-level parallel branches without transitions",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "p1",
+				Steps: map[string]*workflow.Step{
+					"p1": {
+						Name:      "p1",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"p2", "task_x"},
+						OnSuccess: "end",
+					},
+					"p2": {
+						Name:      "p2",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"task_a", "task_b"},
+						OnSuccess: "end",
+					},
+					"task_a": {Name: "task_a", Type: workflow.StepTypeCommand, Command: "echo A"},
+					"task_b": {Name: "task_b", Type: workflow.StepTypeCommand, Command: "echo B"},
+					"task_x": {Name: "task_x", Type: workflow.StepTypeCommand, Command: "echo X"},
+					"end":    {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "B004: same step in multiple parallel branches - valid",
+			wf: workflow.Workflow{
+				Name:    "test",
+				Initial: "p1",
+				Steps: map[string]*workflow.Step{
+					"p1": {
+						Name:      "p1",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"shared_task"},
+						OnSuccess: "p2",
+					},
+					"p2": {
+						Name:      "p2",
+						Type:      workflow.StepTypeParallel,
+						Branches:  []string{"shared_task"},
+						OnSuccess: "end",
+					},
+					"shared_task": {Name: "shared_task", Type: workflow.StepTypeCommand, Command: "echo shared"},
+					"end":         {Name: "end", Type: workflow.StepTypeTerminal},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
