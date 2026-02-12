@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **C057**: Removed deprecated `Tokens` field from `StepState` — use `TokensUsed`
+  - Template interpolation: `{{states.step_name.Tokens}}` → `{{states.step_name.TokensUsed}}`
+  - Expression conditions: `states.step_name.Tokens > 0` → `states.step_name.TokensUsed > 0`
+  - **Migration**: Search workflow YAML files for `.Tokens` and replace with `.TokensUsed`
+  - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
+
 ### Changed
 
 - **C051**: Fixed DIP violation in application layer
@@ -461,8 +469,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provider registry with configurable `model`, `max_tokens`, `temperature`, and `timeout`
   - `custom` provider for unsupported CLIs via command template with `{{prompt}}` placeholder
   - Prompt templates with full variable interpolation (`{{.inputs.*}}`, `{{.states.*}}`, `{{.env.*}}`)
-  - Automatic JSON response parsing stored in `{{.states.step_name.response}}`
-  - Token usage tracking accessible via `{{.states.step_name.tokens}}`
+  - Automatic JSON response parsing stored in `{{.states.step_name.Response}}`
+  - Token usage tracking accessible via `{{.states.step_name.TokensUsed}}`
   - Dry-run mode displays resolved prompts without execution
 - **F033**: Multi-turn Conversation Mode with Context Window Management
   - `mode: conversation` enables iterative agent interactions within a single step

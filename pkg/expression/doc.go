@@ -22,7 +22,7 @@
 //
 // BuildExprContext converts interpolation.Context to expr-compatible map:
 //   - inputs: Map of workflow input parameters (with type coercion)
-//   - states: Map of step results with PascalCase properties (Output, Stderr, ExitCode, Status, Response, Tokens)
+//   - states: Map of step results with PascalCase properties (Output, Stderr, ExitCode, Status, Response, TokensUsed)
 //   - workflow: Workflow metadata with PascalCase properties (ID, Name, CurrentState, Duration)
 //   - env: Environment variables
 //   - loop: Loop context (Index, Index1, Item, Length, First, Last, Parent)
@@ -247,7 +247,7 @@
 // # Property Name Casing (F050)
 //
 // PascalCase properties (uppercase first letter):
-//   - states.step.Output, states.step.Stderr, states.step.ExitCode, states.step.Status, states.step.Response, states.step.Tokens
+//   - states.step.Output, states.step.Stderr, states.step.ExitCode, states.step.Status, states.step.Response, states.step.TokensUsed
 //   - workflow.ID, workflow.Name, workflow.CurrentState, workflow.Duration
 //   - loop.Index, loop.Index1, loop.Item, loop.First, loop.Last, loop.Length, loop.Parent
 //   - error.Message, error.State, error.ExitCode, error.Type

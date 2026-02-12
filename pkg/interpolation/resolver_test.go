@@ -2877,10 +2877,10 @@ func TestTemplateResolver_AutomaticSerialization_PointerTypes(t *testing.T) {
 // =============================================================================
 
 // =============================================================================
-// StepStateData.Tokens Tests (C018-T005)
+// StepStateData.TokensUsed Tests (C018-T005)
 // =============================================================================
 
-func TestTemplateResolver_StepStateDataTokens(t *testing.T) {
+func TestTemplateResolver_StepStateDataTokensUsed(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
@@ -2890,74 +2890,74 @@ func TestTemplateResolver_StepStateDataTokens(t *testing.T) {
 	}{
 		{
 			name:     "tokens integer access",
-			template: "tokens: {{.states.agent_step.Tokens}}",
+			template: "tokens: {{.states.agent_step.TokensUsed}}",
 			states: map[string]interpolation.StepStateData{
-				"agent_step": {Tokens: 1500},
+				"agent_step": {TokensUsed: 1500},
 			},
 			want: "tokens: 1500",
 		},
 		{
 			name:     "tokens zero value",
-			template: "count: {{.states.empty_step.Tokens}}",
+			template: "count: {{.states.empty_step.TokensUsed}}",
 			states: map[string]interpolation.StepStateData{
-				"empty_step": {Tokens: 0},
+				"empty_step": {TokensUsed: 0},
 			},
 			want: "count: 0",
 		},
 		{
 			name:     "tokens with other fields",
-			template: "{{.states.api_call.Output}} used {{.states.api_call.Tokens}} tokens",
+			template: "{{.states.api_call.Output}} used {{.states.api_call.TokensUsed}} tokens",
 			states: map[string]interpolation.StepStateData{
 				"api_call": {
-					Output: "Success",
-					Tokens: 2500,
+					Output:     "Success",
+					TokensUsed: 2500,
 				},
 			},
 			want: "Success used 2500 tokens",
 		},
 		{
 			name:     "tokens formatting in template",
-			template: "API call completed with {{.states.step1.Tokens}} tokens (exit {{.states.step1.ExitCode}})",
+			template: "API call completed with {{.states.step1.TokensUsed}} tokens (exit {{.states.step1.ExitCode}})",
 			states: map[string]interpolation.StepStateData{
 				"step1": {
-					Tokens:   3200,
-					ExitCode: 0,
-					Status:   "success",
+					TokensUsed: 3200,
+					ExitCode:   0,
+					Status:     "success",
 				},
 			},
 			want: "API call completed with 3200 tokens (exit 0)",
 		},
 		{
 			name:     "multiple steps with tokens",
-			template: "Total: {{.states.step1.Tokens}} + {{.states.step2.Tokens}}",
+			template: "Total: {{.states.step1.TokensUsed}} + {{.states.step2.TokensUsed}}",
 			states: map[string]interpolation.StepStateData{
-				"step1": {Tokens: 1000},
-				"step2": {Tokens: 1500},
+				"step1": {TokensUsed: 1000},
+				"step2": {TokensUsed: 1500},
 			},
 			want: "Total: 1000 + 1500",
 		},
 		{
 			name:     "tokens with response data",
-			template: "Response tokens: {{.states.agent.Tokens}}",
+			template: "Response tokens: {{.states.agent.TokensUsed}}",
 			states: map[string]interpolation.StepStateData{
 				"agent": {
-					Tokens:   4200,
-					Response: map[string]any{"result": "data"},
+					TokensUsed: 4200,
+					Response:   map[string]any{"result": "data"},
 				},
 			},
 			want: "Response tokens: 4200",
 		},
 		{
 			name:     "large token count",
-			template: "tokens={{.states.large.Tokens}}",
+			template: "tokens={{.states.large.TokensUsed}}",
 			states: map[string]interpolation.StepStateData{
-				"large": {Tokens: 999999},
+				"large": {TokensUsed: 999999},
 			},
 			want: "tokens=999999",
 		},
 		{
 			name:     "undefined state with tokens",
-			template: "{{.states.nonexistent.Tokens}}",
+			template: "{{.states.nonexistent.TokensUsed}}",
 			states:   map[string]interpolation.StepStateData{},
 			wantErr:  true,
 		},

@@ -35,12 +35,12 @@ func (l *LoopData) Index1() int {
 
 // StepStateData holds step execution results for interpolation.
 type StepStateData struct {
-	Output   string
-	Stderr   string
-	ExitCode int
-	Status   string
-	Response map[string]any // parsed JSON response from agent steps
-	Tokens   int            // token usage from agent steps
+	Output     string
+	Stderr     string
+	ExitCode   int
+	Status     string
+	Response   map[string]any // parsed JSON response from agent steps
+	TokensUsed int            // total tokens used from agent steps
 }
 
 // WorkflowData holds workflow metadata for interpolation.

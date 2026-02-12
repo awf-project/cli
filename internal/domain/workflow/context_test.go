@@ -802,7 +802,6 @@ func TestStepState_ConversationFields_CompleteConversationMode(t *testing.T) {
 			"status": "approved",
 			"issues": 0,
 		},
-		Tokens: 17000, // Legacy field (deprecated)
 		Conversation: &workflow.ConversationState{
 			Turns: []workflow.Turn{
 				{Role: workflow.TurnRoleSystem, Content: "You are a code reviewer", Tokens: 50},
@@ -1012,20 +1011,6 @@ func TestStepState_ConversationFields_StopReasons(t *testing.T) {
 			assert.Equal(t, reason, state.Conversation.StoppedBy)
 		})
 	}
-}
-
-func TestStepState_ConversationFields_BackwardCompatibility(t *testing.T) {
-	// Edge case: Legacy Tokens field should coexist with new TokensUsed
-	state := workflow.StepState{
-		Name:       "legacy-step",
-		Status:     workflow.StatusCompleted,
-		Tokens:     5000,  // Legacy field (deprecated)
-		TokensUsed: 10000, // New field (conversation mode)
-	}
-
-	// Both fields should be accessible
-	assert.Equal(t, 5000, state.Tokens, "Legacy Tokens field should still work")
-	assert.Equal(t, 10000, state.TokensUsed, "New TokensUsed field should work")
 }
 
 func TestStepState_ConversationFields_MixedStepsInContext(t *testing.T) {

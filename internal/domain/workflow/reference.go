@@ -42,23 +42,24 @@ var ValidWorkflowProperties = map[string]bool{
 
 // ValidStateProperties lists known step state properties that can be referenced.
 var ValidStateProperties = map[string]bool{
-	"Output":   true,
-	"Stderr":   true,
-	"ExitCode": true,
-	"Status":   true,
-	"Response": true,
-	"Tokens":   true,
+	"Output":     true,
+	"Stderr":     true,
+	"ExitCode":   true,
+	"Status":     true,
+	"Response":   true,
+	"TokensUsed": true,
 }
 
 // lowercaseToUppercase maps lowercase property names to their correct uppercase equivalents.
 // Used to provide actionable error messages when users use incorrect casing.
 var lowercaseToUppercase = map[string]string{
-	"output":    "Output",
-	"stderr":    "Stderr",
-	"exit_code": "ExitCode",
-	"status":    "Status",
-	"response":  "Response",
-	"tokens":    "Tokens",
+	"output":     "Output",
+	"stderr":     "Stderr",
+	"exit_code":  "ExitCode",
+	"status":     "Status",
+	"response":   "Response",
+	"tokens":     "TokensUsed",
+	"tokensused": "TokensUsed",
 }
 
 // lowercaseToUppercaseError maps lowercase error property names to their correct uppercase equivalents.

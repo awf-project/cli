@@ -38,25 +38,62 @@ states:
 
 ### State Variables
 
-Access output and exit code from previous steps:
+Access output, exit code, and token usage from previous steps:
 
 ```yaml
-{{.states.step_name.Output}}
-{{.states.step_name.ExitCode}}
+{{.states.step_name.Output}}        # Command output
+{{.states.step_name.ExitCode}}      # Exit code (0 for success, non-zero for failure)
+{{.states.step_name.TokensUsed}}    # Tokens consumed by agent steps
 ```
 
-Example:
-```yaml
-read_file:
-  type: step
-  command: cat "{{.inputs.file}}"
-  on_success: analyze
+#### Output
 
+The standard output (stdout) from the executed step:
+
+```yaml
 analyze:
   type: step
   command: |
     claude -c "Analyze: {{.states.read_file.Output}}"
 ```
+
+#### ExitCode
+
+The exit code from the step's command execution. Use in transitions and expressions:
+
+```yaml
+transitions:
+  - when: "states.test_run.ExitCode == 0"
+    goto: success
+  - when: "states.test_run.ExitCode > 0"
+    goto: failure
+```
+
+#### TokensUsed
+
+Tokens consumed by agent steps (Claude, Gemini, Codex). Available for all agent step types:
+
+```yaml
+run_agent:
+  type: step
+  command: claude -c "Process this"
+  on_success: log_tokens
+
+log_tokens:
+  type: step
+  command: |
+    echo "Tokens used: {{.states.run_agent.TokensUsed}}"
+```
+
+Use in conditional expressions for token budgeting:
+
+```yaml
+transitions:
+  - when: "states.agent_step.TokensUsed > inputs.token_limit"
+    goto: token_exceeded
+```
+
+**Note**: Replaced deprecated `states.step_name.Tokens` field. If migrating from earlier versions, update workflow YAML expressions from `{{.states.step_name.Tokens}}` to `{{.states.step_name.TokensUsed}}`.
 
 ### Workflow Metadata
 

@@ -119,12 +119,12 @@ func BuildExprContext(ctx *interpolation.Context) map[string]any {
 		states := make(map[string]any, len(ctx.States))
 		for k, v := range ctx.States {
 			states[k] = map[string]any{
-				"Output":   v.Output,
-				"Stderr":   v.Stderr,
-				"ExitCode": v.ExitCode,
-				"Status":   v.Status,
-				"Response": v.Response,
-				"Tokens":   v.Tokens,
+				"Output":     v.Output,
+				"Stderr":     v.Stderr,
+				"ExitCode":   v.ExitCode,
+				"Status":     v.Status,
+				"Response":   v.Response,
+				"TokensUsed": v.TokensUsed,
 			}
 		}
 		result["states"] = states
