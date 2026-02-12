@@ -253,9 +253,23 @@ awf run deploy \
 
 | Stage | What's Validated |
 |-------|------------------|
-| Load time | YAML syntax, state references, template references |
+| Load time | YAML syntax, state references, template references, transition requirements |
 | Runtime | Input values against validation rules |
 | `awf validate` | All load-time checks without execution |
+
+### Workflow Structure Rules
+
+Load-time validation enforces structural rules on workflow states:
+
+| Rule | Applies To | Description |
+|------|-----------|-------------|
+| Transition required | Command steps | `on_success`/`on_failure` or `transitions` must be defined |
+| Transition exempt | Parallel branch children | Steps listed in a parallel step's `parallel` field do not require transitions (the parallel executor controls flow) |
+| Transition exempt | Loop body steps | Steps listed in a loop's `body` field have relaxed transition target validation |
+| Branches required | Parallel steps | `parallel` field must list at least one branch step |
+| Valid strategy | Parallel steps | `strategy` must be `all_succeed`, `any_succeed`, `best_effort`, or empty |
+
+See [Workflow Syntax](../user-guide/workflow-syntax.md#parallel-state) for parallel step details.
 
 ## Best Practices
 

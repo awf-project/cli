@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Migration**: Search workflow YAML files for `.Tokens` and replace with `.TokensUsed`
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
+### Fixed
+
+- **B004**: Validator no longer forces dead-code transitions on parallel branch children
+  - Parallel branch children (`step.Branches`) can now omit `on_success`/`on_failure` and `Transitions`
+  - The execution engine discards these transitions, so requiring them was forcing dead code
+  - Existing workflows with transitions on parallel children continue to validate (backward compatible)
+
 ### Changed
 
 - **C051**: Fixed DIP violation in application layer
