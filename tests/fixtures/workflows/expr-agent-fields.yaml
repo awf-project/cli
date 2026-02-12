@@ -1,5 +1,5 @@
 # Feature: Test new agent step fields in expressions (VALID)
-# This workflow should PASS validation with Response and Tokens fields
+# Response and TokensUsed fields
 
 name: expr-agent-fields
 version: "1.0.0"
@@ -27,8 +27,8 @@ states:
 
   check_tokens:
     type: step
-    # VALID: Using Tokens field from agent step
-    when: 'states.agent_step.Tokens > 0'
+    # VALID: Using TokensUsed field from agent step
+    when: 'states.agent_step.TokensUsed > 0'
     command: echo "Used tokens"
     on_success: done
     on_failure: error

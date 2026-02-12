@@ -572,13 +572,13 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "access state.Tokens field",
-			expr: `states.agent.Tokens > 50`,
+			name: "access state.TokensUsed field",
+			expr: `states.agent.TokensUsed > 50`,
 			ctx: &interpolation.Context{
 				States: map[string]interpolation.StepStateData{
 					"agent": {
-						Response: map[string]any{},
-						Tokens:   150,
+						Response:   map[string]any{},
+						TokensUsed: 150,
 					},
 				},
 			},
@@ -1047,7 +1047,7 @@ func TestExprEvaluator_NewStepFields(t *testing.T) {
 							"result": "ok",
 							"data":   "test",
 						},
-						Tokens: 100,
+						TokensUsed: 100,
 					},
 				},
 			},
@@ -1056,29 +1056,29 @@ func TestExprEvaluator_NewStepFields(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "access state.Tokens field",
+			name: "access state.TokensUsed field",
 			ctx: &interpolation.Context{
 				States: map[string]interpolation.StepStateData{
 					"agent": {
-						Response: map[string]any{},
-						Tokens:   150,
+						Response:   map[string]any{},
+						TokensUsed: 150,
 					},
 				},
 			},
-			expr:    "states.agent.Tokens == 150",
+			expr:    "states.agent.TokensUsed == 150",
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "compare state.Tokens with threshold",
+			name: "compare state.TokensUsed with threshold",
 			ctx: &interpolation.Context{
 				States: map[string]interpolation.StepStateData{
 					"agent": {
-						Tokens: 150,
+						TokensUsed: 150,
 					},
 				},
 			},
-			expr:    "states.agent.Tokens > 50",
+			expr:    "states.agent.TokensUsed > 50",
 			want:    true,
 			wantErr: false,
 		},
@@ -1111,12 +1111,12 @@ func TestBuildExprContext_PascalCaseStateFields(t *testing.T) {
 			ctx: &interpolation.Context{
 				States: map[string]interpolation.StepStateData{
 					"step1": {
-						Output:   "test output",
-						Stderr:   "test error",
-						ExitCode: 1,
-						Status:   "completed",
-						Response: map[string]any{"key": "value"},
-						Tokens:   100,
+						Output:     "test output",
+						Stderr:     "test error",
+						ExitCode:   1,
+						Status:     "completed",
+						Response:   map[string]any{"key": "value"},
+						TokensUsed: 100,
 					},
 				},
 			},
@@ -1133,14 +1133,14 @@ func TestBuildExprContext_PascalCaseStateFields(t *testing.T) {
 				assert.Contains(t, step1, "ExitCode")
 				assert.Contains(t, step1, "Status")
 				assert.Contains(t, step1, "Response")
-				assert.Contains(t, step1, "Tokens")
+				assert.Contains(t, step1, "TokensUsed")
 
 				// Verify values
 				assert.Equal(t, "test output", step1["Output"])
 				assert.Equal(t, "test error", step1["Stderr"])
 				assert.Equal(t, 1, step1["ExitCode"])
 				assert.Equal(t, "completed", step1["Status"])
-				assert.Equal(t, 100, step1["Tokens"])
+				assert.Equal(t, 100, step1["TokensUsed"])
 			},
 		},
 		{

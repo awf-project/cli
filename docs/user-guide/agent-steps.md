@@ -160,7 +160,7 @@ review:
 **Available Variables:**
 - `{{.inputs.*}}` - Workflow input values
 - `{{.states.step_name.Output}}` - Previous step raw output
-- `{{.states.step_name.response}}` - Previous step parsed JSON
+- `{{.states.step_name.Response}}` - Previous step parsed JSON
 - `{{.env.VAR_NAME}}` - Environment variables
 - `{{.workflow.id}}` - Workflow execution ID
 - `{{.workflow.name}}` - Workflow name
@@ -171,11 +171,11 @@ See [Variable Interpolation Reference](../reference/interpolation.md) for comple
 
 Agent responses are automatically captured in the execution state:
 
-| Field | Type | Example |
-|-------|------|---------|
-| `{{.states.step_name.Output}}` | string | Raw response text |
-| `{{.states.step_name.response}}` | object | Parsed JSON (if valid) |
-| `{{.states.step_name.tokens}}` | object | Token usage metadata |
+| Field | Type | Description |
+|-------|------|-------------|
+| `{{.states.step_name.Output}}` | string | Raw response text from the agent |
+| `{{.states.step_name.Response}}` | object | Parsed JSON response (if valid) |
+| `{{.states.step_name.TokensUsed}}` | int | Tokens consumed by this step |
 | `{{.states.step_name.ExitCode}}` | int | 0 for success, non-zero for failure |
 
 ### Accessing Raw Output
@@ -196,7 +196,7 @@ If an agent returns valid JSON, it's automatically parsed:
 
 process_response:
   type: step
-  command: echo "Found {{.states.analyze.response.issues}} issues"
+  command: echo "Found {{.states.analyze.Response.issues}} issues"
   on_success: done
 ```
 
@@ -364,11 +364,11 @@ analyze:
 
 log_tokens:
   type: step
-  command: echo "Tokens used: {{.states.analyze.tokens.total}}"
+  command: echo "Tokens used: {{.states.analyze.TokensUsed}}"
   on_success: done
 ```
 
-Token availability depends on provider support. Check provider documentation for details.
+**Note**: All agent providers (Claude, Gemini, Codex) report token usage in the `TokensUsed` field.
 
 ## Best Practices
 

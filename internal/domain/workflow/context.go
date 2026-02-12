@@ -32,8 +32,6 @@ type StepState struct {
 	StartedAt   time.Time
 	CompletedAt time.Time
 	Response    map[string]any // parsed JSON response from agent steps
-	Tokens      int            // token usage from agent steps (deprecated, use TokensUsed)
-
 	// F033: Conversation mode fields
 	Conversation       *ConversationState  // conversation history and state (nil for non-conversation steps)
 	TokensUsed         int                 // total tokens used in conversation mode

@@ -504,12 +504,12 @@ func (s *ExecutionService) buildInterpolationContext(
 	for name := range allStates {
 		state := allStates[name]
 		states[name] = interpolation.StepStateData{
-			Output:   state.Output,
-			Stderr:   state.Stderr,
-			ExitCode: state.ExitCode,
-			Status:   state.Status.String(),
-			Response: state.Response,
-			Tokens:   state.Tokens,
+			Output:     state.Output,
+			Stderr:     state.Stderr,
+			ExitCode:   state.ExitCode,
+			Status:     state.Status.String(),
+			Response:   state.Response,
+			TokensUsed: state.TokensUsed,
 		}
 	}
 
@@ -1790,10 +1790,10 @@ func (s *ExecutionService) executeAgentStep(
 	// Populate state from result
 	if result != nil {
 		state.Output = result.Output
-		// AC5: JSON auto-parsed to states.step_name.response
+		// AC5: JSON auto-parsed to states.step_name.Response
 		state.Response = result.Response
-		// AC6: Token usage in states.step_name.tokens
-		state.Tokens = result.Tokens
+		// AC6: Token usage in states.step_name.tokens_used
+		state.TokensUsed = result.Tokens
 	}
 
 	// Handle execution error (e.g., context cancelled, provider error)
@@ -1804,7 +1804,7 @@ func (s *ExecutionService) executeAgentStep(
 			state.Error = execErr.Error()
 			if result != nil {
 				state.Response = result.Response
-				state.Tokens = result.Tokens
+				state.TokensUsed = result.Tokens
 			}
 			execCtx.SetStepState(step.Name, state)
 			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
@@ -1814,7 +1814,7 @@ func (s *ExecutionService) executeAgentStep(
 		state.Error = execErr.Error()
 		if result != nil {
 			state.Response = result.Response
-			state.Tokens = result.Tokens
+			state.TokensUsed = result.Tokens
 		}
 		execCtx.SetStepState(step.Name, state)
 

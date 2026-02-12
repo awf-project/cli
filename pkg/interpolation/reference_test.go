@@ -846,12 +846,12 @@ func TestValidationMaps_PascalCase(t *testing.T) {
 			name:     "ValidStateProperties uses PascalCase and includes all fields",
 			validMap: interpolation.ValidStateProperties,
 			expectedKeys: []string{
-				"Output",   // already PascalCase
-				"Stderr",   // already PascalCase
-				"ExitCode", // already PascalCase
-				"Status",   // already PascalCase
-				"Response", // NEW: from agent steps (F039)
-				"Tokens",   // NEW: from agent steps (F039)
+				"Output",     // already PascalCase
+				"Stderr",     // already PascalCase
+				"ExitCode",   // already PascalCase
+				"Status",     // already PascalCase
+				"Response",   // NEW: from agent steps (F039)
+				"TokensUsed", // NEW: from agent steps (F039)
 			},
 			forbiddenKeys: []string{
 				"output",
@@ -948,8 +948,8 @@ func TestValidationMaps_Completeness(t *testing.T) {
 				"Stderr",
 				"ExitCode",
 				"Status",
-				"Response", // Added in F039 (agent steps)
-				"Tokens",   // Added in F039 (agent steps)
+				"Response",   // Added in F039 (agent steps)
+				"TokensUsed", // Added in F039 (agent steps)
 			},
 			mapDescription:    "ValidStateProperties",
 			contextMapping:    "states.<step>.* namespace in BuildExprContext()",
@@ -1109,12 +1109,12 @@ func TestValidationMaps_ConsistencyWithBuildExprContext(t *testing.T) {
 	t.Run("state namespace consistency", func(t *testing.T) {
 		// These keys MUST match what BuildExprContext sets in states map
 		expectedInBuildExprContext := map[string]bool{
-			"Output":   true, // v.Output
-			"Stderr":   true, // v.Stderr
-			"ExitCode": true, // v.ExitCode
-			"Status":   true, // v.Status
-			"Response": true, // v.Response (agent steps)
-			"Tokens":   true, // v.Tokens (agent steps)
+			"Output":     true, // v.Output
+			"Stderr":     true, // v.Stderr
+			"ExitCode":   true, // v.ExitCode
+			"Status":     true, // v.Status
+			"Response":   true, // v.Response (agent steps)
+			"TokensUsed": true, // v.TokensUsed (agent steps)
 		}
 
 		for key := range expectedInBuildExprContext {
@@ -1195,7 +1195,7 @@ func TestValidationMaps_BreakingChangeFromPre_(t *testing.T) {
 		assert.True(t, interpolation.ValidContextProperties["Hostname"], "PascalCase 'Hostname' is valid")
 	})
 
-	t.Run("state keys already PascalCase but Response/Tokens added", func(t *testing.T) {
+	t.Run("state keys already PascalCase but Response/TokensUsed added", func(t *testing.T) {
 		// State properties were already PascalCase (good!)
 		assert.True(t, interpolation.ValidStateProperties["Output"], "Output already PascalCase")
 		assert.True(t, interpolation.ValidStateProperties["Stderr"], "Stderr already PascalCase")
@@ -1204,10 +1204,10 @@ func TestValidationMaps_BreakingChangeFromPre_(t *testing.T) {
 
 		//  adds missing fields from F039 (agent steps)
 		assert.True(t, interpolation.ValidStateProperties["Response"], "Response field added in ")
-		assert.True(t, interpolation.ValidStateProperties["Tokens"], "Tokens field added in ")
+		assert.True(t, interpolation.ValidStateProperties["TokensUsed"], "TokensUsed field added in ")
 
 		// Lowercase versions should NOT exist
 		assert.False(t, interpolation.ValidStateProperties["response"], "lowercase 'response' not valid")
-		assert.False(t, interpolation.ValidStateProperties["tokens"], "lowercase 'tokens' not valid")
+		assert.False(t, interpolation.ValidStateProperties["tokensused"], "lowercase 'tokensused' not valid")
 	})
 }

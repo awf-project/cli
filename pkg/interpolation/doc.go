@@ -31,7 +31,7 @@
 //
 // Context provides all variable namespaces for interpolation:
 //   - Context: Root context with all namespaces
-//   - StepStateData: Step execution results (output, stderr, exit_code, status, response, tokens)
+//   - StepStateData: Step execution results (output, stderr, exit_code, status, response, tokens_used)
 //   - WorkflowData: Workflow metadata (id, name, current_state, started_at, duration)
 //   - LoopData: Loop iteration state (item, index, first, last, length, parent)
 //   - ErrorData: Error information for error hooks (message, state, exit_code, type)
@@ -66,7 +66,7 @@
 //	{{states.step_name.ExitCode}}  # exit code
 //	{{states.step_name.Status}}    # execution status
 //	{{states.step_name.Response}}  # parsed JSON response (agent steps)
-//	{{states.step_name.Tokens}}    # token usage (agent steps)
+//	{{states.step_name.TokensUsed}}    # total tokens used (agent steps)
 //
 // ## Workflow Namespace
 //
@@ -205,7 +205,7 @@
 // # Property Name Casing (F050)
 //
 // PascalCase properties (uppercase first letter):
-//   - states.step.Output, states.step.Stderr, states.step.ExitCode, states.step.Status, states.step.Response, states.step.Tokens
+//   - states.step.Output, states.step.Stderr, states.step.ExitCode, states.step.Status, states.step.Response, states.step.TokensUsed
 //   - workflow.ID, workflow.Name, workflow.CurrentState, workflow.StartedAt, workflow.Duration
 //   - error.Message, error.State, error.ExitCode, error.Type
 //   - context.WorkingDir, context.User, context.Hostname

@@ -191,8 +191,8 @@ Agent responses are captured in the step state:
 | Field | Type | Description |
 |-------|------|-------------|
 | `{{.states.step_name.Output}}` | string | Raw response text |
-| `{{.states.step_name.response}}` | object | Parsed JSON (if response is valid JSON) |
-| `{{.states.step_name.tokens}}` | object | Token usage (if provider supports it) |
+| `{{.states.step_name.Response}}` | object | Parsed JSON (if response is valid JSON) |
+| `{{.states.step_name.TokensUsed}}` | int | Tokens consumed by this agent step |
 
 ### Multi-Turn Conversations
 
