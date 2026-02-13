@@ -1,0 +1,29 @@
+# Feature: F056 - Slack Notification Backend
+# Test workflow for Slack notification backend
+
+name: notify-slack-test
+version: "1.0"
+
+inputs:
+  message:
+    type: string
+    description: Notification message
+    required: true
+  title:
+    type: string
+    description: Notification title
+    required: false
+
+states:
+  send_slack_notification:
+    type: step
+    operation: notify.send
+    inputs:
+      backend: slack
+      title: "{{inputs.title}}"
+      message: "{{inputs.message}}"
+    next: success
+
+  success:
+    type: terminal
+    status: completed

@@ -773,11 +773,6 @@ func TestRegistryErrors(t *testing.T) {
 		assert.Error(t, ErrInvalidOperation)
 		assert.Contains(t, ErrInvalidOperation.Error(), "invalid")
 	})
-
-	t.Run("ErrRegistryNotImplemented", func(t *testing.T) {
-		assert.Error(t, ErrRegistryNotImplemented)
-		assert.Contains(t, ErrRegistryNotImplemented.Error(), "not implemented")
-	})
 }
 
 // --- Table-driven comprehensive test ---

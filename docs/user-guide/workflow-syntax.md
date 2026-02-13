@@ -61,7 +61,7 @@ states:
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
 | `while` | Repeat until condition is false |
-| `operation` | Execute a declarative plugin operation (e.g., GitHub) |
+| `operation` | Execute a declarative plugin operation (e.g., GitHub, notifications) |
 | `call_workflow` | Invoke another workflow as a sub-workflow |
 
 ---
@@ -449,6 +449,101 @@ label_multiple:
 | `succeeded` | int | Successfully completed count |
 | `failed` | int | Failed operation count |
 | `results` | array | Individual operation results |
+
+### Notification Operations
+
+AWF includes a built-in notification provider with a single `notify.send` operation that dispatches to four backends. See [Plugins - Built-in Notification Plugin](plugins.md#built-in-notification-plugin) for configuration details.
+
+#### notify.send
+
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backend` | string | Yes | Backend: `desktop`, `ntfy`, `slack`, `webhook` |
+| `message` | string | Yes | Notification message body |
+| `title` | string | No | Notification title (defaults to "AWF Workflow") |
+| `priority` | string | No | Priority: `low`, `default`, `high` |
+| `topic` | string | No | ntfy topic name (required for `ntfy` backend) |
+| `webhook_url` | string | No | Webhook URL (required for `webhook` backend) |
+| `channel` | string | No | Slack channel override |
+
+**Outputs:** `backend`, `status`, `response`
+
+#### Examples
+
+**Desktop notification after a build:**
+
+```yaml
+states:
+  initial: build
+
+  build:
+    type: step
+    command: make build
+    on_success: notify
+    on_failure: error
+
+  notify:
+    type: operation
+    operation: notify.send
+    inputs:
+      backend: desktop
+      title: "Build Complete"
+      message: "{{workflow.name}} finished in {{workflow.duration}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
+```
+
+**Push notification via ntfy:**
+
+```yaml
+notify_phone:
+  type: operation
+  operation: notify.send
+  inputs:
+    backend: ntfy
+    topic: my-builds
+    title: "Deploy Status"
+    message: "{{workflow.name}}: {{states.deploy.Output}}"
+    priority: high
+  on_success: done
+  on_failure: error
+```
+
+**Slack team notification:**
+
+```yaml
+notify_slack:
+  type: operation
+  operation: notify.send
+  inputs:
+    backend: slack
+    title: "Workflow Complete"
+    message: "{{workflow.name}} succeeded in {{workflow.duration}}"
+  on_success: done
+  on_failure: error
+```
+
+**Generic webhook (Discord, Teams, PagerDuty, etc.):**
+
+```yaml
+notify_webhook:
+  type: operation
+  operation: notify.send
+  inputs:
+    backend: webhook
+    webhook_url: "https://example.com/hooks/builds"
+    message: "{{workflow.name}} completed"
+  on_success: done
+  on_failure: error
+```
 
 ---
 

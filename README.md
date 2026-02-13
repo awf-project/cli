@@ -22,6 +22,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 - **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, set_project_status, batch) with auth fallback and concurrent execution
+- **Built-in Notification Plugin** - Workflow completion alerts via desktop, [ntfy](https://ntfy.sh), Slack, and webhooks with configurable backends
 - **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation

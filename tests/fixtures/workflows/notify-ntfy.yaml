@@ -1,0 +1,34 @@
+# Feature: F056 - Ntfy Notification Backend
+# Test workflow for ntfy notification backend
+
+name: notify-ntfy-test
+version: "1.0"
+
+inputs:
+  topic:
+    type: string
+    description: Ntfy topic
+    required: true
+  message:
+    type: string
+    description: Notification message
+    required: true
+  priority:
+    type: string
+    description: Notification priority
+    required: false
+
+states:
+  send_ntfy_notification:
+    type: step
+    operation: notify.send
+    inputs:
+      backend: ntfy
+      topic: "{{inputs.topic}}"
+      message: "{{inputs.message}}"
+      priority: "{{inputs.priority}}"
+    next: success
+
+  success:
+    type: terminal
+    status: completed

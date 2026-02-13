@@ -1,0 +1,29 @@
+# Feature: F056 - Desktop Notification Backend
+# Test workflow for desktop notification backend
+
+name: notify-desktop-test
+version: "1.0"
+
+inputs:
+  title:
+    type: string
+    description: Notification title
+    required: false
+  message:
+    type: string
+    description: Notification message
+    required: true
+
+states:
+  send_desktop_notification:
+    type: step
+    operation: notify.send
+    inputs:
+      backend: desktop
+      title: "{{inputs.title}}"
+      message: "{{inputs.message}}"
+    next: success
+
+  success:
+    type: terminal
+    status: completed
