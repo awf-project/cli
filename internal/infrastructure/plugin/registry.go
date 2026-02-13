@@ -13,7 +13,6 @@ var (
 	ErrOperationAlreadyRegistered = errors.New("operation already registered")
 	ErrOperationNotFound          = errors.New("operation not found")
 	ErrInvalidOperation           = errors.New("invalid operation schema")
-	ErrRegistryNotImplemented     = errors.New("registry: not implemented")
 )
 
 // OperationRegistry manages registration of plugin-provided operations.

@@ -21,6 +21,8 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	infra_expression "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/github"
+	"github.com/vanoix/awf/internal/infrastructure/notify"
+	"github.com/vanoix/awf/internal/infrastructure/plugin"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
@@ -259,10 +261,21 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 
-	// Setup GitHub operation provider for F054 GitHub CLI plugin
+	// Setup operation providers (F054 GitHub + F056 Notify)
 	githubClient := github.NewClient(logger)
 	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
-	execSvc.SetOperationProvider(githubProvider)
+
+	// Load notify config from .awf/config.yaml (F056)
+	notifyProvider := notify.NewNotifyOperationProvider(logger)
+
+	// Register notification backends from config (T027)
+	if err := registerNotifyBackends(notifyProvider, projectCfg, logger); err != nil {
+		return fmt.Errorf("failed to register notify backends: %w", err)
+	}
+
+	// Wrap both providers in composite for coexistence
+	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider)
+	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -865,6 +878,13 @@ func runSingleStep(
 	}
 	resolver := interpolation.NewTemplateResolver()
 
+	// Load project config from .awf/config.yaml
+	// TODO(T027): Use projectCfg.Notify to register backends dynamically
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
 	// Create history store and service
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
@@ -899,10 +919,21 @@ func runSingleStep(
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 
-	// Setup GitHub operation provider for F054 GitHub CLI plugin
+	// Setup operation providers (F054 GitHub + F056 Notify)
 	githubClient := github.NewClient(logger)
 	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
-	execSvc.SetOperationProvider(githubProvider)
+
+	// Load notify config from .awf/config.yaml (F056)
+	notifyProvider := notify.NewNotifyOperationProvider(logger)
+
+	// Register notification backends from config (T027)
+	if err := registerNotifyBackends(notifyProvider, projectCfg, logger); err != nil {
+		return fmt.Errorf("failed to register notify backends: %w", err)
+	}
+
+	// Wrap both providers in composite for coexistence
+	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider)
+	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -1090,4 +1121,78 @@ func isTerminal(r io.Reader) bool {
 		return term.IsTerminal(int(f.Fd()))
 	}
 	return false
+}
+
+// registerNotifyBackends registers notification backends from config (T027 stub).
+//
+// This function reads backend configuration from .awf/config.yaml and registers
+// the appropriate backends with the NotifyOperationProvider. It supports:
+//   - Desktop notifications (always enabled)
+//   - Ntfy (if ntfy_url is configured)
+//   - Slack (if slack_webhook_url is configured)
+//   - Webhook (always enabled, URL provided per-operation)
+//
+// If default_backend is configured, it sets the default backend for the provider.
+//
+// Parameters:
+//   - provider: notification provider to register backends with
+//   - cfg: project configuration containing backend settings
+//   - logger: structured logger for backend registration tracing
+//
+// Returns:
+//   - error: non-nil if backend registration fails
+func registerNotifyBackends(provider *notify.NotifyOperationProvider, cfg *config.ProjectConfig, logger ports.Logger) error {
+	// Validate inputs
+	if provider == nil {
+		return fmt.Errorf("notify provider cannot be nil")
+	}
+	if cfg == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	// 1. Register desktop backend (always enabled)
+	desktopBackend := notify.NewDesktopBackend()
+	if err := provider.RegisterBackend("desktop", desktopBackend); err != nil {
+		return fmt.Errorf("failed to register desktop backend: %w", err)
+	}
+	logger.Debug("registered desktop notification backend")
+
+	// 2. Register ntfy backend if cfg.Notify.NtfyURL is set
+	if strings.TrimSpace(cfg.Notify.NtfyURL) != "" {
+		ntfyBackend, err := notify.NewNtfyBackend(cfg.Notify.NtfyURL)
+		if err != nil {
+			return fmt.Errorf("failed to create ntfy backend: %w", err)
+		}
+		if err := provider.RegisterBackend("ntfy", ntfyBackend); err != nil {
+			return fmt.Errorf("failed to register ntfy backend: %w", err)
+		}
+		logger.Debug("registered ntfy notification backend", "url", cfg.Notify.NtfyURL)
+	}
+
+	// 3. Register slack backend if cfg.Notify.SlackWebhookURL is set
+	if strings.TrimSpace(cfg.Notify.SlackWebhookURL) != "" {
+		slackBackend, err := notify.NewSlackBackend(cfg.Notify.SlackWebhookURL)
+		if err != nil {
+			return fmt.Errorf("failed to create slack backend: %w", err)
+		}
+		if err := provider.RegisterBackend("slack", slackBackend); err != nil {
+			return fmt.Errorf("failed to register slack backend: %w", err)
+		}
+		logger.Debug("registered slack notification backend")
+	}
+
+	// 4. Register webhook backend (always enabled)
+	webhookBackend := notify.NewWebhookBackend()
+	if err := provider.RegisterBackend("webhook", webhookBackend); err != nil {
+		return fmt.Errorf("failed to register webhook backend: %w", err)
+	}
+	logger.Debug("registered webhook notification backend")
+
+	// 5. Set default backend if cfg.Notify.DefaultBackend is set
+	if strings.TrimSpace(cfg.Notify.DefaultBackend) != "" {
+		provider.SetDefaultBackend(cfg.Notify.DefaultBackend)
+		logger.Debug("set default notification backend", "backend", cfg.Notify.DefaultBackend)
+	}
+
+	return nil
 }

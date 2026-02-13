@@ -22,7 +22,7 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                  INFRASTRUCTURE LAYER                       │
-│   YAMLRepository │ JSONStateStore │ AgentProviders │ GitHub │
+│ YAMLRepository │ JSONStateStore │ AgentProviders │ GitHub │ Notify │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -173,7 +173,8 @@ Implements domain ports with concrete technologies.
 - `expression/` - Expression evaluator implementing `ExpressionEvaluator` and `ExpressionValidator`
 - `github/` - Built-in GitHub operation provider implementing `OperationProvider` (issue/PR/label/project operations, batch executor, auth fallback)
 - `logger/` - Zap logger implementation (console, JSON, multi-logger, secret masking)
-- `plugin/` - RPC plugin manager, manifest parser, state store
+- `notify/` - Built-in notification operation provider implementing `OperationProvider` (desktop, ntfy, slack, webhook backends)
+- `plugin/` - RPC plugin manager, manifest parser, state store, `CompositeOperationProvider` for multi-provider dispatch
 - `repository/` - YAML file loader implementing `Repository`
 - `store/` - JSON state store implementing `StateStore`, SQLite history storage
 - `tokenizer/` - Token counting for conversation context management

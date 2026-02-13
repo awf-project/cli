@@ -49,7 +49,8 @@ awf/
 │   │   ├── expression/          # Expression evaluator adapter
 │   │   ├── github/              # Built-in GitHub operation provider
 │   │   ├── logger/              # Zap logger adapter
-│   │   ├── plugin/              # RPC plugin manager
+│   │   ├── notify/              # Built-in notification operation provider
+│   │   ├── plugin/              # RPC plugin manager, composite provider
 │   │   ├── repository/          # YAML workflow loaders
 │   │   ├── store/               # SQLite history, JSON state store
 │   │   ├── tokenizer/           # Token counting

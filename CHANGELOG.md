@@ -37,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F056**: Workflow Completion Notification Plugin
+  - New `notify` operation provider with `notify.send` operation dispatching to 4 backends: `desktop`, `ntfy`, `slack`, `webhook`
+  - Desktop backend uses OS-native notifications (`notify-send` on Linux, `osascript` on macOS)
+  - HTTP backends (ntfy, slack, webhook) share a 10-second timeout to prevent workflow stalls
+  - `CompositeOperationProvider` enables multiple built-in providers to coexist (github + notify)
+  - Configurable via `.awf/config.yaml`: `ntfy_url`, `slack_webhook_url`, `default_backend`
+  - All inputs support AWF template interpolation (`{{workflow.name}}`, `{{workflow.duration}}`, etc.)
+  - Webhook backend sends generic JSON POST for integration with Discord, Teams, PagerDuty, etc.
+  - Wired into CLI via `CompositeOperationProvider` wrapping both GitHub and Notify providers in `run.go`
+
 - **F054**: GitHub CLI plugin for declarative operations
   - New `github` operation provider with 9 operation types: `get_issue`, `get_pr`, `create_pr`, `create_issue`, `add_labels`, `set_project_status`, `list_comments`, `add_comment`, `batch`
   - Batch executor with 3 strategies: `all_succeed` (fail-fast), `any_succeed` (first-wins), `best_effort` (run-all)

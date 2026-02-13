@@ -1,0 +1,29 @@
+# Feature: F056 - Webhook Notification Backend
+# Test workflow for generic webhook notification backend
+
+name: notify-webhook-test
+version: "1.0"
+
+inputs:
+  webhook_url:
+    type: string
+    description: Webhook URL
+    required: true
+  message:
+    type: string
+    description: Notification message
+    required: true
+
+states:
+  send_webhook_notification:
+    type: step
+    operation: notify.send
+    inputs:
+      backend: webhook
+      webhook_url: "{{inputs.webhook_url}}"
+      message: "{{inputs.message}}"
+    next: success
+
+  success:
+    type: terminal
+    status: completed

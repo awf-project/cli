@@ -565,6 +565,11 @@ func ComputeExecutionOrder(steps map[string]*Step, initial string) ([]string, er
 		// Add successors to queue (handle cycles gracefully)
 		EnqueueIfNotVisited(&queue, visited, step.OnSuccess)
 		EnqueueIfNotVisited(&queue, visited, step.OnFailure)
+
+		// Also follow conditional transitions (goto targets)
+		for _, tr := range step.Transitions {
+			EnqueueIfNotVisited(&queue, visited, tr.Goto)
+		}
 	}
 
 	return order, nil

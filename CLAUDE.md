@@ -2,17 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Serena MCP Integration
+## MCP Integrations
 
-**IMPORTANT:** This project uses Serena MCP for persistent memory across sessions.
+This project uses several MCP servers for persistent memory and code search.
 
-### At Session Start
-1. Activate project: `mcp__plugin_common_serena__activate_project` with path `/home/pocky/Sites/vanoix/gustave`
-2. Check onboarding: `mcp__plugin_common_serena__check_onboarding_performed`
-3. List and read relevant memories: `mcp__plugin_common_serena__list_memories`
-4. Attach repomix output: `mcp__plugin_common_repomix__attach_packed_output` with path `.repomix`
+### Serena MCP — Symbolic Code Analysis & Memory
 
-### Available Memories
+**Primary use:** Symbolic code navigation (find symbols, references, overview), persistent project memories, code editing at symbol level.
+
+#### At Session Start
+1. Check onboarding: `mcp__plugin_common_serena__check_onboarding_performed`
+2. List and read relevant memories: `mcp__plugin_common_serena__list_memories`
+
+#### Available Memories
 - `project_overview` - Purpose, tech stack, architecture
 - `architecture_details` - Hexagonal layers, ports/adapters
 - `code_style_conventions` - Go style, rules
@@ -22,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `feature_roadmap` - v0.1→v1.0 features status
 - `next_features_detail` - F010, F013, F032 specs
 
-### At Session End (After Significant Work)
+#### At Session End (After Significant Work)
 Update memories if:
 - New patterns or conventions established
 - Architecture changes made
@@ -30,6 +32,43 @@ Update memories if:
 - Important decisions documented
 
 Use `mcp__plugin_common_serena__write_memory` or `mcp__plugin_common_serena__edit_memory`.
+
+### claude-mem MCP — Cross-Session Semantic Memory
+
+**Primary use:** Search past work, decisions, and discoveries across all sessions. 3-layer workflow for token efficiency.
+
+#### Search Workflow (always follow this order)
+1. `mcp__plugin_claude-mem_mcp-search__search` — Get index with IDs (~50-100 tokens/result)
+2. `mcp__plugin_claude-mem_mcp-search__timeline` — Get context around interesting results
+3. `mcp__plugin_claude-mem_mcp-search__get_observations` — Fetch full details ONLY for filtered IDs
+
+#### Save Memory
+- `mcp__plugin_claude-mem_mcp-search__save_memory` — Save important findings, decisions, patterns
+
+#### When to Use
+- "Did we already solve this?" — search past sessions
+- "How did we do X last time?" — find implementation patterns
+- Understanding past architectural decisions
+- Avoiding re-doing research already completed
+
+### GrepAI MCP — Semantic Code Search & Call Graph
+
+**Primary use:** Natural language code search, function call tracing, dependency analysis.
+
+#### Search Tools
+- `mcp__grepai__grepai_search` — Semantic code search with natural language queries (e.g., "user authentication flow", "error handling middleware")
+- `mcp__grepai__grepai_index_status` — Check index health and statistics
+
+#### Call Graph Tracing
+- `mcp__grepai__grepai_trace_callers` — Find all functions that call a given symbol (understand impact before modifying)
+- `mcp__grepai__grepai_trace_callees` — Find all functions called by a given symbol (understand dependencies)
+- `mcp__grepai__grepai_trace_graph` — Build complete call graph around a symbol (both callers and callees, configurable depth)
+
+#### When to Use
+- Finding code by intent rather than exact name ("how are workflows executed?")
+- Impact analysis before refactoring (trace callers)
+- Understanding dependency chains (trace callees/graph)
+- Exploring unfamiliar parts of the codebase
 
 ## Project Overview
 
@@ -179,3 +218,12 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 
 ### New Validations
 - `ParallelStrategy` validated: `all_succeed`, `any_succeed`, `best_effort`, or empty
+
+## Architecture Rules
+
+## Common Pitfalls
+
+## Test Conventions
+
+## Review Standards
+

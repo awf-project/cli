@@ -173,6 +173,9 @@ components:
   infra-github:
     in: infrastructure/github
 
+  infra-notify:
+    in: infrastructure/notify
+
   infra-expression:
     in: infrastructure/expression
 
@@ -305,6 +308,17 @@ deps:
       - go-stdlib
       - go-sync
 
+  infra-notify:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - go-sync
+
   infra-expression:
     mayDependOn:
       - domain-workflow
@@ -378,6 +392,7 @@ deps:
       - infra-expression
       - infra-github
       - infra-logger
+      - infra-notify
       - infra-plugin
       - infra-repository
       - infra-store

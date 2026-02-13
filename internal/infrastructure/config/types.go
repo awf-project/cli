@@ -8,6 +8,15 @@ type ProjectConfig struct {
 	// Inputs contains pre-populated workflow input values.
 	// These are merged with CLI --input flags, with CLI taking precedence.
 	Inputs map[string]any `yaml:"inputs"`
+
+	// Notify holds notification backend configuration.
+	// Loaded from .awf/config.yaml under "notify:" key.
+	// Type is defined in internal/infrastructure/notify/types.go
+	Notify struct {
+		NtfyURL         string `yaml:"ntfy_url"`
+		SlackWebhookURL string `yaml:"slack_webhook_url"`
+		DefaultBackend  string `yaml:"default_backend"`
+	} `yaml:"notify"`
 }
 
 // ConfigError represents an error during config file operations.
