@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -44,9 +44,9 @@ func TestEvaluateTurnCompletion_HappyPath_StopConditionMet(t *testing.T) {
 	evaluator.boolResults[`response contains "DONE"`] = true
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -93,9 +93,9 @@ func TestEvaluateTurnCompletion_HappyPath_MaxTokensReached(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	// Configure tokenizer to return high token count
 	tokenizer.counts["Long response with many tokens"] = 3000
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -141,9 +141,9 @@ func TestEvaluateTurnCompletion_HappyPath_ContinueConversation(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	// Low token count
 	tokenizer.counts["Short response"] = 100
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -188,9 +188,9 @@ func TestEvaluateTurnCompletion_EdgeCase_StopConditionFalse(t *testing.T) {
 	evaluator.boolResults[`response contains "EXIT"`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -232,9 +232,9 @@ func TestEvaluateTurnCompletion_EdgeCase_NoStopCondition(t *testing.T) {
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -278,9 +278,9 @@ func TestEvaluateTurnCompletion_EdgeCase_NoMaxTokens(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	// High token count but no limit
 	tokenizer.counts["Very long response"] = 10000
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -326,9 +326,9 @@ func TestEvaluateTurnCompletion_EdgeCase_BothConditionsNotMet(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	// Token count below limit
 	tokenizer.counts["Medium response"] = 500
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -374,9 +374,9 @@ func TestEvaluateTurnCompletion_EdgeCase_BothConditionsMet(t *testing.T) {
 	tokenizer := newMockTokenizer()
 	// Max tokens also exceeded
 	tokenizer.counts["Response with STOP"] = 3000
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -422,9 +422,9 @@ func TestEvaluateTurnCompletion_Error_StopConditionEvaluationFails(t *testing.T)
 	evaluator.err = assert.AnError
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -472,9 +472,9 @@ func TestEvaluateTurnCompletion_Error_StopConditionAndMaxTokensError(t *testing.
 	tokenizer := newMockTokenizer()
 	// Max tokens exceeded
 	tokenizer.counts["Large response"] = 6000
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -524,9 +524,9 @@ func TestEvaluateTurnCompletion_Verification_MultiTurnWithStopCondition(t *testi
 	evaluator.boolResults[`turn_count >= 3`] = false
 	resolver := newMockResolver()
 	tokenizer := newMockTokenizer()
-	registry := testutil.NewMockAgentRegistry()
+	registry := mocks.NewMockAgentRegistry()
 
-	mockProvider := testutil.NewMockAgentProvider("claude")
+	mockProvider := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(mockProvider)
 
 	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
@@ -607,9 +607,9 @@ func TestEvaluateTurnCompletion_Verification_ConsistentStopReason(t *testing.T) 
 			resolver := newMockResolver()
 			tokenizer := newMockTokenizer()
 			tokenizer.counts["response"] = tt.actualTokens
-			registry := testutil.NewMockAgentRegistry()
+			registry := mocks.NewMockAgentRegistry()
 
-			mockProvider := testutil.NewMockAgentProvider("claude")
+			mockProvider := mocks.NewMockAgentProvider("claude")
 			_ = registry.Register(mockProvider)
 
 			manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)

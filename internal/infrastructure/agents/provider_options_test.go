@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: T004 - Provider Constructor Functional Options
@@ -16,13 +16,13 @@ import (
 func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupMock   func(*testutil.MockCLIExecutor)
+		setupMock   func(*mocks.MockCLIExecutor)
 		options     []ClaudeProviderOption
 		expectError bool
 	}{
 		{
 			name: "no options uses default executor",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("test output"), []byte(""))
 			},
 			options:     nil,
@@ -30,22 +30,22 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 		},
 		{
 			name: "with custom executor option",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("custom executor output"), []byte(""))
 			},
 			options: []ClaudeProviderOption{
-				WithClaudeExecutor(testutil.NewMockCLIExecutor()),
+				WithClaudeExecutor(mocks.NewMockCLIExecutor()),
 			},
 			expectError: false,
 		},
 		{
 			name: "multiple options applied in order",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("final executor output"), []byte(""))
 			},
 			options: []ClaudeProviderOption{
-				WithClaudeExecutor(testutil.NewMockCLIExecutor()),
-				WithClaudeExecutor(testutil.NewMockCLIExecutor()), // Last one wins
+				WithClaudeExecutor(mocks.NewMockCLIExecutor()),
+				WithClaudeExecutor(mocks.NewMockCLIExecutor()), // Last one wins
 			},
 			expectError: false,
 		},
@@ -53,10 +53,10 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *testutil.MockCLIExecutor
+			var mockExec *mocks.MockCLIExecutor
 			var opts []ClaudeProviderOption
 			if tt.setupMock != nil {
-				mockExec = testutil.NewMockCLIExecutor()
+				mockExec = mocks.NewMockCLIExecutor()
 				tt.setupMock(mockExec)
 				// Always use mock executor for testing, even when testing "no options" case
 				opts = []ClaudeProviderOption{WithClaudeExecutor(mockExec)}
@@ -89,33 +89,33 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 func TestGeminiProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
 		name      string
-		setupMock func(*testutil.MockCLIExecutor)
+		setupMock func(*mocks.MockCLIExecutor)
 		options   []GeminiProviderOption
 	}{
 		{
 			name: "no options uses default executor",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("gemini output"), []byte(""))
 			},
 			options: nil,
 		},
 		{
 			name: "with custom executor option",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("custom gemini output"), []byte(""))
 			},
 			options: []GeminiProviderOption{
-				WithGeminiExecutor(testutil.NewMockCLIExecutor()),
+				WithGeminiExecutor(mocks.NewMockCLIExecutor()),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *testutil.MockCLIExecutor
+			var mockExec *mocks.MockCLIExecutor
 			var opts []GeminiProviderOption
 			if tt.setupMock != nil {
-				mockExec = testutil.NewMockCLIExecutor()
+				mockExec = mocks.NewMockCLIExecutor()
 				tt.setupMock(mockExec)
 				// Always use mock executor for testing
 				opts = []GeminiProviderOption{WithGeminiExecutor(mockExec)}
@@ -142,33 +142,33 @@ func TestGeminiProvider_NewWithOptions_HappyPath(t *testing.T) {
 func TestCodexProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
 		name      string
-		setupMock func(*testutil.MockCLIExecutor)
+		setupMock func(*mocks.MockCLIExecutor)
 		options   []CodexProviderOption
 	}{
 		{
 			name: "no options uses default executor",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("codex output"), []byte(""))
 			},
 			options: nil,
 		},
 		{
 			name: "with custom executor option",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("custom codex output"), []byte(""))
 			},
 			options: []CodexProviderOption{
-				WithCodexExecutor(testutil.NewMockCLIExecutor()),
+				WithCodexExecutor(mocks.NewMockCLIExecutor()),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *testutil.MockCLIExecutor
+			var mockExec *mocks.MockCLIExecutor
 			var opts []CodexProviderOption
 			if tt.setupMock != nil {
-				mockExec = testutil.NewMockCLIExecutor()
+				mockExec = mocks.NewMockCLIExecutor()
 				tt.setupMock(mockExec)
 				// Always use mock executor for testing
 				opts = []CodexProviderOption{WithCodexExecutor(mockExec)}
@@ -195,33 +195,33 @@ func TestCodexProvider_NewWithOptions_HappyPath(t *testing.T) {
 func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
 		name      string
-		setupMock func(*testutil.MockCLIExecutor)
+		setupMock func(*mocks.MockCLIExecutor)
 		options   []OpenCodeProviderOption
 	}{
 		{
 			name: "no options uses default executor",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("opencode output"), []byte(""))
 			},
 			options: nil,
 		},
 		{
 			name: "with custom executor option",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("custom opencode output"), []byte(""))
 			},
 			options: []OpenCodeProviderOption{
-				WithOpenCodeExecutor(testutil.NewMockCLIExecutor()),
+				WithOpenCodeExecutor(mocks.NewMockCLIExecutor()),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *testutil.MockCLIExecutor
+			var mockExec *mocks.MockCLIExecutor
 			var opts []OpenCodeProviderOption
 			if tt.setupMock != nil {
-				mockExec = testutil.NewMockCLIExecutor()
+				mockExec = mocks.NewMockCLIExecutor()
 				tt.setupMock(mockExec)
 				// Always use mock executor for testing
 				opts = []OpenCodeProviderOption{WithOpenCodeExecutor(mockExec)}
@@ -250,14 +250,14 @@ func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
 		name            string
 		providerName    string
 		commandTemplate string
-		setupMock       func(*testutil.MockCLIExecutor)
+		setupMock       func(*mocks.MockCLIExecutor)
 		options         []CustomProviderOption
 	}{
 		{
 			name:            "no options uses default executor",
 			providerName:    "my-agent",
 			commandTemplate: "my-agent --prompt {{.Prompt}}",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("custom agent output"), []byte(""))
 			},
 			options: nil,
@@ -266,21 +266,21 @@ func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
 			name:            "with custom executor option",
 			providerName:    "my-agent",
 			commandTemplate: "my-agent --prompt {{.Prompt}}",
-			setupMock: func(m *testutil.MockCLIExecutor) {
+			setupMock: func(m *mocks.MockCLIExecutor) {
 				m.SetOutput([]byte("mock custom agent output"), []byte(""))
 			},
 			options: []CustomProviderOption{
-				WithCustomExecutor(testutil.NewMockCLIExecutor()),
+				WithCustomExecutor(mocks.NewMockCLIExecutor()),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *testutil.MockCLIExecutor
+			var mockExec *mocks.MockCLIExecutor
 			var opts []CustomProviderOption
 			if tt.setupMock != nil {
-				mockExec = testutil.NewMockCLIExecutor()
+				mockExec = mocks.NewMockCLIExecutor()
 				tt.setupMock(mockExec)
 				// Always use mock executor for testing
 				opts = []CustomProviderOption{WithCustomExecutor(mockExec)}
@@ -342,10 +342,10 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 
 	t.Run("options applied in correct order", func(t *testing.T) {
 		// Create two different mock executors
-		mock1 := testutil.NewMockCLIExecutor()
+		mock1 := mocks.NewMockCLIExecutor()
 		mock1.SetOutput([]byte("mock1"), []byte(""))
 
-		mock2 := testutil.NewMockCLIExecutor()
+		mock2 := mocks.NewMockCLIExecutor()
 		mock2.SetOutput([]byte("mock2"), []byte(""))
 
 		// Apply both options - last one should win
@@ -390,7 +390,7 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 
 func TestProviderOptions_ErrorHandling(t *testing.T) {
 	t.Run("claude provider executor error propagates", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetError(errors.New("claude CLI failed"))
 
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
@@ -404,7 +404,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("gemini provider executor error propagates", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetError(errors.New("gemini CLI failed"))
 
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
@@ -418,7 +418,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("codex provider executor error propagates", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetError(errors.New("codex CLI failed"))
 
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
@@ -432,7 +432,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("opencode provider executor error propagates", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetError(errors.New("opencode CLI failed"))
 
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
@@ -446,7 +446,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("custom provider executor error propagates", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetError(errors.New("custom CLI failed"))
 
 		provider := NewCustomProviderWithOptions("test", "test {{.Prompt}}", WithCustomExecutor(mockExec))
@@ -462,7 +462,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 
 func TestProviderOptions_Integration(t *testing.T) {
 	t.Run("claude provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetOutput([]byte("Claude response"), []byte(""))
 
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
@@ -487,7 +487,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 	})
 
 	t.Run("gemini provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetOutput([]byte("Gemini response"), []byte(""))
 
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
@@ -508,7 +508,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 	})
 
 	t.Run("codex provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetOutput([]byte("Codex response"), []byte(""))
 
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
@@ -528,7 +528,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 	})
 
 	t.Run("opencode provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetOutput([]byte("OpenCode response"), []byte(""))
 
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
@@ -548,7 +548,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 	})
 
 	t.Run("custom provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := testutil.NewMockCLIExecutor()
+		mockExec := mocks.NewMockCLIExecutor()
 		mockExec.SetOutput([]byte("Custom agent response"), []byte(""))
 
 		provider := NewCustomProviderWithOptions(
@@ -572,10 +572,10 @@ func TestProviderOptions_Integration(t *testing.T) {
 
 	t.Run("multiple providers can use different executors", func(t *testing.T) {
 		// Create separate mock executors for each provider
-		claudeMock := testutil.NewMockCLIExecutor()
+		claudeMock := mocks.NewMockCLIExecutor()
 		claudeMock.SetOutput([]byte("Claude specific"), []byte(""))
 
-		geminiMock := testutil.NewMockCLIExecutor()
+		geminiMock := mocks.NewMockCLIExecutor()
 		geminiMock.SetOutput([]byte("Gemini specific"), []byte(""))
 
 		// Create providers with different executors

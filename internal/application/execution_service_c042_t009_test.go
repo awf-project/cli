@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 //
@@ -16,7 +16,7 @@ import (
 // This test suite verifies that:
 // 1. ExecutionService.SetEvaluator() accepts ports.ExpressionEvaluator parameter
 // 2. No local ExpressionEvaluator type alias exists (compile-time verification)
-// 3. testutil.MockExpressionEvaluator implements ports.ExpressionEvaluator
+// 3. mocks.MockExpressionEvaluator implements ports.ExpressionEvaluator
 //
 // Test Strategy:
 // The primary verification is compile-time: if these tests compile, it proves
@@ -33,7 +33,7 @@ import (
 // IMPORTANT: This test's compilation success proves the refactoring.
 func TestExecutionServiceC042T009_HappyPath_SetEvaluator(t *testing.T) {
 	svc := &application.ExecutionService{}
-	mockEvaluator := testutil.NewMockExpressionEvaluator()
+	mockEvaluator := mocks.NewMockExpressionEvaluator()
 
 	svc.SetEvaluator(mockEvaluator)
 
@@ -42,9 +42,9 @@ func TestExecutionServiceC042T009_HappyPath_SetEvaluator(t *testing.T) {
 }
 
 // TestExecutionServiceC042T009_HappyPath_InterfaceCompatibility verifies that
-// testutil.MockExpressionEvaluator implements ports.ExpressionEvaluator.
+// mocks.MockExpressionEvaluator implements ports.ExpressionEvaluator.
 func TestExecutionServiceC042T009_HappyPath_InterfaceCompatibility(t *testing.T) {
-	mockEvaluator := testutil.NewMockExpressionEvaluator()
+	mockEvaluator := mocks.NewMockExpressionEvaluator()
 
 	var evaluator ports.ExpressionEvaluator = mockEvaluator
 
@@ -58,8 +58,8 @@ func TestExecutionServiceC042T009_HappyPath_InterfaceCompatibility(t *testing.T)
 func TestExecutionServiceC042T009_EdgeCase_MultipleEvaluatorImplementations(t *testing.T) {
 	svc := &application.ExecutionService{}
 
-	mock1 := testutil.NewMockExpressionEvaluator()
-	mock2 := testutil.NewMockExpressionEvaluator()
+	mock1 := mocks.NewMockExpressionEvaluator()
+	mock2 := mocks.NewMockExpressionEvaluator()
 
 	svc.SetEvaluator(mock1)
 	svc.SetEvaluator(mock2)
@@ -117,10 +117,10 @@ func TestExecutionServiceC042T009_Documentation_MethodSignature(t *testing.T) {
 	//     Evaluate(expr string, ctx *interpolation.Context) (bool, error)
 	// }
 	//
-	// The fact that testutil.MockExpressionEvaluator compiles proves
+	// The fact that mocks.MockExpressionEvaluator compiles proves
 	// it implements the correct interface with EvaluateBool method.
 
-	mock := testutil.NewMockExpressionEvaluator()
+	mock := mocks.NewMockExpressionEvaluator()
 	assert.NotNil(t, mock)
 
 	// Verify mock has the correct methods (via interface check)
@@ -132,7 +132,7 @@ func TestExecutionServiceC042T009_Documentation_MethodSignature(t *testing.T) {
 //
 // ✓ Local ExpressionEvaluator interface removed (compile-time)
 // ✓ SetEvaluator() accepts ports.ExpressionEvaluator (test compiles)
-// ✓ testutil.MockExpressionEvaluator implements ports.ExpressionEvaluator (assertion)
+// ✓ mocks.MockExpressionEvaluator implements ports.ExpressionEvaluator (assertion)
 // ✓ Type safety enforced at compile time (documented)
 //
 // If all tests in this file compile and pass, Component T009 is complete.

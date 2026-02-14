@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
 )
 
 // Feature: C012 - Application Test Harness for Service Layer
@@ -475,15 +475,15 @@ func TestHarnessFunctional_WithTestutilBuilders_IntegratesSeamlessly(t *testing.
 	// Demonstrates: Harness works with existing testutil builders
 	// Validates: Compatible with established patterns from C007-C011
 
-	wf := testutil.NewWorkflowBuilder().
+	wf := builders.NewWorkflowBuilder().
 		WithName("builder-integration").
 		WithInitial("step1").
-		WithStep(testutil.NewStepBuilder("step1").
+		WithStep(builders.NewStepBuilder("step1").
 			WithType(workflow.StepTypeCommand).
 			WithCommand("echo test").
 			WithOnSuccess("done").
 			Build()).
-		WithStep(testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
+		WithStep(builders.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
 		Build()
 
 	svc, mocks := NewTestHarness(t).
@@ -552,13 +552,13 @@ func TestHarnessFunctional_BoilerplateReduction_DemonstratesValue(t *testing.T) 
 	// Does not test functionality, but demonstrates VALUE PROPOSITION
 
 	// BEFORE (without harness): ~15 lines
-	// repo := testutil.NewMockWorkflowRepository()
+	// repo := testmocks.NewMockWorkflowRepository()
 	// repo.AddWorkflow("demo", workflow)
-	// store := testutil.NewMockStateStore()
-	// executor := testutil.NewMockCommandExecutor()
+	// store := testmocks.NewMockStateStore()
+	// executor := testmocks.NewMockCommandExecutor()
 	// executor.SetCommandResult("echo demo", &ports.CommandResult{...})
-	// logger := testutil.NewMockLogger()
-	// builder := testutil.NewExecutionServiceBuilder().
+	// logger := testmocks.NewMockLogger()
+	// builder := builders.NewExecutionServiceBuilder().
 	//     WithWorkflowRepository(repo).
 	//     WithStateStore(store).
 	//     WithExecutor(executor).
@@ -566,15 +566,15 @@ func TestHarnessFunctional_BoilerplateReduction_DemonstratesValue(t *testing.T) 
 	// svc := builder.Build()
 
 	// AFTER (with harness): 3 lines
-	demoWf := testutil.NewWorkflowBuilder().
+	demoWf := builders.NewWorkflowBuilder().
 		WithName("demo").
 		WithInitial("start").
-		WithStep(testutil.NewStepBuilder("start").
+		WithStep(builders.NewStepBuilder("start").
 			WithType(workflow.StepTypeCommand).
 			WithCommand("echo demo").
 			WithOnSuccess("done").
 			Build()).
-		WithStep(testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
+		WithStep(builders.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
 		Build()
 
 	svc, mocks := NewTestHarness(t).

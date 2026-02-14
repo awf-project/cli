@@ -113,11 +113,11 @@ func TestTemplateServiceTest_NoLocalMockTemplateRepository(t *testing.T) {
 	contentStr := string(content)
 
 	assert.NotContains(t, contentStr, "type mockTemplateRepository struct",
-		"template_service_test.go should not define local mockTemplateRepository - use testutil.MockTemplateRepository")
+		"template_service_test.go should not define local mockTemplateRepository - use mocks.MockTemplateRepository")
 	assert.NotContains(t, contentStr, "func newMockTemplateRepository()",
-		"template_service_test.go should not define newMockTemplateRepository() - use testutil.NewMockTemplateRepository()")
+		"template_service_test.go should not define newMockTemplateRepository() - use mocks.NewMockTemplateRepository()")
 	assert.NotContains(t, contentStr, "type mockLogger struct",
-		"template_service_test.go should not define local mockLogger - use testutil.NewMockLogger()")
+		"template_service_test.go should not define local mockLogger - use mocks.NewMockLogger()")
 }
 
 // TestTemplateServiceHelpersTest_NoLocalMockTemplateRepository verifies that
@@ -131,11 +131,11 @@ func TestTemplateServiceHelpersTest_NoLocalMockTemplateRepository(t *testing.T) 
 	contentStr := string(content)
 
 	assert.NotContains(t, contentStr, "type mockTemplateRepository struct",
-		"template_service_helpers_test.go should not define local mockTemplateRepository - use testutil.MockTemplateRepository")
+		"template_service_helpers_test.go should not define local mockTemplateRepository - use mocks.MockTemplateRepository")
 	assert.NotContains(t, contentStr, "func newMockTemplateRepository()",
-		"template_service_helpers_test.go should not define newMockTemplateRepository() - use testutil.NewMockTemplateRepository()")
+		"template_service_helpers_test.go should not define newMockTemplateRepository() - use mocks.NewMockTemplateRepository()")
 	assert.NotContains(t, contentStr, "type mockLogger struct",
-		"template_service_helpers_test.go should not define local mockLogger - use testutil.NewMockLogger()")
+		"template_service_helpers_test.go should not define local mockLogger - use mocks.NewMockLogger()")
 }
 
 // TestTemplateServiceTest_UseDomainErrorTypes verifies that error assertions

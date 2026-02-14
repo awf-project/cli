@@ -8,17 +8,17 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // TestNewWorkflowService_ValidatorInjection tests that the constructor
 // properly accepts and stores the validator parameter (happy path).
 func TestNewWorkflowService_ValidatorInjection(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	store := testutil.NewMockStateStore()
-	executor := testutil.NewMockCommandExecutor()
-	logger := testutil.NewMockLogger()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	store := mocks.NewMockStateStore()
+	executor := mocks.NewMockCommandExecutor()
+	logger := mocks.NewMockLogger()
+	validator := mocks.NewMockExpressionValidator()
 
 	svc := application.NewWorkflowService(repo, store, executor, logger, validator)
 
@@ -46,10 +46,10 @@ func TestNewWorkflowService_ValidatorInjection(t *testing.T) {
 // TestNewWorkflowService_ValidatorNil tests that the service handles
 // nil validator gracefully (edge case).
 func TestNewWorkflowService_ValidatorNil(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	store := testutil.NewMockStateStore()
-	executor := testutil.NewMockCommandExecutor()
-	logger := testutil.NewMockLogger()
+	repo := mocks.NewMockWorkflowRepository()
+	store := mocks.NewMockStateStore()
+	executor := mocks.NewMockCommandExecutor()
+	logger := mocks.NewMockLogger()
 
 	svc := application.NewWorkflowService(repo, store, executor, logger, nil)
 
@@ -65,8 +65,8 @@ func TestNewWorkflowService_ValidatorNil(t *testing.T) {
 // TestValidateWorkflow_UsesInjectedValidator tests that ValidateWorkflow
 // uses the injected validator instead of creating its own (happy path).
 func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Add a workflow with an expression that needs validation
 	repo.AddWorkflow("test", &workflow.Workflow{
@@ -89,9 +89,9 @@ func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -107,8 +107,8 @@ func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
 // TestValidateWorkflow_PropagatesValidatorErrors tests that validator
 // errors are properly propagated to the caller (error handling).
 func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Configure validator to return an error
 	expectedErr := errors.New("invalid expression syntax")
@@ -135,9 +135,9 @@ func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -159,8 +159,8 @@ func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
 // TestValidateWorkflow_EmptyExpression tests handling of empty expressions
 // (edge case - validator should accept empty expressions as valid).
 func TestValidateWorkflow_EmptyExpression(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Add workflow with empty expression
 	repo.AddWorkflow("empty-expr", &workflow.Workflow{
@@ -182,9 +182,9 @@ func TestValidateWorkflow_EmptyExpression(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -197,8 +197,8 @@ func TestValidateWorkflow_EmptyExpression(t *testing.T) {
 // TestValidateWorkflow_MultipleExpressions tests validation with multiple
 // expressions in different steps (edge case - all expressions should be validated).
 func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Track which expressions were validated
 	validatedExpressions := make([]string, 0)
@@ -237,9 +237,9 @@ func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -275,8 +275,8 @@ func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
 // validation fails correctly when the second of multiple expressions is invalid
 // (error handling edge case).
 func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Configure validator to fail on second expression
 	callCount := 0
@@ -317,9 +317,9 @@ func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -337,14 +337,14 @@ func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
 // TestValidateWorkflow_WorkflowNotFound tests error handling when
 // workflow doesn't exist (error handling).
 func TestValidateWorkflow_WorkflowNotFound(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -361,8 +361,8 @@ func TestValidateWorkflow_WorkflowNotFound(t *testing.T) {
 // TestValidateWorkflow_ContextCancellation tests that validation respects
 // context cancellation (edge case - graceful shutdown).
 func TestValidateWorkflow_ContextCancellation(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	repo.AddWorkflow("test", &workflow.Workflow{
 		Name:    "test",
@@ -374,9 +374,9 @@ func TestValidateWorkflow_ContextCancellation(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -395,8 +395,8 @@ func TestValidateWorkflow_ContextCancellation(t *testing.T) {
 // TestValidateWorkflow_StateReferenceErrorConversion tests that StateReferenceError
 // from domain validation is converted to a structured workflow error (coverage: lines 65-81).
 func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Add workflow with invalid state reference in OnSuccess
 	repo.AddWorkflow("invalid-state-ref", &workflow.Workflow{
@@ -415,9 +415,9 @@ func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -469,8 +469,8 @@ func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
 // TestValidateWorkflow_LoadErrorPropagation tests that repository load errors
 // are properly wrapped and propagated (coverage: line 61).
 func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Configure repo to return error on Load
 	expectedErr := errors.New("disk IO error")
@@ -478,9 +478,9 @@ func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 
@@ -505,8 +505,8 @@ func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
 // TestValidateWorkflow_GeneralValidationError tests that non-StateReferenceError
 // validation errors are properly wrapped (coverage: line 83).
 func TestValidateWorkflow_GeneralValidationError(t *testing.T) {
-	repo := testutil.NewMockWorkflowRepository()
-	validator := testutil.NewMockExpressionValidator()
+	repo := mocks.NewMockWorkflowRepository()
+	validator := mocks.NewMockExpressionValidator()
 
 	// Add workflow with general validation error (empty name)
 	repo.AddWorkflow("invalid", &workflow.Workflow{
@@ -519,9 +519,9 @@ func TestValidateWorkflow_GeneralValidationError(t *testing.T) {
 
 	svc := application.NewWorkflowService(
 		repo,
-		testutil.NewMockStateStore(),
-		testutil.NewMockCommandExecutor(),
-		testutil.NewMockLogger(),
+		mocks.NewMockStateStore(),
+		mocks.NewMockCommandExecutor(),
+		mocks.NewMockLogger(),
 		validator,
 	)
 

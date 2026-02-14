@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -26,7 +26,7 @@ import (
 
 func TestLoopExecutor_ResolveMaxIterations_DelegatesArithmeticToEvaluator(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Configure evaluator to return 5 for the arithmetic expression
@@ -49,7 +49,7 @@ func TestLoopExecutor_ResolveMaxIterations_DelegatesArithmeticToEvaluator(t *tes
 
 func TestLoopExecutor_ResolveMaxIterations_DirectIntegerParsing(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.limit}}"] = "42"
@@ -67,7 +67,7 @@ func TestLoopExecutor_ResolveMaxIterations_DirectIntegerParsing(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_WhitespaceTrimming(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Simulate command output with trailing newline
@@ -85,7 +85,7 @@ func TestLoopExecutor_ResolveMaxIterations_WhitespaceTrimming(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_ComplexArithmetic(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Expression: (2 + 3) * 4 = 20
@@ -104,7 +104,7 @@ func TestLoopExecutor_ResolveMaxIterations_ComplexArithmetic(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_MinimumValue(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.min}}"] = "1"
@@ -121,7 +121,7 @@ func TestLoopExecutor_ResolveMaxIterations_MinimumValue(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_MaximumValue(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.max}}"] = "10000"
@@ -138,7 +138,7 @@ func TestLoopExecutor_ResolveMaxIterations_MaximumValue(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithAddition(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(8, nil)
@@ -156,7 +156,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithAddition(t *testing.T) 
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithSubtraction(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(7, nil)
@@ -174,7 +174,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithSubtraction(t *testing.
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithMultiplication(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(15, nil)
@@ -192,7 +192,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithMultiplication(t *testi
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithDivision(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(4, nil)
@@ -210,7 +210,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithDivision(t *testing.T) 
 
 func TestLoopExecutor_ResolveMaxIterations_EmptyExpression(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -225,7 +225,7 @@ func TestLoopExecutor_ResolveMaxIterations_EmptyExpression(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_ResolverError(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	resolver.err = errors.New("missing variable")
@@ -242,7 +242,7 @@ func TestLoopExecutor_ResolveMaxIterations_ResolverError(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_EvaluatorError(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Expression contains arithmetic, so evaluator will be called
@@ -262,7 +262,7 @@ func TestLoopExecutor_ResolveMaxIterations_EvaluatorError(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_InvalidInteger(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	resolver.results["{{inputs.invalid}}"] = "abc123"
@@ -279,7 +279,7 @@ func TestLoopExecutor_ResolveMaxIterations_InvalidInteger(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_ZeroValue(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(0, nil)
@@ -297,7 +297,7 @@ func TestLoopExecutor_ResolveMaxIterations_ZeroValue(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_NegativeValue(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(-5, nil)
@@ -315,7 +315,7 @@ func TestLoopExecutor_ResolveMaxIterations_NegativeValue(t *testing.T) {
 
 func TestLoopExecutor_ResolveMaxIterations_ExceedsMaximum(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(100001, nil)
@@ -333,7 +333,7 @@ func TestLoopExecutor_ResolveMaxIterations_ExceedsMaximum(t *testing.T) {
 
 func TestLoopExecutor_EvaluateArithmeticExpression_DelegatesToEvaluatorPort(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Set up custom function to verify delegation
@@ -359,7 +359,7 @@ func TestLoopExecutor_EvaluateArithmeticExpression_DelegatesToEvaluatorPort(t *t
 
 func TestLoopExecutor_EvaluateArithmeticExpression_ReceivesEmptyContext(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	// Capture context passed to evaluator
@@ -394,7 +394,7 @@ func TestLoopExecutor_NoDirectExprLangDependency(t *testing.T) {
 	// 3. Compilation success (if interface not used, code won't compile)
 
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
 	evaluator.SetIntResult(42, nil)
@@ -524,7 +524,7 @@ func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := &mockLogger{}
-			evaluator := testutil.NewMockExpressionEvaluator()
+			evaluator := mocks.NewMockExpressionEvaluator()
 			resolver := newConfigurableMockResolver()
 
 			if tt.resolverErr != nil {

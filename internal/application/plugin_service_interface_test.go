@@ -12,7 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Tests verify that PluginService can work with:
@@ -25,7 +25,7 @@ import (
 // Option A Tests: Current Implementation (PluginStateStore)
 
 func TestPluginService_OptionA_WorksWithCompositeInterface(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -93,7 +93,7 @@ func TestPluginService_OptionB_CanUseSeparateStoreInterface(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -124,7 +124,7 @@ func TestPluginService_OptionB_CanUseSeparateConfigInterface(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -159,7 +159,7 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	logger := newMockPluginLogger()
@@ -194,7 +194,7 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 
 func TestPluginService_OptionA_NilCompositeInterface(t *testing.T) {
 	// Service should handle nil stateStore gracefully
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, nil, logger)
@@ -228,7 +228,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -261,7 +261,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 
 func TestPluginService_OptionA_ErrorPropagation(t *testing.T) {
 	// Errors from the composite interface should propagate correctly
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -317,7 +317,7 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// This test demonstrates the RECOMMENDED approach (Option A):
 	// Keep current implementation using PluginStateStore composite interface
 
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
 
@@ -377,7 +377,7 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 // Boundary Conditions: Empty and Missing Data
 
 func TestPluginService_T007_EmptyPluginName(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -395,7 +395,7 @@ func TestPluginService_T007_EmptyPluginName(t *testing.T) {
 }
 
 func TestPluginService_T007_NonExistentPlugin(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -413,7 +413,7 @@ func TestPluginService_T007_NonExistentPlugin(t *testing.T) {
 }
 
 func TestPluginService_T007_ContextCancellation(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 

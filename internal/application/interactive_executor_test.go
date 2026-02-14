@@ -12,7 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	"github.com/vanoix/awf/internal/infrastructure/expression"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -474,7 +474,7 @@ func TestInteractiveExecutor_SetTemplateService_Valid(t *testing.T) {
 	}
 
 	// Create template service with mock repository
-	templateRepo := testutil.NewMockTemplateRepository()
+	templateRepo := mocks.NewMockTemplateRepository()
 	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
@@ -561,10 +561,10 @@ func TestInteractiveExecutor_SetTemplateService_Replacement(t *testing.T) {
 	)
 
 	// Create two different template services
-	templateRepo1 := testutil.NewMockTemplateRepository()
+	templateRepo1 := mocks.NewMockTemplateRepository()
 	templateSvc1 := application.NewTemplateService(templateRepo1, &mockLogger{})
 
-	templateRepo2 := testutil.NewMockTemplateRepository()
+	templateRepo2 := mocks.NewMockTemplateRepository()
 	templateSvc2 := application.NewTemplateService(templateRepo2, &mockLogger{})
 
 	exec.SetTemplateService(templateSvc1)

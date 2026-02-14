@@ -9,7 +9,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
 	infraexpr "github.com/vanoix/awf/internal/infrastructure/expression"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
 )
 
 // resolveNextStep Tests
@@ -30,7 +30,7 @@ func TestResolveNextStep_LegacyOnSuccess(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithOnSuccess("success_step").
@@ -64,7 +64,7 @@ func TestResolveNextStep_LegacyOnFailure(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("exit 1").
 				WithOnSuccess("success_step").
@@ -97,7 +97,7 @@ func TestResolveNextStep_TransitionMatches(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -133,7 +133,7 @@ func TestResolveNextStep_TransitionNoMatch_FallbackToLegacy(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -169,7 +169,7 @@ func TestResolveNextStep_MultipleTransitions_FirstMatchWins(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -210,7 +210,7 @@ func TestResolveNextStep_DefaultTransition_AlwaysMatches(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -251,7 +251,7 @@ func TestResolveNextStep_TransitionWithBooleanExpression(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -287,7 +287,7 @@ func TestResolveNextStep_NoEvaluator_FallbackToLegacy(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{
@@ -324,7 +324,7 @@ func TestResolveNextStep_EmptyOnSuccessReturnsEmptyString(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithOnSuccess("done"). // Need to go somewhere to complete workflow
@@ -354,7 +354,7 @@ func TestResolveNextStep_TransitionEvaluationError(t *testing.T) {
 		Name:    "test",
 		Initial: "start",
 		Steps: map[string]*workflow.Step{
-			"start": testutil.NewStepBuilder("start").
+			"start": builders.NewStepBuilder("start").
 				WithType(workflow.StepTypeCommand).
 				WithCommand("echo hello").
 				WithTransitions(workflow.Transitions{

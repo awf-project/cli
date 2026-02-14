@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Feature: C008 - Test File Restructuring
@@ -61,8 +61,8 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 		}).
 		Build()
 
-	registry := testutil.NewMockAgentRegistry()
-	claude := testutil.NewMockAgentProvider("claude")
+	registry := testmocks.NewMockAgentRegistry()
+	claude := testmocks.NewMockAgentProvider("claude")
 	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
@@ -143,8 +143,8 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 		}).
 		Build()
 
-	registry := testutil.NewMockAgentRegistry()
-	claude := testutil.NewMockAgentProvider("claude")
+	registry := testmocks.NewMockAgentRegistry()
+	claude := testmocks.NewMockAgentProvider("claude")
 	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
 		if prompt == "Analyze the data" {
 			return &workflow.AgentResult{
@@ -230,8 +230,8 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 		}).
 		Build()
 
-	registry := testutil.NewMockAgentRegistry()
-	claude := testutil.NewMockAgentProvider("claude")
+	registry := testmocks.NewMockAgentRegistry()
+	claude := testmocks.NewMockAgentProvider("claude")
 	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
 		if prompt == "Process the input" {
 			return &workflow.AgentResult{

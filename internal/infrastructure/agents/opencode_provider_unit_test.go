@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: C025 - T008 - Unit Tests for OpenCodeProvider (WITHOUT integration build tag)
@@ -66,7 +66,7 @@ func TestOpenCodeProvider_Execute_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -127,7 +127,7 @@ func TestOpenCodeProvider_Execute_WithOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -167,7 +167,7 @@ func TestOpenCodeProvider_Execute_EmptyPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
 			result, err := provider.Execute(context.Background(), tt.prompt, nil)
@@ -202,7 +202,7 @@ func TestOpenCodeProvider_Execute_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
 			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
@@ -242,7 +242,7 @@ func TestOpenCodeProvider_Execute_ContextErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
 			result, err := provider.Execute(tt.ctxFunc(), "test prompt", nil)
@@ -279,7 +279,7 @@ func TestOpenCodeProvider_Execute_CLIErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetError(tt.mockErr)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -321,7 +321,7 @@ func TestOpenCodeProvider_Execute_StdoutStderr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, tt.mockStderr)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -364,7 +364,7 @@ func TestOpenCodeProvider_Execute_TokenEstimation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte(tt.output), nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -378,7 +378,7 @@ func TestOpenCodeProvider_Execute_TokenEstimation(t *testing.T) {
 }
 
 func TestOpenCodeProvider_Execute_Timestamps(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("test output"), nil)
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -397,7 +397,7 @@ func TestOpenCodeProvider_Execute_Timestamps(t *testing.T) {
 }
 
 func TestOpenCodeProvider_Execute_ProviderName(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("test output"), nil)
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -448,7 +448,7 @@ func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
@@ -466,7 +466,7 @@ func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 }
 
 func TestOpenCodeProvider_ExecuteConversation_NotImplemented(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 	state := workflow.NewConversationState("")
 
@@ -500,7 +500,7 @@ func TestOpenCodeProvider_NewOpenCodeProvider_DefaultExecutor(t *testing.T) {
 }
 
 func TestOpenCodeProvider_NewOpenCodeProviderWithOptions(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
 	require.NotNil(t, provider)
@@ -555,7 +555,7 @@ func TestOpenCodeProvider_Execute_CLIArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("ok"), nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 

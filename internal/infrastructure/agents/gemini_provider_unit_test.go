@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: C025 - Unit Tests for GeminiProvider (WITHOUT integration build tag)
@@ -66,7 +66,7 @@ func TestGeminiProvider_Execute_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -116,7 +116,7 @@ func TestGeminiProvider_Execute_JSONParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -191,7 +191,7 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -238,7 +238,7 @@ func TestGeminiProvider_Execute_ContextErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -277,7 +277,7 @@ func TestGeminiProvider_Execute_CLIErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetError(tt.mockErr)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -325,7 +325,7 @@ func TestGeminiProvider_Execute_StdoutStderrCombination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.stdout, tt.stderr)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -379,7 +379,7 @@ func TestGeminiProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -455,7 +455,7 @@ func TestGeminiProvider_ExecuteConversation_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -538,7 +538,7 @@ func TestGeminiProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -580,7 +580,7 @@ func TestGeminiProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -615,7 +615,7 @@ func TestGeminiProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetError(tt.mockErr)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -630,7 +630,7 @@ func TestGeminiProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 }
 
 func TestGeminiProvider_ExecuteConversation_StatePreservation(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -665,7 +665,7 @@ func TestGeminiProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 }
 
 func TestGeminiProvider_ExecuteConversation_TokenCounting(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("This is a response with multiple words"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -705,7 +705,7 @@ func TestGeminiProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -738,7 +738,7 @@ func TestGeminiProvider_NewGeminiProvider(t *testing.T) {
 }
 
 func TestGeminiProvider_NewGeminiProviderWithOptions(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 	assert.NotNil(t, provider)
@@ -746,7 +746,7 @@ func TestGeminiProvider_NewGeminiProviderWithOptions(t *testing.T) {
 }
 
 func TestGeminiProvider_Execute_EmptyState(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -759,7 +759,7 @@ func TestGeminiProvider_Execute_EmptyState(t *testing.T) {
 }
 
 func TestGeminiProvider_Execute_OptionsNil(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
@@ -771,7 +771,7 @@ func TestGeminiProvider_Execute_OptionsNil(t *testing.T) {
 }
 
 func TestGeminiProvider_Execute_MultipleOptions(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 

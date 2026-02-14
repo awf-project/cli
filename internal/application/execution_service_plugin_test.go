@@ -11,7 +11,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
 )
 
 // executePluginOperation Tests
@@ -82,7 +82,7 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 			provider := newMockOperationProviderWithDelay(tt.providerDelay)
 			provider.addOperation("slow.operation", "Slow operation", "test-plugin")
 
-			step := testutil.NewStepBuilder("operation").
+			step := builders.NewStepBuilder("operation").
 				WithType(workflow.StepTypeOperation).
 				WithOperation("slow.operation", nil).
 				WithTimeout(tt.timeout).
@@ -174,7 +174,7 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 				Name:    "cancel-test",
 				Initial: "operation",
 				Steps: map[string]*workflow.Step{
-					"operation": testutil.NewStepBuilder("operation").
+					"operation": builders.NewStepBuilder("operation").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.operation", nil).
 						WithOnSuccess("done").
@@ -278,7 +278,7 @@ func TestExecutePluginOperation_ContinueOnError(t *testing.T) {
 				}
 			}
 
-			step := testutil.NewStepBuilder("operation").
+			step := builders.NewStepBuilder("operation").
 				WithType(workflow.StepTypeOperation).
 				WithOperation("test.operation", nil).
 				WithOnSuccess("done").
@@ -353,7 +353,7 @@ func TestExecutePluginOperation_ExecutionErrorPropagation(t *testing.T) {
 				Name:    "error-test",
 				Initial: "operation",
 				Steps: map[string]*workflow.Step{
-					"operation": testutil.NewStepBuilder("operation").
+					"operation": builders.NewStepBuilder("operation").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.operation", nil).
 						Build(),
@@ -416,7 +416,7 @@ func TestExecutePluginOperation_OperationFailureWithoutMessage(t *testing.T) {
 				Error:   tt.resultError,
 			}
 
-			step := testutil.NewStepBuilder("operation").
+			step := builders.NewStepBuilder("operation").
 				WithType(workflow.StepTypeOperation).
 				WithOperation("test.operation", nil).
 				Build()
@@ -543,7 +543,7 @@ func buildHookTestWorkflow(preHookCommand, postHookCommand string, operationFail
 		}
 	}
 
-	step := testutil.NewStepBuilder("operation").
+	step := builders.NewStepBuilder("operation").
 		WithType(workflow.StepTypeOperation).
 		WithOperation("test.operation", nil).
 		WithOnSuccess("done").
@@ -653,7 +653,7 @@ func TestExecutePluginOperation_InputResolution(t *testing.T) {
 			provider := newMockOperationProviderWithCapture()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 
-			step := testutil.NewStepBuilder("operation").
+			step := builders.NewStepBuilder("operation").
 				WithType(workflow.StepTypeOperation).
 				WithOperation("test.operation", tt.inputs).
 				WithOnSuccess("done").
@@ -746,7 +746,7 @@ func TestExecutePluginOperation_OutputSerialization(t *testing.T) {
 				Name:    "output-test",
 				Initial: "operation",
 				Steps: map[string]*workflow.Step{
-					"operation": testutil.NewStepBuilder("operation").
+					"operation": builders.NewStepBuilder("operation").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.operation", nil).
 						WithOnSuccess("done").
@@ -832,7 +832,7 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 				}
 			}
 
-			step := testutil.NewStepBuilder("operation").
+			step := builders.NewStepBuilder("operation").
 				WithType(workflow.StepTypeOperation).
 				WithOperation("test.operation", nil).
 				WithOnSuccess("done").
