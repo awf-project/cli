@@ -8,10 +8,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Template Validation Tests
-// =============================================================================
-
 func TestTemplate_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -175,10 +171,6 @@ func TestTemplate_Validate(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// GetRequiredParams Tests
-// =============================================================================
-
 func TestTemplate_GetRequiredParams(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -245,10 +237,6 @@ func TestTemplate_GetRequiredParams(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// GetDefaultValues Tests
-// =============================================================================
 
 func TestTemplate_GetDefaultValues(t *testing.T) {
 	tests := []struct {
@@ -337,10 +325,6 @@ func TestTemplate_GetDefaultValues(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// WorkflowTemplateRef Tests
-// =============================================================================
-
 func TestWorkflowTemplateRef(t *testing.T) {
 	tests := []struct {
 		name string
@@ -394,10 +378,6 @@ func TestWorkflowTemplateRef(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Template Entity Construction Tests
-// =============================================================================
-
 func TestTemplate_Construction(t *testing.T) {
 	// Verify complete template construction from F017 spec
 	tmpl := &workflow.Template{
@@ -434,10 +414,6 @@ func TestTemplate_Construction(t *testing.T) {
 	assert.NotContains(t, defaults, "prompt")
 }
 
-// =============================================================================
-// Step with TemplateRef Tests
-// =============================================================================
-
 func TestStep_WithTemplateRef(t *testing.T) {
 	step := &workflow.Step{
 		Name:      "code_analysis",
@@ -468,10 +444,6 @@ func TestStep_WithoutTemplateRef(t *testing.T) {
 
 	assert.Nil(t, step.TemplateRef)
 }
-
-// =============================================================================
-// Edge Cases and Boundary Tests
-// =============================================================================
 
 func TestTemplate_EdgeCases(t *testing.T) {
 	t.Run("template with multiple states", func(t *testing.T) {
@@ -545,13 +517,9 @@ func TestTemplate_EdgeCases(t *testing.T) {
 
 		defaults := tmpl.GetDefaultValues()
 		assert.Contains(t, defaults, "enabled")
-		assert.Equal(t, false, defaults["enabled"])
+		assert.False(t, defaults["enabled"].(bool))
 	})
 }
-
-// =============================================================================
-// Template Param Ordering Tests
-// =============================================================================
 
 func TestTemplate_ParamOrdering(t *testing.T) {
 	// Verify that GetRequiredParams returns params in order of definition

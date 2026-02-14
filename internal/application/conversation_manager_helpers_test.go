@@ -11,10 +11,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Test Mocks and Helpers
-// =============================================================================
-
 // Note: mockLogger is defined in service_test.go and shared across package tests
 
 // newMockLogger creates a new mock logger instance
@@ -126,10 +122,7 @@ func (m *mockResolverWithError) Resolve(template string, ctx *interpolation.Cont
 	return template, nil
 }
 
-// =============================================================================
-// ExecuteConversation Helper Tests - Component T013
 // Feature: C006 - Reduce ExecuteConversation complexity from 29 to ≤18
-// =============================================================================
 
 // TestConversationManager_validateConversationInputs tests input validation
 // for the ExecuteConversation method.
@@ -193,7 +186,6 @@ func TestConversationManager_validateConversationInputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mgr := &ConversationManager{
 				logger:        newMockLogger(),
 				evaluator:     &mockEvaluator{},
@@ -202,10 +194,8 @@ func TestConversationManager_validateConversationInputs(t *testing.T) {
 				agentRegistry: &mockAgentRegistry{},
 			}
 
-			// Act
 			err := mgr.validateConversationInputs(tt.step, tt.config)
 
-			// Assert
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorMsg != "" {
@@ -321,7 +311,6 @@ func TestConversationManager_initializeConversationState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var resolver interpolation.Resolver
 			if tt.resolverError != nil {
 				resolver = &mockResolverWithError{err: tt.resolverError}
@@ -338,10 +327,8 @@ func TestConversationManager_initializeConversationState(t *testing.T) {
 			}
 			execCtx := workflow.NewExecutionContext("test-wf", "test")
 
-			// Act
 			state, prompt, err := mgr.initializeConversationState(tt.step, execCtx, tt.buildContext)
 
-			// Assert
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -423,7 +410,6 @@ func TestConversationManager_executeTurn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := &mockAgentProvider{
 				name:   "test-provider",
 				result: tt.providerResult,
@@ -447,10 +433,8 @@ func TestConversationManager_executeTurn(t *testing.T) {
 				cancel() // Cancel immediately
 			}
 
-			// Act
 			result, err := mgr.executeTurn(ctx, provider, tt.state, tt.prompt, tt.options)
 
-			// Assert
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -591,7 +575,6 @@ func TestConversationManager_evaluateTurnCompletion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mgr := &ConversationManager{
 				logger: newMockLogger(),
 				evaluator: &mockEvaluator{
@@ -603,10 +586,8 @@ func TestConversationManager_evaluateTurnCompletion(t *testing.T) {
 				agentRegistry: &mockAgentRegistry{},
 			}
 
-			// Act
 			shouldStop := mgr.evaluateTurnCompletion(tt.config, tt.state, tt.execCtx, tt.buildContext)
 
-			// Assert
 			assert.Equal(t, tt.shouldStop, shouldStop)
 			if tt.shouldStop && tt.expectedReason != "" {
 				assert.Equal(t, tt.expectedReason, tt.state.StoppedBy)
@@ -660,7 +641,6 @@ func TestConversationManager_finalizeStopReason(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mgr := &ConversationManager{
 				logger:        newMockLogger(),
 				evaluator:     &mockEvaluator{},
@@ -669,10 +649,8 @@ func TestConversationManager_finalizeStopReason(t *testing.T) {
 				agentRegistry: &mockAgentRegistry{},
 			}
 
-			// Act
 			mgr.finalizeStopReason(tt.state, tt.turnCount, tt.maxTurns)
 
-			// Assert
 			assert.Equal(t, tt.expectedReason, tt.state.StoppedBy)
 		})
 	}

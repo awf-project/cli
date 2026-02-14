@@ -11,11 +11,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// -----------------------------------------------------------------------------
 // Sentinel Errors Tests
 // Component: T003
 // Feature: F057
-// -----------------------------------------------------------------------------
 
 func TestSentinelErrors_Values(t *testing.T) {
 	// Happy path: Verify sentinel error messages match expected text
@@ -106,11 +104,9 @@ func TestSentinelErrors_AreDistinct(t *testing.T) {
 	assert.NotEqual(t, operation.ErrInvalidOperation, operation.ErrInvalidInputs)
 }
 
-// -----------------------------------------------------------------------------
 // Operation Interface Contract Tests
 // Component: T003
 // Feature: F057
-// -----------------------------------------------------------------------------
 
 // mockOperation is a test implementation of the Operation interface
 // to verify the contract and test operation behavior.
@@ -487,11 +483,9 @@ func TestOperation_Name_ReturnsUniqueIdentifier(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Package Documentation Tests
 // Component: T003
 // Feature: F057
-// -----------------------------------------------------------------------------
 
 func TestPackageDocumentation_Exists(t *testing.T) {
 	// Happy path: Verify package documentation exists in doc.go
@@ -509,11 +503,9 @@ func TestPackageDocumentation_Exists(t *testing.T) {
 	assert.NotEmpty(t, "operation", "Package name should not be empty")
 }
 
-// -----------------------------------------------------------------------------
 // Edge Cases and Validation Tests
 // Component: T003
 // Feature: F057
-// -----------------------------------------------------------------------------
 
 func TestOperation_Execute_WithNilInputs(t *testing.T) {
 	// Edge case: Execute with nil inputs map should work

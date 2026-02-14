@@ -12,12 +12,9 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// ForEach Loop Transition Tests
 // Component: T014 (extracted from T008)
 // Feature: F048 - ForEach Loop Transitions Support
 // Source: loop_executor_transitions_test.go
-// =============================================================================
 //
 // This file contains 19 tests extracted for C014-T014 to split monolithic test files.
 // Tests verify ForEach loop transition behavior with feature parity to While loops.
@@ -31,11 +28,6 @@ import (
 // 6. Skip Steps Tests (5 tests - F048-T010 scenarios)
 //
 // Git History: Maintains traceability per ADR-004
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests: Intra-Body Skip Forward/Backward and Early Exit
-// =============================================================================
 
 // TestForEachTransition_HappyPath_IntraBodySkipForward tests intra-body skip in foreach.
 // Given: ForEach loop with items [a, b] and body [step1, step2, step3]
@@ -44,7 +36,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipForward(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -86,7 +77,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipForward(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -98,7 +88,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipForward(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -125,7 +114,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipToEnd(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -168,7 +156,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipToEnd(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -180,7 +167,6 @@ func TestForEachTransition_HappyPath_IntraBodySkipToEnd(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -199,7 +185,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromFirstStep(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -242,7 +227,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromFirstStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -254,7 +238,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromFirstStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -279,7 +262,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromMiddleStep(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -322,7 +304,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromMiddleStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -334,7 +315,6 @@ func TestForEachTransition_HappyPath_EarlyExitFromMiddleStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -358,7 +338,6 @@ func TestForEachTransition_HappyPath_NoTransition(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -397,7 +376,6 @@ func TestForEachTransition_HappyPath_NoTransition(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -409,7 +387,6 @@ func TestForEachTransition_HappyPath_NoTransition(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -422,14 +399,6 @@ func TestForEachTransition_HappyPath_NoTransition(t *testing.T) {
 	assert.Empty(t, result.NextStep, "no early exit should occur")
 }
 
-// =============================================================================
-// Edge Case Tests: Boundary Conditions
-// =============================================================================
-
-// =============================================================================
-// Edge Case Tests: Boundary Conditions
-// =============================================================================
-
 // TestForEachTransition_EdgeCase_SingleStepBody tests transition behavior
 // when the loop body contains only a single step.
 // Given: ForEach loop with items [a] and body [step1]
@@ -439,7 +408,6 @@ func TestForEachTransition_EdgeCase_SingleStepBody(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -480,7 +448,6 @@ func TestForEachTransition_EdgeCase_SingleStepBody(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -492,7 +459,6 @@ func TestForEachTransition_EdgeCase_SingleStepBody(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -510,7 +476,6 @@ func TestForEachTransition_EdgeCase_EmptyItems(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -547,7 +512,6 @@ func TestForEachTransition_EdgeCase_EmptyItems(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -559,7 +523,6 @@ func TestForEachTransition_EdgeCase_EmptyItems(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -578,7 +541,6 @@ func TestForEachTransition_EdgeCase_MaxIterations(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -621,7 +583,6 @@ func TestForEachTransition_EdgeCase_MaxIterations(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -633,7 +594,6 @@ func TestForEachTransition_EdgeCase_MaxIterations(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -654,7 +614,6 @@ func TestForEachTransition_EdgeCase_EarlyExitOnSecondIteration(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -701,7 +660,6 @@ func TestForEachTransition_EdgeCase_EarlyExitOnSecondIteration(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -713,7 +671,6 @@ func TestForEachTransition_EdgeCase_EarlyExitOnSecondIteration(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -728,14 +685,6 @@ func TestForEachTransition_EdgeCase_EarlyExitOnSecondIteration(t *testing.T) {
 	assert.Equal(t, "external_step", result.NextStep, "result.NextStep should be external_step")
 }
 
-// =============================================================================
-// Error Handling Tests: Invalid Transitions
-// =============================================================================
-
-// =============================================================================
-// Error Handling Tests: Invalid Transitions
-// =============================================================================
-
 // TestForEachTransition_ErrorHandling_InvalidTarget tests graceful degradation
 // when a transition targets a non-existent step (not in body, not in workflow).
 // Given: ForEach loop with items [a] and body [step1, step2]
@@ -745,7 +694,6 @@ func TestForEachTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -786,7 +734,6 @@ func TestForEachTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -798,7 +745,6 @@ func TestForEachTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -823,7 +769,6 @@ func TestForEachTransition_ErrorHandling_StepError(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -865,7 +810,6 @@ func TestForEachTransition_ErrorHandling_StepError(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -877,7 +821,6 @@ func TestForEachTransition_ErrorHandling_StepError(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.Error(t, err, "should return error from step execution")
 	require.NotNil(t, result)
 
@@ -889,14 +832,6 @@ func TestForEachTransition_ErrorHandling_StepError(t *testing.T) {
 	assert.Empty(t, result.NextStep, "error should prevent transition processing")
 }
 
-// =============================================================================
-// Integration Tests: Complex Scenarios
-// =============================================================================
-
-// =============================================================================
-// Integration Tests: Complex Scenarios
-// =============================================================================
-
 // TestForEachTransition_Integration_RetryPattern tests ADR-004 retry pattern:
 // when a body step transitions back to the loop step itself.
 // Given: ForEach loop with items [a] and body [step1, step2]
@@ -906,7 +841,6 @@ func TestForEachTransition_Integration_RetryPattern(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -947,7 +881,6 @@ func TestForEachTransition_Integration_RetryPattern(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -959,7 +892,6 @@ func TestForEachTransition_Integration_RetryPattern(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -981,7 +913,6 @@ func TestForEachTransition_Integration_MultipleTransitions(t *testing.T) {
 	// Item: T008
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -1041,7 +972,6 @@ func TestForEachTransition_Integration_MultipleTransitions(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1063,7 +993,6 @@ func TestForEachTransition_Integration_MultipleTransitions(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1085,13 +1014,9 @@ func TestForEachTransition_Integration_MultipleTransitions(t *testing.T) {
 	assert.Equal(t, "external_step", result.NextStep, "result.NextStep should be external_step")
 }
 
-// =============================================================================
-// F048-T010: Loop Body Transition - Skip Steps Scenario Tests (ForEach)
-// =============================================================================
 //
 // These tests verify that transitions within foreach loop bodies correctly skip
 // intermediate steps when a transition is triggered.
-// =============================================================================
 
 // TestLoopExecutor_ExecuteForEach_SkipSingleStep tests skip behavior
 // in a foreach loop context.
@@ -1103,7 +1028,6 @@ func TestForEachTransition_Integration_MultipleTransitions(t *testing.T) {
 // When:  Loop processes both items
 // Then:  For each item: step2 is skipped, execution is [step1, step3]
 func TestLoopExecutor_ExecuteForEach_SkipSingleStep(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1142,7 +1066,6 @@ func TestLoopExecutor_ExecuteForEach_SkipSingleStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1154,7 +1077,6 @@ func TestLoopExecutor_ExecuteForEach_SkipSingleStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1175,7 +1097,6 @@ func TestLoopExecutor_ExecuteForEach_SkipSingleStep(t *testing.T) {
 // When:  All items are valid
 // Then:  transform is skipped for all iterations
 func TestLoopExecutor_ExecuteForEach_SkipMultipleSteps(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1214,7 +1135,6 @@ func TestLoopExecutor_ExecuteForEach_SkipMultipleSteps(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1226,7 +1146,6 @@ func TestLoopExecutor_ExecuteForEach_SkipMultipleSteps(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1247,7 +1166,6 @@ func TestLoopExecutor_ExecuteForEach_SkipMultipleSteps(t *testing.T) {
 // When:  Loop processes items
 // Then:  log step receives correct item even though use was skipped
 func TestLoopExecutor_ExecuteForEach_SkipPreservesItem(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1290,7 +1208,6 @@ func TestLoopExecutor_ExecuteForEach_SkipPreservesItem(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1302,7 +1219,6 @@ func TestLoopExecutor_ExecuteForEach_SkipPreservesItem(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.TotalCount, "should process 2 items")
@@ -1323,7 +1239,6 @@ func TestLoopExecutor_ExecuteForEach_SkipPreservesItem(t *testing.T) {
 // When:  Loop executes first iteration
 // Then:  step1 executes for first item, loop breaks, remaining items not processed
 func TestLoopExecutor_ExecuteForEach_EarlyExit(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1368,7 +1283,6 @@ func TestLoopExecutor_ExecuteForEach_EarlyExit(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1378,7 +1292,6 @@ func TestLoopExecutor_ExecuteForEach_EarlyExit(t *testing.T) {
 		contextBuilder,
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "external_step", result.NextStep, "should return early exit target")
@@ -1395,7 +1308,6 @@ func TestLoopExecutor_ExecuteForEach_EarlyExit(t *testing.T) {
 // When:  Loop executes
 // Then:  Warning logged, step1, step2, step3 execute sequentially for item
 func TestLoopExecutor_ExecuteForEach_InvalidTarget(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1439,7 +1351,6 @@ func TestLoopExecutor_ExecuteForEach_InvalidTarget(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -1449,7 +1360,6 @@ func TestLoopExecutor_ExecuteForEach_InvalidTarget(t *testing.T) {
 		contextBuilder,
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Empty(t, result.NextStep, "should return empty NextStep when loop completes normally")

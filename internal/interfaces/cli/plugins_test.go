@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// BuildPluginPaths Tests (T014)
-// =============================================================================
-
 func TestBuildPluginPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
 	// Unset env var for test
 	t.Setenv("AWF_PLUGINS_PATH", "")
@@ -292,10 +288,6 @@ func TestBuildPluginPaths_TableDriven(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Config.PluginsDir Tests (T014)
-// =============================================================================
 
 func TestConfig_PluginsDirField(t *testing.T) {
 	cfg := cli.DefaultConfig()

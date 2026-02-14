@@ -12,24 +12,14 @@ import (
 // Component: approximation_tokenizer
 // Feature: F033
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestApproximationTokenizer_InterfaceCompliance(t *testing.T) {
 	// Verify ApproximationTokenizer implements ports.Tokenizer
 	var _ ports.Tokenizer = (*ApproximationTokenizer)(nil)
 }
 
-// ============================================================================
-// Constructor Tests
-// ============================================================================
-
 func TestNewApproximationTokenizer_HappyPath(t *testing.T) {
-	// Act
 	tokenizer := NewApproximationTokenizer()
 
-	// Assert
 	require.NotNil(t, tokenizer)
 	assert.Equal(t, "approximation", tokenizer.ModelName())
 	assert.True(t, tokenizer.IsEstimate(), "approximation should provide estimates")
@@ -50,10 +40,8 @@ func TestNewApproximationTokenizerWithRatio_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			tokenizer := NewApproximationTokenizerWithRatio(tt.charsPerToken)
 
-			// Assert
 			require.NotNil(t, tokenizer)
 			assert.Equal(t, "approximation", tokenizer.ModelName())
 			assert.True(t, tokenizer.IsEstimate())
@@ -70,25 +58,17 @@ func TestNewApproximationTokenizerWithRatio_HappyPath(t *testing.T) {
 
 func TestNewApproximationTokenizerWithRatio_ZeroRatio(t *testing.T) {
 	// This tests edge case behavior - division by zero potential
-	// Act
 	tokenizer := NewApproximationTokenizerWithRatio(0.0)
 
-	// Assert - Constructor should succeed
 	require.NotNil(t, tokenizer)
 }
 
 func TestNewApproximationTokenizerWithRatio_NegativeRatio(t *testing.T) {
 	// This tests edge case behavior - negative ratio
-	// Act
 	tokenizer := NewApproximationTokenizerWithRatio(-4.0)
 
-	// Assert - Constructor should succeed (validation happens during counting)
 	require.NotNil(t, tokenizer)
 }
-
-// ============================================================================
-// CountTokens Tests - Happy Path
-// ============================================================================
 
 func TestApproximationTokenizer_CountTokens_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -125,13 +105,10 @@ func TestApproximationTokenizer_CountTokens_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizer()
 
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, count, tt.expectedMin,
 				"token count should be at least %d", tt.expectedMin)
@@ -142,13 +119,10 @@ func TestApproximationTokenizer_CountTokens_HappyPath(t *testing.T) {
 }
 
 func TestApproximationTokenizer_CountTokens_EmptyString(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	count, err := tokenizer.CountTokens("")
 
-	// Assert - Empty string should have 0 tokens
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
@@ -167,13 +141,10 @@ func TestApproximationTokenizer_CountTokens_WhitespaceOnly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizer()
 
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert - Whitespace should be counted by character length
 			require.NoError(t, err)
 			expectedCount := len(tt.text) / 4 // Integer division rounds down
 			assert.Equal(t, expectedCount, count)
@@ -195,13 +166,10 @@ func TestApproximationTokenizer_CountTokens_UnicodeText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizer()
 
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert - Should handle unicode gracefully (byte-based or rune-based)
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, count, 0, "unicode text should produce non-negative count")
 		})
@@ -221,34 +189,24 @@ func TestApproximationTokenizer_CountTokens_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizer()
 
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Greater(t, count, 0)
 		})
 	}
 }
 
-// ============================================================================
-// CountTokens Tests - Edge Cases
-// ============================================================================
-
 func TestApproximationTokenizer_CountTokens_LargeText(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	// Create large text (~100KB)
 	largeText := strings.Repeat("This is a test sentence with multiple words. ", 2000)
 
-	// Act
 	count, err := tokenizer.CountTokens(largeText)
 
-	// Assert - Should handle large text without error
 	require.NoError(t, err)
 	assert.Greater(t, count, 1000, "large text should produce many tokens")
 
@@ -259,28 +217,22 @@ func TestApproximationTokenizer_CountTokens_LargeText(t *testing.T) {
 }
 
 func TestApproximationTokenizer_CountTokens_VeryLongSingleWord(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	// Very long "word" (no spaces)
 	longWord := strings.Repeat("a", 10000)
 
-	// Act
 	count, err := tokenizer.CountTokens(longWord)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 2500, count, "10000 chars / 4 = 2500 tokens")
 }
 
 func TestApproximationTokenizer_CountTokens_SingleCharacter(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	count, err := tokenizer.CountTokens("x")
 
-	// Assert - Single char with ratio 4.0 should round to 0 or 1
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, 0)
 	assert.LessOrEqual(t, count, 1)
@@ -288,12 +240,10 @@ func TestApproximationTokenizer_CountTokens_SingleCharacter(t *testing.T) {
 
 func TestApproximationTokenizer_CountTokens_RepeatedCounting(t *testing.T) {
 	// Test that counting the same text multiple times is consistent
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	text := "This is a test prompt that should produce consistent counts"
 
-	// Act - Count same text 5 times
 	counts := make([]int, 5)
 	for i := 0; i < 5; i++ {
 		count, err := tokenizer.CountTokens(text)
@@ -301,7 +251,6 @@ func TestApproximationTokenizer_CountTokens_RepeatedCounting(t *testing.T) {
 		counts[i] = count
 	}
 
-	// Assert - All counts should be identical (deterministic)
 	for i := 1; i < len(counts); i++ {
 		assert.Equal(t, counts[0], counts[i],
 			"count %d should equal first count %d", counts[i], counts[0])
@@ -323,31 +272,21 @@ func TestApproximationTokenizer_CountTokens_DifferentRatios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizerWithRatio(tt.charsPerToken)
 
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCount, count)
 		})
 	}
 }
 
-// ============================================================================
-// CountTokens Tests - Error Handling
-// ============================================================================
-
 func TestApproximationTokenizer_CountTokens_ZeroRatio(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizerWithRatio(0.0)
 
-	// Act
 	count, err := tokenizer.CountTokens("test text")
 
-	// Assert - Should return error for division by zero
 	// Stub returns 0, nil - test will fail when implemented
 	if err == nil {
 		t.Log("Warning: Expected error for zero ratio, got success (stub behavior)")
@@ -359,13 +298,10 @@ func TestApproximationTokenizer_CountTokens_ZeroRatio(t *testing.T) {
 }
 
 func TestApproximationTokenizer_CountTokens_NegativeRatio(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizerWithRatio(-4.0)
 
-	// Act
 	count, err := tokenizer.CountTokens("test text")
 
-	// Assert - Should return error for negative ratio
 	if err == nil {
 		t.Log("Warning: Expected error for negative ratio, got success (stub behavior)")
 		assert.Equal(t, 0, count, "count should be 0 on error")
@@ -374,12 +310,7 @@ func TestApproximationTokenizer_CountTokens_NegativeRatio(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// CountTurnsTokens Tests - Happy Path
-// ============================================================================
-
 func TestApproximationTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{
@@ -389,10 +320,8 @@ func TestApproximationTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
 		"Thank you for the analysis!",      // ~29 chars = ~7 tokens
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Greater(t, count, 25, "multiple turns should produce significant tokens")
 
@@ -406,45 +335,35 @@ func TestApproximationTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_SingleTurn(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{"Single turn message"} // 19 chars = 4 tokens
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 4, count, "19 chars / 4 = 4 tokens (integer division)")
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_EmptyArray(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens([]string{})
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 0, count, "empty array should produce 0 tokens")
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_NilArray(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 0, count, "nil array should produce 0 tokens")
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{
@@ -455,34 +374,24 @@ func TestApproximationTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
 		"Fifth turn with content", // 23 chars = 5 tokens
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 17, count, "69 chars / 4 = 17 tokens (integer division)")
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_AllEmptyTurns(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{"", "", "", ""}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 0, count, "all empty turns should produce 0 tokens")
 }
 
-// ============================================================================
-// CountTurnsTokens Tests - Edge Cases
-// ============================================================================
-
 func TestApproximationTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	// Create 100 turns
@@ -491,17 +400,14 @@ func TestApproximationTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
 		turns[i] = "Turn with some content for testing" // 34 chars = ~8-9 tokens each
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	expectedCount := 100 * 34 / 4 // 100 turns * 34 chars / 4 = 850 tokens
 	assert.Equal(t, expectedCount, count)
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_LargeIndividualTurns(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	// Create turns with large content
@@ -511,16 +417,13 @@ func TestApproximationTokenizer_CountTurnsTokens_LargeIndividualTurns(t *testing
 		strings.Repeat("Third turn with lots of content. ", 100),  // 3400 chars = 850 tokens
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Greater(t, count, 2000, "large turns should produce many tokens")
 }
 
 func TestApproximationTokenizer_CountTurnsTokens_UnicodeInTurns(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{
@@ -531,21 +434,14 @@ func TestApproximationTokenizer_CountTurnsTokens_UnicodeInTurns(t *testing.T) {
 		"🌍 Emoji turn",
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
 
-	// Assert
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, 0, "unicode turns should produce non-negative tokens")
 }
 
-// ============================================================================
-// CountTurnsTokens Tests - Consistency with CountTokens
-// ============================================================================
-
 func TestApproximationTokenizer_CountTurnsTokens_MatchesIndividualCounts(t *testing.T) {
 	// Test that CountTurnsTokens produces same result as sum of individual CountTokens
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	turns := []string{
@@ -554,7 +450,6 @@ func TestApproximationTokenizer_CountTurnsTokens_MatchesIndividualCounts(t *test
 		"Turn three", // 10 chars
 	}
 
-	// Act - Count individually
 	individualTotal := 0
 	for _, turn := range turns {
 		count, err := tokenizer.CountTokens(turn)
@@ -562,11 +457,9 @@ func TestApproximationTokenizer_CountTurnsTokens_MatchesIndividualCounts(t *test
 		individualTotal += count
 	}
 
-	// Act - Count in batch
 	batchTotal, err := tokenizer.CountTurnsTokens(turns)
 	require.NoError(t, err)
 
-	// Assert - Should match exactly for approximation tokenizer
 	assert.Equal(t, individualTotal, batchTotal,
 		"batch count should match sum of individual counts")
 }
@@ -600,31 +493,21 @@ func TestApproximationTokenizer_CountTurnsTokens_DifferentRatios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizerWithRatio(tt.charsPerToken)
 
-			// Act
 			count, err := tokenizer.CountTurnsTokens(tt.turns)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCount, count)
 		})
 	}
 }
 
-// ============================================================================
-// ModelName Tests
-// ============================================================================
-
 func TestApproximationTokenizer_ModelName(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	name := tokenizer.ModelName()
 
-	// Assert
 	assert.Equal(t, "approximation", name)
 }
 
@@ -634,31 +517,21 @@ func TestApproximationTokenizer_ModelName_WithCustomRatio(t *testing.T) {
 
 	for _, ratio := range ratios {
 		t.Run(string(rune(ratio)), func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizerWithRatio(ratio)
 
-			// Act
 			name := tokenizer.ModelName()
 
-			// Assert
 			assert.Equal(t, "approximation", name,
 				"model name should be 'approximation' for all ratios")
 		})
 	}
 }
 
-// ============================================================================
-// IsEstimate Tests
-// ============================================================================
-
 func TestApproximationTokenizer_IsEstimate(t *testing.T) {
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
-	// Act
 	isEstimate := tokenizer.IsEstimate()
 
-	// Assert - Approximation provides estimates, not exact counts
 	assert.True(t, isEstimate, "approximation should return true for IsEstimate()")
 }
 
@@ -667,26 +540,18 @@ func TestApproximationTokenizer_IsEstimate_AllRatios(t *testing.T) {
 
 	for _, ratio := range ratios {
 		t.Run(string(rune(ratio)), func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizerWithRatio(ratio)
 
-			// Act
 			isEstimate := tokenizer.IsEstimate()
 
-			// Assert - All approximation tokenizers provide estimates
 			assert.True(t, isEstimate,
 				"ratio %.1f should return true for IsEstimate()", ratio)
 		})
 	}
 }
 
-// ============================================================================
-// Integration Tests - Real-world Scenarios
-// ============================================================================
-
 func TestApproximationTokenizer_RealWorldPrompt(t *testing.T) {
 	// Test with a realistic AI workflow prompt
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	prompt := `You are a code review assistant. Analyze the following Go code for:
@@ -706,10 +571,8 @@ func ProcessData(data []string) error {
 
 Provide detailed feedback.`
 
-	// Act
 	count, err := tokenizer.CountTokens(prompt)
 
-	// Assert
 	require.NoError(t, err)
 
 	// Calculate expected approximation
@@ -720,7 +583,6 @@ Provide detailed feedback.`
 
 func TestApproximationTokenizer_ConversationScenario(t *testing.T) {
 	// Test with a multi-turn conversation
-	// Arrange
 	tokenizer := NewApproximationTokenizer()
 
 	conversation := []string{
@@ -731,10 +593,8 @@ func TestApproximationTokenizer_ConversationScenario(t *testing.T) {
 		"Assistant: Sure! Here's the version with error handling...",
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(conversation)
 
-	// Assert
 	require.NoError(t, err)
 
 	// Calculate total characters
@@ -763,10 +623,8 @@ func TestApproximationTokenizer_AccuracyComparison(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			count, err := tokenizer.CountTokens(tt.text)
 
-			// Assert
 			require.NoError(t, err)
 
 			// For approximation, we expect: count ≈ len(text) / 4
@@ -776,10 +634,6 @@ func TestApproximationTokenizer_AccuracyComparison(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// Rounding Behavior Tests
-// ============================================================================
 
 func TestApproximationTokenizer_RoundingBehavior(t *testing.T) {
 	// Test how integer division handles rounding
@@ -798,14 +652,11 @@ func TestApproximationTokenizer_RoundingBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := NewApproximationTokenizerWithRatio(tt.charsPerToken)
 			text := strings.Repeat("x", tt.textLength)
 
-			// Act
 			count, err := tokenizer.CountTokens(text)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCount, count)
 		})

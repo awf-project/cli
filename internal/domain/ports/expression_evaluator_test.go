@@ -17,10 +17,6 @@ import (
 // Component: T001
 // Feature: C042
 
-// ============================================================================
-// Mock Implementations
-// ============================================================================
-
 // mockExpressionEvaluator is a test implementation of ExpressionEvaluator interface
 type mockExpressionEvaluator struct {
 	evaluateBoolFunc func(expr string, ctx *interpolation.Context) (bool, error)
@@ -58,18 +54,10 @@ func (m *mockExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Co
 	return m.evaluateIntFunc(expr, ctx)
 }
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestExpressionEvaluatorInterface(t *testing.T) {
 	// Verify interface compliance
 	var _ ports.ExpressionEvaluator = (*mockExpressionEvaluator)(nil)
 }
-
-// ============================================================================
-// ExpressionEvaluator Tests - EvaluateBool Happy Path
-// ============================================================================
 
 func TestExpressionEvaluator_EvaluateBool_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -93,16 +81,13 @@ func TestExpressionEvaluator_EvaluateBool_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 				return tt.expected, nil
 			}
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for expression '%s': %v", tt.expr, err)
 			}
@@ -169,7 +154,6 @@ func TestExpressionEvaluator_EvaluateBool_WithContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 				return tt.expected, nil
@@ -177,9 +161,7 @@ func TestExpressionEvaluator_EvaluateBool_WithContext(t *testing.T) {
 			ctx := interpolation.NewContext()
 			tt.setup(ctx)
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -189,10 +171,6 @@ func TestExpressionEvaluator_EvaluateBool_WithContext(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// ExpressionEvaluator Tests - EvaluateInt Happy Path
-// ============================================================================
 
 func TestExpressionEvaluator_EvaluateInt_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -214,16 +192,13 @@ func TestExpressionEvaluator_EvaluateInt_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 				return tt.expected, nil
 			}
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for expression '%s': %v", tt.expr, err)
 			}
@@ -293,7 +268,6 @@ func TestExpressionEvaluator_EvaluateInt_WithContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 				return tt.expected, nil
@@ -301,9 +275,7 @@ func TestExpressionEvaluator_EvaluateInt_WithContext(t *testing.T) {
 			ctx := interpolation.NewContext()
 			tt.setup(ctx)
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -314,19 +286,12 @@ func TestExpressionEvaluator_EvaluateInt_WithContext(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// ExpressionEvaluator Tests - Edge Cases
-// ============================================================================
-
 func TestExpressionEvaluator_EvaluateBool_EmptyExpression(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateBool("", ctx)
 
-	// Assert - should reject empty expression
 	if err == nil {
 		t.Error("expected error for empty expression, got nil")
 	}
@@ -336,14 +301,11 @@ func TestExpressionEvaluator_EvaluateBool_EmptyExpression(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateInt_EmptyExpression(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateInt("", ctx)
 
-	// Assert - should reject empty expression
 	if err == nil {
 		t.Error("expected error for empty expression, got nil")
 	}
@@ -353,7 +315,6 @@ func TestExpressionEvaluator_EvaluateInt_EmptyExpression(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateBool_NilContext(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 		if ctx == nil {
@@ -362,10 +323,8 @@ func TestExpressionEvaluator_EvaluateBool_NilContext(t *testing.T) {
 		return true, nil
 	}
 
-	// Act
 	result, err := evaluator.EvaluateBool("true", nil)
 
-	// Assert - should handle nil context gracefully
 	if err == nil {
 		t.Error("expected error for nil context, got nil")
 	}
@@ -375,7 +334,6 @@ func TestExpressionEvaluator_EvaluateBool_NilContext(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateInt_NilContext(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 		if ctx == nil {
@@ -384,10 +342,8 @@ func TestExpressionEvaluator_EvaluateInt_NilContext(t *testing.T) {
 		return 42, nil
 	}
 
-	// Act
 	result, err := evaluator.EvaluateInt("42", nil)
 
-	// Assert - should handle nil context gracefully
 	if err == nil {
 		t.Error("expected error for nil context, got nil")
 	}
@@ -397,7 +353,6 @@ func TestExpressionEvaluator_EvaluateInt_NilContext(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateBool_WhitespaceOnly(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 		if expr == "   " {
@@ -407,10 +362,8 @@ func TestExpressionEvaluator_EvaluateBool_WhitespaceOnly(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateBool("   ", ctx)
 
-	// Assert - whitespace-only should be rejected
 	if err == nil {
 		t.Error("expected error for whitespace-only expression, got nil")
 	}
@@ -434,16 +387,13 @@ func TestExpressionEvaluator_EvaluateInt_TypeCoercion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 				return tt.expected, nil
 			}
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -456,16 +406,13 @@ func TestExpressionEvaluator_EvaluateInt_TypeCoercion(t *testing.T) {
 
 func TestExpressionEvaluator_EvaluateInt_LargeNumbers(t *testing.T) {
 	// Test handling of large numbers
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 		return 1000000, nil
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateInt("1000 * 1000", ctx)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -491,16 +438,13 @@ func TestExpressionEvaluator_EvaluateBool_ComplexLogic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 				return tt.expected, nil
 			}
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for expression '%s': %v", tt.expr, err)
 			}
@@ -511,12 +455,7 @@ func TestExpressionEvaluator_EvaluateBool_ComplexLogic(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// ExpressionEvaluator Tests - Error Handling
-// ============================================================================
-
 func TestExpressionEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("syntax error: unexpected token")
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
@@ -524,10 +463,8 @@ func TestExpressionEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateBool("invalid && &&", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for invalid syntax, got nil")
 	}
@@ -540,7 +477,6 @@ func TestExpressionEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("syntax error: unexpected operator")
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
@@ -548,10 +484,8 @@ func TestExpressionEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateInt("10 ++ 5", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for invalid syntax, got nil")
 	}
@@ -564,7 +498,6 @@ func TestExpressionEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateBool_UndefinedVariable(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("undefined variable: unknown_var")
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
@@ -572,10 +505,8 @@ func TestExpressionEvaluator_EvaluateBool_UndefinedVariable(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateBool("inputs.unknown_var > 5", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for undefined variable, got nil")
 	}
@@ -588,7 +519,6 @@ func TestExpressionEvaluator_EvaluateBool_UndefinedVariable(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateInt_UndefinedVariable(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("undefined variable: unknown_var")
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
@@ -596,10 +526,8 @@ func TestExpressionEvaluator_EvaluateInt_UndefinedVariable(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateInt("inputs.unknown_var * 2", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for undefined variable, got nil")
 	}
@@ -613,7 +541,6 @@ func TestExpressionEvaluator_EvaluateInt_UndefinedVariable(t *testing.T) {
 
 func TestExpressionEvaluator_EvaluateBool_TypeMismatch(t *testing.T) {
 	// Test attempting to use non-boolean result as boolean
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("type mismatch: expected boolean, got int")
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
@@ -622,10 +549,8 @@ func TestExpressionEvaluator_EvaluateBool_TypeMismatch(t *testing.T) {
 	ctx := interpolation.NewContext()
 	ctx.Inputs["count"] = 42
 
-	// Act
 	result, err := evaluator.EvaluateBool("inputs.count", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for type mismatch, got nil")
 	}
@@ -636,7 +561,6 @@ func TestExpressionEvaluator_EvaluateBool_TypeMismatch(t *testing.T) {
 
 func TestExpressionEvaluator_EvaluateInt_TypeMismatch(t *testing.T) {
 	// Test attempting to use non-numeric result as int
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("type mismatch: expected numeric, got string")
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
@@ -645,10 +569,8 @@ func TestExpressionEvaluator_EvaluateInt_TypeMismatch(t *testing.T) {
 	ctx := interpolation.NewContext()
 	ctx.Inputs["name"] = "test"
 
-	// Act
 	result, err := evaluator.EvaluateInt("inputs.name", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for type mismatch, got nil")
 	}
@@ -658,7 +580,6 @@ func TestExpressionEvaluator_EvaluateInt_TypeMismatch(t *testing.T) {
 }
 
 func TestExpressionEvaluator_EvaluateInt_DivisionByZero(t *testing.T) {
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	expectedErr := errors.New("division by zero")
 	evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
@@ -666,10 +587,8 @@ func TestExpressionEvaluator_EvaluateInt_DivisionByZero(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := evaluator.EvaluateInt("10 / 0", ctx)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for division by zero, got nil")
 	}
@@ -693,17 +612,14 @@ func TestExpressionEvaluator_EvaluateBool_UnbalancedParentheses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 				return false, errors.New("unbalanced parentheses")
 			}
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expr, ctx)
 
-			// Assert
 			if err == nil {
 				t.Errorf("expected error for %s, got nil", tt.name)
 			}
@@ -714,13 +630,8 @@ func TestExpressionEvaluator_EvaluateBool_UnbalancedParentheses(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Integration Tests - Behavior Verification
-// ============================================================================
-
 func TestExpressionEvaluator_Idempotent(t *testing.T) {
 	// Test that evaluating the same expression multiple times produces consistent results
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 		return true, nil
@@ -730,12 +641,10 @@ func TestExpressionEvaluator_Idempotent(t *testing.T) {
 	}
 	ctx := interpolation.NewContext()
 
-	// Act - Bool
 	boolResult1, err1 := evaluator.EvaluateBool("true", ctx)
 	boolResult2, err2 := evaluator.EvaluateBool("true", ctx)
 	boolResult3, err3 := evaluator.EvaluateBool("true", ctx)
 
-	// Assert - Bool
 	if err1 != nil || err2 != nil || err3 != nil {
 		t.Errorf("unexpected errors: %v, %v, %v", err1, err2, err3)
 	}
@@ -743,12 +652,10 @@ func TestExpressionEvaluator_Idempotent(t *testing.T) {
 		t.Errorf("inconsistent bool results: %v, %v, %v", boolResult1, boolResult2, boolResult3)
 	}
 
-	// Act - Int
 	intResult1, err4 := evaluator.EvaluateInt("42", ctx)
 	intResult2, err5 := evaluator.EvaluateInt("42", ctx)
 	intResult3, err6 := evaluator.EvaluateInt("42", ctx)
 
-	// Assert - Int
 	if err4 != nil || err5 != nil || err6 != nil {
 		t.Errorf("unexpected errors: %v, %v, %v", err4, err5, err6)
 	}
@@ -767,15 +674,12 @@ func TestExpressionEvaluator_Idempotent(t *testing.T) {
 
 func TestExpressionEvaluator_IndependentMethods(t *testing.T) {
 	// Test that EvaluateBool and EvaluateInt are independent
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	ctx := interpolation.NewContext()
 
-	// Act
 	boolResult, boolErr := evaluator.EvaluateBool("true", ctx)
 	intResult, intErr := evaluator.EvaluateInt("42", ctx)
 
-	// Assert - Both should succeed independently
 	if boolErr != nil {
 		t.Errorf("unexpected bool error: %v", boolErr)
 	}
@@ -798,7 +702,6 @@ func TestExpressionEvaluator_IndependentMethods(t *testing.T) {
 
 func TestExpressionEvaluator_ContextIsolation(t *testing.T) {
 	// Test that expressions with different contexts produce different results
-	// Arrange
 	evaluator := newMockExpressionEvaluator()
 	evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 		// Return different results based on context
@@ -814,11 +717,9 @@ func TestExpressionEvaluator_ContextIsolation(t *testing.T) {
 	ctx2 := interpolation.NewContext()
 	ctx2.Inputs["test"] = "value2"
 
-	// Act
 	result1, err1 := evaluator.EvaluateBool("inputs.test == 'value1'", ctx1)
 	result2, err2 := evaluator.EvaluateBool("inputs.test == 'value1'", ctx2)
 
-	// Assert - Different contexts should produce different results
 	if err1 != nil || err2 != nil {
 		t.Errorf("unexpected errors: %v, %v", err1, err2)
 	}
@@ -829,10 +730,6 @@ func TestExpressionEvaluator_ContextIsolation(t *testing.T) {
 		t.Errorf("expected false for ctx2, got %v", result2)
 	}
 }
-
-// ============================================================================
-// Test Helpers
-// ============================================================================
 
 // findRepoRoot searches upward from the current directory to find the repository root
 // by looking for the go.mod file.
@@ -855,10 +752,6 @@ func findRepoRoot() (string, error) {
 	}
 }
 
-// ============================================================================
-// Interface Documentation Tests
-// ============================================================================
-
 // TestExpressionEvaluator_InterfaceDocumentation verifies that the ExpressionEvaluator interface
 // and its methods have proper godoc comments following Go conventions.
 //
@@ -866,7 +759,6 @@ func findRepoRoot() (string, error) {
 //
 //nolint:gocognit // Test complexity reflects comprehensive AST validation
 func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
-	// Arrange
 	repoRoot, err := findRepoRoot()
 	if err != nil {
 		t.Fatalf("failed to find repository root: %v", err)
@@ -874,7 +766,6 @@ func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
 
 	interfacePath := filepath.Join(repoRoot, "internal", "domain", "ports", "expression_evaluator.go")
 
-	// Act - parse the source file
 	content, err := os.ReadFile(interfacePath)
 	if err != nil {
 		t.Fatalf("failed to read expression_evaluator.go: %v", err)
@@ -919,16 +810,14 @@ func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
 		return true
 	})
 
-	// Assert - interface was found
 	if interfaceDecl == nil {
 		t.Fatal("ExpressionEvaluator interface not found in expression_evaluator.go")
 	}
 
-	// Assert - interface has documentation
 	if interfaceDoc == nil || len(interfaceDoc.List) == 0 {
 		t.Error("ExpressionEvaluator interface has no godoc comment")
 	} else {
-		// Assert - interface documentation follows Go convention (starts with type name)
+
 		firstLine := interfaceDoc.List[0].Text
 		if !strings.Contains(firstLine, interfaceName) {
 			t.Errorf("interface godoc comment should mention interface name '%s', got: %s",
@@ -936,7 +825,6 @@ func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
 		}
 	}
 
-	// Assert - interface has methods
 	if interfaceDecl.Methods == nil || len(interfaceDecl.Methods.List) == 0 {
 		t.Fatal("ExpressionEvaluator interface has no methods")
 	}
@@ -959,11 +847,10 @@ func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
 		if _, required := requiredMethods[methodName]; required {
 			requiredMethods[methodName] = true
 
-			// Assert - method has documentation
 			if field.Doc == nil || len(field.Doc.List) == 0 {
 				t.Errorf("method %s has no godoc comment", methodName)
 			} else {
-				// Assert - method documentation follows Go convention (starts with method name)
+
 				firstLine := field.Doc.List[0].Text
 				if !strings.Contains(firstLine, methodName) {
 					t.Errorf("method %s godoc comment should mention method name, got: %s",
@@ -973,17 +860,12 @@ func TestExpressionEvaluator_InterfaceDocumentation(t *testing.T) {
 		}
 	}
 
-	// Assert - all required methods were found
 	for methodName, found := range requiredMethods {
 		if !found {
 			t.Errorf("required method %s not found in ExpressionEvaluator interface", methodName)
 		}
 	}
 }
-
-// ============================================================================
-// Usage Pattern Tests - Real-World Scenarios
-// ============================================================================
 
 func TestExpressionEvaluator_LoopConditionPatterns(t *testing.T) {
 	// Test real-world loop condition patterns
@@ -1026,7 +908,6 @@ func TestExpressionEvaluator_LoopConditionPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateBoolFunc = func(expr string, ctx *interpolation.Context) (bool, error) {
 				return tt.expected, nil
@@ -1034,9 +915,7 @@ func TestExpressionEvaluator_LoopConditionPatterns(t *testing.T) {
 			ctx := interpolation.NewContext()
 			tt.setup(ctx)
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -1082,7 +961,6 @@ func TestExpressionEvaluator_MaxIterationsPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := newMockExpressionEvaluator()
 			evaluator.evaluateIntFunc = func(expr string, ctx *interpolation.Context) (int, error) {
 				return tt.expected, nil
@@ -1090,9 +968,7 @@ func TestExpressionEvaluator_MaxIterationsPatterns(t *testing.T) {
 			ctx := interpolation.NewContext()
 			tt.setup(ctx)
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expr, ctx)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

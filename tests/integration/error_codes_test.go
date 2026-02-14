@@ -21,15 +21,12 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
-// C047: Structured Error Codes Taxonomy - Integration Tests
 // Tests validate end-to-end error code handling across all layers:
 // - Domain error taxonomy (ErrorCode, StructuredError)
 // - Port abstractions (ErrorFormatter interface)
 // - Infrastructure formatters (JSON, Human)
 // - CLI integration (categorizeError, WriteError, error command)
 // - Exit code mapping (USER→1, WORKFLOW→2, EXECUTION→3, SYSTEM→4)
-// =============================================================================
 
 const (
 	// Expected error code count - all 14 error codes defined in spec
@@ -41,14 +38,11 @@ const (
 // When: command executes
 // Then: all 14 error codes from catalog are listed
 func TestErrorCommand_ListAllCodes(t *testing.T) {
-	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 
-	// Act
 	cmd := exec.Command(binPath, "error")
 	output, err := cmd.CombinedOutput()
 
-	// Assert
 	require.NoError(t, err, "awf error command should succeed")
 	outputStr := string(output)
 
@@ -72,15 +66,12 @@ func TestErrorCommand_ListAllCodes(t *testing.T) {
 // When: command executes
 // Then: description, resolution, and related codes are displayed
 func TestErrorCommand_LookupSpecificCode(t *testing.T) {
-	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	testCode := domainerrors.ErrorCodeUserInputMissingFile
 
-	// Act
 	cmd := exec.Command(binPath, "error", string(testCode))
 	output, err := cmd.CombinedOutput()
 
-	// Assert
 	require.NoError(t, err, "awf error command should succeed")
 	outputStr := string(output)
 
@@ -105,15 +96,12 @@ func TestErrorCommand_LookupSpecificCode(t *testing.T) {
 // When: command executes
 // Then: all matching codes are displayed
 func TestErrorCommand_PrefixMatch(t *testing.T) {
-	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	prefix := "WORKFLOW.VALIDATION"
 
-	// Act
 	cmd := exec.Command(binPath, "error", prefix)
 	output, err := cmd.CombinedOutput()
 
-	// Assert
 	require.NoError(t, err, "awf error command should succeed")
 	outputStr := string(output)
 
@@ -139,15 +127,12 @@ func TestErrorCommand_PrefixMatch(t *testing.T) {
 // When: command executes
 // Then: error message indicates code not found
 func TestErrorCommand_InvalidCode(t *testing.T) {
-	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	invalidCode := "INVALID.CODE.HERE"
 
-	// Act
 	cmd := exec.Command(binPath, "error", invalidCode)
 	output, err := cmd.CombinedOutput()
 
-	// Assert
 	assert.Error(t, err, "awf error command should fail for invalid code")
 	outputStr := string(output)
 
@@ -163,15 +148,12 @@ func TestErrorCommand_InvalidCode(t *testing.T) {
 // When: command executes
 // Then: JSON object with code/description/resolution/related_codes
 func TestErrorCommand_JSONOutput(t *testing.T) {
-	// Arrange
 	binPath := buildBinaryIfNeeded(t)
 	testCode := domainerrors.ErrorCodeUserInputMissingFile
 
-	// Act
 	cmd := exec.Command(binPath, "--format", "json", "error", string(testCode))
 	output, err := cmd.CombinedOutput()
 
-	// Assert
 	require.NoError(t, err, "awf error command should succeed")
 
 	// Parse JSON
@@ -232,15 +214,12 @@ func TestStructuredError_ExitCodeMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			workflowPath := filepath.Join("../fixtures/workflows", tt.workflowFile)
 			require.FileExists(t, workflowPath, "Workflow fixture should exist")
 
-			// Act
 			cmd := exec.Command(binPath, "run", workflowPath)
 			output, err := cmd.CombinedOutput()
 
-			// Assert
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "Command should exit with error code")
 
@@ -262,7 +241,6 @@ func TestStructuredError_ExitCodeMapping(t *testing.T) {
 // When: error is written to output
 // Then: JSON includes "error_code" field with hierarchical code
 func TestStructuredError_JSONFormat(t *testing.T) {
-	// Arrange - create a test StructuredError
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
 		"test workflow file not found",
@@ -274,10 +252,8 @@ func TestStructuredError_JSONFormat(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false, false)
 
-	// Act - write error
 	writer.WriteError(testErr, 1)
 
-	// Assert - parse JSON output
 	var errorResponse struct {
 		Error     string                 `json:"error"`
 		ErrorCode string                 `json:"error_code"`
@@ -302,7 +278,6 @@ func TestStructuredError_JSONFormat(t *testing.T) {
 // When: error is written to stderr
 // Then: output includes [ERROR_CODE] reference
 func TestStructuredError_HumanFormat(t *testing.T) {
-	// Arrange - create a test StructuredError
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeWorkflowValidationCycleDetected,
 		"state machine cycle detected",
@@ -316,10 +291,8 @@ func TestStructuredError_HumanFormat(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatText, true, false) // no color for testing
 
-	// Act - write error
 	writer.WriteError(testErr, 2)
 
-	// Assert - verify human-readable format
 	output := stderr.String()
 
 	// Verify error code in brackets
@@ -371,7 +344,6 @@ func TestCategorizeError_StructuredErrorPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errorCode,
 				"test error message",
@@ -379,10 +351,8 @@ func TestCategorizeError_StructuredErrorPath(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			exitCode := structuredErr.ExitCode()
 
-			// Assert
 			assert.Equal(t, tt.wantExitCode, exitCode,
 				"StructuredError exit code should match category mapping")
 		})
@@ -420,15 +390,12 @@ func TestCategorizeError_FallbackPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			workflowPath := filepath.Join("../fixtures/workflows", tt.workflowFile)
 			require.FileExists(t, workflowPath, "Workflow fixture should exist")
 
-			// Act
 			cmd := exec.Command(binPath, "run", workflowPath)
 			output, err := cmd.CombinedOutput()
 
-			// Assert
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "Command should exit with error")
 
@@ -471,14 +438,11 @@ func TestBackwardCompatibility_PlainErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			workflowPath := filepath.Join("../fixtures/workflows", tt.workflowFile)
 
-			// Act
 			cmd := exec.Command(binPath, "run", workflowPath)
 			_, err := cmd.CombinedOutput()
 
-			// Assert - backward compatibility: exit codes preserved
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "Command should exit with error")
 
@@ -494,15 +458,12 @@ func TestBackwardCompatibility_PlainErrors(t *testing.T) {
 // When: package is compiled
 // Then: no external dependencies beyond standard library
 func TestDomainLayerPurity_StdlibOnly(t *testing.T) {
-	// Arrange
 	domainErrorsPath := filepath.Join("..", "..", "internal", "domain", "errors")
 
-	// Act - check imports in all Go files
 	files, err := filepath.Glob(filepath.Join(domainErrorsPath, "*.go"))
 	require.NoError(t, err, "Should be able to glob domain/errors files")
 	require.NotEmpty(t, files, "Domain errors package should have Go files")
 
-	// Assert - verify no external imports
 	forbiddenImports := []string{
 		"github.com",
 		"golang.org/x/",
@@ -530,12 +491,10 @@ func TestDomainLayerPurity_StdlibOnly(t *testing.T) {
 // When: catalog is queried
 // Then: every code has description, resolution, and related codes
 func TestErrorCatalog_Completeness(t *testing.T) {
-	// Arrange - get all defined error codes
 	allCodes := domainerrors.AllErrorCodes()
 	require.GreaterOrEqual(t, len(allCodes), expectedErrorCodeCount,
 		"Should have at least %d error codes", expectedErrorCodeCount)
 
-	// Act & Assert - verify each code has complete catalog entry
 	for _, code := range allCodes {
 		t.Run(string(code), func(t *testing.T) {
 			entry, found := domainerrors.GetCatalogEntry(code)
@@ -562,7 +521,6 @@ func TestErrorCatalog_Completeness(t *testing.T) {
 // When: formatter formats the error
 // Then: JSON includes code, message, details, timestamp, all properly serialized
 func TestErrorFormatter_JSONStructure(t *testing.T) {
-	// Arrange
 	formatter := errfmt.NewJSONErrorFormatter(false)
 	testTime := time.Date(2025, 1, 15, 10, 30, 45, 0, time.UTC)
 
@@ -578,10 +536,8 @@ func TestErrorFormatter_JSONStructure(t *testing.T) {
 		Timestamp: testTime,
 	}
 
-	// Act
 	output := formatter.FormatError(testErr)
 
-	// Assert - parse JSON
 	var result map[string]interface{}
 	err := json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err, "Formatter output should be valid JSON")
@@ -631,7 +587,6 @@ func TestErrorFormatter_HumanReadable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := errfmt.NewHumanErrorFormatter(tt.colorEnabled, false)
 			testErr := domainerrors.NewStructuredError(
 				domainerrors.ErrorCodeSystemIOPermissionDenied,
@@ -643,10 +598,8 @@ func TestErrorFormatter_HumanReadable(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(testErr)
 
-			// Assert
 			// Verify error code prefix
 			assert.Contains(t, output, "[SYSTEM.IO.PERMISSION_DENIED]",
 				"Output should include error code in brackets")
@@ -682,7 +635,6 @@ func TestErrorFormatter_HumanReadable(t *testing.T) {
 // When: output format is JSON
 // Then: error_code field is populated in ErrorResponse
 func TestWriteError_StructuredDetection(t *testing.T) {
-	// Arrange
 	testErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeWorkflowValidationMissingState,
 		"referenced state does not exist",
@@ -696,10 +648,8 @@ func TestWriteError_StructuredDetection(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	writer := ui.NewOutputWriter(&stdout, &stderr, ui.FormatJSON, false, false)
 
-	// Act
 	writer.WriteError(testErr, 2)
 
-	// Assert
 	var errorResponse struct {
 		Error     string                 `json:"error"`
 		ErrorCode string                 `json:"error_code"`
@@ -823,10 +773,6 @@ func TestEndToEnd_AcceptanceCriteria(t *testing.T) {
 		t.Log("Backward compatibility verified through other tests")
 	})
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 // buildBinaryIfNeeded builds the AWF binary if not already present
 func buildBinaryIfNeeded(t *testing.T) string {

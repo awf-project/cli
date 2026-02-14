@@ -865,10 +865,6 @@ func TestValidationError(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Additional Edge Case Tests
-// =============================================================================
-
 func TestValidateType_UnknownType(t *testing.T) {
 	// Unknown type should return error
 	_, err := validateType("field", "value", "unknown_type")

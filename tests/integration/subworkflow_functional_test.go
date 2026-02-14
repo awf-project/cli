@@ -20,8 +20,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// F023: Sub-Workflow Functional Tests - Additional Coverage
 //
 // These tests complement the integration tests with functional scenarios that
 // verify end-to-end behavior of the sub-workflow feature against acceptance
@@ -34,7 +32,6 @@ import (
 // - Edge: Missing required input handling
 // - Edge: Default input values
 // - Edge: Deep call stack error messages
-// =============================================================================
 
 // TestSubworkflow_StateVisibleInParent_Functional verifies that sub-workflow step state
 // is properly recorded in parent's execution context (AC7).

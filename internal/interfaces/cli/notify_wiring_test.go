@@ -19,10 +19,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestRunCommand_WiresNotifyOperationProvider(t *testing.T) {
 	// GIVEN: A temporary test directory with a workflow containing notify operation
 	tmpDir := setupTestDir(t)
@@ -230,10 +226,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
 func TestRunSingleStep_WiresNotifyOperationProvider(t *testing.T) {
 	// GIVEN: A workflow with notify operation for single-step execution
 	tmpDir := setupTestDir(t)
@@ -305,10 +297,6 @@ func TestResumeCommand_WiresNotifyOperationProvider(t *testing.T) {
 	// but notify provider wiring should not cause crashes
 	// Success criteria: no panic from nil providers during initialization
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestRunCommand_NotifyProvider_InvalidBackend(t *testing.T) {
 	// GIVEN: A workflow with invalid backend type

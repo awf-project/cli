@@ -117,7 +117,7 @@ func TestResolveOperationValue(t *testing.T) {
 				assert.Equal(t, "item1", items[0])
 				assert.Equal(t, "dynamic-item", items[1])
 				assert.Equal(t, 42, items[2])
-				assert.Equal(t, true, items[3])
+				assert.True(t, items[3].(bool))
 				itemMap, ok := items[4].(map[string]any)
 				require.True(t, ok, "items[4] should be a map")
 				assert.Equal(t, "resolved", itemMap["key"])
@@ -142,7 +142,7 @@ func TestResolveOperationValue(t *testing.T) {
 			wantErr: false,
 			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
 				assert.Equal(t, 42, inputs["count"])
-				assert.Equal(t, true, inputs["enabled"])
+				assert.True(t, inputs["enabled"].(bool))
 				assert.Nil(t, inputs["data"])
 				assert.Equal(t, 3.14, inputs["float"])
 				return &plugin.OperationResult{Success: true}, nil
@@ -240,7 +240,6 @@ func TestResolveOperationValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create workflow with operation step
 			wf := testutil.NewWorkflowBuilder().
 				WithName("resolve-test").
 				WithInitial("op").
@@ -269,10 +268,8 @@ func TestResolveOperationValue(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			_, err := svc.Run(context.Background(), "resolve-test", tt.workflowInputs)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err, "expected error but got none")
 				if tt.errorContains != "" {
@@ -353,7 +350,6 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			wf := testutil.NewWorkflowBuilder().
 				WithName("edge-test").
 				WithInitial("op").
@@ -380,10 +376,8 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			// Act
 			_, err := svc.Run(context.Background(), "edge-test", tt.workflowInputs)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -435,7 +429,6 @@ func TestResolveOperationValue_ErrorPropagation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			wf := testutil.NewWorkflowBuilder().
 				WithName("error-test").
 				WithInitial("op").
@@ -464,10 +457,8 @@ func TestResolveOperationValue_ErrorPropagation(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			// Act
 			_, err := svc.Run(context.Background(), "error-test", tt.workflowInputs)
 
-			// Assert
 			require.Error(t, err, "expected error from interpolation failure")
 			assert.Contains(t, err.Error(), fmt.Sprintf("input %q", tt.errorField),
 				"error should include field name that failed")

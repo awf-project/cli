@@ -20,7 +20,6 @@ type YAMLRepository struct {
 	basePath string
 }
 
-// NewYAMLRepository creates a new YAML repository.
 func NewYAMLRepository(basePath string) *YAMLRepository {
 	return &YAMLRepository{basePath: basePath}
 }

@@ -7,9 +7,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Shared Mock Implementations for Loop Executor Tests
-// =============================================================================
 //
 // This file contains mock implementations used across multiple loop executor
 // test files. Extracted during C014 test file splitting to prevent duplication

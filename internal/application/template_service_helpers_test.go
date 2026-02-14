@@ -11,17 +11,11 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Feature: C005 - Helper Method Tests for TemplateService
 // Component: T001_expandStep_helpers
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // validateAndLoadTemplate Tests
-// -----------------------------------------------------------------------------
 
 func TestTemplateService_validateAndLoadTemplate_HappyPath(t *testing.T) {
-	// Arrange: setup template repository and service
 	repo := testutil.NewMockTemplateRepository()
 	simpleTemplate := newSimpleEchoTemplate()
 	repo.AddTemplate(simpleTemplate.Name, simpleTemplate)
@@ -34,10 +28,8 @@ func TestTemplateService_validateAndLoadTemplate_HappyPath(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act: call validateAndLoadTemplate
 	tmpl, err := svc.ValidateAndLoadTemplate(context.Background(), ref, visited)
 
-	// Assert: verify successful load
 	require.NoError(t, err)
 	require.NotNil(t, tmpl)
 	assert.Equal(t, "simple-echo", tmpl.Name)
@@ -81,7 +73,6 @@ func TestTemplateService_validateAndLoadTemplate_CircularDetection(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tmplA := &workflow.Template{
 				Name: "template-a",
@@ -111,10 +102,8 @@ func TestTemplateService_validateAndLoadTemplate_CircularDetection(t *testing.T)
 				TemplateName: tt.templateName,
 			}
 
-			// Act
 			tmpl, err := svc.ValidateAndLoadTemplate(context.Background(), ref, tt.visited)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
 				var circErr *workflow.CircularTemplateError
@@ -151,7 +140,6 @@ func TestTemplateService_validateAndLoadTemplate_LoadErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
@@ -161,10 +149,8 @@ func TestTemplateService_validateAndLoadTemplate_LoadErrors(t *testing.T) {
 			}
 			visited := make(map[string]bool)
 
-			// Act
 			tmpl, err := svc.ValidateAndLoadTemplate(context.Background(), ref, visited)
 
-			// Assert
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 			assert.Nil(t, tmpl)
@@ -173,7 +159,6 @@ func TestTemplateService_validateAndLoadTemplate_LoadErrors(t *testing.T) {
 }
 
 func TestTemplateService_validateAndLoadTemplate_ContextCancellation(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	tmpl := newSimpleEchoTemplate()
 	repo.AddTemplate(tmpl.Name, tmpl)
@@ -188,9 +173,7 @@ func TestTemplateService_validateAndLoadTemplate_ContextCancellation(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act
 	tmpl, err := svc.ValidateAndLoadTemplate(ctx, ref, visited)
-	// Assert: should handle context cancellation
 	// Note: actual behavior depends on implementation
 	if err != nil {
 		assert.Error(t, err)
@@ -200,7 +183,6 @@ func TestTemplateService_validateAndLoadTemplate_ContextCancellation(t *testing.
 }
 
 func TestTemplateService_validateAndLoadTemplate_VisitedMapUnmodified(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	tmpl := newSimpleEchoTemplate()
 	repo.AddTemplate(tmpl.Name, tmpl)
@@ -212,10 +194,8 @@ func TestTemplateService_validateAndLoadTemplate_VisitedMapUnmodified(t *testing
 	}
 	visited := map[string]bool{"other-template": true}
 
-	// Act
 	_, err := svc.ValidateAndLoadTemplate(context.Background(), ref, visited)
 
-	// Assert: helper marks template as visited (caller responsible for cleanup)
 	require.NoError(t, err)
 	// Template should be marked as visited
 	assert.True(t, visited["simple-echo"])
@@ -223,9 +203,7 @@ func TestTemplateService_validateAndLoadTemplate_VisitedMapUnmodified(t *testing
 	assert.True(t, visited["other-template"])
 }
 
-// -----------------------------------------------------------------------------
 // selectPrimaryStep Tests
-// -----------------------------------------------------------------------------
 
 func TestTemplateService_selectPrimaryStep_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -289,15 +267,12 @@ func TestTemplateService_selectPrimaryStep_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
 
-			// Act
 			step, err := svc.SelectPrimaryStep(tt.template)
 
-			// Assert
 			require.NoError(t, err)
 			require.NotNil(t, step)
 			assert.Equal(t, tt.expectedStep, step.Name)
@@ -340,15 +315,12 @@ func TestTemplateService_selectPrimaryStep_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
 
-			// Act
 			step, err := svc.SelectPrimaryStep(tt.template)
 
-			// Assert
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 			assert.Nil(t, step)
@@ -357,7 +329,6 @@ func TestTemplateService_selectPrimaryStep_ErrorCases(t *testing.T) {
 }
 
 func TestTemplateService_selectPrimaryStep_SingleStep(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -373,21 +344,16 @@ func TestTemplateService_selectPrimaryStep_SingleStep(t *testing.T) {
 		},
 	}
 
-	// Act
 	step, err := svc.SelectPrimaryStep(template)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, step)
 	assert.Equal(t, "only-step", step.Name)
 }
 
-// -----------------------------------------------------------------------------
 // expandNestedTemplate Tests
-// -----------------------------------------------------------------------------
 
 func TestTemplateService_expandNestedTemplate_HappyPath(t *testing.T) {
-	// Arrange: setup nested template structure
 	repo := testutil.NewMockTemplateRepository()
 
 	// Leaf template (no further nesting)
@@ -416,17 +382,14 @@ func TestTemplateService_expandNestedTemplate_HappyPath(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act
 	err := svc.ExpandNestedTemplate(context.Background(), "parent-step", templateStep, visited)
 
-	// Assert
 	require.NoError(t, err)
 	// After expansion, TemplateRef should be nil
 	assert.Nil(t, templateStep.TemplateRef)
 }
 
 func TestTemplateService_expandNestedTemplate_NoNestedRef(t *testing.T) {
-	// Arrange: step without nested template
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -439,15 +402,12 @@ func TestTemplateService_expandNestedTemplate_NoNestedRef(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act
 	err := svc.ExpandNestedTemplate(context.Background(), "simple-step", templateStep, visited)
 
-	// Assert: should succeed with no-op
 	require.NoError(t, err)
 }
 
 func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
-	// Arrange: create deeply nested template chain
 	repo := testutil.NewMockTemplateRepository()
 
 	// Level 0 (leaf)
@@ -505,16 +465,13 @@ func TestTemplateService_expandNestedTemplate_DeepNesting(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act: expand nested templates recursively
 	err := svc.ExpandNestedTemplate(context.Background(), "root-step", templateStep, visited)
 
-	// Assert: should successfully expand all levels
 	require.NoError(t, err)
 	assert.Nil(t, templateStep.TemplateRef)
 }
 
 func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
-	// Arrange: create circular template reference
 	repo := testutil.NewMockTemplateRepository()
 
 	// Template A references B
@@ -559,17 +516,14 @@ func TestTemplateService_expandNestedTemplate_CircularReference(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act
 	err := svc.ExpandNestedTemplate(context.Background(), "root-step", templateStep, visited)
 
-	// Assert: should detect circular reference
 	require.Error(t, err)
 	var circErr *workflow.CircularTemplateError
 	require.ErrorAs(t, err, &circErr)
 }
 
 func TestTemplateService_expandNestedTemplate_TemplateNotFound(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -583,17 +537,14 @@ func TestTemplateService_expandNestedTemplate_TemplateNotFound(t *testing.T) {
 	}
 	visited := make(map[string]bool)
 
-	// Act
 	err := svc.ExpandNestedTemplate(context.Background(), "step-with-missing-ref", templateStep, visited)
 
-	// Assert
 	require.Error(t, err)
 	var notFoundErr *workflow.TemplateNotFoundError
 	require.ErrorAs(t, err, &notFoundErr)
 }
 
 func TestTemplateService_expandNestedTemplate_ContextCancellation(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	tmpl := newSimpleEchoTemplate()
 	repo.AddTemplate(tmpl.Name, tmpl)
@@ -612,20 +563,15 @@ func TestTemplateService_expandNestedTemplate_ContextCancellation(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act
 	err := svc.ExpandNestedTemplate(ctx, "step", templateStep, visited)
 
-	// Assert: should handle context cancellation gracefully
 	// Note: actual behavior depends on implementation
 	_ = err // May or may not error depending on timing
 }
 
-// -----------------------------------------------------------------------------
 // applyTemplateFields Tests
-// -----------------------------------------------------------------------------
 
 func TestTemplateService_applyTemplateFields_HappyPath(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -647,10 +593,8 @@ func TestTemplateService_applyTemplateFields_HappyPath(t *testing.T) {
 		"message": "Hello World",
 	}
 
-	// Act
 	err := svc.ApplyTemplateFields(step, templateStep, params)
 
-	// Assert
 	require.NoError(t, err)
 	// Step should have template fields merged
 	assert.Equal(t, workflow.StepTypeCommand, step.Type)
@@ -694,7 +638,6 @@ func TestTemplateService_applyTemplateFields_FieldPrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
@@ -716,10 +659,8 @@ func TestTemplateService_applyTemplateFields_FieldPrecedence(t *testing.T) {
 				templateStep.Dir = tt.templateValue.(string)
 			}
 
-			// Act
 			err := svc.ApplyTemplateFields(step, templateStep, params)
 
-			// Assert
 			require.NoError(t, err)
 			switch tt.field {
 			case "Timeout":
@@ -734,7 +675,6 @@ func TestTemplateService_applyTemplateFields_FieldPrecedence(t *testing.T) {
 }
 
 func TestTemplateService_applyTemplateFields_RetryMerging(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -759,10 +699,8 @@ func TestTemplateService_applyTemplateFields_RetryMerging(t *testing.T) {
 
 	params := map[string]any{}
 
-	// Act
 	err := svc.ApplyTemplateFields(step, templateStep, params)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, step.Retry)
 	// Step's MaxAttempts should override template
@@ -773,7 +711,6 @@ func TestTemplateService_applyTemplateFields_RetryMerging(t *testing.T) {
 }
 
 func TestTemplateService_applyTemplateFields_CaptureMerging(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -797,10 +734,8 @@ func TestTemplateService_applyTemplateFields_CaptureMerging(t *testing.T) {
 
 	params := map[string]any{}
 
-	// Act
 	err := svc.ApplyTemplateFields(step, templateStep, params)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, step.Capture)
 	// Step's Stdout should override template
@@ -810,7 +745,6 @@ func TestTemplateService_applyTemplateFields_CaptureMerging(t *testing.T) {
 }
 
 func TestTemplateService_applyTemplateFields_TransitionsPreserved(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -831,10 +765,8 @@ func TestTemplateService_applyTemplateFields_TransitionsPreserved(t *testing.T) 
 
 	params := map[string]any{}
 
-	// Act
 	err := svc.ApplyTemplateFields(step, templateStep, params)
 
-	// Assert: workflow step transitions should be preserved
 	require.NoError(t, err)
 	assert.Equal(t, "workflow-next", step.OnSuccess)
 	assert.Equal(t, "workflow-error", step.OnFailure)
@@ -869,7 +801,6 @@ func TestTemplateService_applyTemplateFields_ParameterSubstitution(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
@@ -881,10 +812,8 @@ func TestTemplateService_applyTemplateFields_ParameterSubstitution(t *testing.T)
 				Command: tt.command,
 			}
 
-			// Act
 			err := svc.ApplyTemplateFields(step, templateStep, tt.params)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Contains(t, step.Command, tt.expectedOutput)
 		})
@@ -920,15 +849,12 @@ func TestTemplateService_applyTemplateFields_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
 
-			// Act
 			err := svc.ApplyTemplateFields(tt.step, tt.templateStep, tt.params)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
@@ -940,7 +866,6 @@ func TestTemplateService_applyTemplateFields_ErrorCases(t *testing.T) {
 }
 
 func TestTemplateService_applyTemplateFields_EmptyParams(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -952,17 +877,14 @@ func TestTemplateService_applyTemplateFields_EmptyParams(t *testing.T) {
 		Command: "echo 'no params'",
 	}
 
-	// Act: empty params should still work
 	err := svc.ApplyTemplateFields(step, templateStep, map[string]any{})
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StepTypeCommand, step.Type)
 	assert.Equal(t, "echo 'no params'", step.Command)
 }
 
 func TestTemplateService_applyTemplateFields_NilParams(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
 	svc := application.NewTemplateService(repo, logger)
@@ -974,10 +896,8 @@ func TestTemplateService_applyTemplateFields_NilParams(t *testing.T) {
 		Command: "echo 'no params'",
 	}
 
-	// Act: nil params should be handled
 	err := svc.ApplyTemplateFields(step, templateStep, nil)
 
-	// Assert: should not panic, may or may not error depending on implementation
 	_ = err // Allow either success or error
 }
 
@@ -1010,7 +930,6 @@ func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			logger := testutil.NewMockLogger()
 			svc := application.NewTemplateService(repo, logger)
@@ -1027,10 +946,8 @@ func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 			}
 			params := map[string]any{}
 
-			// Act
 			err := svc.ApplyTemplateFields(step, templateStep, params)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTimeout, step.Timeout)
 		})

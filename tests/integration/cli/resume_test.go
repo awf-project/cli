@@ -16,10 +16,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Resume Command Unit Tests (F013)
-// =============================================================================
-
 func TestResumeCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -31,7 +27,7 @@ func TestResumeCommand_Exists(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "expected root command to have 'resume' subcommand")
+	assert.True(t, found)
 }
 
 func TestResumeCommand_HasListFlag(t *testing.T) {
@@ -40,8 +36,8 @@ func TestResumeCommand_HasListFlag(t *testing.T) {
 	for _, sub := range cmd.Commands() {
 		if sub.Name() == "resume" {
 			flag := sub.Flags().Lookup("list")
-			require.NotNil(t, flag, "expected 'resume' command to have --list flag")
-			assert.Equal(t, "l", flag.Shorthand, "list flag should have -l shorthand")
+			require.NotNil(t, flag)
+			assert.Equal(t, "l", flag.Shorthand)
 			return
 		}
 	}
@@ -55,8 +51,8 @@ func TestResumeCommand_HasInputFlag(t *testing.T) {
 	for _, sub := range cmd.Commands() {
 		if sub.Name() == "resume" {
 			flag := sub.Flags().Lookup("input")
-			require.NotNil(t, flag, "expected 'resume' command to have --input flag")
-			assert.Equal(t, "i", flag.Shorthand, "input flag should have -i shorthand")
+			require.NotNil(t, flag)
+			assert.Equal(t, "i", flag.Shorthand)
 			return
 		}
 	}
@@ -70,8 +66,8 @@ func TestResumeCommand_HasOutputFlag(t *testing.T) {
 	for _, sub := range cmd.Commands() {
 		if sub.Name() == "resume" {
 			flag := sub.Flags().Lookup("output")
-			require.NotNil(t, flag, "expected 'resume' command to have --output flag")
-			assert.Equal(t, "o", flag.Shorthand, "output flag should have -o shorthand")
+			require.NotNil(t, flag)
+			assert.Equal(t, "o", flag.Shorthand)
 			return
 		}
 	}
@@ -106,7 +102,7 @@ func TestResumeCommand_NoArgsNoListFlag(t *testing.T) {
 	cmd.SetArgs([]string{"resume"})
 
 	err := cmd.Execute()
-	require.Error(t, err, "expected error when no workflow-id provided")
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow-id required")
 }
 
@@ -223,8 +219,8 @@ func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "running-id", "should show running workflow")
-	assert.NotContains(t, output, "completed-id", "should not show completed workflow")
+	assert.Contains(t, output, "running-id")
+	assert.NotContains(t, output, "completed-id")
 }
 
 func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
@@ -262,7 +258,7 @@ func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
 	// Verify output is valid JSON
 	var result []map[string]interface{}
 	err = json.Unmarshal(buf.Bytes(), &result)
-	require.NoError(t, err, "output should be valid JSON")
+	require.NoError(t, err)
 	require.Len(t, result, 1)
 	assert.Equal(t, "json-test-id", result[0]["workflow_id"])
 	assert.Equal(t, "json-workflow", result[0]["workflow_name"])
@@ -493,7 +489,7 @@ states:
 	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "success-id"})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "resume should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 	assert.True(t, strings.Contains(output, "completed") || strings.Contains(output, "success"),
@@ -594,10 +590,6 @@ func TestResumeCommand_MultipleInputOverrides(t *testing.T) {
 	t.Error("resume command not found")
 }
 
-// =============================================================================
-// SQLite History Store Integration Tests (bug-48)
-// =============================================================================
-
 func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	// Test that resume command creates history.db (SQLite) instead of Badger directory
 	tmpDir := setupTestDir(t)
@@ -656,17 +648,17 @@ states:
 	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "sqlite-test-id"})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "resume should succeed")
+	require.NoError(t, err)
 
 	// Verify SQLite database file was created
 	historyDBPath := filepath.Join(tmpDir, "history.db")
 	_, err = os.Stat(historyDBPath)
-	assert.NoError(t, err, "history.db should exist (SQLite)")
+	assert.NoError(t, err)
 
 	// Verify Badger directory was NOT created
 	badgerDir := filepath.Join(tmpDir, "history")
 	_, err = os.Stat(badgerDir)
-	assert.True(t, os.IsNotExist(err), "Badger history directory should NOT exist")
+	assert.True(t, os.IsNotExist(err))
 }
 
 func TestResumeCommand_ConcurrentAccess(t *testing.T) {
@@ -715,13 +707,9 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 	// Collect results - all should succeed without lock errors
 	for i := 0; i < concurrency; i++ {
 		err := <-errCh
-		assert.NoError(t, err, "concurrent resume --list should not fail with lock errors")
+		assert.NoError(t, err)
 	}
 }
-
-// =============================================================================
-// T008: Config Integration Tests for Resume Command (F036)
-// =============================================================================
 
 // TestResumeCommand_ConfigIntegration tests that runResume properly integrates
 // with loadProjectConfig and mergeInputs.
@@ -852,10 +840,10 @@ states:
 			cmd.SetArgs(args)
 
 			err := cmd.Execute()
-			require.NoError(t, err, "resume should succeed")
+			require.NoError(t, err)
 
 			output := buf.String()
-			assert.Contains(t, output, "completed", "should complete successfully")
+			assert.Contains(t, output, "completed")
 		})
 	}
 }
@@ -929,8 +917,8 @@ states:
 		cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "error-test-id"})
 
 		execErr := cmd.Execute()
-		require.Error(t, execErr, "resume should fail with invalid config")
-		assert.Contains(t, execErr.Error(), "config", "error should mention config")
+		require.Error(t, execErr)
+		assert.Contains(t, execErr.Error(), "config")
 	})
 }
 
@@ -995,7 +983,7 @@ states:
 	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "no-config-id"})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "resume should succeed without config file")
+	require.NoError(t, err)
 }
 
 // TestResumeCommand_ConfigWithCLIInputMerge tests that config and CLI inputs
@@ -1078,7 +1066,7 @@ states:
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "resume should succeed")
+	require.NoError(t, err)
 	// The test validates that the command completes successfully with merged inputs
 }
 
@@ -1232,5 +1220,5 @@ states:
 	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "empty-inputs-id"})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "resume should succeed with empty config inputs")
+	require.NoError(t, err)
 }

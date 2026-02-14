@@ -186,10 +186,6 @@ func (m *mockPluginLogger) Warn(msg string, fields ...any)              { m.logs
 func (m *mockPluginLogger) Error(msg string, fields ...any)             { m.logs = append(m.logs, "ERROR: "+msg) }
 func (m *mockPluginLogger) WithContext(ctx map[string]any) ports.Logger { return m }
 
-// =============================================================================
-// Constructor Tests
-// =============================================================================
-
 func TestNewPluginService(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
@@ -205,10 +201,6 @@ func TestNewPluginService_NilDependencies(t *testing.T) {
 	svc := application.NewPluginService(nil, nil, nil)
 	require.NotNil(t, svc)
 }
-
-// =============================================================================
-// Discovery Tests
-// =============================================================================
 
 func TestPluginService_DiscoverPlugins_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -293,10 +285,6 @@ func TestPluginService_DiscoverPlugins_ContextCanceled(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
-// =============================================================================
-// Load Plugin Tests
-// =============================================================================
-
 func TestPluginService_LoadPlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
@@ -369,10 +357,6 @@ func TestPluginService_LoadPlugin_EmptyName(t *testing.T) {
 
 	assert.ErrorIs(t, err, application.ErrPluginNameEmpty)
 }
-
-// =============================================================================
-// Init Plugin Tests
-// =============================================================================
 
 func TestPluginService_InitPlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -454,10 +438,6 @@ func TestPluginService_InitPlugin_WithStoredConfig(t *testing.T) {
 	assert.Equal(t, 30, capturedConfig["timeout"])
 }
 
-// =============================================================================
-// Load and Init Plugin Tests
-// =============================================================================
-
 func TestPluginService_LoadAndInitPlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
@@ -510,10 +490,6 @@ func TestPluginService_LoadAndInitPlugin_InitFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "init failed")
 }
 
-// =============================================================================
-// Shutdown Plugin Tests
-// =============================================================================
-
 func TestPluginService_ShutdownPlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
@@ -558,10 +534,6 @@ func TestPluginService_ShutdownPlugin_NotFound(t *testing.T) {
 	// Should handle gracefully (no error for missing plugin)
 	require.NoError(t, err)
 }
-
-// =============================================================================
-// Shutdown All Tests
-// =============================================================================
 
 func TestPluginService_ShutdownAll_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -611,10 +583,6 @@ func TestPluginService_ShutdownAll_PartialFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "shutdown failed")
 }
-
-// =============================================================================
-// Enable Plugin Tests
-// =============================================================================
 
 func TestPluginService_EnablePlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -668,10 +636,6 @@ func TestPluginService_EnablePlugin_SaveStateFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "save failed")
 }
 
-// =============================================================================
-// Disable Plugin Tests
-// =============================================================================
-
 func TestPluginService_DisablePlugin_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
@@ -723,10 +687,6 @@ func TestPluginService_DisablePlugin_ShutdownsRunning(t *testing.T) {
 	require.True(t, found)
 	assert.Equal(t, plugin.StatusStopped, info.Status)
 }
-
-// =============================================================================
-// Config Management Tests
-// =============================================================================
 
 func TestPluginService_SetPluginConfig_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -784,10 +744,6 @@ func TestPluginService_GetPluginConfig_NotExists(t *testing.T) {
 
 	assert.Nil(t, config)
 }
-
-// =============================================================================
-// Get/List Plugin Tests
-// =============================================================================
 
 func TestPluginService_GetPlugin_Exists(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -924,10 +880,6 @@ func TestPluginService_IsPluginEnabled_DefaultTrue(t *testing.T) {
 	assert.True(t, enabled)
 }
 
-// =============================================================================
-// State Persistence Tests
-// =============================================================================
-
 func TestPluginService_SaveState_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
@@ -981,10 +933,6 @@ func TestPluginService_LoadState_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "file not found")
 }
-
-// =============================================================================
-// Startup Tests
-// =============================================================================
 
 func TestPluginService_StartupEnabledPlugins_Success(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
@@ -1067,10 +1015,6 @@ func TestPluginService_StartupEnabledPlugins_ContextCanceled(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
-
 func TestPluginService_ConcurrentOperations(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
@@ -1133,10 +1077,6 @@ func TestPluginService_VeryLongPluginName(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// =============================================================================
-// Nil Dependencies Tests
-// =============================================================================
-
 func TestPluginService_NilManager_DiscoverPlugins(t *testing.T) {
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
@@ -1160,10 +1100,6 @@ func TestPluginService_NilStateStore_IsPluginEnabled(t *testing.T) {
 	// Default: enabled when no state store
 	assert.True(t, enabled)
 }
-
-// =============================================================================
-// Plugin Lifecycle Error Path Tests (C027-T006)
-// =============================================================================
 
 // TestPluginService_ShutdownPlugin_ContextCanceled tests ShutdownPlugin with canceled context
 func TestPluginService_ShutdownPlugin_ContextCanceled(t *testing.T) {

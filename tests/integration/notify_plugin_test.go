@@ -31,10 +31,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// US1: DESKTOP NOTIFICATION TESTS
-// =============================================================================
-
 // TestNotifyDesktop_Success tests sending desktop notification via notify.send operation.
 // Acceptance Criteria: Desktop notification displayed with workflow name and status
 func TestNotifyDesktop_Success(t *testing.T) {
@@ -138,10 +134,6 @@ func TestNotifyDesktop_TemplateInterpolation(t *testing.T) {
 	title, _ := state.Response["title"].(string)
 	assert.Contains(t, title, "notify-desktop-test", "title should contain resolved workflow name")
 }
-
-// =============================================================================
-// US2: NTFY/WEBHOOK BACKEND TESTS
-// =============================================================================
 
 // TestNotifyNtfy_Success tests sending notification to ntfy topic.
 // Acceptance Criteria: HTTP POST sent to ntfy_url/topic with payload
@@ -347,10 +339,6 @@ func TestNotifyWebhook_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "timeout", "error should mention timeout")
 }
 
-// =============================================================================
-// US3: SLACK BACKEND TESTS
-// =============================================================================
-
 // TestNotifySlack_Success tests sending Slack notification.
 // Acceptance Criteria: POST sent to Slack webhook with formatted message block
 func TestNotifySlack_Success(t *testing.T) {
@@ -433,10 +421,6 @@ func TestNotifySlack_MissingWebhookURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "slack_webhook_url", "error should mention missing slack_webhook_url")
 }
 
-// =============================================================================
-// US4: CONFIGURATION TESTS
-// =============================================================================
-
 // TestNotifyConfig_DefaultBackend tests using default_backend from .awf/config.yaml.
 // Acceptance Criteria: Default backend from config used when no explicit backend specified
 func TestNotifyConfig_DefaultBackend(t *testing.T) {
@@ -512,10 +496,6 @@ func TestNotifyConfig_ExplicitOverridesDefault(t *testing.T) {
 	require.NotNil(t, state.Response)
 	assert.Equal(t, "webhook", state.Response["backend"], "should use explicit backend, not default")
 }
-
-// =============================================================================
-// WORKFLOW INTEGRATION TESTS
-// =============================================================================
 
 // TestNotifyOperations_WorkflowParsing tests YAML workflow parsing through execution.
 // Integration test: YAML parsing → operation step → provider dispatch → output interpolation
@@ -630,10 +610,6 @@ states:
 	require.NotNil(t, state.Response)
 }
 
-// =============================================================================
-// COMPOSITE PROVIDER TESTS
-// =============================================================================
-
 // TestCompositeProvider_BothProvidersWork tests github and notify coexistence.
 // Integration test: CompositeOperationProvider dispatches to correct provider
 func TestCompositeProvider_BothProvidersWork(t *testing.T) {
@@ -729,10 +705,6 @@ func TestCompositeProvider_GithubStillWorks(t *testing.T) {
 	require.NotNil(t, state.Response)
 	assert.Contains(t, state.Response, "title", "github operation should return issue data")
 }
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
 
 // setupNotifyTestWorkflowService creates a workflow service with notify operation provider wired.
 // This helper wires the complete stack: workflow service → execution service → composite provider (github + notify).

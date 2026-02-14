@@ -10,14 +10,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Component: InputCollectionService
 // Feature: F046 - Interactive Mode for Incomplete Command Inputs
-// =============================================================================
-
-// =============================================================================
-// Mock Implementations
-// =============================================================================
 
 // mockInputCollector implements ports.InputCollector for testing.
 type mockInputCollector struct {
@@ -84,10 +77,6 @@ func (m *mockInputCollector) wasPromptedFor(name string) bool {
 	return false
 }
 
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
 func newWorkflowWithInputs(inputs []workflow.Input) *workflow.Workflow {
 	return &workflow.Workflow{
 		Name:    "test-workflow",
@@ -109,10 +98,6 @@ func newWorkflowWithInputs(inputs []workflow.Input) *workflow.Workflow {
 	}
 }
 
-// =============================================================================
-// NewInputCollectionService Tests
-// =============================================================================
-
 func TestNewInputCollectionService(t *testing.T) {
 	collector := newMockInputCollector()
 	logger := &mockLogger{}
@@ -120,10 +105,6 @@ func TestNewInputCollectionService(t *testing.T) {
 	svc := application.NewInputCollectionService(collector, logger)
 	require.NotNil(t, svc, "service should not be nil")
 }
-
-// =============================================================================
-// CollectMissingInputs - Happy Path Tests
-// =============================================================================
 
 func TestInputCollectionService_CollectMissingInputs_AllInputsProvided(t *testing.T) {
 	// F046: US1 - No prompts when all required inputs provided
@@ -246,7 +227,7 @@ func TestInputCollectionService_CollectMissingInputs_OptionalWithDefault(t *test
 		assert.Equal(t, 30, result["timeout"])
 	}
 	if collector.wasPromptedFor("verbose") {
-		assert.Equal(t, true, result["verbose"])
+		assert.True(t, result["verbose"].(bool))
 	}
 }
 
@@ -341,10 +322,6 @@ func TestInputCollectionService_CollectMissingInputs_EnumInput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "staging", result["environment"])
 }
-
-// =============================================================================
-// CollectMissingInputs - Edge Case Tests
-// =============================================================================
 
 func TestInputCollectionService_CollectMissingInputs_NilWorkflow(t *testing.T) {
 	// Edge case: nil workflow
@@ -478,10 +455,6 @@ func TestInputCollectionService_CollectMissingInputs_LargeNumberOfInputs(t *test
 	assert.Len(t, result, 10, "should have 10 results")
 }
 
-// =============================================================================
-// CollectMissingInputs - Error Handling Tests
-// =============================================================================
-
 func TestInputCollectionService_CollectMissingInputs_CollectorError(t *testing.T) {
 	// F046: US3-AC3 - Handle cancellation (Ctrl+C, EOF)
 	// Given: User cancels during input collection
@@ -557,10 +530,6 @@ func TestInputCollectionService_CollectMissingInputs_CollectorReturnsNil(t *test
 	}
 }
 
-// =============================================================================
-// CollectMissingInputs - Input Type Tests
-// =============================================================================
-
 func TestInputCollectionService_CollectMissingInputs_StringType(t *testing.T) {
 	// Verify string type inputs are collected correctly
 
@@ -612,12 +581,8 @@ func TestInputCollectionService_CollectMissingInputs_BooleanType(t *testing.T) {
 	result, err := svc.CollectMissingInputs(wf, map[string]any{})
 
 	require.NoError(t, err)
-	assert.Equal(t, true, result["enabled"])
+	assert.True(t, result["enabled"].(bool))
 }
-
-// =============================================================================
-// CollectMissingInputs - Input Validation Tests
-// =============================================================================
 
 func TestInputCollectionService_CollectMissingInputs_WithPatternValidation(t *testing.T) {
 	// F046: US3-AC1 - Validation with error messages
@@ -675,10 +640,6 @@ func TestInputCollectionService_CollectMissingInputs_WithMinMaxValidation(t *tes
 	assert.Equal(t, 8080, result["port"])
 }
 
-// =============================================================================
-// Regression Tests
-// =============================================================================
-
 func TestInputCollectionService_CollectMissingInputs_PreservesProvidedInputs(t *testing.T) {
 	// Regression: ensure provided inputs are not overwritten
 	// Given: Some inputs already provided
@@ -734,10 +695,6 @@ func TestInputCollectionService_CollectMissingInputs_DoesNotModifyOriginalMap(t 
 	assert.Len(t, providedInputs, originalLen, "original map should not be modified")
 	assert.Len(t, result, 2, "result should have both inputs")
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 func ptrInt(i int) *int {
 	return &i

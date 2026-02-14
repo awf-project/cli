@@ -18,15 +18,12 @@ type CodexProvider struct {
 	executor ports.CLIExecutor
 }
 
-// NewCodexProvider creates a new CodexProvider.
-// If no executor is provided, ExecCLIExecutor is used by default.
 func NewCodexProvider() *CodexProvider {
 	return &CodexProvider{
 		executor: NewExecCLIExecutor(),
 	}
 }
 
-// NewCodexProviderWithOptions creates a new CodexProvider with functional options.
 func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
 	p := &CodexProvider{
 		executor: NewExecCLIExecutor(),
@@ -37,29 +34,23 @@ func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
 	return p
 }
 
-// Execute invokes the Codex CLI with the given prompt and options.
 func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateCodexOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("codex provider: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"--prompt", prompt}
 
-	// Apply options
 	if language, ok := getStringOption(options, "language"); ok {
 		args = append(args, "--language", language)
 	}
@@ -70,7 +61,6 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 		args = append(args, "--quiet")
 	}
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
 	completedAt := time.Now()
 
@@ -78,7 +68,6 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
@@ -94,43 +83,34 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	return result, nil
 }
 
-// ExecuteConversation invokes the Codex CLI with conversation history for multi-turn interactions.
 func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
-	// Validate state
 	if state == nil {
 		return nil, errors.New("conversation state cannot be nil")
 	}
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateCodexConversationOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("codex provider: %w", err)
 	}
 
-	// Clone state to avoid modifying original
 	workingState := cloneState(state)
 
-	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
 	if err := workingState.AddTurn(userTurn); err != nil {
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"--prompt", prompt}
 
-	// Apply options
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
@@ -147,7 +127,6 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		args = append(args, "--quiet")
 	}
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
 	completedAt := time.Now()
 
@@ -155,20 +134,17 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
 	outputStr := string(output)
 
-	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
 	if err := workingState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
 
-	// Estimate input tokens (all previous turns)
 	inputTokens := 0
 	for i := 0; i < len(workingState.Turns)-1; i++ {
 		if workingState.Turns[i].Tokens == 0 {
@@ -177,7 +153,6 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		inputTokens += workingState.Turns[i].Tokens
 	}
 
-	// Create result
 	result := &workflow.ConversationResult{
 		Provider:        "codex",
 		State:           workingState,

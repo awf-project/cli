@@ -21,10 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Happy Path Tests - Documentation file structure validation
-// =============================================================================
-
 // TestPackageDocumentation_WorkflowPackage validates workflow package documentation
 func TestPackageDocumentation_WorkflowPackage(t *testing.T) {
 	repoRoot := getRepoRoot(t)
@@ -144,10 +140,6 @@ func TestPackageDocumentation_ApplicationPackage(t *testing.T) {
 	// Verify no executable code
 	assert.Empty(t, f.Decls, "doc.go should contain no declarations")
 }
-
-// =============================================================================
-// Edge Cases Tests
-// =============================================================================
 
 // TestPackageDocumentation_AllPackages uses table-driven tests for all packages
 func TestPackageDocumentation_AllPackages(t *testing.T) {
@@ -292,10 +284,6 @@ func TestPackageDocumentation_NoMultiplePackageComments(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestPackageDocumentation_MalformedFile validates parser error handling
 func TestPackageDocumentation_MalformedFile(t *testing.T) {
 	// Create temporary malformed file
@@ -341,10 +329,6 @@ func TestPackageDocumentation_NoPackageComment(t *testing.T) {
 	// Package comment should be nil
 	assert.Nil(t, f.Doc, "file without package comment should have nil Doc field")
 }
-
-// =============================================================================
-// Documentation Quality Tests
-// =============================================================================
 
 // TestPackageDocumentation_ContentQuality validates documentation completeness
 func TestPackageDocumentation_ContentQuality(t *testing.T) {
@@ -439,10 +423,6 @@ func TestPackageDocumentation_FormattingConventions(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
 
 // fileHasPackageComment checks if a Go file has a package-level comment
 func fileHasPackageComment(filePath string) (bool, error) {

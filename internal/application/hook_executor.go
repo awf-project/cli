@@ -16,7 +16,6 @@ type HookExecutor struct {
 	resolver interpolation.Resolver
 }
 
-// NewHookExecutor creates a new hook executor.
 func NewHookExecutor(
 	executor ports.CommandExecutor,
 	logger ports.Logger,
@@ -44,7 +43,6 @@ func (h *HookExecutor) ExecuteHooks(
 
 	for _, action := range hook {
 		if err := h.executeAction(ctx, action, intCtx); err != nil {
-			// Context cancellation should propagate immediately
 			if ctx.Err() != nil {
 				return fmt.Errorf("hook cancelled: %w", ctx.Err())
 			}
@@ -52,7 +50,6 @@ func (h *HookExecutor) ExecuteHooks(
 			if failOnError {
 				return err
 			}
-			// Log warning and continue
 			h.logger.Warn("hook action failed", "error", err)
 		}
 	}
@@ -60,18 +57,15 @@ func (h *HookExecutor) ExecuteHooks(
 	return nil
 }
 
-// executeAction executes a single hook action.
 func (h *HookExecutor) executeAction(
 	ctx context.Context,
 	action workflow.HookAction,
 	intCtx *interpolation.Context,
 ) error {
-	// Handle log action
 	if action.Log != "" {
 		return h.executeLogAction(action.Log, intCtx)
 	}
 
-	// Handle command action
 	if action.Command != "" {
 		return h.executeCommandAction(ctx, action.Command, intCtx)
 	}
@@ -79,7 +73,6 @@ func (h *HookExecutor) executeAction(
 	return nil
 }
 
-// executeLogAction interpolates and logs a message.
 func (h *HookExecutor) executeLogAction(msg string, intCtx *interpolation.Context) error {
 	resolved, err := h.resolver.Resolve(msg, intCtx)
 	if err != nil {
@@ -90,7 +83,6 @@ func (h *HookExecutor) executeLogAction(msg string, intCtx *interpolation.Contex
 	return nil
 }
 
-// executeCommandAction interpolates and executes a shell command.
 func (h *HookExecutor) executeCommandAction(
 	ctx context.Context,
 	command string,

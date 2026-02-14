@@ -11,14 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// MockErrorFormatter - Hint Support Tests (C048 T010)
-// =============================================================================
-
-// =============================================================================
-// AddHintGenerator - Happy Path Tests
-// =============================================================================
-
 func TestMockErrorFormatter_AddHintGenerator_HappyPath(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -95,15 +87,12 @@ func TestMockErrorFormatter_AddHintGenerator_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 
-			// Act
 			formatter.AddHintGenerator(tt.generator)
 			formatter.EnableHints(true)
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			require.Len(t, hints, len(tt.wantHints), "Unexpected number of hints")
 			for i, want := range tt.wantHints {
 				assert.Equal(t, want, hints[i].Message, "Hint %d message mismatch", i)
@@ -111,10 +100,6 @@ func TestMockErrorFormatter_AddHintGenerator_HappyPath(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// AddHintGenerator - Edge Cases
-// =============================================================================
 
 func TestMockErrorFormatter_AddHintGenerator_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -230,15 +215,12 @@ func TestMockErrorFormatter_AddHintGenerator_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			tt.setupFunc(formatter)
 			formatter.EnableHints(tt.enableHints)
 
-			// Act
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints, "Unexpected number of hints")
 			for i, expected := range tt.expectedResult {
 				assert.Equal(t, expected, hints[i].Message, "Hint %d message mismatch", i)
@@ -246,10 +228,6 @@ func TestMockErrorFormatter_AddHintGenerator_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// SetHintGenerators - Happy Path Tests
-// =============================================================================
 
 func TestMockErrorFormatter_SetHintGenerators_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -306,15 +284,12 @@ func TestMockErrorFormatter_SetHintGenerators_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 
-			// Act
 			formatter.SetHintGenerators(tt.generators)
 			formatter.EnableHints(true)
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			require.Len(t, hints, len(tt.wantHints))
 			for i, want := range tt.wantHints {
 				assert.Equal(t, want, hints[i].Message)
@@ -322,10 +297,6 @@ func TestMockErrorFormatter_SetHintGenerators_HappyPath(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// SetHintGenerators - Edge Cases
-// =============================================================================
 
 func TestMockErrorFormatter_SetHintGenerators_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -381,15 +352,12 @@ func TestMockErrorFormatter_SetHintGenerators_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			formatter.EnableHints(true)
 
-			// Act
 			tt.setupFunc(formatter)
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints)
 			for i, expected := range tt.expectedResult {
 				assert.Equal(t, expected, hints[i].Message)
@@ -397,10 +365,6 @@ func TestMockErrorFormatter_SetHintGenerators_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// EnableHints - Happy Path Tests
-// =============================================================================
 
 func TestMockErrorFormatter_EnableHints_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -422,7 +386,6 @@ func TestMockErrorFormatter_EnableHints_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 				return []domainerrors.Hint{{Message: "Test hint"}}
@@ -434,19 +397,13 @@ func TestMockErrorFormatter_EnableHints_HappyPath(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			formatter.EnableHints(tt.enabled)
 			hints := formatter.GetHints(testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints)
 		})
 	}
 }
-
-// =============================================================================
-// EnableHints - Edge Cases
-// =============================================================================
 
 func TestMockErrorFormatter_EnableHints_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -485,7 +442,6 @@ func TestMockErrorFormatter_EnableHints_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			testError := domainerrors.NewStructuredError(
 				domainerrors.ErrorCodeUserInputMissingFile,
@@ -494,11 +450,9 @@ func TestMockErrorFormatter_EnableHints_EdgeCases(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			tt.setupFunc(formatter)
 			hints := formatter.GetHints(testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints)
 			for i, expected := range tt.expectedResult {
 				assert.Equal(t, expected, hints[i].Message)
@@ -506,10 +460,6 @@ func TestMockErrorFormatter_EnableHints_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// GetHints - Happy Path Tests
-// =============================================================================
 
 func TestMockErrorFormatter_GetHints_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -582,14 +532,11 @@ func TestMockErrorFormatter_GetHints_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			tt.setupFunc(formatter)
 
-			// Act
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			require.Len(t, hints, len(tt.wantHints))
 			for i, want := range tt.wantHints {
 				assert.Equal(t, want, hints[i].Message)
@@ -597,10 +544,6 @@ func TestMockErrorFormatter_GetHints_HappyPath(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// GetHints - Edge Cases
-// =============================================================================
 
 func TestMockErrorFormatter_GetHints_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -678,22 +621,15 @@ func TestMockErrorFormatter_GetHints_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			tt.setupFunc(formatter)
 
-			// Act
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints)
 		})
 	}
 }
-
-// =============================================================================
-// GetHints - Error Handling Tests
-// =============================================================================
 
 func TestMockErrorFormatter_GetHints_ErrorHandling(t *testing.T) {
 	tests := []struct {
@@ -741,25 +677,17 @@ func TestMockErrorFormatter_GetHints_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := testutil.NewMockErrorFormatter()
 			tt.setupFunc(formatter)
 
-			// Act
 			hints := formatter.GetHints(tt.testError)
 
-			// Assert
 			assert.Len(t, hints, tt.expectedHints)
 		})
 	}
 }
 
-// =============================================================================
-// Clear - Hint Support Tests
-// =============================================================================
-
 func TestMockErrorFormatter_Clear_HintsReset(t *testing.T) {
-	// Arrange
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{{Message: "Test hint"}}
@@ -776,16 +704,13 @@ func TestMockErrorFormatter_Clear_HintsReset(t *testing.T) {
 	hintsBefore := formatter.GetHints(testError)
 	require.Len(t, hintsBefore, 1, "Should have hints before clear")
 
-	// Act
 	formatter.Clear()
 
-	// Assert
 	hintsAfter := formatter.GetHints(testError)
 	assert.Len(t, hintsAfter, 0, "Hints should be cleared")
 }
 
 func TestMockErrorFormatter_Clear_HintsEnabledReset(t *testing.T) {
-	// Arrange
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.EnableHints(true)
 	testError := domainerrors.NewStructuredError(
@@ -795,23 +720,16 @@ func TestMockErrorFormatter_Clear_HintsEnabledReset(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	formatter.Clear()
 	formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{{Message: "Test hint"}}
 	})
 
-	// Assert - hints should be disabled after clear
 	hints := formatter.GetHints(testError)
 	assert.Len(t, hints, 0, "Hints should be disabled after clear")
 }
 
-// =============================================================================
-// Thread Safety Tests - Hint Operations
-// =============================================================================
-
 func TestMockErrorFormatter_ThreadSafety_HintOperations(t *testing.T) {
-	// Arrange
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.EnableHints(true)
 	testError := domainerrors.NewStructuredError(
@@ -824,7 +742,6 @@ func TestMockErrorFormatter_ThreadSafety_HintOperations(t *testing.T) {
 	const goroutines = 100
 	const operationsPerGoroutine = 10
 
-	// Act - Concurrent add and get operations
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
@@ -846,13 +763,11 @@ func TestMockErrorFormatter_ThreadSafety_HintOperations(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - No data races (would be caught by -race flag)
 	hints := formatter.GetHints(testError)
 	assert.GreaterOrEqual(t, len(hints), 0, "Should have hints after concurrent operations")
 }
 
 func TestMockErrorFormatter_ThreadSafety_EnableHintsConcurrent(t *testing.T) {
-	// Arrange
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{{Message: "Test hint"}}
@@ -866,7 +781,6 @@ func TestMockErrorFormatter_ThreadSafety_EnableHintsConcurrent(t *testing.T) {
 
 	const goroutines = 50
 
-	// Act - Concurrent enable/disable
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
 
@@ -887,14 +801,12 @@ func TestMockErrorFormatter_ThreadSafety_EnableHintsConcurrent(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - No data races (would be caught by -race flag)
 	// Final state is non-deterministic due to concurrent modifications, which is expected
 	hints := formatter.GetHints(testError)
 	assert.GreaterOrEqual(t, len(hints), 0, "Should handle concurrent enable/disable")
 }
 
 func TestMockErrorFormatter_ThreadSafety_SetHintGeneratorsConcurrent(t *testing.T) {
-	// Arrange
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.EnableHints(true)
 	testError := domainerrors.NewStructuredError(
@@ -906,7 +818,6 @@ func TestMockErrorFormatter_ThreadSafety_SetHintGeneratorsConcurrent(t *testing.
 
 	const goroutines = 50
 
-	// Act - Concurrent SetHintGenerators
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
@@ -925,17 +836,11 @@ func TestMockErrorFormatter_ThreadSafety_SetHintGeneratorsConcurrent(t *testing.
 
 	wg.Wait()
 
-	// Assert - No data races (would be caught by -race flag)
 	hints := formatter.GetHints(testError)
 	assert.GreaterOrEqual(t, len(hints), 0, "Should handle concurrent SetHintGenerators")
 }
 
-// =============================================================================
-// Real-World Scenario Tests
-// =============================================================================
-
 func TestMockErrorFormatter_RealWorld_FileNotFoundHints(t *testing.T) {
-	// Arrange - Simulate FileNotFoundHintGenerator behavior
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		if err.Code == domainerrors.ErrorCodeUserInputMissingFile {
@@ -958,10 +863,8 @@ func TestMockErrorFormatter_RealWorld_FileNotFoundHints(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	hints := formatter.GetHints(testError)
 
-	// Assert
 	require.Len(t, hints, 3)
 	assert.Equal(t, "File not found: /workflows/my-workfow.yaml", hints[0].Message)
 	assert.Equal(t, "Did you mean 'my-workflow.yaml'?", hints[1].Message)
@@ -969,7 +872,6 @@ func TestMockErrorFormatter_RealWorld_FileNotFoundHints(t *testing.T) {
 }
 
 func TestMockErrorFormatter_RealWorld_YAMLSyntaxHints(t *testing.T) {
-	// Arrange - Simulate YAMLSyntaxHintGenerator behavior
 	formatter := testutil.NewMockErrorFormatter()
 	formatter.AddHintGenerator(func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		if err.Code == domainerrors.ErrorCodeWorkflowParseYAMLSyntax {
@@ -993,17 +895,14 @@ func TestMockErrorFormatter_RealWorld_YAMLSyntaxHints(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	hints := formatter.GetHints(testError)
 
-	// Assert
 	require.Len(t, hints, 2)
 	assert.Contains(t, hints[0].Message, "line 10")
 	assert.Contains(t, hints[1].Message, "Expected")
 }
 
 func TestMockErrorFormatter_RealWorld_MultipleGeneratorsForSameError(t *testing.T) {
-	// Arrange - Multiple generators contribute hints for the same error
 	formatter := testutil.NewMockErrorFormatter()
 
 	// Generator 1: Path-based hint
@@ -1039,10 +938,8 @@ func TestMockErrorFormatter_RealWorld_MultipleGeneratorsForSameError(t *testing.
 		nil,
 	)
 
-	// Act
 	hints := formatter.GetHints(testError)
 
-	// Assert
 	require.Len(t, hints, 3)
 	assert.Equal(t, "Check the file path", hints[0].Message)
 	assert.Equal(t, "Did you mean 'workflow.yaml'?", hints[1].Message)

@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// LoopExecutor ExecuteWhile Tests
-// =============================================================================
 //
 // Tests for while loop execution functionality. Covers:
 // - Basic while loop execution with condition evaluation
@@ -349,10 +346,6 @@ func TestLoopExecutor_ExecuteWhile_LoopVariables(t *testing.T) {
 
 	assert.Equal(t, 2, recorder.executions[2].loopData.Index)
 }
-
-// =============================================================================
-// F037 T012: ExecuteWhile with Dynamic MaxIterationsExpr Tests
-// =============================================================================
 
 func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_FromInput(t *testing.T) {
 	// Test US1: while loop max_iterations from {{inputs.limit}}

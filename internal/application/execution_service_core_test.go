@@ -16,11 +16,8 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Core Execution Integration Tests
 // Feature: C008 - Test File Restructuring
 // Component: T010 - extract_core_tests
-// =============================================================================
 //
 // This file contains core execution integration tests for ExecutionService.
 // Tests verify basic workflow execution, state transitions, context propagation,
@@ -28,7 +25,6 @@ import (
 //
 // Extracted from: execution_service_test.go (50 core execution tests)
 // Test count: 50 core execution tests
-// =============================================================================
 
 // Mock types are defined in execution_service_specialized_mocks_test.go
 // Helper functions are defined in execution_service_helpers_test.go
@@ -399,10 +395,6 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 	assert.Equal(t, "done", saved.CurrentStep)
 }
 
-// =============================================================================
-// ContinueOnError Tests (F009)
-// =============================================================================
-
 func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 	// When continue_on_error is true, even if the step fails (non-zero exit),
 	// it should follow on_success instead of on_failure
@@ -595,10 +587,6 @@ func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "done", ctx.CurrentStep, "should follow on_success when continue_on_error is true")
 }
-
-// =============================================================================
-// Input Validation Tests (F012)
-// =============================================================================
 
 func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 	// Workflow with input validation - all inputs valid
@@ -1082,10 +1070,6 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 	})
 }
 
-// =============================================================================
-// Resume Tests (F013)
-// =============================================================================
-
 func TestExecutionService_Resume_Success(t *testing.T) {
 	// Setup: Create a workflow with 3 steps, interrupt after step1, resume from step2
 	wf := &workflow.Workflow{
@@ -1402,10 +1386,6 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
 
-// =============================================================================
-// ListResumable Tests (F013)
-// =============================================================================
-
 func TestExecutionService_ListResumable_FiltersCompleted(t *testing.T) {
 	// ListResumable should only return non-completed executions
 	execSvc, mocks := NewTestHarness(t).Build()
@@ -1470,7 +1450,7 @@ func TestExecutionService_ListResumable_Empty(t *testing.T) {
 	resumable, err := execSvc.ListResumable(context.Background())
 
 	require.NoError(t, err, "list resumable should succeed")
-	assert.Empty(t, resumable, "should return empty list when no states")
+	assert.Empty(t, resumable)
 }
 
 func TestExecutionService_ListResumable_AllCompleted(t *testing.T) {
@@ -1529,9 +1509,6 @@ func TestExecutionService_ListResumable_ReturnsCorrectFields(t *testing.T) {
 	assert.Equal(t, now.Round(time.Second), exec.UpdatedAt.Round(time.Second))
 }
 
-// =============================================================================
-// Call Workflow Dispatcher Tests (F023: T013)
-// =============================================================================
 // These tests verify that the dispatcher correctly routes StepTypeCallWorkflow
 // steps to the executeCallWorkflowStep method in both Run() and Resume() paths.
 
@@ -1888,10 +1865,7 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
 
-// =============================================================================
-// C027 Component T001: ExecutionService Setter Tests
 // Feature: C027 - Application Layer Test Coverage Improvement
-// =============================================================================
 //
 // This section contains tests for ExecutionService setters that previously
 // had zero coverage:
@@ -1902,7 +1876,6 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 //
 // Test pattern follows existing setter tests from plugin_operation_test.go
 // and agent_step_test.go. Each setter has two test scenarios: valid value and nil value.
-// =============================================================================
 
 // TestExecutionService_SetOperationProvider_Valid verifies that a valid
 // ports.OperationProvider can be set without panicking.
@@ -2005,10 +1978,6 @@ func TestExecutionService_SetConversationManager_Nil(t *testing.T) {
 		execSvc.SetConversationManager(nil)
 	})
 }
-
-// =============================================================================
-// Helper mocks for setter tests
-// =============================================================================
 
 // simpleOperationProvider implements ports.OperationProvider for testing SetOperationProvider.
 type simpleOperationProvider struct{}

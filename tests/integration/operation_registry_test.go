@@ -28,10 +28,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// =============================================================================
-// TEST DOUBLES
-// =============================================================================
-
 // mockOperation is a test double for operation execution.
 // It simulates an operation that can be registered and executed.
 // Implements operation.Operation interface.
@@ -103,10 +99,6 @@ func (m *mockOperation) callCount() int {
 	defer m.callsMu.Unlock()
 	return m.calls
 }
-
-// =============================================================================
-// USER STORY TESTS
-// =============================================================================
 
 // TestOperationRegistry_US1_ExecuteByName tests executing registered operations by name.
 // User Story 1: As a workflow author, I want to execute plugin operations by name
@@ -339,10 +331,6 @@ func TestOperationRegistry_US4_DynamicRegistration(t *testing.T) {
 	assert.True(t, found, "other plugin's operation should remain")
 }
 
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
-
 // TestOperationRegistry_DuplicateRegistration tests handling of duplicate operation names.
 func TestOperationRegistry_DuplicateRegistration(t *testing.T) {
 	if testing.Short() {
@@ -431,10 +419,6 @@ func TestOperationRegistry_InvalidOperation(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// CONTEXT CANCELLATION TESTS
-// =============================================================================
-
 // TestOperationExecution_ContextCancellation tests cancellation propagation.
 func TestOperationExecution_ContextCancellation(t *testing.T) {
 	if testing.Short() {
@@ -505,10 +489,6 @@ func TestOperationExecution_ContextTimeout(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Nil(t, result)
 }
-
-// =============================================================================
-// THREAD SAFETY TESTS
-// =============================================================================
 
 // TestOperationRegistry_ConcurrentRegistration tests concurrent registration.
 func TestOperationRegistry_ConcurrentRegistration(t *testing.T) {
@@ -716,10 +696,6 @@ func TestOperationRegistry_ConcurrentPluginOperations(t *testing.T) {
 	assert.Len(t, registry.List(), 15, "should have 15 total operations")
 }
 
-// =============================================================================
-// INTERFACE COMPLIANCE TESTS
-// =============================================================================
-
 // TestOperationRegistry_ImplementsOperationProvider verifies interface compliance.
 func TestOperationRegistry_ImplementsOperationProvider(t *testing.T) {
 	// Given: An OperationRegistry instance
@@ -743,17 +719,13 @@ func TestOperationRegistry_ImplementsOperationProvider(t *testing.T) {
 	assert.NoError(t, registry.Unregister("test.op"))
 }
 
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
-
 // TestOperationRegistry_EmptyRegistry tests operations on empty registry.
 func TestOperationRegistry_EmptyRegistry(t *testing.T) {
 	// Given: An empty registry
 	registry := operation.NewOperationRegistry()
 
 	// Then: All query operations return safe defaults
-	assert.Equal(t, 0, len(registry.List()))
+	assert.Empty(t, registry.List())
 	assert.Empty(t, registry.ListOperations())
 
 	_, found := registry.GetOperation("any-op")

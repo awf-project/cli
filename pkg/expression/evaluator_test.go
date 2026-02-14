@@ -24,8 +24,7 @@ func TestExprEvaluator_Evaluate(t *testing.T) {
 			ctx: &interpolation.Context{
 				Inputs: map[string]any{"mode": "full"},
 			},
-			want:    true,
-			wantErr: false,
+			want: true,
 		},
 		{
 			name: "string equality false",
@@ -1198,8 +1197,8 @@ func TestBuildExprContext_PascalCaseStateFields(t *testing.T) {
 				assert.Equal(t, 3, loop["Index1"]) // Index1() returns Index + 1
 				assert.Equal(t, "test-item", loop["Item"])
 				assert.Equal(t, 5, loop["Length"])
-				assert.Equal(t, false, loop["First"])
-				assert.Equal(t, false, loop["Last"])
+				assert.False(t, loop["First"].(bool))
+				assert.False(t, loop["Last"].(bool))
 				assert.Nil(t, loop["Parent"])
 			},
 		},

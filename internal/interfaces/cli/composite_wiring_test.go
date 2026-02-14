@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestRunCommand_WiresCompositeOperationProvider_WithGitHubAndNotify(t *testing.T) {
 	// GIVEN: A temporary test directory with a workflow containing both github and notify operations
 	tmpDir := setupTestDir(t)
@@ -222,10 +218,6 @@ func TestResumeCommand_WiresCompositeOperationProvider(t *testing.T) {
 	// but composite provider wiring should not cause crashes
 	// Success criteria: no panic from nil providers during initialization
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestRunSingleStep_WiresCompositeOperationProvider_GitHubOp(t *testing.T) {
 	// GIVEN: A workflow with github operation for single-step execution
@@ -484,10 +476,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestRunCommand_CompositeProvider_FirstProviderWins(t *testing.T) {
 	// GIVEN: A workflow where composite has potential operation name conflicts
 	// (In practice, github.* and notify.* have different namespaces, so no conflict)
@@ -608,10 +596,6 @@ states:
 	// Should get validation error or "not found", not panic
 	assert.NotContains(t, errMsg, "nil pointer", "should handle empty operation name")
 }
-
-// =============================================================================
-// Integration Tests: Composite Provider + Multiple Providers + Logger Wiring
-// =============================================================================
 
 func TestRunCommand_CompositeWiringStack_NoNilPointers(t *testing.T) {
 	// GIVEN: A workflow exercising the full composite wiring stack

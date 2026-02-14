@@ -34,14 +34,6 @@ type HTTPOperationProvider struct {
 	operations map[string]*plugin.OperationSchema
 }
 
-// NewHTTPOperationProvider creates a new HTTP operation provider.
-//
-// Parameters:
-//   - client: HTTP client for request execution
-//   - logger: structured logger for operation tracing
-//
-// Returns:
-//   - *HTTPOperationProvider: configured provider ready for registration
 func NewHTTPOperationProvider(client *httputil.Client, logger ports.Logger) *HTTPOperationProvider {
 	// Build operation registry from schema definitions
 	ops := AllOperations()
@@ -57,15 +49,11 @@ func NewHTTPOperationProvider(client *httputil.Client, logger ports.Logger) *HTT
 	}
 }
 
-// GetOperation returns an operation schema by name.
-// Implements ports.OperationProvider.
 func (p *HTTPOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
 	op, found := p.operations[name]
 	return op, found
 }
 
-// ListOperations returns all available HTTP operations.
-// Implements ports.OperationProvider.
 func (p *HTTPOperationProvider) ListOperations() []*plugin.OperationSchema {
 	result := make([]*plugin.OperationSchema, 0, len(p.operations))
 	for _, op := range p.operations {

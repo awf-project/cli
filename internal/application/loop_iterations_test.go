@@ -10,9 +10,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Loop Executor - ResolveMaxIterations Tests (25 tests)
-// =============================================================================
 //
 // These tests verify the dynamic max_iterations resolution functionality
 // for loop execution, including:

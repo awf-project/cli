@@ -10,9 +10,7 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
 // testAnalyzer: Template analysis helper for tests
-// =============================================================================
 
 // testAnalyzer wraps pkg/interpolation for testing template validation.
 type testAnalyzer struct{}
@@ -61,10 +59,6 @@ func convertRefType(t interpolation.ReferenceType) workflow.ReferenceType {
 		return workflow.TypeUnknown
 	}
 }
-
-// =============================================================================
-// Workflow fixtures: Create test workflows
-// =============================================================================
 
 // newTestWorkflow creates a basic test workflow with start, done, and error states
 func newTestWorkflow() *workflow.Workflow {
@@ -186,10 +180,6 @@ func newLoopWorkflow() *workflow.Workflow {
 		},
 	}
 }
-
-// =============================================================================
-// String helpers
-// =============================================================================
 
 // containsString checks if string s contains substr
 func containsString(s, substr string) bool {

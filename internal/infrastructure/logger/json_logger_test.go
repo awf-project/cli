@@ -170,7 +170,7 @@ func TestJSONLogger_FieldTypes(t *testing.T) {
 	assert.Equal(t, "hello", entry["string"])
 	assert.Equal(t, float64(42), entry["int"])
 	assert.Equal(t, 3.14, entry["float"])
-	assert.Equal(t, true, entry["bool"])
+	assert.True(t, entry["bool"].(bool))
 }
 
 func TestJSONLogger_CreatesDirectory(t *testing.T) {

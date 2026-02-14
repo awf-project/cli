@@ -17,7 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // Input Validation Integration Tests (C011 - US2)
 // Tests verify input validation rules work correctly at the CLI level:
 // - Pattern validation (regex) rejects invalid inputs
@@ -29,7 +28,6 @@ import (
 // Implementation Note (ADR-004):
 // Tests use ExecutionService.Run() with invalid inputs to verify full chain:
 // CLI input → workflow parsing → validation → error reporting
-// =============================================================================
 
 // TestInputValidation_PatternMatch_Integration verifies regex pattern validation
 // Feature: C011 - Component: input_validation_tests
@@ -62,7 +60,6 @@ func TestInputValidation_PatternMatch_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -92,7 +89,6 @@ func TestInputValidation_PatternMatch_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with inputs
 			workflowName := strings.TrimSuffix(tt.workflow, ".yaml")
 			inputs := map[string]interface{}{
 				tt.inputName: tt.value,
@@ -100,7 +96,6 @@ func TestInputValidation_PatternMatch_Integration(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, inputs)
 
-			// Assert: Verify validation behavior (3-layer assertion pattern from C009)
 			// Layer 1: Error presence
 			if tt.wantErr {
 				require.Error(t, err, "expected validation error")
@@ -150,7 +145,6 @@ func TestInputValidation_EnumAllowedValues_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -180,7 +174,6 @@ func TestInputValidation_EnumAllowedValues_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with inputs
 			workflowName := strings.TrimSuffix(tt.workflow, ".yaml")
 			inputs := map[string]interface{}{
 				tt.inputName: tt.value,
@@ -188,7 +181,6 @@ func TestInputValidation_EnumAllowedValues_Integration(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, inputs)
 
-			// Assert: Verify validation behavior (3-layer assertion pattern from C009)
 			// Layer 1: Error presence
 			if tt.wantErr {
 				require.Error(t, err, "expected validation error for disallowed enum value")
@@ -246,7 +238,6 @@ func TestInputValidation_NumericMinMax_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -276,7 +267,6 @@ func TestInputValidation_NumericMinMax_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with inputs
 			workflowName := strings.TrimSuffix(tt.workflow, ".yaml")
 			inputs := map[string]interface{}{
 				tt.inputName: tt.value,
@@ -284,7 +274,6 @@ func TestInputValidation_NumericMinMax_Integration(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, inputs)
 
-			// Assert: Verify validation behavior (3-layer assertion pattern from C009)
 			// Layer 1: Error presence
 			if tt.wantErr {
 				require.Error(t, err, "expected validation error for out-of-bounds value")
@@ -337,7 +326,6 @@ func TestInputValidation_CombinedRules_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -367,7 +355,6 @@ func TestInputValidation_CombinedRules_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with multiple inputs
 			workflowName := strings.TrimSuffix(tt.workflow, ".yaml")
 
 			// Convert string inputs to interface{} map
@@ -378,7 +365,6 @@ func TestInputValidation_CombinedRules_Integration(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, inputs)
 
-			// Assert: Verify validation behavior (3-layer assertion pattern from C009)
 			// Layer 1: Error presence
 			if tt.wantErr {
 				require.Error(t, err, "expected validation error when one rule fails")
@@ -442,7 +428,6 @@ func TestInputValidation_ErrorMessages_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -472,7 +457,6 @@ func TestInputValidation_ErrorMessages_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with invalid input to trigger validation error
 			workflowName := strings.TrimSuffix(tt.workflow, ".yaml")
 			inputs := map[string]interface{}{
 				tt.inputName: tt.value,
@@ -480,7 +464,6 @@ func TestInputValidation_ErrorMessages_Integration(t *testing.T) {
 
 			_, err = svc.Run(ctx, workflowName, inputs)
 
-			// Assert: Verify error message contains all expected substrings (Layer 3 detail)
 			require.Error(t, err, "invalid input should produce validation error")
 
 			errMsg := strings.ToLower(err.Error())

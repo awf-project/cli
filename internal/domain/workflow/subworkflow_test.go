@@ -9,20 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Constants Tests
-// =============================================================================
-
 func TestSubWorkflowConstants(t *testing.T) {
 	assert.Equal(t, 300, DefaultSubWorkflowTimeout)
 	assert.Equal(t, 10, MaxCallStackDepth)
 	assert.Greater(t, DefaultSubWorkflowTimeout, 0)
 	assert.Greater(t, MaxCallStackDepth, 0)
 }
-
-// =============================================================================
-// CallWorkflowConfig Validate Tests
-// =============================================================================
 
 func TestCallWorkflowConfig_Validate(t *testing.T) {
 	tests := []struct {
@@ -173,10 +165,6 @@ func TestCallWorkflowConfig_Validate_WorkflowNameVariants(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// CallWorkflowConfig GetTimeout Tests
-// =============================================================================
-
 func TestCallWorkflowConfig_GetTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -230,10 +218,6 @@ func TestCallWorkflowConfig_GetTimeout(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// CallWorkflowConfig Input Mapping Tests
-// =============================================================================
 
 func TestCallWorkflowConfig_InputMappings(t *testing.T) {
 	tests := []struct {
@@ -312,10 +296,6 @@ func TestCallWorkflowConfig_InputMappings(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// CallWorkflowConfig Output Mapping Tests
-// =============================================================================
-
 func TestCallWorkflowConfig_OutputMappings(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -365,10 +345,6 @@ func TestCallWorkflowConfig_OutputMappings(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SubWorkflowResult Constructor Tests
-// =============================================================================
-
 func TestNewSubWorkflowResult(t *testing.T) {
 	workflowName := "my-child-workflow"
 
@@ -409,10 +385,6 @@ func TestNewSubWorkflowResult_SpecialCharacters(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// SubWorkflowResult Duration Tests
-// =============================================================================
 
 func TestSubWorkflowResult_Duration(t *testing.T) {
 	start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -461,10 +433,6 @@ func TestSubWorkflowResult_Duration_LongRunning(t *testing.T) {
 	assert.Equal(t, 24*time.Hour, result.Duration())
 }
 
-// =============================================================================
-// SubWorkflowResult Success Tests
-// =============================================================================
-
 func TestSubWorkflowResult_Success(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -509,10 +477,6 @@ func TestSubWorkflowResult_Success(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SubWorkflowResult Outputs Tests
-// =============================================================================
-
 func TestSubWorkflowResult_Outputs(t *testing.T) {
 	result := NewSubWorkflowResult("test")
 
@@ -539,10 +503,6 @@ func TestSubWorkflowResult_Outputs_NilValue(t *testing.T) {
 	assert.Nil(t, result.Outputs["empty"])
 }
 
-// =============================================================================
-// SubWorkflowResult Fields Tests
-// =============================================================================
-
 func TestSubWorkflowResult_AllFields(t *testing.T) {
 	err := errors.New("timeout exceeded")
 	start := time.Now()
@@ -566,10 +526,6 @@ func TestSubWorkflowResult_AllFields(t *testing.T) {
 	assert.False(t, result.Success())
 	assert.Equal(t, 5*time.Second, result.Duration())
 }
-
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
 
 func TestCallWorkflowConfig_CompleteExample(t *testing.T) {
 	config := CallWorkflowConfig{
@@ -641,10 +597,6 @@ func TestSubWorkflowResult_FailedExecution(t *testing.T) {
 	assert.NotNil(t, result.Error)
 	assert.Contains(t, result.Error.Error(), "code 1")
 }
-
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
 
 func TestCallWorkflowConfig_TimeoutBoundaries(t *testing.T) {
 	tests := []struct {

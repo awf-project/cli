@@ -11,10 +11,6 @@ import (
 // Component: tokenizer_port
 // Feature: F033
 
-// ============================================================================
-// Mock Implementations
-// ============================================================================
-
 // mockTokenizer is a test implementation of Tokenizer interface
 type mockTokenizer struct {
 	countFunc      func(text string) (int, error)
@@ -61,27 +57,16 @@ func (m *mockTokenizer) ModelName() string {
 	return m.modelName
 }
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestTokenizerInterface(t *testing.T) {
 	// Verify interface compliance
 	var _ ports.Tokenizer = (*mockTokenizer)(nil)
 }
 
-// ============================================================================
-// Tokenizer Tests - Happy Path
-// ============================================================================
-
 func TestTokenizer_CountTokens_HappyPath(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	text := "This is a test prompt for token counting"
 
-	// Act
 	count, err := tokenizer.CountTokens(text)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -94,7 +79,6 @@ func TestTokenizer_CountTokens_HappyPath(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	turns := []string{
 		"You are a helpful assistant",
@@ -102,9 +86,7 @@ func TestTokenizer_CountTurnsTokens_HappyPath(t *testing.T) {
 		"Here is the analysis...",
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -127,13 +109,10 @@ func TestTokenizer_IsEstimate_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := newMockTokenizer("test", tt.isEstimate)
 
-			// Act
 			result := tokenizer.IsEstimate()
 
-			// Assert
 			if result != tt.isEstimate {
 				t.Errorf("expected IsEstimate() = %v, got %v", tt.isEstimate, result)
 			}
@@ -154,13 +133,10 @@ func TestTokenizer_ModelName_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tokenizer := newMockTokenizer(tt.modelName, false)
 
-			// Act
 			name := tokenizer.ModelName()
 
-			// Assert
 			if name != tt.modelName {
 				t.Errorf("expected ModelName() = '%s', got '%s'", tt.modelName, name)
 			}
@@ -168,17 +144,10 @@ func TestTokenizer_ModelName_HappyPath(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Tokenizer Tests - Edge Cases
-// ============================================================================
-
 func TestTokenizer_CountTokens_EmptyString(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 
-	// Act
 	count, err := tokenizer.CountTokens("")
-	// Assert - should handle empty string gracefully
 	if err != nil {
 		t.Errorf("unexpected error for empty string: %v", err)
 	}
@@ -188,14 +157,11 @@ func TestTokenizer_CountTokens_EmptyString(t *testing.T) {
 }
 
 func TestTokenizer_CountTokens_LargeText(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	// Create a large text (100KB)
 	largeText := strings.Repeat("This is a test sentence. ", 4000)
 
-	// Act
 	count, err := tokenizer.CountTokens(largeText)
-	// Assert - should handle large text
 	if err != nil {
 		t.Errorf("unexpected error for large text: %v", err)
 	}
@@ -205,13 +171,10 @@ func TestTokenizer_CountTokens_LargeText(t *testing.T) {
 }
 
 func TestTokenizer_CountTokens_UnicodeText(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	unicodeText := "Hello 世界! Привет мир! مرحبا بالعالم!"
 
-	// Act
 	count, err := tokenizer.CountTokens(unicodeText)
-	// Assert - should handle unicode text
 	if err != nil {
 		t.Errorf("unexpected error for unicode text: %v", err)
 	}
@@ -221,13 +184,10 @@ func TestTokenizer_CountTokens_UnicodeText(t *testing.T) {
 }
 
 func TestTokenizer_CountTokens_SpecialCharacters(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	specialText := "```python\ndef foo():\n    return \"bar\"\n```\n\n<xml>test</xml>"
 
-	// Act
 	count, err := tokenizer.CountTokens(specialText)
-	// Assert - should handle special characters and code
 	if err != nil {
 		t.Errorf("unexpected error for special characters: %v", err)
 	}
@@ -237,12 +197,9 @@ func TestTokenizer_CountTokens_SpecialCharacters(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_EmptyArray(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens([]string{})
-	// Assert - should handle empty array
 	if err != nil {
 		t.Errorf("unexpected error for empty array: %v", err)
 	}
@@ -252,12 +209,9 @@ func TestTokenizer_CountTurnsTokens_EmptyArray(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_NilArray(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(nil)
-	// Assert - should handle nil array gracefully
 	if err != nil {
 		t.Errorf("unexpected error for nil array: %v", err)
 	}
@@ -267,13 +221,10 @@ func TestTokenizer_CountTurnsTokens_NilArray(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_SingleTurn(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	turns := []string{"Single turn message"}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-	// Assert - should handle single turn
 	if err != nil {
 		t.Errorf("unexpected error for single turn: %v", err)
 	}
@@ -283,7 +234,6 @@ func TestTokenizer_CountTurnsTokens_SingleTurn(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	// Create 100 turns
 	turns := make([]string, 100)
@@ -291,9 +241,7 @@ func TestTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
 		turns[i] = "This is turn number with some content"
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-	// Assert - should handle many turns
 	if err != nil {
 		t.Errorf("unexpected error for many turns: %v", err)
 	}
@@ -303,7 +251,6 @@ func TestTokenizer_CountTurnsTokens_ManyTurns(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	turns := []string{
 		"First turn with content",
@@ -313,9 +260,7 @@ func TestTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
 		"Fifth turn with content",
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens(turns)
-	// Assert - should handle mixed empty/non-empty turns
 	if err != nil {
 		t.Errorf("unexpected error for mixed turns: %v", err)
 	}
@@ -324,22 +269,15 @@ func TestTokenizer_CountTurnsTokens_MixedEmptyTurns(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Tokenizer Tests - Error Handling
-// ============================================================================
-
 func TestTokenizer_CountTokens_Error(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	expectedErr := errors.New("tokenization failed")
 	tokenizer.countFunc = func(text string) (int, error) {
 		return 0, expectedErr
 	}
 
-	// Act
 	count, err := tokenizer.CountTokens("test")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -352,17 +290,14 @@ func TestTokenizer_CountTokens_Error(t *testing.T) {
 }
 
 func TestTokenizer_CountTurnsTokens_Error(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	expectedErr := errors.New("batch tokenization failed")
 	tokenizer.countTurnsFunc = func(turns []string) (int, error) {
 		return 0, expectedErr
 	}
 
-	// Act
 	count, err := tokenizer.CountTurnsTokens([]string{"test1", "test2"})
 
-	// Assert
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -375,17 +310,14 @@ func TestTokenizer_CountTurnsTokens_Error(t *testing.T) {
 }
 
 func TestTokenizer_CountTokens_ModelLoadError(t *testing.T) {
-	// Arrange
 	tokenizer := newMockTokenizer("invalid_model", false)
 	expectedErr := errors.New("model not found: invalid_model")
 	tokenizer.countFunc = func(text string) (int, error) {
 		return 0, expectedErr
 	}
 
-	// Act
 	count, err := tokenizer.CountTokens("test")
 
-	// Assert
 	if err == nil {
 		t.Error("expected model load error, got nil")
 	}
@@ -394,13 +326,8 @@ func TestTokenizer_CountTokens_ModelLoadError(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Integration Tests - Behavior Verification
-// ============================================================================
-
 func TestTokenizer_CountTurnsOptimization(t *testing.T) {
 	// Test that CountTurnsTokens can be optimized vs individual calls
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	turns := []string{
 		"Turn 1",
@@ -408,7 +335,6 @@ func TestTokenizer_CountTurnsOptimization(t *testing.T) {
 		"Turn 3",
 	}
 
-	// Act - Count individually
 	individualTotal := 0
 	for _, turn := range turns {
 		count, err := tokenizer.CountTokens(turn)
@@ -418,13 +344,11 @@ func TestTokenizer_CountTurnsOptimization(t *testing.T) {
 		individualTotal += count
 	}
 
-	// Act - Count in batch
 	batchTotal, err := tokenizer.CountTurnsTokens(turns)
 	if err != nil {
 		t.Fatalf("error counting batch: %v", err)
 	}
 
-	// Assert - Should produce same result (or close enough for approximations)
 	if individualTotal != batchTotal {
 		// For this mock, they should be exactly equal
 		// Real implementations might have slight differences
@@ -435,16 +359,13 @@ func TestTokenizer_CountTurnsOptimization(t *testing.T) {
 
 func TestTokenizer_ConsistentCounting(t *testing.T) {
 	// Test that counting the same text multiple times produces consistent results
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	text := "This is a test prompt that should produce consistent counts"
 
-	// Act
 	count1, err1 := tokenizer.CountTokens(text)
 	count2, err2 := tokenizer.CountTokens(text)
 	count3, err3 := tokenizer.CountTokens(text)
 
-	// Assert
 	if err1 != nil || err2 != nil || err3 != nil {
 		t.Fatalf("unexpected errors: %v, %v, %v", err1, err2, err3)
 	}
@@ -468,12 +389,9 @@ func TestTokenizer_DifferentModels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.modelName, func(t *testing.T) {
-			// Arrange
 			tokenizer := newMockTokenizer(tt.modelName, tt.isEstimate)
 
-			// Act
 			count, err := tokenizer.CountTokens(text)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for model %s: %v", tt.modelName, err)
 			}
@@ -490,22 +408,15 @@ func TestTokenizer_DifferentModels(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Performance Characteristics Tests
-// ============================================================================
-
 func TestTokenizer_CountTurnsTokens_Performance(t *testing.T) {
 	// Test that CountTurnsTokens is called once for batch operations
-	// Arrange
 	tokenizer := newMockTokenizer("cl100k_base", false)
 	turns := []string{
 		"Turn 1", "Turn 2", "Turn 3", "Turn 4", "Turn 5",
 		"Turn 6", "Turn 7", "Turn 8", "Turn 9", "Turn 10",
 	}
 
-	// Act
 	_, err := tokenizer.CountTurnsTokens(turns)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

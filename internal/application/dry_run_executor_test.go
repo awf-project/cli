@@ -12,10 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// DryRunExecutor Tests (F019)
-// =============================================================================
-
 func TestDryRunExecutor_Execute_LinearWorkflow(t *testing.T) {
 	// Simple linear workflow: start -> process -> done
 	repo := newMockRepository()
@@ -979,9 +975,6 @@ func TestDryRunExecutor_Execute_AllStepTypes(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// DryRunExecutor Setter Tests (C027-T003)
-// =============================================================================
 // Component T003 implements comprehensive tests for DryRunExecutor setter methods.
 // Tests follow TDD patterns (RED/GREEN/REFACTOR) and cover happy path, edge cases,
 // and error conditions for SetTemplateService method.
@@ -995,7 +988,6 @@ func TestDryRunExecutor_Execute_AllStepTypes(t *testing.T) {
 // TestDryRunExecutor_SetTemplateService_Valid verifies that SetTemplateService
 // correctly sets a valid template service and that it's used during Execute.
 func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
-	// Arrange: Create workflow with template reference
 	repo := newMockRepository()
 	repo.workflows["templated"] = &workflow.Workflow{
 		Name:    "templated",
@@ -1020,13 +1012,11 @@ func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
 	templateRepo := testutil.NewMockTemplateRepository()
 	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
 
-	// Act: Set template service
 	executor.SetTemplateService(templateSvc)
 
 	// Execute to verify it works with template service set
 	plan, err := executor.Execute(context.Background(), "templated", nil)
 
-	// Assert: Execution succeeds with template service
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	assert.Equal(t, "templated", plan.WorkflowName)
@@ -1036,7 +1026,6 @@ func TestDryRunExecutor_SetTemplateService_Valid(t *testing.T) {
 // TestDryRunExecutor_SetTemplateService_Nil verifies that SetTemplateService
 // handles nil template service gracefully (template expansion is optional).
 func TestDryRunExecutor_SetTemplateService_Nil(t *testing.T) {
-	// Arrange: Create workflow
 	repo := newMockRepository()
 	repo.workflows["no_template"] = &workflow.Workflow{
 		Name:    "no_template",
@@ -1057,13 +1046,11 @@ func TestDryRunExecutor_SetTemplateService_Nil(t *testing.T) {
 	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
-	// Act: Set nil template service (explicitly allowing nil)
 	executor.SetTemplateService(nil)
 
 	// Execute workflow - should succeed without template expansion
 	plan, err := executor.Execute(context.Background(), "no_template", nil)
 
-	// Assert: Execution succeeds without template service
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	assert.Equal(t, "no_template", plan.WorkflowName)
@@ -1073,7 +1060,6 @@ func TestDryRunExecutor_SetTemplateService_Nil(t *testing.T) {
 // TestDryRunExecutor_SetTemplateService_ReplaceExisting verifies that
 // SetTemplateService can replace an existing template service.
 func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
-	// Arrange: Create workflow
 	repo := newMockRepository()
 	repo.workflows["replace_test"] = &workflow.Workflow{
 		Name:    "replace_test",
@@ -1103,13 +1089,11 @@ func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
 	secondRepo := testutil.NewMockTemplateRepository()
 	secondSvc := application.NewTemplateService(secondRepo, &mockLogger{})
 
-	// Act: Replace with second template service
 	executor.SetTemplateService(secondSvc)
 
 	// Execute to verify execution succeeds after replacement
 	plan, err := executor.Execute(context.Background(), "replace_test", nil)
 
-	// Assert: Execution succeeds with replaced template service
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	assert.Equal(t, "replace_test", plan.WorkflowName)
@@ -1119,7 +1103,6 @@ func TestDryRunExecutor_SetTemplateService_ReplaceExisting(t *testing.T) {
 // TestDryRunExecutor_SetTemplateService_WithTemplateReference verifies that
 // template service is used when workflow has template references.
 func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
-	// Arrange: Create workflow with template reference
 	repo := newMockRepository()
 	repo.workflows["with_template"] = &workflow.Workflow{
 		Name:    "with_template",
@@ -1160,10 +1143,8 @@ func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
 	templateSvc := application.NewTemplateService(templateRepo, &mockLogger{})
 	executor.SetTemplateService(templateSvc)
 
-	// Act: Execute workflow with template
 	plan, err := executor.Execute(context.Background(), "with_template", nil)
 
-	// Assert: Execution succeeds with template expansion
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	assert.Equal(t, "with_template", plan.WorkflowName)
@@ -1174,7 +1155,6 @@ func TestDryRunExecutor_SetTemplateService_WithTemplateReference(t *testing.T) {
 // TestDryRunExecutor_SetTemplateService_NoTemplateService verifies behavior
 // when no template service is set (initial state).
 func TestDryRunExecutor_SetTemplateService_NoTemplateService(t *testing.T) {
-	// Arrange: Create workflow without setting template service
 	repo := newMockRepository()
 	repo.workflows["no_svc"] = &workflow.Workflow{
 		Name:    "no_svc",
@@ -1195,10 +1175,8 @@ func TestDryRunExecutor_SetTemplateService_NoTemplateService(t *testing.T) {
 	evaluator := testutil.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
-	// Act: Execute without ever calling SetTemplateService
 	plan, err := executor.Execute(context.Background(), "no_svc", nil)
 
-	// Assert: Execution succeeds without template service
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	assert.Equal(t, "no_svc", plan.WorkflowName)

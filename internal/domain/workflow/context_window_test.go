@@ -7,24 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Component: context_window_strategies
 // Feature: F033
-// =============================================================================
-
-// =============================================================================
-// ContextWindowManager Constructor Tests
-// =============================================================================
 
 func TestNewContextWindowManager(t *testing.T) {
 	manager := NewContextWindowManager()
 
 	require.NotNil(t, manager)
 }
-
-// =============================================================================
-// ContextWindowManager ApplyStrategy Tests
-// =============================================================================
 
 func TestContextWindowManager_ApplyStrategy_SlidingWindow(t *testing.T) {
 	manager := NewContextWindowManager()
@@ -135,10 +124,6 @@ func TestContextWindowManager_ApplyStrategy_ZeroMaxTokens(t *testing.T) {
 	assert.False(t, wasTruncated)
 }
 
-// =============================================================================
-// ContextWindowManager PreserveSystemPrompt Tests
-// =============================================================================
-
 func TestContextWindowManager_PreserveSystemPrompt(t *testing.T) {
 	manager := NewContextWindowManager()
 
@@ -221,10 +206,6 @@ func TestContextWindowManager_PreserveSystemPrompt_OnlySystem(t *testing.T) {
 	assert.Empty(t, otherTurns)
 }
 
-// =============================================================================
-// ContextWindowManager CalculateTotalTokens Tests
-// =============================================================================
-
 func TestContextWindowManager_CalculateTotalTokens(t *testing.T) {
 	manager := NewContextWindowManager()
 
@@ -283,10 +264,6 @@ func TestContextWindowManager_CalculateTotalTokens(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ContextWindowManager EstimateTokens Tests
-// =============================================================================
-
 func TestContextWindowManager_EstimateTokens(t *testing.T) {
 	manager := NewContextWindowManager()
 
@@ -339,19 +316,11 @@ func TestContextWindowManager_EstimateTokens(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SlidingWindowStrategy Constructor Tests
-// =============================================================================
-
 func TestNewSlidingWindowStrategy(t *testing.T) {
 	strategy := NewSlidingWindowStrategy()
 
 	require.NotNil(t, strategy)
 }
-
-// =============================================================================
-// SlidingWindowStrategy Apply Tests
-// =============================================================================
 
 func TestSlidingWindowStrategy_Apply(t *testing.T) {
 	strategy := NewSlidingWindowStrategy()
@@ -535,10 +504,6 @@ func TestSlidingWindowStrategy_Apply_PreservesOrder(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SummarizeStrategy Tests (Post-MVP Stub)
-// =============================================================================
-
 func TestNewSummarizeStrategy(t *testing.T) {
 	strategy := NewSummarizeStrategy()
 
@@ -560,10 +525,6 @@ func TestSummarizeStrategy_Apply_NotImplemented(t *testing.T) {
 	assert.Nil(t, truncated)
 }
 
-// =============================================================================
-// TruncateMiddleStrategy Tests (Post-MVP Stub)
-// =============================================================================
-
 func TestNewTruncateMiddleStrategy(t *testing.T) {
 	strategy := NewTruncateMiddleStrategy()
 
@@ -584,10 +545,6 @@ func TestTruncateMiddleStrategy_Apply_NotImplemented(t *testing.T) {
 	assert.Contains(t, err.Error(), "not implemented")
 	assert.Nil(t, truncated)
 }
-
-// =============================================================================
-// ContextWindowState Constructor Tests
-// =============================================================================
 
 func TestNewContextWindowState(t *testing.T) {
 	tests := []struct {
@@ -613,10 +570,6 @@ func TestNewContextWindowState(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ContextWindowState RecordTruncation Tests
-// =============================================================================
 
 func TestContextWindowState_RecordTruncation(t *testing.T) {
 	state := NewContextWindowState(StrategySlidingWindow)
@@ -659,10 +612,6 @@ func TestContextWindowState_RecordTruncation_NegativeValues(t *testing.T) {
 	assert.GreaterOrEqual(t, state.TruncationCount, 1)
 }
 
-// =============================================================================
-// ContextWindowState WasTruncated Tests
-// =============================================================================
-
 func TestContextWindowState_WasTruncated(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -685,10 +634,6 @@ func TestContextWindowState_WasTruncated(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
 
 func TestSlidingWindowStrategy_Apply_SingleTurnExceedsLimit(t *testing.T) {
 	strategy := NewSlidingWindowStrategy()
@@ -795,10 +740,6 @@ func TestContextWindowState_MultipleTruncations(t *testing.T) {
 	assert.Equal(t, 18, state.LastTruncatedAt)
 	assert.True(t, state.WasTruncated())
 }
-
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
 
 func TestContextWindowManager_FullWorkflow(t *testing.T) {
 	manager := NewContextWindowManager()

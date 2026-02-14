@@ -10,11 +10,8 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Shared Mock Executors and Evaluators for Execution Service Tests
 // Feature: C008 - Test File Restructuring
 // Component: extract_shared_mocks (T002)
-// =============================================================================
 //
 // This file contains specialized mock implementations shared across multiple
 // execution service test files. These mocks enable testing of:
@@ -26,7 +23,6 @@ import (
 // Extracted from: execution_service_test.go and execution_service_retry_test.go
 // Usage: Used by execution_service_test.go, execution_service_retry_test.go,
 //        and future split test files (loop, parallel, hooks, core)
-// =============================================================================
 
 // timeoutMockExecutor simulates timeout behavior for testing context cancellation.
 type timeoutMockExecutor struct {

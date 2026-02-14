@@ -58,51 +58,42 @@ func NewClient(opts ...Option) *Client {
 // applies headers, executes via doer, reads response via ReadBody.
 // Returns Response or error.
 func (c *Client) Do(ctx context.Context, method, url string, headers map[string]string, body string, maxBodyBytes int64) (*Response, error) {
-	// Apply timeout if context has no deadline
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline && c.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
 		defer cancel()
 	}
 
-	// Create request body reader
 	var bodyReader io.Reader
 	if body != "" {
 		bodyReader = strings.NewReader(body)
 	}
 
-	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Apply headers
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
 
-	// Execute request via doer
 	httpResp, err := c.doer.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer httpResp.Body.Close()
 
-	// Read response body with size limiting
 	bodyStr, truncated, err := ReadBody(httpResp.Body, maxBodyBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert headers to map[string]string
-	// Multi-value headers are joined with ", " per HTTP spec
 	respHeaders := make(map[string]string)
 	for key, values := range httpResp.Header {
 		respHeaders[key] = strings.Join(values, ", ")
 	}
 
-	// Construct Response
 	resp := &Response{
 		StatusCode: httpResp.StatusCode,
 		Body:       bodyStr,

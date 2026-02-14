@@ -8,25 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Component: agent_config_config
 // Feature: 39
 // Extracted from: agent_config_test.go
 // Tests: 10 configuration validation tests
-// =============================================================================
-
-// =============================================================================
-// Constants Tests
-// =============================================================================
 
 func TestAgentConstants(t *testing.T) {
 	assert.Equal(t, 300, DefaultAgentTimeout)
 	assert.Greater(t, DefaultAgentTimeout, 0)
 }
-
-// =============================================================================
-// AgentConfig Validate Tests
-// =============================================================================
 
 func TestAgentConfig_Validate(t *testing.T) {
 	tests := []struct {
@@ -234,10 +223,6 @@ func TestAgentConfig_Validate_PromptVariants(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// AgentConfig GetTimeout Tests
-// =============================================================================
-
 func TestAgentConfig_GetTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -292,10 +277,6 @@ func TestAgentConfig_GetTimeout(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// AgentConfig Options Tests
-// =============================================================================
 
 func TestAgentConfig_Options(t *testing.T) {
 	tests := []struct {
@@ -354,10 +335,6 @@ func TestAgentConfig_Options(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// AgentConfig Custom Command Tests
-// =============================================================================
-
 func TestAgentConfig_CustomCommand(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -405,10 +382,6 @@ func TestAgentConfig_CustomCommand(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
-
 func TestAgentConfig_CompleteExample(t *testing.T) {
 	config := AgentConfig{
 		Provider: "claude",
@@ -439,10 +412,6 @@ Focus on: {{inputs.focus_areas}}`,
 	assert.Equal(t, "claude-sonnet-4-20250514", config.Options["model"])
 	assert.Equal(t, 4096, config.Options["max_tokens"])
 }
-
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
 
 func TestAgentConfig_TimeoutBoundaries(t *testing.T) {
 	tests := []struct {

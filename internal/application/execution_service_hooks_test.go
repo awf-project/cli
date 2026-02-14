@@ -13,11 +13,8 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Agent Hook Integration Tests
 // Feature: C008 - Test File Restructuring
 // Component: extract_hooks_tests (T008)
-// =============================================================================
 //
 // This file contains all agent hook integration tests for ExecutionService.
 // Tests verify pre-hook and post-hook execution with agent steps, including
@@ -25,7 +22,6 @@ import (
 //
 // Extracted from: execution_service_test.go (lines 1932-2170)
 // Test count: 3 hook-related tests
-// =============================================================================
 
 // Mock types are defined in execution_service_specialized_mocks_test.go
 // Mock helper functions are defined in execution_service_helpers_test.go

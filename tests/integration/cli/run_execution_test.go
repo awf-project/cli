@@ -19,10 +19,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Single Step Execution Tests
-// =============================================================================
-
 func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
 	tmpDir := setupTestDir(t)
 
@@ -203,10 +199,6 @@ states:
 	assert.Contains(t, err.Error(), "terminal")
 }
 
-// =============================================================================
-// SQLite History Store Tests
-// =============================================================================
-
 // TestRunCommand_SQLiteHistoryStore_Wiring tests that workflows correctly use SQLiteHistoryStore
 // This validates the T004 CLI wiring update from BadgerDB to SQLite
 func TestRunCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
@@ -305,10 +297,6 @@ states:
 	_, statErr := os.Stat(historyDBPath)
 	assert.NoError(t, statErr, "SQLite history.db should exist after single step execution")
 }
-
-// =============================================================================
-// Concurrent Workflow Execution Tests
-// =============================================================================
 
 // TestRunCommand_ConcurrentWorkflows validates that bug-48 is fixed
 // Multiple workflows should be able to run concurrently without lock errors

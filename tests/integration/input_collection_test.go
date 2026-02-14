@@ -13,9 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// F046: Interactive Input Collection - Functional Tests
-// =============================================================================
 //
 // Acceptance Criteria:
 // - [ ] Detect missing required inputs and prompt interactively
@@ -28,11 +25,8 @@ import (
 // - [ ] Allow error recovery with corrected values
 // - [ ] Handle Ctrl+C gracefully
 //
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // US1: Prompt for Required Inputs - Happy Path Tests
-// -----------------------------------------------------------------------------
 
 // F046: US1-AC1 - Prompt for missing required inputs
 // Given: I run a command with missing required inputs
@@ -170,9 +164,7 @@ func TestInputCollection_ExecuteWithCollectedValues_Integration(t *testing.T) {
 	assert.Contains(t, output, "completed successfully", "should complete workflow")
 }
 
-// -----------------------------------------------------------------------------
 // US2: Skip Optional Inputs - Happy Path Tests
-// -----------------------------------------------------------------------------
 
 // F046: US2-AC1 - Skip optional inputs
 // Given: I am prompted for an optional input
@@ -246,9 +238,7 @@ func TestInputCollection_UseDefaultValue_Integration(t *testing.T) {
 	assert.Contains(t, output, "completed successfully", "should complete workflow")
 }
 
-// -----------------------------------------------------------------------------
 // US3: Validation and Error Recovery - Tests
-// -----------------------------------------------------------------------------
 
 // F046: US3-AC1 - Validation with error messages
 // Given: I provide an invalid value for an input with validation rules
@@ -334,9 +324,7 @@ func TestInputCollection_GracefulCancellation_Integration(t *testing.T) {
 	// 4. Verify: No panic, no hanging process
 }
 
-// -----------------------------------------------------------------------------
 // Edge Cases and Error Handling
-// -----------------------------------------------------------------------------
 
 // Test non-interactive stdin (no TTY) with missing inputs
 func TestInputCollection_NonInteractiveStdin_Integration(t *testing.T) {

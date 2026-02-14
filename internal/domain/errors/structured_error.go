@@ -49,23 +49,6 @@ type StructuredError struct {
 	Timestamp time.Time
 }
 
-// NewStructuredError creates a new StructuredError with the given code, message, details, and cause.
-// Automatically sets Timestamp to time.Now().
-//
-// Parameters:
-//   - code: ErrorCode constant (e.g., ErrorCodeUserInputMissingFile)
-//   - message: Human-readable error message
-//   - details: Optional structured context (pass nil if not needed)
-//   - cause: Optional underlying error (pass nil if not wrapping)
-//
-// Example:
-//
-//	err := NewStructuredError(
-//	    ErrorCodeWorkflowParseYAMLSyntax,
-//	    "invalid YAML syntax",
-//	    map[string]any{"line": 42, "column": 10},
-//	    yamlErr,
-//	)
 func NewStructuredError(code ErrorCode, message string, details map[string]any, cause error) *StructuredError {
 	return &StructuredError{
 		Code:      code,
@@ -76,8 +59,6 @@ func NewStructuredError(code ErrorCode, message string, details map[string]any, 
 	}
 }
 
-// Error implements the error interface.
-// Returns the message field for string representation.
 func (e *StructuredError) Error() string {
 	return e.Message
 }
@@ -88,26 +69,18 @@ func (e *StructuredError) Unwrap() error {
 	return e.Cause
 }
 
-// NewUserError creates a StructuredError with a USER.* error code.
-// Convenience constructor for user-facing input errors (exit code 1).
 func NewUserError(code ErrorCode, message string, details map[string]any, cause error) *StructuredError {
 	return NewStructuredError(code, message, details, cause)
 }
 
-// NewWorkflowError creates a StructuredError with a WORKFLOW.* error code.
-// Convenience constructor for workflow definition errors (exit code 2).
 func NewWorkflowError(code ErrorCode, message string, details map[string]any, cause error) *StructuredError {
 	return NewStructuredError(code, message, details, cause)
 }
 
-// NewExecutionError creates a StructuredError with an EXECUTION.* error code.
-// Convenience constructor for runtime execution errors (exit code 3).
 func NewExecutionError(code ErrorCode, message string, details map[string]any, cause error) *StructuredError {
 	return NewStructuredError(code, message, details, cause)
 }
 
-// NewSystemError creates a StructuredError with a SYSTEM.* error code.
-// Convenience constructor for infrastructure errors (exit code 4).
 func NewSystemError(code ErrorCode, message string, details map[string]any, cause error) *StructuredError {
 	return NewStructuredError(code, message, details, cause)
 }

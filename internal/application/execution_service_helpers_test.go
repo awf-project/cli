@@ -12,10 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Test Mocks and Helpers
-// =============================================================================
-
 // newTestExecutionService creates an ExecutionService for testing with minimal setup.
 // C019: Ensures outputLimiter is initialized to prevent nil pointer panics.
 func newTestExecutionService() *ExecutionService {
@@ -57,10 +53,8 @@ func (m *mockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.
 
 // Note: mockLogger is defined in service_test.go and shared across package tests
 
-// =============================================================================
 // executeStep Helper Tests - Component T010
 // Feature: C006 - Reduce executeStep complexity from 29 to ≤18
-// =============================================================================
 
 // TestExecutionService_prepareStepExecution tests the prepareStepExecution helper
 // that handles pre-hooks and timeout context setup.
@@ -128,7 +122,6 @@ func TestExecutionService_prepareStepExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create ExecutionService with mock dependencies for GREEN phase testing
 			mockExec := newMockExecutor()
 			mockLogger := &mockLogger{}
 			mockResolver := newMockResolver()
@@ -142,13 +135,11 @@ func TestExecutionService_prepareStepExecution(t *testing.T) {
 
 			ctx := context.Background()
 
-			// Act: Call prepareStepExecution
 			resultCtx, intCtx, cancel, err := svc.prepareStepExecution(ctx, tt.step, tt.execCtx)
 			if cancel != nil {
 				defer cancel()
 			}
 
-			// Assert: Verify behavior
 			if tt.expectError {
 				assert.Error(t, err, "should return error")
 			} else {
@@ -218,17 +209,14 @@ func TestExecutionService_resolveStepCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create ExecutionService with mock dependencies for GREEN phase testing
 			mockResolver := newMockResolver()
 			svc := &ExecutionService{
 				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
 				resolver:      mockResolver,
 			}
 
-			// Act: Call resolveStepCommand
 			cmd, err := svc.resolveStepCommand(tt.step, tt.intCtx)
 
-			// Assert: Verify behavior
 			if tt.expectError {
 				assert.Error(t, err, "should return interpolation error")
 				assert.Nil(t, cmd, "should not return command on error")
@@ -307,15 +295,12 @@ func TestExecutionService_executeStepCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create minimal ExecutionService for stub phase testing
 			svc := newTestExecutionService()
 
 			ctx := context.Background()
 
-			// Act: Call executeStepCommand
 			result, attempt, err := svc.executeStepCommand(ctx, tt.step, tt.cmd)
 
-			// Assert: Verify behavior (stub phase - returns nil, 0, nil)
 			// GREEN phase will implement actual retry logic
 			_ = result
 			_ = attempt
@@ -380,15 +365,12 @@ func TestExecutionService_recordStepResult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup ExecutionService with output limiter
 			svc := &ExecutionService{
 				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
 			}
 
-			// Act: Call recordStepResult
 			state := svc.recordStepResult(tt.step, tt.startTime, tt.result, tt.attempt)
 
-			// Assert: Verify state structure
 			if tt.expectState {
 				// Note: In stub phase, state will be empty StepState{}
 				// In GREEN phase, verify:
@@ -494,7 +476,6 @@ func TestExecutionService_handleExecutionError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
 				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
 				logger:        &mockLogger{},
@@ -508,10 +489,8 @@ func TestExecutionService_handleExecutionError(t *testing.T) {
 			}
 			stepCtx := context.Background()
 
-			// Act: Call handleExecutionError
 			nextStep, err := svc.handleExecutionError(ctx, stepCtx, tt.step, tt.execCtx, &tt.state, tt.execErr)
 
-			// Assert: Verify behavior
 			if tt.expectError {
 				assert.Error(t, err, "should return error")
 			} else {
@@ -593,7 +572,6 @@ func TestExecutionService_handleNonZeroExit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
 				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
 				logger:        &mockLogger{},
@@ -601,13 +579,11 @@ func TestExecutionService_handleNonZeroExit(t *testing.T) {
 
 			stepCtx := context.Background()
 
-			// Act: Call handleNonZeroExit
 			result := &ports.CommandResult{
 				ExitCode: tt.exitCode,
 			}
 			nextStep, err := svc.handleNonZeroExit(stepCtx, tt.step, tt.execCtx, &tt.state, result)
 
-			// Assert: Verify behavior
 			if tt.expectError {
 				assert.Error(t, err, "should return error")
 			} else {
@@ -685,7 +661,6 @@ func TestExecutionService_handleSuccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup ExecutionService with mock dependencies
 			svc := &ExecutionService{
 				outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
 				logger:        &mockLogger{},
@@ -693,10 +668,8 @@ func TestExecutionService_handleSuccess(t *testing.T) {
 
 			stepCtx := context.Background()
 
-			// Act: Call handleSuccess
 			nextStep, err := svc.handleSuccess(stepCtx, tt.step, tt.execCtx, &tt.state)
 
-			// Assert: Verify behavior
 			if tt.expectError {
 				assert.Error(t, err, "should return error")
 			} else {

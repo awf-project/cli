@@ -8,10 +8,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// F043: buildLoopDataChain Tests (internal package tests)
-// =============================================================================
-
 func TestBuildLoopDataChain_Nil(t *testing.T) {
 	// Nil input should return nil
 	result := buildLoopDataChain(nil)

@@ -13,20 +13,12 @@ import (
 // Component: exec_cli_executor
 // Task: C025-T002
 
-// ============================================================================
-// Constructor Tests
-// ============================================================================
-
 func TestNewExecCLIExecutor(t *testing.T) {
 	executor := NewExecCLIExecutor()
 
 	require.NotNil(t, executor)
 	assert.IsType(t, &ExecCLIExecutor{}, executor)
 }
-
-// ============================================================================
-// Happy Path Tests
-// ============================================================================
 
 func TestExecCLIExecutor_Run_SimpleCommands(t *testing.T) {
 	tests := []struct {
@@ -81,10 +73,8 @@ func TestExecCLIExecutor_Run_SimpleCommands(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			if tt.wantErrNil {
 				require.NoError(t, err, tt.description)
 			}
@@ -126,10 +116,8 @@ func TestExecCLIExecutor_Run_CommandWithFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			require.NoError(t, err)
 			assert.NotNil(t, stdout)
 			assert.NotNil(t, stderr)
@@ -137,18 +125,12 @@ func TestExecCLIExecutor_Run_CommandWithFlags(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Edge Case Tests
-// ============================================================================
-
 func TestExecCLIExecutor_Run_EmptyCommand(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "", []string{}...)
 
-	// Assert
 	// Empty binary name should cause an error
 	assert.Error(t, err, "empty binary name should fail")
 	assert.NotNil(t, stdout, "stdout should not be nil even on error")
@@ -159,10 +141,8 @@ func TestExecCLIExecutor_Run_NoArguments(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
 
-	// Act - command that works without arguments
 	stdout, stderr, err := executor.Run(ctx, "echo")
 
-	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
@@ -178,10 +158,8 @@ func TestExecCLIExecutor_Run_ManyArguments(t *testing.T) {
 		args[i] = "arg"
 	}
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "echo", args...)
 
-	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.Greater(t, len(stdout), 0, "should have output from 100 args")
@@ -193,10 +171,8 @@ func TestExecCLIExecutor_Run_LargeOutput(t *testing.T) {
 	ctx := context.Background()
 
 	// Generate large output
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "seq", "1", "1000")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Greater(t, len(stdout), 100, "should have substantial output")
 	assert.NotNil(t, stderr)
@@ -226,10 +202,8 @@ func TestExecCLIExecutor_Run_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, "echo", tt.args...)
 
-			// Assert
 			require.NoError(t, err)
 			assert.NotNil(t, stdout)
 			assert.NotNil(t, stderr)
@@ -240,7 +214,6 @@ func TestExecCLIExecutor_Run_SpecialCharacters(t *testing.T) {
 func TestExecCLIExecutor_Run_NilContext(t *testing.T) {
 	executor := NewExecCLIExecutor()
 
-	// Act - passing nil context should cause panic or error
 	// This is an edge case - proper usage requires valid context
 	defer func() {
 		if r := recover(); r != nil {
@@ -255,10 +228,6 @@ func TestExecCLIExecutor_Run_NilContext(t *testing.T) {
 		assert.Error(t, err, "nil context should cause error")
 	}
 }
-
-// ============================================================================
-// Error Handling Tests
-// ============================================================================
 
 func TestExecCLIExecutor_Run_BinaryNotFound(t *testing.T) {
 	executor := NewExecCLIExecutor()
@@ -284,10 +253,8 @@ func TestExecCLIExecutor_Run_BinaryNotFound(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary)
 
-			// Assert
 			assert.Error(t, err, "non-existent binary should cause error")
 			assert.NotNil(t, stdout)
 			assert.NotNil(t, stderr)
@@ -327,10 +294,8 @@ func TestExecCLIExecutor_Run_NonZeroExitCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			assert.Error(t, err, "non-zero exit should cause error")
 			assert.NotNil(t, stdout)
 			assert.NotNil(t, stderr)
@@ -363,14 +328,11 @@ func TestExecCLIExecutor_Run_CommandTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			assert.Error(t, err, "timeout should cause error")
 			assert.True(t,
 				errors.Is(err, context.DeadlineExceeded) || err != nil,
@@ -404,7 +366,6 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 
 			// Cancel immediately after starting
@@ -413,10 +374,8 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 				cancel()
 			}()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			assert.Error(t, err, "cancellation should cause error")
 			assert.True(t,
 				errors.Is(err, context.Canceled) || err != nil,
@@ -480,10 +439,8 @@ func TestExecCLIExecutor_Run_StderrOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
 
-			// Assert
 			require.NoError(t, err)
 			// Note: os/exec.CombinedOutput merges stderr into stdout
 			// So we might see output in stdout or stderr depending on implementation
@@ -518,10 +475,8 @@ func TestExecCLIExecutor_Run_InvalidArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			// Most commands will error on invalid args
 			// But we're testing the executor handles it gracefully
 			assert.NotNil(t, stdout)
@@ -531,10 +486,6 @@ func TestExecCLIExecutor_Run_InvalidArguments(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// Concurrent Execution Tests
-// ============================================================================
 
 func TestExecCLIExecutor_Run_ConcurrentExecutions(t *testing.T) {
 	executor := NewExecCLIExecutor()
@@ -561,10 +512,6 @@ func TestExecCLIExecutor_Run_ConcurrentExecutions(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Integration-Style Tests (Simulating Provider Usage)
-// ============================================================================
-
 func TestExecCLIExecutor_Run_SimulateClaudeProvider(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
@@ -573,10 +520,8 @@ func TestExecCLIExecutor_Run_SimulateClaudeProvider(t *testing.T) {
 	// (using echo as a stand-in for claude CLI)
 	args := []string{"test prompt"}
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "echo", args...)
 
-	// Assert
 	require.NoError(t, err, "Claude provider simulation should succeed")
 	assert.NotNil(t, stdout)
 	assert.Greater(t, len(stdout), 0, "should have response")
@@ -590,10 +535,8 @@ func TestExecCLIExecutor_Run_SimulateGeminiProvider(t *testing.T) {
 	// Simulate Gemini provider with JSON output flag
 	args := []string{"--json", "test"}
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "echo", args...)
 
-	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
@@ -607,18 +550,12 @@ func TestExecCLIExecutor_Run_SimulateCodexProvider(t *testing.T) {
 	// Simulate Codex provider with model selection
 	args := []string{"--model", "gpt-4", "prompt"}
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "echo", args...)
 
-	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
 }
-
-// ============================================================================
-// Process Group Management Tests (B002 Bug Fix)
-// ============================================================================
 
 // TestRun_SetsProcessGroup verifies that SysProcAttr.Setpgid is configured
 // to enable process group isolation. This test validates AC-005 requirement
@@ -666,11 +603,9 @@ func TestRun_SetsProcessGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := NewExecCLIExecutor()
 			ctx, cancel := context.WithCancel(context.Background())
 
-			// Act - Cancel context after delay
 			go func() {
 				time.Sleep(tt.cancelDelay)
 				cancel()
@@ -679,7 +614,6 @@ func TestRun_SetsProcessGroup(t *testing.T) {
 			// Execute command that spawns child processes
 			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
 
-			// Assert - Execution should error with context.Canceled
 			assert.Error(t, err, tt.description)
 			assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled")
 			assert.NotNil(t, stdout, "stdout should not be nil")
@@ -718,11 +652,9 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := NewExecCLIExecutor()
 			ctx, cancel := context.WithCancel(context.Background())
 
-			// Act
 			go func() {
 				time.Sleep(tt.cancelDelay)
 				cancel()
@@ -730,7 +662,6 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 
 			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
 
-			// Assert
 			assert.NotNil(t, stdout, "stdout should not be nil")
 			assert.NotNil(t, stderr, "stderr should not be nil")
 
@@ -779,14 +710,11 @@ func TestRun_SetsProcessGroup_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := NewExecCLIExecutor()
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
 
-			// Assert
 			assert.NotNil(t, stdout, "stdout should not be nil")
 			assert.NotNil(t, stderr, "stderr should not be nil")
 

@@ -9,10 +9,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Command Registration Tests
-// =============================================================================
-
 func TestDiagramCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -43,10 +39,6 @@ func TestDiagramCommand_RegisteredInRoot(t *testing.T) {
 		t.Errorf("diagram --help should not error: %v", err)
 	}
 }
-
-// =============================================================================
-// Argument Validation Tests
-// =============================================================================
 
 func TestDiagramCommand_NoArgs_ReturnsError(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -93,10 +85,6 @@ func TestDiagramCommand_ExactlyOneArg_Accepted(t *testing.T) {
 		t.Error("command should accept exactly one argument")
 	}
 }
-
-// =============================================================================
-// Flag Tests
-// =============================================================================
 
 func TestDiagramCommand_OutputFlag_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -231,10 +219,6 @@ func TestDiagramCommand_AllFlagsPresent(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Help Text Tests
-// =============================================================================
-
 func TestDiagramCommand_Help(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -360,10 +344,6 @@ func TestDiagramCommand_ShortDescription(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Execution Tests (GREEN phase - implementation complete)
-// =============================================================================
-
 func TestDiagramCommand_Run_NonExistentWorkflow(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -453,10 +433,6 @@ func TestDiagramCommand_WithShortOutputFlag_NonExistentWorkflow(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Table-driven tests for flag descriptions
-// =============================================================================
-
 func TestDiagramCommand_FlagDescriptions(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -509,10 +485,6 @@ func TestDiagramCommand_FlagDescriptions(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Direction flag value validation tests
-// =============================================================================
-
 func TestDiagramCommand_DirectionFlag_ValidValues(t *testing.T) {
 	validDirections := []string{"TB", "LR", "BT", "RL"}
 
@@ -535,10 +507,6 @@ func TestDiagramCommand_DirectionFlag_ValidValues(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Output file extension tests (behavior when implemented)
-// =============================================================================
-
 func TestDiagramCommand_OutputFlag_AcceptsVariousExtensions(t *testing.T) {
 	extensions := []string{".png", ".svg", ".pdf", ".dot"}
 
@@ -560,10 +528,6 @@ func TestDiagramCommand_OutputFlag_AcceptsVariousExtensions(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Output Mode Tests (to be verified after implementation)
-// =============================================================================
 
 // TestDiagramCommand_DefaultOutputToDOT verifies DOT output to stdout when no --output flag.
 // GREEN phase: Should output valid DOT for existing workflow.
@@ -601,10 +565,6 @@ func TestDiagramCommand_OutputToDotFile(t *testing.T) {
 		t.Error("expected error for non-existent workflow")
 	}
 }
-
-// =============================================================================
-// Error Handling Tests (to be verified after implementation)
-// =============================================================================
 
 // TestDiagramCommand_InvalidWorkflow_ReturnsError verifies error for non-existent workflow.
 // GREEN phase: Should return error for non-existent workflow.
@@ -660,10 +620,6 @@ func TestDiagramCommand_GraphvizMissing_WithOutputFlag_ReturnsError(t *testing.T
 	}
 }
 
-// =============================================================================
-// Direction Flag Behavior Tests
-// =============================================================================
-
 // TestDiagramCommand_DirectionFlag_AffectsRankdir verifies --direction flag sets rankdir in DOT.
 // GREEN phase: DOT should contain rankdir=<direction> - tested in integration tests with fixtures.
 func TestDiagramCommand_DirectionFlag_AffectsRankdir(t *testing.T) {
@@ -715,10 +671,6 @@ func TestDiagramCommand_DirectionFlag_InvalidValue(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Highlight Flag Behavior Tests
-// =============================================================================
-
 // TestDiagramCommand_HighlightFlag_AffectsNodeStyle verifies --highlight emphasizes node.
 // GREEN phase: Highlighted node should have special styling - tested in integration tests.
 func TestDiagramCommand_HighlightFlag_AffectsNodeStyle(t *testing.T) {
@@ -754,10 +706,6 @@ func TestDiagramCommand_HighlightFlag_NonExistentStep(t *testing.T) {
 		t.Error("expected error for non-existent workflow")
 	}
 }
-
-// =============================================================================
-// Combined Flags Tests
-// =============================================================================
 
 // TestDiagramCommand_CombinedFlags_DirectionAndHighlight verifies both flags work together.
 func TestDiagramCommand_CombinedFlags_DirectionAndHighlight(t *testing.T) {
@@ -799,10 +747,6 @@ func TestDiagramCommand_CombinedFlags_OutputAndDirection(t *testing.T) {
 		t.Error("expected error for non-existent workflow")
 	}
 }
-
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
 
 // TestDiagramCommand_EmptyWorkflowName verifies empty string argument handling.
 func TestDiagramCommand_EmptyWorkflowName(t *testing.T) {

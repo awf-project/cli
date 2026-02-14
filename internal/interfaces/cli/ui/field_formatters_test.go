@@ -13,10 +13,8 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
 // formatFieldIfPresent Tests (C004)
 // Feature: C004 - Extract field formatters to reduce formatStep complexity
-// =============================================================================
 
 func TestFormatFieldIfPresent_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -165,9 +163,7 @@ func TestFormatFieldIfPresent_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // formatRetry Tests (C004)
-// =============================================================================
 
 func TestFormatRetry_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -317,9 +313,7 @@ func TestFormatRetry_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // formatCapture Tests (C004)
-// =============================================================================
 
 func TestFormatCapture_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -487,10 +481,6 @@ func TestFormatCapture_OutputOrdering(t *testing.T) {
 
 	assert.True(t, stdoutPos < stderrPos, "stdout should appear before stderr in output")
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 // failingWriter is a test helper that always returns an error on Write.
 type failingWriter struct {

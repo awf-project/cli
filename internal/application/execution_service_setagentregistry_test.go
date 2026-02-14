@@ -16,27 +16,21 @@ import (
 // accepts the ports.AgentRegistry interface type, following the same pattern
 // as SetOperationProvider. This ensures compliance with DIP.
 func TestSetAgentRegistry_AcceptsInterfaceType(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 	mockRegistry := &setterTestAgentRegistry{}
 
-	// Act: Method should accept interface type
 	execSvc.SetAgentRegistry(mockRegistry)
 
-	// Assert: No compilation error means method accepts interface type
 	assert.NotNil(t, execSvc)
 }
 
 // TestSetAgentRegistry_AcceptsNil verifies that SetAgentRegistry can accept nil,
 // which is a valid value for interface types.
 func TestSetAgentRegistry_AcceptsNil(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
-	// Act: Method should accept nil without panic
 	execSvc.SetAgentRegistry(nil)
 
-	// Assert: No panic occurred
 	assert.NotNil(t, execSvc)
 }
 
@@ -67,13 +61,10 @@ func TestSetAgentRegistry_AcceptsMultipleImplementations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			execSvc, _ := NewTestHarness(t).Build()
 
-			// Act: Each implementation should be accepted by SetAgentRegistry
 			execSvc.SetAgentRegistry(tt.registry)
 
-			// Assert: Interface polymorphism allows any implementation
 			assert.NotNil(t, execSvc, tt.desc)
 		})
 	}
@@ -83,38 +74,31 @@ func TestSetAgentRegistry_AcceptsMultipleImplementations(t *testing.T) {
 // SetAgentRegistry follows the same signature pattern as SetOperationProvider,
 // both accepting interface types from the ports package.
 func TestSetAgentRegistry_MatchesSetOperationProviderPattern(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Both methods should accept their respective interface types
 	var agentReg ports.AgentRegistry = &setterTestAgentRegistry{}
 	var opProvider ports.OperationProvider = &setterTestOperationProvider{}
 
-	// Act: Both setters should accept interface types without concrete dependencies
 	execSvc.SetAgentRegistry(agentReg)
 	execSvc.SetOperationProvider(opProvider)
 
-	// Assert: Both methods follow the same DIP-compliant pattern
 	assert.NotNil(t, execSvc)
 }
 
 // TestSetAgentRegistry_SupportsReassignment verifies that the registry
 // can be changed after initial assignment, supporting flexible configuration.
 func TestSetAgentRegistry_SupportsReassignment(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 	first := &setterTestAgentRegistry{}
 	second := &setterTestAgentRegistryAlt{}
 
-	// Act: Set initial registry
 	execSvc.SetAgentRegistry(first)
 	assert.NotNil(t, execSvc, "First assignment should succeed")
 
-	// Act: Reassign with different implementation
 	execSvc.SetAgentRegistry(second)
 	assert.NotNil(t, execSvc, "Reassignment should succeed")
 
-	// Act: Set to nil (clearing the registry)
 	execSvc.SetAgentRegistry(nil)
 	assert.NotNil(t, execSvc, "Setting to nil should succeed")
 }
@@ -123,16 +107,13 @@ func TestSetAgentRegistry_SupportsReassignment(t *testing.T) {
 // accepting the interface type enables proper dependency injection without
 // coupling to infrastructure implementations.
 func TestSetAgentRegistry_InterfaceTypeEnablesDependencyInjection(t *testing.T) {
-	// Arrange: Create service with test harness
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Demonstrate DI: Create registry using only interface type declaration
 	var registry ports.AgentRegistry = &setterTestAgentRegistry{}
 
-	// Act: Inject dependency via interface
 	execSvc.SetAgentRegistry(registry)
 
-	// Assert: Dependency injection works without concrete type knowledge
 	assert.NotNil(t, execSvc)
 	assert.NotNil(t, registry)
 }
@@ -140,7 +121,6 @@ func TestSetAgentRegistry_InterfaceTypeEnablesDependencyInjection(t *testing.T) 
 // TestSetAgentRegistry_NoConcreteTypeRequired verifies that the method
 // signature does not require or expect a concrete type, only the interface.
 func TestSetAgentRegistry_NoConcreteTypeRequired(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Create instances through interface type, not concrete type
@@ -152,10 +132,8 @@ func TestSetAgentRegistry_NoConcreteTypeRequired(t *testing.T) {
 
 	for i, reg := range registries {
 		t.Run("interface_instance_"+string(rune('A'+i)), func(t *testing.T) {
-			// Act: Pass interface instance to setter
 			execSvc.SetAgentRegistry(reg)
 
-			// Assert: Method accepts interface without requiring concrete type
 			assert.NotNil(t, execSvc)
 		})
 	}

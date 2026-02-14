@@ -18,10 +18,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// HAPPY PATH TESTS - Normal usage scenarios
-// =============================================================================
-
 func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 	// Setup: Create temp directory with local prompts only
 	tmpDir := t.TempDir()
@@ -67,9 +63,9 @@ func TestPromptDiscovery_ListPrompts_LocalOnly_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "system.md", "should list local system.md")
-	assert.Contains(t, output, "task.md", "should list local task.md")
-	assert.Contains(t, output, "local", "should show 'local' source")
+	assert.Contains(t, output, "system.md")
+	assert.Contains(t, output, "task.md")
+	assert.Contains(t, output, "local")
 }
 
 func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
@@ -114,8 +110,8 @@ func TestPromptDiscovery_ListPrompts_GlobalOnly_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "global-system.md", "should list global prompt")
-	assert.Contains(t, output, "global", "should show 'global' source")
+	assert.Contains(t, output, "global-system.md")
+	assert.Contains(t, output, "global")
 }
 
 func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
@@ -167,15 +163,11 @@ func TestPromptDiscovery_ListPrompts_BothSources_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "local-only.md", "should list local prompt")
-	assert.Contains(t, output, "global-only.md", "should list global prompt")
-	assert.Contains(t, output, "local", "should show local source")
-	assert.Contains(t, output, "global", "should show global source")
+	assert.Contains(t, output, "local-only.md")
+	assert.Contains(t, output, "global-only.md")
+	assert.Contains(t, output, "local")
+	assert.Contains(t, output, "global")
 }
-
-// =============================================================================
-// LOCAL TAKES PRECEDENCE OVER GLOBAL (US2)
-// =============================================================================
 
 func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -236,10 +228,6 @@ func TestPromptDiscovery_LocalOverridesGlobal_Integration(t *testing.T) {
 	assert.Equal(t, 1, sharedLines, "should have exactly one shared.md entry")
 }
 
-// =============================================================================
-// NESTED DIRECTORY SUPPORT (FR-006)
-// =============================================================================
-
 func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -285,8 +273,8 @@ func TestPromptDiscovery_NestedDirectories_Integration(t *testing.T) {
 
 	output := buf.String()
 	// Should show nested paths in output
-	assert.Contains(t, output, "agents/claude/system.md", "should list nested prompt")
-	assert.Contains(t, output, "tasks/code-review.md", "should list nested task prompt")
+	assert.Contains(t, output, "agents/claude/system.md")
+	assert.Contains(t, output, "tasks/code-review.md")
 }
 
 func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
@@ -353,10 +341,6 @@ func TestPromptDiscovery_NestedOverride_Integration(t *testing.T) {
 	assert.Contains(t, output, "nested/global-only.md", "should list global-only nested prompt")
 }
 
-// =============================================================================
-// EDGE CASES
-// =============================================================================
-
 func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -393,7 +377,7 @@ func TestPromptDiscovery_EmptyDirectories_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "No prompts found", "should show no prompts message")
+	assert.Contains(t, output, "No prompts found")
 }
 
 func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
@@ -426,7 +410,7 @@ func TestPromptDiscovery_MissingDirectories_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "No prompts found", "should show no prompts message for missing dirs")
+	assert.Contains(t, output, "No prompts found")
 }
 
 func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
@@ -481,10 +465,6 @@ func TestPromptDiscovery_VariousFileExtensions_Integration(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// JSON OUTPUT FORMAT
-// =============================================================================
-
 func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "project")
@@ -531,15 +511,11 @@ func TestPromptDiscovery_JSONFormat_Integration(t *testing.T) {
 
 	output := buf.String()
 	// Verify JSON structure
-	assert.Contains(t, output, `"name"`, "JSON output should contain name field")
-	assert.Contains(t, output, `"source"`, "JSON output should contain source field")
-	assert.Contains(t, output, `"local.md"`, "JSON should contain local.md")
-	assert.Contains(t, output, `"global.md"`, "JSON should contain global.md")
+	assert.Contains(t, output, `"name"`)
+	assert.Contains(t, output, `"source"`)
+	assert.Contains(t, output, `"local.md"`)
+	assert.Contains(t, output, `"global.md"`)
 }
-
-// =============================================================================
-// PROMPT RESOLUTION IN RUN COMMAND (@prompts/ prefix)
-// =============================================================================
 
 func TestPromptResolution_LocalPrompt_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -610,7 +586,7 @@ states:
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "RESOLVED_PROMPT_CONTENT", "prompt content should be resolved and passed to workflow")
+	assert.Contains(t, output, "RESOLVED_PROMPT_CONTENT")
 }
 
 func TestPromptResolution_GlobalPrompt_Integration(t *testing.T) {
@@ -684,7 +660,7 @@ states:
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "GLOBAL_PROMPT_CONTENT", "global prompt content should be resolved")
+	assert.Contains(t, output, "GLOBAL_PROMPT_CONTENT")
 }
 
 func TestPromptResolution_LocalOverridesGlobal_Integration(t *testing.T) {
@@ -765,8 +741,8 @@ states:
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "LOCAL_WINS", "local prompt should override global")
-	assert.NotContains(t, output, "GLOBAL_LOSES", "global prompt should not appear")
+	assert.Contains(t, output, "LOCAL_WINS")
+	assert.NotContains(t, output, "GLOBAL_LOSES")
 }
 
 func TestPromptResolution_NestedPath_Integration(t *testing.T) {
@@ -838,12 +814,8 @@ states:
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "NESTED_CLAUDE_SYSTEM", "nested prompt should be resolved")
+	assert.Contains(t, output, "NESTED_CLAUDE_SYSTEM")
 }
-
-// =============================================================================
-// ERROR HANDLING
-// =============================================================================
 
 func TestPromptResolution_NotFound_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -901,8 +873,8 @@ states:
 	})
 
 	err := cmd.Execute()
-	require.Error(t, err, "should error when prompt not found")
-	assert.Contains(t, err.Error(), "not found", "error should mention not found")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestPromptResolution_PathTraversal_Integration(t *testing.T) {
@@ -964,15 +936,11 @@ states:
 			})
 
 			err := cmd.Execute()
-			require.Error(t, err, "should error on path traversal attempt")
-			assert.Contains(t, err.Error(), "invalid prompt path", "error should mention invalid path")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid prompt path")
 		})
 	}
 }
-
-// =============================================================================
-// AWF INIT --GLOBAL
-// =============================================================================
 
 func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1008,13 +976,13 @@ func TestInitGlobal_CreatesDirectory_Integration(t *testing.T) {
 	// Verify directory was created
 	globalPrompts := filepath.Join(xdgDir, "awf", "prompts")
 	info, err := os.Stat(globalPrompts)
-	require.NoError(t, err, "global prompts directory should exist")
-	assert.True(t, info.IsDir(), "should be a directory")
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
 
 	// Verify example.md was created
 	examplePath := filepath.Join(globalPrompts, "example.md")
 	_, err = os.Stat(examplePath)
-	require.NoError(t, err, "example.md should exist")
+	require.NoError(t, err)
 }
 
 func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
@@ -1060,7 +1028,7 @@ func TestInitGlobal_PreservesExisting_Integration(t *testing.T) {
 	// Verify existing prompt was preserved
 	content, err := os.ReadFile(filepath.Join(globalPrompts, "my-prompt.md"))
 	require.NoError(t, err)
-	assert.Equal(t, existingContent, string(content), "existing prompt should be preserved")
+	assert.Equal(t, existingContent, string(content))
 }
 
 func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
@@ -1097,12 +1065,8 @@ func TestInitGlobal_XDGCompliance_Integration(t *testing.T) {
 	// Verify it used the custom XDG path
 	expectedPath := filepath.Join(customXDG, "awf", "prompts")
 	_, err = os.Stat(expectedPath)
-	require.NoError(t, err, "should create directory at custom XDG_CONFIG_HOME")
+	require.NoError(t, err)
 }
-
-// =============================================================================
-// USING FIXTURES FROM tests/fixtures/prompts/
-// =============================================================================
 
 func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 	// Get project root
@@ -1188,10 +1152,10 @@ func TestPromptDiscovery_WithFixtures_Integration(t *testing.T) {
 
 	// Verify prompts from fixtures are discovered
 	// Local-only prompt should exist
-	assert.Contains(t, output, "local-only.md", "should find local-only fixture")
+	assert.Contains(t, output, "local-only.md")
 
 	// Global-only prompt should exist
-	assert.Contains(t, output, "system.md", "should find global system fixture")
+	assert.Contains(t, output, "system.md")
 
 	// Shared prompt should show local source (local overrides global)
 	lines := strings.Split(output, "\n")

@@ -2,8 +2,6 @@
 
 package integration_test
 
-// Feature: C016
-
 import (
 	"context"
 	"os"
@@ -18,21 +16,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Input Validation Functional Tests
-// Validates that input validation (pattern, enum, min/max) and state
-// persistence improvements work correctly in end-to-end scenarios.
-//
-// Coverage:
-// - Pattern, enum, and min/max validation through full execution pipeline
-// - JSON store concurrent access and file corruption handling
-// - SQLite history store integration with workflow execution
-// - Edge cases: empty input, unicode, boundary values
-// =============================================================================
-
-// TestInputValidation_HappyPath verifies that all input validation types
-// (pattern, enum, numeric) work correctly through the full workflow
-// execution pipeline.
 func TestInputValidation_HappyPath(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -238,18 +221,15 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
 
 			require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
-			// Write workflow file
 			workflowPath := filepath.Join(workflowsDir, "test.yaml")
 			require.NoError(t, os.WriteFile(workflowPath, []byte(tt.workflowYAML), 0o644))
 
-			// Setup components
 			repo := repository.NewYAMLRepository(workflowsDir)
 			stateStore := testutil.NewMockStateStore()
 			exec := executor.NewShellExecutor()
@@ -262,10 +242,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", tt.inputs)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err, "workflow should execute successfully")
 				if execCtx != nil {
@@ -386,18 +364,15 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
 
 			require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 
-			// Write workflow file
 			workflowPath := filepath.Join(workflowsDir, "test.yaml")
 			require.NoError(t, os.WriteFile(workflowPath, []byte(tt.workflowYAML), 0o644))
 
-			// Setup components
 			repo := repository.NewYAMLRepository(workflowsDir)
 			stateStore := testutil.NewMockStateStore()
 			exec := executor.NewShellExecutor()
@@ -410,10 +385,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", tt.inputs)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err)
 				if execCtx != nil {

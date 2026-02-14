@@ -14,10 +14,6 @@ import (
 
 const templateFixturesPath = "../../../tests/fixtures/templates"
 
-// =============================================================================
-// GetTemplate Tests
-// =============================================================================
-
 func TestYAMLTemplateRepository_GetTemplate_Success(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
 
@@ -147,10 +143,6 @@ func TestYAMLTemplateRepository_GetTemplate_NonExistentSearchPath(t *testing.T) 
 	require.NotNil(t, tmpl)
 }
 
-// =============================================================================
-// GetTemplate Caching Tests
-// =============================================================================
-
 func TestYAMLTemplateRepository_GetTemplate_Cache(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
 
@@ -187,10 +179,6 @@ func TestYAMLTemplateRepository_GetTemplate_CacheMultipleTemplates(t *testing.T)
 	require.NoError(t, err)
 	assert.Same(t, tmpl2, tmpl2Cached)
 }
-
-// =============================================================================
-// ListTemplates Tests
-// =============================================================================
 
 func TestYAMLTemplateRepository_ListTemplates(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
@@ -334,10 +322,6 @@ func TestYAMLTemplateRepository_ListTemplates_OnlyYAMLFiles(t *testing.T) {
 	assert.NotContains(t, names, "script")
 }
 
-// =============================================================================
-// Exists Tests
-// =============================================================================
-
 func TestYAMLTemplateRepository_Exists(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
 
@@ -392,10 +376,6 @@ states:
 	assert.False(t, repo.Exists(context.Background(), "nonexistent"))
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestYAMLTemplateRepository_GetTemplate_InvalidSyntax(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
 
@@ -419,10 +399,6 @@ func TestYAMLTemplateRepository_GetTemplate_MissingName(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, tmpl)
 }
-
-// =============================================================================
-// Constructor Tests
-// =============================================================================
 
 func TestNewYAMLTemplateRepository(t *testing.T) {
 	tests := []struct {
@@ -457,10 +433,6 @@ func TestNewYAMLTemplateRepository(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Concurrent Access Tests
-// =============================================================================
-
 func TestYAMLTemplateRepository_ConcurrentGetTemplate(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})
 
@@ -494,10 +466,6 @@ func TestYAMLTemplateRepository_ConcurrentGetTemplate(t *testing.T) {
 		t.Errorf("concurrent access error: %v", err)
 	}
 }
-
-// =============================================================================
-// Interface Compliance Tests
-// =============================================================================
 
 func TestYAMLTemplateRepository_ImplementsInterface(t *testing.T) {
 	repo := NewYAMLTemplateRepository([]string{templateFixturesPath})

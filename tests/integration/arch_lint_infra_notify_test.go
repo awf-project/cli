@@ -14,11 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestArchLintInfraNotify_ComponentRegistration verifies that the infra-notify
-// component is properly registered in .go-arch-lint.yml with correct dependencies.
-// This test validates F056 component T001 requirement.
 func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
-	// Arrange: Load .go-arch-lint.yml from project root
 	projectRoot := filepath.Join("..", "..")
 	configPath := filepath.Join(projectRoot, ".go-arch-lint.yml")
 	data, err := os.ReadFile(configPath)
@@ -37,7 +33,6 @@ func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
 	err = yaml.Unmarshal(data, &config)
 	require.NoError(t, err, "Failed to parse .go-arch-lint.yml")
 
-	// Act & Assert: Verify infra-notify component exists
 	t.Run("component_registered", func(t *testing.T) {
 		component, exists := config.Components["infra-notify"]
 		assert.True(t, exists, "infra-notify component should be registered in components section")
@@ -45,13 +40,10 @@ func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
 			"infra-notify should point to infrastructure/notify directory")
 	})
 
-	// Act & Assert: Verify infra-notify dependencies
 	t.Run("dependencies_configured", func(t *testing.T) {
 		deps, exists := config.Deps["infra-notify"]
 		require.True(t, exists, "infra-notify dependencies should be configured in deps section")
 
-		// Expected dependencies based on F056 architecture requirements
-		// infra-notify needs domain layers, plugin support, and logging
 		expectedMayDependOn := []string{
 			"domain-workflow",
 			"domain-ports",
@@ -60,7 +52,6 @@ func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
 			"infra-logger",
 		}
 
-		// Only stdlib and concurrency primitives allowed
 		expectedCanUse := []string{
 			"go-stdlib",
 			"go-sync",
@@ -73,7 +64,6 @@ func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
 			"infra-notify should only use go-stdlib and go-sync (no external deps)")
 	})
 
-	// Act & Assert: Verify interfaces-cli can depend on infra-notify
 	t.Run("interfaces_cli_can_wire_infra_notify", func(t *testing.T) {
 		cliDeps, exists := config.Deps["interfaces-cli"]
 		require.True(t, exists, "interfaces-cli dependencies should be configured")
@@ -83,35 +73,27 @@ func TestArchLintInfraNotify_ComponentRegistration(t *testing.T) {
 	})
 }
 
-// TestArchLintInfraNotify_ArchitectureValidation runs go-arch-lint to ensure
-// the infra-notify component configuration is valid and no violations exist.
 func TestArchLintInfraNotify_ArchitectureValidation(t *testing.T) {
-	// Skip if go-arch-lint is not installed
 	if _, err := exec.LookPath("go-arch-lint"); err != nil {
 		t.Skip("go-arch-lint not installed, skipping validation test")
 	}
 
-	// Act: Run go-arch-lint check from project root
 	projectRoot := filepath.Join("..", "..")
 	ctx := context.Background()
 	cmd := exec.CommandContext(ctx, "go-arch-lint", "check")
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 
-	// Assert: No architecture violations for infra-notify
 	require.NoError(t, err, "go-arch-lint check failed:\n%s", string(output))
 
 	outputStr := string(output)
 	assert.Contains(t, outputStr, "OK - No warnings found",
 		"Expected no architecture warnings for infra-notify component, got:\n%s", outputStr)
 
-	// Verify infra-notify specific checks passed
 	assert.NotContains(t, outputStr, "infra-notify",
 		"Should have no warnings mentioning infra-notify")
 }
 
-// TestArchLintInfraNotify_DependencyIsolation verifies that infra-notify
-// cannot import components it should not depend on (architecture boundaries).
 func TestArchLintInfraNotify_DependencyIsolation(t *testing.T) {
 	projectRoot := filepath.Join("..", "..")
 	configPath := filepath.Join(projectRoot, ".go-arch-lint.yml")
@@ -187,7 +169,6 @@ func TestArchLintInfraNotify_DependencyIsolation(t *testing.T) {
 	}
 }
 
-// TestArchLintInfraNotify_EdgeCases tests edge cases in configuration.
 func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 	projectRoot := filepath.Join("..", "..")
 	configPath := filepath.Join(projectRoot, ".go-arch-lint.yml")
@@ -195,8 +176,6 @@ func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("no_duplicate_component_definitions", func(t *testing.T) {
-		// Count occurrences of "infra-notify:" - should appear exactly twice
-		// (once in components section, once in deps section)
 		count := strings.Count(string(data), "infra-notify:")
 		assert.Equal(t, 2, count,
 			"infra-notify should appear exactly twice (components + deps), found %d", count)
@@ -213,7 +192,6 @@ func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 
 		deps := config.Deps["infra-notify"]
 
-		// Verify all dependencies are valid component names (no typos)
 		validDeps := map[string]bool{
 			"domain-workflow": true,
 			"domain-ports":    true,
@@ -229,15 +207,12 @@ func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("yaml_properly_formatted", func(t *testing.T) {
-		// Verify YAML uses spaces not tabs
 		assert.NotContains(t, string(data), "\t",
 			"YAML should use spaces for indentation, not tabs")
 
-		// Verify infra-notify sections are properly indented
 		lines := strings.Split(string(data), "\n")
 		for i, line := range lines {
 			if strings.Contains(line, "infra-notify:") {
-				// Component/dep name should be indented with 2 spaces
 				trimmed := strings.TrimLeft(line, " ")
 				indent := len(line) - len(trimmed)
 				assert.Equal(t, 2, indent,
@@ -247,7 +222,6 @@ func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("component_path_exists", func(t *testing.T) {
-		// Verify infrastructure/notify directory actually exists
 		notifyPath := filepath.Join(projectRoot, "internal", "infrastructure", "notify")
 		info, err := os.Stat(notifyPath)
 		require.NoError(t, err, "infrastructure/notify directory should exist")
@@ -255,19 +229,15 @@ func TestArchLintInfraNotify_EdgeCases(t *testing.T) {
 	})
 }
 
-// TestArchLintInfraNotify_ErrorHandling tests error scenarios.
 func TestArchLintInfraNotify_ErrorHandling(t *testing.T) {
 	t.Run("missing_config_file", func(t *testing.T) {
-		// Arrange: Try to read non-existent config
 		_, err := os.ReadFile("nonexistent-config.yml")
 
-		// Assert: Should return error
 		assert.Error(t, err, "Reading non-existent config should return error")
 		assert.True(t, os.IsNotExist(err), "Error should be ErrNotExist")
 	})
 
 	t.Run("malformed_yaml_parsing", func(t *testing.T) {
-		// Arrange: Create malformed YAML
 		malformed := `
 components:
   infra-notify:
@@ -277,12 +247,10 @@ components:
 		var config map[string]any
 		err := yaml.Unmarshal([]byte(malformed), &config)
 
-		// Assert: Should fail to parse
 		assert.Error(t, err, "Malformed YAML should fail to parse")
 	})
 
 	t.Run("empty_dependency_list_is_valid", func(t *testing.T) {
-		// Arrange: Config with empty mayDependOn (valid edge case)
 		emptyDeps := `
 deps:
   infra-notify:
@@ -299,7 +267,6 @@ deps:
 		err := yaml.Unmarshal([]byte(emptyDeps), &config)
 		require.NoError(t, err, "Empty dependency list should be valid YAML")
 
-		// Assert: Empty list is valid (not nil)
 		assert.NotNil(t, config.Deps["infra-notify"].MayDependOn,
 			"Empty dependency list should be non-nil slice")
 		assert.Empty(t, config.Deps["infra-notify"].MayDependOn,
@@ -309,7 +276,6 @@ deps:
 	})
 
 	t.Run("missing_component_in_deps", func(t *testing.T) {
-		// Arrange: Config with component but no deps entry
 		missingDeps := `
 components:
   infra-notify:
@@ -329,7 +295,6 @@ deps:
 		err := yaml.Unmarshal([]byte(missingDeps), &config)
 		require.NoError(t, err)
 
-		// Assert: Component exists but deps don't
 		_, componentExists := config.Components["infra-notify"]
 		assert.True(t, componentExists, "Component should be defined")
 

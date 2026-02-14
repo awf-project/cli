@@ -31,14 +31,6 @@ type GitHubOperationProvider struct {
 	operations map[string]*plugin.OperationSchema
 }
 
-// NewGitHubOperationProvider creates a new GitHub operation provider.
-//
-// Parameters:
-//   - client: GitHub client for API interactions
-//   - logger: structured logger for operation tracing
-//
-// Returns:
-//   - *GitHubOperationProvider: configured provider ready for registration
 func NewGitHubOperationProvider(runner GHRunner, logger ports.Logger) *GitHubOperationProvider {
 	// Build operation registry from schema definitions
 	ops := AllOperations()
@@ -54,15 +46,11 @@ func NewGitHubOperationProvider(runner GHRunner, logger ports.Logger) *GitHubOpe
 	}
 }
 
-// GetOperation returns an operation schema by name.
-// Implements ports.OperationProvider.
 func (p *GitHubOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
 	op, found := p.operations[name]
 	return op, found
 }
 
-// ListOperations returns all available GitHub operations.
-// Implements ports.OperationProvider.
 func (p *GitHubOperationProvider) ListOperations() []*plugin.OperationSchema {
 	result := make([]*plugin.OperationSchema, 0, len(p.operations))
 	for _, op := range p.operations {

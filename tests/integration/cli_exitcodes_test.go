@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
 // CLI Exit Code Integration Tests (C011 - US4)
 // Tests validate CLI exit codes match error taxonomy:
 // - Exit code 1 for user errors (bad input, missing file, validation failure)
@@ -26,7 +25,6 @@ import (
 // Tests spawn actual `awf run` subprocess via exec.Command() to verify
 // CLI-level exit code mapping (internal/interfaces/cli/run.go:82-102).
 // This provides high-fidelity validation of user-facing behavior.
-// =============================================================================
 
 // getBinaryPath returns the path to the awf binary, building it if necessary
 func getBinaryPath(t *testing.T) string {
@@ -69,12 +67,10 @@ func TestCLI_ExitCode0_Success_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn awf run subprocess
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -83,7 +79,6 @@ func TestCLI_ExitCode0_Success_Integration(t *testing.T) {
 
 			output, err := cmd.CombinedOutput()
 
-			// Assert: Exit code verification
 			if tt.wantExitCode == 0 {
 				require.NoError(t, err, "workflow should succeed: %s", string(output))
 			} else {
@@ -120,12 +115,10 @@ func TestCLI_ExitCode1_UserError_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with missing input
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -135,15 +128,12 @@ func TestCLI_ExitCode1_UserError_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for user error")
 
-			// Assert - Layer 2: Exit code should be 1
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 1 for user error")
 
-			// Assert - Layer 3: Error message should indicate user error
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention %s", tt.wantStderr)
 		})
 	}
@@ -171,12 +161,10 @@ func TestCLI_ExitCode1_InvalidInputValue_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with invalid input
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -186,15 +174,12 @@ func TestCLI_ExitCode1_InvalidInputValue_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for validation error")
 
-			// Assert - Layer 2: Exit code should be 1
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 1 for validation error")
 
-			// Assert - Layer 3: Error message should indicate validation failure
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention validation")
 		})
 	}
@@ -222,12 +207,10 @@ func TestCLI_ExitCode2_InvalidStateReference_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with invalid workflow
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -237,15 +220,12 @@ func TestCLI_ExitCode2_InvalidStateReference_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for workflow error")
 
-			// Assert - Layer 2: Exit code should be 2
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 2 for workflow error")
 
-			// Assert - Layer 3: Error message should indicate workflow problem
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention state issue")
 		})
 	}
@@ -273,12 +253,10 @@ func TestCLI_ExitCode2_CyclicStateMachine_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -288,15 +266,12 @@ func TestCLI_ExitCode2_CyclicStateMachine_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for cyclic workflow")
 
-			// Assert - Layer 2: Exit code should be 2
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 2 for cycle")
 
-			// Assert - Layer 3: Error message should mention cycle
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention cycle")
 		})
 	}
@@ -324,12 +299,10 @@ func TestCLI_ExitCode3_CommandFailure_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with failing command
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -339,15 +312,12 @@ func TestCLI_ExitCode3_CommandFailure_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for execution error")
 
-			// Assert - Layer 2: Exit code should be 3
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 3 for execution error")
 
-			// Assert - Layer 3: Error message should indicate execution failure
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention command failure")
 		})
 	}
@@ -375,12 +345,10 @@ func TestCLI_ExitCode3_Timeout_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with timeout
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -390,15 +358,12 @@ func TestCLI_ExitCode3_Timeout_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for timeout")
 
-			// Assert - Layer 2: Exit code should be 3
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 3 for timeout")
 
-			// Assert - Layer 3: Error message should mention timeout
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention timeout")
 		})
 	}
@@ -426,12 +391,10 @@ func TestCLI_ExitCode4_FileNotFound_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Get binary and fixture paths
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
 
-			// Act: Spawn subprocess with non-existent file
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -441,15 +404,12 @@ func TestCLI_ExitCode4_FileNotFound_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for missing file")
 
-			// Assert - Layer 2: Exit code should be 4
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 4 for file not found")
 
-			// Assert - Layer 3: Error message should indicate file problem
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention file not found")
 		})
 	}
@@ -486,7 +446,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create unreadable workflow file
 			binaryPath := getBinaryPath(t)
 			tmpDir := t.TempDir()
 			workflowPath := filepath.Join(tmpDir, "unreadable.yaml")
@@ -499,22 +458,18 @@ states:
 				_ = os.Chmod(workflowPath, 0o644)
 			})
 
-			// Act: Spawn subprocess with unreadable file
 			cmd := exec.Command(binaryPath, "run", "unreadable.yaml")
 			cmd.Dir = tmpDir
 
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert - Layer 1: Command should fail
 			require.Error(t, err, "command should fail for permission denied")
 
-			// Assert - Layer 2: Exit code should be 4
 			exitErr, ok := err.(*exec.ExitError)
 			require.True(t, ok, "expected *exec.ExitError, got %T", err)
 			assert.Equal(t, tt.wantExitCode, exitErr.ExitCode(), "should return exit code 4 for permission denied")
 
-			// Assert - Layer 3: Error message should indicate permission problem
 			assert.Contains(t, strings.ToLower(outputStr), tt.wantStderr, "error message should mention permission")
 		})
 	}
@@ -571,7 +526,6 @@ func TestCLI_ExitCodeMapping_ComprehensiveScenarios_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			binaryPath := getBinaryPath(t)
 			fixtureDir, err := filepath.Abs("../fixtures/workflows")
 			require.NoError(t, err)
@@ -580,7 +534,6 @@ func TestCLI_ExitCodeMapping_ComprehensiveScenarios_Integration(t *testing.T) {
 				tt.setupFunc(t, fixtureDir)
 			}
 
-			// Act
 			args := []string{"run", tt.workflowFile}
 			args = append(args, tt.inputs...)
 
@@ -590,7 +543,6 @@ func TestCLI_ExitCodeMapping_ComprehensiveScenarios_Integration(t *testing.T) {
 			output, err := cmd.CombinedOutput()
 			outputStr := string(output)
 
-			// Assert
 			if tt.wantExitCode == 0 {
 				require.NoError(t, err, "workflow should succeed: %s", outputStr)
 			} else {

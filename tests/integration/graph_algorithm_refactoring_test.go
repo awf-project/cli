@@ -31,10 +31,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Happy Path Tests - Normal Graph Traversal
-// =============================================================================
-
 // TestDetectCycles_Integration_LinearWorkflow validates that linear workflows
 // (no cycles) are correctly identified as cycle-free.
 func TestDetectCycles_Integration_LinearWorkflow(t *testing.T) {
@@ -197,10 +193,6 @@ func TestComputeExecutionOrder_Integration_ParallelWorkflow(t *testing.T) {
 	assert.Greater(t, branchAIdx, parallelIdx, "branch_a should come after parallel_step")
 	assert.Greater(t, branchBIdx, parallelIdx, "branch_b should come after parallel_step")
 }
-
-// =============================================================================
-// Edge Cases Tests - Complex Graph Structures
-// =============================================================================
 
 // TestDetectCycles_Integration_MultipleCyclesInGraph validates detection of
 // multiple distinct cycles in a single workflow graph.
@@ -377,10 +369,6 @@ func TestComputeExecutionOrder_Integration_MaxBreadth(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling Tests - Invalid Graph Structures
-// =============================================================================
-
 // TestDetectCycles_Integration_InvalidTransitions validates handling of
 // transitions to non-existent states.
 func TestDetectCycles_Integration_InvalidTransitions(t *testing.T) {
@@ -448,10 +436,6 @@ func TestComputeExecutionOrder_Integration_CircularDependencies(t *testing.T) {
 	assert.NotEmpty(t, order, "Should still produce some order")
 	assert.Contains(t, order, "start")
 }
-
-// =============================================================================
-// Integration Tests - Full Workflow Validation
-// =============================================================================
 
 // TestFullWorkflowValidation_Integration validates that DetectCycles and
 // ComputeExecutionOrder work correctly together for complete workflow validation.
@@ -615,10 +599,6 @@ func TestBackwardCompatibility_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
 
 // indexOf returns the index of target in slice, or -1 if not found.
 func indexOf(slice []string, target string) int {

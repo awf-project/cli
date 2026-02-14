@@ -13,10 +13,6 @@ import (
 // Component: T004 - Provider Constructor Functional Options
 // Tests the refactored provider constructors with CLIExecutor dependency injection
 
-// =============================================================================
-// Happy Path Tests - Verify constructors work with and without options
-// =============================================================================
-
 func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -57,7 +53,6 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var mockExec *testutil.MockCLIExecutor
 			var opts []ClaudeProviderOption
 			if tt.setupMock != nil {
@@ -69,10 +64,8 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 				opts = tt.options
 			}
 
-			// Act
 			provider := NewClaudeProviderWithOptions(opts...)
 
-			// Assert
 			require.NotNil(t, provider)
 			assert.NotNil(t, provider.executor)
 			assert.NotNil(t, provider.logger)
@@ -119,7 +112,6 @@ func TestGeminiProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var mockExec *testutil.MockCLIExecutor
 			var opts []GeminiProviderOption
 			if tt.setupMock != nil {
@@ -131,10 +123,8 @@ func TestGeminiProvider_NewWithOptions_HappyPath(t *testing.T) {
 				opts = tt.options
 			}
 
-			// Act
 			provider := NewGeminiProviderWithOptions(opts...)
 
-			// Assert
 			require.NotNil(t, provider)
 			assert.NotNil(t, provider.executor)
 
@@ -175,7 +165,6 @@ func TestCodexProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var mockExec *testutil.MockCLIExecutor
 			var opts []CodexProviderOption
 			if tt.setupMock != nil {
@@ -187,10 +176,8 @@ func TestCodexProvider_NewWithOptions_HappyPath(t *testing.T) {
 				opts = tt.options
 			}
 
-			// Act
 			provider := NewCodexProviderWithOptions(opts...)
 
-			// Assert
 			require.NotNil(t, provider)
 			assert.NotNil(t, provider.executor)
 
@@ -231,7 +218,6 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var mockExec *testutil.MockCLIExecutor
 			var opts []OpenCodeProviderOption
 			if tt.setupMock != nil {
@@ -243,10 +229,8 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 				opts = tt.options
 			}
 
-			// Act
 			provider := NewOpenCodeProviderWithOptions(opts...)
 
-			// Assert
 			require.NotNil(t, provider)
 			assert.NotNil(t, provider.executor)
 
@@ -293,7 +277,6 @@ func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var mockExec *testutil.MockCLIExecutor
 			var opts []CustomProviderOption
 			if tt.setupMock != nil {
@@ -305,10 +288,8 @@ func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
 				opts = tt.options
 			}
 
-			// Act
 			provider := NewCustomProviderWithOptions(tt.providerName, tt.commandTemplate, opts...)
 
-			// Assert
 			require.NotNil(t, provider)
 			assert.NotNil(t, provider.executor)
 			assert.Equal(t, tt.providerName, provider.name)
@@ -324,10 +305,6 @@ func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Cases Tests - Boundary conditions and unusual inputs
-// =============================================================================
 
 func TestProviderOptions_EdgeCases(t *testing.T) {
 	t.Run("nil executor option panics are prevented", func(t *testing.T) {
@@ -411,10 +388,6 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Error Handling Tests - Verify behavior with mock errors
-// =============================================================================
-
 func TestProviderOptions_ErrorHandling(t *testing.T) {
 	t.Run("claude provider executor error propagates", func(t *testing.T) {
 		mockExec := testutil.NewMockCLIExecutor()
@@ -423,10 +396,8 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "test prompt", nil)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "claude execution failed")
@@ -439,10 +410,8 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "test prompt", nil)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "gemini execution failed")
@@ -455,10 +424,8 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "test prompt", nil)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "codex execution failed")
@@ -471,10 +438,8 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "test prompt", nil)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "opencode execution failed")
@@ -487,19 +452,13 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewCustomProviderWithOptions("test", "test {{.Prompt}}", WithCustomExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "test prompt", nil)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "execution failed")
 	})
 }
-
-// =============================================================================
-// Integration Tests - Verify end-to-end functionality with mocks
-// =============================================================================
 
 func TestProviderOptions_Integration(t *testing.T) {
 	t.Run("claude provider with mock executor executes successfully", func(t *testing.T) {
@@ -509,10 +468,8 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "What is 2+2?", nil)
 
-		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "claude", result.Provider)
@@ -536,10 +493,8 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "Explain Go interfaces", nil)
 
-		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "gemini", result.Provider)
@@ -559,10 +514,8 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "Write a function", nil)
 
-		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "codex", result.Provider)
@@ -581,10 +534,8 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "Generate code", nil)
 
-		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "opencode", result.Provider)
@@ -607,10 +558,8 @@ func TestProviderOptions_Integration(t *testing.T) {
 		)
 		ctx := context.Background()
 
-		// Act
 		result, err := provider.Execute(ctx, "Test prompt", nil)
 
-		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "my-agent", result.Provider)

@@ -20,8 +20,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// F023: Sub-Workflow Execution Integration Tests
 //
 // These tests verify end-to-end sub-workflow execution:
 // - Simple parent → child invocation
@@ -31,7 +29,6 @@ import (
 // - Timeout enforcement
 // - Error propagation
 // - Context cancellation
-// =============================================================================
 
 // TestSubworkflow_Simple_Integration verifies basic parent → child sub-workflow invocation.
 // Tests: call_workflow loads child, passes inputs, captures outputs

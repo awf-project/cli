@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Mock Implementations for ConversationManager Tests
-// =============================================================================
-
 // mockTokenizer implements ports.Tokenizer for testing
 type mockTokenizer struct {
 	counts     map[string]int
@@ -109,10 +105,6 @@ func (m *mockConversationProvider) Validate() error {
 	return nil
 }
 
-// =============================================================================
-// Constructor Tests
-// =============================================================================
-
 func TestNewConversationManager(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -128,10 +120,6 @@ func TestNewConversationManager(t *testing.T) {
 
 	assert.NotNil(t, manager)
 }
-
-// =============================================================================
-// Happy Path Tests - Single Turn
-// =============================================================================
 
 func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 	logger := &mockLogger{}
@@ -175,10 +163,6 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-// =============================================================================
-// Happy Path Tests - Multi-Turn
-// =============================================================================
-
 func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -220,10 +204,6 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Happy Path Tests - With System Prompt
-// =============================================================================
 
 func TestConversationManager_WithSystemPrompt(t *testing.T) {
 	logger := &mockLogger{}
@@ -267,10 +247,6 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Stop Condition Tests
-// =============================================================================
 
 func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 	logger := &mockLogger{}
@@ -360,10 +336,6 @@ func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-// =============================================================================
-// Max Turns Tests
-// =============================================================================
-
 func TestConversationManager_MaxTurns_Reached(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -448,10 +420,6 @@ func TestConversationManager_MaxTurns_One(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-// =============================================================================
-// Max Tokens Tests
-// =============================================================================
-
 func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -494,10 +462,6 @@ func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Context Window Strategy Tests
-// =============================================================================
 
 func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
 	logger := &mockLogger{}
@@ -582,10 +546,6 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Template Interpolation Tests
-// =============================================================================
 
 func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 	logger := &mockLogger{}
@@ -689,10 +649,6 @@ func TestConversationManager_Interpolation_States(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-// =============================================================================
-// Error Handling Tests - Provider Not Found
-// =============================================================================
-
 func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -736,10 +692,6 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 	assert.Nil(t, result)
 }
-
-// =============================================================================
-// Error Handling Tests - Provider Execution Error
-// =============================================================================
 
 func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 	logger := &mockLogger{}
@@ -787,10 +739,6 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-// =============================================================================
-// Error Handling Tests - Tokenizer Error
-// =============================================================================
-
 func TestConversationManager_Error_TokenizerError(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -833,10 +781,6 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Error Handling Tests - Template Resolution Error
-// =============================================================================
 
 func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 	logger := &mockLogger{}
@@ -882,10 +826,6 @@ func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// =============================================================================
-// Error Handling Tests - Stop Condition Evaluation Error
-// =============================================================================
-
 func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -929,10 +869,6 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Error Handling Tests - Context Cancellation
-// =============================================================================
 
 func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 	logger := &mockLogger{}
@@ -980,10 +916,6 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// =============================================================================
-// Unit Tests for Helper Methods - Component T001
-// =============================================================================
-
 // TestConversationManager_ValidateConversationInputs_HappyPath tests the
 // validateConversationInputs helper method with valid inputs.
 func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) {
@@ -1028,8 +960,8 @@ func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) 
 	// Execution may fail due to stub implementation, but that's expected in RED phase
 	// The key test is that we don't get a validation error about nil inputs
 	if err != nil {
-		assert.NotContains(t, err.Error(), "nil", "should not fail validation")
-		assert.NotContains(t, err.Error(), "config is nil", "should not fail validation")
+		assert.NotContains(t, err.Error(), "nil")
+		assert.NotContains(t, err.Error(), "config is nil")
 	}
 	// Result may be nil in RED phase due to incomplete implementation
 	_ = result
@@ -1208,10 +1140,6 @@ func TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderNa
 	assert.Nil(t, result)
 }
 
-// =============================================================================
-// Edge Case Tests - Nil Config
-// =============================================================================
-
 func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -1248,10 +1176,6 @@ func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "config")
 	assert.Nil(t, result)
 }
-
-// =============================================================================
-// Edge Case Tests - Empty Initial Prompt
-// =============================================================================
 
 func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 	logger := &mockLogger{}
@@ -1294,10 +1218,6 @@ func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
-
-// =============================================================================
-// Edge Case Tests - Empty System Prompt
-// =============================================================================
 
 func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 	logger := &mockLogger{}

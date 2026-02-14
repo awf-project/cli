@@ -14,10 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// =============================================================================
-// ParallelStrategy Tests
-// =============================================================================
-
 func TestParseParallelStrategy(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -67,20 +63,12 @@ func TestDefaultMaxConcurrent(t *testing.T) {
 	assert.Equal(t, 0, DefaultMaxConcurrent, "0 means unlimited")
 }
 
-// =============================================================================
-// ParallelConfig Tests
-// =============================================================================
-
 func TestParallelConfig_Defaults(t *testing.T) {
 	config := ParallelConfig{}
 
 	assert.Equal(t, ParallelStrategy(""), config.Strategy)
 	assert.Equal(t, 0, config.MaxConcurrent)
 }
-
-// =============================================================================
-// BranchResult Tests
-// =============================================================================
 
 func TestBranchResult_Success(t *testing.T) {
 	tests := []struct {
@@ -159,10 +147,6 @@ func TestBranchResult_Fields(t *testing.T) {
 	assert.Equal(t, "stderr content", result.Stderr)
 	assert.Equal(t, 42, result.ExitCode)
 }
-
-// =============================================================================
-// ParallelResult Tests
-// =============================================================================
 
 func TestNewParallelResult(t *testing.T) {
 	result := NewParallelResult()

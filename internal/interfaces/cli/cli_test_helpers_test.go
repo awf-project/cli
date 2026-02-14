@@ -100,10 +100,6 @@ func createTestWorkflow(t *testing.T, baseDir, filename, content string) string 
 	return workflowPath
 }
 
-// =============================================================================
-// Helper Validation Tests
-// =============================================================================
-
 // TestSetupTestDir verifies the thread-safe directory setup helper.
 // This test validates T002 acceptance criteria: setupTestDir uses t.TempDir().
 func TestSetupTestDir(t *testing.T) {

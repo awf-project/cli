@@ -22,10 +22,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// HAPPY PATH TESTS
-// =============================================================================
-
 // TestPluginDiscovery_Integration tests discovering plugins from a directory.
 // Acceptance Criteria: Plugin discovery from plugins/ directory
 func TestPluginDiscovery_Integration(t *testing.T) {
@@ -141,7 +137,7 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 	require.Contains(t, m.Config, "notify_on_failure")
 	notifyCfg := m.Config["notify_on_failure"]
 	assert.Equal(t, plugin.ConfigTypeBoolean, notifyCfg.Type)
-	assert.Equal(t, true, notifyCfg.Default)
+	assert.True(t, notifyCfg.Default)
 
 	require.Contains(t, m.Config, "log_level")
 	logCfg := m.Config["log_level"]
@@ -316,10 +312,6 @@ func TestOperationRegistry_Integration(t *testing.T) {
 	assert.False(t, found)
 }
 
-// =============================================================================
-// CLI INTEGRATION TESTS
-// =============================================================================
-
 // TestCLI_Plugin_List_Integration tests the `awf plugin list` command.
 func TestCLI_Plugin_List_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -419,10 +411,6 @@ func TestCLI_Plugin_Help_Integration(t *testing.T) {
 	assert.Contains(t, output, "enable")
 	assert.Contains(t, output, "disable")
 }
-
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
 
 // TestPluginDiscovery_EmptyDirectory_Integration tests discovery with no plugins.
 func TestPluginDiscovery_EmptyDirectory_Integration(t *testing.T) {
@@ -606,10 +594,6 @@ func TestOperationRegistry_Concurrent_Integration(t *testing.T) {
 	// Registry should be in a consistent state
 	assert.GreaterOrEqual(t, registry.Count(), 0)
 }
-
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
 
 // TestPluginLoad_InvalidPath_Integration tests loading from non-existent path.
 func TestPluginLoad_InvalidPath_Integration(t *testing.T) {
@@ -802,10 +786,6 @@ func TestCLI_Plugin_Disable_NoArgs_Integration(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// =============================================================================
-// CONTEXT CANCELLATION TESTS
-// =============================================================================
-
 // TestPluginDiscovery_ContextCancellation_Integration tests discovery with cancelled context.
 func TestPluginDiscovery_ContextCancellation_Integration(t *testing.T) {
 	fixturesPath := "../fixtures/plugins"
@@ -859,10 +839,6 @@ func TestPluginService_ContextCancellation_Integration(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
-// =============================================================================
-// PLUGIN INFO TESTS
-// =============================================================================
-
 // TestPluginInfo_StatusMethods_Integration tests PluginInfo helper methods.
 func TestPluginInfo_StatusMethods_Integration(t *testing.T) {
 	tests := []struct {
@@ -887,10 +863,6 @@ func TestPluginInfo_StatusMethods_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// OPERATION RESULT TESTS
-// =============================================================================
 
 // TestOperationResult_Helpers_Integration tests OperationResult helper methods.
 func TestOperationResult_Helpers_Integration(t *testing.T) {
@@ -934,10 +906,6 @@ func TestOperationResult_Helpers_Integration(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// MANIFEST CAPABILITY TESTS
-// =============================================================================
-
 // TestManifest_HasCapability_Integration tests capability checking.
 func TestManifest_HasCapability_Integration(t *testing.T) {
 	m := &plugin.Manifest{
@@ -949,10 +917,6 @@ func TestManifest_HasCapability_Integration(t *testing.T) {
 	assert.False(t, m.HasCapability(plugin.CapabilityValidators))
 	assert.False(t, m.HasCapability("unknown"))
 }
-
-// =============================================================================
-// CLI LIST EMPTY PLUGINS DIRECTORY TEST
-// =============================================================================
 
 // TestCLI_Plugin_List_EmptyDir_Integration tests list command with no plugins.
 func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
@@ -975,10 +939,6 @@ func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
 	// Should not error, just show empty or "no plugins found"
 	assert.True(t, len(output) > 0 || strings.Contains(output, "NAME"))
 }
-
-// =============================================================================
-// PLUGIN STATE TESTS
-// =============================================================================
 
 // TestPluginState_NewPluginState_Integration tests default plugin state creation.
 func TestPluginState_NewPluginState_Integration(t *testing.T) {

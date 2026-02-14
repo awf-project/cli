@@ -187,10 +187,6 @@ func TestLocalPromptsDir(t *testing.T) {
 	assert.Equal(t, ".awf/prompts", got)
 }
 
-// =============================================================================
-// Plugin Directory Tests (T014)
-// =============================================================================
-
 func TestAWFPluginsDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -339,10 +335,6 @@ func TestPluginsDirs_TableDriven(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Local Config Path Tests (T004 - F036)
-// =============================================================================
 
 func TestLocalConfigPath(t *testing.T) {
 	tests := []struct {

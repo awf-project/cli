@@ -293,11 +293,8 @@ func (r *interpolatingMockResolver) Resolve(template string, ctx *interpolation.
 	return template, nil
 }
 
-// =============================================================================
-// ExecuteSingleStep Extended Tests - T008
 // Feature: C054 - Increase Application Layer Test Coverage
 // Component: T008 - Extend ExecuteSingleStep tests
-// =============================================================================
 //
 // These tests target uncovered paths in ExecuteSingleStep to increase coverage
 // from 62.3% to 80%+. Focus areas:
@@ -307,7 +304,6 @@ func (r *interpolatingMockResolver) Resolve(template string, ctx *interpolation.
 //
 // Tests follow existing manual mock wiring pattern (pre-C012) to maintain
 // consistency with existing tests in this file. New tests are additive only.
-// =============================================================================
 
 func TestExecuteSingleStep_TemplateExpansionError(t *testing.T) {
 	tests := []struct {
@@ -339,7 +335,6 @@ func TestExecuteSingleStep_TemplateExpansionError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create workflow with template reference
 			repo := newMockRepository()
 
 			// Add template reference to trigger template expansion
@@ -359,10 +354,8 @@ func TestExecuteSingleStep_TemplateExpansionError(t *testing.T) {
 			execSvc := application.NewExecutionService(wfSvc, newMockExecutor(), newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 			execSvc.SetTemplateService(templateSvc)
 
-			// Act: Execute single step
 			result, err := execSvc.ExecuteSingleStep(context.Background(), tt.workflow.Name, "start", nil, nil)
 
-			// Assert: Verify error returned
 			require.Error(t, err)
 			assert.Nil(t, result)
 			assert.Contains(t, err.Error(), tt.expectedError)
@@ -397,7 +390,6 @@ func TestExecuteSingleStep_DirInterpolation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with step.Dir containing template
 			repo := newMockRepository()
 			repo.workflows["dir-test"] = &workflow.Workflow{
 				Name:    "dir-test",
@@ -434,11 +426,9 @@ func TestExecuteSingleStep_DirInterpolation(t *testing.T) {
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
 
-			// Act: Execute step with workdir input
 			inputs := map[string]any{"workdir": tt.workdir}
 			result, err := execSvc.ExecuteSingleStep(context.Background(), "dir-test", "work", inputs, nil)
 
-			// Assert: Verify dir was interpolated correctly
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			assert.Equal(t, workflow.StatusCompleted, result.Status)
@@ -470,7 +460,6 @@ func TestExecuteSingleStep_DirInterpolationError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with step.Dir that will fail interpolation
 			repo := newMockRepository()
 			repo.workflows["dir-error-test"] = &workflow.Workflow{
 				Name:    "dir-error-test",
@@ -502,10 +491,8 @@ func TestExecuteSingleStep_DirInterpolationError(t *testing.T) {
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
 
-			// Act: Execute step with dir interpolation error
 			result, err := execSvc.ExecuteSingleStep(context.Background(), "dir-error-test", "work", nil, nil)
 
-			// Assert: Verify error returned with correct prefix
 			require.Error(t, err)
 			require.NotNil(t, result, "result should be returned even on error")
 			assert.Contains(t, err.Error(), tt.expectedError)
@@ -541,7 +528,6 @@ func TestExecuteSingleStep_StepTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with step timeout
 			repo := newMockRepository()
 			repo.workflows["timeout-test"] = &workflow.Workflow{
 				Name:    "timeout-test",
@@ -569,10 +555,8 @@ func TestExecuteSingleStep_StepTimeout(t *testing.T) {
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
-			// Act: Execute step with timeout
 			result, err := execSvc.ExecuteSingleStep(context.Background(), "timeout-test", "slow", nil, nil)
 
-			// Assert: Verify timeout behavior
 			if tt.expectTimeout {
 				// Timeout results in failed status with context deadline error
 				require.NoError(t, err, "ExecuteSingleStep returns result, not error")
@@ -588,10 +572,6 @@ func TestExecuteSingleStep_StepTimeout(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Test Helpers for ExecuteSingleStep Extended Tests
-// =============================================================================
 
 // dirCapturingExecutor captures the Dir field from Command to verify interpolation
 type dirCapturingExecutor struct {

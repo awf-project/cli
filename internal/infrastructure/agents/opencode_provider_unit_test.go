@@ -15,10 +15,6 @@ import (
 // Component: C025 - T008 - Unit Tests for OpenCodeProvider (WITHOUT integration build tag)
 // These tests use MockCLIExecutor to avoid external CLI dependencies
 
-// =============================================================================
-// Execute Method Tests
-// =============================================================================
-
 func TestOpenCodeProvider_Execute_Success(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -412,10 +408,6 @@ func TestOpenCodeProvider_Execute_ProviderName(t *testing.T) {
 	assert.Equal(t, "opencode", result.Provider)
 }
 
-// =============================================================================
-// JSON Auto-Detection Tests (OpenCodeProvider-specific)
-// =============================================================================
-
 func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -473,10 +465,6 @@ func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ExecuteConversation Method Tests
-// =============================================================================
-
 func TestOpenCodeProvider_ExecuteConversation_NotImplemented(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
@@ -488,10 +476,6 @@ func TestOpenCodeProvider_ExecuteConversation_NotImplemented(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "not implemented")
 }
-
-// =============================================================================
-// Provider Interface Method Tests
-// =============================================================================
 
 func TestOpenCodeProvider_Name(t *testing.T) {
 	provider := NewOpenCodeProvider()
@@ -523,10 +507,6 @@ func TestOpenCodeProvider_NewOpenCodeProviderWithOptions(t *testing.T) {
 	assert.Equal(t, mockExec, provider.executor)
 	assert.Equal(t, "opencode", provider.Name())
 }
-
-// =============================================================================
-// CLI Argument Construction Tests
-// =============================================================================
 
 func TestOpenCodeProvider_Execute_CLIArguments(t *testing.T) {
 	tests := []struct {

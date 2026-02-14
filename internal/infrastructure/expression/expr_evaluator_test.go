@@ -12,31 +12,17 @@ import (
 // Component: T003
 // Feature: C042
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestExprEvaluator_InterfaceCompliance(t *testing.T) {
 	// Verify ExprEvaluator implements ports.ExpressionEvaluator
 	var _ ports.ExpressionEvaluator = (*ExprEvaluator)(nil)
 }
 
-// ============================================================================
-// Constructor Tests
-// ============================================================================
-
 func TestNewExprEvaluator(t *testing.T) {
-	// Arrange & Act
 	evaluator := NewExprEvaluator()
 
-	// Assert
 	require.NotNil(t, evaluator)
 	assert.Implements(t, (*ports.ExpressionEvaluator)(nil), evaluator)
 }
-
-// ============================================================================
-// EvaluateBool Tests - Happy Path
-// ============================================================================
 
 func TestExprEvaluator_EvaluateBool_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -215,65 +201,48 @@ func TestExprEvaluator_EvaluateBool_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expression, tt.context)
 
-			// Assert
 			require.NoError(t, err, "expression should evaluate without error")
 			assert.Equal(t, tt.want, result, "expression result mismatch")
 		})
 	}
 }
 
-// ============================================================================
-// EvaluateBool Tests - Edge Cases
-// ============================================================================
-
 func TestExprEvaluator_EvaluateBool_EmptyExpression(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{}
 
-	// Act
 	result, err := evaluator.EvaluateBool("", ctx)
 
-	// Assert
 	assert.Error(t, err, "empty expression should return error")
 	assert.False(t, result, "empty expression should return false")
 }
 
 func TestExprEvaluator_EvaluateBool_NilContext(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 
-	// Act
 	result, err := evaluator.EvaluateBool("true", nil)
 
-	// Assert
 	// pkg/expression handles nil context by creating empty maps
 	require.NoError(t, err)
 	assert.True(t, result)
 }
 
 func TestExprEvaluator_EvaluateBool_MissingInputs(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{}
 
-	// Act
 	result, err := evaluator.EvaluateBool("inputs.count > 5", ctx)
 
-	// Assert
 	// Missing inputs should evaluate to false without error (per pkg/expression behavior)
 	require.NoError(t, err)
 	assert.False(t, result)
 }
 
 func TestExprEvaluator_EvaluateBool_MissingStateKey(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		States: map[string]interpolation.StepStateData{
@@ -281,10 +250,8 @@ func TestExprEvaluator_EvaluateBool_MissingStateKey(t *testing.T) {
 		},
 	}
 
-	// Act
 	result, err := evaluator.EvaluateBool("states.nonexistent.ExitCode == 0", ctx)
 
-	// Assert
 	// Missing state keys should evaluate to false without error
 	require.NoError(t, err)
 	assert.False(t, result)
@@ -306,16 +273,13 @@ func TestExprEvaluator_EvaluateBool_TypeCoercion_StringBoolean(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 			ctx := &interpolation.Context{
 				Inputs: map[string]any{"flag": tt.value},
 			}
 
-			// Act
 			result, err := evaluator.EvaluateBool("inputs.flag", ctx)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result)
 		})
@@ -345,25 +309,18 @@ func TestExprEvaluator_EvaluateBool_TypeCoercion_StringNumbers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 			ctx := &interpolation.Context{
 				Inputs: map[string]any{"count": tt.value, "ratio": tt.value},
 			}
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expression, ctx)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result)
 		})
 	}
 }
-
-// ============================================================================
-// EvaluateBool Tests - Error Handling
-// ============================================================================
 
 func TestExprEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
 	tests := []struct {
@@ -379,14 +336,11 @@ func TestExprEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 			ctx := &interpolation.Context{}
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expression, ctx)
 
-			// Assert
 			require.Error(t, err, "invalid syntax should return error")
 			assert.False(t, result, "error should return false")
 		})
@@ -394,24 +348,17 @@ func TestExprEvaluator_EvaluateBool_InvalidSyntax(t *testing.T) {
 }
 
 func TestExprEvaluator_EvaluateBool_NonBooleanResult(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": 10},
 	}
 
-	// Act - arithmetic expression returns int, not bool
 	result, err := evaluator.EvaluateBool("inputs.count + 5", ctx)
 
-	// Assert
 	require.Error(t, err, "non-boolean result should return error")
 	assert.Contains(t, err.Error(), "boolean", "error should mention type mismatch")
 	assert.False(t, result)
 }
-
-// ============================================================================
-// EvaluateBool Tests - Real-world Loop Conditions
-// ============================================================================
 
 func TestExprEvaluator_EvaluateBool_LoopConditions(t *testing.T) {
 	tests := []struct {
@@ -474,22 +421,15 @@ func TestExprEvaluator_EvaluateBool_LoopConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 
-			// Act
 			result, err := evaluator.EvaluateBool(tt.expression, tt.context)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result)
 		})
 	}
 }
-
-// ============================================================================
-// EvaluateInt Tests - Happy Path
-// ============================================================================
 
 func TestExprEvaluator_EvaluateInt_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -585,59 +525,43 @@ func TestExprEvaluator_EvaluateInt_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expression, tt.context)
 
-			// Assert
 			require.NoError(t, err, "expression should evaluate without error")
 			assert.Equal(t, tt.want, result, "expression result mismatch")
 		})
 	}
 }
 
-// ============================================================================
-// EvaluateInt Tests - Edge Cases
-// ============================================================================
-
 func TestExprEvaluator_EvaluateInt_EmptyExpression(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{}
 
-	// Act
 	result, err := evaluator.EvaluateInt("", ctx)
 
-	// Assert
 	assert.Error(t, err, "empty expression should return error")
 	assert.Equal(t, 0, result, "error should return zero value")
 }
 
 func TestExprEvaluator_EvaluateInt_NilContext(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 
-	// Act
 	result, err := evaluator.EvaluateInt("42", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 42, result)
 }
 
 func TestExprEvaluator_EvaluateInt_TypeCoercion_Int64(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": int64(999999)},
 	}
 
-	// Act
 	result, err := evaluator.EvaluateInt("inputs.count", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 999999, result)
 }
@@ -667,13 +591,10 @@ func TestExprEvaluator_EvaluateInt_TypeCoercion_Float64(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expression, tt.context)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result)
 		})
@@ -694,16 +615,13 @@ func TestExprEvaluator_EvaluateInt_TypeCoercion_StringNumber(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 			ctx := &interpolation.Context{
 				Inputs: map[string]any{"count": tt.value},
 			}
 
-			// Act
 			result, err := evaluator.EvaluateInt("inputs.count", ctx)
 
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result)
 		})
@@ -711,27 +629,21 @@ func TestExprEvaluator_EvaluateInt_TypeCoercion_StringNumber(t *testing.T) {
 }
 
 func TestExprEvaluator_EvaluateInt_DivisionByZero(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{}
 
-	// Act
 	result, err := evaluator.EvaluateInt("10 / 0", ctx)
 
-	// Assert
 	require.Error(t, err, "division by zero should return error")
 	assert.Equal(t, 0, result)
 }
 
 func TestExprEvaluator_EvaluateInt_Overflow(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{}
 
-	// Act - very large number multiplication
 	result, err := evaluator.EvaluateInt("999999999 * 999999999", ctx)
 
-	// Assert
 	// Implementation may handle overflow differently - verify it doesn't panic
 	// Either succeeds with wrapped value or returns error
 	if err == nil {
@@ -740,10 +652,6 @@ func TestExprEvaluator_EvaluateInt_Overflow(t *testing.T) {
 		assert.Equal(t, 0, result, "error should return zero")
 	}
 }
-
-// ============================================================================
-// EvaluateInt Tests - Error Handling
-// ============================================================================
 
 func TestExprEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
 	tests := []struct {
@@ -758,14 +666,11 @@ func TestExprEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 			ctx := &interpolation.Context{}
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expression, ctx)
 
-			// Assert
 			require.Error(t, err, "invalid syntax should return error")
 			assert.Equal(t, 0, result, "error should return zero")
 		})
@@ -773,38 +678,28 @@ func TestExprEvaluator_EvaluateInt_InvalidSyntax(t *testing.T) {
 }
 
 func TestExprEvaluator_EvaluateInt_NonNumericResult(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"message": "hello"},
 	}
 
-	// Act
 	result, err := evaluator.EvaluateInt("inputs.message", ctx)
 
-	// Assert
 	require.Error(t, err, "non-numeric result should return error")
 	assert.Equal(t, 0, result)
 }
 
 func TestExprEvaluator_EvaluateInt_BooleanExpression(t *testing.T) {
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": 10},
 	}
 
-	// Act
 	result, err := evaluator.EvaluateInt("inputs.count > 5", ctx)
 
-	// Assert
 	require.Error(t, err, "boolean expression should return error")
 	assert.Equal(t, 0, result)
 }
-
-// ============================================================================
-// EvaluateInt Tests - Real-world Loop Scenarios
-// ============================================================================
 
 func TestExprEvaluator_EvaluateInt_LoopMaxIterations(t *testing.T) {
 	tests := []struct {
@@ -875,37 +770,27 @@ func TestExprEvaluator_EvaluateInt_LoopMaxIterations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			evaluator := NewExprEvaluator()
 
-			// Act
 			result, err := evaluator.EvaluateInt(tt.expression, tt.context)
 
-			// Assert
 			require.NoError(t, err, "loop max_iterations expression should evaluate")
 			assert.Equal(t, tt.want, result, "max_iterations mismatch")
 		})
 	}
 }
 
-// ============================================================================
-// Cross-method Consistency Tests
-// ============================================================================
-
 func TestExprEvaluator_Consistency_MultipleEvaluations(t *testing.T) {
 	// Verify that multiple evaluations produce consistent results
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": 10},
 	}
 
-	// Act - Evaluate same expression multiple times
 	result1, err1 := evaluator.EvaluateBool("inputs.count > 5", ctx)
 	result2, err2 := evaluator.EvaluateBool("inputs.count > 5", ctx)
 	result3, err3 := evaluator.EvaluateBool("inputs.count > 5", ctx)
 
-	// Assert - All results should be identical
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 	require.NoError(t, err3)
@@ -915,35 +800,29 @@ func TestExprEvaluator_Consistency_MultipleEvaluations(t *testing.T) {
 
 func TestExprEvaluator_Consistency_NoSideEffects(t *testing.T) {
 	// Verify that evaluation doesn't modify context
-	// Arrange
 	evaluator := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": 10},
 	}
 	originalCount := ctx.Inputs["count"]
 
-	// Act
 	_, _ = evaluator.EvaluateBool("inputs.count > 5", ctx)
 	_, _ = evaluator.EvaluateInt("inputs.count + 5", ctx)
 
-	// Assert
 	assert.Equal(t, originalCount, ctx.Inputs["count"], "context should not be modified")
 }
 
 func TestExprEvaluator_Consistency_MultipleInstances(t *testing.T) {
 	// Verify that multiple evaluator instances work independently
-	// Arrange
 	evaluator1 := NewExprEvaluator()
 	evaluator2 := NewExprEvaluator()
 	ctx := &interpolation.Context{
 		Inputs: map[string]any{"count": 10},
 	}
 
-	// Act
 	result1, err1 := evaluator1.EvaluateInt("inputs.count + 5", ctx)
 	result2, err2 := evaluator2.EvaluateInt("inputs.count + 5", ctx)
 
-	// Assert
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 	assert.Equal(t, result1, result2)

@@ -1,8 +1,5 @@
 package application_test
 
-// =============================================================================
-// Source: loop_executor_transitions_test.go | Component: C014
-// =============================================================================
 //
 // This file has been split into:
 // - loop_transitions_intrabody_test.go (T010) - intra-body transitions
@@ -10,4 +7,3 @@ package application_test
 // - loop_transitions_foreach_test.go (T014) - foreach-specific transitions
 //
 // File will be deleted in T015.
-// =============================================================================

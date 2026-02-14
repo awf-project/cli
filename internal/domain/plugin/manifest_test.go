@@ -8,10 +8,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// =============================================================================
-// Constants Tests
-// =============================================================================
-
 func TestValidCapabilities_ContainsExpectedValues(t *testing.T) {
 	assert.Contains(t, plugin.ValidCapabilities, plugin.CapabilityOperations)
 	assert.Contains(t, plugin.ValidCapabilities, plugin.CapabilityCommands)
@@ -38,10 +34,8 @@ func TestConfigTypeConstants_Values(t *testing.T) {
 	assert.Equal(t, "boolean", plugin.ConfigTypeBoolean)
 }
 
-// =============================================================================
 // NamePattern Regex Tests (Component T001)
 // Feature: C031
-// =============================================================================
 
 func TestNamePattern_ValidNames(t *testing.T) {
 	// Component: T001
@@ -150,10 +144,6 @@ func TestNamePattern_RegexCompilation(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// =============================================================================
-// Manifest Creation Tests
-// =============================================================================
-
 func TestManifest_Creation(t *testing.T) {
 	m := plugin.Manifest{
 		Name:       "test-plugin",
@@ -253,10 +243,6 @@ func TestManifest_HasCapability(t *testing.T) {
 	assert.False(t, m.HasCapability(plugin.CapabilityValidators))
 }
 
-// =============================================================================
-// ConfigField Tests
-// =============================================================================
-
 func TestConfigField_Creation(t *testing.T) {
 	cf := plugin.ConfigField{
 		Type:        plugin.ConfigTypeString,
@@ -301,10 +287,6 @@ func TestConfigField_FullField(t *testing.T) {
 	assert.Equal(t, "Configuration field", cf.Description)
 	assert.Len(t, cf.Enum, 2)
 }
-
-// =============================================================================
-// Manifest Field Format Tests
-// =============================================================================
 
 func TestManifest_NameFormats(t *testing.T) {
 	tests := []struct {
@@ -484,10 +466,8 @@ func TestManifest_AuthorFormats(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // validateConfigField() Tests (Component T002)
 // Feature: C031
-// =============================================================================
 
 // TestValidateConfigField_HappyPath tests valid ConfigField configurations
 func TestValidateConfigField_HappyPath(t *testing.T) {
@@ -1047,9 +1027,7 @@ func TestValidateConfigField_ComplexScenarios(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // validateDefaultType() Helper Tests (Component T003)
-// =============================================================================
 
 // TestValidateDefaultType_StringType tests string type validation via validateDefaultType
 func TestValidateDefaultType_StringType(t *testing.T) {
@@ -1654,10 +1632,8 @@ func TestValidateDefaultType_MultipleFields(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // Manifest.Validate() Integration Tests (Component T004)
 // Feature: C031
-// =============================================================================
 
 // TestManifestValidate_HappyPath tests valid manifests that should pass all validation
 func TestManifestValidate_HappyPath(t *testing.T) {

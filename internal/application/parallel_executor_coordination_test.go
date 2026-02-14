@@ -14,14 +14,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Tests for T007: runBranchWithSemaphore helper
 // Feature: C005
-// =============================================================================
-// Note: Uses mockStepExecutor and mockLogger from parallel_executor_test.go
 
 func TestParallelExecutor_RunBranchWithSemaphore_SuccessfulExecution(t *testing.T) {
-	// Arrange: setup executor with successful branch result
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch1"] = &workflow.BranchResult{
 		Name:        "branch1",
@@ -40,7 +35,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SuccessfulExecution(t *testing.
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-1", "test-workflow")
 
-	// Act: execute branch with semaphore
 	branchResult, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch1",
@@ -52,7 +46,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SuccessfulExecution(t *testing.
 		&mu,
 	)
 
-	// Assert: successful execution
 	require.NoError(t, err)
 	require.NotNil(t, branchResult)
 	assert.Equal(t, "branch1", branchResult.Name)
@@ -61,11 +54,10 @@ func TestParallelExecutor_RunBranchWithSemaphore_SuccessfulExecution(t *testing.
 	assert.True(t, branchResult.Success())
 
 	// Verify result was added to parallel result
-	assert.Equal(t, 1, len(result.Results))
+	assert.Len(t, result.Results, 1)
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_ExecutorError(t *testing.T) {
-	// Arrange: setup executor with error
 	expectedErr := errors.New("execution failed")
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.errors["branch2"] = expectedErr
@@ -79,7 +71,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ExecutorError(t *testing.T) {
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-2", "test-workflow")
 
-	// Act: execute branch that will fail
 	branchResult, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch2",
@@ -91,7 +82,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ExecutorError(t *testing.T) {
 		&mu,
 	)
 
-	// Assert: error returned and result added
 	require.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	require.NotNil(t, branchResult)
@@ -99,12 +89,11 @@ func TestParallelExecutor_RunBranchWithSemaphore_ExecutorError(t *testing.T) {
 	assert.NotNil(t, branchResult.Error)
 
 	// Verify error result was added to parallel result
-	assert.Equal(t, 1, len(result.Results))
+	assert.Len(t, result.Results, 1)
 	assert.NotNil(t, result.FirstError)
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_ContextCancellation(t *testing.T) {
-	// Arrange: setup with cancellable context
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.delay = 100 * time.Millisecond // Slow execution
 
@@ -119,7 +108,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ContextCancellation(t *testing.
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-3", "test-workflow")
 
-	// Act: execute branch with cancelled context
 	branchResult, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch3",
@@ -131,7 +119,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ContextCancellation(t *testing.
 		&mu,
 	)
 
-	// Assert: context cancellation detected
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 	// Stub returns nil, nil - implementation should return nil, ctx.Err()
@@ -139,7 +126,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ContextCancellation(t *testing.
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreBlocking(t *testing.T) {
-	// Arrange: setup with full semaphore (size 1, already occupied)
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch4"] = &workflow.BranchResult{
 		Name:     "branch4",
@@ -161,7 +147,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreBlocking(t *testing.T)
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-4", "test-workflow")
 
-	// Act: attempt to execute branch with full semaphore
 	branchResult, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch4",
@@ -173,7 +158,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreBlocking(t *testing.T)
 		&mu,
 	)
 
-	// Assert: timeout waiting for semaphore
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	// Stub returns nil, nil - implementation should detect ctx.Done() and return error
@@ -181,7 +165,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreBlocking(t *testing.T)
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_NoSemaphore(t *testing.T) {
-	// Arrange: setup without semaphore (unlimited concurrency)
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch5"] = &workflow.BranchResult{
 		Name:        "branch5",
@@ -199,7 +182,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_NoSemaphore(t *testing.T) {
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-5", "test-workflow")
 
-	// Act: execute branch without semaphore (nil)
 	branchResult, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch5",
@@ -211,12 +193,11 @@ func TestParallelExecutor_RunBranchWithSemaphore_NoSemaphore(t *testing.T) {
 		&mu,
 	)
 
-	// Assert: successful execution without semaphore
 	require.NoError(t, err)
 	require.NotNil(t, branchResult)
 	assert.Equal(t, "branch5", branchResult.Name)
 	assert.Equal(t, "no semaphore", branchResult.Output)
-	assert.Equal(t, 1, len(result.Results))
+	assert.Len(t, result.Results, 1)
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
@@ -334,7 +315,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			stepExecutor := newMockStepExecutor()
 			tt.setupExecutor(stepExecutor)
 
@@ -356,7 +336,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 			wf := &workflow.Workflow{Name: "test"}
 			execCtx := workflow.NewExecutionContext("exec", "test")
 
-			// Act
 			branchResult, err := executor.RunBranchWithSemaphore(
 				ctx,
 				tt.branchName,
@@ -368,7 +347,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 				&mu,
 			)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.wantErrType != nil {
@@ -384,7 +362,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_ConcurrentAccess(t *testing.T) {
-	// Arrange: test concurrent access to shared result and mutex
 	stepExecutor := newMockStepExecutor()
 	for i := 0; i < 10; i++ {
 		branchName := fmt.Sprintf("branch%d", i)
@@ -404,7 +381,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ConcurrentAccess(t *testing.T) 
 	wf := &workflow.Workflow{Name: "test-workflow"}
 	execCtx := workflow.NewExecutionContext("exec-concurrent", "test-workflow")
 
-	// Act: launch 10 concurrent branches
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -429,14 +405,12 @@ func TestParallelExecutor_RunBranchWithSemaphore_ConcurrentAccess(t *testing.T) 
 
 	wg.Wait()
 
-	// Assert: all branches executed and results added safely
 	// Note: stub implementation may not properly add results
 	// Real implementation should have len(result.Results) == 10
 	assert.LessOrEqual(t, len(result.Results), 10)
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreRelease(t *testing.T) {
-	// Arrange: verify semaphore is properly released after execution
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch1"] = &workflow.BranchResult{
 		Name:     "branch1",
@@ -452,7 +426,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreRelease(t *testing.T) 
 	wf := &workflow.Workflow{Name: "test"}
 	execCtx := workflow.NewExecutionContext("exec", "test")
 
-	// Act: execute branch
 	_, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch1",
@@ -465,7 +438,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreRelease(t *testing.T) 
 	)
 	require.NoError(t, err)
 
-	// Assert: semaphore slot released (should be able to acquire again)
 	select {
 	case sem <- struct{}{}:
 		// Successfully acquired - semaphore was released
@@ -476,7 +448,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_SemaphoreRelease(t *testing.T) 
 }
 
 func TestParallelExecutor_RunBranchWithSemaphore_ErrorWithSemaphoreRelease(t *testing.T) {
-	// Arrange: verify semaphore is released even on error
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.errors["branch-fail"] = errors.New("execution error")
 
@@ -489,7 +460,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ErrorWithSemaphoreRelease(t *te
 	wf := &workflow.Workflow{Name: "test"}
 	execCtx := workflow.NewExecutionContext("exec", "test")
 
-	// Act: execute failing branch
 	_, err := executor.RunBranchWithSemaphore(
 		ctx,
 		"branch-fail",
@@ -502,7 +472,6 @@ func TestParallelExecutor_RunBranchWithSemaphore_ErrorWithSemaphoreRelease(t *te
 	)
 	require.Error(t, err)
 
-	// Assert: semaphore slot released even after error
 	select {
 	case sem <- struct{}{}:
 		// Successfully acquired - semaphore was released
@@ -512,15 +481,11 @@ func TestParallelExecutor_RunBranchWithSemaphore_ErrorWithSemaphoreRelease(t *te
 	}
 }
 
-// =============================================================================
-// Tests for T008: checkBranchSuccess helper
 // Feature: C005
-// =============================================================================
 
 // TestParallelExecutor_CheckBranchSuccess_FirstSuccess tests the first successful branch
 // detection and cancellation trigger.
 func TestParallelExecutor_CheckBranchSuccess_FirstSuccess(t *testing.T) {
-	// Arrange: setup for first success detection
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	successfulBranch := &workflow.BranchResult{
@@ -544,10 +509,8 @@ func TestParallelExecutor_CheckBranchSuccess_FirstSuccess(t *testing.T) {
 		cancel()
 	}
 
-	// Act: check branch success for the first successful branch
 	executor.CheckBranchSuccess(successfulBranch, &firstSuccess, &mu, successChan, mockCancel)
 
-	// Assert: first success detected and cancellation triggered
 	assert.True(t, firstSuccess, "firstSuccess flag should be set to true")
 	assert.True(t, cancelCalled, "cancel function should have been called")
 
@@ -563,7 +526,6 @@ func TestParallelExecutor_CheckBranchSuccess_FirstSuccess(t *testing.T) {
 // TestParallelExecutor_CheckBranchSuccess_DuplicateSuccess tests idempotent behavior
 // when multiple branches succeed (only first should trigger cancellation).
 func TestParallelExecutor_CheckBranchSuccess_DuplicateSuccess(t *testing.T) {
-	// Arrange: setup with firstSuccess already true
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	successfulBranch := &workflow.BranchResult{
@@ -588,10 +550,8 @@ func TestParallelExecutor_CheckBranchSuccess_DuplicateSuccess(t *testing.T) {
 		cancel()
 	}
 
-	// Act: check branch success when already succeeded
 	executor.CheckBranchSuccess(successfulBranch, &firstSuccess, &mu, successChan, mockCancel)
 
-	// Assert: no additional cancellation or signal
 	assert.True(t, firstSuccess, "firstSuccess should remain true")
 	assert.Equal(t, 0, cancelCallCount, "cancel should not be called again")
 
@@ -615,7 +575,6 @@ func TestParallelExecutor_CheckBranchSuccess_DuplicateSuccess(t *testing.T) {
 // TestParallelExecutor_CheckBranchSuccess_FailedBranch tests that failed branches
 // do not trigger success detection or cancellation.
 func TestParallelExecutor_CheckBranchSuccess_FailedBranch(t *testing.T) {
-	// Arrange: setup with failed branch
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	failedBranch := &workflow.BranchResult{
@@ -640,10 +599,8 @@ func TestParallelExecutor_CheckBranchSuccess_FailedBranch(t *testing.T) {
 		cancel()
 	}
 
-	// Act: check branch success for failed branch
 	executor.CheckBranchSuccess(failedBranch, &firstSuccess, &mu, successChan, mockCancel)
 
-	// Assert: no success detection or cancellation
 	assert.False(t, firstSuccess, "firstSuccess should remain false for failed branch")
 	assert.False(t, cancelCalled, "cancel should not be called for failed branch")
 
@@ -658,7 +615,6 @@ func TestParallelExecutor_CheckBranchSuccess_FailedBranch(t *testing.T) {
 
 // TestParallelExecutor_CheckBranchSuccess_NilBranchResult tests handling of nil result.
 func TestParallelExecutor_CheckBranchSuccess_NilBranchResult(t *testing.T) {
-	// Arrange: setup with nil branch result
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	var firstSuccess bool
@@ -674,10 +630,8 @@ func TestParallelExecutor_CheckBranchSuccess_NilBranchResult(t *testing.T) {
 		cancel()
 	}
 
-	// Act: check nil branch result (should handle gracefully)
 	executor.CheckBranchSuccess(nil, &firstSuccess, &mu, successChan, mockCancel)
 
-	// Assert: no crash, no success detection
 	assert.False(t, firstSuccess, "firstSuccess should remain false for nil result")
 	assert.False(t, cancelCalled, "cancel should not be called for nil result")
 
@@ -772,7 +726,6 @@ func TestParallelExecutor_CheckBranchSuccess_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := application.NewParallelExecutor(&mockLogger{})
 			firstSuccess := tt.initialFirstSuccess
 			var mu sync.Mutex
@@ -787,10 +740,8 @@ func TestParallelExecutor_CheckBranchSuccess_TableDriven(t *testing.T) {
 				cancel()
 			}
 
-			// Act
 			executor.CheckBranchSuccess(tt.branchResult, &firstSuccess, &mu, successChan, mockCancel)
 
-			// Assert
 			assert.Equal(t, tt.expectFirstSuccess, firstSuccess, "firstSuccess flag mismatch")
 			assert.Equal(t, tt.expectCancel, cancelCalled, "cancel invocation mismatch")
 
@@ -816,7 +767,6 @@ func TestParallelExecutor_CheckBranchSuccess_TableDriven(t *testing.T) {
 // TestParallelExecutor_CheckBranchSuccess_ConcurrentCalls tests thread safety
 // when multiple goroutines check success simultaneously.
 func TestParallelExecutor_CheckBranchSuccess_ConcurrentCalls(t *testing.T) {
-	// Arrange: setup for concurrent success checks
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	var firstSuccess bool
@@ -847,7 +797,6 @@ func TestParallelExecutor_CheckBranchSuccess_ConcurrentCalls(t *testing.T) {
 		}
 	}
 
-	// Act: check success concurrently from multiple goroutines
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
@@ -860,7 +809,6 @@ func TestParallelExecutor_CheckBranchSuccess_ConcurrentCalls(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert: exactly one cancel call (first success wins)
 	cancelMu.Lock()
 	actualCancelCount := cancelCount
 	cancelMu.Unlock()
@@ -885,7 +833,6 @@ done:
 // TestParallelExecutor_CheckBranchSuccess_ChannelFull tests behavior when success
 // channel is full (already has a signal).
 func TestParallelExecutor_CheckBranchSuccess_ChannelFull(t *testing.T) {
-	// Arrange: setup with full success channel
 	executor := application.NewParallelExecutor(&mockLogger{})
 
 	successfulBranch := &workflow.BranchResult{
@@ -908,14 +855,12 @@ func TestParallelExecutor_CheckBranchSuccess_ChannelFull(t *testing.T) {
 		cancel()
 	}
 
-	// Act: check success when channel is full
 	done := make(chan struct{})
 	go func() {
 		executor.CheckBranchSuccess(successfulBranch, &firstSuccess, &mu, successChan, mockCancel)
 		close(done)
 	}()
 
-	// Assert: should not block (uses non-blocking select with default)
 	select {
 	case <-done:
 		// Expected - method returned without blocking

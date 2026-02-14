@@ -657,10 +657,6 @@ func TestExecuteLoopStep_ForEach_BreakCondition(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 }
 
-// ============================================================================
-// HandleMaxIterationFailure Tests (C027-T005)
-// ============================================================================
-
 // TestHandleMaxIterationFailure_WithFailures tests HandleMaxIterationFailure when loop has step failures
 func TestHandleMaxIterationFailure_WithFailures(t *testing.T) {
 	// Given: A loop result with step failures
@@ -1111,10 +1107,6 @@ func TestHandleMaxIterationFailure_UpdatesLoopState(t *testing.T) {
 	assert.Equal(t, workflow.StatusFailed, savedState.Status)
 	assert.Equal(t, loopState.Error, savedState.Error)
 }
-
-// ============================================================================
-// Component T009: Break/Continue Transition Tests
-// ============================================================================
 
 // TestExecuteLoopStep_BreakTransitionToExternalStep tests that a loop correctly
 // handles early exit when a body step transitions to a step outside the loop.

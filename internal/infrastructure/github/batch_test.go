@@ -9,21 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Note: Mock provider not needed for stub tests
 // When implementation is complete, a mock provider can be added here to test
 // actual batch execution behavior with mocked operation results
-// =============================================================================
 
 // Example mock structure (commented out, not needed for stub tests):
 // type mockProviderForBatch struct {
 //     results map[string]*plugin.OperationResult
 //     errors  map[string]error
 // }
-
-// =============================================================================
-// Constructor tests
-// =============================================================================
 
 func TestNewBatchExecutor(t *testing.T) {
 	provider := newTestProvider()
@@ -34,10 +27,6 @@ func TestNewBatchExecutor(t *testing.T) {
 	require.NotNil(t, executor, "NewBatchExecutor() should not return nil")
 	// Can't check unexported fields directly, verify via behavior
 }
-
-// =============================================================================
-// Happy path tests
-// =============================================================================
 
 func TestBatchExecutor_Execute_AllSucceedStrategy_AllSuccess(t *testing.T) {
 	// Given: a batch executor with 3 successful operations
@@ -116,10 +105,6 @@ func TestBatchExecutor_Execute_AnySucceedStrategy(t *testing.T) {
 	assert.Equal(t, 0, result.Succeeded, "no operations should succeed")
 	assert.Equal(t, 3, result.Failed, "all operations should fail")
 }
-
-// =============================================================================
-// Edge cases
-// =============================================================================
 
 func TestBatchExecutor_Execute_EmptyOperations(t *testing.T) {
 	// Given: a batch executor with no operations
@@ -250,10 +235,6 @@ func TestBatchExecutor_Execute_LargeBatch_100Operations(t *testing.T) {
 	assert.Equal(t, 100, result.Succeeded, "all real operations succeed")
 	assert.Equal(t, 0, result.Failed)
 }
-
-// =============================================================================
-// Error handling tests
-// =============================================================================
 
 func TestBatchExecutor_Execute_AllSucceedStrategy_ExpectsCancellationOnFailure(t *testing.T) {
 	// Given: all_succeed strategy should cancel remaining on first failure
@@ -532,10 +513,6 @@ func TestBatchExecutor_Execute_NegativeMaxConcurrent(t *testing.T) {
 	assert.Equal(t, 1, result.Failed)
 }
 
-// =============================================================================
-// Concurrency control tests
-// =============================================================================
-
 func TestBatchExecutor_Execute_ConcurrencyLimit_MaxConcurrent1(t *testing.T) {
 	// Given: MaxConcurrent = 1 (sequential execution)
 	executor := NewBatchExecutor(newTestProvider(), &mockLogger{})
@@ -619,10 +596,6 @@ func TestBatchExecutor_Execute_ConcurrencyLimit_RespectsSemaphore(t *testing.T) 
 	assert.Equal(t, 0, result.Succeeded, "all fake operations fail")
 	assert.Equal(t, 5, result.Failed)
 }
-
-// =============================================================================
-// Result aggregation tests
-// =============================================================================
 
 func TestBatchExecutor_Execute_ResultAggregation_PreservesIndividualResults(t *testing.T) {
 	// Given: diverse operation results

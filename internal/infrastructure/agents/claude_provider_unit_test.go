@@ -15,10 +15,6 @@ import (
 // Component: C025 - Unit Tests for ClaudeProvider (WITHOUT integration build tag)
 // These tests use MockCLIExecutor to avoid external CLI dependencies
 
-// =============================================================================
-// Execute Method Tests
-// =============================================================================
-
 func TestClaudeProvider_Execute_Success(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -436,10 +432,6 @@ func TestClaudeProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ExecuteConversation Method Tests
-// =============================================================================
-
 func TestClaudeProvider_ExecuteConversation_Success(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -768,18 +760,10 @@ func TestClaudeProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Provider Metadata Tests
-// =============================================================================
-
 func TestClaudeProvider_Name(t *testing.T) {
 	provider := NewClaudeProvider()
 	assert.Equal(t, "claude", provider.Name())
 }
-
-// =============================================================================
-// Edge Cases and Special Scenarios
-// =============================================================================
 
 func TestClaudeProvider_Execute_EmptyState(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()

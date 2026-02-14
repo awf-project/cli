@@ -14,8 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Error Hints Functional Tests
 //
 // Validates end-to-end behavior of actionable error message hints across all
 // error types, flag interactions, output formats, and edge cases.
@@ -28,11 +26,8 @@ import (
 //   - Hints are visually distinct from error messages (dimmed)
 //   - --no-hints flag suppresses suggestions without affecting error output
 //   - Tests pass with >80% coverage on new hint generation code
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // Happy Path Tests
-// -----------------------------------------------------------------------------
 
 // TestFileNotFoundHint_SuggestsCorrectFilename validates that a typo in a
 // workflow filename triggers a "did you mean?" suggestion for the closest match.
@@ -163,9 +158,7 @@ func TestCommandFailureHint_SuggestsVerification(t *testing.T) {
 		"hint should suggest verification or checking")
 }
 
-// -----------------------------------------------------------------------------
 // Edge Case Tests
-// -----------------------------------------------------------------------------
 
 // TestFileNotFoundHint_CompletelyWrongName validates that a filename with no
 // close Levenshtein match falls back to a generic "awf list" suggestion.
@@ -315,9 +308,7 @@ func TestHintsWithDetails_StructurePreserved(t *testing.T) {
 		"error code should appear before hints")
 }
 
-// -----------------------------------------------------------------------------
 // Error Handling / Flag Suppression Tests
-// -----------------------------------------------------------------------------
 
 // TestNoHintsFlag_SuppressesAllHints validates that --no-hints removes all
 // hint markers from the output while preserving the core error message.
@@ -417,9 +408,7 @@ func TestNoHintsFlag_AppliesToAllSubcommands(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // JSON Output Format Tests
-// -----------------------------------------------------------------------------
 
 // TestJSONFormat_IncludesHintsArray validates that JSON-formatted error output
 // includes a "hints" array with actionable suggestion strings.
@@ -519,9 +508,7 @@ func TestJSONFormat_HintContentMatchesHumanFormat(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Integration Tests (cross-concern)
-// -----------------------------------------------------------------------------
 
 // TestErrorHint_ExitCodePreserved validates that exit codes are unaffected
 // by the presence or absence of hints.

@@ -9,14 +9,10 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Type Alias Behavioral Tests
-// =============================================================================
 // These tests verify that repository.TemplateNotFoundError (the type alias)
 // behaves identically to workflow.TemplateNotFoundError (the canonical type).
 // This ensures backward compatibility for infrastructure code while the
 // canonical definition lives in the domain layer.
-// =============================================================================
 
 func TestTemplateNotFoundErrorAlias_IdenticalToCanonicalType(t *testing.T) {
 	// Happy path: verify type alias produces same error message as canonical type
@@ -259,10 +255,6 @@ func TestTemplateNotFoundErrorAlias_ZeroValue(t *testing.T) {
 	assert.Contains(t, result, "not found")
 	assert.Equal(t, `template "" not found`, result)
 }
-
-// =============================================================================
-// Cross-Layer Integration Tests
-// =============================================================================
 
 func TestTemplateNotFoundErrorAlias_CrossLayerErrorPropagation(t *testing.T) {
 	// Integration test: verify error propagates correctly from infrastructure to application

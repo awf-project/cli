@@ -14,27 +14,17 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Interface Compliance Checks (Compile-Time)
-// =============================================================================
-
 // Component: T001
 // Feature: C038
 
 var _ ports.AgentRegistry = (*testutil.MockAgentRegistry)(nil)
 
-// =============================================================================
-// MockAgentRegistry Tests - Happy Path
-// =============================================================================
-
 // Component: T001
 // Feature: C038
 
 func TestMockAgentRegistry_NewMockAgentRegistry(t *testing.T) {
-	// Arrange & Act
 	registry := testutil.NewMockAgentRegistry()
 
-	// Assert
 	require.NotNil(t, registry, "NewMockAgentRegistry should return non-nil instance")
 
 	// Verify it's usable immediately
@@ -74,14 +64,11 @@ func TestMockAgentRegistry_RegisterAndGet_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			registry := testutil.NewMockAgentRegistry()
 			provider := &mockAgentProvider{name: tt.providerName}
 
-			// Act
 			err := registry.Register(provider)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -128,17 +115,14 @@ func TestMockAgentRegistry_List_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			registry := testutil.NewMockAgentRegistry()
 			for _, name := range tt.providerNames {
 				err := registry.Register(&mockAgentProvider{name: name})
 				require.NoError(t, err)
 			}
 
-			// Act
 			names := registry.List()
 
-			// Assert
 			assert.Len(t, names, tt.wantCount, "List should return correct number of providers")
 
 			// Verify all registered providers are in the list
@@ -150,7 +134,6 @@ func TestMockAgentRegistry_List_HappyPath(t *testing.T) {
 }
 
 func TestMockAgentRegistry_Has_HappyPath(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	err := registry.Register(&mockAgentProvider{name: "claude"})
 	require.NoError(t, err)
@@ -186,33 +169,24 @@ func TestMockAgentRegistry_Has_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			has := registry.Has(tt.providerName)
 
-			// Assert
 			assert.Equal(t, tt.want, has, "Has should return %v for provider %s", tt.want, tt.providerName)
 		})
 	}
 }
 
-// =============================================================================
-// MockAgentRegistry Tests - Edge Cases
-// =============================================================================
-
 // Component: T001
 // Feature: C038
 
 func TestMockAgentRegistry_Register_DuplicateProvider(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	provider1 := &mockAgentProvider{name: "claude"}
 	provider2 := &mockAgentProvider{name: "claude"}
 
-	// Act
 	err1 := registry.Register(provider1)
 	err2 := registry.Register(provider2)
 
-	// Assert
 	require.NoError(t, err1, "First registration should succeed")
 	require.Error(t, err2, "Second registration with same name should fail")
 	assert.Contains(t, err2.Error(), "provider already registered", "Error should indicate duplicate")
@@ -240,13 +214,10 @@ func TestMockAgentRegistry_Get_NonexistentProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			registry := testutil.NewMockAgentRegistry()
 
-			// Act
 			provider, err := registry.Get(tt.providerName)
 
-			// Assert
 			require.Error(t, err, "Get should return error for nonexistent provider")
 			assert.Nil(t, provider, "Get should return nil provider on error")
 			assert.Contains(t, err.Error(), "provider not found", "Error should indicate not found")
@@ -255,16 +226,13 @@ func TestMockAgentRegistry_Get_NonexistentProvider(t *testing.T) {
 }
 
 func TestMockAgentRegistry_List_ReturnsNewSlice(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	err := registry.Register(&mockAgentProvider{name: "claude"})
 	require.NoError(t, err)
 
-	// Act
 	list1 := registry.List()
 	list2 := registry.List()
 
-	// Assert - verify separate slices (defensive copy)
 	assert.Equal(t, list1, list2, "Lists should contain same elements")
 
 	// Modify first list
@@ -278,7 +246,6 @@ func TestMockAgentRegistry_List_ReturnsNewSlice(t *testing.T) {
 }
 
 func TestMockAgentRegistry_Clear_RemovesAllProviders(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	err := registry.Register(&mockAgentProvider{name: "claude"})
 	require.NoError(t, err)
@@ -290,10 +257,8 @@ func TestMockAgentRegistry_Clear_RemovesAllProviders(t *testing.T) {
 	// Verify setup
 	assert.Len(t, registry.List(), 3, "Registry should have 3 providers before clear")
 
-	// Act
 	registry.Clear()
 
-	// Assert
 	assert.Empty(t, registry.List(), "List should be empty after Clear")
 	assert.False(t, registry.Has("claude"), "Should not have claude after Clear")
 	assert.False(t, registry.Has("gemini"), "Should not have gemini after Clear")
@@ -305,24 +270,17 @@ func TestMockAgentRegistry_Clear_RemovesAllProviders(t *testing.T) {
 }
 
 func TestMockAgentRegistry_RegisterAfterClear(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	err := registry.Register(&mockAgentProvider{name: "old-provider"})
 	require.NoError(t, err)
 
-	// Act
 	registry.Clear()
 	err = registry.Register(&mockAgentProvider{name: "new-provider"})
 
-	// Assert
 	require.NoError(t, err, "Should be able to register after Clear")
 	assert.True(t, registry.Has("new-provider"), "Should have new provider")
 	assert.False(t, registry.Has("old-provider"), "Should not have old provider")
 }
-
-// =============================================================================
-// MockAgentRegistry Tests - Error Handling
-// =============================================================================
 
 // Component: T001
 // Feature: C038
@@ -357,33 +315,24 @@ func TestMockAgentRegistry_ErrorMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			registry := testutil.NewMockAgentRegistry()
 			tt.setupFunc(registry)
 
-			// Act
 			err := tt.operation(registry)
 
-			// Assert
 			require.Error(t, err)
 			assert.Equal(t, tt.expectedErrText, err.Error(), "Error message should match expected format")
 		})
 	}
 }
 
-// =============================================================================
-// MockAgentRegistry Tests - Thread Safety
-// =============================================================================
-
 // Component: T001
 // Feature: C038
 
 func TestMockAgentRegistry_ThreadSafety_ConcurrentRegister(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	const numGoroutines = 10
 
-	// Act - concurrent registrations
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -398,13 +347,11 @@ func TestMockAgentRegistry_ThreadSafety_ConcurrentRegister(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert
 	names := registry.List()
 	assert.Len(t, names, numGoroutines, "All providers should be registered")
 }
 
 func TestMockAgentRegistry_ThreadSafety_ConcurrentGetAndRegister(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	const numReaders = 20
 	const numWriters = 5
@@ -415,7 +362,6 @@ func TestMockAgentRegistry_ThreadSafety_ConcurrentGetAndRegister(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Act - concurrent reads and writes
 	var wg sync.WaitGroup
 	wg.Add(numReaders + numWriters)
 
@@ -443,17 +389,14 @@ func TestMockAgentRegistry_ThreadSafety_ConcurrentGetAndRegister(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - verify no race conditions (race detector would catch issues)
 	names := registry.List()
 	assert.GreaterOrEqual(t, len(names), 3, "Should have at least the pre-populated providers")
 }
 
 func TestMockAgentRegistry_ThreadSafety_ConcurrentClear(t *testing.T) {
-	// Arrange
 	registry := testutil.NewMockAgentRegistry()
 	const numOperations = 50
 
-	// Act - concurrent operations including Clear
 	var wg sync.WaitGroup
 	wg.Add(numOperations)
 
@@ -475,15 +418,10 @@ func TestMockAgentRegistry_ThreadSafety_ConcurrentClear(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - no crash means thread-safety works
 	// Registry may be empty or have some providers depending on timing
 	names := registry.List()
 	t.Logf("Final registry has %d providers after concurrent operations", len(names))
 }
-
-// =============================================================================
-// Helper Types for Tests
-// =============================================================================
 
 // mockAgentProvider is a minimal test implementation of ports.AgentProvider
 type mockAgentProvider struct {
@@ -529,27 +467,17 @@ func (m *mockAgentProvider) Validate() error {
 	return nil
 }
 
-// =============================================================================
-// MockAgentProvider Tests - Interface Compliance
-// =============================================================================
-
 // Component: T002
 // Feature: C038
 
 var _ ports.AgentProvider = (*testutil.MockAgentProvider)(nil)
 
-// =============================================================================
-// MockAgentProvider Tests - Happy Path
-// =============================================================================
-
 // Component: T002
 // Feature: C038
 
 func TestMockAgentProvider_NewMockAgentProvider(t *testing.T) {
-	// Arrange & Act
 	provider := testutil.NewMockAgentProvider("test-agent")
 
-	// Assert
 	require.NotNil(t, provider, "NewMockAgentProvider should return non-nil instance")
 	assert.Equal(t, "test-agent", provider.Name(), "Provider name should match constructor argument")
 
@@ -647,15 +575,12 @@ func TestMockAgentProvider_Execute_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider(tt.providerName)
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			// Act
 			result, err := provider.Execute(ctx, tt.prompt, tt.options)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -749,15 +674,12 @@ func TestMockAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider(tt.providerName)
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			// Act
 			result, err := provider.ExecuteConversation(ctx, tt.initialState, tt.prompt, tt.options)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -797,13 +719,10 @@ func TestMockAgentProvider_Name_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider(tt.providerName)
 
-			// Act
 			name := provider.Name()
 
-			// Assert
 			assert.Equal(t, tt.providerName, name, "Name should match constructor argument")
 
 			// Verify Name is idempotent
@@ -858,14 +777,11 @@ func TestMockAgentProvider_Validate_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider("test-agent")
 			tt.setupFunc(provider)
 
-			// Act
 			err := provider.Validate()
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedErr, err.Error())
@@ -876,15 +792,10 @@ func TestMockAgentProvider_Validate_HappyPath(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// MockAgentProvider Tests - Edge Cases
-// =============================================================================
-
 // Component: T002
 // Feature: C038
 
 func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	ctx := context.Background()
 
@@ -897,7 +808,6 @@ func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
 		}, nil
 	})
 
-	// Act - overwrite with second function
 	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "test-agent",
@@ -908,14 +818,12 @@ func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
 
 	result, err := provider.Execute(ctx, "test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Second response", result.Output, "Should use the second function")
 	assert.Equal(t, 20, result.Tokens, "Should use the second function's token count")
 }
 
 func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	ctx := context.Background()
 	state := &workflow.ConversationState{
@@ -933,7 +841,6 @@ func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) 
 		}, nil
 	})
 
-	// Act - overwrite with second function
 	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
 			Provider: "test-agent",
@@ -944,13 +851,11 @@ func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) 
 
 	result, err := provider.ExecuteConversation(ctx, state, "test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Second conversation", result.Output, "Should use the second function")
 }
 
 func TestMockAgentProvider_SetValidateFunc_OverwritesPrevious(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 
 	// Set first function
@@ -958,20 +863,17 @@ func TestMockAgentProvider_SetValidateFunc_OverwritesPrevious(t *testing.T) {
 		return fmt.Errorf("first error")
 	})
 
-	// Act - overwrite with second function
 	provider.SetValidateFunc(func() error {
 		return fmt.Errorf("second error")
 	})
 
 	err := provider.Validate()
 
-	// Assert
 	require.Error(t, err)
 	assert.Equal(t, "second error", err.Error(), "Should use the second function")
 }
 
 func TestMockAgentProvider_Execute_EmptyPrompt(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
@@ -982,16 +884,13 @@ func TestMockAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// Act
 	result, err := provider.Execute(ctx, "", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Prompt length: 0", result.Output, "Should handle empty prompt")
 }
 
 func TestMockAgentProvider_Execute_NilOptions(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 		optionsNil := options == nil
@@ -1003,16 +902,13 @@ func TestMockAgentProvider_Execute_NilOptions(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// Act
 	result, err := provider.Execute(ctx, "test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Options nil: true", result.Output, "Should handle nil options")
 }
 
 func TestMockAgentProvider_Execute_EmptyOptions(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
@@ -1023,16 +919,13 @@ func TestMockAgentProvider_Execute_EmptyOptions(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// Act
 	result, err := provider.Execute(ctx, "test", map[string]any{})
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Options count: 0", result.Output, "Should handle empty options map")
 }
 
 func TestMockAgentProvider_ExecuteConversation_NilState(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		stateNil := state == nil
@@ -1044,17 +937,14 @@ func TestMockAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, nil, "test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "State nil: true", result.Output, "Should handle nil state")
 	assert.Nil(t, result.State, "Result state should be nil")
 }
 
 func TestMockAgentProvider_ExecuteConversation_EmptyTurns(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
@@ -1070,17 +960,11 @@ func TestMockAgentProvider_ExecuteConversation_EmptyTurns(t *testing.T) {
 		TotalTokens: 0,
 	}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, "test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Turn count: 0", result.Output, "Should handle empty turns")
 }
-
-// =============================================================================
-// MockAgentProvider Tests - Error Handling
-// =============================================================================
 
 // Component: T002
 // Feature: C038
@@ -1125,15 +1009,12 @@ func TestMockAgentProvider_Execute_CustomError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider("test-agent")
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			// Act
 			result, err := provider.Execute(ctx, "", nil)
 
-			// Assert
 			require.Error(t, err)
 			assert.Nil(t, result, "Result should be nil when error occurs")
 			assert.Equal(t, tt.expectedErr, err.Error())
@@ -1169,7 +1050,6 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := testutil.NewMockAgentProvider("test-agent")
 			tt.setupFunc(provider)
 			ctx := context.Background()
@@ -1179,10 +1059,8 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 				TotalTokens: 0,
 			}
 
-			// Act
 			result, err := provider.ExecuteConversation(ctx, state, "test", nil)
 
-			// Assert
 			require.Error(t, err)
 			assert.Nil(t, result, "Result should be nil when error occurs")
 			assert.Equal(t, tt.expectedErr, err.Error())
@@ -1191,29 +1069,21 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 }
 
 func TestMockAgentProvider_Validate_CustomError(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	provider.SetValidateFunc(func() error {
 		return fmt.Errorf("validation failed: missing API key")
 	})
 
-	// Act
 	err := provider.Validate()
 
-	// Assert
 	require.Error(t, err)
 	assert.Equal(t, "validation failed: missing API key", err.Error())
 }
-
-// =============================================================================
-// MockAgentProvider Tests - Thread Safety
-// =============================================================================
 
 // Component: T002
 // Feature: C038
 
 func TestMockAgentProvider_ThreadSafety_ConcurrentExecute(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	var callCount int
 	var mu sync.Mutex
@@ -1232,7 +1102,6 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecute(t *testing.T) {
 	const numGoroutines = 20
 	ctx := context.Background()
 
-	// Act - concurrent executions
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -1248,14 +1117,12 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecute(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, numGoroutines, callCount, "All concurrent calls should have been executed")
 }
 
 func TestMockAgentProvider_ThreadSafety_ConcurrentExecuteConversation(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	var callCount int
 	var mu sync.Mutex
@@ -1274,7 +1141,6 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecuteConversation(t *testing
 	const numGoroutines = 20
 	ctx := context.Background()
 
-	// Act - concurrent conversation executions
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -1294,20 +1160,17 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecuteConversation(t *testing
 
 	wg.Wait()
 
-	// Assert
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, numGoroutines, callCount, "All concurrent conversation calls should have been executed")
 }
 
 func TestMockAgentProvider_ThreadSafety_ConcurrentSetAndExecute(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	const numReaders = 30
 	const numWriters = 5
 	ctx := context.Background()
 
-	// Act - concurrent reads and writes
 	var wg sync.WaitGroup
 	wg.Add(numReaders + numWriters)
 
@@ -1339,18 +1202,15 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentSetAndExecute(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - no crash means thread-safety works (race detector would catch issues)
 	result, err := provider.Execute(ctx, "final-test", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
 func TestMockAgentProvider_ThreadSafety_ConcurrentName(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	const numGoroutines = 50
 
-	// Act - concurrent Name calls
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -1364,17 +1224,14 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentName(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - Name should remain consistent
 	assert.Equal(t, "test-agent", provider.Name())
 }
 
 func TestMockAgentProvider_ThreadSafety_MixedOperations(t *testing.T) {
-	// Arrange
 	provider := testutil.NewMockAgentProvider("test-agent")
 	const numOperations = 100
 	ctx := context.Background()
 
-	// Act - mixed concurrent operations
 	var wg sync.WaitGroup
 	wg.Add(numOperations)
 
@@ -1405,6 +1262,5 @@ func TestMockAgentProvider_ThreadSafety_MixedOperations(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - no crash means thread-safety works
 	assert.Equal(t, "test-agent", provider.Name())
 }

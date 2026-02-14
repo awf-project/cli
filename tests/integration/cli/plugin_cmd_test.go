@@ -15,10 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Plugin Command Existence Tests (T019)
-// =============================================================================
-
 func TestPluginCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -106,10 +102,6 @@ func TestPluginListCommand_HasLsAlias(t *testing.T) {
 	}
 	t.Error("list subcommand not found")
 }
-
-// =============================================================================
-// Plugin List Command Tests (T019)
-// =============================================================================
 
 func TestPluginListCommand_NoPlugins(t *testing.T) {
 	tmpDir := setupTestDir(t)
@@ -349,10 +341,6 @@ awf_version: ">=0.1.0"
 	assert.Contains(t, output, "no", "should indicate plugin is disabled")
 }
 
-// =============================================================================
-// Plugin Enable Command Tests (T019)
-// =============================================================================
-
 func TestPluginEnableCommand_RequiresArgument(t *testing.T) {
 	cmd := cli.NewRootCommand()
 	var errOut bytes.Buffer
@@ -437,7 +425,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, err, "output should be valid JSON")
 
 	assert.Equal(t, "json-enable-plugin", result["plugin"])
-	assert.Equal(t, true, result["enabled"])
+	assert.True(t, result["enabled"].(bool))
 }
 
 func TestPluginEnableCommand_PersistsState(t *testing.T) {
@@ -493,10 +481,6 @@ awf_version: ">=0.1.0"
 	// (exact format depends on implementation)
 	_ = stateData
 }
-
-// =============================================================================
-// Plugin Disable Command Tests (T019)
-// =============================================================================
 
 func TestPluginDisableCommand_RequiresArgument(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -582,7 +566,7 @@ awf_version: ">=0.1.0"
 	require.NoError(t, err, "output should be valid JSON")
 
 	assert.Equal(t, "json-disable-plugin", result["plugin"])
-	assert.Equal(t, false, result["enabled"])
+	assert.False(t, result["enabled"].(bool))
 }
 
 func TestPluginDisableCommand_PersistsState(t *testing.T) {
@@ -620,10 +604,6 @@ awf_version: ">=0.1.0"
 	// State file should be created
 	assert.NoError(t, err, "state file should exist after disable")
 }
-
-// =============================================================================
-// Plugin Command Help Tests (T019)
-// =============================================================================
 
 func TestPluginCommand_HelpText(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -677,10 +657,6 @@ func TestPluginDisableCommand_HelpText(t *testing.T) {
 	}
 	t.Error("disable subcommand not found")
 }
-
-// =============================================================================
-// Plugin Command Edge Cases Tests (T019)
-// =============================================================================
 
 func TestPluginListCommand_WithInvalidPluginManifest(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -784,10 +760,6 @@ func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
 	// Should show removed plugin with not_found status
 	assert.Contains(t, output, "removed-plugin", "should show removed plugin")
 }
-
-// =============================================================================
-// Plugin Command Table Driven Tests (T019)
-// =============================================================================
 
 func TestPluginListCommand_OutputFormats(t *testing.T) {
 	tests := []struct {

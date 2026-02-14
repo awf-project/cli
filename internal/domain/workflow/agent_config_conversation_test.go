@@ -14,9 +14,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
 // workflow.AgentConfig Conversation Field Tests
-// =============================================================================
 
 func TestAgentConfig_ConversationField(t *testing.T) {
 	tests := []struct {
@@ -109,9 +107,7 @@ func TestAgentConfig_ConversationField(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentConfig SystemPrompt Tests
-// =============================================================================
 
 func TestAgentConfig_SystemPrompt(t *testing.T) {
 	tests := []struct {
@@ -172,9 +168,7 @@ func TestAgentConfig_SystemPrompt(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentConfig InitialPrompt Tests
-// =============================================================================
 
 func TestAgentConfig_InitialPrompt(t *testing.T) {
 	tests := []struct {
@@ -247,9 +241,7 @@ func TestAgentConfig_InitialPrompt(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentConfig IsConversationMode Tests
-// =============================================================================
 
 func TestAgentConfig_IsConversationMode(t *testing.T) {
 	tests := []struct {
@@ -333,9 +325,7 @@ func TestAgentConfig_IsConversationMode_AfterValidation(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentConfig GetEffectivePrompt Tests
-// =============================================================================
 
 func TestAgentConfig_GetEffectivePrompt(t *testing.T) {
 	tests := []struct {
@@ -445,10 +435,6 @@ func TestAgentConfig_GetEffectivePrompt_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Integration Tests - Conversation Mode
-// =============================================================================
-
 func TestAgentConfig_ConversationMode_Complete(t *testing.T) {
 	config := workflow.AgentConfig{
 		Provider:     "claude",
@@ -518,10 +504,6 @@ func TestAgentConfig_SingleMode_BackwardCompatibility(t *testing.T) {
 	assert.Equal(t, "single", config.Mode) // Normalized to "single"
 	assert.Equal(t, "Analyze this code", config.GetEffectivePrompt())
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 	tests := []struct {

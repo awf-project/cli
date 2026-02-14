@@ -407,10 +407,6 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// F037: Dynamic MaxIterations YAML Parsing Tests
-// =============================================================================
-
 func TestYAMLRepository_Load_LoopWithIntegerMaxIterations(t *testing.T) {
 	repo := NewYAMLRepository(fixturesPath)
 

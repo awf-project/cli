@@ -31,9 +31,7 @@ type Retryer struct {
 	rng    *rand.Rand
 }
 
-// NewRetryer creates a Retryer with the given configuration.
-// If logger is nil, retry attempts are not logged.
-// Uses a seeded random source for jitter; pass a fixed seed for deterministic tests.
+// NewRetryer uses a seeded random source for jitter; pass a fixed seed for deterministic tests.
 func NewRetryer(config *Config, logger Logger, seed int64) *Retryer {
 	return &Retryer{
 		config: *config,
@@ -43,25 +41,19 @@ func NewRetryer(config *Config, logger Logger, seed int64) *Retryer {
 }
 
 // ShouldRetry returns true if the operation should be retried.
-// exitCode is the exit code from the failed operation.
-// attempt is the current attempt number (1-indexed).
 func (r *Retryer) ShouldRetry(exitCode, attempt int) bool {
-	// Success never retries
 	if exitCode == 0 {
 		return false
 	}
 
-	// Check if we've exhausted attempts
 	if attempt >= r.config.MaxAttempts {
 		return false
 	}
 
-	// Check if exit code is retryable
 	return r.IsRetryableExitCode(exitCode)
 }
 
 // NextDelay returns the delay to wait before the next attempt.
-// attempt is the current attempt number (1-indexed).
 func (r *Retryer) NextDelay(attempt int) time.Duration {
 	delay := CalculateDelay(
 		r.config.Strategy,
@@ -75,7 +67,6 @@ func (r *Retryer) NextDelay(attempt int) time.Duration {
 }
 
 // Wait sleeps for the calculated delay, respecting context cancellation.
-// Returns an error if the context is cancelled during the wait.
 func (r *Retryer) Wait(ctx context.Context, attempt int) error {
 	delay := r.NextDelay(attempt)
 
@@ -99,17 +90,14 @@ func (r *Retryer) Wait(ctx context.Context, attempt int) error {
 
 // IsRetryableExitCode checks if the given exit code should trigger a retry.
 func (r *Retryer) IsRetryableExitCode(exitCode int) bool {
-	// Success (exit code 0) never triggers retry
 	if exitCode == 0 {
 		return false
 	}
 
-	// If no specific codes are configured, retry any non-zero exit code
 	if len(r.config.RetryableExitCodes) == 0 {
 		return true
 	}
 
-	// Check if exit code is in the allowed list
 	for _, code := range r.config.RetryableExitCodes {
 		if code == exitCode {
 			return true

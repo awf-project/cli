@@ -120,7 +120,6 @@ func TestHumanErrorFormatter_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, false) // Disable color for easier testing
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -129,10 +128,8 @@ func TestHumanErrorFormatter_HappyPath(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -173,7 +170,6 @@ func TestHumanErrorFormatter_ColorOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(tt.colorEnabled, false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -182,10 +178,8 @@ func TestHumanErrorFormatter_ColorOutput(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -321,7 +315,6 @@ func TestHumanErrorFormatter_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, false) // Disable color for easier testing
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -330,10 +323,8 @@ func TestHumanErrorFormatter_EdgeCases(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -398,7 +389,6 @@ func TestHumanErrorFormatter_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -407,10 +397,8 @@ func TestHumanErrorFormatter_ErrorHandling(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -456,7 +444,6 @@ func TestHumanErrorFormatter_OutputFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -465,10 +452,8 @@ func TestHumanErrorFormatter_OutputFormat(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -507,7 +492,6 @@ func TestHumanErrorFormatter_AllErrorCategories(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
 				"test message",
@@ -515,10 +499,8 @@ func TestHumanErrorFormatter_AllErrorCategories(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			assert.NotEmpty(t, output)
 			assert.Contains(t, output, tt.category,
 				"output should contain category %s", tt.category)
@@ -528,7 +510,6 @@ func TestHumanErrorFormatter_AllErrorCategories(t *testing.T) {
 
 // TestHumanErrorFormatter_ConsistentOutput verifies formatting is deterministic.
 func TestHumanErrorFormatter_ConsistentOutput(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false)
 
 	// Create error with fixed timestamp for reproducibility
@@ -543,17 +524,14 @@ func TestHumanErrorFormatter_ConsistentOutput(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act - format multiple times
 	output1 := formatter.FormatError(structuredErr)
 	output2 := formatter.FormatError(structuredErr)
 
-	// Assert - outputs should be identical
 	assert.Equal(t, output1, output2, "formatting should be deterministic")
 }
 
 // TestHumanErrorFormatter_Idempotency verifies multiple calls produce same result.
 func TestHumanErrorFormatter_Idempotency(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false)
 	structuredErr := &domainerrors.StructuredError{
 		Code:      domainerrors.ErrorCodeUserInputMissingFile,
@@ -563,13 +541,11 @@ func TestHumanErrorFormatter_Idempotency(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act - format 10 times
 	outputs := make([]string, 10)
 	for i := 0; i < 10; i++ {
 		outputs[i] = formatter.FormatError(structuredErr)
 	}
 
-	// Assert - all outputs identical
 	for i := 1; i < len(outputs); i++ {
 		assert.Equal(t, outputs[0], outputs[i],
 			"output %d should match output 0", i)
@@ -578,7 +554,6 @@ func TestHumanErrorFormatter_Idempotency(t *testing.T) {
 
 // TestHumanErrorFormatter_MultilineDetails tests formatting of details that span multiple lines.
 func TestHumanErrorFormatter_MultilineDetails(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeWorkflowValidationCycleDetected,
@@ -590,10 +565,8 @@ func TestHumanErrorFormatter_MultilineDetails(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	assert.NotEmpty(t, output)
 	assert.Contains(t, output, "WORKFLOW.VALIDATION.CYCLE_DETECTED")
 	// Should handle multiline strings in details gracefully
@@ -601,7 +574,6 @@ func TestHumanErrorFormatter_MultilineDetails(t *testing.T) {
 
 // TestHumanErrorFormatter_LargeDetailsMap tests handling of many detail entries.
 func TestHumanErrorFormatter_LargeDetailsMap(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false)
 	details := make(map[string]any)
 	for i := 0; i < 50; i++ {
@@ -615,10 +587,8 @@ func TestHumanErrorFormatter_LargeDetailsMap(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	assert.NotEmpty(t, output)
 	assert.Contains(t, output, "SYSTEM.IO.READ_FAILED")
 	// Should handle large detail maps without crashing
@@ -626,7 +596,6 @@ func TestHumanErrorFormatter_LargeDetailsMap(t *testing.T) {
 
 // TestHumanErrorFormatter_NoDetailsSection tests that errors without details don't show empty section.
 func TestHumanErrorFormatter_NoDetailsSection(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
@@ -635,10 +604,8 @@ func TestHumanErrorFormatter_NoDetailsSection(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	assert.NotEmpty(t, output)
 	assert.Contains(t, output, "USER.INPUT.MISSING_FILE")
 	assert.Contains(t, output, "simple error")
@@ -752,7 +719,6 @@ func TestHumanErrorFormatter_HintGeneration_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, tt.noHints, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -761,10 +727,8 @@ func TestHumanErrorFormatter_HintGeneration_HappyPath(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -965,7 +929,6 @@ func TestHumanErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, tt.noHints, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -974,10 +937,8 @@ func TestHumanErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -1081,7 +1042,6 @@ func TestHumanErrorFormatter_HintGeneration_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(false, false, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -1090,10 +1050,8 @@ func TestHumanErrorFormatter_HintGeneration_ErrorHandling(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -1141,7 +1099,6 @@ func TestHumanErrorFormatter_HintGeneration_WithColor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewHumanErrorFormatter(tt.colorEnabled, false, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				domainerrors.ErrorCodeUserInputMissingFile,
@@ -1150,10 +1107,8 @@ func TestHumanErrorFormatter_HintGeneration_WithColor(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -1161,7 +1116,6 @@ func TestHumanErrorFormatter_HintGeneration_WithColor(t *testing.T) {
 
 // TestHumanErrorFormatter_HintGeneration_OrderPreserved tests that hint order is preserved.
 func TestHumanErrorFormatter_HintGeneration_OrderPreserved(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
@@ -1178,10 +1132,8 @@ func TestHumanErrorFormatter_HintGeneration_OrderPreserved(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	assert.Contains(t, output, "First hint")
 	assert.Contains(t, output, "Second hint")
 	assert.Contains(t, output, "Third hint")
@@ -1197,7 +1149,6 @@ func TestHumanErrorFormatter_HintGeneration_OrderPreserved(t *testing.T) {
 
 // TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder tests generator execution order.
 func TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
@@ -1222,10 +1173,8 @@ func TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder(t *testing.T
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	assert.Contains(t, output, "Generator 1 hint")
 	assert.Contains(t, output, "Generator 2 hint")
 	assert.Contains(t, output, "Generator 3 hint")
@@ -1241,7 +1190,6 @@ func TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder(t *testing.T
 
 // TestHumanErrorFormatter_HintGeneration_ConsistentOutput tests deterministic hint rendering.
 func TestHumanErrorFormatter_HintGeneration_ConsistentOutput(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
@@ -1258,19 +1206,16 @@ func TestHumanErrorFormatter_HintGeneration_ConsistentOutput(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act - format multiple times
 	output1 := formatter.FormatError(structuredErr)
 	output2 := formatter.FormatError(structuredErr)
 	output3 := formatter.FormatError(structuredErr)
 
-	// Assert - outputs should be identical
 	assert.Equal(t, output1, output2, "output 2 should match output 1")
 	assert.Equal(t, output2, output3, "output 3 should match output 2")
 }
 
 // TestHumanErrorFormatter_HintGeneration_CompleteFormat tests full error output with hints.
 func TestHumanErrorFormatter_HintGeneration_CompleteFormat(t *testing.T) {
-	// Arrange
 	formatter := NewHumanErrorFormatter(false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
@@ -1289,10 +1234,8 @@ func TestHumanErrorFormatter_HintGeneration_CompleteFormat(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert - verify all sections present
 	assert.Contains(t, output, "USER.INPUT.MISSING_FILE", "should contain error code")
 	assert.Contains(t, output, "workflow file not found", "should contain message")
 	assert.Contains(t, output, "Details:", "should contain details section")

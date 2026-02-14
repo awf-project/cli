@@ -13,9 +13,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// ForEach Loop Tests
-// =============================================================================
 //
 // Tests for ExecuteForEach functionality including:
 // - Simple iteration over items

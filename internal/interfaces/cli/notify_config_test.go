@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestRunCommand_LoadsNotifyConfig_AllFields(t *testing.T) {
 	// GIVEN: A project with complete notify configuration
 	tmpDir := setupTestDir(t)
@@ -215,10 +211,6 @@ states:
 		assert.NotContains(t, errMsg, "nil pointer", "should not panic")
 	}
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestRunCommand_LoadsNotifyConfig_EmptyConfig(t *testing.T) {
 	// GIVEN: An empty config file
@@ -473,10 +465,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestRunCommand_LoadsNotifyConfig_InvalidYAML(t *testing.T) {
 	// GIVEN: Config file with invalid YAML syntax
 	tmpDir := setupTestDir(t)
@@ -681,10 +669,6 @@ states:
 	errMsg := err.Error()
 	assert.Contains(t, errMsg, "config error", "should report config error for permission issues")
 }
-
-// =============================================================================
-// Integration Tests: Config + Provider Wiring
-// =============================================================================
 
 func TestRunCommand_NotifyConfigWiringToProvider_FullStack(t *testing.T) {
 	// GIVEN: Complete config that exercises full wiring stack

@@ -2,27 +2,6 @@
 
 package integration_test
 
-// Infrastructure Test File Splitting Functional Tests
-//
-// This file contains comprehensive functional tests validating that the infrastructure
-// test file splitting maintains test integrity, coverage, and organization.
-//
-// Feature: Validates C015 test file splitting from 2 monolithic files to 10 focused files
-//
-// Test Categories:
-// - Integration: Validates end-to-end test execution and preservation
-// - Edge Cases: Validates boundary conditions and organizational patterns
-// - Error Handling: Validates lint compliance and package structure
-//
-// Acceptance Criteria Validated:
-// - All original tests preserved (51 CLI tests, 130 diagram tests)
-// - Split files respect size limits (<1,500 lines per ADR-005)
-// - Test files organized by logical concern
-// - All tests pass with maintained coverage (≥78.5%)
-// - No race conditions detected (thread-safety fixes applied)
-// - Zero os.Chdir calls remain in CLI tests
-// - Shared helpers properly extracted
-
 import (
 	"context"
 	"fmt"
@@ -37,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// findProjectRootInfraSplit locates the project root by looking for go.mod
 func findProjectRootInfraSplit() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -57,7 +35,6 @@ func findProjectRootInfraSplit() (string, error) {
 	}
 }
 
-// parseFloatInfraSplit is a helper to parse float from string
 func parseFloatInfraSplit(s string, out *float64) error {
 	n, err := fmt.Sscanf(s, "%f", out)
 	if err != nil {
@@ -69,8 +46,6 @@ func parseFloatInfraSplit(s string, out *float64) error {
 	return nil
 }
 
-// TestInfrastructureTestFileSplitting_Integration validates that C015 test file splitting
-// maintains test count, coverage, and file organization standards.
 func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 	projectRoot, err := findProjectRootInfraSplit()
 	require.NoError(t, err, "failed to find project root")
@@ -80,11 +55,11 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 
 	t.Run("all CLI split test files exist", func(t *testing.T) {
 		expectedFiles := []string{
-			"cli_test_helpers_test.go", // Thread-safe test utilities
-			"run_flags_test.go",        // Flag parsing tests
-			"run_execution_test.go",    // Execution mode tests
-			"run_agent_test.go",        // Agent execution tests
-			"run_interactive_test.go",  // Interactive mode tests
+			"cli_test_helpers_test.go",
+			"run_flags_test.go",
+			"run_execution_test.go",
+			"run_agent_test.go",
+			"run_interactive_test.go",
 		}
 
 		for _, file := range expectedFiles {
@@ -96,12 +71,12 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 
 	t.Run("all diagram split test files exist", func(t *testing.T) {
 		expectedFiles := []string{
-			"generator_nodes_test.go",     // Node/shape generation tests
-			"generator_edges_test.go",     // Edge rendering tests
-			"generator_header_test.go",    // Header/config tests
-			"generator_parallel_test.go",  // Parallel execution tests
-			"generator_highlight_test.go", // Highlight/styling tests
-			"dot_generator_core_test.go",  // Core integration tests
+			"generator_nodes_test.go",
+			"generator_edges_test.go",
+			"generator_header_test.go",
+			"generator_parallel_test.go",
+			"generator_highlight_test.go",
+			"dot_generator_core_test.go",
 		}
 
 		for _, file := range expectedFiles {
@@ -125,7 +100,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 	})
 
 	t.Run("zero os.Chdir calls in CLI tests", func(t *testing.T) {
-		// Critical thread-safety requirement: no os.Chdir in tests
 		cliTestFiles := []string{
 			"cli_test_helpers_test.go",
 			"run_flags_test.go",
@@ -139,14 +113,12 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 			content, err := os.ReadFile(filePath)
 			require.NoError(t, err, "failed to read %s", file)
 
-			// Check for os.Chdir calls
 			assert.NotContains(t, string(content), "os.Chdir(",
 				"file %s must not contain os.Chdir calls (thread-safety violation)", file)
 		}
 	})
 
 	t.Run("CLI split files use thread-safe patterns", func(t *testing.T) {
-		// Verify usage of t.TempDir() and t.Setenv() patterns
 		cliTestFiles := []string{
 			"run_flags_test.go",
 			"run_execution_test.go",
@@ -162,12 +134,11 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 			}
 
 			fileContent := string(content)
-			// Check for thread-safe patterns (at least one should be present)
 			hasThreadSafe := strings.Contains(fileContent, "t.TempDir()") ||
 				strings.Contains(fileContent, "t.Setenv(") ||
 				strings.Contains(fileContent, "setupTestDir(t)")
 
-			if len(fileContent) > 1000 { // Only check substantial test files
+			if len(fileContent) > 1000 {
 				assert.True(t, hasThreadSafe,
 					"file %s should use thread-safe directory patterns", file)
 			}
@@ -175,11 +146,8 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 	})
 
 	t.Run("split files respect size limits", func(t *testing.T) {
-		// Acceptance criteria: each new test file < 1500 lines (ADR-005)
 		maxLines := 1500
-		allowedExceptions := map[string]int{
-			// Allow larger files for complex integration tests
-		}
+		allowedExceptions := map[string]int{}
 
 		testFiles := map[string]string{
 			"run_flags_test.go":           cliTestDir,
@@ -219,7 +187,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "CLI tests failed:\n%s", string(output))
 
-		// Verify no test failures in output
 		assert.NotContains(t, string(output), "FAIL:", "found test failures")
 		assert.Contains(t, string(output), "PASS", "expected passing tests")
 	})
@@ -231,7 +198,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "diagram tests failed:\n%s", string(output))
 
-		// Verify no test failures in output
 		assert.NotContains(t, string(output), "FAIL:", "found test failures")
 		assert.Contains(t, string(output), "PASS", "expected passing tests")
 	})
@@ -259,7 +225,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 	})
 
 	t.Run("coverage maintained after split", func(t *testing.T) {
-		// C015 acceptance criteria: maintain ≥78.5% coverage baseline
 		minCoverage := 78.5
 
 		ctx := context.Background()
@@ -271,7 +236,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "coverage test failed:\n%s", string(output))
 
-		// Parse coverage from output
 		coverageRegex := regexp.MustCompile(`coverage: ([\d.]+)% of statements`)
 		matches := coverageRegex.FindStringSubmatch(string(output))
 		if len(matches) > 1 {
@@ -285,7 +249,6 @@ func TestInfrastructureTestFileSplitting_Integration(t *testing.T) {
 	})
 }
 
-// TestInfrastructureTestFileSplitting_HappyPath validates normal usage and complete workflow.
 func TestInfrastructureTestFileSplitting_HappyPath(t *testing.T) {
 	projectRoot, err := findProjectRootInfraSplit()
 	require.NoError(t, err, "failed to find project root")
@@ -294,19 +257,16 @@ func TestInfrastructureTestFileSplitting_HappyPath(t *testing.T) {
 		cliTestDir := filepath.Join(projectRoot, "internal", "interfaces", "cli")
 		diagramTestDir := filepath.Join(projectRoot, "internal", "infrastructure", "diagram")
 
-		// Verify CLI helpers exist
 		cliHelpersPath := filepath.Join(cliTestDir, "cli_test_helpers_test.go")
 		_, err := os.Stat(cliHelpersPath)
 		require.NoError(t, err, "CLI test helpers should exist")
 
-		// Verify diagram helpers exist
 		diagramHelpersPath := filepath.Join(diagramTestDir, "diagram_test_helpers_test.go")
 		_, err = os.Stat(diagramHelpersPath)
 		require.NoError(t, err, "diagram test helpers should exist")
 	})
 
 	t.Run("file naming follows convention", func(t *testing.T) {
-		// Verify naming pattern: <component>_test.go
 		cliTestDir := filepath.Join(projectRoot, "internal", "interfaces", "cli")
 		diagramTestDir := filepath.Join(projectRoot, "internal", "infrastructure", "diagram")
 
@@ -342,8 +302,6 @@ func TestInfrastructureTestFileSplitting_HappyPath(t *testing.T) {
 	})
 }
 
-// TestInfrastructureTestFileSplitting_EdgeCases validates boundary conditions
-// and edge cases in the split test organization.
 func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 	projectRoot, err := findProjectRootInfraSplit()
 	require.NoError(t, err, "failed to find project root")
@@ -352,7 +310,6 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 	diagramTestDir := filepath.Join(projectRoot, "internal", "infrastructure", "diagram")
 
 	t.Run("CLI tests organized by execution mode", func(t *testing.T) {
-		// Verify CLI files follow organizational pattern
 		cliFiles := map[string][]string{
 			"run_flags_test.go":       {"Flag", "Parse"},
 			"run_execution_test.go":   {"Execute", "SQLite"},
@@ -364,7 +321,7 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 			filePath := filepath.Join(cliTestDir, file)
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				continue // File may not exist yet
+				continue
 			}
 
 			for _, keyword := range keywords {
@@ -375,7 +332,6 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("diagram tests organized by concern", func(t *testing.T) {
-		// Verify diagram files follow organizational pattern
 		diagramFiles := map[string][]string{
 			"generator_nodes_test.go":    {"Node", "Shape"},
 			"generator_edges_test.go":    {"Edge", "Connection"},
@@ -387,7 +343,7 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 			filePath := filepath.Join(diagramTestDir, file)
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				continue // File may not exist yet
+				continue
 			}
 
 			contentStr := string(content)
@@ -428,19 +384,16 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("shared CLI helpers prevent import cycles", func(t *testing.T) {
-		// Verify cli_test_helpers_test.go exists and is importable
 		helperPath := filepath.Join(cliTestDir, "cli_test_helpers_test.go")
 		content, err := os.ReadFile(helperPath)
 		require.NoError(t, err, "shared helpers file not found")
 
-		// Verify it's in the same package (no import needed)
 		assert.Contains(t, string(content), "package cli",
 			"helpers must be in cli package to avoid import cycles")
 
-		// Verify it contains expected thread-safe utilities
 		helpers := []string{
-			"setupTestDir", // Thread-safe directory setup
-			"setTestEnv",   // Thread-safe environment setup
+			"setupTestDir",
+			"setTestEnv",
 		}
 		contentStr := string(content)
 		for _, helper := range helpers {
@@ -453,8 +406,6 @@ func TestInfrastructureTestFileSplitting_EdgeCases(t *testing.T) {
 	})
 }
 
-// TestInfrastructureTestFileSplitting_ErrorHandling validates error scenarios
-// in the test file organization.
 func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 	projectRoot, err := findProjectRootInfraSplit()
 	require.NoError(t, err, "failed to find project root")
@@ -468,7 +419,6 @@ func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("CLI test count preserved", func(t *testing.T) {
-		// C015 acceptance: 51 CLI tests preserved
 		ctx := context.Background()
 		cmd := exec.CommandContext(ctx, "go", "test", "./internal/interfaces/cli/...", "-v")
 		cmd.Dir = projectRoot
@@ -477,18 +427,15 @@ func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 			t.Logf("CLI tests output:\n%s", string(output))
 		}
 
-		// Count test functions
 		testRunRegex := regexp.MustCompile(`=== RUN\s+Test`)
 		matches := testRunRegex.FindAllString(string(output), -1)
 		testCount := len(matches)
 
-		// Allow some variance, but should be around 51 tests
 		assert.Greater(t, testCount, 40,
 			"expected >40 CLI tests after split, found %d", testCount)
 	})
 
 	t.Run("diagram test count preserved", func(t *testing.T) {
-		// C015 acceptance: 130 diagram tests preserved
 		ctx := context.Background()
 		cmd := exec.CommandContext(ctx, "go", "test", "./internal/infrastructure/diagram/...", "-v")
 		cmd.Dir = projectRoot
@@ -497,29 +444,23 @@ func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 			t.Logf("Diagram tests output:\n%s", string(output))
 		}
 
-		// Count test functions
 		testRunRegex := regexp.MustCompile(`=== RUN\s+Test`)
 		matches := testRunRegex.FindAllString(string(output), -1)
 		testCount := len(matches)
 
-		// Allow some variance, but should be around 130 tests
 		assert.Greater(t, testCount, 100,
 			"expected >100 diagram tests after split, found %d", testCount)
 	})
 
 	t.Run("split maintains git history", func(t *testing.T) {
-		// Verify that git blame still works for test functions
-		// This validates ADR-004: Preserve Test Function Names
 		ctx := context.Background()
 
-		// Check if we're in a git repository
 		cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
 		cmd.Dir = projectRoot
 		if err := cmd.Run(); err != nil {
 			t.Skip("Not in a git repository")
 		}
 
-		// Verify git can track history for split files
 		splitFiles := []string{
 			"internal/interfaces/cli/run_flags_test.go",
 			"internal/infrastructure/diagram/generator_nodes_test.go",
@@ -536,7 +477,6 @@ func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("test execution is deterministic", func(t *testing.T) {
-		// Run tests twice and verify consistent results
 		ctx := context.Background()
 
 		runTests := func() error {
@@ -553,29 +493,25 @@ func TestInfrastructureTestFileSplitting_ErrorHandling(t *testing.T) {
 			return nil
 		}
 
-		// First run
 		err1 := runTests()
-		// Second run
 		err2 := runTests()
 
-		// Both should succeed
 		assert.NoError(t, err1, "first test run should pass")
 		assert.NoError(t, err2, "second test run should pass")
 	})
 }
 
-// verifyNoTestDuplication checks for duplicate test function names across files
 func verifyNoTestDuplication(t *testing.T, testDir string, testFiles []string) {
 	t.Helper()
 
 	testFuncRegex := regexp.MustCompile(`func (Test\w+)\(t \*testing\.T\)`)
-	seenTests := make(map[string]string) // test name -> file name
+	seenTests := make(map[string]string)
 
 	for _, file := range testFiles {
 		filePath := filepath.Join(testDir, file)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			continue // File may not exist yet
+			continue
 		}
 
 		matches := testFuncRegex.FindAllStringSubmatch(string(content), -1)
@@ -597,11 +533,9 @@ func verifyNoTestDuplication(t *testing.T, testDir string, testFiles []string) {
 	}
 }
 
-// verifyLintPassesInfraSplit checks that golangci-lint finds no issues in split files
 func verifyLintPassesInfraSplit(t *testing.T, projectRoot string) {
 	t.Helper()
 
-	// Skip if golangci-lint not installed
 	if _, err := exec.LookPath("golangci-lint"); err != nil {
 		t.Skip("golangci-lint not installed")
 	}
@@ -613,19 +547,16 @@ func verifyLintPassesInfraSplit(t *testing.T, projectRoot string) {
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 
-	// Allow exit code 0 (no issues) or not installed
 	if err != nil && !strings.Contains(string(output), "not found") {
 		t.Logf("Lint output:\n%s", string(output))
 	}
 
-	// Check for common issues in split files
 	assert.NotContains(t, string(output), "unused",
 		"found unused code in split files")
 	assert.NotContains(t, string(output), "ineffassign",
 		"found inefficient assignments")
 }
 
-// verifyPackageDeclarationsInfraSplit checks that all test files have proper package declaration
 func verifyPackageDeclarationsInfraSplit(t *testing.T, projectRoot string) {
 	t.Helper()
 
@@ -659,17 +590,15 @@ func verifyPackageDeclarationsInfraSplit(t *testing.T, projectRoot string) {
 	}
 }
 
-// verifyFileHasPackageDeclarationInfraSplit checks a single file for package declaration
 func verifyFileHasPackageDeclarationInfraSplit(t *testing.T, dir, file, expectedPkg string) {
 	t.Helper()
 
 	filePath := filepath.Join(dir, file)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return // File may not exist yet
+		return
 	}
 
-	// First non-comment line should be package declaration
 	lines := strings.Split(string(content), "\n")
 	var foundPackage bool
 	expectedDecl := "package " + expectedPkg

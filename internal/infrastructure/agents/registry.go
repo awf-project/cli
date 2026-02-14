@@ -17,14 +17,12 @@ type AgentRegistry struct {
 	providers map[string]ports.AgentProvider
 }
 
-// NewAgentRegistry creates a new AgentRegistry with default providers.
 func NewAgentRegistry() *AgentRegistry {
 	return &AgentRegistry{
 		providers: make(map[string]ports.AgentProvider),
 	}
 }
 
-// Register registers a new agent provider.
 func (r *AgentRegistry) Register(provider ports.AgentProvider) error {
 	name := provider.Name()
 	r.mu.Lock()
@@ -38,7 +36,6 @@ func (r *AgentRegistry) Register(provider ports.AgentProvider) error {
 	return nil
 }
 
-// Get retrieves a registered provider by name.
 func (r *AgentRegistry) Get(name string) (ports.AgentProvider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -51,7 +48,6 @@ func (r *AgentRegistry) Get(name string) (ports.AgentProvider, error) {
 	return provider, nil
 }
 
-// List returns a list of all registered provider names.
 func (r *AgentRegistry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -64,7 +60,6 @@ func (r *AgentRegistry) List() []string {
 	return names
 }
 
-// Has checks if a provider with the given name is registered.
 func (r *AgentRegistry) Has(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

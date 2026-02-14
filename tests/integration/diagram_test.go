@@ -24,10 +24,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// ===========================================================================
-// Happy Path Tests
-// ===========================================================================
-
 // TestDiagram_Simple_OutputsValidDOT tests US1: basic DOT output to stdout
 // for a linear workflow.
 func TestDiagram_Simple_OutputsValidDOT(t *testing.T) {
@@ -176,10 +172,6 @@ func TestDiagram_EdgeStyles_SuccessAndFailure(t *testing.T) {
 		"failure edges should have red color")
 }
 
-// ===========================================================================
-// Flag Tests - Direction
-// ===========================================================================
-
 // TestDiagram_Direction_AllValues tests FR-007: --direction flag controls
 // graph layout direction.
 func TestDiagram_Direction_AllValues(t *testing.T) {
@@ -233,10 +225,6 @@ func TestDiagram_Direction_Default(t *testing.T) {
 		"default direction should be TB")
 }
 
-// ===========================================================================
-// Flag Tests - Highlight
-// ===========================================================================
-
 // TestDiagram_Highlight_EmphasizesStep tests US3: --highlight step_name
 // visually emphasizes the specified step.
 func TestDiagram_Highlight_EmphasizesStep(t *testing.T) {
@@ -283,10 +271,6 @@ func TestDiagram_Highlight_NonexistentStep(t *testing.T) {
 	// Should still produce valid DOT
 	assert.Contains(t, output, "digraph")
 }
-
-// ===========================================================================
-// Flag Tests - Output File
-// ===========================================================================
 
 // TestDiagram_Output_DotFile tests FR-006: --output exports to .dot file.
 func TestDiagram_Output_DotFile(t *testing.T) {
@@ -414,10 +398,6 @@ func TestDiagram_Output_PDFExport(t *testing.T) {
 	assert.Equal(t, "%PDF-", string(content[:5]), "PDF file should have correct header")
 }
 
-// ===========================================================================
-// Combined Flags Tests
-// ===========================================================================
-
 // TestDiagram_CombinedFlags_DirectionAndHighlight tests multiple flags together.
 func TestDiagram_CombinedFlags_DirectionAndHighlight(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -475,10 +455,6 @@ func TestDiagram_CombinedFlags_AllFlags(t *testing.T) {
 	assert.Contains(t, output, "rankdir=LR", "file should have LR direction")
 	assert.Contains(t, output, "process", "file should contain process node")
 }
-
-// ===========================================================================
-// Error Handling Tests
-// ===========================================================================
 
 // TestDiagram_InvalidWorkflow_NotFound tests FR-008: non-existent workflow.
 func TestDiagram_InvalidWorkflow_NotFound(t *testing.T) {
@@ -578,10 +554,6 @@ func TestDiagram_OutputDirectory_NotExists(t *testing.T) {
 	err := cmd.Execute()
 	assert.Error(t, err, "should error when output directory doesn't exist")
 }
-
-// ===========================================================================
-// Edge Cases
-// ===========================================================================
 
 // TestDiagram_WorkflowWithSpecialCharacters tests DOT escaping for special characters.
 func TestDiagram_WorkflowWithSpecialCharacters(t *testing.T) {
@@ -756,10 +728,6 @@ states:
 	assert.Contains(t, output, longName, "long step name should be preserved")
 }
 
-// ===========================================================================
-// DOT Validation Tests
-// ===========================================================================
-
 // TestDiagram_DOTSyntax_ValidWithGraphviz validates DOT output with graphviz
 // if available. This is the ultimate integration test per US1 acceptance.
 func TestDiagram_DOTSyntax_ValidWithGraphviz(t *testing.T) {
@@ -829,10 +797,6 @@ func TestDiagram_DOTSyntax_AllFixtures(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// Help and Documentation Tests
-// ===========================================================================
-
 // TestDiagram_Help_ShowsUsage tests that --help shows usage information.
 func TestDiagram_Help_ShowsUsage(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -850,10 +814,6 @@ func TestDiagram_Help_ShowsUsage(t *testing.T) {
 	assert.Contains(t, output, "--highlight", "help should document --highlight flag")
 	assert.Contains(t, output, "DOT", "help should mention DOT format")
 }
-
-// ===========================================================================
-// Helper Functions
-// ===========================================================================
 
 // extractNodeDefinition extracts the DOT definition for a specific node.
 func extractNodeDefinition(dotOutput, nodeName string) string {

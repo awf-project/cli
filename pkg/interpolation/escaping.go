@@ -11,7 +11,6 @@ func ShellEscape(s string) string {
 	if !needsEscaping(s) {
 		return s
 	}
-	// Escape single quotes: ' -> '\''
 	escaped := strings.ReplaceAll(s, "'", `'\''`)
 	return "'" + escaped + "'"
 }

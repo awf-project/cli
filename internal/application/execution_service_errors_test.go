@@ -164,7 +164,6 @@ func TestClassifyErrorType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			var wf *workflow.Workflow
 			if tt.wantWorkflowError {
 				// Create workflow with error hook that logs error.type
@@ -194,10 +193,8 @@ func TestClassifyErrorType(t *testing.T) {
 				})
 			}
 
-			// Act
 			_, err := svc.Run(context.Background(), "test", nil)
 
-			// Assert
 			if !tt.wantWorkflowError {
 				// Success case: no error expected
 				require.NoError(t, err)
@@ -281,7 +278,6 @@ func TestClassifyErrorType_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			wf := createWorkflowWithErrorHook()
 
 			svc, mocks := NewTestHarness(t).
@@ -294,10 +290,8 @@ func TestClassifyErrorType_EdgeCases(t *testing.T) {
 				ExitCode: 1,
 			})
 
-			// Act
 			_, err := svc.Run(context.Background(), "test", nil)
 
-			// Assert
 			require.Error(t, err)
 
 			messages := mocks.Logger.GetMessages()
@@ -321,7 +315,6 @@ func TestClassifyErrorType_EdgeCases(t *testing.T) {
 // TestClassifyErrorType_ErrorHookContext tests that error classification
 // is available in error hook interpolation context with all error metadata.
 func TestClassifyErrorType_ErrorHookContext(t *testing.T) {
-	// Arrange: Create workflow with error hook that logs all error fields
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -351,10 +344,8 @@ func TestClassifyErrorType_ErrorHookContext(t *testing.T) {
 		ExitCode: 1,
 	})
 
-	// Act
 	_, err := svc.Run(context.Background(), "test", nil)
 
-	// Assert
 	require.Error(t, err)
 	messages := mocks.Logger.GetMessages()
 

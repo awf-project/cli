@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestRunCommand_WiresHTTPOperationProvider(t *testing.T) {
 	// GIVEN: A temporary test directory with a workflow containing http operation
 	tmpDir := setupTestDir(t)
@@ -175,10 +171,6 @@ func TestResumeCommand_WiresHTTPOperationProvider(t *testing.T) {
 		assert.NotContains(t, errMsg, "no operation provider", "provider should be wired")
 	}
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestRunSingleStep_WiresHTTPOperationProvider(t *testing.T) {
 	// GIVEN: A workflow with http operation for single-step execution
@@ -360,10 +352,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestRunCommand_HTTPOperation_InvalidMethod(t *testing.T) {
 	// GIVEN: A workflow with invalid HTTP method
 	tmpDir := setupTestDir(t)
@@ -541,10 +529,6 @@ states:
 		})
 	}
 }
-
-// =============================================================================
-// Integration Tests: Provider + Client + Logger Wiring
-// =============================================================================
 
 func TestRunCommand_FullHTTPWiringStack_NoNilPointers(t *testing.T) {
 	// GIVEN: A workflow exercising the full HTTP wiring stack

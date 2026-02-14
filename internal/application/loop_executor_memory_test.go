@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Loop Executor - Memory Management Tests (C019 T004)
-// =============================================================================
 //
 // These tests verify the rolling window memory management functionality
 // for loop execution, including:
@@ -105,7 +102,7 @@ func TestLoopExecutor_UnlimitedRetention_DefaultBehavior(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(result.Iterations), "all 5 iterations should be retained")
+	assert.Len(t, result.Iterations, 5)
 	assert.Equal(t, 0, result.PrunedCount, "no iterations should be pruned with unlimited retention")
 	assert.Equal(t, 5, result.TotalCount, "TotalCount should be 5")
 }
@@ -140,7 +137,7 @@ func TestLoopExecutor_RollingWindow_SingleIteration(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(result.Iterations), "only last iteration should be retained")
+	assert.Len(t, result.Iterations, 1)
 	assert.Equal(t, 4, result.PrunedCount, "4 iterations should be pruned")
 	assert.Equal(t, 5, result.TotalCount, "TotalCount should still be 5")
 
@@ -181,7 +178,7 @@ func TestLoopExecutor_RollingWindow_TenIterations(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 10, len(result.Iterations), "only last 10 iterations should be retained")
+	assert.Len(t, result.Iterations, 10)
 	assert.Equal(t, 15, result.PrunedCount, "15 iterations should be pruned")
 	assert.Equal(t, 25, result.TotalCount, "TotalCount should be 25")
 
@@ -220,7 +217,7 @@ func TestLoopExecutor_RollingWindow_ExactlyAtLimit(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(result.Iterations), "all 5 iterations should be retained")
+	assert.Len(t, result.Iterations, 5)
 	assert.Equal(t, 0, result.PrunedCount, "no iterations should be pruned when count equals limit")
 	assert.Equal(t, 5, result.TotalCount, "TotalCount should be 5")
 }
@@ -255,7 +252,7 @@ func TestLoopExecutor_RollingWindow_BelowLimit(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(result.Iterations), "all 3 iterations should be retained")
+	assert.Len(t, result.Iterations, 3)
 	assert.Equal(t, 0, result.PrunedCount, "no iterations should be pruned when count is below limit")
 	assert.Equal(t, 3, result.TotalCount, "TotalCount should be 3")
 }
@@ -290,7 +287,7 @@ func TestLoopExecutor_RollingWindow_ZeroIterations(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(result.Iterations), "no iterations should be retained")
+	assert.Empty(t, result.Iterations)
 	assert.Equal(t, 0, result.PrunedCount, "no iterations should be pruned")
 	assert.Equal(t, 0, result.TotalCount, "TotalCount should be 0")
 }
@@ -340,7 +337,7 @@ func TestLoopExecutor_RollingWindow_LargeIterationCount(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 100, len(result.Iterations), "only last 100 iterations should be retained")
+	assert.Len(t, result.Iterations, 100)
 	assert.Equal(t, 900, result.PrunedCount, "900 iterations should be pruned")
 	assert.Equal(t, 1000, result.TotalCount, "TotalCount should be 1000")
 
@@ -382,7 +379,7 @@ func TestLoopExecutor_RollingWindow_WhileLoop(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(result.Iterations), "only last 5 iterations should be retained")
+	assert.Len(t, result.Iterations, 5)
 	assert.Equal(t, 5, result.PrunedCount, "5 iterations should be pruned")
 	assert.Equal(t, 10, result.TotalCount, "TotalCount should be 10")
 
@@ -423,7 +420,7 @@ func TestLoopExecutor_RollingWindow_PrunedCountAccumulates(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(result.Iterations), "only last 3 iterations should be retained")
+	assert.Len(t, result.Iterations, 3)
 	assert.Equal(t, 7, result.PrunedCount, "7 iterations should be pruned (10 total - 3 retained)")
 	assert.Equal(t, 10, result.TotalCount, "TotalCount should still reflect all 10 iterations")
 }
@@ -460,7 +457,7 @@ func TestLoopExecutor_RollingWindow_IterationOrderPreserved(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(result.Iterations), "only last 5 iterations should be retained")
+	assert.Len(t, result.Iterations, 5)
 	assert.Equal(t, 3, result.PrunedCount, "3 iterations should be pruned")
 
 	// Verify order: indices should be 3, 4, 5, 6, 7 in that order
@@ -501,7 +498,7 @@ func TestLoopExecutor_RollingWindow_NegativeMaxRetainedIterations(t *testing.T) 
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(result.Iterations), "all iterations should be retained with negative limit")
+	assert.Len(t, result.Iterations, 5)
 	assert.Equal(t, 0, result.PrunedCount, "no iterations should be pruned with negative limit")
 	assert.Equal(t, 5, result.TotalCount, "TotalCount should be 5")
 }

@@ -57,11 +57,6 @@ func (m *SecretMasker) MaskFields(fields []any) []any {
 }
 
 // MaskText replaces secret values in text output with "***".
-// It accepts a text string and a map of environment variables,
-// then scans for any secret values and replaces them.
-// MaskText replaces secret values in text output with "***".
-// It accepts a text string and a map of environment variables,
-// then scans for any secret values and replaces them.
 func (m *SecretMasker) MaskText(text string, env map[string]string) string {
 	if len(env) == 0 || text == "" {
 		return text

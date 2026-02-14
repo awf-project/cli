@@ -11,10 +11,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
-// RenderWorkflowHelp Tests (US1, US2, US3, US4)
-// =============================================================================
-
 func TestRenderWorkflowHelp_WorkflowWithMultipleInputs(t *testing.T) {
 	// US1: View workflow input arguments
 	wf := &workflow.Workflow{
@@ -402,9 +398,7 @@ func TestRenderWorkflowHelp_ColorDisabled(t *testing.T) {
 	assert.Contains(t, output, "input")
 }
 
-// =============================================================================
 // workflowToInputInfos Tests
-// =============================================================================
 
 func TestWorkflowToInputInfos_EmptyInputs(t *testing.T) {
 	wf := &workflow.Workflow{
@@ -547,9 +541,7 @@ func TestWorkflowToInputInfos_PreservesOrder(t *testing.T) {
 	assert.Equal(t, "fourth", result[3].Name)
 }
 
-// =============================================================================
 // formatInputsTable Tests
-// =============================================================================
 
 func TestFormatInputsTable_EmptyInputs(t *testing.T) {
 	inputs := []ui.InputInfo{}
@@ -621,9 +613,7 @@ func TestFormatInputsTable_AlignedColumns(t *testing.T) {
 	assert.Contains(t, output, "very_long_name")
 }
 
-// =============================================================================
 // formatDefaultValue Tests
-// =============================================================================
 
 func TestFormatDefaultValue(t *testing.T) {
 	tests := []struct {
@@ -661,9 +651,7 @@ func TestFormatDefaultValue(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // formatRequired Tests
-// =============================================================================
 
 func TestFormatRequired(t *testing.T) {
 	tests := []struct {
@@ -691,9 +679,7 @@ func TestFormatRequired(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // formatDescription Tests
-// =============================================================================
 
 func TestFormatDescription(t *testing.T) {
 	tests := []struct {
@@ -725,10 +711,6 @@ func TestFormatDescription(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
 
 func TestRenderWorkflowHelp_NilWorkflow(t *testing.T) {
 	buf := new(bytes.Buffer)
@@ -848,10 +830,6 @@ func TestRenderWorkflowHelp_ManyInputs(t *testing.T) {
 	assert.Contains(t, output, "input_t") // 20th input (a-t)
 }
 
-// =============================================================================
-// Integration with ui.InputInfo
-// =============================================================================
-
 func TestWorkflowToInputInfos_MapsAllFields(t *testing.T) {
 	input := workflow.Input{
 		Name:        "complete_input",
@@ -876,10 +854,6 @@ func TestWorkflowToInputInfos_MapsAllFields(t *testing.T) {
 	assert.Equal(t, "default_value", info.Default)
 	assert.Equal(t, "Complete input with all fields", info.Description)
 }
-
-// =============================================================================
-// Table-driven comprehensive tests
-// =============================================================================
 
 func TestRenderWorkflowHelp_Scenarios(t *testing.T) {
 	tests := []struct {

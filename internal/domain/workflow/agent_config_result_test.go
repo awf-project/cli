@@ -16,9 +16,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
 // workflow.NewAgentResult Constructor Tests
-// =============================================================================
 
 func TestNewAgentResult(t *testing.T) {
 	provider := "claude"
@@ -63,9 +61,7 @@ func TestNewAgentResult_VariousProviders(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentResult Duration Tests
-// =============================================================================
 
 func TestAgentResult_Duration(t *testing.T) {
 	start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -114,9 +110,7 @@ func TestAgentResult_Duration_LongRunning(t *testing.T) {
 	assert.Equal(t, 10*time.Minute, result.Duration())
 }
 
-// =============================================================================
 // workflow.AgentResult Success Tests
-// =============================================================================
 
 func TestAgentResult_Success(t *testing.T) {
 	tests := []struct {
@@ -171,9 +165,7 @@ func TestAgentResult_Success(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentResult HasJSONResponse Tests
-// =============================================================================
 
 func TestAgentResult_HasJSONResponse(t *testing.T) {
 	tests := []struct {
@@ -226,9 +218,7 @@ func TestAgentResult_HasJSONResponse(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentResult Output Tests
-// =============================================================================
 
 func TestAgentResult_Output(t *testing.T) {
 	tests := []struct {
@@ -268,9 +258,7 @@ func TestAgentResult_Output(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentResult Response Tests
-// =============================================================================
 
 func TestAgentResult_Response(t *testing.T) {
 	result := workflow.NewAgentResult("claude")
@@ -300,9 +288,7 @@ func TestAgentResult_Response_NilValue(t *testing.T) {
 	assert.True(t, result.HasJSONResponse())
 }
 
-// =============================================================================
 // workflow.AgentResult Tokens Tests
-// =============================================================================
 
 func TestAgentResult_Tokens(t *testing.T) {
 	tests := []struct {
@@ -326,9 +312,7 @@ func TestAgentResult_Tokens(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // workflow.AgentResult Fields Tests
-// =============================================================================
 
 func TestAgentResult_AllFields(t *testing.T) {
 	err := errors.New("timeout exceeded")
@@ -358,10 +342,6 @@ func TestAgentResult_AllFields(t *testing.T) {
 	assert.True(t, result.HasJSONResponse())
 	assert.Equal(t, 5*time.Second, result.Duration())
 }
-
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
 
 func TestAgentResult_ExecutionLifecycle(t *testing.T) {
 	// Simulate a complete agent execution lifecycle
@@ -455,10 +435,6 @@ func TestAgentResult_TextOnlyResponse(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
-
 func TestAgentResult_ResponseTypes(t *testing.T) {
 	result := workflow.NewAgentResult("claude")
 
@@ -487,9 +463,7 @@ func TestAgentResult_ResponseTypes(t *testing.T) {
 	assert.True(t, result.HasJSONResponse())
 }
 
-// =============================================================================
 // workflow.AgentResult Conversation Field Tests
-// =============================================================================
 
 func TestAgentResult_ConversationField(t *testing.T) {
 	tests := []struct {

@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Source: loop_executor_transitions_test.go | Tests: 59 | Component: C014-T010
-// =============================================================================
 //
 // Intra-body transition tests for F048 (While Loop Transitions Support).
 // Tests body step index mapping, transition evaluation, and skip-step functionality.
@@ -25,10 +22,8 @@ import (
 // - TestHandleIntraBodyJump_* (17 tests)
 // - TestExecuteWhile/ForEach_*Skip* tests (11 tests)
 //
-// =============================================================================
 
 func TestBuildBodyStepIndices_HappyPath_SimpleSequence(t *testing.T) {
-	// Arrange: Create loop executor
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -43,10 +38,8 @@ func TestBuildBodyStepIndices_HappyPath_SimpleSequence(t *testing.T) {
 		"step3": 2,
 	}
 
-	// Act: Call BuildBodyStepIndices (now exported for testing)
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, expectedIndices, indices)
 }
@@ -54,7 +47,6 @@ func TestBuildBodyStepIndices_HappyPath_SimpleSequence(t *testing.T) {
 // TestBuildBodyStepIndices_HappyPath_SingleStep verifies mapping
 // for a loop body with only one step.
 func TestBuildBodyStepIndices_HappyPath_SingleStep(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -67,10 +59,8 @@ func TestBuildBodyStepIndices_HappyPath_SingleStep(t *testing.T) {
 		"only_step": 0,
 	}
 
-	// Act: Call BuildBodyStepIndices
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, expectedIndices, indices)
 }
@@ -78,7 +68,6 @@ func TestBuildBodyStepIndices_HappyPath_SingleStep(t *testing.T) {
 // TestBuildBodyStepIndices_HappyPath_ManySteps verifies mapping
 // works correctly with larger body (boundary condition).
 func TestBuildBodyStepIndices_HappyPath_ManySteps(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -104,10 +93,8 @@ func TestBuildBodyStepIndices_HappyPath_ManySteps(t *testing.T) {
 		"step_9": 9,
 	}
 
-	// Act: Call BuildBodyStepIndices
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, expectedIndices, indices)
 }
@@ -115,7 +102,6 @@ func TestBuildBodyStepIndices_HappyPath_ManySteps(t *testing.T) {
 // TestBuildBodyStepIndices_EdgeCase_EmptyBody verifies behavior
 // when loop body is empty (should return empty map).
 func TestBuildBodyStepIndices_EdgeCase_EmptyBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -126,10 +112,8 @@ func TestBuildBodyStepIndices_EdgeCase_EmptyBody(t *testing.T) {
 	// Expected: Empty map
 	expectedIndices := map[string]int{}
 
-	// Act: Call BuildBodyStepIndices
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, expectedIndices, indices)
 }
@@ -137,7 +121,6 @@ func TestBuildBodyStepIndices_EdgeCase_EmptyBody(t *testing.T) {
 // TestBuildBodyStepIndices_EdgeCase_NilBody verifies graceful handling
 // when body is nil (edge case that shouldn't happen in practice).
 func TestBuildBodyStepIndices_EdgeCase_NilBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -148,10 +131,8 @@ func TestBuildBodyStepIndices_EdgeCase_NilBody(t *testing.T) {
 	// Expected: Empty map (graceful degradation)
 	expectedIndices := map[string]int{}
 
-	// Act: Call BuildBodyStepIndices
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, expectedIndices, indices)
 }
@@ -159,7 +140,6 @@ func TestBuildBodyStepIndices_EdgeCase_NilBody(t *testing.T) {
 // TestBuildBodyStepIndices_EdgeCase_DuplicateStepNames verifies behavior
 // when body contains duplicate step names (should return error).
 func TestBuildBodyStepIndices_EdgeCase_DuplicateStepNames(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -168,10 +148,8 @@ func TestBuildBodyStepIndices_EdgeCase_DuplicateStepNames(t *testing.T) {
 	// Body with duplicate "step2"
 	body := []string{"step1", "step2", "step3", "step2", "step4"}
 
-	// Act: Call BuildBodyStepIndices
 	indices, err := loopExec.BuildBodyStepIndices(body)
 
-	// Assert: Should return error for duplicate step names
 	require.Error(t, err)
 	assert.Nil(t, indices)
 	assert.Contains(t, err.Error(), "duplicate step 'step2'")
@@ -179,15 +157,10 @@ func TestBuildBodyStepIndices_EdgeCase_DuplicateStepNames(t *testing.T) {
 	assert.Contains(t, err.Error(), "3")
 }
 
-// =============================================================================
-// Integration Tests: buildBodyStepIndices Usage in ExecuteWhile
-// =============================================================================
-
 // TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration verifies
 // that buildBodyStepIndices is called during ExecuteWhile execution.
 // This test validates the stub integration, not the mapping logic itself.
 func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T) {
-	// Arrange: Create minimal while loop
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// First iteration: true, second: false
@@ -232,7 +205,6 @@ func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T)
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -244,7 +216,6 @@ func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T)
 		},
 	)
 
-	// Assert: Loop executed successfully
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 1, result.TotalCount, "Should complete one iteration")
@@ -260,7 +231,6 @@ func TestExecuteWhile_BuildsBodyStepIndices_CalledOncePerIteration(t *testing.T)
 // the current stub implementation compiles and runs even though
 // buildBodyStepIndices returns an empty map.
 func TestExecuteWhile_BodyStepIndices_NotUsedInStubPhase(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -304,7 +274,6 @@ func TestExecuteWhile_BodyStepIndices_NotUsedInStubPhase(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -316,7 +285,6 @@ func TestExecuteWhile_BodyStepIndices_NotUsedInStubPhase(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -330,14 +298,9 @@ func TestExecuteWhile_BodyStepIndices_NotUsedInStubPhase(t *testing.T) {
 		"GREEN phase: bodyStepIndices map is used by T005 transition logic")
 }
 
-// =============================================================================
-// Error Handling and Boundary Conditions
-// =============================================================================
-
 // TestExecuteWhile_BodyStepIndices_WithComplexStepNames verifies mapping
 // works with various step name formats (underscores, dashes, numbers).
 func TestExecuteWhile_BodyStepIndices_WithComplexStepNames(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -384,7 +347,6 @@ func TestExecuteWhile_BodyStepIndices_WithComplexStepNames(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -396,7 +358,6 @@ func TestExecuteWhile_BodyStepIndices_WithComplexStepNames(t *testing.T) {
 		},
 	)
 
-	// Assert: Loop executes successfully with complex names
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 5, executionCount, "Should execute all 5 steps with complex names")
@@ -408,7 +369,6 @@ func TestExecuteWhile_BodyStepIndices_WithComplexStepNames(t *testing.T) {
 // TestExecuteWhile_BodyStepIndices_WithSpecialCharacters verifies mapping
 // handles edge case step names with special characters.
 func TestExecuteWhile_BodyStepIndices_WithSpecialCharacters(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -450,7 +410,6 @@ func TestExecuteWhile_BodyStepIndices_WithSpecialCharacters(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -462,7 +421,6 @@ func TestExecuteWhile_BodyStepIndices_WithSpecialCharacters(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 5, executionCount, "Should handle special characters in step names")
@@ -471,7 +429,6 @@ func TestExecuteWhile_BodyStepIndices_WithSpecialCharacters(t *testing.T) {
 // TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations verifies
 // that the index mapping is consistent across multiple loop iterations.
 func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	// True for first 2 iterations
@@ -518,7 +475,6 @@ func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -530,7 +486,6 @@ func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.
 		},
 	)
 
-	// Assert: Order should be consistent across iterations
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.TotalCount, "Should complete 2 iterations")
@@ -545,10 +500,6 @@ func TestExecuteWhile_BodyStepIndices_PreservesOrderAcrossIterations(t *testing.
 
 	// After GREEN phase: indices should be {first: 0, second: 1, third: 2} in both iterations
 }
-
-// =============================================================================
-// Documentation Tests
-// =============================================================================
 
 // TestBuildBodyStepIndices_ExpectedBehavior documents the expected behavior
 // of buildBodyStepIndices for future implementers.
@@ -567,10 +518,6 @@ func TestBuildBodyStepIndices_ExpectedBehavior(t *testing.T) {
 	t.Log("GREEN Phase (T005): Will implement actual index mapping logic")
 	t.Log("This enables T005 to use the map for transition jumps within loop body")
 }
-
-// =============================================================================
-// RED Phase Tests - These SHOULD FAIL until GREEN implementation
-// =============================================================================
 
 // TestT004_RED_ExecuteWhile_TransitionWithinBody_ShouldSkipSteps is a RED phase test
 // that documents the expected behavior after buildBodyStepIndices is properly implemented.
@@ -735,11 +682,6 @@ func TestT004_RED_ExecuteWhile_MultipleTransitions_ShouldUseIndices(t *testing.T
 
 // Component T005: Transition Evaluation in Loop Body
 // Feature: F048 - While Loop Transitions Support
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests: Normal Transition Scenarios
-// =============================================================================
 
 // TestEvaluateBodyTransition_HappyPath_IntraBodyJump tests the basic scenario
 // where a step transitions to another step within the loop body (forward jump).
@@ -747,7 +689,6 @@ func TestT004_RED_ExecuteWhile_MultipleTransitions_ShouldUseIndices(t *testing.T
 // When: step1 transitions to step3 (nextStep = "step3")
 // Then: Should return (shouldBreak=false, newIdx=2) to jump to index 2
 func TestEvaluateBodyTransition_HappyPath_IntraBodyJump(t *testing.T) {
-	// Arrange: Create loop with body that contains transition target
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -791,7 +732,6 @@ func TestEvaluateBodyTransition_HappyPath_IntraBodyJump(t *testing.T) {
 		return "", nil
 	}
 
-	// Act: Execute loop
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -803,7 +743,6 @@ func TestEvaluateBodyTransition_HappyPath_IntraBodyJump(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -821,7 +760,6 @@ func TestEvaluateBodyTransition_HappyPath_IntraBodyJump(t *testing.T) {
 // When: step1 transitions to step3 (last step)
 // Then: Should jump to step3, skipping step2
 func TestEvaluateBodyTransition_HappyPath_JumpToEnd(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -863,7 +801,6 @@ func TestEvaluateBodyTransition_HappyPath_JumpToEnd(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -875,7 +812,6 @@ func TestEvaluateBodyTransition_HappyPath_JumpToEnd(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -893,7 +829,6 @@ func TestEvaluateBodyTransition_HappyPath_JumpToEnd(t *testing.T) {
 // When: step1 → step3, step3 → step5
 // Then: Should execute step1, step3, step5 (skip step2 and step4)
 func TestEvaluateBodyTransition_HappyPath_MultipleJumps(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -940,7 +875,6 @@ func TestEvaluateBodyTransition_HappyPath_MultipleJumps(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -952,7 +886,6 @@ func TestEvaluateBodyTransition_HappyPath_MultipleJumps(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -970,7 +903,6 @@ func TestEvaluateBodyTransition_HappyPath_MultipleJumps(t *testing.T) {
 // When: step1 transitions to "external_step" (not in body)
 // Then: Should return (shouldBreak=true, newIdx=-1) to exit loop early
 func TestEvaluateBodyTransition_HappyPath_EarlyExit(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1013,7 +945,6 @@ func TestEvaluateBodyTransition_HappyPath_EarlyExit(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1025,7 +956,6 @@ func TestEvaluateBodyTransition_HappyPath_EarlyExit(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1044,7 +974,6 @@ func TestEvaluateBodyTransition_HappyPath_EarlyExit(t *testing.T) {
 // When: All steps return empty nextStep
 // Then: Should execute all steps sequentially (shouldBreak=false, newIdx=-1)
 func TestEvaluateBodyTransition_HappyPath_NoTransition(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1083,7 +1012,6 @@ func TestEvaluateBodyTransition_HappyPath_NoTransition(t *testing.T) {
 		return "", nil // No transitions
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1095,7 +1023,6 @@ func TestEvaluateBodyTransition_HappyPath_NoTransition(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1104,16 +1031,11 @@ func TestEvaluateBodyTransition_HappyPath_NoTransition(t *testing.T) {
 		"All steps should execute sequentially when no transitions are returned")
 }
 
-// =============================================================================
-// Edge Cases: Boundary Conditions
-// =============================================================================
-
 // TestEvaluateBodyTransition_EdgeCase_JumpToFirst tests jumping to the first step.
 // Given: Body with [step1, step2, step3]
 // When: step2 transitions to step1 (backward jump)
 // Then: Should jump back to step1, creating a loop within iteration
 func TestEvaluateBodyTransition_EdgeCase_JumpToFirst(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1158,7 +1080,6 @@ func TestEvaluateBodyTransition_EdgeCase_JumpToFirst(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1170,7 +1091,6 @@ func TestEvaluateBodyTransition_EdgeCase_JumpToFirst(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1188,7 +1108,6 @@ func TestEvaluateBodyTransition_EdgeCase_JumpToFirst(t *testing.T) {
 // When: step1 transitions to "step1" (self-loop)
 // Then: Should handle gracefully (could infinite loop without protection)
 func TestEvaluateBodyTransition_EdgeCase_SelfTransition(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1232,7 +1151,6 @@ func TestEvaluateBodyTransition_EdgeCase_SelfTransition(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1244,7 +1162,6 @@ func TestEvaluateBodyTransition_EdgeCase_SelfTransition(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1262,7 +1179,6 @@ func TestEvaluateBodyTransition_EdgeCase_SelfTransition(t *testing.T) {
 // When: Loop executes
 // Then: Should handle gracefully (no transitions possible)
 func TestEvaluateBodyTransition_EdgeCase_EmptyBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1297,7 +1213,6 @@ func TestEvaluateBodyTransition_EdgeCase_EmptyBody(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1309,7 +1224,6 @@ func TestEvaluateBodyTransition_EdgeCase_EmptyBody(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 0, executionCount, "Empty body should execute no steps")
@@ -1320,7 +1234,6 @@ func TestEvaluateBodyTransition_EdgeCase_EmptyBody(t *testing.T) {
 // When: single_step transitions to itself or external
 // Then: Should handle both scenarios correctly
 func TestEvaluateBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1362,7 +1275,6 @@ func TestEvaluateBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1374,7 +1286,6 @@ func TestEvaluateBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1383,16 +1294,11 @@ func TestEvaluateBodyTransition_EdgeCase_SingleStepBody(t *testing.T) {
 		"Should execute only_step then exit due to external transition")
 }
 
-// =============================================================================
-// Error Handling: Invalid Inputs and Edge Cases
-// =============================================================================
-
 // TestEvaluateBodyTransition_ErrorHandling_InvalidTarget tests transition to non-existent step.
 // Given: Body with [step1, step2, step3]
 // When: step1 transitions to "nonexistent_step"
 // Then: Should handle gracefully (log warning, continue sequentially, or exit)
 func TestEvaluateBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1434,7 +1340,6 @@ func TestEvaluateBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1446,7 +1351,6 @@ func TestEvaluateBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err, "Should not error on invalid target (graceful degradation)")
 	require.NotNil(t, result)
 
@@ -1462,7 +1366,6 @@ func TestEvaluateBodyTransition_ErrorHandling_InvalidTarget(t *testing.T) {
 // When: Loop attempts to build body step indices
 // Then: Should return error rejecting duplicate step names (PR-67 review item)
 func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1498,7 +1401,6 @@ func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1510,20 +1412,11 @@ func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.Error(t, err, "should reject duplicate step names")
 	require.Nil(t, result)
 	require.Contains(t, err.Error(), "duplicate step 'step1'")
 	require.Contains(t, err.Error(), "indices 0 and 2")
 }
-
-// =============================================================================
-// Integration Tests: ExecuteForEach Transition Support
-// =============================================================================
-
-// =============================================================================
-// Multi-Iteration Transition Tests
-// =============================================================================
 
 // TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior tests that
 // transitions work consistently across multiple loop iterations.
@@ -1531,7 +1424,6 @@ func TestEvaluateBodyTransition_ErrorHandling_DuplicateStepNames(t *testing.T) {
 // When: Each iteration has step1 → step3 transition
 // Then: Should skip step2 in all iterations
 func TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
@@ -1584,7 +1476,6 @@ func TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior(t *testing.T) 
 	// Set initial condition
 	evaluator.boolResults["loop.index < 3"] = true
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1596,7 +1487,6 @@ func TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior(t *testing.T) 
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.TotalCount, "Should complete 3 iterations")
@@ -1622,10 +1512,6 @@ func TestEvaluateBodyTransition_MultiIteration_ConsistentBehavior(t *testing.T) 
 	_ = iterationCount
 }
 
-// =============================================================================
-// Documentation Test
-// =============================================================================
-
 // TestT005_ComponentBehavior documents the expected behavior of T005.
 func TestT005_ComponentBehavior(t *testing.T) {
 	t.Log("Component T005: Transition Evaluation in Loop Body")
@@ -1648,10 +1534,7 @@ func TestT005_ComponentBehavior(t *testing.T) {
 	t.Log("GREEN Phase: Implements transition logic per ADR-003")
 }
 
-// =============================================================================
-// Component T006: Handle Intra-Body Jumps in Loop Executor
 // Feature: F048 - While Loop Transitions Support
-// =============================================================================
 //
 // handleIntraBodyJump is responsible for calculating the adjusted loop body
 // index when a transition jumps to a target step within the loop body.
@@ -1664,11 +1547,6 @@ func TestT005_ComponentBehavior(t *testing.T) {
 //   - newIdx = -1 (no jump): returns -1 (sequential execution continues)
 //   - newIdx >= 0 (intra-body jump): returns newIdx - 1 (compensate for loop increment)
 //
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests: Normal Intra-Body Jump Scenarios
-// =============================================================================
 
 // TestHandleIntraBodyJump_HappyPath_ForwardJump tests jumping forward within
 // the loop body (e.g., skip steps 2-3 to go directly to step 4).
@@ -1676,7 +1554,6 @@ func TestT005_ComponentBehavior(t *testing.T) {
 // When: Transition to index 3 (newIdx=3)
 // Then: Should return 2 (newIdx - 1) to compensate for loop increment
 func TestHandleIntraBodyJump_HappyPath_ForwardJump(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -1721,7 +1598,6 @@ func TestHandleIntraBodyJump_HappyPath_ForwardJump(t *testing.T) {
 		return "", nil
 	}
 
-	// Act: Execute loop (integration test to verify handleIntraBodyJump behavior)
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1733,7 +1609,6 @@ func TestHandleIntraBodyJump_HappyPath_ForwardJump(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1751,7 +1626,6 @@ func TestHandleIntraBodyJump_HappyPath_ForwardJump(t *testing.T) {
 // When: step1 (index 0) transitions to step4 (index 3)
 // Then: Should return 2 (index 3 - 1) to land on step4 after increment
 func TestHandleIntraBodyJump_HappyPath_JumpToEnd(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1795,7 +1669,6 @@ func TestHandleIntraBodyJump_HappyPath_JumpToEnd(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1807,7 +1680,6 @@ func TestHandleIntraBodyJump_HappyPath_JumpToEnd(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1826,7 +1698,6 @@ func TestHandleIntraBodyJump_HappyPath_JumpToEnd(t *testing.T) {
 // When: All steps return empty nextStep (newIdx = -1)
 // Then: Should return -1 (no index adjustment, sequential execution)
 func TestHandleIntraBodyJump_HappyPath_NoJump(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1865,7 +1736,6 @@ func TestHandleIntraBodyJump_HappyPath_NoJump(t *testing.T) {
 		return "", nil // No transitions
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1877,7 +1747,6 @@ func TestHandleIntraBodyJump_HappyPath_NoJump(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1886,17 +1755,12 @@ func TestHandleIntraBodyJump_HappyPath_NoJump(t *testing.T) {
 		"All steps should execute sequentially when no jumps occur")
 }
 
-// =============================================================================
-// Edge Cases: Boundary Conditions
-// =============================================================================
-
 // TestHandleIntraBodyJump_EdgeCase_JumpToNextStep tests jumping to the
 // immediately next step (minimal jump distance of 1).
 // Given: Loop body with [step1, step2, step3]
 // When: step1 (index 0) transitions to step2 (index 1)
 // Then: Should return 0 (index 1 - 1) resulting in step2 execution
 func TestHandleIntraBodyJump_EdgeCase_JumpToNextStep(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -1939,7 +1803,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToNextStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -1951,7 +1814,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToNextStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -1970,7 +1832,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToNextStep(t *testing.T) {
 // When: step3 (index 2) transitions to step1 (index 0)
 // Then: Should return -1 (index 0 - 1 = -1) creating a mini-loop within iteration
 func TestHandleIntraBodyJump_EdgeCase_BackwardJump(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2013,7 +1874,6 @@ func TestHandleIntraBodyJump_EdgeCase_BackwardJump(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2025,7 +1885,6 @@ func TestHandleIntraBodyJump_EdgeCase_BackwardJump(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -2050,7 +1909,6 @@ func TestHandleIntraBodyJump_EdgeCase_BackwardJump(t *testing.T) {
 // When: step2 transitions to step1 (index 0)
 // Then: Should return -1 (0 - 1 = -1) to restart from beginning
 func TestHandleIntraBodyJump_EdgeCase_JumpToFirstStep(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2093,7 +1951,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToFirstStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2105,7 +1962,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToFirstStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -2130,7 +1986,6 @@ func TestHandleIntraBodyJump_EdgeCase_JumpToFirstStep(t *testing.T) {
 // When: step1 returns any transition (becomes early exit since no other body steps)
 // Then: Should handle gracefully (this tests integration with T005)
 func TestHandleIntraBodyJump_EdgeCase_SingleStepBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2172,7 +2027,6 @@ func TestHandleIntraBodyJump_EdgeCase_SingleStepBody(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2184,7 +2038,6 @@ func TestHandleIntraBodyJump_EdgeCase_SingleStepBody(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -2202,7 +2055,6 @@ func TestHandleIntraBodyJump_EdgeCase_SingleStepBody(t *testing.T) {
 // When: step1→step3, step3→step4
 // Then: Should handle both jumps correctly (step1, step3, step4)
 func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2249,7 +2101,6 @@ func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2261,7 +2112,6 @@ func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -2274,10 +2124,6 @@ func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
 		"GREEN phase: Should handle two consecutive jumps (step1→step3→step4, skipping step2)")
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError tests that when
 // a step returns both a nextStep and an error, the error takes precedence
 // and the transition is not processed.
@@ -2285,7 +2131,6 @@ func TestHandleIntraBodyJump_EdgeCase_MultipleJumpsInIteration(t *testing.T) {
 // When: step1 returns ("step3", error)
 // Then: Should handle error, not process jump
 func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2328,7 +2173,6 @@ func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2340,7 +2184,6 @@ func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
 		},
 	)
 
-	// Assert
 	// Error should propagate (loop execution fails)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "assert.AnError")
@@ -2351,17 +2194,12 @@ func TestHandleIntraBodyJump_ErrorHandling_JumpWithStepError(t *testing.T) {
 	_ = result // May be nil on error
 }
 
-// =============================================================================
-// Integration Tests: ExecuteForEach with handleIntraBodyJump
-// =============================================================================
-
 // TestHandleIntraBodyJump_Integration_ForEachJump verifies that
 // handleIntraBodyJump works correctly in ExecuteForEach context.
 // Given: ForEach loop with items ["a", "b", "c"] and body [step1, step2, step3]
 // When: step1 transitions to step3 in each iteration
 // Then: Should skip step2 in all iterations
 func TestHandleIntraBodyJump_Integration_ForEachJump(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -2406,7 +2244,6 @@ func TestHandleIntraBodyJump_Integration_ForEachJump(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -2418,7 +2255,6 @@ func TestHandleIntraBodyJump_Integration_ForEachJump(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.TotalCount, "Should process 3 items")
@@ -2441,17 +2277,12 @@ func TestHandleIntraBodyJump_Integration_ForEachJump(t *testing.T) {
 		"GREEN phase: step2 should be skipped in all 3 ForEach iterations")
 }
 
-// =============================================================================
-// Performance/Stress Tests
-// =============================================================================
-
 // TestHandleIntraBodyJump_Performance_LargeBody tests handling of jumps
 // in a loop with a large body (edge case: performance and index calculation).
 // Given: Loop body with 100 steps
 // When: Jump from step 10 to step 90
 // Then: Should correctly calculate index adjustment (89 = 90 - 1)
 func TestHandleIntraBodyJump_Performance_LargeBody(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -2503,7 +2334,6 @@ func TestHandleIntraBodyJump_Performance_LargeBody(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -2515,7 +2345,6 @@ func TestHandleIntraBodyJump_Performance_LargeBody(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -2526,10 +2355,6 @@ func TestHandleIntraBodyJump_Performance_LargeBody(t *testing.T) {
 	assert.Equal(t, 21, executionCount,
 		"GREEN phase: Should execute steps 0-10 (11 steps) then 90-99 (10 steps) = 21 total")
 }
-
-// =============================================================================
-// Documentation Test
-// =============================================================================
 
 // TestT006_ComponentBehavior documents the expected behavior of T006.
 func TestT006_ComponentBehavior(t *testing.T) {
@@ -2574,7 +2399,6 @@ func TestT006_ComponentBehavior(t *testing.T) {
 
 // Component T007: Handle Early Exit Transitions in ExecuteWhile
 // Feature: F048 - While Loop Transitions Support
-// =============================================================================
 //
 // T007 is responsible for capturing the target step name when a loop body step
 // transitions to a step outside the loop body, triggering early loop exit.
@@ -2588,11 +2412,6 @@ func TestT006_ComponentBehavior(t *testing.T) {
 // This enables early exit from loops with proper workflow continuation, preventing
 // unnecessary agent execution and supporting complex control flow patterns.
 //
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests: Normal Early Exit Scenarios
-// =============================================================================
 
 // TestEarlyExitTransition_HappyPath_ExitFromFirstStep tests early exit when
 // the first step in a while loop body transitions to an external step.

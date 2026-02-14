@@ -22,10 +22,6 @@ import (
 // Feature: C019 - Shared Test Helpers
 // Common utilities for memory management and integration tests
 
-// =============================================================================
-// Mock Logger
-// =============================================================================
-
 // mockLogger provides a simple logger implementation for testing.
 type mockLogger struct {
 	warnings []string
@@ -58,10 +54,6 @@ func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
-// =============================================================================
-// CI Environment Detection
-// =============================================================================
-
 // skipInCI skips the test if running in a CI environment.
 // Tests requiring external API access use this helper since CI lacks credentials.
 func skipInCI(t *testing.T) {
@@ -70,10 +62,6 @@ func skipInCI(t *testing.T) {
 		t.Skip("Skipping test in CI environment")
 	}
 }
-
-// =============================================================================
-// C030: Skip Helper Functions
-// =============================================================================
 
 // skipIfRoot skips the test if running as root user.
 // Tests that verify permission denials should not run as root.
@@ -111,10 +99,6 @@ func skipIfToolMissing(t *testing.T, toolName string) {
 	skipIfCLIMissing(t, toolName)
 }
 
-// =============================================================================
-// Repository Root Helper
-// =============================================================================
-
 // getRepoRoot returns the repository root directory.
 // It walks up from the current directory until it finds a go.mod file.
 func getRepoRoot(t *testing.T) string {
@@ -137,10 +121,6 @@ func getRepoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
-
-// =============================================================================
-// Workflow Service Setup
-// =============================================================================
 
 // setupTestWorkflowService creates a fully configured workflow service for integration tests.
 func setupTestWorkflowService(t *testing.T, workflowsDir, statesDir string) (*application.ExecutionService, ports.StateStore) {

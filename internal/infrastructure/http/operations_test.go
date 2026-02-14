@@ -8,8 +8,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// --- Happy Path Tests ---
-
 func TestAllOperations_ReturnsOneOperation(t *testing.T) {
 	// Given: AllOperations is called
 	ops := AllOperations()
@@ -54,8 +52,6 @@ func TestAllOperations_HTTPRequestHasOutputs(t *testing.T) {
 	require.Len(t, ops, 1)
 	assert.NotEmpty(t, ops[0].Outputs, "http.request should have outputs")
 }
-
-// --- Individual Operation Schema Tests (Happy Path) ---
 
 func TestHTTPRequestOperation_RequiredInputs(t *testing.T) {
 	ops := AllOperations()
@@ -224,8 +220,6 @@ func TestHTTPRequestOperation_AllInputCount(t *testing.T) {
 	}
 }
 
-// --- Edge Case Tests ---
-
 func TestAllOperations_ImmutabilityCheck(t *testing.T) {
 	// Given: AllOperations is called twice
 	ops1 := AllOperations()
@@ -356,8 +350,6 @@ func TestHTTPRequestOperation_MethodCaseInsensitivityDocumented(t *testing.T) {
 	methodInput := op.Inputs["method"]
 	assert.Contains(t, methodInput.Description, "case-insensitive", "method description should mention case-insensitivity")
 }
-
-// --- Error Handling Tests ---
 
 func TestAllOperations_NoEmptyOutputFields(t *testing.T) {
 	// Given: AllOperations is called
@@ -506,8 +498,6 @@ func TestHTTPRequestOperation_BodyTruncatedOutputExists(t *testing.T) {
 	assert.Contains(t, op.Outputs, "body_truncated",
 		"body_truncated output should exist to signal response body truncation")
 }
-
-// --- Specification Compliance Tests ---
 
 func TestHTTPRequestOperation_FR001Compliance(t *testing.T) {
 	// FR-001: The http.request operation must support HTTP methods: GET, POST, PUT, DELETE

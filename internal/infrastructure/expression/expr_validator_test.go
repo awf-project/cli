@@ -11,31 +11,17 @@ import (
 // Component: T003
 // Feature: C021
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestExprValidator_InterfaceCompliance(t *testing.T) {
 	// Verify ExprValidator implements ports.ExpressionValidator
 	var _ ports.ExpressionValidator = (*ExprValidator)(nil)
 }
 
-// ============================================================================
-// Constructor Tests
-// ============================================================================
-
 func TestNewExprValidator(t *testing.T) {
-	// Arrange & Act
 	validator := NewExprValidator()
 
-	// Assert
 	require.NotNil(t, validator)
 	assert.IsType(t, &ExprValidator{}, validator)
 }
-
-// ============================================================================
-// Compile Tests - Happy Path (Valid Expressions)
-// ============================================================================
 
 func TestExprValidator_Compile_ValidExpressions(t *testing.T) {
 	tests := []struct {
@@ -126,30 +112,20 @@ func TestExprValidator_Compile_ValidExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err, "expression should compile successfully: %s", tt.expression)
 		})
 	}
 }
 
-// ============================================================================
-// Compile Tests - Edge Cases
-// ============================================================================
-
 func TestExprValidator_Compile_EmptyExpression(t *testing.T) {
-	// Arrange
 	validator := NewExprValidator()
 
-	// Act
 	err := validator.Compile("")
 
-	// Assert
 	// Empty expression should be valid (no early exit condition)
 	require.NoError(t, err)
 }
@@ -168,13 +144,10 @@ func TestExprValidator_Compile_WhitespaceOnly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			// Whitespace-only should be treated as empty (valid)
 			require.NoError(t, err)
 		})
@@ -195,54 +168,42 @@ func TestExprValidator_Compile_ExpressionWithLeadingTrailingWhitespace(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err)
 		})
 	}
 }
 
 func TestExprValidator_Compile_MultilineExpression(t *testing.T) {
-	// Arrange
 	validator := NewExprValidator()
 	expression := `turn_count >= 5 &&
 		total_tokens > 10000 &&
 		response contains 'COMPLETE'`
 
-	// Act
 	err := validator.Compile(expression)
 
-	// Assert
 	require.NoError(t, err)
 }
 
 func TestExprValidator_Compile_VeryLongExpression(t *testing.T) {
-	// Arrange
 	validator := NewExprValidator()
 	// Build a very long but valid expression
 	expression := "(a > 0 && b > 0) || (c > 0 && d > 0) || (e > 0 && f > 0) || (g > 0 && h > 0) || (i > 0 && j > 0) || (k > 0 && l > 0) || (m > 0 && n > 0) || (o > 0 && p > 0)"
 
-	// Act
 	err := validator.Compile(expression)
 
-	// Assert
 	require.NoError(t, err)
 }
 
 func TestExprValidator_Compile_DeeplyNestedParentheses(t *testing.T) {
-	// Arrange
 	validator := NewExprValidator()
 	expression := "((((a > 0))))"
 
-	// Act
 	err := validator.Compile(expression)
 
-	// Assert
 	require.NoError(t, err)
 }
 
@@ -261,13 +222,10 @@ func TestExprValidator_Compile_NumericLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err)
 		})
 	}
@@ -289,13 +247,10 @@ func TestExprValidator_Compile_StringLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err)
 		})
 	}
@@ -314,21 +269,14 @@ func TestExprValidator_Compile_BooleanLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err)
 		})
 	}
 }
-
-// ============================================================================
-// Compile Tests - Error Handling (Invalid Syntax)
-// ============================================================================
 
 func TestExprValidator_Compile_InvalidSyntax(t *testing.T) {
 	tests := []struct {
@@ -415,22 +363,15 @@ func TestExprValidator_Compile_InvalidSyntax(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.Error(t, err, "expression should fail to compile: %s (reason: %s)", tt.expression, tt.reason)
 			assert.NotEmpty(t, err.Error(), "error message should not be empty")
 		})
 	}
 }
-
-// ============================================================================
-// Compile Tests - Real-world Conversation Stop Conditions
-// ============================================================================
 
 func TestExprValidator_Compile_RealWorldStopConditions(t *testing.T) {
 	// These are actual stop condition patterns used in workflows
@@ -474,56 +415,42 @@ func TestExprValidator_Compile_RealWorldStopConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			validator := NewExprValidator()
 
-			// Act
 			err := validator.Compile(tt.expression)
 
-			// Assert
 			require.NoError(t, err, "real-world stop condition should compile: %s", tt.expression)
 		})
 	}
 }
 
-// ============================================================================
-// Compile Tests - Consistency and Idempotency
-// ============================================================================
-
 func TestExprValidator_Compile_Idempotency(t *testing.T) {
 	// Verify that compiling the same expression multiple times produces consistent results
-	// Arrange
 	validator := NewExprValidator()
 	expression := "turn_count >= 5 && response contains 'DONE'"
 
-	// Act - Compile same expression 5 times
 	for i := range 5 {
 		err := validator.Compile(expression)
 
-		// Assert
 		require.NoError(t, err, "iteration %d should compile successfully", i)
 	}
 }
 
 func TestExprValidator_Compile_MultipleValidators(t *testing.T) {
 	// Verify that multiple validator instances work independently
-	// Arrange
 	validator1 := NewExprValidator()
 	validator2 := NewExprValidator()
 	expression := "count > 5"
 
-	// Act
 	err1 := validator1.Compile(expression)
 	err2 := validator2.Compile(expression)
 
-	// Assert
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 }
 
 func TestExprValidator_Compile_DifferentExpressionsSequentially(t *testing.T) {
 	// Verify that validator can handle different expressions in sequence
-	// Arrange
 	validator := NewExprValidator()
 	expressions := []string{
 		"count > 5",
@@ -532,42 +459,31 @@ func TestExprValidator_Compile_DifferentExpressionsSequentially(t *testing.T) {
 		"response contains 'COMPLETE'",
 	}
 
-	// Act & Assert
 	for _, expr := range expressions {
 		err := validator.Compile(expr)
 		require.NoError(t, err, "expression should compile: %s", expr)
 	}
 }
 
-// ============================================================================
-// Compile Tests - No Side Effects
-// ============================================================================
-
 func TestExprValidator_Compile_NoSideEffects(t *testing.T) {
 	// Verify that Compile only validates, doesn't evaluate or modify state
-	// Arrange
 	validator := NewExprValidator()
 	expression := "count > 5"
 
-	// Act - Compile the same expression twice
 	err1 := validator.Compile(expression)
 	err2 := validator.Compile(expression)
 
-	// Assert - Both should succeed independently
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 }
 
 func TestExprValidator_Compile_DoesNotEvaluate(t *testing.T) {
 	// Verify that Compile doesn't require variable values (only checks syntax)
-	// Arrange
 	validator := NewExprValidator()
 	// Expression with undefined variables - should compile (syntax valid)
 	expression := "some_undefined_variable > 5"
 
-	// Act
 	err := validator.Compile(expression)
 
-	// Assert - Should succeed (we only validate syntax, not runtime evaluation)
 	require.NoError(t, err, "syntax validation should not require variable definitions")
 }

@@ -9,10 +9,6 @@ import (
 	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
-// =============================================================================
-// Hint Type Tests (Happy Path)
-// =============================================================================
-
 func TestHint_Construction_WithValidMessage(t *testing.T) {
 	// Given
 	message := "Did you mean 'my-workflow.yaml'?"
@@ -47,10 +43,6 @@ func TestHint_Construction_WithCommandSuggestion(t *testing.T) {
 	assert.Equal(t, message, hint.Message)
 	assert.Contains(t, hint.Message, "awf")
 }
-
-// =============================================================================
-// Hint Type Tests (Edge Cases)
-// =============================================================================
 
 func TestHint_Construction_WithEmptyMessage(t *testing.T) {
 	// Given
@@ -124,10 +116,6 @@ func TestHint_Construction_WithSpecialCharacters(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// HintGenerator Type Tests (Happy Path)
-// =============================================================================
-
 func TestHintGenerator_ReturnsEmptySlice_WhenNoHintsAvailable(t *testing.T) {
 	// Given
 	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
@@ -147,7 +135,7 @@ func TestHintGenerator_ReturnsEmptySlice_WhenNoHintsAvailable(t *testing.T) {
 	// Then
 	assert.NotNil(t, hints)
 	assert.Empty(t, hints)
-	assert.Equal(t, 0, len(hints))
+	assert.Empty(t, hints)
 }
 
 func TestHintGenerator_ReturnsSingleHint_ForSimpleError(t *testing.T) {
@@ -269,10 +257,6 @@ func TestHintGenerator_UsesErrorsAs_ToDetectSpecificErrorTypes(t *testing.T) {
 	require.Len(t, hints, 1)
 	assert.Contains(t, hints[0].Message, "/test.yaml")
 }
-
-// =============================================================================
-// HintGenerator Type Tests (Edge Cases)
-// =============================================================================
 
 func TestHintGenerator_HandlesNilStructuredError_Gracefully(t *testing.T) {
 	// Given
@@ -417,10 +401,6 @@ func TestHintGenerator_HandlesInvalidDetailTypes_Gracefully(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// HintGenerator Type Tests (Error Handling)
-// =============================================================================
-
 func TestHintGenerator_ReturnsEmptySlice_OnUnrecognizedErrorCode(t *testing.T) {
 	// Given
 	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
@@ -512,10 +492,6 @@ func TestHintGenerator_RespectsMaxHintLimit(t *testing.T) {
 	// Then
 	assert.Len(t, hints, maxHints)
 }
-
-// =============================================================================
-// HintGenerator Composition Tests
-// =============================================================================
 
 func TestHintGenerator_CanBeComposed_IntoChain(t *testing.T) {
 	// Given

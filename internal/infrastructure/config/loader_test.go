@@ -446,10 +446,6 @@ func TestYAMLConfigLoader_Load_RelativePath(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// T011: Unknown Keys Warning Tests
-// =============================================================================
-
 func TestYAMLConfigLoader_WithWarningFunc(t *testing.T) {
 	loader := NewYAMLConfigLoader("/some/path")
 

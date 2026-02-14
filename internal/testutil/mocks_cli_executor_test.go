@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Interface Compliance Check (Compile-Time)
-// =============================================================================
-
 // Feature: C025 Improve Agents Package Test Coverage
 // Component: T003 MockCLIExecutor Tests
 
@@ -25,28 +21,18 @@ import (
 // the code will not compile, catching interface mismatches early.
 var _ ports.CLIExecutor = (*testutil.MockCLIExecutor)(nil)
 
-// =============================================================================
-// MockCLIExecutor Tests
-// =============================================================================
-
 // Feature: C025 Improve Agents Package Test Coverage
 // Component: T003 MockCLIExecutor
 
 func TestMockCLIExecutor_NewMockCLIExecutor(t *testing.T) {
-	// Arrange & Act
 	executor := testutil.NewMockCLIExecutor()
 
-	// Assert
 	require.NotNil(t, executor, "NewMockCLIExecutor should return non-nil instance")
 
 	// Verify initial state
 	calls := executor.GetCalls()
 	assert.Empty(t, calls, "New executor should have no recorded calls")
 }
-
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
 
 func TestMockCLIExecutor_Run_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -111,15 +97,12 @@ func TestMockCLIExecutor_Run_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := testutil.NewMockCLIExecutor()
 			tt.setupFunc(executor)
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			assert.NoError(t, err, "Run should not error for configured output")
 			assert.Equal(t, tt.wantStdout, string(stdout), "Stdout should match configured value")
 			assert.Equal(t, tt.wantStderr, string(stderr), "Stderr should match configured value")
@@ -132,10 +115,6 @@ func TestMockCLIExecutor_Run_HappyPath(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestMockCLIExecutor_Run_ErrorInjection(t *testing.T) {
 	tests := []struct {
@@ -185,15 +164,12 @@ func TestMockCLIExecutor_Run_ErrorInjection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := testutil.NewMockCLIExecutor()
 			tt.setupFunc(executor)
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			assert.Error(t, err, "Run should return error when error is configured")
 			assert.EqualError(t, err, tt.wantErr.Error(), "Run should return the configured error")
 			assert.Nil(t, stdout, "Stdout should be nil when error occurs")
@@ -237,15 +213,12 @@ func TestMockCLIExecutor_Run_ContextCancellation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := testutil.NewMockCLIExecutor()
 			tt.setupFunc(executor)
 			ctx := tt.ctxFunc()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, "claude", "--version")
 
-			// Assert
 			assert.Error(t, err, "Run should return error for context issues")
 			assert.ErrorIs(t, err, tt.wantErr, "Error should match expected context error")
 			assert.Nil(t, stdout, "Stdout should be nil when context error occurs")
@@ -253,10 +226,6 @@ func TestMockCLIExecutor_Run_ContextCancellation(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
 
 func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -408,12 +377,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Call Recording Tests
-// =============================================================================
-
 func TestMockCLIExecutor_CallRecording(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("ok"), []byte(""))
 	ctx := context.Background()
@@ -427,12 +391,10 @@ func TestMockCLIExecutor_CallRecording(t *testing.T) {
 		{"codex", []string{"--max-tokens", "1000", "--format", "json"}},
 	}
 
-	// Act - execute multiple commands
 	for _, cmd := range commands {
 		_, _, _ = executor.Run(ctx, cmd.binary, cmd.args...)
 	}
 
-	// Assert
 	calls := executor.GetCalls()
 	assert.Len(t, calls, 3, "All executions should be recorded")
 
@@ -443,18 +405,15 @@ func TestMockCLIExecutor_CallRecording(t *testing.T) {
 }
 
 func TestMockCLIExecutor_CallRecording_MultipleExecutionsOfSameCommand(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("result"), []byte(""))
 	ctx := context.Background()
 
-	// Act - execute same command 5 times
 	for i := 0; i < 5; i++ {
 		_, _, err := executor.Run(ctx, "claude", "--version")
 		assert.NoError(t, err, "Execution %d should succeed", i)
 	}
 
-	// Assert
 	calls := executor.GetCalls()
 	assert.Len(t, calls, 5, "All 5 executions should be recorded")
 	for i, call := range calls {
@@ -464,18 +423,15 @@ func TestMockCLIExecutor_CallRecording_MultipleExecutionsOfSameCommand(t *testin
 }
 
 func TestMockCLIExecutor_GetCalls_IsolatedCopy(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("ok"), []byte(""))
 	ctx := context.Background()
 
 	_, _, _ = executor.Run(ctx, "tool", "arg1", "arg2")
 
-	// Act - get calls twice
 	calls1 := executor.GetCalls()
 	calls2 := executor.GetCalls()
 
-	// Assert - modifications to returned slice shouldn't affect internal state
 	calls1[0].Name = "modified"
 	calls1[0].Args[0] = "modified-arg"
 
@@ -484,52 +440,39 @@ func TestMockCLIExecutor_GetCalls_IsolatedCopy(t *testing.T) {
 	assert.Equal(t, "arg1", calls2[0].Args[0], "Args should be deep copied")
 }
 
-// =============================================================================
-// Test Helpers Tests
-// =============================================================================
-
 func TestMockCLIExecutor_SetOutput(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act - set output and run
 	executor.SetOutput([]byte("stdout content"), []byte("stderr content"))
 	stdout, stderr, err := executor.Run(ctx, "tool")
 
-	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, "stdout content", string(stdout))
 	assert.Equal(t, "stderr content", string(stderr))
 }
 
 func TestMockCLIExecutor_SetOutput_Overwrites(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act - set output twice
 	executor.SetOutput([]byte("first"), []byte(""))
 	executor.SetOutput([]byte("second"), []byte(""))
 	stdout, stderr, err := executor.Run(ctx, "tool")
 
-	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, "second", string(stdout), "Second SetOutput should overwrite first")
 	assert.Empty(t, stderr)
 }
 
 func TestMockCLIExecutor_SetError(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 	expectedErr := errors.New("test error")
 
-	// Act
 	executor.SetError(expectedErr)
 	stdout, stderr, err := executor.Run(ctx, "tool")
 
-	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.Nil(t, stdout)
@@ -537,31 +480,25 @@ func TestMockCLIExecutor_SetError(t *testing.T) {
 }
 
 func TestMockCLIExecutor_SetError_Overwrites(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act - set error twice
 	executor.SetError(errors.New("first error"))
 	executor.SetError(errors.New("second error"))
 	_, _, err := executor.Run(ctx, "tool")
 
-	// Assert
 	assert.Error(t, err)
 	assert.EqualError(t, err, "second error", "Second SetError should overwrite first")
 }
 
 func TestMockCLIExecutor_SetError_TakesPrecedenceOverOutput(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act - set both output and error
 	executor.SetOutput([]byte("stdout"), []byte("stderr"))
 	executor.SetError(errors.New("execution failed"))
 	stdout, stderr, err := executor.Run(ctx, "tool")
 
-	// Assert
 	assert.Error(t, err, "Error should take precedence over output")
 	assert.EqualError(t, err, "execution failed")
 	assert.Nil(t, stdout, "Output should not be returned when error is set")
@@ -569,7 +506,6 @@ func TestMockCLIExecutor_SetError_TakesPrecedenceOverOutput(t *testing.T) {
 }
 
 func TestMockCLIExecutor_Clear(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("stdout"), []byte("stderr"))
 	executor.SetError(errors.New("error"))
@@ -584,32 +520,23 @@ func TestMockCLIExecutor_Clear(t *testing.T) {
 	calls := executor.GetCalls()
 	assert.Len(t, calls, 3, "Should have recorded calls before clear")
 
-	// Act
 	executor.Clear()
 
-	// Assert - calls are cleared
 	calls = executor.GetCalls()
 	assert.Empty(t, calls, "Clear should remove all recorded calls")
 
-	// Assert - output and error are cleared
 	stdout, stderr, err := executor.Run(ctx, "new-cmd")
 	assert.NoError(t, err, "Clear should reset error configuration")
 	assert.Nil(t, stdout, "Clear should reset output configuration")
 	assert.Nil(t, stderr, "Clear should reset stderr configuration")
 }
 
-// =============================================================================
-// Thread Safety Tests
-// =============================================================================
-
 func TestMockCLIExecutor_ConcurrentRun(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("output"), []byte(""))
 	ctx := context.Background()
 	numGoroutines := 50
 
-	// Act - concurrent executions
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -627,19 +554,16 @@ func TestMockCLIExecutor_ConcurrentRun(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - verify no race conditions
 	calls := executor.GetCalls()
 	assert.Len(t, calls, numGoroutines, "All concurrent executions should be recorded")
 }
 
 func TestMockCLIExecutor_ConcurrentReadWrite(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 	const goroutines = 20
 	const iterations = 50
 
-	// Act - concurrent reads and writes
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3) // readers + writers + configurators
 
@@ -677,19 +601,16 @@ func TestMockCLIExecutor_ConcurrentReadWrite(t *testing.T) {
 		}()
 	}
 
-	// Assert - should complete without race conditions
 	wg.Wait()
 	assert.True(t, true, "Concurrent access should not cause races")
 }
 
 func TestMockCLIExecutor_ConcurrentClear(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	executor.SetOutput([]byte("output"), []byte(""))
 	ctx := context.Background()
 	const goroutines = 10
 
-	// Act - concurrent Clear and Run
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
 
@@ -709,27 +630,19 @@ func TestMockCLIExecutor_ConcurrentClear(t *testing.T) {
 		}(i)
 	}
 
-	// Assert - should complete without race conditions
 	wg.Wait()
 	assert.True(t, true, "Concurrent Clear and Run should not cause races")
 }
 
-// =============================================================================
-// Real-World Usage Scenarios
-// =============================================================================
-
 func TestMockCLIExecutor_ClaudeProviderScenario(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
 	jsonResponse := `{"output": "Hello, world!", "tokens": 100}`
 	executor.SetOutput([]byte(jsonResponse), []byte(""))
 
-	// Act - simulate Claude provider usage
 	stdout, stderr, err := executor.Run(ctx, "claude", "--model", "opus", "--prompt", "Say hello")
 
-	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, jsonResponse, string(stdout))
 	assert.Empty(t, stderr)
@@ -741,20 +654,17 @@ func TestMockCLIExecutor_ClaudeProviderScenario(t *testing.T) {
 }
 
 func TestMockCLIExecutor_GeminiProviderScenario(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
 	executor.SetOutput([]byte(`{"result": "Analysis complete"}`), []byte(""))
 
-	// Act - simulate Gemini provider usage
 	stdout, stderr, err := executor.Run(ctx, "gemini",
 		"--temperature", "0.5",
 		"--max-tokens", "2000",
 		"--format", "json",
 		"Analyze this code")
 
-	// Assert
 	assert.NoError(t, err)
 	assert.Contains(t, string(stdout), "Analysis complete")
 	assert.Empty(t, stderr)
@@ -766,17 +676,14 @@ func TestMockCLIExecutor_GeminiProviderScenario(t *testing.T) {
 }
 
 func TestMockCLIExecutor_ProviderErrorScenario(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
 	// Simulate CLI error (e.g., API key invalid)
 	executor.SetError(errors.New("exit status 1: API key invalid"))
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "claude", "--prompt", "test")
 
-	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API key invalid")
 	assert.Nil(t, stdout)
@@ -788,17 +695,14 @@ func TestMockCLIExecutor_ProviderErrorScenario(t *testing.T) {
 }
 
 func TestMockCLIExecutor_ProviderTimeoutScenario(t *testing.T) {
-	// Arrange
 	executor := testutil.NewMockCLIExecutor()
 	ctx := context.Background()
 
 	// Simulate timeout
 	executor.SetError(context.DeadlineExceeded)
 
-	// Act
 	stdout, stderr, err := executor.Run(ctx, "codex", "--prompt", "long running task")
 
-	// Assert
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Nil(t, stdout)

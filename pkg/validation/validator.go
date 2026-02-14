@@ -56,33 +56,28 @@ func ValidateInputs(inputs map[string]any, definitions []Input) error {
 	for _, def := range definitions {
 		value, provided := inputs[def.Name]
 
-		// check required
 		if err := validateRequired(def.Name, value, def.Required); err != nil {
 			if def.Required {
 				errs = append(errs, err.Error())
 			}
-			// skip other validations if value not provided
 			if !provided || value == nil {
 				continue
 			}
 		}
 
-		// skip validation if not provided and not required
 		if !provided || value == nil {
 			continue
 		}
 
-		// validate type and coerce if needed
 		if def.Type != "" {
 			coerced, err := validateType(def.Name, value, def.Type)
 			if err != nil {
 				errs = append(errs, err.Error())
-				continue // skip other validations if type is invalid
+				continue
 			}
 			value = coerced
 		}
 
-		// apply validation rules if defined
 		if def.Validation != nil {
 			valErrs := validateRules(def.Name, value, def.Type, def.Validation)
 			errs = append(errs, valErrs...)
@@ -95,32 +90,27 @@ func ValidateInputs(inputs map[string]any, definitions []Input) error {
 	return nil
 }
 
-// validateRules applies validation rules to a value.
 func validateRules(name string, value any, inputType string, rules *Rules) []string {
 	var errs []string
 
-	// pattern validation (for strings)
 	if rules.Pattern != "" {
 		if err := validatePatternWithType(name, value, rules.Pattern); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 
-	// enum validation (for strings)
 	if len(rules.Enum) > 0 {
 		if err := validateEnumWithType(name, value, rules.Enum); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 
-	// range validation (for integers)
 	if rules.Min != nil || rules.Max != nil {
 		if err := validateRangeWithType(name, value, rules.Min, rules.Max); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 
-	// file validation (for strings representing paths)
 	if rules.FileExists {
 		if err := validateFileExistsWithType(name, value); err != nil {
 			errs = append(errs, err.Error())
@@ -136,10 +126,7 @@ func validateRules(name string, value any, inputType string, rules *Rules) []str
 	return errs
 }
 
-// validatePatternWithType validates pattern rule with type checking.
-// Returns nil if value is not a string (skips validation).
 func validatePatternWithType(name string, value any, pattern string) error {
-	// Skip validation if value is not a string
 	strVal, ok := value.(string)
 	if !ok {
 		return nil
@@ -147,10 +134,7 @@ func validatePatternWithType(name string, value any, pattern string) error {
 	return validatePattern(name, strVal, pattern)
 }
 
-// validateEnumWithType validates enum rule with type checking.
-// Returns nil if value is not a string (skips validation).
 func validateEnumWithType(name string, value any, enum []string) error {
-	// Skip validation if value is not a string
 	strVal, ok := value.(string)
 	if !ok {
 		return nil
@@ -158,10 +142,7 @@ func validateEnumWithType(name string, value any, enum []string) error {
 	return validateEnum(name, strVal, enum)
 }
 
-// validateRangeWithType validates range rule with type checking.
-// Returns nil if value is not an int (skips validation).
 func validateRangeWithType(name string, value any, minVal, maxVal *int) error {
-	// Skip validation if value is not an int
 	intVal, ok := value.(int)
 	if !ok {
 		return nil
@@ -169,42 +150,32 @@ func validateRangeWithType(name string, value any, minVal, maxVal *int) error {
 	return validateRange(name, intVal, minVal, maxVal)
 }
 
-// validateFileExistsWithType validates file existence with type checking.
-// Returns nil if value is not a string (skips validation).
 func validateFileExistsWithType(name string, value any) error {
-	// Skip validation if value is not a string
 	strVal, ok := value.(string)
 	if !ok {
 		return nil
 	}
-	// Empty string is an error when value is explicitly provided as string
 	if strVal == "" {
 		return fmt.Errorf("inputs.%s: file path cannot be empty", name)
 	}
 	return validateFileExists(name, strVal)
 }
 
-// validateFileExtensionWithType validates file extension with type checking.
-// Returns nil if value is not a string (skips validation).
 func validateFileExtensionWithType(name string, value any, extensions []string) error {
-	// Skip validation if value is not a string
 	strVal, ok := value.(string)
 	if !ok {
 		return nil
 	}
 
-	// Handle empty extensions list - no validation needed
 	if len(extensions) == 0 || strVal == "" {
 		return nil
 	}
 
-	// Get file extension
 	ext := filepath.Ext(strVal)
 	if ext == "" {
 		return fmt.Errorf("inputs.%s: file %q has no extension, allowed: %v", name, strVal, extensions)
 	}
 
-	// Case-sensitive comparison (unlike the atomic validator which is case-insensitive)
 	for _, allowed := range extensions {
 		if ext == allowed {
 			return nil
@@ -214,7 +185,6 @@ func validateFileExtensionWithType(name string, value any, extensions []string) 
 	return fmt.Errorf("inputs.%s: file extension %q not in allowed extensions %v", name, ext, extensions)
 }
 
-// validateRequired checks if a required input is present and non-nil.
 func validateRequired(name string, value any, required bool) error {
 	if !required {
 		return nil
@@ -224,7 +194,6 @@ func validateRequired(name string, value any, required bool) error {
 		return fmt.Errorf("inputs.%s: required but not provided", name)
 	}
 
-	// check for empty string
 	if strVal, ok := value.(string); ok && strVal == "" {
 		return fmt.Errorf("inputs.%s: required but empty", name)
 	}
@@ -232,8 +201,6 @@ func validateRequired(name string, value any, required bool) error {
 	return nil
 }
 
-// validateType checks if the input value matches the expected type.
-// Returns the coerced value if type conversion is needed.
 func validateType(name string, value any, expectedType string) (any, error) {
 	if value == nil {
 		return nil, fmt.Errorf("inputs.%s: cannot validate nil value as type %s", name, expectedType)
@@ -247,14 +214,12 @@ func validateType(name string, value any, expectedType string) (any, error) {
 	case "boolean":
 		return coerceToBool(name, value)
 	case "":
-		// empty type accepts any value
 		return value, nil
 	default:
 		return nil, fmt.Errorf("inputs.%s: unknown type %q", name, expectedType)
 	}
 }
 
-// coerceToString converts a value to string.
 func coerceToString(name string, value any) (string, error) {
 	switch v := value.(type) {
 	case string:
@@ -272,7 +237,6 @@ func coerceToString(name string, value any) (string, error) {
 	}
 }
 
-// coerceToInt converts a value to int.
 func coerceToInt(name string, value any) (int, error) {
 	switch v := value.(type) {
 	case int:
@@ -292,7 +256,6 @@ func coerceToInt(name string, value any) (int, error) {
 	}
 }
 
-// coerceToBool converts a value to bool.
 func coerceToBool(name string, value any) (bool, error) {
 	switch v := value.(type) {
 	case bool:
@@ -312,7 +275,6 @@ func coerceToBool(name string, value any) (bool, error) {
 	}
 }
 
-// validatePattern checks if a string value matches the regex pattern.
 func validatePattern(name, value, pattern string) error {
 	if pattern == "" {
 		return nil
@@ -330,7 +292,6 @@ func validatePattern(name, value, pattern string) error {
 	return nil
 }
 
-// validateEnum checks if a string value is in the allowed list.
 func validateEnum(name, value string, allowed []string) error {
 	if len(allowed) == 0 {
 		return nil
@@ -345,7 +306,6 @@ func validateEnum(name, value string, allowed []string) error {
 	return fmt.Errorf("inputs.%s: value %q not in allowed values %v", name, value, allowed)
 }
 
-// validateRange checks if an integer value is within min/max bounds.
 func validateRange(name string, value int, minVal, maxVal *int) error {
 	if minVal != nil && value < *minVal {
 		return fmt.Errorf("inputs.%s: value %d is below minimum %d", name, value, *minVal)
@@ -358,11 +318,9 @@ func validateRange(name string, value int, minVal, maxVal *int) error {
 	return nil
 }
 
-// validateFileExists checks if the file at the given path exists.
-// Empty paths are skipped (valid for optional file inputs).
 func validateFileExists(name, path string) error {
 	if path == "" {
-		return nil // skip validation for empty optional paths
+		return nil
 	}
 
 	_, err := os.Stat(path)
@@ -376,8 +334,6 @@ func validateFileExists(name, path string) error {
 	return nil
 }
 
-// validateFileExtension checks if the file has an allowed extension.
-// Empty paths are skipped (valid for optional file inputs).
 func validateFileExtension(name, path string, allowed []string) error {
 	if len(allowed) == 0 || path == "" {
 		return nil
@@ -398,5 +354,4 @@ func validateFileExtension(name, path string, allowed []string) error {
 	return fmt.Errorf("inputs.%s: file extension %q not in allowed extensions %v", name, ext, allowed)
 }
 
-// Ensure ValidationError implements error interface.
 var _ error = (*ValidationError)(nil)

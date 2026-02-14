@@ -11,10 +11,6 @@ import (
 // Component: cli_executor_port
 // Task: C025-T001
 
-// ============================================================================
-// Mock Implementation
-// ============================================================================
-
 // mockCLIExecutor is a test implementation of CLIExecutor interface
 type mockCLIExecutor struct {
 	runFunc    func(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error)
@@ -40,18 +36,10 @@ func (m *mockCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	return m.runFunc(ctx, name, args...)
 }
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestCLIExecutorInterface(t *testing.T) {
 	// Verify interface compliance
 	var _ ports.CLIExecutor = (*mockCLIExecutor)(nil)
 }
-
-// ============================================================================
-// CLIExecutor Tests - Happy Path
-// ============================================================================
 
 func TestCLIExecutor_Run_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -93,13 +81,10 @@ func TestCLIExecutor_Run_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mock := newMockCLIExecutor()
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := mock.Run(ctx, tt.binaryName, tt.args...)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -120,16 +105,13 @@ func TestCLIExecutor_Run_HappyPath(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_WithStderr(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		return []byte("output"), []byte("warning message"), nil
 	}
 	ctx := context.Background()
 
-	// Act
 	stdout, stderr, err := mock.Run(ctx, "test-binary", "--flag")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -141,12 +123,7 @@ func TestCLIExecutor_Run_WithStderr(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// CLIExecutor Tests - Edge Cases
-// ============================================================================
-
 func TestCLIExecutor_Run_EmptyBinaryName(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "" {
@@ -156,10 +133,8 @@ func TestCLIExecutor_Run_EmptyBinaryName(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Act
 	_, _, err := mock.Run(ctx, "", "--arg")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for empty binary name, got nil")
 	}
@@ -169,13 +144,10 @@ func TestCLIExecutor_Run_EmptyBinaryName(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_NoArgs(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act
 	stdout, stderr, err := mock.Run(ctx, "test-binary")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -191,16 +163,13 @@ func TestCLIExecutor_Run_NoArgs(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_EmptyStdout(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		return []byte(""), []byte(""), nil
 	}
 	ctx := context.Background()
 
-	// Act
 	stdout, stderr, err := mock.Run(ctx, "test-binary")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -213,7 +182,6 @@ func TestCLIExecutor_Run_EmptyStdout(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_LargeOutput(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	largeOutput := make([]byte, 1024*1024) // 1MB
 	for i := range largeOutput {
@@ -224,9 +192,7 @@ func TestCLIExecutor_Run_LargeOutput(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Act
 	stdout, _, err := mock.Run(ctx, "test-binary")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -234,10 +200,6 @@ func TestCLIExecutor_Run_LargeOutput(t *testing.T) {
 		t.Errorf("expected stdout length %d, got %d", len(largeOutput), len(stdout))
 	}
 }
-
-// ============================================================================
-// CLIExecutor Tests - Error Handling
-// ============================================================================
 
 func TestCLIExecutor_Run_ExecutionError(t *testing.T) {
 	tests := []struct {
@@ -269,17 +231,14 @@ func TestCLIExecutor_Run_ExecutionError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mock := newMockCLIExecutor()
 			mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 				return nil, []byte("error output"), tt.mockError
 			}
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := mock.Run(ctx, "test-binary")
 
-			// Assert
 			if err == nil {
 				t.Error("expected error, got nil")
 			}
@@ -297,7 +256,6 @@ func TestCLIExecutor_Run_ExecutionError(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_ContextCancellation(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		select {
@@ -310,10 +268,8 @@ func TestCLIExecutor_Run_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act
 	_, _, err := mock.Run(ctx, "test-binary")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for cancelled context, got nil")
 	}
@@ -323,7 +279,6 @@ func TestCLIExecutor_Run_ContextCancellation(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_ContextDeadline(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		select {
@@ -336,10 +291,8 @@ func TestCLIExecutor_Run_ContextDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0) // Already expired
 	defer cancel()
 
-	// Act
 	_, _, err := mock.Run(ctx, "test-binary")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for expired context, got nil")
 	}
@@ -349,17 +302,14 @@ func TestCLIExecutor_Run_ContextDeadline(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_ErrorWithStderr(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	mock.runFunc = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		return nil, []byte("detailed error message"), errors.New("command failed")
 	}
 	ctx := context.Background()
 
-	// Act
 	stdout, stderr, err := mock.Run(ctx, "test-binary")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -371,20 +321,13 @@ func TestCLIExecutor_Run_ErrorWithStderr(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// CLIExecutor Tests - Argument Handling
-// ============================================================================
-
 func TestCLIExecutor_Run_ArgumentOrder(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	ctx := context.Background()
 	expectedArgs := []string{"--flag1", "value1", "--flag2", "value2"}
 
-	// Act
 	_, _, _ = mock.Run(ctx, "test-binary", expectedArgs...)
 
-	// Assert
 	if len(mock.lastCalled.args) != len(expectedArgs) {
 		t.Errorf("expected %d args, got %d", len(expectedArgs), len(mock.lastCalled.args))
 	}
@@ -396,15 +339,12 @@ func TestCLIExecutor_Run_ArgumentOrder(t *testing.T) {
 }
 
 func TestCLIExecutor_Run_ArgumentsWithSpaces(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	ctx := context.Background()
 	argsWithSpaces := []string{"-p", "hello world", "--data", "value with spaces"}
 
-	// Act
 	_, _, _ = mock.Run(ctx, "test-binary", argsWithSpaces...)
 
-	// Assert
 	if len(mock.lastCalled.args) != len(argsWithSpaces) {
 		t.Errorf("expected %d args, got %d", len(argsWithSpaces), len(mock.lastCalled.args))
 	}
@@ -429,13 +369,10 @@ func TestCLIExecutor_Run_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mock := newMockCLIExecutor()
 			ctx := context.Background()
 
-			// Act
 			_, _, err := mock.Run(ctx, "test-binary", tt.args...)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -446,21 +383,14 @@ func TestCLIExecutor_Run_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// CLIExecutor Tests - Call Tracking
-// ============================================================================
-
 func TestCLIExecutor_Run_MultipleCallsTracking(t *testing.T) {
-	// Arrange
 	mock := newMockCLIExecutor()
 	ctx := context.Background()
 
-	// Act
 	_, _, _ = mock.Run(ctx, "first-binary", "arg1")
 	_, _, _ = mock.Run(ctx, "second-binary", "arg2", "arg3")
 	_, _, _ = mock.Run(ctx, "third-binary")
 
-	// Assert
 	if mock.runCalled != 3 {
 		t.Errorf("expected 3 calls, got %d", mock.runCalled)
 	}

@@ -220,7 +220,6 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			// Execute
 			err = store.Record(ctx, tt.record)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -454,7 +453,6 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			// Execute List
 			records, err := store.List(execCtx, tt.filter)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -622,7 +620,6 @@ func TestSQLiteHistoryStore_GetStats(t *testing.T) {
 			// Execute GetStats
 			stats, err := store.GetStats(execCtx, tt.filter)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -757,7 +754,6 @@ func TestSQLiteHistoryStore_Cleanup(t *testing.T) {
 			// Execute Cleanup
 			deleted, err := store.Cleanup(execCtx, tt.olderThan)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -887,7 +883,6 @@ func TestSQLiteHistoryStore_ClosedState(t *testing.T) {
 				_, err = store.Cleanup(ctx, 24*time.Hour)
 			}
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "store is closed")
@@ -1371,7 +1366,6 @@ func TestSQLiteHistoryStore_List_ErrorPaths(t *testing.T) {
 			// Execute
 			records, err := store.List(ctx, nil)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.errMsg != "" {
@@ -1437,7 +1431,6 @@ func TestSQLiteHistoryStore_GetStats_ErrorPaths(t *testing.T) {
 			// Execute
 			stats, err := store.GetStats(ctx, nil)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.errMsg != "" {
@@ -1503,7 +1496,6 @@ func TestSQLiteHistoryStore_Cleanup_ErrorPaths(t *testing.T) {
 			// Execute
 			deleted, err := store.Cleanup(ctx, 24*time.Hour)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.errMsg != "" {

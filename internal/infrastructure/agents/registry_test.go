@@ -23,10 +23,6 @@ type mockProvider struct {
 // Component: T002
 // Feature: C022
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestAgentRegistry_InterfaceCompliance(t *testing.T) {
 	// Verify AgentRegistry implements ports.AgentRegistry
 	var _ ports.AgentRegistry = (*AgentRegistry)(nil)
@@ -433,10 +429,6 @@ func TestAgentRegistry_CaseSensitiveNames(t *testing.T) {
 
 // Component: T010
 // Feature: C025
-
-// ============================================================================
-// RegisterDefaults Edge Cases
-// ============================================================================
 
 func TestAgentRegistry_RegisterDefaults_PartialFailure(t *testing.T) {
 	// Pre-register one default provider (e.g., claude), then call RegisterDefaults

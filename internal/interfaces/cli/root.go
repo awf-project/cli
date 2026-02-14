@@ -20,7 +20,6 @@ type App struct {
 	Formatter *ui.Formatter
 }
 
-// NewApp creates a new CLI app with the given config.
 func NewApp(cfg *Config) *App {
 	return &App{
 		Config: cfg,
@@ -32,7 +31,6 @@ func NewApp(cfg *Config) *App {
 	}
 }
 
-// NewRootCommand creates the root CLI command.
 func NewRootCommand() *cobra.Command {
 	cfg := DefaultConfig()
 

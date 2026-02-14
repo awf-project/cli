@@ -8,10 +8,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// ValidateGraph Tests
-// =============================================================================
-
 func TestValidateGraph_ValidLinearWorkflow(t *testing.T) {
 	// Linear: start -> middle -> done (terminal)
 	steps := map[string]*workflow.Step{
@@ -451,9 +447,7 @@ func TestValidateGraph_NoTerminalState(t *testing.T) {
 	assert.True(t, found, "should have ErrNoTerminalState error")
 }
 
-// =============================================================================
 // findReachableStates Tests
-// =============================================================================
 
 func TestFindReachableStates_AllReachable(t *testing.T) {
 	steps := map[string]*workflow.Step{
@@ -531,9 +525,7 @@ func TestFindReachableStates_InvalidInitial(t *testing.T) {
 	assert.Empty(t, reachable)
 }
 
-// =============================================================================
 // detectCycles Tests
-// =============================================================================
 
 func TestDetectCycles_NoCycle(t *testing.T) {
 	steps := map[string]*workflow.Step{
@@ -623,9 +615,7 @@ func TestDetectCycles_MultipleCycles(t *testing.T) {
 	assert.NotEmpty(t, cycles, "should detect cycles")
 }
 
-// =============================================================================
 // getTransitions Tests
-// =============================================================================
 
 func TestGetTransitions_CommandStep(t *testing.T) {
 	step := &workflow.Step{
@@ -687,10 +677,6 @@ func TestGetTransitions_ParallelStep(t *testing.T) {
 	assert.Contains(t, transitions, "error")
 	assert.Len(t, transitions, 5)
 }
-
-// =============================================================================
-// GetTransitions call_workflow Tests (F023)
-// =============================================================================
 
 func TestGetTransitions_CallWorkflowStep(t *testing.T) {
 	// call_workflow steps should return on_success and on_failure like command steps
@@ -767,10 +753,6 @@ func TestGetTransitions_NilStep(t *testing.T) {
 
 	assert.Nil(t, transitions)
 }
-
-// =============================================================================
-// Graph validation with call_workflow (F023)
-// =============================================================================
 
 func TestValidateGraph_CallWorkflowReachable(t *testing.T) {
 	// Workflow with call_workflow step - should be reachable via transitions
@@ -1108,10 +1090,6 @@ func TestValidateGraph_CallWorkflowMixedWithOtherTypes(t *testing.T) {
 	assert.False(t, result.HasErrors(), "mixed step types should be valid")
 }
 
-// =============================================================================
-// ValidationResult Tests
-// =============================================================================
-
 func TestValidationResult_ToError(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1190,9 +1168,7 @@ func TestValidationError_Error(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // visitState Enum Tests (C003: Phase 1)
-// =============================================================================
 
 // TestVisitState_String verifies the String() method returns correct values
 // for each visit state enum constant.

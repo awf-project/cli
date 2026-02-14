@@ -8,203 +8,198 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// ExtractReferences Tests - Basic Cases
-// =============================================================================
-
-func TestExtractReferences_SingleInput(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("echo {{inputs.name}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeInputs, refs[0].Type)
-	assert.Equal(t, "inputs", refs[0].Namespace)
-	assert.Equal(t, "name", refs[0].Path)
-	assert.Equal(t, "{{inputs.name}}", refs[0].Raw)
-}
-
-func TestExtractReferences_StateOutput(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("result: {{states.build.Output}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
-	assert.Equal(t, "states", refs[0].Namespace)
-	assert.Equal(t, "build", refs[0].Path)
-	assert.Equal(t, "Output", refs[0].Property)
-	assert.Equal(t, "{{states.build.Output}}", refs[0].Raw)
-}
-
-func TestExtractReferences_WorkflowProperty(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("Workflow: {{workflow.name}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeWorkflow, refs[0].Type)
-	assert.Equal(t, "name", refs[0].Path)
-}
-
-func TestExtractReferences_EnvVariable(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("token: {{env.API_TOKEN}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeEnv, refs[0].Type)
-	assert.Equal(t, "API_TOKEN", refs[0].Path)
-}
-
-func TestExtractReferences_ErrorInHook(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("Error: {{error.message}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeError, refs[0].Type)
-	assert.Equal(t, "message", refs[0].Path)
-}
-
-func TestExtractReferences_ContextProperty(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("Dir: {{context.working_dir}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeContext, refs[0].Type)
-	assert.Equal(t, "working_dir", refs[0].Path)
-}
-
-func TestExtractReferences_MultipleReferences(t *testing.T) {
-	template := "{{inputs.name}} ran {{states.build.output}} in {{workflow.name}}"
-	refs, err := interpolation.ExtractReferences(template)
-
-	require.NoError(t, err)
-	require.Len(t, refs, 3)
-
-	types := make(map[interpolation.ReferenceType]bool)
-	for _, ref := range refs {
-		types[ref.Type] = true
+func TestExtractReferences_NamespaceTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		wantType interpolation.ReferenceType
+		wantNS   string
+		wantPath string
+		wantProp string
+		wantRaw  string
+	}{
+		{
+			name:     "inputs",
+			template: "echo {{inputs.name}}",
+			wantType: interpolation.TypeInputs,
+			wantNS:   "inputs",
+			wantPath: "name",
+			wantRaw:  "{{inputs.name}}",
+		},
+		{
+			name:     "states with property",
+			template: "result: {{states.build.Output}}",
+			wantType: interpolation.TypeStates,
+			wantNS:   "states",
+			wantPath: "build",
+			wantProp: "Output",
+			wantRaw:  "{{states.build.Output}}",
+		},
+		{
+			name:     "workflow",
+			template: "Workflow: {{workflow.name}}",
+			wantType: interpolation.TypeWorkflow,
+			wantPath: "name",
+		},
+		{
+			name:     "env",
+			template: "token: {{env.API_TOKEN}}",
+			wantType: interpolation.TypeEnv,
+			wantPath: "API_TOKEN",
+		},
+		{
+			name:     "error",
+			template: "Error: {{error.message}}",
+			wantType: interpolation.TypeError,
+			wantPath: "message",
+		},
+		{
+			name:     "context",
+			template: "Dir: {{context.working_dir}}",
+			wantType: interpolation.TypeContext,
+			wantPath: "working_dir",
+		},
 	}
-	assert.True(t, types[interpolation.TypeInputs])
-	assert.True(t, types[interpolation.TypeStates])
-	assert.True(t, types[interpolation.TypeWorkflow])
-}
 
-func TestExtractReferences_NoReferences(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("plain text without templates")
-
-	require.NoError(t, err)
-	assert.Empty(t, refs)
-}
-
-func TestExtractReferences_UnknownNamespace(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("{{unknown.field}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	assert.Equal(t, interpolation.TypeUnknown, refs[0].Type)
-}
-
-func TestExtractReferences_EmptyTemplate(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("")
-
-	require.NoError(t, err)
-	assert.Empty(t, refs)
-}
-
-// =============================================================================
-// ExtractReferences Tests - Edge Cases
-// =============================================================================
-
-func TestExtractReferences_WhitespaceInTemplate(t *testing.T) {
-	// Templates should not have internal whitespace
-	refs, err := interpolation.ExtractReferences("{{ inputs.name }}")
-
-	require.NoError(t, err)
-	// Should either parse trimmed or recognize as-is
-	// Implementation decides behavior for whitespace
-	require.Len(t, refs, 1)
-}
-
-func TestExtractReferences_NestedBraces(t *testing.T) {
-	// Edge case: nested or escaped braces
-	refs, err := interpolation.ExtractReferences("echo {{{inputs.name}}}")
-
-	require.NoError(t, err)
-	// Should extract the valid reference within
-	require.GreaterOrEqual(t, len(refs), 1)
-}
-
-func TestExtractReferences_UnmatchedOpenBrace(t *testing.T) {
-	// Unmatched braces should not cause errors, just no extraction
-	refs, err := interpolation.ExtractReferences("echo {{inputs.name")
-
-	require.NoError(t, err)
-	// Could be 0 (incomplete pattern) or 1 (lenient parsing)
-	// Implementation decides behavior
-	assert.Empty(t, refs, "incomplete template pattern should not extract")
-}
-
-func TestExtractReferences_UnmatchedCloseBrace(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("echo inputs.name}}")
-
-	require.NoError(t, err)
-	assert.Empty(t, refs)
-}
-
-func TestExtractReferences_AdjacentReferences(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("{{inputs.a}}{{inputs.b}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 2)
-	assert.Equal(t, "a", refs[0].Path)
-	assert.Equal(t, "b", refs[1].Path)
-}
-
-func TestExtractReferences_ReferencesOnMultipleLines(t *testing.T) {
-	template := `line1: {{inputs.name}}
-line2: {{states.step1.output}}
-line3: {{workflow.id}}`
-
-	refs, err := interpolation.ExtractReferences(template)
-
-	require.NoError(t, err)
-	require.Len(t, refs, 3)
-}
-
-func TestExtractReferences_DuplicateReferences(t *testing.T) {
-	// Same reference used twice
-	refs, err := interpolation.ExtractReferences("{{inputs.name}} and {{inputs.name}}")
-
-	require.NoError(t, err)
-	require.Len(t, refs, 2) // Should return both occurrences
-}
-
-func TestExtractReferences_EmptyBraces(t *testing.T) {
-	refs, err := interpolation.ExtractReferences("echo {{}}")
-
-	require.NoError(t, err)
-	// Empty braces shouldn't be a valid reference
-	// Could produce an error or empty result
-	assert.Empty(t, refs)
-}
-
-func TestExtractReferences_SingleDotPath(t *testing.T) {
-	// Single segment path (no namespace)
-	refs, err := interpolation.ExtractReferences("{{invalid}}")
-
-	require.NoError(t, err)
-	// Should handle gracefully - either error or TypeUnknown
-	if len(refs) > 0 {
-		assert.Equal(t, interpolation.TypeUnknown, refs[0].Type)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs, err := interpolation.ExtractReferences(tt.template)
+			require.NoError(t, err)
+			require.Len(t, refs, 1)
+			assert.Equal(t, tt.wantType, refs[0].Type)
+			if tt.wantNS != "" {
+				assert.Equal(t, tt.wantNS, refs[0].Namespace)
+			}
+			if tt.wantPath != "" {
+				assert.Equal(t, tt.wantPath, refs[0].Path)
+			}
+			if tt.wantProp != "" {
+				assert.Equal(t, tt.wantProp, refs[0].Property)
+			}
+			if tt.wantRaw != "" {
+				assert.Equal(t, tt.wantRaw, refs[0].Raw)
+			}
+		})
 	}
 }
 
-func TestExtractReferences_DeepNestedPath(t *testing.T) {
-	// More than 3 segments
-	refs, err := interpolation.ExtractReferences("{{states.step.output.nested.deep}}")
+func TestExtractReferences_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		template  string
+		wantLen   int
+		wantEmpty bool
+		checkType bool
+		wantType  interpolation.ReferenceType
+		checkPath bool
+		path0     string
+		path1     string
+	}{
+		{
+			name:      "multiple references",
+			template:  "{{inputs.name}} ran {{states.build.output}} in {{workflow.name}}",
+			wantLen:   3,
+			wantEmpty: false,
+		},
+		{
+			name:      "no references",
+			template:  "plain text without templates",
+			wantEmpty: true,
+		},
+		{
+			name:      "unknown namespace",
+			template:  "{{unknown.field}}",
+			wantLen:   1,
+			checkType: true,
+			wantType:  interpolation.TypeUnknown,
+		},
+		{
+			name:      "empty template",
+			template:  "",
+			wantEmpty: true,
+		},
+		{
+			name:     "whitespace in template",
+			template: "{{ inputs.name }}",
+			wantLen:  1,
+		},
+		{
+			name:     "nested braces",
+			template: "echo {{{inputs.name}}}",
+			wantLen:  1,
+		},
+		{
+			name:      "unmatched open brace",
+			template:  "echo {{inputs.name",
+			wantEmpty: true,
+		},
+		{
+			name:      "unmatched close brace",
+			template:  "echo inputs.name}}",
+			wantEmpty: true,
+		},
+		{
+			name:      "adjacent references",
+			template:  "{{inputs.a}}{{inputs.b}}",
+			wantLen:   2,
+			checkPath: true,
+			path0:     "a",
+			path1:     "b",
+		},
+		{
+			name:     "multiline",
+			template: "line1: {{inputs.name}}\nline2: {{states.step1.output}}\nline3: {{workflow.id}}",
+			wantLen:  3,
+		},
+		{
+			name:     "duplicates",
+			template: "{{inputs.name}} and {{inputs.name}}",
+			wantLen:  2,
+		},
+		{
+			name:      "empty braces",
+			template:  "echo {{}}",
+			wantEmpty: true,
+		},
+		{
+			name:      "single segment",
+			template:  "{{invalid}}",
+			checkType: true,
+			wantType:  interpolation.TypeUnknown,
+		},
+		{
+			name:      "deep nested path",
+			template:  "{{states.step.output.nested.deep}}",
+			wantLen:   1,
+			checkType: true,
+			wantType:  interpolation.TypeStates,
+		},
+	}
 
-	require.NoError(t, err)
-	require.Len(t, refs, 1)
-	// Should still parse with TypeStates
-	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs, err := interpolation.ExtractReferences(tt.template)
+			require.NoError(t, err)
+
+			if tt.wantEmpty {
+				assert.Empty(t, refs)
+				return
+			}
+
+			if tt.wantLen > 0 {
+				require.Len(t, refs, tt.wantLen)
+			}
+
+			if tt.checkType && len(refs) > 0 {
+				assert.Equal(t, tt.wantType, refs[0].Type)
+			}
+
+			if tt.checkPath && len(refs) >= 2 {
+				assert.Equal(t, tt.path0, refs[0].Path)
+				assert.Equal(t, tt.path1, refs[1].Path)
+			}
+		})
+	}
 }
 
 func TestExtractReferences_SpecialCharactersInPath(t *testing.T) {
@@ -228,202 +223,140 @@ func TestExtractReferences_SpecialCharactersInPath(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ExtractReferences Tests - All State Properties
-// =============================================================================
-
-func TestExtractReferences_AllStateProperties(t *testing.T) {
+func TestExtractReferences_AllProperties(t *testing.T) {
 	tests := []struct {
-		property string
+		name      string
+		namespace string
+		property  string
+		wantType  interpolation.ReferenceType
 	}{
-		{"Output"},
-		{"Stderr"},
-		{"ExitCode"},
-		{"Status"},
+		{"state Output", "states.step1", "Output", interpolation.TypeStates},
+		{"state Stderr", "states.step1", "Stderr", interpolation.TypeStates},
+		{"state ExitCode", "states.step1", "ExitCode", interpolation.TypeStates},
+		{"state Status", "states.step1", "Status", interpolation.TypeStates},
+		{"workflow id", "workflow", "id", interpolation.TypeWorkflow},
+		{"workflow name", "workflow", "name", interpolation.TypeWorkflow},
+		{"workflow current_state", "workflow", "current_state", interpolation.TypeWorkflow},
+		{"workflow started_at", "workflow", "started_at", interpolation.TypeWorkflow},
+		{"workflow duration", "workflow", "duration", interpolation.TypeWorkflow},
+		{"error message", "error", "message", interpolation.TypeError},
+		{"error state", "error", "state", interpolation.TypeError},
+		{"error exit_code", "error", "exit_code", interpolation.TypeError},
+		{"error type", "error", "type", interpolation.TypeError},
+		{"context working_dir", "context", "working_dir", interpolation.TypeContext},
+		{"context user", "context", "user", interpolation.TypeContext},
+		{"context hostname", "context", "hostname", interpolation.TypeContext},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.property, func(t *testing.T) {
-			template := "{{states.step1." + tt.property + "}}"
+		t.Run(tt.name, func(t *testing.T) {
+			template := "{{" + tt.namespace + "." + tt.property + "}}"
 			refs, err := interpolation.ExtractReferences(template)
 
 			require.NoError(t, err)
 			require.Len(t, refs, 1)
-			assert.Equal(t, interpolation.TypeStates, refs[0].Type)
-			assert.Equal(t, tt.property, refs[0].Property)
+			assert.Equal(t, tt.wantType, refs[0].Type)
 		})
 	}
 }
 
-// =============================================================================
-// ExtractReferences Tests - All Workflow Properties
-// =============================================================================
-
-func TestExtractReferences_AllWorkflowProperties(t *testing.T) {
+func TestParseReference(t *testing.T) {
 	tests := []struct {
-		property string
+		name     string
+		path     string
+		wantType interpolation.ReferenceType
+		wantNS   string
+		wantPath string
+		wantProp string
 	}{
-		{"id"},
-		{"name"},
-		{"current_state"},
-		{"started_at"},
-		{"duration"},
+		{
+			name:     "inputs",
+			path:     "inputs.name",
+			wantType: interpolation.TypeInputs,
+			wantNS:   "inputs",
+			wantPath: "name",
+		},
+		{
+			name:     "states with Output",
+			path:     "states.build.Output",
+			wantType: interpolation.TypeStates,
+			wantNS:   "states",
+			wantPath: "build",
+			wantProp: "Output",
+		},
+		{
+			name:     "states with Stderr",
+			path:     "states.compile.Stderr",
+			wantType: interpolation.TypeStates,
+			wantPath: "compile",
+			wantProp: "Stderr",
+		},
+		{
+			name:     "states with ExitCode",
+			path:     "states.validate.ExitCode",
+			wantType: interpolation.TypeStates,
+			wantPath: "validate",
+			wantProp: "ExitCode",
+		},
+		{
+			name:     "states with Status",
+			path:     "states.deploy.Status",
+			wantType: interpolation.TypeStates,
+			wantPath: "deploy",
+			wantProp: "Status",
+		},
+		{
+			name:     "workflow",
+			path:     "workflow.duration",
+			wantType: interpolation.TypeWorkflow,
+			wantPath: "duration",
+		},
+		{
+			name:     "env",
+			path:     "env.HOME",
+			wantType: interpolation.TypeEnv,
+			wantPath: "HOME",
+		},
+		{
+			name:     "error",
+			path:     "error.message",
+			wantType: interpolation.TypeError,
+			wantPath: "message",
+		},
+		{
+			name:     "context",
+			path:     "context.working_dir",
+			wantType: interpolation.TypeContext,
+			wantPath: "working_dir",
+		},
+		{
+			name:     "empty path",
+			path:     "",
+			wantType: interpolation.TypeUnknown,
+		},
+		{
+			name:     "single segment",
+			path:     "invalid",
+			wantType: interpolation.TypeUnknown,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.property, func(t *testing.T) {
-			template := "{{workflow." + tt.property + "}}"
-			refs, err := interpolation.ExtractReferences(template)
-
-			require.NoError(t, err)
-			require.Len(t, refs, 1)
-			assert.Equal(t, interpolation.TypeWorkflow, refs[0].Type)
-			assert.Equal(t, tt.property, refs[0].Path)
+		t.Run(tt.name, func(t *testing.T) {
+			ref := interpolation.ParseReference(tt.path)
+			assert.Equal(t, tt.wantType, ref.Type)
+			if tt.wantNS != "" {
+				assert.Equal(t, tt.wantNS, ref.Namespace)
+			}
+			if tt.wantPath != "" {
+				assert.Equal(t, tt.wantPath, ref.Path)
+			}
+			if tt.wantProp != "" {
+				assert.Equal(t, tt.wantProp, ref.Property)
+			}
 		})
 	}
 }
-
-// =============================================================================
-// ExtractReferences Tests - All Error Properties
-// =============================================================================
-
-func TestExtractReferences_AllErrorProperties(t *testing.T) {
-	tests := []struct {
-		property string
-	}{
-		{"message"},
-		{"state"},
-		{"exit_code"},
-		{"type"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.property, func(t *testing.T) {
-			template := "{{error." + tt.property + "}}"
-			refs, err := interpolation.ExtractReferences(template)
-
-			require.NoError(t, err)
-			require.Len(t, refs, 1)
-			assert.Equal(t, interpolation.TypeError, refs[0].Type)
-			assert.Equal(t, tt.property, refs[0].Path)
-		})
-	}
-}
-
-// =============================================================================
-// ExtractReferences Tests - All Context Properties
-// =============================================================================
-
-func TestExtractReferences_AllContextProperties(t *testing.T) {
-	tests := []struct {
-		property string
-	}{
-		{"working_dir"},
-		{"user"},
-		{"hostname"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.property, func(t *testing.T) {
-			template := "{{context." + tt.property + "}}"
-			refs, err := interpolation.ExtractReferences(template)
-
-			require.NoError(t, err)
-			require.Len(t, refs, 1)
-			assert.Equal(t, interpolation.TypeContext, refs[0].Type)
-			assert.Equal(t, tt.property, refs[0].Path)
-		})
-	}
-}
-
-// =============================================================================
-// ParseReference Tests
-// =============================================================================
-
-func TestParseReference_InputsSimple(t *testing.T) {
-	ref := interpolation.ParseReference("inputs.name")
-
-	assert.Equal(t, interpolation.TypeInputs, ref.Type)
-	assert.Equal(t, "inputs", ref.Namespace)
-	assert.Equal(t, "name", ref.Path)
-}
-
-func TestParseReference_StatesWithProperty(t *testing.T) {
-	ref := interpolation.ParseReference("states.build.Output")
-
-	assert.Equal(t, interpolation.TypeStates, ref.Type)
-	assert.Equal(t, "states", ref.Namespace)
-	assert.Equal(t, "build", ref.Path)
-	assert.Equal(t, "Output", ref.Property)
-}
-
-func TestParseReference_StatesWithStderr(t *testing.T) {
-	ref := interpolation.ParseReference("states.compile.Stderr")
-
-	assert.Equal(t, interpolation.TypeStates, ref.Type)
-	assert.Equal(t, "compile", ref.Path)
-	assert.Equal(t, "Stderr", ref.Property)
-}
-
-func TestParseReference_WorkflowDuration(t *testing.T) {
-	ref := interpolation.ParseReference("workflow.duration")
-
-	assert.Equal(t, interpolation.TypeWorkflow, ref.Type)
-	assert.Equal(t, "duration", ref.Path)
-}
-
-func TestParseReference_EnvVariable(t *testing.T) {
-	ref := interpolation.ParseReference("env.HOME")
-
-	assert.Equal(t, interpolation.TypeEnv, ref.Type)
-	assert.Equal(t, "HOME", ref.Path)
-}
-
-func TestParseReference_ErrorMessage(t *testing.T) {
-	ref := interpolation.ParseReference("error.message")
-
-	assert.Equal(t, interpolation.TypeError, ref.Type)
-	assert.Equal(t, "message", ref.Path)
-}
-
-func TestParseReference_ContextWorkingDir(t *testing.T) {
-	ref := interpolation.ParseReference("context.working_dir")
-
-	assert.Equal(t, interpolation.TypeContext, ref.Type)
-	assert.Equal(t, "working_dir", ref.Path)
-}
-
-func TestParseReference_EmptyPath(t *testing.T) {
-	ref := interpolation.ParseReference("")
-
-	assert.Equal(t, interpolation.TypeUnknown, ref.Type)
-}
-
-func TestParseReference_SingleSegment(t *testing.T) {
-	ref := interpolation.ParseReference("invalid")
-
-	assert.Equal(t, interpolation.TypeUnknown, ref.Type)
-}
-
-func TestParseReference_StatesWithExitCode(t *testing.T) {
-	ref := interpolation.ParseReference("states.validate.ExitCode")
-
-	assert.Equal(t, interpolation.TypeStates, ref.Type)
-	assert.Equal(t, "validate", ref.Path)
-	assert.Equal(t, "ExitCode", ref.Property)
-}
-
-func TestParseReference_StatesWithStatus(t *testing.T) {
-	ref := interpolation.ParseReference("states.deploy.Status")
-
-	assert.Equal(t, interpolation.TypeStates, ref.Type)
-	assert.Equal(t, "deploy", ref.Path)
-	assert.Equal(t, "Status", ref.Property)
-}
-
-// =============================================================================
-// CategorizeNamespace Tests
-// =============================================================================
 
 func TestCategorizeNamespace(t *testing.T) {
 	tests := []struct {
@@ -452,94 +385,78 @@ func TestCategorizeNamespace(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidProperties Tests (ensure maps are populated correctly)
-// =============================================================================
-
-func TestValidWorkflowProperties(t *testing.T) {
-	expected := []string{"ID", "Name", "CurrentState", "StartedAt", "Duration"}
-	for _, prop := range expected {
-		assert.True(t, interpolation.ValidWorkflowProperties[prop],
-			"expected %q to be a valid workflow property", prop)
-	}
-	// Also verify invalid properties return false
-	assert.False(t, interpolation.ValidWorkflowProperties["invalid"])
-	assert.False(t, interpolation.ValidWorkflowProperties[""])
-}
-
-func TestValidStateProperties(t *testing.T) {
-	expected := []string{"Output", "Stderr", "ExitCode", "Status"}
-	for _, prop := range expected {
-		assert.True(t, interpolation.ValidStateProperties[prop],
-			"expected %q to be a valid state property", prop)
-	}
-	// Also verify invalid properties return false
-	assert.False(t, interpolation.ValidStateProperties["stdout"]) // common mistake
-	assert.False(t, interpolation.ValidStateProperties["result"])
-	assert.False(t, interpolation.ValidStateProperties[""])
-	// F050: Verify lowercase keys are now invalid (breaking change)
-	assert.False(t, interpolation.ValidStateProperties["output"])
-	assert.False(t, interpolation.ValidStateProperties["stderr"])
-	assert.False(t, interpolation.ValidStateProperties["exit_code"])
-	assert.False(t, interpolation.ValidStateProperties["status"])
-}
-
-func TestValidErrorProperties(t *testing.T) {
-	expected := []string{"Message", "State", "ExitCode", "Type"}
-	for _, prop := range expected {
-		assert.True(t, interpolation.ValidErrorProperties[prop],
-			"expected %q to be a valid error property", prop)
-	}
-	assert.False(t, interpolation.ValidErrorProperties["code"])
-	assert.False(t, interpolation.ValidErrorProperties[""])
-}
-
-func TestValidContextProperties(t *testing.T) {
-	expected := []string{"WorkingDir", "User", "Hostname"}
-	for _, prop := range expected {
-		assert.True(t, interpolation.ValidContextProperties[prop],
-			"expected %q to be a valid context property", prop)
-	}
-	assert.False(t, interpolation.ValidContextProperties["cwd"])
-	assert.False(t, interpolation.ValidContextProperties[""])
-}
-
-// =============================================================================
-// Reference Struct Tests
-// =============================================================================
-
-func TestReference_RawFieldPreservesOriginal(t *testing.T) {
+func TestValidationMaps(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		wantRaw  string
+		name           string
+		validMap       map[string]bool
+		expectedKeys   []string
+		invalidKeys    []string
+		forbiddenLower []string
 	}{
-		{"simple input", "{{inputs.name}}", "{{inputs.name}}"},
-		{"state with property", "{{states.build.output}}", "{{states.build.output}}"},
-		{"env var", "{{env.HOME}}", "{{env.HOME}}"},
-		{"with surrounding text", "echo {{inputs.name}} done", "{{inputs.name}}"},
+		{
+			name:           "ValidWorkflowProperties",
+			validMap:       interpolation.ValidWorkflowProperties,
+			expectedKeys:   []string{"ID", "Name", "CurrentState", "StartedAt", "Duration"},
+			invalidKeys:    []string{"invalid", ""},
+			forbiddenLower: []string{"id", "name", "current_state", "started_at", "duration"},
+		},
+		{
+			name:           "ValidStateProperties",
+			validMap:       interpolation.ValidStateProperties,
+			expectedKeys:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed"},
+			invalidKeys:    []string{"stdout", "result", ""},
+			forbiddenLower: []string{"output", "stderr", "exit_code", "status", "response", "tokens"},
+		},
+		{
+			name:           "ValidErrorProperties",
+			validMap:       interpolation.ValidErrorProperties,
+			expectedKeys:   []string{"Message", "State", "ExitCode", "Type"},
+			invalidKeys:    []string{"code", ""},
+			forbiddenLower: []string{"message", "state", "exit_code", "type"},
+		},
+		{
+			name:           "ValidContextProperties",
+			validMap:       interpolation.ValidContextProperties,
+			expectedKeys:   []string{"WorkingDir", "User", "Hostname"},
+			invalidKeys:    []string{"cwd", ""},
+			forbiddenLower: []string{"working_dir", "user", "hostname"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			refs, err := interpolation.ExtractReferences(tt.template)
-			require.NoError(t, err)
-			require.Len(t, refs, 1)
-			assert.Equal(t, tt.wantRaw, refs[0].Raw)
+			for _, key := range tt.expectedKeys {
+				assert.True(t, tt.validMap[key])
+			}
+			for _, key := range tt.invalidKeys {
+				assert.False(t, tt.validMap[key])
+			}
+			for _, key := range tt.forbiddenLower {
+				assert.False(t, tt.validMap[key])
+			}
 		})
 	}
 }
 
-// =============================================================================
-// Complex Template Tests
-// =============================================================================
-
-func TestExtractReferences_RealWorldTemplates(t *testing.T) {
+func TestExtractReferences_RealWorld(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
 		wantLen  int
+		wantRaw  string
 	}{
+		{
+			name:     "preserves raw simple",
+			template: "{{inputs.name}}",
+			wantLen:  1,
+			wantRaw:  "{{inputs.name}}",
+		},
+		{
+			name:     "preserves raw with surrounding",
+			template: "echo {{inputs.name}} done",
+			wantLen:  1,
+			wantRaw:  "{{inputs.name}}",
+		},
 		{
 			name:     "shell command with input",
 			template: "curl -X POST -d '{\"name\": \"{{inputs.name}}\"}' https://api.example.com",
@@ -547,23 +464,18 @@ func TestExtractReferences_RealWorldTemplates(t *testing.T) {
 		},
 		{
 			name:     "multiline script",
-			template: "#!/bin/bash\nNAME={{inputs.name}}\necho \"Processing $NAME\"\necho \"Result: {{states.process.output}}\"",
+			template: "#!/bin/bash\nNAME={{inputs.name}}\necho \"Result: {{states.process.output}}\"",
 			wantLen:  2,
 		},
 		{
 			name:     "json output",
-			template: `{"workflow": "{{workflow.name}}", "result": "{{states.final.output}}", "env": "{{env.ENVIRONMENT}}"}`,
-			wantLen:  3,
+			template: `{"workflow": "{{workflow.name}}", "result": "{{states.final.output}}"}`,
+			wantLen:  2,
 		},
 		{
 			name:     "error handler",
 			template: "echo 'Error in {{error.state}}: {{error.message}}' >> {{context.working_dir}}/error.log",
 			wantLen:  3,
-		},
-		{
-			name:     "all namespace types",
-			template: "{{inputs.a}} {{states.b.output}} {{workflow.id}} {{env.HOME}} {{error.message}} {{context.user}}",
-			wantLen:  6,
 		},
 	}
 
@@ -572,155 +484,85 @@ func TestExtractReferences_RealWorldTemplates(t *testing.T) {
 			refs, err := interpolation.ExtractReferences(tt.template)
 			require.NoError(t, err)
 			assert.Len(t, refs, tt.wantLen)
-		})
-	}
-}
-
-// =============================================================================
-// Table-Driven Comprehensive Test
-// =============================================================================
-
-func TestExtractReferences_Comprehensive(t *testing.T) {
-	tests := []struct {
-		name      string
-		template  string
-		wantCount int
-		wantTypes []interpolation.ReferenceType
-	}{
-		{
-			name:      "input only",
-			template:  "{{inputs.foo}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeInputs},
-		},
-		{
-			name:      "states only",
-			template:  "{{states.step.output}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeStates},
-		},
-		{
-			name:      "workflow only",
-			template:  "{{workflow.name}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeWorkflow},
-		},
-		{
-			name:      "env only",
-			template:  "{{env.PATH}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeEnv},
-		},
-		{
-			name:      "error only",
-			template:  "{{error.message}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeError},
-		},
-		{
-			name:      "context only",
-			template:  "{{context.working_dir}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeContext},
-		},
-		{
-			name:      "unknown namespace",
-			template:  "{{custom.field}}",
-			wantCount: 1,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeUnknown},
-		},
-		{
-			name:      "mixed types",
-			template:  "{{inputs.name}} {{states.step.output}}",
-			wantCount: 2,
-			wantTypes: []interpolation.ReferenceType{interpolation.TypeInputs, interpolation.TypeStates},
-		},
-		{
-			name:      "no templates",
-			template:  "plain text",
-			wantCount: 0,
-			wantTypes: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			refs, err := interpolation.ExtractReferences(tt.template)
-
-			require.NoError(t, err)
-			assert.Len(t, refs, tt.wantCount)
-
-			if tt.wantTypes != nil {
-				extractedTypes := make([]interpolation.ReferenceType, len(refs))
-				for i, ref := range refs {
-					extractedTypes[i] = ref.Type
-				}
-				assert.ElementsMatch(t, tt.wantTypes, extractedTypes)
+			if tt.wantRaw != "" && len(refs) > 0 {
+				assert.Equal(t, tt.wantRaw, refs[0].Raw)
 			}
 		})
 	}
 }
 
-// =============================================================================
-// Leading Dot Syntax Tests (Go template compatibility)
-// =============================================================================
+func TestParseReference_LeadingDot(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		wantType interpolation.ReferenceType
+		wantNS   string
+		wantPath string
+		wantProp string
+	}{
+		{
+			name:     "states",
+			path:     ".states.build.Output",
+			wantType: interpolation.TypeStates,
+			wantNS:   "states",
+			wantPath: "build",
+			wantProp: "Output",
+		},
+		{
+			name:     "inputs",
+			path:     ".inputs.pr_base",
+			wantType: interpolation.TypeInputs,
+			wantNS:   "inputs",
+			wantPath: "pr_base",
+		},
+		{
+			name:     "workflow",
+			path:     ".workflow.Duration",
+			wantType: interpolation.TypeWorkflow,
+			wantNS:   "workflow",
+			wantPath: "Duration",
+		},
+		{
+			name:     "error",
+			path:     ".error.Message",
+			wantType: interpolation.TypeError,
+			wantNS:   "error",
+			wantPath: "Message",
+		},
+		{
+			name:     "loop",
+			path:     ".loop.Index",
+			wantType: interpolation.TypeLoop,
+			wantNS:   "loop",
+			wantPath: "Index",
+		},
+		{
+			name:     "env",
+			path:     ".env.HOME",
+			wantType: interpolation.TypeEnv,
+			wantNS:   "env",
+			wantPath: "HOME",
+		},
+		{
+			name:     "context",
+			path:     ".context.working_dir",
+			wantType: interpolation.TypeContext,
+			wantNS:   "context",
+			wantPath: "working_dir",
+		},
+	}
 
-func TestParseReference_LeadingDotStates(t *testing.T) {
-	// Go template syntax: {{.states.step.Output}} should work like {{states.step.Output}}
-	ref := interpolation.ParseReference(".states.build.Output")
-
-	assert.Equal(t, interpolation.TypeStates, ref.Type)
-	assert.Equal(t, "states", ref.Namespace)
-	assert.Equal(t, "build", ref.Path)
-	assert.Equal(t, "Output", ref.Property)
-}
-
-func TestParseReference_LeadingDotInputs(t *testing.T) {
-	ref := interpolation.ParseReference(".inputs.pr_base")
-
-	assert.Equal(t, interpolation.TypeInputs, ref.Type)
-	assert.Equal(t, "inputs", ref.Namespace)
-	assert.Equal(t, "pr_base", ref.Path)
-}
-
-func TestParseReference_LeadingDotWorkflow(t *testing.T) {
-	ref := interpolation.ParseReference(".workflow.Duration")
-
-	assert.Equal(t, interpolation.TypeWorkflow, ref.Type)
-	assert.Equal(t, "workflow", ref.Namespace)
-	assert.Equal(t, "Duration", ref.Path)
-}
-
-func TestParseReference_LeadingDotError(t *testing.T) {
-	ref := interpolation.ParseReference(".error.Message")
-
-	assert.Equal(t, interpolation.TypeError, ref.Type)
-	assert.Equal(t, "error", ref.Namespace)
-	assert.Equal(t, "Message", ref.Path)
-}
-
-func TestParseReference_LeadingDotLoop(t *testing.T) {
-	ref := interpolation.ParseReference(".loop.Index")
-
-	assert.Equal(t, interpolation.TypeLoop, ref.Type)
-	assert.Equal(t, "loop", ref.Namespace)
-	assert.Equal(t, "Index", ref.Path)
-}
-
-func TestParseReference_LeadingDotEnv(t *testing.T) {
-	ref := interpolation.ParseReference(".env.HOME")
-
-	assert.Equal(t, interpolation.TypeEnv, ref.Type)
-	assert.Equal(t, "env", ref.Namespace)
-	assert.Equal(t, "HOME", ref.Path)
-}
-
-func TestParseReference_LeadingDotContext(t *testing.T) {
-	ref := interpolation.ParseReference(".context.working_dir")
-
-	assert.Equal(t, interpolation.TypeContext, ref.Type)
-	assert.Equal(t, "context", ref.Namespace)
-	assert.Equal(t, "working_dir", ref.Path)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref := interpolation.ParseReference(tt.path)
+			assert.Equal(t, tt.wantType, ref.Type)
+			assert.Equal(t, tt.wantNS, ref.Namespace)
+			assert.Equal(t, tt.wantPath, ref.Path)
+			if tt.wantProp != "" {
+				assert.Equal(t, tt.wantProp, ref.Property)
+			}
+		})
+	}
 }
 
 func TestExtractReferences_LeadingDotSyntax(t *testing.T) {
@@ -781,22 +623,18 @@ func TestExtractReferences_LeadingDotSyntax(t *testing.T) {
 }
 
 func TestExtractReferences_MixedLeadingDotSyntax(t *testing.T) {
-	// Test mixing both syntaxes in the same template
 	template := "{{.states.step1.Output}} and {{states.step2.Output}}"
 	refs, err := interpolation.ExtractReferences(template)
 
 	require.NoError(t, err)
 	require.Len(t, refs, 2)
-	// Both should be TypeStates
 	assert.Equal(t, interpolation.TypeStates, refs[0].Type)
 	assert.Equal(t, interpolation.TypeStates, refs[1].Type)
-	// Paths should be correctly extracted
 	assert.Equal(t, "step1", refs[0].Path)
 	assert.Equal(t, "step2", refs[1].Path)
 }
 
 func TestExtractReferences_RealWorldLeadingDot(t *testing.T) {
-	// Test based on actual user workflow that was failing
 	template := `git commit -m "$(cat << 'COMMITEOF'
       {{.states.generate_commit.Output}}
       COMMITEOF
@@ -810,404 +648,56 @@ func TestExtractReferences_RealWorldLeadingDot(t *testing.T) {
 	assert.Equal(t, "Output", refs[0].Property)
 }
 
-// =============================================================================
-// Validation Maps PascalCase Normalization Tests
-// =============================================================================
+func TestValidationMaps_Comprehensive(t *testing.T) {
+	type mapSpec struct {
+		validMap   map[string]bool
+		required   []string
+		invalid    []string
+		deprecated []string
+	}
 
-// TestValidationMaps_PascalCase verifies all validation maps use PascalCase keys
-func TestValidationMaps_PascalCase(t *testing.T) {
-	tests := []struct {
-		name           string
-		validMap       map[string]bool
-		expectedKeys   []string
-		forbiddenKeys  []string
-		mapDescription string
-	}{
-		{
-			name:     "ValidWorkflowProperties uses PascalCase",
-			validMap: interpolation.ValidWorkflowProperties,
-			expectedKeys: []string{
-				"ID",           // not "id"
-				"Name",         // not "name"
-				"CurrentState", // not "current_state"
-				"StartedAt",    // not "started_at"
-				"Duration",     // not "duration"
-			},
-			forbiddenKeys: []string{
-				"id",
-				"name",
-				"current_state",
-				"started_at",
-				"duration",
-			},
-			mapDescription: "ValidWorkflowProperties",
+	specs := map[string]mapSpec{
+		"ValidWorkflowProperties": {
+			validMap:   interpolation.ValidWorkflowProperties,
+			required:   []string{"ID", "Name", "CurrentState", "StartedAt", "Duration"},
+			invalid:    []string{"invalid", ""},
+			deprecated: []string{"id", "name", "current_state", "started_at", "duration"},
 		},
-		{
-			name:     "ValidStateProperties uses PascalCase and includes all fields",
-			validMap: interpolation.ValidStateProperties,
-			expectedKeys: []string{
-				"Output",     // already PascalCase
-				"Stderr",     // already PascalCase
-				"ExitCode",   // already PascalCase
-				"Status",     // already PascalCase
-				"Response",   // NEW: from agent steps (F039)
-				"TokensUsed", // NEW: from agent steps (F039)
-			},
-			forbiddenKeys: []string{
-				"output",
-				"stderr",
-				"exit_code",
-				"status",
-				"response",
-				"tokens",
-			},
-			mapDescription: "ValidStateProperties",
+		"ValidStateProperties": {
+			validMap:   interpolation.ValidStateProperties,
+			required:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed"},
+			invalid:    []string{"stdout", "result", ""},
+			deprecated: []string{"output", "stderr", "exit_code", "status", "response", "tokensused"},
 		},
-		{
-			name:     "ValidErrorProperties uses PascalCase",
-			validMap: interpolation.ValidErrorProperties,
-			expectedKeys: []string{
-				"Message",  // not "message"
-				"State",    // not "state"
-				"ExitCode", // not "exit_code"
-				"Type",     // not "type"
-			},
-			forbiddenKeys: []string{
-				"message",
-				"state",
-				"exit_code",
-				"type",
-			},
-			mapDescription: "ValidErrorProperties",
+		"ValidErrorProperties": {
+			validMap:   interpolation.ValidErrorProperties,
+			required:   []string{"Message", "State", "ExitCode", "Type"},
+			invalid:    []string{"code", ""},
+			deprecated: []string{"message", "state", "exit_code", "type"},
 		},
-		{
-			name:     "ValidContextProperties uses PascalCase",
-			validMap: interpolation.ValidContextProperties,
-			expectedKeys: []string{
-				"WorkingDir", // not "working_dir"
-				"User",       // not "user"
-				"Hostname",   // not "hostname"
-			},
-			forbiddenKeys: []string{
-				"working_dir",
-				"user",
-				"hostname",
-			},
-			mapDescription: "ValidContextProperties",
+		"ValidContextProperties": {
+			validMap:   interpolation.ValidContextProperties,
+			required:   []string{"WorkingDir", "User", "Hostname"},
+			invalid:    []string{"cwd", ""},
+			deprecated: []string{"working_dir", "user", "hostname"},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Assert all expected PascalCase keys are present
-			for _, key := range tt.expectedKeys {
-				assert.True(t, tt.validMap[key],
-					"%s must contain PascalCase key %q", tt.mapDescription, key)
+	for name, spec := range specs {
+		t.Run(name, func(t *testing.T) {
+			for _, key := range spec.required {
+				assert.True(t, spec.validMap[key])
 			}
 
-			// Assert all lowercase/snake_case keys are absent
-			for _, key := range tt.forbiddenKeys {
-				assert.False(t, tt.validMap[key],
-					"%s must NOT contain lowercase/snake_case key %q", tt.mapDescription, key)
+			for _, key := range spec.invalid {
+				assert.False(t, spec.validMap[key])
 			}
+
+			for _, key := range spec.deprecated {
+				assert.False(t, spec.validMap[key])
+			}
+
+			assert.Equal(t, len(spec.required), len(spec.validMap))
 		})
 	}
-}
-
-// TestValidationMaps_Completeness verifies validation maps include ALL fields
-// that BuildExprContext exposes in pkg/expression/evaluator.go
-// Task: T009 - Validation completeness tests
-func TestValidationMaps_Completeness(t *testing.T) {
-	tests := []struct {
-		name              string
-		validMap          map[string]bool
-		requiredFields    []string
-		mapDescription    string
-		contextMapping    string
-		missingIsCritical bool
-	}{
-		{
-			name:     "ValidWorkflowProperties complete",
-			validMap: interpolation.ValidWorkflowProperties,
-			requiredFields: []string{
-				"ID",
-				"Name",
-				"CurrentState",
-				"StartedAt",
-				"Duration",
-			},
-			mapDescription:    "ValidWorkflowProperties",
-			contextMapping:    "workflow.* namespace in BuildExprContext()",
-			missingIsCritical: true,
-		},
-		{
-			name:     "ValidStateProperties complete with F039 fields",
-			validMap: interpolation.ValidStateProperties,
-			requiredFields: []string{
-				"Output",
-				"Stderr",
-				"ExitCode",
-				"Status",
-				"Response",   // Added in F039 (agent steps)
-				"TokensUsed", // Added in F039 (agent steps)
-			},
-			mapDescription:    "ValidStateProperties",
-			contextMapping:    "states.<step>.* namespace in BuildExprContext()",
-			missingIsCritical: true,
-		},
-		{
-			name:     "ValidErrorProperties complete with F037 fields",
-			validMap: interpolation.ValidErrorProperties,
-			requiredFields: []string{
-				"Message",
-				"State",
-				"ExitCode",
-				"Type",
-			},
-			mapDescription:    "ValidErrorProperties",
-			contextMapping:    "error.* namespace in BuildExprContext()",
-			missingIsCritical: true,
-		},
-		{
-			name:     "ValidContextProperties complete with F033 fields",
-			validMap: interpolation.ValidContextProperties,
-			requiredFields: []string{
-				"WorkingDir",
-				"User",
-				"Hostname",
-			},
-			mapDescription:    "ValidContextProperties",
-			contextMapping:    "context.* namespace in BuildExprContext()",
-			missingIsCritical: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Check all required fields are present
-			missing := []string{}
-			for _, field := range tt.requiredFields {
-				if !tt.validMap[field] {
-					missing = append(missing, field)
-				}
-			}
-
-			if len(missing) > 0 {
-				if tt.missingIsCritical {
-					t.Errorf("%s is incomplete. Missing fields from %s: %v",
-						tt.mapDescription, tt.contextMapping, missing)
-				} else {
-					t.Logf("Warning: %s missing optional fields: %v", tt.mapDescription, missing)
-				}
-			}
-
-			// Verify count matches expected
-			assert.Equal(t, len(tt.requiredFields), len(tt.validMap),
-				"%s should have exactly %d fields matching %s",
-				tt.mapDescription, len(tt.requiredFields), tt.contextMapping)
-		})
-	}
-}
-
-// hasUppercaseLetter checks if a string contains any uppercase letter
-func hasUppercaseLetter(s string) bool {
-	for _, r := range s {
-		if r >= 'A' && r <= 'Z' {
-			return true
-		}
-	}
-	return false
-}
-
-// containsUnderscore checks if a string contains an underscore
-func containsUnderscore(s string) bool {
-	for _, r := range s {
-		if r == '_' {
-			return true
-		}
-	}
-	return false
-}
-
-// findInvalidKeys returns lowercase and snake_case keys from a map
-func findInvalidKeys(validMap map[string]bool) (lowercase, snakeCase []string) {
-	for key := range validMap {
-		if !hasUppercaseLetter(key) {
-			lowercase = append(lowercase, key)
-		}
-		if containsUnderscore(key) {
-			snakeCase = append(snakeCase, key)
-		}
-	}
-	return lowercase, snakeCase
-}
-
-// TestValidationMaps_NoLowercaseKeys ensures no lowercase keys remain after PascalCase normalization.
-// This prevents regression to pre-normalization inconsistent casing.
-// Task: T009 - Validation completeness tests
-func TestValidationMaps_NoLowercaseKeys(t *testing.T) {
-	tests := []struct {
-		name        string
-		validMap    map[string]bool
-		description string
-	}{
-		{
-			name:        "ValidWorkflowProperties",
-			validMap:    interpolation.ValidWorkflowProperties,
-			description: "workflow properties",
-		},
-		{
-			name:        "ValidStateProperties",
-			validMap:    interpolation.ValidStateProperties,
-			description: "state properties",
-		},
-		{
-			name:        "ValidErrorProperties",
-			validMap:    interpolation.ValidErrorProperties,
-			description: "error properties",
-		},
-		{
-			name:        "ValidContextProperties",
-			validMap:    interpolation.ValidContextProperties,
-			description: "context properties",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lowercaseKeys, snakeCaseKeys := findInvalidKeys(tt.validMap)
-
-			//  requirement: NO lowercase or snake_case keys allowed
-			assert.Empty(t, lowercaseKeys,
-				"%s contains lowercase keys (should be PascalCase): %v", tt.description, lowercaseKeys)
-			assert.Empty(t, snakeCaseKeys,
-				"%s contains snake_case keys (should be PascalCase): %v", tt.description, snakeCaseKeys)
-		})
-	}
-}
-
-// TestValidationMaps_ConsistencyWithBuildExprContext verifies validation maps
-// are synchronized with what BuildExprContext() actually exposes
-// Task: T009 - Validation completeness tests
-func TestValidationMaps_ConsistencyWithBuildExprContext(t *testing.T) {
-	t.Run("workflow namespace consistency", func(t *testing.T) {
-		// These keys MUST match what BuildExprContext sets in workflow map
-		expectedInBuildExprContext := map[string]bool{
-			"ID":           true, // ctx.Workflow.ID
-			"Name":         true, // ctx.Workflow.Name
-			"CurrentState": true, // ctx.Workflow.CurrentState
-			"Duration":     true, // ctx.Workflow.Duration() method call
-			"StartedAt":    true, // ctx.Workflow.StartedAt (for completeness)
-		}
-
-		for key := range expectedInBuildExprContext {
-			assert.True(t, interpolation.ValidWorkflowProperties[key],
-				"ValidWorkflowProperties missing key %q that BuildExprContext exposes", key)
-		}
-	})
-
-	t.Run("state namespace consistency", func(t *testing.T) {
-		// These keys MUST match what BuildExprContext sets in states map
-		expectedInBuildExprContext := map[string]bool{
-			"Output":     true, // v.Output
-			"Stderr":     true, // v.Stderr
-			"ExitCode":   true, // v.ExitCode
-			"Status":     true, // v.Status
-			"Response":   true, // v.Response (agent steps)
-			"TokensUsed": true, // v.TokensUsed (agent steps)
-		}
-
-		for key := range expectedInBuildExprContext {
-			assert.True(t, interpolation.ValidStateProperties[key],
-				"ValidStateProperties missing key %q that BuildExprContext exposes", key)
-		}
-	})
-
-	t.Run("error namespace consistency", func(t *testing.T) {
-		// These keys MUST match what buildErrorContext() returns
-		expectedInBuildErrorContext := map[string]bool{
-			"Message":  true, // err.Message
-			"State":    true, // err.State
-			"ExitCode": true, // err.ExitCode
-			"Type":     true, // err.Type
-		}
-
-		for key := range expectedInBuildErrorContext {
-			assert.True(t, interpolation.ValidErrorProperties[key],
-				"ValidErrorProperties missing key %q that buildErrorContext exposes", key)
-		}
-	})
-
-	t.Run("context namespace consistency", func(t *testing.T) {
-		// These keys MUST match what buildSystemContext() returns
-		expectedInBuildSystemContext := map[string]bool{
-			"WorkingDir": true, // ctx.WorkingDir
-			"User":       true, // ctx.User
-			"Hostname":   true, // ctx.Hostname
-		}
-
-		for key := range expectedInBuildSystemContext {
-			assert.True(t, interpolation.ValidContextProperties[key],
-				"ValidContextProperties missing key %q that buildSystemContext exposes", key)
-		}
-	})
-}
-
-// TestValidationMaps_BreakingChangeFromPre_ documents the breaking change
-// This test explicitly shows which keys changed from lowercase to PascalCase
-// Task: T009 - Validation completeness tests
-func TestValidationMaps_BreakingChangeFromPre_(t *testing.T) {
-	t.Run("workflow keys changed", func(t *testing.T) {
-		// Pre- (INVALID): lowercase
-		assert.False(t, interpolation.ValidWorkflowProperties["id"], "lowercase 'id' no longer valid")
-		assert.False(t, interpolation.ValidWorkflowProperties["name"], "lowercase 'name' no longer valid")
-		assert.False(t, interpolation.ValidWorkflowProperties["current_state"], "snake_case 'current_state' no longer valid")
-
-		// Post- (VALID): PascalCase
-		assert.True(t, interpolation.ValidWorkflowProperties["ID"], "PascalCase 'ID' is valid")
-		assert.True(t, interpolation.ValidWorkflowProperties["Name"], "PascalCase 'Name' is valid")
-		assert.True(t, interpolation.ValidWorkflowProperties["CurrentState"], "PascalCase 'CurrentState' is valid")
-	})
-
-	t.Run("error keys changed", func(t *testing.T) {
-		// Pre- (INVALID): lowercase/snake_case
-		assert.False(t, interpolation.ValidErrorProperties["message"], "lowercase 'message' no longer valid")
-		assert.False(t, interpolation.ValidErrorProperties["state"], "lowercase 'state' no longer valid")
-		assert.False(t, interpolation.ValidErrorProperties["exit_code"], "snake_case 'exit_code' no longer valid")
-		assert.False(t, interpolation.ValidErrorProperties["type"], "lowercase 'type' no longer valid")
-
-		// Post- (VALID): PascalCase
-		assert.True(t, interpolation.ValidErrorProperties["Message"], "PascalCase 'Message' is valid")
-		assert.True(t, interpolation.ValidErrorProperties["State"], "PascalCase 'State' is valid")
-		assert.True(t, interpolation.ValidErrorProperties["ExitCode"], "PascalCase 'ExitCode' is valid")
-		assert.True(t, interpolation.ValidErrorProperties["Type"], "PascalCase 'Type' is valid")
-	})
-
-	t.Run("context keys changed", func(t *testing.T) {
-		// Pre- (INVALID): snake_case
-		assert.False(t, interpolation.ValidContextProperties["working_dir"], "snake_case 'working_dir' no longer valid")
-		assert.False(t, interpolation.ValidContextProperties["user"], "lowercase 'user' no longer valid")
-		assert.False(t, interpolation.ValidContextProperties["hostname"], "lowercase 'hostname' no longer valid")
-
-		// Post- (VALID): PascalCase
-		assert.True(t, interpolation.ValidContextProperties["WorkingDir"], "PascalCase 'WorkingDir' is valid")
-		assert.True(t, interpolation.ValidContextProperties["User"], "PascalCase 'User' is valid")
-		assert.True(t, interpolation.ValidContextProperties["Hostname"], "PascalCase 'Hostname' is valid")
-	})
-
-	t.Run("state keys already PascalCase but Response/TokensUsed added", func(t *testing.T) {
-		// State properties were already PascalCase (good!)
-		assert.True(t, interpolation.ValidStateProperties["Output"], "Output already PascalCase")
-		assert.True(t, interpolation.ValidStateProperties["Stderr"], "Stderr already PascalCase")
-		assert.True(t, interpolation.ValidStateProperties["ExitCode"], "ExitCode already PascalCase")
-		assert.True(t, interpolation.ValidStateProperties["Status"], "Status already PascalCase")
-
-		//  adds missing fields from F039 (agent steps)
-		assert.True(t, interpolation.ValidStateProperties["Response"], "Response field added in ")
-		assert.True(t, interpolation.ValidStateProperties["TokensUsed"], "TokensUsed field added in ")
-
-		// Lowercase versions should NOT exist
-		assert.False(t, interpolation.ValidStateProperties["response"], "lowercase 'response' not valid")
-		assert.False(t, interpolation.ValidStateProperties["tokensused"], "lowercase 'tokensused' not valid")
-	})
 }

@@ -123,10 +123,6 @@ func TestParseOutputFormat(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// BuildPromptPaths Tests (T004)
-// =============================================================================
-
 func TestBuildPromptPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
 	// BuildPromptPaths should return exactly 2 paths: local and global
 	// (no AWF_PROMPTS_PATH env var support per ADR-002)

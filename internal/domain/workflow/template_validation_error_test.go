@@ -14,10 +14,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Validate - Error References in Hooks
-// =============================================================================
-
 func TestTemplateValidator_ErrorRefInErrorHook_Valid(t *testing.T) {
 	w := newTestWorkflow()
 	w.Hooks = workflow.WorkflowHooks{
@@ -102,10 +98,6 @@ func TestTemplateValidator_InvalidErrorProperty(t *testing.T) {
 	assert.Equal(t, workflow.ErrInvalidErrorProperty, result.Errors[0].Code)
 }
 
-// =============================================================================
-// Validate - Step Hooks
-// =============================================================================
-
 func TestTemplateValidator_ValidStepPreHook(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Hooks = workflow.StepHooks{
@@ -178,10 +170,6 @@ func TestTemplateValidator_InvalidRefInHookLog(t *testing.T) {
 	require.True(t, result.HasErrors())
 }
 
-// =============================================================================
-// Validate - Unknown Reference Type
-// =============================================================================
-
 func TestTemplateValidator_UnknownReferenceType(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{unknown.field}}"
@@ -218,10 +206,6 @@ func TestTemplateValidator_TypoInNamespace(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Validate - Aggregate All Errors (Non Fail-Fast)
-// =============================================================================
 
 func TestTemplateValidator_AggregatesAllErrors(t *testing.T) {
 	w := &workflow.Workflow{
@@ -282,10 +266,6 @@ func TestTemplateValidator_AggregatesErrorsAcrossFields(t *testing.T) {
 	assert.GreaterOrEqual(t, len(result.Errors), 2)
 }
 
-// =============================================================================
-// Validate - Dir Field
-// =============================================================================
-
 func TestTemplateValidator_ValidDirFieldReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Dir = "{{context.WorkingDir}}/subdir"
@@ -305,10 +285,6 @@ func TestTemplateValidator_InvalidDirFieldReference(t *testing.T) {
 
 	require.True(t, result.HasErrors())
 }
-
-// =============================================================================
-// Edge Cases and Special Scenarios
-// =============================================================================
 
 func TestTemplateValidator_TerminalStepsIgnored(t *testing.T) {
 	// Terminal steps shouldn't have commands, but if they do, validate them
@@ -394,10 +370,6 @@ func TestTemplateValidator_ComplexRealWorldWorkflow(t *testing.T) {
 	assert.False(t, result.HasErrors(), "real-world workflow should validate successfully")
 }
 
-// =============================================================================
-// Error Message Quality Tests
-// =============================================================================
-
 func TestTemplateValidator_ErrorMessageContainsStepName(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo {{inputs.undefined}}"
@@ -419,10 +391,6 @@ func TestTemplateValidator_ErrorMessageContainsReference(t *testing.T) {
 	require.True(t, result.HasErrors())
 	assert.Contains(t, result.Errors[0].Message, "undefined", "error message should contain the reference")
 }
-
-// =============================================================================
-// Loop Expression Validation Tests (F037-T016)
-// =============================================================================
 
 func TestTemplateValidator_LoopExpressions_ValidMaxIterationsExpr(t *testing.T) {
 	w := newLoopWorkflow()
@@ -858,9 +826,7 @@ func TestTemplateValidator_LoopExpressions_NestedTemplate(t *testing.T) {
 	assert.False(t, result.HasErrors())
 }
 
-// =============================================================================
 // enqueueIfNotVisited Helper Tests (C003: Phase 3)
-// =============================================================================
 
 // TestEnqueueIfNotVisited_NotVisited verifies that unvisited states are added to queue.
 // Feature: C003 - Reduce Graph Algorithm Cognitive Complexity

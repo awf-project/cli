@@ -9,18 +9,14 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Parallel Execution Tests
 // Feature: C008 - Test File Restructuring
 // Component: extract_parallel_tests (T007)
-// =============================================================================
 //
 // This file contains parallel execution integration tests for ExecutionService.
 // Tests verify parallel/branch execution with resume functionality.
 //
 // Extracted from: execution_service_test.go (lines 1359-1399)
 // Test count: 1 parallel execution test
-// =============================================================================
 
 // Mock types are defined in:
 // - service_test.go (common mocks)

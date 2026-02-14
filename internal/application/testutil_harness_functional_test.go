@@ -11,10 +11,7 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// ServiceTestHarness Functional Tests
 // Feature: C012 - Application Test Harness for Service Layer
-// =============================================================================
 //
 // This file contains FUNCTIONAL tests that validate ServiceTestHarness works
 // end-to-end in realistic test scenarios. These tests verify:
@@ -28,18 +25,12 @@ import (
 // demonstrating VALUE in real-world usage patterns.
 //
 // Test count: 12+ functional tests covering realistic scenarios
-// =============================================================================
-
-// =============================================================================
-// Happy Path - Realistic Workflow Execution
-// =============================================================================
 
 func TestHarnessFunctional_SimpleWorkflow_ExecutesSuccessfully(t *testing.T) {
 	// Demonstrates: Basic harness usage for simple workflow execution
 	// Before harness: 15 lines of mock setup
 	// After harness: 3 lines
 
-	// Arrange: Create realistic workflow
 	wf := &workflow.Workflow{
 		Name:    "deploy-app",
 		Initial: "build",
@@ -84,7 +75,6 @@ func TestHarnessFunctional_SimpleWorkflow_ExecutesSuccessfully(t *testing.T) {
 		},
 	}
 
-	// Act: Use harness to set up service (3 lines vs 15 lines before)
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("deploy-app", wf).
 		WithCommandResult("make build", &ports.CommandResult{Stdout: "Build successful\n", ExitCode: 0}).
@@ -95,12 +85,10 @@ func TestHarnessFunctional_SimpleWorkflow_ExecutesSuccessfully(t *testing.T) {
 	// Execute workflow
 	ctx, err := svc.Run(context.Background(), "deploy-app", nil)
 
-	// Assert: Workflow completes successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
 
-	// Assert: Can access mocks for verification
 	assert.NotNil(t, mocks.Repository)
 	assert.NotNil(t, mocks.Executor)
 }
@@ -109,7 +97,6 @@ func TestHarnessFunctional_MultiStepWorkflow_WithInputs_ExecutesSuccessfully(t *
 	// Demonstrates: Harness with workflow inputs and interpolation
 	// Validates: Inputs flow through workflow correctly
 
-	// Arrange: Workflow with input variables
 	wf := &workflow.Workflow{
 		Name:    "greet-user",
 		Initial: "greet",
@@ -142,7 +129,6 @@ func TestHarnessFunctional_MultiStepWorkflow_WithInputs_ExecutesSuccessfully(t *
 		},
 	}
 
-	// Act: Set up with harness
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("greet-user", wf).
 		WithCommandResult("echo 'Hello Alice'", &ports.CommandResult{Stdout: "Hello Alice\n", ExitCode: 0}).
@@ -155,7 +141,6 @@ func TestHarnessFunctional_MultiStepWorkflow_WithInputs_ExecutesSuccessfully(t *
 	}
 	ctx, err := svc.Run(context.Background(), "greet-user", inputs)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 
@@ -173,7 +158,6 @@ func TestHarnessFunctional_WorkflowWithRetry_ExecutesWithRetryLogic(t *testing.T
 	// Demonstrates: Harness works with retry configuration
 	// Validates: Complex retry patterns work correctly
 
-	// Arrange: Workflow with retry on step
 	wf := &workflow.Workflow{
 		Name:    "flaky-api",
 		Initial: "call-api",
@@ -208,7 +192,6 @@ func TestHarnessFunctional_WorkflowWithRetry_ExecutesWithRetryLogic(t *testing.T
 		},
 	}
 
-	// Act: Set up with harness - command succeeds after first attempt
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("flaky-api", wf).
 		WithCommandResult("curl https://api.example.com/data", &ports.CommandResult{
@@ -223,7 +206,6 @@ func TestHarnessFunctional_WorkflowWithRetry_ExecutesWithRetryLogic(t *testing.T
 
 	ctx, err := svc.Run(context.Background(), "flaky-api", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
@@ -236,7 +218,6 @@ func TestHarnessFunctional_ParallelSteps_ExecuteConcurrently(t *testing.T) {
 	// Demonstrates: Harness supports parallel execution patterns
 	// Validates: Parallel steps execute correctly
 
-	// Arrange: Workflow with parallel steps
 	wf := &workflow.Workflow{
 		Name:    "parallel-build",
 		Initial: "parallel-tasks",
@@ -277,7 +258,6 @@ func TestHarnessFunctional_ParallelSteps_ExecuteConcurrently(t *testing.T) {
 		},
 	}
 
-	// Act: Set up all parallel command results
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("parallel-build", wf).
 		WithCommandResult("npm run build", &ports.CommandResult{Stdout: "Frontend built\n", ExitCode: 0}).
@@ -287,7 +267,6 @@ func TestHarnessFunctional_ParallelSteps_ExecuteConcurrently(t *testing.T) {
 
 	ctx, err := svc.Run(context.Background(), "parallel-build", nil)
 
-	// Assert: All parallel steps complete
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
@@ -301,15 +280,10 @@ func TestHarnessFunctional_ParallelSteps_ExecuteConcurrently(t *testing.T) {
 	assert.True(t, ok3, "tests should execute")
 }
 
-// =============================================================================
-// Edge Cases - Complex Scenarios
-// =============================================================================
-
 func TestHarnessFunctional_WorkflowFailure_HandlesGracefully(t *testing.T) {
 	// Demonstrates: Harness handles workflow failures correctly
 	// Validates: Error paths work as expected
 
-	// Arrange: Workflow that fails
 	wf := &workflow.Workflow{
 		Name:    "failing-workflow",
 		Initial: "fail-step",
@@ -334,7 +308,6 @@ func TestHarnessFunctional_WorkflowFailure_HandlesGracefully(t *testing.T) {
 		},
 	}
 
-	// Act: Configure failure result
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("failing-workflow", wf).
 		WithCommandResult("exit 1", &ports.CommandResult{
@@ -346,7 +319,6 @@ func TestHarnessFunctional_WorkflowFailure_HandlesGracefully(t *testing.T) {
 
 	ctx, err := svc.Run(context.Background(), "failing-workflow", nil)
 
-	// Assert: Workflow transitions to failure terminal
 	// Note: Run() returns error when workflow reaches terminal failure state
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal failure")
@@ -370,7 +342,6 @@ func TestHarnessFunctional_SubworkflowExecution_ExecutesCorrectly(t *testing.T) 
 	// Demonstrates: Harness supports subworkflow execution
 	// Validates: CallWorkflow step works correctly
 
-	// Arrange: Parent workflow calls child workflow
 	childWf := &workflow.Workflow{
 		Name:    "child-workflow",
 		Initial: "child-step",
@@ -415,7 +386,6 @@ func TestHarnessFunctional_SubworkflowExecution_ExecutesCorrectly(t *testing.T) 
 		},
 	}
 
-	// Act: Register both workflows
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("parent-workflow", parentWf).
 		WithWorkflow("child-workflow", childWf).
@@ -425,27 +395,20 @@ func TestHarnessFunctional_SubworkflowExecution_ExecutesCorrectly(t *testing.T) 
 
 	ctx, err := svc.Run(context.Background(), "parent-workflow", nil)
 
-	// Assert: Parent workflow completes successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "parent-done", ctx.CurrentStep)
 }
 
-// =============================================================================
-// Error Handling - Invalid Configurations
-// =============================================================================
-
 func TestHarnessFunctional_MissingWorkflow_ReturnsError(t *testing.T) {
 	// Demonstrates: Harness detects missing workflow at runtime
 	// Validates: Appropriate error returned when workflow not registered
 
-	// Act: Build without registering workflow
 	svc, _ := NewTestHarness(t).Build()
 
 	// Try to run non-existent workflow
 	_, err := svc.Run(context.Background(), "non-existent", nil)
 
-	// Assert: Error returned
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow file not found")
 }
@@ -454,7 +417,6 @@ func TestHarnessFunctional_MissingCommandResult_UsesDefaults(t *testing.T) {
 	// Demonstrates: Harness handles missing command results gracefully
 	// Validates: Default executor behavior when result not configured
 
-	// Arrange: Workflow with unconfigured command
 	wf := &workflow.Workflow{
 		Name:    "unconfigured",
 		Initial: "step1",
@@ -473,14 +435,12 @@ func TestHarnessFunctional_MissingCommandResult_UsesDefaults(t *testing.T) {
 		},
 	}
 
-	// Act: Build without configuring command result
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("unconfigured", wf).
 		Build()
 
 	ctx, err := svc.Run(context.Background(), "unconfigured", nil)
 
-	// Assert: Uses default executor result (empty stdout, exit code 0)
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
@@ -489,7 +449,6 @@ func TestHarnessFunctional_InvalidWorkflow_ReturnsValidationError(t *testing.T) 
 	// Demonstrates: Harness works with workflow validation
 	// Validates: Invalid workflows are caught
 
-	// Arrange: Invalid workflow (no initial step)
 	wf := &workflow.Workflow{
 		Name:    "invalid",
 		Initial: "non-existent-step",
@@ -501,7 +460,6 @@ func TestHarnessFunctional_InvalidWorkflow_ReturnsValidationError(t *testing.T) 
 		},
 	}
 
-	// Act: Register invalid workflow
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("invalid", wf).
 		Build()
@@ -509,20 +467,14 @@ func TestHarnessFunctional_InvalidWorkflow_ReturnsValidationError(t *testing.T) 
 	// Try to run - validation should catch this
 	_, err := svc.Run(context.Background(), "invalid", nil)
 
-	// Assert: Error indicates validation issue (step not found)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "step not found")
 }
-
-// =============================================================================
-// Integration - Cross-Pattern Compatibility
-// =============================================================================
 
 func TestHarnessFunctional_WithTestutilBuilders_IntegratesSeamlessly(t *testing.T) {
 	// Demonstrates: Harness works with existing testutil builders
 	// Validates: Compatible with established patterns from C007-C011
 
-	// Arrange: Use testutil builders to create workflow
 	wf := testutil.NewWorkflowBuilder().
 		WithName("builder-integration").
 		WithInitial("step1").
@@ -534,7 +486,6 @@ func TestHarnessFunctional_WithTestutilBuilders_IntegratesSeamlessly(t *testing.
 		WithStep(testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
 		Build()
 
-	// Act: Combine harness with builders
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("builder-integration", wf).
 		WithCommandResult("echo test", &ports.CommandResult{Stdout: "test\n", ExitCode: 0}).
@@ -542,7 +493,6 @@ func TestHarnessFunctional_WithTestutilBuilders_IntegratesSeamlessly(t *testing.
 
 	ctx, err := svc.Run(context.Background(), "builder-integration", nil)
 
-	// Assert: Integration works seamlessly
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.NotNil(t, mocks.Repository)
@@ -552,7 +502,6 @@ func TestHarnessFunctional_MultipleWorkflows_ShareServiceInstance(t *testing.T) 
 	// Demonstrates: Harness supports testing multiple workflows
 	// Validates: Repository can hold multiple workflows
 
-	// Arrange: Two different workflows
 	wf1 := &workflow.Workflow{
 		Name:    "workflow1",
 		Initial: "start",
@@ -581,7 +530,6 @@ func TestHarnessFunctional_MultipleWorkflows_ShareServiceInstance(t *testing.T) 
 		},
 	}
 
-	// Act: Register both workflows in single harness
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("workflow1", wf1).
 		WithWorkflow("workflow2", wf2).
@@ -593,16 +541,11 @@ func TestHarnessFunctional_MultipleWorkflows_ShareServiceInstance(t *testing.T) 
 	ctx1, err1 := svc.Run(context.Background(), "workflow1", nil)
 	ctx2, err2 := svc.Run(context.Background(), "workflow2", nil)
 
-	// Assert: Both workflows execute successfully
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 	assert.Equal(t, workflow.StatusCompleted, ctx1.Status)
 	assert.Equal(t, workflow.StatusCompleted, ctx2.Status)
 }
-
-// =============================================================================
-// Performance - Demonstrating Boilerplate Reduction
-// =============================================================================
 
 func TestHarnessFunctional_BoilerplateReduction_DemonstratesValue(t *testing.T) {
 	// This test documents the BEFORE vs AFTER of using ServiceTestHarness

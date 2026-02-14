@@ -583,10 +583,6 @@ func TestOutputFormat_String(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Plugin Output Tests (T019)
-// =============================================================================
-
 func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
 	buf := new(bytes.Buffer)
 	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
@@ -914,10 +910,6 @@ func TestPluginInfo_JSONOmitsEmptyFields(t *testing.T) {
 	assert.NotContains(t, output, `"version":""`)
 	assert.NotContains(t, output, `"description":""`)
 }
-
-// =============================================================================
-// InputInfo Tests (F035 - Workflow Arguments Help Command)
-// =============================================================================
 
 func TestInputInfo_DescriptionField(t *testing.T) {
 	tests := []struct {

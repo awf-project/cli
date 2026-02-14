@@ -364,7 +364,7 @@ func TestTestInputs(t *testing.T) {
 
 	assert.Equal(t, "John", inputs["name"])
 	assert.Equal(t, 30, inputs["age"])
-	assert.Equal(t, true, inputs["active"])
+	assert.True(t, inputs["active"].(bool))
 }
 
 func TestTestInputs_Empty(t *testing.T) {

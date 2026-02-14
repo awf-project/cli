@@ -23,8 +23,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Execution Core Integration Tests
 // Tests validate that ExecuteConversation, executeStep,
 // IsProblematicMaxIterationPattern, and HandleMaxIterationFailure maintain
 // exact behavioral compatibility while improving maintainability.
@@ -32,7 +30,6 @@ import (
 // Test approach: Since executeStep and other refactored methods are unexported,
 // we test through the public Run() method with workflows that exercise the
 // specific helper paths.
-// =============================================================================
 
 // mockExecutionLogger for integration tests
 type mockExecutionLogger struct {
@@ -66,11 +63,8 @@ func (m *mockExecutionLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
-// =============================================================================
-// Happy Path Tests - executeStep Helpers
 // Tests prepareStepExecution, resolveStepCommand, executeStepCommand,
 // recordStepResult, handleSuccess helpers
-// =============================================================================
 
 func TestExecuteStep_SuccessfulLinearWorkflow_Integration(t *testing.T) {
 	// Given: A simple linear workflow with multiple steps
@@ -118,13 +112,11 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute workflow (exercises all helpers in success path)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "linear-success", nil)
 
-	// Assert: Workflow completes successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -196,13 +188,11 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute workflow with retry
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "retry-workflow", nil)
 
-	// Assert: Eventually succeeds after retry
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep, "should succeed after retry")
@@ -212,10 +202,7 @@ states:
 	assert.Equal(t, workflow.StatusCompleted, retryState.Status)
 }
 
-// =============================================================================
-// Error Handling Tests - executeStep Helpers
 // Tests handleExecutionError and handleNonZeroExit helpers
-// =============================================================================
 
 func TestExecuteStep_NonZeroExit_WithOnFailure_Integration(t *testing.T) {
 	// Given: A step that fails with non-zero exit and has on_failure configured
@@ -262,13 +249,11 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute workflow
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "failure-workflow", nil)
 
-	// Assert: handleNonZeroExit routes to recovery path
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -327,13 +312,11 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute workflow
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "continue-workflow", nil)
 
-	// Assert: Continues to next_step despite failure
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -348,10 +331,6 @@ states:
 	require.True(t, ok)
 	assert.Equal(t, workflow.StatusCompleted, nextState.Status)
 }
-
-// =============================================================================
-// Edge Cases - executeStep Helpers
-// =============================================================================
 
 func TestExecuteStep_ContextCancellationTimeout_Integration(t *testing.T) {
 	// Given: A long-running command with timeout configured
@@ -396,7 +375,6 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -404,7 +382,6 @@ states:
 	execCtx, err := execSvc.Run(ctx, "timeout-workflow", nil)
 	elapsed := time.Since(startTime)
 
-	// Assert: Timeout handled correctly
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Less(t, elapsed, 5*time.Second, "should timeout quickly")
@@ -416,13 +393,10 @@ states:
 	assert.Contains(t, handlerState.Output, "timeout occurred")
 }
 
-// =============================================================================
-// Full Integration Tests - All Helpers Working Together
 //
 // Note: Loop pattern detection helpers (detectLoopPatterns, shouldCheckLoopProblems,
 // isComplexStepType) are tested indirectly through existing loop integration tests
 // in loop_test.go and loop_transitions_test.go which exercise these code paths.
-// =============================================================================
 
 func TestExecuteStep_ComplexWorkflowWithAllHelpers_Integration(t *testing.T) {
 	// Given: A complex workflow with retries, error handling, and multiple transitions
@@ -489,7 +463,6 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute complex workflow (exercises all helpers across different paths)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -498,7 +471,6 @@ states:
 	}
 	execCtx, err := execSvc.Run(ctx, "complex-workflow", inputs)
 
-	// Assert: All steps complete successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -582,13 +554,11 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute parallel workflow
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	execCtx, err := execSvc.Run(ctx, "parallel-error-workflow", nil)
 
-	// Assert: Completes with best_effort strategy
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -603,10 +573,7 @@ states:
 	assert.Equal(t, workflow.StatusFailed, failureState.Status)
 }
 
-// =============================================================================
-// Edge Cases - Interpolation and Variable Resolution
 // Tests resolveStepCommand helper with complex interpolation
-// =============================================================================
 
 func TestExecuteStep_ComplexInterpolation_Integration(t *testing.T) {
 	// Given: Steps that reference inputs, previous outputs, and env vars
@@ -652,7 +619,6 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute with interpolation
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -661,7 +627,6 @@ states:
 	}
 	execCtx, err := execSvc.Run(ctx, "interpolation-workflow", inputs)
 
-	// Assert: Interpolation worked correctly
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -676,10 +641,6 @@ states:
 	assert.Contains(t, step2State.Output, "Previous output was")
 	assert.Contains(t, step2State.Output, "Hello from refactoring")
 }
-
-// =============================================================================
-// Race Condition Tests - Concurrent Step Execution
-// =============================================================================
 
 func TestExecuteStep_ConcurrentWorkflows_NoRaceConditions_Integration(t *testing.T) {
 	// Given: Multiple workflows executed concurrently
@@ -719,7 +680,6 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute 20 concurrent workflows
 	const concurrency = 20
 	var wg sync.WaitGroup
 	errors := make(chan error, concurrency)
@@ -750,16 +710,12 @@ states:
 	wg.Wait()
 	close(errors)
 
-	// Assert: No errors, all executions succeeded
 	for err := range errors {
 		require.NoError(t, err)
 	}
 }
 
-// =============================================================================
-// Boundary Tests - Retry Exhaustion
 // Tests executeStepCommand retry helper with exhaustion
-// =============================================================================
 
 func TestExecuteStep_RetryExhaustion_TransitionsToFailure_Integration(t *testing.T) {
 	// Given: A step that always fails with max retries configured
@@ -804,7 +760,6 @@ states:
 	parallelExec := application.NewParallelExecutor(log)
 	execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-	// Act: Execute with retry exhaustion
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -812,7 +767,6 @@ states:
 	execCtx, err := execSvc.Run(ctx, "retry-exhaustion", nil)
 	duration := time.Since(startTime)
 
-	// Assert: Retries exhausted, workflow completes at error terminal
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "error", execCtx.CurrentStep)
@@ -827,10 +781,6 @@ states:
 	// Note: Don't assert on exact timing as it's unreliable in CI environments
 	_ = duration
 }
-
-// =============================================================================
-// Backward Compatibility - Verify No Regressions
-// =============================================================================
 
 func TestExecuteStep_BackwardCompatibility_ExistingWorkflowsStillWork_Integration(t *testing.T) {
 	// Given: A workflow pattern from before refactoring
@@ -914,13 +864,11 @@ states:
 			parallelExec := application.NewParallelExecutor(log)
 			execSvc := application.NewExecutionService(wfSvc, shellExec, parallelExec, store, log, resolver, nil)
 
-			// Act
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
 			execCtx, err := execSvc.Run(ctx, strings.Split(filepath.Base(workflowPath), ".")[0], nil)
 
-			// Assert: Behavior unchanged
 			require.NoError(t, err)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "should reach expected step")

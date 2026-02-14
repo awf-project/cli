@@ -19,10 +19,6 @@ import (
 	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
 )
 
-// =============================================================================
-// HAPPY PATH TESTS - Valid Manifests
-// =============================================================================
-
 // TestManifestValidation_ValidSimple_Integration tests validation of a minimal valid manifest.
 // Acceptance Criteria: Manifest.Validate() returns nil for valid simple manifests
 func TestManifestValidation_ValidSimple_Integration(t *testing.T) {
@@ -80,10 +76,6 @@ func TestManifestValidation_ValidFull_Integration(t *testing.T) {
 	assert.NotEmpty(t, pluginInfo.Manifest.Author)
 	assert.NotEmpty(t, pluginInfo.Manifest.License)
 }
-
-// =============================================================================
-// ERROR TESTS - Invalid Manifests
-// =============================================================================
 
 // TestManifestValidation_MissingName_Integration tests validation rejection for missing name.
 // Acceptance Criteria: Manifest.Validate() returns descriptive error for empty name
@@ -192,10 +184,6 @@ func TestManifestValidation_BadCapability_Integration(t *testing.T) {
 	assert.Contains(t, validationErr.Error(), "capability", "error should mention invalid capability")
 }
 
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
-
 // TestManifestValidation_EmptyCapabilities_Integration tests validation with empty capabilities list.
 // Acceptance Criteria: Empty capabilities list is valid (plugins without capabilities are allowed)
 func TestManifestValidation_EmptyCapabilities_Integration(t *testing.T) {
@@ -235,10 +223,6 @@ func TestManifestValidation_NilConfigMap_Integration(t *testing.T) {
 	// Then: No error occurs (nil config is valid)
 	assert.NoError(t, err, "nil config map should be valid")
 }
-
-// =============================================================================
-// NAME VALIDATION TESTS
-// =============================================================================
 
 // TestManifestValidation_InvalidNamePattern_Integration tests rejection of names with invalid patterns.
 // Acceptance Criteria: Manifest.Validate() rejects names not matching ^[a-z][a-z0-9-]*$
@@ -340,10 +324,6 @@ func TestManifestValidation_ValidNamePattern_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// CONFIG FIELD VALIDATION TESTS
-// =============================================================================
 
 // TestManifestValidation_InvalidConfigType_Integration tests rejection of invalid config field types.
 // Acceptance Criteria: Manifest.Validate() rejects config fields with invalid types
@@ -508,10 +488,6 @@ func TestManifestValidation_ValidConfigDefaults_Integration(t *testing.T) {
 	assert.NoError(t, err, "valid config defaults should pass validation")
 }
 
-// =============================================================================
-// CAPABILITIES VALIDATION TESTS
-// =============================================================================
-
 // TestManifestValidation_MultipleValidCapabilities_Integration tests validation with multiple valid capabilities.
 // Acceptance Criteria: Manifest.Validate() accepts manifests with multiple valid capabilities
 func TestManifestValidation_MultipleValidCapabilities_Integration(t *testing.T) {
@@ -554,10 +530,6 @@ func TestManifestValidation_DuplicateCapabilities_Integration(t *testing.T) {
 	// Then: No validation error occurs (duplicates are allowed)
 	assert.NoError(t, err, "duplicate capabilities should be valid")
 }
-
-// =============================================================================
-// INTEGRATION WORKFLOW TESTS
-// =============================================================================
 
 // TestManifestValidation_CompleteWorkflow_Integration tests the complete validation workflow.
 // Acceptance Criteria: All validation methods work together correctly

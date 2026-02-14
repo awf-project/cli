@@ -587,10 +587,6 @@ func TestExecutionService_Resume_WithOperationStep(t *testing.T) {
 	assert.Equal(t, "done", ctx.CurrentStep)
 }
 
-// ============================================================================
-// GREEN PHASE TESTS - These tests will FAIL until the stub is implemented
-// ============================================================================
-
 // TestExecutionService_PluginOperation_SuccessfulExecution tests successful
 // operation execution (will fail until implementation is complete).
 func TestExecutionService_PluginOperation_SuccessfulExecution(t *testing.T) {
@@ -864,10 +860,6 @@ func TestExecutionService_PluginOperation_Timeout(t *testing.T) {
 	// For now, we just verify the test runs without panic
 	_ = err
 }
-
-// ============================================================================
-// ERROR HANDLING TESTS - These verify error messages contain helpful context
-// ============================================================================
 
 // TestExecutionService_PluginOperation_ErrorMessages tests that error messages
 // include helpful context.

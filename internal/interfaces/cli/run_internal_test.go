@@ -1034,10 +1034,6 @@ func TestResolvePromptFromPaths_UTF8Content(t *testing.T) {
 	assert.Equal(t, utf8Content, result)
 }
 
-// =============================================================================
-// T006: mergeInputs() tests
-// =============================================================================
-
 // TestMergeInputs tests the mergeInputs() helper that merges config file inputs
 // with CLI flag inputs. CLI inputs always take precedence over config inputs.
 func TestMergeInputs(t *testing.T) {
@@ -1346,10 +1342,6 @@ func TestMergeInputs_ComplexValues(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// T007: loadProjectConfig() tests
-// =============================================================================
-
 // configTestLogger implements ports.Logger for testing loadProjectConfig
 type configTestLogger struct {
 	debugMsgs []string
@@ -1638,10 +1630,6 @@ func TestLoadProjectConfig_LoggerParameter(t *testing.T) {
 	// This test verifies the function signature is correct
 }
 
-// =============================================================================
-// T007: Integration tests for runWorkflow with config loading
-// =============================================================================
-
 // TestRunWorkflow_ConfigIntegration tests that runWorkflow properly integrates
 // with loadProjectConfig and mergeInputs.
 //
@@ -1763,10 +1751,6 @@ func TestRunWorkflow_NoConfigFile_Succeeds(t *testing.T) {
 		t.Log("runWorkflow should proceed normally with empty config inputs")
 	})
 }
-
-// ============================================================================
-// F046: Interactive Mode for Incomplete Command Inputs - Component Tests
-// ============================================================================
 
 // TestHasMissingRequiredInputs tests detection of missing required workflow inputs.
 // Component: run_command_integration

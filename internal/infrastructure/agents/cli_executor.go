@@ -20,15 +20,11 @@ import (
 // claude, gemini, codex, etc.
 type ExecCLIExecutor struct{}
 
-// NewExecCLIExecutor creates a new production CLI executor.
 func NewExecCLIExecutor() *ExecCLIExecutor {
 	return &ExecCLIExecutor{}
 }
 
-// Run executes a binary with given arguments, returning stdout, stderr, and any error.
-// Implements ports.CLIExecutor interface.
 func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error) {
-	// Create command with context for cancellation/timeout support
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Process group management for clean termination
@@ -42,12 +38,10 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	}
 	cmd.WaitDelay = 100 * time.Millisecond
 
-	// Create buffers to capture output
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
-	// Start the command (non-blocking)
 	if startErr := cmd.Start(); startErr != nil {
 		return []byte{}, []byte{}, fmt.Errorf("CLI start failed for '%s': %w", name, startErr)
 	}
@@ -57,21 +51,16 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	defer func() {
 		if cmd.Process != nil {
 			pid := cmd.Process.Pid
-			// First, kill the process group (catches most children)
 			_ = syscall.Kill(-pid, syscall.SIGKILL)
-			// Then, recursively kill any descendants that escaped to their own groups
 			killDescendants(pid)
 		}
 	}()
 
-	// Wait for the main process to complete
 	execErr := cmd.Wait()
 
-	// Return captured output (never nil, use empty slices)
 	stdoutBytes := stdoutBuf.Bytes()
 	stderrBytes := stderrBuf.Bytes()
 
-	// Ensure we never return nil slices
 	if stdoutBytes == nil {
 		stdoutBytes = []byte{}
 	}
@@ -79,12 +68,10 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 		stderrBytes = []byte{}
 	}
 
-	// Handle context cancellation - return context error wrapped
 	if ctx.Err() != nil {
 		return stdoutBytes, stderrBytes, fmt.Errorf("CLI execution cancelled for '%s': %w", name, ctx.Err())
 	}
 
-	// Wrap error with context if execution failed
 	if execErr != nil {
 		return stdoutBytes, stderrBytes, fmt.Errorf("CLI execution failed for '%s': %w", name, execErr)
 	}
@@ -93,23 +80,17 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 }
 
 // killDescendants recursively kills all descendant processes of the given PID.
-// It traverses /proc to find children and grandchildren, killing them with SIGKILL.
 // This handles cases where child processes create their own process groups.
 func killDescendants(pid int) {
-	// Find all children of this PID
 	children := findChildPIDs(pid)
 
-	// Recursively kill descendants first (depth-first)
 	for _, child := range children {
 		killDescendants(child)
 	}
 
-	// Kill this process (ignore errors - process may already be gone)
 	_ = syscall.Kill(pid, syscall.SIGKILL)
 }
 
-// findChildPIDs returns all direct child PIDs of the given parent PID.
-// It reads /proc/*/stat to find processes with matching PPID.
 func findChildPIDs(parentPID int) []int {
 	var children []int
 

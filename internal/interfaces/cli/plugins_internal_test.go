@@ -11,9 +11,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 )
 
-// =============================================================================
 // initPluginSystem Tests (T014)
-// =============================================================================
 
 func TestInitPluginSystem_NoPluginsDirectory(t *testing.T) {
 	// Test graceful degradation when no plugins directory exists
@@ -201,9 +199,7 @@ func TestInitPluginSystem_ServiceMethodsWork(t *testing.T) {
 	result.Cleanup()
 }
 
-// =============================================================================
 // getPluginSearchPaths Tests (T014)
-// =============================================================================
 
 func TestGetPluginSearchPaths_WithOverride(t *testing.T) {
 	cfg := &Config{
@@ -241,9 +237,7 @@ func TestGetPluginSearchPaths_EmptyStringOverride(t *testing.T) {
 	require.NotEmpty(t, paths, "Should return non-empty paths from BuildPluginPaths")
 }
 
-// =============================================================================
 // findFirstExistingDir Tests (T014)
-// =============================================================================
 
 func TestFindFirstExistingDir_FirstExists(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -364,10 +358,6 @@ func TestFindFirstExistingDir_MultipleExisting(t *testing.T) {
 	assert.Equal(t, dir1, result)
 }
 
-// =============================================================================
-// PluginSystemResult Tests (T014)
-// =============================================================================
-
 func TestPluginSystemResult_ServiceNotNil(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &Config{
@@ -399,10 +389,6 @@ func TestPluginSystemResult_CleanupNotNil(t *testing.T) {
 
 	result.Cleanup()
 }
-
-// =============================================================================
-// Integration with run.go Tests (T014)
-// =============================================================================
 
 func TestInitPluginSystem_IntegrationScenario(t *testing.T) {
 	// Simulates the actual usage pattern in runWorkflow
@@ -506,10 +492,6 @@ func TestInitPluginSystem_PluginStatesPersistence(t *testing.T) {
 	result.Cleanup()
 }
 
-// =============================================================================
-// Mock Logger for Tests
-// =============================================================================
-
 type mockLogger struct {
 	debugCalls []string
 	infoCalls  []string
@@ -539,9 +521,7 @@ func (l *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 
 var _ ports.Logger = (*mockLogger)(nil)
 
-// =============================================================================
 // initPluginSystemReadOnly Tests (T019)
-// =============================================================================
 
 func TestInitPluginSystemReadOnly_NoPluginsDirectory(t *testing.T) {
 	tmpDir := t.TempDir()

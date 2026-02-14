@@ -17,10 +17,6 @@ import (
 // Component: T001
 // Feature: C049
 
-// =============================================================================
-// Mock Implementations
-// =============================================================================
-
 // mockStepPresenter is a test implementation of StepPresenter interface
 type mockStepPresenter struct {
 	showHeaderCalled      bool
@@ -164,10 +160,6 @@ func newMockInteractivePrompt() *mockInteractivePrompt {
 	}
 }
 
-// =============================================================================
-// Interface Compliance Tests
-// =============================================================================
-
 func TestStepPresenterInterface(t *testing.T) {
 	// Verify interface compliance
 	var _ ports.StepPresenter = (*mockStepPresenter)(nil)
@@ -193,10 +185,6 @@ func TestInteractivePromptInterface(t *testing.T) {
 	var _ ports.UserInteraction = ports.InteractivePrompt(nil)
 }
 
-// =============================================================================
-// StepPresenter Tests - Happy Path
-// =============================================================================
-
 func TestStepPresenter_ShowHeader_HappyPath(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -211,13 +199,10 @@ func TestStepPresenter_ShowHeader_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStepPresenter()
 
-			// Act
 			presenter.ShowHeader(tt.workflowName)
 
-			// Assert
 			if !presenter.showHeaderCalled {
 				t.Error("ShowHeader should be called")
 			}
@@ -232,7 +217,6 @@ func TestStepPresenter_ShowHeader_HappyPath(t *testing.T) {
 }
 
 func TestStepPresenter_ShowStepDetails_HappyPath(t *testing.T) {
-	// Arrange
 	presenter := newMockStepPresenter()
 	stepInfo := &workflow.InteractiveStepInfo{
 		Name:  "validate-input",
@@ -246,10 +230,8 @@ func TestStepPresenter_ShowStepDetails_HappyPath(t *testing.T) {
 		Transitions: []string{"→ on_success: process", "→ on_failure: error"},
 	}
 
-	// Act
 	presenter.ShowStepDetails(stepInfo)
 
-	// Assert
 	if !presenter.showStepDetailsCalled {
 		t.Error("ShowStepDetails should be called")
 	}
@@ -277,13 +259,10 @@ func TestStepPresenter_ShowExecuting_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStepPresenter()
 
-			// Act
 			presenter.ShowExecuting(tt.stepName)
 
-			// Assert
 			if !presenter.showExecutingCalled {
 				t.Error("ShowExecuting should be called")
 			}
@@ -332,13 +311,10 @@ func TestStepPresenter_ShowStepResult_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStepPresenter()
 
-			// Act
 			presenter.ShowStepResult(tt.state, tt.nextStep)
 
-			// Assert
 			if !presenter.showStepResultCalled {
 				t.Error("ShowStepResult should be called")
 			}
@@ -354,16 +330,13 @@ func TestStepPresenter_ShowStepResult_HappyPath(t *testing.T) {
 
 func TestStepPresenter_MethodSequence(t *testing.T) {
 	// Test typical method call sequence for step lifecycle
-	// Arrange
 	presenter := newMockStepPresenter()
 
-	// Act - typical sequence
 	presenter.ShowHeader("test-workflow")
 	presenter.ShowStepDetails(&workflow.InteractiveStepInfo{Name: "step1"})
 	presenter.ShowExecuting("step1")
 	presenter.ShowStepResult(&workflow.StepState{Status: workflow.StatusCompleted}, "step2")
 
-	// Assert
 	if presenter.callCount != 4 {
 		t.Errorf("expected 4 calls in sequence, got %d", presenter.callCount)
 	}
@@ -373,18 +346,11 @@ func TestStepPresenter_MethodSequence(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// StatusPresenter Tests - Happy Path
-// =============================================================================
-
 func TestStatusPresenter_ShowAborted_HappyPath(t *testing.T) {
-	// Arrange
 	presenter := newMockStatusPresenter()
 
-	// Act
 	presenter.ShowAborted()
 
-	// Assert
 	if !presenter.showAbortedCalled {
 		t.Error("ShowAborted should be called")
 	}
@@ -406,13 +372,10 @@ func TestStatusPresenter_ShowSkipped_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStatusPresenter()
 
-			// Act
 			presenter.ShowSkipped(tt.stepName, tt.nextStep)
 
-			// Assert
 			if !presenter.showSkippedCalled {
 				t.Error("ShowSkipped should be called")
 			}
@@ -438,13 +401,10 @@ func TestStatusPresenter_ShowCompleted_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStatusPresenter()
 
-			// Act
 			presenter.ShowCompleted(tt.status)
 
-			// Assert
 			if !presenter.showCompletedCalled {
 				t.Error("ShowCompleted should be called")
 			}
@@ -467,13 +427,10 @@ func TestStatusPresenter_ShowError_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStatusPresenter()
 
-			// Act
 			presenter.ShowError(tt.err)
 
-			// Assert
 			if !presenter.showErrorCalled {
 				t.Error("ShowError should be called")
 			}
@@ -486,7 +443,6 @@ func TestStatusPresenter_ShowError_HappyPath(t *testing.T) {
 
 func TestStatusPresenter_TerminalStateExclusivity(t *testing.T) {
 	// Test that each terminal state method can be called independently
-	// Arrange
 	tests := []struct {
 		name   string
 		action func(*mockStatusPresenter)
@@ -500,13 +456,10 @@ func TestStatusPresenter_TerminalStateExclusivity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			presenter := newMockStatusPresenter()
 
-			// Act
 			tt.action(presenter)
 
-			// Assert
 			if !tt.check(presenter) {
 				t.Errorf("expected %s to be called", tt.name)
 			}
@@ -516,10 +469,6 @@ func TestStatusPresenter_TerminalStateExclusivity(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// UserInteraction Tests - Happy Path
-// =============================================================================
 
 func TestUserInteraction_PromptAction_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -538,13 +487,10 @@ func TestUserInteraction_PromptAction_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			interaction := newMockUserInteraction()
 			interaction.returnAction = tt.returnAction
 
-			// Act
 			action, err := interaction.PromptAction(tt.hasRetry)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -577,13 +523,10 @@ func TestUserInteraction_EditInput_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			interaction := newMockUserInteraction()
 			interaction.returnInputValue = tt.returnValue
 
-			// Act
 			newValue, err := interaction.EditInput(tt.inputName, tt.currentValue)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -637,13 +580,10 @@ func TestUserInteraction_ShowContext_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			interaction := newMockUserInteraction()
 
-			// Act
 			interaction.ShowContext(tt.context)
 
-			// Assert
 			if !interaction.showContextCalled {
 				t.Error("ShowContext should be called")
 			}
@@ -656,16 +596,13 @@ func TestUserInteraction_ShowContext_HappyPath(t *testing.T) {
 
 func TestUserInteraction_InteractiveLoopPattern(t *testing.T) {
 	// Test typical interactive loop: prompt → action → possibly edit → possibly inspect
-	// Arrange
 	interaction := newMockUserInteraction()
 
-	// Act - simulate interactive loop
 	_, _ = interaction.PromptAction(true)
 	_, _ = interaction.EditInput("name", "old")
 	interaction.ShowContext(&workflow.RuntimeContext{})
 	_, _ = interaction.PromptAction(false)
 
-	// Assert
 	if interaction.callCount != 4 {
 		t.Errorf("expected 4 calls in interactive loop, got %d", interaction.callCount)
 	}
@@ -674,21 +611,14 @@ func TestUserInteraction_InteractiveLoopPattern(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// InteractivePrompt (Composite) Tests - Happy Path
-// =============================================================================
-
 func TestInteractivePrompt_CompositeEmbedding_HappyPath(t *testing.T) {
 	// Test that composite interface can access all embedded interface methods
-	// Arrange
 	prompt := newMockInteractivePrompt()
 
-	// Act - Call methods from all three embedded interfaces
 	prompt.ShowHeader("test-workflow")
 	prompt.ShowAborted()
 	_, _ = prompt.PromptAction(false)
 
-	// Assert
 	if !prompt.showHeaderCalled {
 		t.Error("StepPresenter methods should be accessible")
 	}
@@ -702,12 +632,10 @@ func TestInteractivePrompt_CompositeEmbedding_HappyPath(t *testing.T) {
 
 func TestInteractivePrompt_AllMethodsAccessible(t *testing.T) {
 	// Test that all 11 original methods are accessible through composite
-	// Arrange
 	prompt := newMockInteractivePrompt()
 	stepState := &workflow.StepState{Status: workflow.StatusCompleted}
 	ctx := &workflow.RuntimeContext{}
 
-	// Act - Call all 11 methods
 	prompt.ShowHeader("workflow")
 	prompt.ShowStepDetails(&workflow.InteractiveStepInfo{Name: "step"})
 	prompt.ShowExecuting("step")
@@ -720,7 +648,6 @@ func TestInteractivePrompt_AllMethodsAccessible(t *testing.T) {
 	_, _ = prompt.EditInput("name", "value")
 	prompt.ShowContext(ctx)
 
-	// Assert - All methods should be called
 	if prompt.mockStepPresenter.callCount != 4 {
 		t.Errorf("expected 4 StepPresenter calls, got %d", prompt.mockStepPresenter.callCount)
 	}
@@ -732,18 +659,11 @@ func TestInteractivePrompt_AllMethodsAccessible(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
-
 func TestStepPresenter_NilStepInfo(t *testing.T) {
-	// Arrange
 	presenter := newMockStepPresenter()
 
-	// Act
 	presenter.ShowStepDetails(nil)
 
-	// Assert
 	if !presenter.showStepDetailsCalled {
 		t.Error("ShowStepDetails should handle nil gracefully")
 	}
@@ -753,13 +673,10 @@ func TestStepPresenter_NilStepInfo(t *testing.T) {
 }
 
 func TestStepPresenter_NilStepState(t *testing.T) {
-	// Arrange
 	presenter := newMockStepPresenter()
 
-	// Act
 	presenter.ShowStepResult(nil, "next")
 
-	// Assert
 	if !presenter.showStepResultCalled {
 		t.Error("ShowStepResult should handle nil state gracefully")
 	}
@@ -769,13 +686,10 @@ func TestStepPresenter_NilStepState(t *testing.T) {
 }
 
 func TestStatusPresenter_EmptyStrings(t *testing.T) {
-	// Arrange
 	presenter := newMockStatusPresenter()
 
-	// Act
 	presenter.ShowSkipped("", "")
 
-	// Assert
 	if !presenter.showSkippedCalled {
 		t.Error("ShowSkipped should handle empty strings")
 	}
@@ -785,13 +699,10 @@ func TestStatusPresenter_EmptyStrings(t *testing.T) {
 }
 
 func TestUserInteraction_NilCurrentValue(t *testing.T) {
-	// Arrange
 	interaction := newMockUserInteraction()
 	interaction.returnInputValue = "new-value"
 
-	// Act
 	newValue, err := interaction.EditInput("name", nil)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -805,27 +716,21 @@ func TestUserInteraction_NilCurrentValue(t *testing.T) {
 
 func TestUserInteraction_LargeInputNames(t *testing.T) {
 	// Test handling of very long input names
-	// Arrange
 	interaction := newMockUserInteraction()
 	longName := "this_is_a_very_long_input_name_that_might_appear_in_complex_workflows_with_detailed_configuration"
 
-	// Act
 	_, _ = interaction.EditInput(longName, "value")
 
-	// Assert
 	if interaction.lastInputName != longName {
 		t.Error("should handle long input names correctly")
 	}
 }
 
 func TestStepPresenter_EmptyWorkflowName(t *testing.T) {
-	// Arrange
 	presenter := newMockStepPresenter()
 
-	// Act
 	presenter.ShowHeader("")
 
-	// Assert
 	if !presenter.showHeaderCalled {
 		t.Error("ShowHeader should handle empty workflow name")
 	}
@@ -835,13 +740,10 @@ func TestStepPresenter_EmptyWorkflowName(t *testing.T) {
 }
 
 func TestStepPresenter_EmptyStepName(t *testing.T) {
-	// Arrange
 	presenter := newMockStepPresenter()
 
-	// Act
 	presenter.ShowExecuting("")
 
-	// Assert
 	if !presenter.showExecutingCalled {
 		t.Error("ShowExecuting should handle empty step name")
 	}
@@ -850,20 +752,13 @@ func TestStepPresenter_EmptyStepName(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestUserInteraction_PromptAction_Error(t *testing.T) {
-	// Arrange
 	interaction := newMockUserInteraction()
 	expectedErr := errors.New("user cancelled")
 	interaction.returnActionError = expectedErr
 
-	// Act
 	action, err := interaction.PromptAction(false)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error from PromptAction")
 	}
@@ -876,15 +771,12 @@ func TestUserInteraction_PromptAction_Error(t *testing.T) {
 }
 
 func TestUserInteraction_EditInput_Error(t *testing.T) {
-	// Arrange
 	interaction := newMockUserInteraction()
 	expectedErr := errors.New("invalid input")
 	interaction.returnInputError = expectedErr
 
-	// Act
 	value, err := interaction.EditInput("name", "current")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error from EditInput")
 	}
@@ -898,13 +790,10 @@ func TestUserInteraction_EditInput_Error(t *testing.T) {
 
 func TestUserInteraction_PromptAction_InvalidAction(t *testing.T) {
 	// Test handling of invalid/unknown action values
-	// Arrange
 	interaction := newMockUserInteraction()
 	interaction.returnAction = workflow.InteractiveAction("invalid") // invalid action
 
-	// Act
 	action, err := interaction.PromptAction(false)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -915,13 +804,10 @@ func TestUserInteraction_PromptAction_InvalidAction(t *testing.T) {
 
 func TestUserInteraction_EditInput_TypeMismatch(t *testing.T) {
 	// Test handling when returned value differs from current value type
-	// Arrange
 	interaction := newMockUserInteraction()
 	interaction.returnInputValue = "string-value"
 
-	// Act
 	newValue, err := interaction.EditInput("count", 42) // current is int, return is string
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -929,10 +815,6 @@ func TestUserInteraction_EditInput_TypeMismatch(t *testing.T) {
 		t.Error("should allow type changes through input editing")
 	}
 }
-
-// =============================================================================
-// Interface Segregation Validation Tests
-// =============================================================================
 
 func TestInterfaceSegregation_MethodCounts(t *testing.T) {
 	// Verify that each interface has ≤4 methods as per ISP requirement
@@ -985,10 +867,8 @@ func TestInterfaceSegregation_MethodCounts(t *testing.T) {
 
 func TestInterfaceSegregation_CompositePreservesBackwardCompatibility(t *testing.T) {
 	// Verify that composite interface provides all 11 original methods
-	// Arrange
 	prompt := newMockInteractivePrompt()
 
-	// Act - count accessible methods by calling all of them
 	methodCount := 0
 
 	// StepPresenter methods (4)
@@ -1019,7 +899,6 @@ func TestInterfaceSegregation_CompositePreservesBackwardCompatibility(t *testing
 	prompt.ShowContext(nil)
 	methodCount++
 
-	// Assert
 	if methodCount != 11 {
 		t.Errorf("InteractivePrompt composite should expose 11 methods, found %d", methodCount)
 	}
@@ -1027,17 +906,14 @@ func TestInterfaceSegregation_CompositePreservesBackwardCompatibility(t *testing
 
 func TestInterfaceSegregation_FocusedInterfacesIndependent(t *testing.T) {
 	// Verify that each focused interface can be used independently
-	// Arrange
 	stepPresenter := newMockStepPresenter()
 	statusPresenter := newMockStatusPresenter()
 	userInteraction := newMockUserInteraction()
 
-	// Act - use each interface independently
 	stepPresenter.ShowHeader("test")
 	statusPresenter.ShowAborted()
 	_, _ = userInteraction.PromptAction(false)
 
-	// Assert - each should work without depending on others
 	if !stepPresenter.showHeaderCalled {
 		t.Error("StepPresenter should work independently")
 	}
@@ -1048,10 +924,6 @@ func TestInterfaceSegregation_FocusedInterfacesIndependent(t *testing.T) {
 		t.Error("UserInteraction should work independently")
 	}
 }
-
-// =============================================================================
-// AST-Based Structural Validation (C049 ISP Compliance)
-// =============================================================================
 
 // interfaceInfo holds structural information about an interface declaration.
 type interfaceInfo struct {
@@ -1151,10 +1023,6 @@ func TestC049_TotalMethodsPreserved(t *testing.T) {
 	assert.Equal(t, 11, totalMethods,
 		"total methods across focused interfaces should be 11 (original InteractivePrompt method count)")
 }
-
-// =============================================================================
-// AST Helper Functions
-// =============================================================================
 
 // findInteractiveSourceFile locates the interactive.go source file.
 func findInteractiveSourceFile(t *testing.T) string {

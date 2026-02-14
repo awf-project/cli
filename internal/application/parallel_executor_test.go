@@ -16,10 +16,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Mock StepExecutor for parallel execution tests
-// =============================================================================
-
 type mockStepExecutor struct {
 	results      map[string]*workflow.BranchResult
 	errors       map[string]error
@@ -78,10 +74,6 @@ func (m *mockStepExecutor) ExecuteStep(
 
 // Verify mock implements interface
 var _ ports.StepExecutor = (*mockStepExecutor)(nil)
-
-// =============================================================================
-// ParallelExecutor Tests
-// =============================================================================
 
 // NOTE: Domain type tests (ParallelStrategy, BranchResult, ParallelResult)
 // are in internal/domain/workflow/parallel_test.go
@@ -257,7 +249,7 @@ func TestParallelExecutor_Execute_BestEffortStrategy(t *testing.T) {
 
 	require.NoError(t, err, "best_effort should not return error even with failures")
 	require.NotNil(t, result)
-	assert.Equal(t, 3, len(result.Results), "best_effort should collect all results")
+	assert.Len(t, result.Results, 3)
 	assert.Equal(t, 2, result.SuccessCount)
 	assert.Equal(t, 1, result.FailureCount)
 }
@@ -299,7 +291,7 @@ func TestParallelExecutor_Execute_MaxConcurrent(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, 5, len(result.Results))
+	assert.Len(t, result.Results, 5)
 }
 
 func TestParallelExecutor_Execute_ContextCancellation(t *testing.T) {
@@ -351,7 +343,7 @@ func TestParallelExecutor_Execute_EmptyBranches(t *testing.T) {
 
 	require.NoError(t, err, "empty branches should succeed")
 	require.NotNil(t, result)
-	assert.Equal(t, 0, len(result.Results))
+	assert.Empty(t, result.Results)
 }
 
 func TestParallelExecutor_Execute_BranchResultsAccessible(t *testing.T) {
@@ -398,10 +390,6 @@ func TestParallelExecutor_Execute_BranchResultsAccessible(t *testing.T) {
 	require.True(t, ok, "step_b result should be accessible")
 	assert.Equal(t, "output_b", branchB.Output)
 }
-
-// =============================================================================
-// Single Branch Tests
-// =============================================================================
 
 func TestParallelExecutor_Execute_SingleBranch(t *testing.T) {
 	tests := []struct {
@@ -454,10 +442,6 @@ func TestParallelExecutor_Execute_SingleBranch(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// NonZero ExitCode vs Error Tests
-// =============================================================================
 
 func TestParallelExecutor_Execute_NonZeroExitCodeWithoutError(t *testing.T) {
 	// Tests that non-zero exit codes are treated as failures even without an error
@@ -529,13 +513,9 @@ func TestParallelExecutor_Execute_NonZeroExitCodeWithoutError(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, result.SuccessCount)
 		assert.Equal(t, 1, result.FailureCount)
-		assert.Equal(t, 2, len(result.Results))
+		assert.Len(t, result.Results, 2)
 	})
 }
-
-// =============================================================================
-// Concurrency Control Tests
-// =============================================================================
 
 func TestParallelExecutor_Execute_ConcurrencyLimiting(t *testing.T) {
 	// Use a mock that tracks concurrent execution count
@@ -658,10 +638,6 @@ func TestParallelExecutor_Execute_UnlimitedConcurrency(t *testing.T) {
 	assert.GreaterOrEqual(t, int(maxObservedConcurrent.Load()), branchCount-1,
 		"with unlimited concurrency, all branches should run nearly simultaneously")
 }
-
-// =============================================================================
-// AllSucceed Cancellation Behavior Tests
-// =============================================================================
 
 func TestParallelExecutor_Execute_AllSucceedCancelsOnFirstFailure(t *testing.T) {
 	// First branch fails quickly, others should be cancelled
@@ -832,10 +808,6 @@ func TestParallelExecutor_Execute_BestEffortWaitsForAll(t *testing.T) {
 	assert.Len(t, result.Results, 3)
 }
 
-// =============================================================================
-// Context Cancellation Edge Cases
-// =============================================================================
-
 func TestParallelExecutor_Execute_AlreadyCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel before execution
@@ -894,10 +866,6 @@ func TestParallelExecutor_Execute_ContextDeadlineExceeded(t *testing.T) {
 		"error should be context-related")
 }
 
-// =============================================================================
-// Result Timing Tests
-// =============================================================================
-
 func TestParallelExecutor_Execute_ResultTiming(t *testing.T) {
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch1"] = &workflow.BranchResult{
@@ -936,10 +904,6 @@ func TestParallelExecutor_Execute_ResultTiming(t *testing.T) {
 	assert.True(t, result.CompletedAt.After(result.StartedAt) || result.CompletedAt.Equal(result.StartedAt))
 }
 
-// =============================================================================
-// Default Strategy Tests
-// =============================================================================
-
 func TestParallelExecutor_Execute_DefaultStrategy(t *testing.T) {
 	stepExecutor := newMockStepExecutor()
 	stepExecutor.results["branch1"] = &workflow.BranchResult{Name: "branch1", ExitCode: 0}
@@ -970,10 +934,6 @@ func TestParallelExecutor_Execute_DefaultStrategy(t *testing.T) {
 
 	require.Error(t, err, "default (empty) strategy should behave like all_succeed")
 }
-
-// =============================================================================
-// Helper Types for Advanced Tests
-// =============================================================================
 
 // trackingStepExecutor allows custom execution behavior for testing concurrency
 type trackingStepExecutor struct {

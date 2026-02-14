@@ -13,22 +13,19 @@ const (
 	StatusDisabled    PluginStatus = "disabled"    // Manually disabled by user
 )
 
-// PluginInfo holds runtime state for a loaded plugin.
 type PluginInfo struct {
 	Manifest      *Manifest
 	Status        PluginStatus
-	Path          string // Filesystem path to plugin directory
-	Error         error  // Last error if status is Failed
-	LoadedAt      int64  // Unix timestamp when loaded
-	InitializedAt int64  // Unix timestamp when initialized
+	Path          string
+	Error         error
+	LoadedAt      int64
+	InitializedAt int64
 }
 
-// IsActive returns true if the plugin is running.
 func (p *PluginInfo) IsActive() bool {
 	return p.Status == StatusRunning
 }
 
-// CanLoad returns true if the plugin can be loaded.
 func (p *PluginInfo) CanLoad() bool {
 	return p.Status == StatusDiscovered || p.Status == StatusStopped || p.Status == StatusFailed
 }

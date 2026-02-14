@@ -9,10 +9,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// F050: Standardize Template Field Casing to Uppercase
 // Feature: Validate that state property references use correct uppercase casing
-// =============================================================================
 
 // TestValidateStateRef_LowercaseCasingErrors tests that lowercase state
 // properties are detected and emit errors with uppercase suggestions.

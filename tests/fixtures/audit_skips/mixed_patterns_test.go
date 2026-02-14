@@ -2,9 +2,6 @@ package audit_skips_test
 
 import "testing"
 
-// Test fixture for audit-skips.sh testing
-// Contains multiple different skip patterns
-
 func TestIntegration(t *testing.T) {
 	t.Skip("skipping integration test")
 }

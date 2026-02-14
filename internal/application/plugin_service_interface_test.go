@@ -15,33 +15,24 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// T007: PluginService Interface Dependency Tests
-// =============================================================================
 // Tests verify that PluginService can work with:
 // - Option A (current): PluginStateStore composite interface (RECOMMENDED)
 // - Option B (alternative): Separate PluginStore and PluginConfig interfaces
 //
 // These tests ensure the interface split (from T004) enables future flexibility
 // in service dependencies while maintaining backward compatibility.
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // Option A Tests: Current Implementation (PluginStateStore)
-// -----------------------------------------------------------------------------
 
 func TestPluginService_OptionA_WorksWithCompositeInterface(t *testing.T) {
-	// Arrange: Create service with composite PluginStateStore
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
-	// Act: Create service with composite interface
 	svc := application.NewPluginService(manager, stateStore, logger)
 
-	// Assert: Service should work with both persistence and config operations
 	// Test persistence operations (from PluginStore)
 	err := svc.SaveState(context.Background())
 	require.NoError(t, err)
@@ -86,9 +77,8 @@ func TestPluginService_OptionA_CompositeInterfaceAcceptsNarrower(t *testing.T) {
 	var _ ports.PluginStateStore = composite
 }
 
-// -----------------------------------------------------------------------------
 // Option B Tests: Alternative Implementation (Separate Interfaces)
-// -----------------------------------------------------------------------------
+
 // These tests verify that IF we chose Option B (separate pluginStore and
 // pluginConfig fields), the split interfaces would support this refactoring.
 
@@ -96,7 +86,6 @@ func TestPluginService_OptionB_CanUseSeparateStoreInterface(t *testing.T) {
 	// This test demonstrates that methods needing ONLY persistence
 	// could use ports.PluginStore instead of full PluginStateStore
 
-	// Arrange: Create separate mock for PluginStore
 	store := newMockPluginStore()
 	config := newMockPluginConfig()
 	composite := &mockPluginStateStore{
@@ -107,10 +96,8 @@ func TestPluginService_OptionB_CanUseSeparateStoreInterface(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
-	// Act: Create service (still using composite for now)
 	svc := application.NewPluginService(manager, composite, logger)
 
-	// Assert: Methods that only need persistence should work
 	// Save/Load/ListDisabled only require PluginStore interface
 	err := svc.SaveState(context.Background())
 	require.NoError(t, err)
@@ -130,7 +117,6 @@ func TestPluginService_OptionB_CanUseSeparateConfigInterface(t *testing.T) {
 	// This test demonstrates that methods needing ONLY configuration
 	// could use ports.PluginConfig instead of full PluginStateStore
 
-	// Arrange: Create separate mock for PluginConfig
 	store := newMockPluginStore()
 	config := newMockPluginConfig()
 	composite := &mockPluginStateStore{
@@ -141,10 +127,8 @@ func TestPluginService_OptionB_CanUseSeparateConfigInterface(t *testing.T) {
 	manager := testutil.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
-	// Act: Create service (still using composite for now)
 	svc := application.NewPluginService(manager, composite, logger)
 
-	// Assert: Methods that only need config should work
 	// IsEnabled/SetEnabled/GetConfig/SetConfig only require PluginConfig
 	err := svc.EnablePlugin(context.Background(), "test-plugin")
 	require.NoError(t, err)
@@ -206,9 +190,7 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 	assert.Equal(t, "enabled-plugin", plugins[0].Manifest.Name)
 }
 
-// -----------------------------------------------------------------------------
 // Edge Cases: Nil Dependencies
-// -----------------------------------------------------------------------------
 
 func TestPluginService_OptionA_NilCompositeInterface(t *testing.T) {
 	// Service should handle nil stateStore gracefully
@@ -275,9 +257,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 	assert.Equal(t, "data", state.Config["shared"])
 }
 
-// -----------------------------------------------------------------------------
 // Error Handling: Interface Boundary Conditions
-// -----------------------------------------------------------------------------
 
 func TestPluginService_OptionA_ErrorPropagation(t *testing.T) {
 	// Errors from the composite interface should propagate correctly
@@ -331,15 +311,12 @@ func TestPluginService_OptionB_InterfaceComplianceVerification(t *testing.T) {
 	assert.NotNil(t, configFromComposite)
 }
 
-// -----------------------------------------------------------------------------
 // Happy Path: Current Recommended Implementation
-// -----------------------------------------------------------------------------
 
 func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// This test demonstrates the RECOMMENDED approach (Option A):
 	// Keep current implementation using PluginStateStore composite interface
 
-	// Arrange: Full setup with all components
 	manager := testutil.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
@@ -350,7 +327,6 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// Initially disable plugin-b
 	stateStore.setPluginEnabled("plugin-b", false)
 
-	// Act & Assert: Run through typical plugin service lifecycle
 	svc := application.NewPluginService(manager, stateStore, logger)
 
 	// 1. Load state from storage
@@ -398,9 +374,7 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// provides all needed functionality without requiring field changes
 }
 
-// -----------------------------------------------------------------------------
 // Boundary Conditions: Empty and Missing Data
-// -----------------------------------------------------------------------------
 
 func TestPluginService_T007_EmptyPluginName(t *testing.T) {
 	manager := testutil.NewMockPluginManager()

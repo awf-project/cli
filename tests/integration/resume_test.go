@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Resume Integration Tests (F013)
-// =============================================================================
-
 func TestResumeWorkflow_E2E(t *testing.T) {
 	// Full flow: create workflow, run until interrupt, resume, complete
 

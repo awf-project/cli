@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Component T007 Tests - Multi-Turn Prompt Resolution
-// =============================================================================
 //
 // Component T007: Add unit tests for multi-turn prompt resolution
 // - Verify prompt template interpolation works correctly across turns
@@ -26,12 +23,10 @@ import (
 // 2. Dynamic context variables (states, inputs) update between turns
 // 3. InitialPrompt is used for turn 1, Prompt is used for subsequent turns
 // 4. Resolution errors are handled gracefully
-// =============================================================================
 
 // TestConversationManager_T007_PromptResolution_HappyPath verifies basic
 // prompt resolution across multiple turns with template variables.
 func TestConversationManager_T007_PromptResolution_HappyPath(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false} // Never stop
 	tokenizer := &mockTokenizer{count: 10}
@@ -108,10 +103,8 @@ func TestConversationManager_T007_PromptResolution_HappyPath(t *testing.T) {
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.State.TotalTurns)
@@ -127,7 +120,6 @@ func TestConversationManager_T007_PromptResolution_HappyPath(t *testing.T) {
 // that prompts with {{inputs.var}} resolve correctly when inputs change
 // between turns.
 func TestConversationManager_T007_PromptResolution_WithDynamicInputs(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -200,10 +192,8 @@ func TestConversationManager_T007_PromptResolution_WithDynamicInputs(t *testing.
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.State.TotalTurns)
@@ -217,7 +207,6 @@ func TestConversationManager_T007_PromptResolution_WithDynamicInputs(t *testing.
 // TestConversationManager_T007_PromptResolution_WithStateReferences verifies
 // that prompts can reference previous step states using {{states.step.output}}.
 func TestConversationManager_T007_PromptResolution_WithStateReferences(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -294,10 +283,8 @@ func TestConversationManager_T007_PromptResolution_WithStateReferences(t *testin
 		return buildTestContext(ec.Inputs, ec.States)
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.State.TotalTurns)
@@ -311,7 +298,6 @@ func TestConversationManager_T007_PromptResolution_WithStateReferences(t *testin
 // TestConversationManager_T007_PromptResolution_InitialPromptVsPrompt verifies
 // the distinction between InitialPrompt (turn 1) and Prompt (turns 2+).
 func TestConversationManager_T007_PromptResolution_InitialPromptVsPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -383,10 +369,8 @@ func TestConversationManager_T007_PromptResolution_InitialPromptVsPrompt(t *test
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.State.TotalTurns)
@@ -402,7 +386,6 @@ func TestConversationManager_T007_PromptResolution_InitialPromptVsPrompt(t *test
 // that the execution context is properly updated between turns and prompt
 // resolution reflects these updates.
 func TestConversationManager_T007_PromptResolution_ContextUpdates(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -479,10 +462,8 @@ func TestConversationManager_T007_PromptResolution_ContextUpdates(t *testing.T) 
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.State.TotalTurns)
@@ -497,7 +478,6 @@ func TestConversationManager_T007_PromptResolution_ContextUpdates(t *testing.T) 
 // TestConversationManager_T007_PromptResolution_EmptyTemplate verifies
 // behavior when prompt template is empty or contains only whitespace.
 func TestConversationManager_T007_PromptResolution_EmptyTemplate(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -548,10 +528,8 @@ func TestConversationManager_T007_PromptResolution_EmptyTemplate(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 1, result.State.TotalTurns)
@@ -564,7 +542,6 @@ func TestConversationManager_T007_PromptResolution_EmptyTemplate(t *testing.T) {
 // TestConversationManager_T007_PromptResolution_ResolutionError verifies
 // that errors during prompt resolution are properly propagated.
 func TestConversationManager_T007_PromptResolution_ResolutionError(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -612,19 +589,16 @@ func TestConversationManager_T007_PromptResolution_ResolutionError(t *testing.T)
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
-	assert.Error(t, err, "should propagate resolution error")
+	assert.Error(t, err)
 	assert.ErrorIs(t, err, expectedErr)
-	assert.Nil(t, result, "should not return result on error")
+	assert.Nil(t, result)
 }
 
 // TestConversationManager_T007_PromptResolution_MultipleVariables verifies
 // prompts with multiple template variables resolve correctly.
 func TestConversationManager_T007_PromptResolution_MultipleVariables(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -688,10 +662,8 @@ func TestConversationManager_T007_PromptResolution_MultipleVariables(t *testing.
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 
@@ -703,7 +675,6 @@ func TestConversationManager_T007_PromptResolution_MultipleVariables(t *testing.
 // TestConversationManager_T007_PromptResolution_NestedVariables verifies
 // that nested variable references resolve correctly.
 func TestConversationManager_T007_PromptResolution_NestedVariables(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -770,10 +741,8 @@ func TestConversationManager_T007_PromptResolution_NestedVariables(t *testing.T)
 		return buildTestContext(ec.Inputs, ec.States)
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 
@@ -785,7 +754,6 @@ func TestConversationManager_T007_PromptResolution_NestedVariables(t *testing.T)
 // TestConversationManager_T007_PromptResolution_TurnCountVariable verifies
 // that turn_count variable is available and updates correctly across turns.
 func TestConversationManager_T007_PromptResolution_TurnCountVariable(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -851,10 +819,8 @@ func TestConversationManager_T007_PromptResolution_TurnCountVariable(t *testing.
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	requireNoResolutionError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.State.TotalTurns)
@@ -865,10 +831,6 @@ func TestConversationManager_T007_PromptResolution_TurnCountVariable(t *testing.
 	assertPromptResolved(t, "This is turn 2", receivedPrompts[1], "turn 2 count should be 2")
 	assertPromptResolved(t, "This is turn 3", receivedPrompts[2], "turn 3 count should be 3")
 }
-
-// =============================================================================
-// Test Helpers for Component T007
-// =============================================================================
 
 // mockResolverT007 implements TemplateResolver for T007 testing
 type mockResolverT007 struct {

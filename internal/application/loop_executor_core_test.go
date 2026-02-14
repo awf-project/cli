@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// LoopExecutor Core Tests
-// =============================================================================
 // Source: loop_executor_test.go | Tests: 10 | Component: C014-T009
 //
 // This file contains the core loop executor tests:
@@ -30,10 +27,6 @@ import (
 // - loop_iterations_test.go: Iteration resolution tests
 // - loop_transitions_*.go: State transition tests
 
-// =============================================================================
-// Constructor Tests
-// =============================================================================
-
 func TestNewLoopExecutor(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
@@ -43,10 +36,6 @@ func TestNewLoopExecutor(t *testing.T) {
 
 	assert.NotNil(t, executor)
 }
-
-// =============================================================================
-// LoopResult Tests
-// =============================================================================
 
 func TestLoopResult_Duration(t *testing.T) {
 	result := workflow.NewLoopResult()
@@ -78,12 +67,7 @@ func TestLoopResult_AllSucceeded(t *testing.T) {
 	assert.False(t, result.AllSucceeded())
 }
 
-// =============================================================================
-// StepExecutorFunc Tests
-// =============================================================================
-
 func TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError(t *testing.T) {
-	// Arrange: Create a step executor that returns nextStep
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
 		stepName string,
@@ -93,18 +77,15 @@ func TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError(t *testing.T) {
 		return "target_step", nil
 	}
 
-	// Act: Execute the function
 	ctx := context.Background()
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
 
-	// Assert: Verify both return values
 	assert.NoError(t, err)
 	assert.Equal(t, "target_step", nextStep, "should return nextStep value")
 }
 
 func TestStepExecutorFunc_NoTransition_ReturnsEmptyString(t *testing.T) {
-	// Arrange: Create executor with no transition
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
 		stepName string,
@@ -114,18 +95,15 @@ func TestStepExecutorFunc_NoTransition_ReturnsEmptyString(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	ctx := context.Background()
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
 
-	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, "", nextStep, "should return empty string when no transition")
 }
 
 func TestStepExecutorFunc_ErrorWithoutTransition(t *testing.T) {
-	// Arrange: Create executor that fails
 	expectedErr := errors.New("step execution failed")
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
@@ -136,19 +114,16 @@ func TestStepExecutorFunc_ErrorWithoutTransition(t *testing.T) {
 		return "", expectedErr
 	}
 
-	// Act
 	ctx := context.Background()
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
 
-	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.Equal(t, "", nextStep, "should return empty nextStep on error")
 }
 
 func TestStepExecutorFunc_ErrorWithTransition(t *testing.T) {
-	// Arrange: Executor returns both error and nextStep
 	expectedErr := errors.New("step failed but has on_failure transition")
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
@@ -159,19 +134,16 @@ func TestStepExecutorFunc_ErrorWithTransition(t *testing.T) {
 		return "error_handler_step", expectedErr
 	}
 
-	// Act
 	ctx := context.Background()
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
 
-	// Assert: Both values should be returned
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.Equal(t, "error_handler_step", nextStep, "should return nextStep even on error")
 }
 
 func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -187,18 +159,15 @@ func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
 		return "next_step", nil
 	}
 
-	// Act
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "test_step", intCtx)
 
-	// Assert
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, "", nextStep, "Should return empty nextStep on cancellation")
 }
 
 func TestStepExecutorFunc_NilInterpolationContext(t *testing.T) {
-	// Arrange
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
 		stepName string,
@@ -211,18 +180,15 @@ func TestStepExecutorFunc_NilInterpolationContext(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	ctx := context.Background()
 	nextStep, err := stepExecutor(ctx, "test_step", nil)
 
-	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nil")
 	assert.Equal(t, "", nextStep)
 }
 
 func TestStepExecutorFunc_EmptyStepName(t *testing.T) {
-	// Arrange
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
 		stepName string,
@@ -234,12 +200,10 @@ func TestStepExecutorFunc_EmptyStepName(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	ctx := context.Background()
 	intCtx := interpolation.NewContext()
 	nextStep, err := stepExecutor(ctx, "", intCtx)
 
-	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "empty")
 	assert.Equal(t, "", nextStep)

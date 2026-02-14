@@ -16,10 +16,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// InteractiveExecutor Tests (F020)
-// =============================================================================
-
 // mockInteractivePrompt simulates user interactions for testing.
 type mockInteractivePrompt struct {
 	actions        []workflow.InteractiveAction
@@ -444,9 +440,6 @@ func TestInteractiveExecutor_Run_ParallelStep(t *testing.T) {
 	assert.True(t, prompt.completeCalled)
 }
 
-// =============================================================================
-// InteractiveExecutor Setter Tests (C027 - T002)
-// =============================================================================
 //
 // This section implements comprehensive tests for InteractiveExecutor setter methods
 // as part of Feature C027 (Application Layer Test Coverage Improvement).
@@ -462,7 +455,6 @@ func TestInteractiveExecutor_Run_ParallelStep(t *testing.T) {
 //
 // These tests verify that setters correctly store dependencies without side effects,
 // ensuring proper dependency injection for workflow execution.
-// =============================================================================
 
 // TestInteractiveExecutor_SetTemplateService_Valid verifies that SetTemplateService
 // correctly stores a valid TemplateService instance.
@@ -471,7 +463,6 @@ func TestInteractiveExecutor_Run_ParallelStep(t *testing.T) {
 //
 // Verification: Setter accepts and stores the service, workflow execution proceeds normally.
 func TestInteractiveExecutor_SetTemplateService_Valid(t *testing.T) {
-	// Arrange: Create simple workflow without template references
 	repo := newMockRepository()
 	repo.workflows["simple"] = &workflow.Workflow{
 		Name:    "simple",
@@ -496,10 +487,8 @@ func TestInteractiveExecutor_SetTemplateService_Valid(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Set template service
 	exec.SetTemplateService(templateSvc)
 
-	// Assert: Execute workflow - should complete without errors
 	ctx, err := exec.Run(context.Background(), "simple", nil)
 
 	require.NoError(t, err)
@@ -515,7 +504,6 @@ func TestInteractiveExecutor_SetTemplateService_Valid(t *testing.T) {
 // Verification: Executes a workflow without template references to confirm
 // nil template service doesn't cause issues.
 func TestInteractiveExecutor_SetTemplateService_Nil(t *testing.T) {
-	// Arrange: Create simple workflow without templates
 	repo := newMockRepository()
 	repo.workflows["simple"] = &workflow.Workflow{
 		Name:    "simple",
@@ -536,10 +524,8 @@ func TestInteractiveExecutor_SetTemplateService_Nil(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Set template service to nil
 	exec.SetTemplateService(nil)
 
-	// Assert: Should execute without panicking
 	ctx, err := exec.Run(context.Background(), "simple", nil)
 
 	require.NoError(t, err)
@@ -554,7 +540,6 @@ func TestInteractiveExecutor_SetTemplateService_Nil(t *testing.T) {
 //
 // Verification: Multiple calls should each replace the previous value without error.
 func TestInteractiveExecutor_SetTemplateService_Replacement(t *testing.T) {
-	// Arrange
 	repo := newMockRepository()
 	repo.workflows["test"] = &workflow.Workflow{
 		Name:    "test",
@@ -582,13 +567,10 @@ func TestInteractiveExecutor_SetTemplateService_Replacement(t *testing.T) {
 	templateRepo2 := testutil.NewMockTemplateRepository()
 	templateSvc2 := application.NewTemplateService(templateRepo2, &mockLogger{})
 
-	// Act: Set first template service
 	exec.SetTemplateService(templateSvc1)
 
-	// Act: Replace with second template service
 	exec.SetTemplateService(templateSvc2)
 
-	// Assert: Should execute without issues
 	ctx, err := exec.Run(context.Background(), "test", nil)
 
 	require.NoError(t, err)
@@ -603,7 +585,6 @@ func TestInteractiveExecutor_SetTemplateService_Replacement(t *testing.T) {
 //
 // Verification: Output should be written to the configured writers during command execution.
 func TestInteractiveExecutor_SetOutputWriters_ValidWriters(t *testing.T) {
-	// Arrange: Create buffers to capture output
 	var stdoutBuf, stderrBuf strings.Builder
 
 	// Create workflow with command that produces output
@@ -635,10 +616,8 @@ func TestInteractiveExecutor_SetOutputWriters_ValidWriters(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Set output writers
 	exec.SetOutputWriters(&stdoutBuf, &stderrBuf)
 
-	// Assert: Execute workflow
 	ctx, err := exec.Run(context.Background(), "output", nil)
 
 	require.NoError(t, err)
@@ -655,7 +634,6 @@ func TestInteractiveExecutor_SetOutputWriters_ValidWriters(t *testing.T) {
 //
 // Verification: Should execute without panicking when writers are nil.
 func TestInteractiveExecutor_SetOutputWriters_NilWriters(t *testing.T) {
-	// Arrange
 	repo := newMockRepository()
 	repo.workflows["simple"] = &workflow.Workflow{
 		Name:    "simple",
@@ -676,10 +654,8 @@ func TestInteractiveExecutor_SetOutputWriters_NilWriters(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Set both writers to nil
 	exec.SetOutputWriters(nil, nil)
 
-	// Assert: Should execute without panicking
 	ctx, err := exec.Run(context.Background(), "simple", nil)
 
 	require.NoError(t, err)
@@ -716,7 +692,6 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := newMockRepository()
 			repo.workflows["partial"] = &workflow.Workflow{
 				Name:    "partial",
@@ -737,10 +712,8 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 				newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 			)
 
-			// Act: Set partial writers
 			exec.SetOutputWriters(tt.stdoutWriter, tt.stderrWriter)
 
-			// Assert: Should execute without errors
 			ctx, err := exec.Run(context.Background(), "partial", nil)
 
 			require.NoError(t, err, tt.description)
@@ -750,9 +723,6 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// InteractiveExecutor Loop Function Tests (C027 - T008)
-// =============================================================================
 //
 // This section implements test stubs for InteractiveExecutor loop execution functions
 // as part of Feature C027 (Application Layer Test Coverage Improvement).
@@ -767,7 +737,6 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 //
 // These tests verify correct loop execution semantics including iteration, condition
 // evaluation, context propagation, and proper data structure conversion.
-// =============================================================================
 
 // TestInteractiveExecutor_executeLoopStep_ForEach verifies that executeLoopStep
 // correctly executes for_each loops over collections.
@@ -777,7 +746,6 @@ func TestInteractiveExecutor_SetOutputWriters_PartialWriters(t *testing.T) {
 // Verification: Each item should be processed, loop.item and loop.index should be
 // available in the loop body execution context.
 func TestInteractiveExecutor_executeLoopStep_ForEach(t *testing.T) {
-	// Arrange: Create workflow with for_each loop
 	repo := newMockRepository()
 	repo.workflows["foreach"] = &workflow.Workflow{
 		Name:    "foreach",
@@ -817,10 +785,8 @@ func TestInteractiveExecutor_executeLoopStep_ForEach(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute for_each loop
 	ctx, err := exec.Run(context.Background(), "foreach", nil)
 
-	// Assert: Loop should complete successfully
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -844,7 +810,6 @@ func TestInteractiveExecutor_executeLoopStep_ForEach(t *testing.T) {
 //
 // Verification: Loop should execute while condition is true, stop when false.
 func TestInteractiveExecutor_executeLoopStep_While(t *testing.T) {
-	// Arrange: Create workflow with while loop using max_iterations
 	repo := newMockRepository()
 	repo.workflows["while"] = &workflow.Workflow{
 		Name:    "while",
@@ -884,10 +849,8 @@ func TestInteractiveExecutor_executeLoopStep_While(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute while loop
 	ctx, err := exec.Run(context.Background(), "while", nil)
 
-	// Assert: Loop should complete when max_iterations reached
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -907,7 +870,6 @@ func TestInteractiveExecutor_executeLoopStep_While(t *testing.T) {
 // Verification: Inner loop should execute for each iteration of outer loop,
 // loop.parent should provide access to outer loop context.
 func TestInteractiveExecutor_executeLoopStep_NestedLoop(t *testing.T) {
-	// Arrange: Create workflow with nested for_each loops
 	repo := newMockRepository()
 	repo.workflows["nested"] = &workflow.Workflow{
 		Name:    "nested",
@@ -959,10 +921,8 @@ func TestInteractiveExecutor_executeLoopStep_NestedLoop(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute nested loop
 	ctx, err := exec.Run(context.Background(), "nested", nil)
 
-	// Assert: Nested loops should complete successfully
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -986,7 +946,6 @@ func TestInteractiveExecutor_executeLoopStep_NestedLoop(t *testing.T) {
 //
 // Verification: Loop should terminate on error, error should be propagated correctly.
 func TestInteractiveExecutor_executeLoopStep_LoopBodyError(t *testing.T) {
-	// Arrange: Create workflow with loop that references an invalid step
 	// This will cause an error in the loop body execution
 	repo := newMockRepository()
 
@@ -1021,10 +980,8 @@ func TestInteractiveExecutor_executeLoopStep_LoopBodyError(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute loop with failing body
 	ctx, err := exec.Run(context.Background(), "failloop", nil)
 
-	// Assert: Loop should handle error and transition to on_failure
 	require.NoError(t, err) // Workflow completes via error handler
 	require.NotNil(t, ctx)
 
@@ -1042,7 +999,6 @@ func TestInteractiveExecutor_executeLoopStep_LoopBodyError(t *testing.T) {
 //
 // Verification: Loop should stop when timeout is reached, appropriate error returned.
 func TestInteractiveExecutor_executeLoopStep_Timeout(t *testing.T) {
-	// Arrange: Create workflow with loop that has timeout
 	repo := newMockRepository()
 	repo.workflows["timeout"] = &workflow.Workflow{
 		Name:    "timeout",
@@ -1082,11 +1038,9 @@ func TestInteractiveExecutor_executeLoopStep_Timeout(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute loop with timeout (context will be cancelled)
 	// Note: Mock executor doesn't simulate actual delays, so we test that timeout context is set
 	ctx, _ := exec.Run(context.Background(), "timeout", nil)
 
-	// Assert: Should complete (timeout may not trigger with mock, but structure is tested)
 	// Real timeout behavior tested in integration tests
 	require.NotNil(t, ctx)
 
@@ -1102,7 +1056,6 @@ func TestInteractiveExecutor_executeLoopStep_Timeout(t *testing.T) {
 //
 // Verification: After loop completes, should transition to step specified in on_complete.
 func TestInteractiveExecutor_executeLoopStep_OnCompleteTransition(t *testing.T) {
-	// Arrange: Create workflow with loop that has on_complete transition
 	repo := newMockRepository()
 	repo.workflows["transition"] = &workflow.Workflow{
 		Name:    "transition",
@@ -1148,10 +1101,8 @@ func TestInteractiveExecutor_executeLoopStep_OnCompleteTransition(t *testing.T) 
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute loop with on_complete transition
 	ctx, err := exec.Run(context.Background(), "transition", nil)
 
-	// Assert: Should complete and execute summary step
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1216,10 +1167,8 @@ func TestInteractiveExecutor_convertLoopData_SingleLevel(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute workflow with loop
 	ctx, err := exec.Run(context.Background(), "loop", nil)
 
-	// Assert: Loop data conversion should work (indicated by successful execution)
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1238,7 +1187,6 @@ func TestInteractiveExecutor_convertLoopData_SingleLevel(t *testing.T) {
 //
 // Verification: Parent chain should be preserved, each level correctly converted.
 func TestInteractiveExecutor_convertLoopData_Nested(t *testing.T) {
-	// Arrange: Create workflow with nested loops (outer and inner)
 	repo := newMockRepository()
 	repo.workflows["nested"] = &workflow.Workflow{
 		Name:    "nested",
@@ -1290,10 +1238,8 @@ func TestInteractiveExecutor_convertLoopData_Nested(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute nested loop workflow
 	ctx, err := exec.Run(context.Background(), "nested", nil)
 
-	// Assert: Nested loop data conversion should work
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1320,7 +1266,6 @@ func TestInteractiveExecutor_convertLoopData_Nil(t *testing.T) {
 	// Since the function is package-private, we test indirectly through execution
 	// A workflow without loops should not cause issues
 
-	// Arrange: Create workflow without loops
 	repo := newMockRepository()
 	repo.workflows["noloop"] = &workflow.Workflow{
 		Name:    "noloop",
@@ -1341,10 +1286,8 @@ func TestInteractiveExecutor_convertLoopData_Nil(t *testing.T) {
 		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
 	)
 
-	// Act: Execute non-loop workflow (nil loop data scenario)
 	ctx, err := exec.Run(context.Background(), "noloop", nil)
 
-	// Assert: Should handle nil loop data without panicking
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

@@ -20,10 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Happy Path Tests - Documentation file structure validation
-// =============================================================================
-
 // TestInfrastructureDocumentation_AllPackages uses table-driven tests for all infrastructure packages
 func TestInfrastructureDocumentation_AllPackages(t *testing.T) {
 	repoRoot := getRepoRoot(t)
@@ -173,10 +169,6 @@ func TestInfrastructureDocumentation_AllPackages(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Edge Cases Tests
-// =============================================================================
-
 // TestInfrastructureDocumentation_NoMultiplePackageComments validates one package comment rule
 func TestInfrastructureDocumentation_NoMultiplePackageComments(t *testing.T) {
 	repoRoot := getRepoRoot(t)
@@ -239,10 +231,6 @@ func TestInfrastructureDocumentation_NoMultiplePackageComments(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestInfrastructureDocumentation_MalformedFile validates parser error handling
 func TestInfrastructureDocumentation_MalformedFile(t *testing.T) {
 	// Create temporary malformed file
@@ -288,10 +276,6 @@ func TestInfrastructureDocumentation_NoPackageComment(t *testing.T) {
 	// Package comment should be nil
 	assert.Nil(t, f.Doc, "file without package comment should have nil Doc field")
 }
-
-// =============================================================================
-// Documentation Quality Tests
-// =============================================================================
 
 // TestInfrastructureDocumentation_ContentQuality validates documentation completeness
 func TestInfrastructureDocumentation_ContentQuality(t *testing.T) {
@@ -447,9 +431,6 @@ func TestInfrastructureDocumentation_FormattingConventions(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
 // Helper functions shared with c045_package_documentation_test.go:
 // - getRepoRoot(t *testing.T) string - defined in test_helpers_test.go
 // - fileHasPackageComment(filePath string) (bool, error) - defined in c045_package_documentation_test.go

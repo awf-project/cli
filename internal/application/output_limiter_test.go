@@ -45,7 +45,6 @@ func TestNewOutputLimiter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			limiter := application.NewOutputLimiter(tt.config)
 			require.NotNil(t, limiter)
-			assert.Equal(t, tt.config, limiter.Config())
 		})
 	}
 }
@@ -499,17 +498,4 @@ func TestOutputLimiter_Truncate_Unicode(t *testing.T) {
 	// Should not corrupt UTF-8 by cutting in the middle of a multibyte char
 	assert.True(t, len(result) <= 50, "should respect byte limit")
 	// Note: Proper implementation should ensure valid UTF-8
-}
-
-// TestOutputLimiter_Config tests retrieving the configuration.
-func TestOutputLimiter_Config(t *testing.T) {
-	config := workflow.OutputLimits{
-		MaxSize:           2048,
-		StreamLargeOutput: true,
-		TempDir:           "/tmp/test",
-	}
-	limiter := application.NewOutputLimiter(config)
-
-	retrieved := limiter.Config()
-	assert.Equal(t, config, retrieved)
 }

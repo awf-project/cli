@@ -18,9 +18,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// F047 - Component T010: loop_json_child.yaml Fixture Tests
-// =============================================================================
 // US3: Integration validation for loop item JSON serialization
 // Tests that the child workflow correctly validates JSON vs Go map format
 

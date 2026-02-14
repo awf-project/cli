@@ -11,9 +11,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Component T002 Tests - Replace Duplicate Initialization Code
-// =============================================================================
 //
 // Component T002: Replace duplicate initialization code with
 // `initializeConversationState()` call in conversation_manager.go:219-234
@@ -22,13 +19,11 @@ import (
 // 1. The refactoring was done correctly
 // 2. The helper method call replaces the duplicate code
 // 3. All functionality is preserved after refactoring
-// =============================================================================
 
 // TestConversationManager_T002_HappyPath_InitializationUsingHelper verifies
 // that ExecuteConversation successfully initializes conversation state using
 // the initializeConversationState helper method instead of inline code.
 func TestConversationManager_T002_HappyPath_InitializationUsingHelper(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -78,10 +73,8 @@ func TestConversationManager_T002_HappyPath_InitializationUsingHelper(t *testing
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.NotNil(t, result.State)
@@ -91,7 +84,6 @@ func TestConversationManager_T002_HappyPath_InitializationUsingHelper(t *testing
 // TestConversationManager_T002_HappyPath_SystemPromptInitialization verifies
 // that the system prompt is correctly initialized using the helper method.
 func TestConversationManager_T002_HappyPath_SystemPromptInitialization(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -143,10 +135,8 @@ func TestConversationManager_T002_HappyPath_SystemPromptInitialization(t *testin
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	// Verify system prompt is in first turn
@@ -158,7 +148,6 @@ func TestConversationManager_T002_HappyPath_SystemPromptInitialization(t *testin
 // TestConversationManager_T002_HappyPath_InitialPromptPriority verifies
 // that InitialPrompt takes precedence over Prompt when both are set.
 func TestConversationManager_T002_HappyPath_InitialPromptPriority(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -207,10 +196,8 @@ func TestConversationManager_T002_HappyPath_InitialPromptPriority(t *testing.T) 
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	// Verify the initial prompt was used (evidenced by the output)
@@ -220,7 +207,6 @@ func TestConversationManager_T002_HappyPath_InitialPromptPriority(t *testing.T) 
 // TestConversationManager_T002_EdgeCase_EmptySystemPrompt verifies that
 // conversations work correctly when system prompt is empty.
 func TestConversationManager_T002_EdgeCase_EmptySystemPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -269,10 +255,8 @@ func TestConversationManager_T002_EdgeCase_EmptySystemPrompt(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	// Verify no system prompt in turns (first turn should be user)
@@ -284,7 +268,6 @@ func TestConversationManager_T002_EdgeCase_EmptySystemPrompt(t *testing.T) {
 // TestConversationManager_T002_EdgeCase_OnlyPromptNoInitialPrompt verifies
 // that Prompt is used as fallback when InitialPrompt is not set.
 func TestConversationManager_T002_EdgeCase_OnlyPromptNoInitialPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -332,10 +315,8 @@ func TestConversationManager_T002_EdgeCase_OnlyPromptNoInitialPrompt(t *testing.
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "response", result.Output)
@@ -344,7 +325,6 @@ func TestConversationManager_T002_EdgeCase_OnlyPromptNoInitialPrompt(t *testing.
 // TestConversationManager_T002_EdgeCase_TemplateInterpolationInPrompt verifies
 // that template interpolation works correctly in the initialization phase.
 func TestConversationManager_T002_EdgeCase_TemplateInterpolationInPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 
@@ -398,10 +378,8 @@ func TestConversationManager_T002_EdgeCase_TemplateInterpolationInPrompt(t *test
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "Resolved answer", result.Output)
@@ -410,7 +388,6 @@ func TestConversationManager_T002_EdgeCase_TemplateInterpolationInPrompt(t *test
 // TestConversationManager_T002_ErrorHandling_TemplateResolutionFails verifies
 // that initialization errors from template resolution are properly handled.
 func TestConversationManager_T002_ErrorHandling_TemplateResolutionFails(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 
@@ -450,10 +427,8 @@ func TestConversationManager_T002_ErrorHandling_TemplateResolutionFails(t *testi
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "variable")
 	assert.Nil(t, result)
@@ -462,7 +437,6 @@ func TestConversationManager_T002_ErrorHandling_TemplateResolutionFails(t *testi
 // TestConversationManager_T002_ErrorHandling_NilBuildContext verifies that
 // a nil buildContext function causes a panic (as expected in Go for nil function calls).
 func TestConversationManager_T002_ErrorHandling_NilBuildContext(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -493,7 +467,6 @@ func TestConversationManager_T002_ErrorHandling_NilBuildContext(t *testing.T) {
 	execCtx := workflow.NewExecutionContext("test-wf", "test")
 	execCtx.States = make(map[string]workflow.StepState)
 
-	// Act - passing nil buildContext should panic
 	// This tests that the initialization properly requires buildContext
 	defer func() {
 		r := recover()
@@ -508,7 +481,6 @@ func TestConversationManager_T002_ErrorHandling_NilBuildContext(t *testing.T) {
 // TestConversationManager_T002_Integration_MultipleFields verifies that all
 // initialization fields work together correctly after refactoring.
 func TestConversationManager_T002_Integration_MultipleFields(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -562,10 +534,8 @@ func TestConversationManager_T002_Integration_MultipleFields(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	// Verify system prompt is in first turn

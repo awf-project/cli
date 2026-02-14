@@ -18,11 +18,8 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 )
 
-// =============================================================================
-// Feature: C005 - Cognitive Complexity Refactoring Functional Tests
 // Tests validate that refactored code maintains exact behavioral compatibility
 // with pre-refactoring implementation while improving maintainability.
-// =============================================================================
 
 // mockLogger for integration tests
 type mockC005Logger struct {
@@ -48,10 +45,6 @@ func (m *mockC005Logger) Error(msg string, fields ...any) {
 func (m *mockC005Logger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
-
-// =============================================================================
-// Happy Path Tests - Normal operation scenarios
-// =============================================================================
 
 func TestTemplateService_ExpandWorkflow_WithNestedTemplates_Integration(t *testing.T) {
 	// Feature: C005 - Component T001 (expandStep helpers)
@@ -121,16 +114,13 @@ states:
 		},
 	}
 
-	// Act: Expand workflow with nested templates
 	err := templateSvc.ExpandWorkflow(context.Background(), wf)
 
-	// Assert: Expansion succeeds
 	require.NoError(t, err, "nested template expansion should succeed")
 	assert.NotNil(t, wf.Steps["start"])
 	assert.Nil(t, wf.Steps["start"].TemplateRef, "template reference should be resolved")
 	assert.Contains(t, wf.Steps["start"].Command, "Hello from nested template")
 
-	// Assert: No errors logged during expansion
 	log.mu.Lock()
 	errorCount := len(log.errors)
 	log.mu.Unlock()
@@ -190,18 +180,12 @@ states:
 		},
 	}
 
-	// Act: Expand workflow
 	err := templateSvc.ExpandWorkflow(context.Background(), wf)
 
-	// Assert: Parameters substituted correctly
 	require.NoError(t, err)
 	assert.Contains(t, wf.Steps["start"].Command, "[DEBUG]", "prefix parameter should be substituted")
 	assert.Contains(t, wf.Steps["start"].Command, "Test message", "message parameter should be substituted")
 }
-
-// =============================================================================
-// Edge Cases - Boundary conditions and special scenarios
-// =============================================================================
 
 func TestTemplateService_ExpandWorkflow_CircularReference_DetectsError_Integration(t *testing.T) {
 	// Feature: C005 - Component T001 (validateAndLoadTemplate circular detection)
@@ -261,19 +245,13 @@ states:
 		},
 	}
 
-	// Act: Attempt to expand circular templates
 	err := templateSvc.ExpandWorkflow(context.Background(), wf)
 
-	// Assert: Circular reference error is returned
 	require.Error(t, err)
 	var circErr *workflow.CircularTemplateError
 	assert.ErrorAs(t, err, &circErr, "should return CircularTemplateError")
 	assert.True(t, strings.Contains(err.Error(), "circular"), "error message should mention circular reference")
 }
-
-// =============================================================================
-// Error Handling - Invalid inputs and failure scenarios
-// =============================================================================
 
 func TestTemplateService_ExpandWorkflow_MissingTemplate_ReturnsError_Integration(t *testing.T) {
 	// Feature: C005 - Component T001 (validateAndLoadTemplate error path)
@@ -303,10 +281,8 @@ func TestTemplateService_ExpandWorkflow_MissingTemplate_ReturnsError_Integration
 		},
 	}
 
-	// Act: Attempt to expand with missing template
 	err := templateSvc.ExpandWorkflow(context.Background(), wf)
 
-	// Assert: TemplateNotFoundError is returned
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "nonexistent-template"), "error should mention missing template name")
 }
@@ -346,18 +322,12 @@ states:
 	tmpl, err := templateRepo.GetTemplate(context.Background(), "my-template")
 	require.NoError(t, err)
 
-	// Act: Select primary step
 	step, err := templateSvc.SelectPrimaryStep(tmpl)
 
-	// Assert: Step matching template name is selected
 	require.NoError(t, err)
 	assert.NotNil(t, step)
 	assert.Equal(t, "my-template", step.Name, "should select step with name matching template")
 }
-
-// =============================================================================
-// Integration - Components working together
-// =============================================================================
 
 func TestTemplateService_FullExpansion_DeepNesting_ThreeLevels_Integration(t *testing.T) {
 	// Feature: C005 - All T001 components working together
@@ -445,25 +415,18 @@ states:
 		},
 	}
 
-	// Act: Expand workflow with three levels of nesting
 	err := templateSvc.ExpandWorkflow(context.Background(), wf)
 
-	// Assert: All levels expanded successfully
 	require.NoError(t, err, "three-level expansion should succeed")
 	assert.Nil(t, wf.Steps["start"].TemplateRef, "all templates should be expanded")
 	assert.Contains(t, wf.Steps["start"].Command, "Level 0:", "should reach leaf level")
 	assert.Contains(t, wf.Steps["start"].Command, "Deep nesting test", "parameter should propagate through all levels")
 
-	// Assert: No errors logged
 	log.mu.Lock()
 	errorCount := len(log.errors)
 	log.mu.Unlock()
 	assert.Equal(t, 0, errorCount, "no errors during deep expansion")
 }
-
-// =============================================================================
-// Feature: C005 - T002/T003 Executor Integration Tests (Behavioral Compatibility)
-// =============================================================================
 
 func TestExecutorIntegration_HandleSuccess_WorkflowCompletion(t *testing.T) {
 	// Feature: C005 - Component T002 (HandleSuccess result handler behavioral validation)
@@ -499,7 +462,6 @@ states:
 `
 	require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-	// Act: Load workflow using real repository
 	log := &mockC005Logger{}
 	repo := repository.NewYAMLRepository(tempDir)
 
@@ -515,7 +477,6 @@ states:
 	assert.Equal(t, "step2", wf.Steps["step1"].OnSuccess)
 	assert.Equal(t, "done", wf.Steps["step2"].OnSuccess)
 
-	// Assert: No errors logged during validation
 	log.mu.Lock()
 	errorCount := len(log.errors)
 	log.mu.Unlock()
@@ -555,14 +516,12 @@ states:
 `
 	require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-	// Act: Load and validate workflow
 	log := &mockC005Logger{}
 	repo := repository.NewYAMLRepository(tempDir)
 
 	wf, err := repo.Load(context.Background(), "error-handling-workflow")
 	require.NoError(t, err)
 
-	// Assert: Error handling paths configured correctly
 	assert.True(t, wf.Steps["risky_step"].ContinueOnError, "continue_on_error should be enabled")
 	assert.Equal(t, "recovery_step", wf.Steps["risky_step"].OnFailure, "on_failure path configured")
 	assert.NotNil(t, wf.Steps["recovery_step"], "recovery step exists")
@@ -650,14 +609,12 @@ states:
 `
 			require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-			// Act: Load and validate
 			log := &mockC005Logger{}
 			repo := repository.NewYAMLRepository(tempDir)
 
 			wf, err := repo.Load(context.Background(), "parallel-workflow")
 			require.NoError(t, err)
 
-			// Assert: Parallel configuration correct
 			parallelStep := wf.Steps["parallel_step"]
 			assert.NotNil(t, parallelStep)
 			assert.Equal(t, workflow.StepTypeParallel, parallelStep.Type)
@@ -680,10 +637,6 @@ states:
 		})
 	}
 }
-
-// =============================================================================
-// Integration - All C005 Components Working Together
-// =============================================================================
 
 func TestFullIntegration_TemplateExpansion_ParallelExecution(t *testing.T) {
 	// Feature: C005 - All components (T001 + T002 + T003) working together
@@ -765,7 +718,6 @@ states:
 	workflowPath := filepath.Join(workflowsDir, "complex-integration-workflow.yaml")
 	require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-	// Act: Load workflow and expand templates (tests T001 helpers)
 	log := &mockC005Logger{}
 	workflowRepo := repository.NewYAMLRepository(workflowsDir)
 	templateRepo := repository.NewYAMLTemplateRepository([]string{templatesDir})
@@ -778,20 +730,17 @@ states:
 	err = templateSvc.ExpandWorkflow(context.Background(), wf)
 	require.NoError(t, err, "T001 helpers should expand templates successfully")
 
-	// Assert: Template expansion worked correctly (T001)
 	assert.Nil(t, wf.Steps["task1"].TemplateRef, "template1 should be expanded")
 	assert.Nil(t, wf.Steps["task2"].TemplateRef, "template2 should be expanded")
 	assert.Contains(t, wf.Steps["task1"].Command, "Task 1: Processing data", "parameters substituted correctly")
 	assert.Contains(t, wf.Steps["task2"].Command, "Task 2: Validating results", "parameters substituted correctly")
 
-	// Assert: Parallel configuration preserved (T003 will use RunBranchWithSemaphore & CheckBranchSuccess)
 	parallelStep := wf.Steps["parallel_tasks"]
 	assert.NotNil(t, parallelStep)
 	assert.Equal(t, workflow.StepTypeParallel, parallelStep.Type)
 	assert.Equal(t, "all_succeed", parallelStep.Strategy)
 	assert.Len(t, parallelStep.Branches, 2)
 
-	// Assert: Transition paths configured (T002 will use HandleSuccess, HandleNonZeroExit, HandleExecutionError)
 	assert.Equal(t, "parallel_tasks", wf.Steps["setup"].OnSuccess)
 	assert.Equal(t, "done", wf.Steps["parallel_tasks"].OnSuccess)
 	assert.Equal(t, "error", wf.Steps["parallel_tasks"].OnFailure)

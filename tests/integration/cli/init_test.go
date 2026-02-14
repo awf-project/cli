@@ -297,7 +297,7 @@ func TestInitCommand_HelpText_GlobalFlag(t *testing.T) {
 			name: "--global flag has proper description in flags",
 			checkFunc: func(t *testing.T, initCmd *cobra.Command) {
 				globalFlag := initCmd.Flags().Lookup("global")
-				require.NotNil(t, globalFlag, "--global flag should exist")
+				require.NotNil(t, globalFlag)
 
 				// Flag description should be meaningful
 				assert.NotEmpty(t, globalFlag.Usage,
@@ -356,8 +356,8 @@ func TestInitCommand_HelpText_GlobalFlag_Completeness(t *testing.T) {
 		// Short description should be brief and not mention --global
 		// (details go in long description)
 		shortDesc := initCmd.Short
-		assert.NotEmpty(t, shortDesc, "should have short description")
-		assert.Less(t, len(shortDesc), 80, "short description should be concise")
+		assert.NotEmpty(t, shortDesc)
+		assert.Less(t, len(shortDesc), 80)
 	})
 
 	t.Run("long description has proper structure", func(t *testing.T) {
@@ -399,10 +399,10 @@ func TestInitCommand_HelpText_GlobalFlag_Completeness(t *testing.T) {
 	t.Run("flags are properly registered", func(t *testing.T) {
 		// Both --force and --global flags should be registered
 		forceFlag := initCmd.Flags().Lookup("force")
-		require.NotNil(t, forceFlag, "--force flag should be registered")
+		require.NotNil(t, forceFlag)
 
 		globalFlag := initCmd.Flags().Lookup("global")
-		require.NotNil(t, globalFlag, "--global flag should be registered")
+		require.NotNil(t, globalFlag)
 
 		// Both should be boolean flags
 		assert.Equal(t, "bool", forceFlag.Value.Type())
@@ -434,13 +434,13 @@ func TestInitCommand_GlobalFlag(t *testing.T) {
 		// Verify global prompts directory was created
 		globalPromptsDir := filepath.Join(tmpDir, "awf", "prompts")
 		info, statErr := os.Stat(globalPromptsDir)
-		require.NoError(t, statErr, "global prompts directory should be created at $XDG_CONFIG_HOME/awf/prompts")
+		require.NoError(t, statErr)
 		assert.True(t, info.IsDir())
 
 		// Verify example prompt was created
 		examplePrompt := filepath.Join(globalPromptsDir, "example.md")
 		_, statErr = os.Stat(examplePrompt)
-		require.NoError(t, statErr, "example prompt should be created in global directory")
+		require.NoError(t, statErr)
 	})
 
 	t.Run("--global flag is recognized by init command", func(t *testing.T) {
@@ -450,7 +450,7 @@ func TestInitCommand_GlobalFlag(t *testing.T) {
 
 		// Check that --global flag is defined
 		globalFlag := initCmd.Flags().Lookup("global")
-		require.NotNil(t, globalFlag, "--global flag should be defined on init command")
+		require.NotNil(t, globalFlag)
 		assert.Equal(t, "bool", globalFlag.Value.Type())
 	})
 }
@@ -1193,6 +1193,6 @@ func TestInitCommand_GlobalFlag_ExamplePromptPermissions(t *testing.T) {
 
 	// On Unix, check that file is readable by owner and group
 	mode := info.Mode().Perm()
-	assert.True(t, mode&0o400 != 0, "file should be readable by owner")
-	assert.True(t, mode&0o200 != 0, "file should be writable by owner")
+	assert.True(t, mode&0o400 != 0)
+	assert.True(t, mode&0o200 != 0)
 }

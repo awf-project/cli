@@ -10,7 +10,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// WorkflowService orchestrates workflow operations.
 type WorkflowService struct {
 	repo      ports.WorkflowRepository
 	store     ports.StateStore
@@ -19,7 +18,6 @@ type WorkflowService struct {
 	validator ports.ExpressionValidator
 }
 
-// NewWorkflowService creates a new workflow service with injected dependencies.
 func NewWorkflowService(
 	repo ports.WorkflowRepository,
 	store ports.StateStore,
@@ -36,7 +34,6 @@ func NewWorkflowService(
 	}
 }
 
-// ListWorkflows returns all available workflow names.
 func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
 	workflows, err := s.repo.List(ctx)
 	if err != nil {
@@ -45,7 +42,6 @@ func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
 	return workflows, nil
 }
 
-// GetWorkflow retrieves a workflow by name.
 func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workflow.Workflow, error) {
 	wf, err := s.repo.Load(ctx, name)
 	if err != nil {
@@ -54,14 +50,12 @@ func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workfl
 	return wf, nil
 }
 
-// ValidateWorkflow validates a workflow definition.
 func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) error {
 	wf, err := s.repo.Load(ctx, name)
 	if err != nil {
 		return fmt.Errorf("load workflow %s: %w", name, err)
 	}
 	if err := wf.Validate(s.validator.Compile); err != nil {
-		// Convert domain StateReferenceError to StructuredError
 		var stateRefErr *workflow.StateReferenceError
 		if errors.As(err, &stateRefErr) {
 			availableAny := make([]any, len(stateRefErr.AvailableStates))
@@ -85,7 +79,6 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	return nil
 }
 
-// WorkflowExists checks if a workflow exists.
 func (s *WorkflowService) WorkflowExists(ctx context.Context, name string) (bool, error) {
 	exists, err := s.repo.Exists(ctx, name)
 	if err != nil {

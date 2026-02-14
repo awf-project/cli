@@ -11,10 +11,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
 func newSimpleEchoTemplate() *workflow.Template {
 	return &workflow.Template{
 		Name: "simple-echo",
@@ -82,10 +78,6 @@ func newWorkflowWithTemplateRef(templateName string, params map[string]any) *wor
 	}
 }
 
-// =============================================================================
-// NewTemplateService Tests
-// =============================================================================
-
 func TestNewTemplateService(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
@@ -93,10 +85,6 @@ func TestNewTemplateService(t *testing.T) {
 	svc := application.NewTemplateService(repo, logger)
 	require.NotNil(t, svc)
 }
-
-// =============================================================================
-// ExpandWorkflow Tests - Success Cases
-// =============================================================================
 
 func TestTemplateService_ExpandWorkflow_Simple(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
@@ -357,10 +345,6 @@ func TestTemplateService_ExpandWorkflow_InheritsTemplateDir(t *testing.T) {
 	assert.Equal(t, "/template/dir", wf.Steps["step"].Dir)
 }
 
-// =============================================================================
-// ExpandWorkflow Tests - Error Cases
-// =============================================================================
-
 func TestTemplateService_ExpandWorkflow_TemplateNotFound(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
@@ -511,10 +495,6 @@ func TestTemplateService_ExpandWorkflow_SelfReference(t *testing.T) {
 	require.ErrorAs(t, err, &circularErr)
 }
 
-// =============================================================================
-// ValidateTemplateRef Tests
-// =============================================================================
-
 func TestTemplateService_ValidateTemplateRef_Valid(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
 	tmpl := newSimpleEchoTemplate()
@@ -615,10 +595,6 @@ func TestTemplateService_ValidateTemplateRef_ExtraParams(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// =============================================================================
-// Parameter Substitution Tests
-// =============================================================================
-
 func TestTemplateService_ParameterSubstitution(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -705,10 +681,6 @@ func TestTemplateService_ParameterSubstitution(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Template Inheritance Tests
-// =============================================================================
 
 func TestTemplateService_ExpandWorkflow_InheritsRetry(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
@@ -891,10 +863,6 @@ func TestTemplateService_ExpandWorkflow_StepTimeoutOverridesTemplate(t *testing.
 	assert.Equal(t, 60, wf.Steps["step"].Timeout)
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
 func TestTemplateService_ExpandWorkflow_NilWorkflow(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
 	logger := testutil.NewMockLogger()
@@ -951,10 +919,6 @@ func TestTemplateService_ExpandWorkflow_NilTemplateRef(t *testing.T) {
 	assert.Equal(t, "echo test", wf.Steps["step"].Command)
 }
 
-// =============================================================================
-// Context Cancellation Tests
-// =============================================================================
-
 func TestTemplateService_ExpandWorkflow_ContextCanceled(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()
 	tmpl := newSimpleEchoTemplate()
@@ -974,10 +938,6 @@ func TestTemplateService_ExpandWorkflow_ContextCanceled(t *testing.T) {
 	// Just verify it doesn't panic
 	_ = svc.ExpandWorkflow(ctx, wf)
 }
-
-// =============================================================================
-// Interface Compliance
-// =============================================================================
 
 func TestTemplateService_ImplementsExpectedBehavior(t *testing.T) {
 	repo := testutil.NewMockTemplateRepository()

@@ -11,9 +11,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Loop Executor Refactoring Tests - Component T007 (C042)
-// =============================================================================
 //
 // These tests verify the refactored LoopExecutor implementation that uses
 // ports.ExpressionEvaluator interface instead of direct expr-lang dependency.
@@ -27,12 +24,7 @@ import (
 // - C042: Fix DIP Violations in Application Layer
 // - Component T007: Refactor LoopExecutor to use ports.ExpressionEvaluator
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestLoopExecutor_ResolveMaxIterations_DelegatesArithmeticToEvaluator(t *testing.T) {
-	// Arrange: Create executor with mock evaluator
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -49,16 +41,13 @@ func TestLoopExecutor_ResolveMaxIterations_DelegatesArithmeticToEvaluator(t *tes
 	ctx.Inputs["total"] = "20"
 	ctx.Inputs["batch"] = "4"
 
-	// Act: Resolve max iterations with arithmetic expression
 	result, err := exec.ResolveMaxIterations("{{inputs.total / inputs.batch}}", ctx)
 
-	// Assert: Evaluator was called and result is correct
 	require.NoError(t, err)
 	assert.Equal(t, 5, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_DirectIntegerParsing(t *testing.T) {
-	// Arrange: Expression resolves to a plain integer (no arithmetic)
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -70,16 +59,13 @@ func TestLoopExecutor_ResolveMaxIterations_DirectIntegerParsing(t *testing.T) {
 	ctx := interpolation.NewContext()
 	ctx.Inputs["limit"] = "42"
 
-	// Act: Resolve with direct integer
 	result, err := exec.ResolveMaxIterations("{{inputs.limit}}", ctx)
 
-	// Assert: Direct parsing succeeds, evaluator not needed
 	require.NoError(t, err)
 	assert.Equal(t, 42, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_WhitespaceTrimming(t *testing.T) {
-	// Arrange: Resolver returns value with whitespace (common with command output)
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -91,16 +77,13 @@ func TestLoopExecutor_ResolveMaxIterations_WhitespaceTrimming(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act: Resolve with whitespace
 	result, err := exec.ResolveMaxIterations("{{steps.count.output}}", ctx)
 
-	// Assert: Whitespace trimmed correctly
 	require.NoError(t, err)
 	assert.Equal(t, 10, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ComplexArithmetic(t *testing.T) {
-	// Arrange: Complex expression with multiple operators
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -113,20 +96,13 @@ func TestLoopExecutor_ResolveMaxIterations_ComplexArithmetic(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{(inputs.a + inputs.b) * inputs.c}}", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 20, result)
 }
 
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
-
 func TestLoopExecutor_ResolveMaxIterations_MinimumValue(t *testing.T) {
-	// Arrange: Test minimum allowed value (1)
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -137,16 +113,13 @@ func TestLoopExecutor_ResolveMaxIterations_MinimumValue(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.min}}", ctx)
 
-	// Assert: Minimum value accepted
 	require.NoError(t, err)
 	assert.Equal(t, 1, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_MaximumValue(t *testing.T) {
-	// Arrange: Test maximum allowed value (10,000)
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -157,16 +130,13 @@ func TestLoopExecutor_ResolveMaxIterations_MaximumValue(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.max}}", ctx)
 
-	// Assert: Maximum value accepted
 	require.NoError(t, err)
 	assert.Equal(t, 10000, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithAddition(t *testing.T) {
-	// Arrange: Addition operator
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -178,16 +148,13 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithAddition(t *testing.T) 
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.a + inputs.b}}", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 8, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithSubtraction(t *testing.T) {
-	// Arrange: Subtraction operator
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -199,16 +166,13 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithSubtraction(t *testing.
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.total - inputs.offset}}", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 7, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithMultiplication(t *testing.T) {
-	// Arrange: Multiplication operator
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -220,16 +184,13 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithMultiplication(t *testi
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.pages * inputs.items}}", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 15, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithDivision(t *testing.T) {
-	// Arrange: Division operator
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -241,20 +202,13 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithDivision(t *testing.T) 
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.total / inputs.divisor}}", ctx)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 4, result)
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestLoopExecutor_ResolveMaxIterations_EmptyExpression(t *testing.T) {
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -263,16 +217,13 @@ func TestLoopExecutor_ResolveMaxIterations_EmptyExpression(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act: Empty expression
 	_, err := exec.ResolveMaxIterations("", ctx)
 
-	// Assert: Error on empty expression
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ResolverError(t *testing.T) {
-	// Arrange: Resolver fails
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -283,16 +234,13 @@ func TestLoopExecutor_ResolveMaxIterations_ResolverError(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.missing}}", ctx)
 
-	// Assert: Resolver error propagated
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve max_iterations expression")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_EvaluatorError(t *testing.T) {
-	// Arrange: Evaluator fails on arithmetic expression
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -305,17 +253,14 @@ func TestLoopExecutor_ResolveMaxIterations_EvaluatorError(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.total / inputs.zero}}", ctx)
 
-	// Assert: Evaluator error propagated
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "evaluation failed")
 	assert.Contains(t, err.Error(), "division by zero")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_InvalidInteger(t *testing.T) {
-	// Arrange: Resolved value is not a valid integer
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -326,16 +271,13 @@ func TestLoopExecutor_ResolveMaxIterations_InvalidInteger(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.invalid}}", ctx)
 
-	// Assert: Invalid integer error
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ZeroValue(t *testing.T) {
-	// Arrange: Evaluator returns zero
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -347,16 +289,13 @@ func TestLoopExecutor_ResolveMaxIterations_ZeroValue(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.total - inputs.total}}", ctx)
 
-	// Assert: Zero value rejected
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must be at least 1")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_NegativeValue(t *testing.T) {
-	// Arrange: Evaluator returns negative value
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -368,16 +307,13 @@ func TestLoopExecutor_ResolveMaxIterations_NegativeValue(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.a - inputs.b}}", ctx)
 
-	// Assert: Negative value rejected
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must be at least 1")
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ExceedsMaximum(t *testing.T) {
-	// Arrange: Evaluator returns value > 100,000
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -389,20 +325,13 @@ func TestLoopExecutor_ResolveMaxIterations_ExceedsMaximum(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.huge * inputs.multiplier}}", ctx)
 
-	// Assert: Exceeds maximum error
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exceeds maximum allowed limit")
 }
 
-// =============================================================================
-// Interface Delegation Tests
-// =============================================================================
-
 func TestLoopExecutor_EvaluateArithmeticExpression_DelegatesToEvaluatorPort(t *testing.T) {
-	// Arrange: Verify that arithmetic evaluation delegates to the port
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -421,17 +350,14 @@ func TestLoopExecutor_EvaluateArithmeticExpression_DelegatesToEvaluatorPort(t *t
 
 	ctx := interpolation.NewContext()
 
-	// Act
 	result, err := exec.ResolveMaxIterations("{{inputs.expr}}", ctx)
 
-	// Assert: Evaluator port was called
 	require.NoError(t, err)
 	assert.Equal(t, 5, result)
 	assert.True(t, called, "EvaluateInt should have been called on the port")
 }
 
 func TestLoopExecutor_EvaluateArithmeticExpression_ReceivesEmptyContext(t *testing.T) {
-	// Arrange: Verify evaluator receives empty context for arithmetic
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -450,10 +376,8 @@ func TestLoopExecutor_EvaluateArithmeticExpression_ReceivesEmptyContext(t *testi
 	ctx := interpolation.NewContext()
 	ctx.Inputs["foo"] = "bar" // Add data to verify it's NOT passed to evaluator
 
-	// Act
 	_, err := exec.ResolveMaxIterations("{{inputs.expr}}", ctx)
 
-	// Assert: Evaluator received empty context
 	require.NoError(t, err)
 	require.NotNil(t, capturedCtx)
 	assert.Empty(t, capturedCtx.Inputs, "Arithmetic evaluation should use empty context")
@@ -469,7 +393,6 @@ func TestLoopExecutor_NoDirectExprLangDependency(t *testing.T) {
 	// 2. Architecture tests (C042 compliance test)
 	// 3. Compilation success (if interface not used, code won't compile)
 
-	// Arrange: Use mock evaluator (proves we're using the port)
 	logger := &mockLogger{}
 	evaluator := testutil.NewMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -481,17 +404,11 @@ func TestLoopExecutor_NoDirectExprLangDependency(t *testing.T) {
 
 	ctx := interpolation.NewContext()
 
-	// Act: Execute through port interface
 	result, err := exec.ResolveMaxIterations("{{expr}}", ctx)
 
-	// Assert: Success proves port delegation works
 	require.NoError(t, err)
 	assert.Equal(t, 42, result)
 }
-
-// =============================================================================
-// Table-Driven Test Suite
-// =============================================================================
 
 func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) {
 	tests := []struct {
@@ -606,7 +523,6 @@ func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			logger := &mockLogger{}
 			evaluator := testutil.NewMockExpressionEvaluator()
 			resolver := newConfigurableMockResolver()
@@ -626,10 +542,8 @@ func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) 
 			exec := application.NewLoopExecutor(logger, evaluator, resolver)
 			ctx := interpolation.NewContext()
 
-			// Act
 			result, err := exec.ResolveMaxIterations(tt.expression, ctx)
 
-			// Assert
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedError)
