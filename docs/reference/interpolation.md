@@ -98,7 +98,7 @@ transitions:
 
 #### Response (Operation Outputs)
 
-Operation steps (e.g., `github.get_issue`) return structured data accessible via `Response`:
+Operation steps (e.g., `github.get_issue`, `http.request`) return structured data accessible via `Response`:
 
 ```yaml
 {{.states.step_name.Response.title}}       # Parsed field from operation result
@@ -131,6 +131,15 @@ states:
   error:
     type: terminal
     status: failure
+```
+
+**HTTP operation outputs** follow the same pattern:
+
+```yaml
+{{.states.step_name.Response.status_code}}       # HTTP status (200, 404, etc.)
+{{.states.step_name.Response.body}}              # Response body (truncated at 1MB)
+{{.states.step_name.Response.headers.Content-Type}}  # Response header value
+{{.states.step_name.Response.body_truncated}}    # true if body was truncated
 ```
 
 See [Workflow Syntax - Operation State](../user-guide/workflow-syntax.md#operation-state) for the full list of available operations and their output fields.

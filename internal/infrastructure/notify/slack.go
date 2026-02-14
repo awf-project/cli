@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/vanoix/awf/pkg/httputil"
 )
 
 var slackBackendCounter uint64
@@ -19,8 +22,8 @@ type slackBackend struct {
 	// webhookURL is the Slack incoming webhook URL
 	webhookURL string
 
-	// sender handles HTTP POST requests with timeout and context support
-	sender *httpSender
+	// client handles HTTP POST requests with timeout and context support
+	client *httputil.Client
 
 	// id uniquely identifies this backend instance for testing purposes.
 	// Without this field, Go would optimize empty structs to share the same memory location.
@@ -39,7 +42,7 @@ func newSlackBackend(webhookURL string) (*slackBackend, error) {
 
 	return &slackBackend{
 		webhookURL: trimmed,
-		sender:     newHTTPSender(),
+		client:     httputil.NewClient(httputil.WithTimeout(10 * time.Second)),
 		id:         atomic.AddUint64(&slackBackendCounter, 1),
 	}, nil
 }
@@ -84,26 +87,32 @@ func (s *slackBackend) Send(ctx context.Context, payload NotificationPayload) (*
 	}
 
 	// Send HTTP POST request
-	statusCode, response, err := s.sender.PostJSON(ctx, s.webhookURL, body)
+	// Set Content-Type header for JSON
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	// Use unlimited body size (0) for Slack responses (typically small)
+	resp, err := s.client.Post(ctx, s.webhookURL, headers, string(body), 0)
 	if err != nil {
 		// Network errors (unreachable, timeout, context cancellation)
 		return nil, fmt.Errorf("failed to send Slack notification: %w", err)
 	}
 
 	// Check for HTTP errors
-	if statusCode < 200 || statusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &BackendResult{
 			Backend:    "slack",
-			StatusCode: statusCode,
-			Response:   response,
+			StatusCode: resp.StatusCode,
+			Response:   resp.Body,
 		}, errors.New("slack webhook returned non-2xx status code")
 	}
 
 	// Success
 	return &BackendResult{
 		Backend:    "slack",
-		StatusCode: statusCode,
-		Response:   response,
+		StatusCode: resp.StatusCode,
+		Response:   resp.Body,
 	}, nil
 }
 

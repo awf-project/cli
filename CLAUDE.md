@@ -225,13 +225,23 @@ Domain layer packages must restrict dependencies via go-arch-lint rules; domain/
 
 Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
 
+Use pkg pattern for cross-layer HTTP utilities (pkg/httputil) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
+
+Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
+
 ## Common Pitfalls
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
 
+Never duplicate HTTP client logic across notification backends; extract to pkg/httputil with HTTPDoer interface for testability and shared timeout/header handling
+
+Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
+
+Use HTTPDoer interface in pkg/httputil tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
 
 ## Review Standards
 

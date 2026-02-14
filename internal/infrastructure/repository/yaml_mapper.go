@@ -385,9 +385,22 @@ func mapCallWorkflowFlat(y *yamlStep) *workflow.CallWorkflowConfig {
 	if y.Workflow == "" {
 		return nil
 	}
+
+	// Convert CallInputs (map[string]any) to map[string]string for CallWorkflowConfig
+	inputs := make(map[string]string, len(y.CallInputs))
+	for k, v := range y.CallInputs {
+		if s, ok := v.(string); ok {
+			inputs[k] = s
+		} else {
+			// Non-string values should not appear in call_workflow inputs (only string templates)
+			// This is a YAML validation error, but we'll convert to string for robustness
+			inputs[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
 	return &workflow.CallWorkflowConfig{
 		Workflow: y.Workflow,
-		Inputs:   y.CallInputs,
+		Inputs:   inputs,
 		Outputs:  y.CallOutputs,
 		// Timeout is handled separately via step.Timeout
 	}

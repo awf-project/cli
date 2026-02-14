@@ -226,6 +226,13 @@ linters:
         linters:
           - revive
 
+      # Internal infrastructure packages use directory names matching stdlib (http, github)
+      # This is intentional and scoped to internal packages only
+      - path: internal/infrastructure/http/
+        text: var-naming
+        linters:
+          - revive
+
       # Struct initialization in tests often has "unused" writes
       # Shadow vars in tests are common and acceptable
       # Error handling patterns in tests are simpler

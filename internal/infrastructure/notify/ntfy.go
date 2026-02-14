@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/vanoix/awf/pkg/httputil"
 )
 
 var ntfyBackendCounter uint64
@@ -20,8 +21,8 @@ type ntfyBackend struct {
 	// baseURL is the ntfy server URL (e.g., "https://ntfy.sh")
 	baseURL string
 
-	// sender handles HTTP POST requests with timeout and context support
-	sender *httpSender
+	// client handles HTTP POST requests with timeout and context support
+	client *httputil.Client
 
 	// id uniquely identifies this backend instance for testing purposes.
 	// Without this field, Go would optimize empty structs to share the same memory location.
@@ -40,7 +41,7 @@ func newNtfyBackend(baseURL string) (*ntfyBackend, error) {
 
 	return &ntfyBackend{
 		baseURL: trimmed,
-		sender:  newHTTPSender(),
+		client:  httputil.NewClient(httputil.WithTimeout(10 * time.Second)),
 		id:      atomic.AddUint64(&ntfyBackendCounter, 1),
 	}, nil
 }
@@ -98,36 +99,17 @@ func (n *ntfyBackend) Send(ctx context.Context, payload NotificationPayload) (*B
 		priority = "default"
 	}
 
-	// Create request body (ntfy expects plain text message body)
-	body := []byte(payload.Message)
-
-	// Create HTTP request to set custom headers
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(body)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ntfy request: %w", err)
+	// Set ntfy-specific headers
+	headers := map[string]string{
+		"Title":    title,
+		"Priority": priority,
 	}
 
-	// Set ntfy-specific headers
-	req.Header.Set("Title", title)
-	req.Header.Set("Priority", priority)
-
-	// Execute request using sender's client
-	resp, err := n.sender.client.Do(req)
+	// Use unlimited body size (0) for ntfy responses (typically small)
+	resp, err := n.client.Post(ctx, url, headers, payload.Message, 0)
 	if err != nil {
 		// Network errors (unreachable, timeout, etc.)
 		return nil, fmt.Errorf("failed to send ntfy notification: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	responseData, readErr := io.ReadAll(resp.Body)
-	responseStr := string(responseData)
-	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-		return &BackendResult{
-			Backend:    "ntfy",
-			StatusCode: resp.StatusCode,
-			Response:   "",
-		}, fmt.Errorf("failed to read ntfy response: %w", readErr)
 	}
 
 	// Check for HTTP errors
@@ -135,7 +117,7 @@ func (n *ntfyBackend) Send(ctx context.Context, payload NotificationPayload) (*B
 		return &BackendResult{
 			Backend:    "ntfy",
 			StatusCode: resp.StatusCode,
-			Response:   responseStr,
+			Response:   resp.Body,
 		}, errors.New("ntfy server returned non-2xx status code")
 	}
 
@@ -143,6 +125,6 @@ func (n *ntfyBackend) Send(ctx context.Context, payload NotificationPayload) (*B
 	return &BackendResult{
 		Backend:    "ntfy",
 		StatusCode: resp.StatusCode,
-		Response:   responseStr,
+		Response:   resp.Body,
 	}, nil
 }

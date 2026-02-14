@@ -301,6 +301,66 @@ states:
     status: failure
 ```
 
+## HTTP API Integration
+
+Fetch data from a REST API and process the response:
+
+```yaml
+name: api-integration
+version: "1.0.0"
+
+inputs:
+  - name: api_token
+    type: string
+    required: true
+
+states:
+  initial: fetch_users
+
+  fetch_users:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+      url: "https://api.example.com/users"
+      headers:
+        Authorization: "Bearer {{.inputs.api_token}}"
+        Accept: "application/json"
+      timeout: 10
+    on_success: create_report
+    on_failure: error
+
+  create_report:
+    type: operation
+    operation: http.request
+    inputs:
+      method: POST
+      url: "https://api.example.com/reports"
+      headers:
+        Content-Type: "application/json"
+        Authorization: "Bearer {{.inputs.api_token}}"
+      body: '{"source": "users", "data": {{.states.fetch_users.Response.body}}}'
+      timeout: 15
+      retryable_status_codes: [429, 502, 503]
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      initial_delay_ms: 1000
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+
+  error:
+    type: terminal
+    status: failure
+```
+
+```bash
+awf run api-integration --input api_token=$API_TOKEN
+```
+
 ## Nested Loops
 
 Loops within loops with parent context:

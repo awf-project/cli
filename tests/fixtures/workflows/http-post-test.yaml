@@ -1,0 +1,35 @@
+# Feature: F058 - HTTP Operation Integration Test Fixture
+# This workflow tests HTTP POST operation with JSON body
+
+name: http-post-test
+version: "1.0"
+
+inputs:
+  - name: url
+    type: string
+    required: true
+  - name: method
+    type: string
+    required: true
+  - name: body
+    type: string
+    required: false
+
+states:
+  initial: create_resource
+
+  create_resource:
+    type: operation
+    operation: http.request
+    inputs:
+      method: "{{inputs.method}}"
+      url: "{{inputs.url}}"
+      headers:
+        Content-Type: "application/json"
+      body: "{{inputs.body}}"
+    on_success: success
+    on_failure: success
+
+  success:
+    type: terminal
+    status: success

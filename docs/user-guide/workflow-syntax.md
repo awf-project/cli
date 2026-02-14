@@ -61,7 +61,7 @@ states:
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
 | `while` | Repeat until condition is false |
-| `operation` | Execute a declarative plugin operation (e.g., GitHub, notifications) |
+| `operation` | Execute a declarative plugin operation (e.g., HTTP, GitHub, notifications) |
 | `call_workflow` | Invoke another workflow as a sub-workflow |
 
 ---
@@ -541,6 +541,113 @@ notify_webhook:
     backend: webhook
     webhook_url: "https://example.com/hooks/builds"
     message: "{{workflow.name}} completed"
+  on_success: done
+  on_failure: error
+```
+
+### HTTP Operations
+
+AWF includes a built-in HTTP operation provider for declarative REST API calls. The `http.request` operation supports GET, POST, PUT, and DELETE with configurable timeout and response capture. See [Plugins - Built-in HTTP Operation](plugins.md#built-in-http-operation) for configuration details.
+
+#### http.request
+
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | HTTP endpoint URL (must start with `http://` or `https://`) |
+| `method` | string | Yes | HTTP method: `GET`, `POST`, `PUT`, `DELETE` (case-insensitive) |
+| `headers` | object | No | Custom headers as key-value pairs |
+| `body` | string | No | Request body (for POST/PUT) |
+| `timeout` | integer | No | Per-request timeout in seconds (default: 30) |
+| `retryable_status_codes` | array | No | Status codes that signal retryable failures (e.g., `[429, 502, 503]`) |
+
+**Outputs:** `status_code`, `body`, `headers`, `body_truncated`
+
+#### Examples
+
+**Simple GET request:**
+
+```yaml
+fetch_data:
+  type: operation
+  operation: http.request
+  inputs:
+    method: GET
+    url: "https://api.example.com/users/{{.inputs.user_id}}"
+    headers:
+      Authorization: "Bearer {{.inputs.api_token}}"
+      Accept: "application/json"
+    timeout: 10
+  on_success: process
+  on_failure: error
+```
+
+**POST with JSON body and retry:**
+
+```yaml
+create_resource:
+  type: operation
+  operation: http.request
+  inputs:
+    method: POST
+    url: "https://api.example.com/resources"
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer {{.inputs.api_token}}"
+    body: '{"name": "{{.inputs.resource_name}}"}'
+    timeout: 15
+    retryable_status_codes: [429, 502, 503]
+  retry:
+    max_attempts: 3
+    backoff: exponential
+    initial_delay_ms: 2000
+  on_success: done
+  on_failure: error
+```
+
+**Access response fields in subsequent steps:**
+
+```yaml
+states:
+  initial: fetch_user
+
+  fetch_user:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+      url: "https://api.example.com/users/1"
+    on_success: show_result
+    on_failure: error
+
+  show_result:
+    type: step
+    command: |
+      echo "Status: {{.states.fetch_user.Response.status_code}}"
+      echo "Body: {{.states.fetch_user.Response.body}}"
+      echo "Content-Type: {{.states.fetch_user.Response.headers.Content-Type}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
+```
+
+**DELETE request (no body):**
+
+```yaml
+delete_resource:
+  type: operation
+  operation: http.request
+  inputs:
+    method: DELETE
+    url: "https://api.example.com/resources/{{.inputs.resource_id}}"
+    headers:
+      Authorization: "Bearer {{.inputs.api_token}}"
   on_success: done
   on_failure: error
 ```

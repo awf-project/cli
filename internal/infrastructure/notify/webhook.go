@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/vanoix/awf/pkg/httputil"
 )
 
 var webhookBackendCounter uint64
@@ -16,8 +19,8 @@ var webhookBackendCounter uint64
 // It sends HTTP POST requests with JSON payloads containing workflow completion details.
 // The webhook URL is provided dynamically via the operation input (webhook_url).
 type webhookBackend struct {
-	// sender handles HTTP POST requests with timeout and context support
-	sender *httpSender
+	// client handles HTTP POST requests with timeout and context support
+	client *httputil.Client
 
 	// id uniquely identifies this backend instance for testing purposes.
 	// Without this field, Go would optimize empty structs to share the same memory location.
@@ -28,7 +31,7 @@ type webhookBackend struct {
 // Unlike ntfy and slack, webhook URLs are provided per-request via metadata.
 func newWebhookBackend() *webhookBackend {
 	return &webhookBackend{
-		sender: newHTTPSender(),
+		client: httputil.NewClient(httputil.WithTimeout(10 * time.Second)),
 		id:     atomic.AddUint64(&webhookBackendCounter, 1),
 	}
 }
@@ -77,26 +80,32 @@ func (w *webhookBackend) Send(ctx context.Context, payload NotificationPayload) 
 	}
 
 	// Send HTTP POST request
-	statusCode, response, err := w.sender.PostJSON(ctx, webhookURL, body)
+	// Set Content-Type header for JSON
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	// Use unlimited body size (0) for webhook responses (typically small)
+	resp, err := w.client.Post(ctx, webhookURL, headers, string(body), 0)
 	if err != nil {
 		// Network errors (unreachable, timeout, context cancellation)
-		return nil, err
+		return nil, fmt.Errorf("failed to send webhook notification: %w", err)
 	}
 
 	// Check for HTTP errors
-	if statusCode < 200 || statusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &BackendResult{
 			Backend:    "webhook",
-			StatusCode: statusCode,
-			Response:   response,
+			StatusCode: resp.StatusCode,
+			Response:   resp.Body,
 		}, errors.New("webhook returned non-2xx status code")
 	}
 
 	// Success
 	return &BackendResult{
 		Backend:    "webhook",
-		StatusCode: statusCode,
-		Response:   response,
+		StatusCode: resp.StatusCode,
+		Response:   resp.Body,
 	}, nil
 }
 
