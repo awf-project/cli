@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: C025 - Unit Tests for CustomProvider (WITHOUT integration build tag)
@@ -38,7 +38,7 @@ func TestCustomProvider_Execute_TemplateProcessing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCustomProviderWithOptions("test", tt.template, WithCustomExecutor(mockExec))
 
@@ -53,7 +53,7 @@ func TestCustomProvider_Execute_TemplateProcessing(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_EmptyPrompt(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
 	result, err := provider.Execute(context.Background(), "", nil)
@@ -64,7 +64,7 @@ func TestCustomProvider_Execute_EmptyPrompt(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_EmptyTemplate(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "", WithCustomExecutor(mockExec))
 
 	result, err := provider.Execute(context.Background(), "test", nil)
@@ -94,7 +94,7 @@ func TestCustomProvider_Execute_TemplateSyntaxError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			provider := NewCustomProviderWithOptions("test", tt.template, WithCustomExecutor(mockExec))
 
 			result, err := provider.Execute(context.Background(), "test", nil)
@@ -107,7 +107,7 @@ func TestCustomProvider_Execute_TemplateSyntaxError(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_ContextCancellation(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -119,7 +119,7 @@ func TestCustomProvider_Execute_ContextCancellation(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_CLIError(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetError(assert.AnError)
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
@@ -130,7 +130,7 @@ func TestCustomProvider_Execute_CLIError(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_WithOptions(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("prompt='test' model='gpt-4'"), nil)
 	provider := NewCustomProviderWithOptions(
 		"test",
@@ -174,7 +174,7 @@ func TestCustomProvider_Execute_JSONAutoDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
@@ -192,7 +192,7 @@ func TestCustomProvider_Execute_JSONAutoDetection(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_TokenEstimation(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	output := "This is a test output with some content"
 	mockExec.SetOutput([]byte(output), nil)
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
@@ -207,7 +207,7 @@ func TestCustomProvider_Execute_TokenEstimation(t *testing.T) {
 }
 
 func TestCustomProvider_Execute_Timestamps(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("test"), nil)
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
@@ -221,7 +221,7 @@ func TestCustomProvider_Execute_Timestamps(t *testing.T) {
 }
 
 func TestCustomProvider_ExecuteConversation_NotImplemented(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
 	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil)
@@ -291,7 +291,7 @@ func TestCustomProvider_NewCustomProvider(t *testing.T) {
 }
 
 func TestCustomProvider_NewCustomProviderWithOptions_HappyPath(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
 
 	require.NotNil(t, provider)

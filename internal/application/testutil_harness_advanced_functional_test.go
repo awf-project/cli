@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Feature: C012 - Application Test Harness for Service Layer
@@ -186,7 +186,7 @@ func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 	// Demonstrates: Harness supports custom state store injection
 	// Validates: Custom state store receives and persists workflow state
 
-	customStore := testutil.NewMockStateStore()
+	customStore := testmocks.NewMockStateStore()
 
 	wf := &workflow.Workflow{
 		Name:    "stateful-workflow",
@@ -237,7 +237,7 @@ func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 	// Demonstrates: Harness supports custom executor injection
 	// Validates: Custom executor can replace default mock executor
 
-	customExecutor := testutil.NewMockCommandExecutor()
+	customExecutor := testmocks.NewMockCommandExecutor()
 	customExecutor.SetCommandResult("custom command", &ports.CommandResult{
 		Stdout:   "Custom executor output\n",
 		ExitCode: 0,

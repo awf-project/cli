@@ -217,6 +217,12 @@ components:
   # TEST UTILITIES
   testutil:
     in: testutil
+  testutil-mocks:
+    in: testutil/mocks
+  testutil-builders:
+    in: testutil/builders
+  testutil-fixtures:
+    in: testutil/fixtures
 
 deps:
   # DOMAIN — only stdlib (+ pkg via commonComponents)
@@ -455,17 +461,35 @@ deps:
       - zap
 
   # TESTUTIL — test helpers (can depend on domain + some infra)
-  testutil:
+  testutil-mocks:
     mayDependOn:
       - domain-workflow
       - domain-ports
       - domain-errors
       - domain-plugin
       - domain-operation
+    canUse:
+      - go-stdlib
+      - go-sync
+      - testify
+  testutil-builders:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-plugin
+      - domain-operation
       - application
-      - infra-repository
-      - infra-store
-      - infra-logger
+      - testutil-mocks
+    canUse:
+      - go-stdlib
+      - go-sync
+      - testify
+  testutil:
+    canUse:
+      - go-stdlib
+  testutil-fixtures:
+    mayDependOn:
+      - domain-workflow
     canUse:
       - go-stdlib
       - testify

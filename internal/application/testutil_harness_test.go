@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
+	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Feature: C012 - Application Test Harness for Service Layer
@@ -89,7 +90,7 @@ func TestServiceTestHarness_WithCommandResult_ConfiguresExecutorResult(t *testin
 
 func TestServiceTestHarness_WithStateStore_OverridesDefaultStore(t *testing.T) {
 	harness := NewTestHarness(t)
-	customStore := testutil.NewMockStateStore()
+	customStore := testmocks.NewMockStateStore()
 	customStore.Save(context.Background(), &workflow.ExecutionContext{
 		WorkflowID:   "custom-id",
 		WorkflowName: "custom",
@@ -330,20 +331,20 @@ func TestServiceTestHarness_Mocks_ThreadSafe_ConcurrentAccess(t *testing.T) {
 }
 
 func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
-	wf := testutil.NewWorkflowBuilder().
+	wf := builders.NewWorkflowBuilder().
 		WithName("integration-test").
 		WithInitial("step1").
-		WithStep(testutil.NewStepBuilder("step1").
+		WithStep(builders.NewStepBuilder("step1").
 			WithType(workflow.StepTypeCommand).
 			WithCommand("echo hello").
 			WithOnSuccess("step2").
 			Build()).
-		WithStep(testutil.NewStepBuilder("step2").
+		WithStep(builders.NewStepBuilder("step2").
 			WithType(workflow.StepTypeCommand).
 			WithCommand("echo world").
 			WithOnSuccess("done").
 			Build()).
-		WithStep(testutil.NewStepBuilder("done").
+		WithStep(builders.NewStepBuilder("done").
 			WithType(workflow.StepTypeTerminal).
 			Build()).
 		Build()
@@ -380,11 +381,11 @@ func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
 }
 
 func TestServiceTestHarness_Integration_UseTestutilFixtures(t *testing.T) {
-	wf := testutil.NewWorkflowBuilder().
+	wf := builders.NewWorkflowBuilder().
 		WithName("fixture-test").
 		WithInitial("start").
-		WithStep(testutil.NewCommandStep("start", "echo fixture").Build()).
-		WithStep(testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
+		WithStep(builders.NewCommandStep("start", "echo fixture").Build()).
+		WithStep(builders.NewTerminalStep("done", workflow.TerminalSuccess).Build()).
 		Build()
 
 	// Ensure step transition

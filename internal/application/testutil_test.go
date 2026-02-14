@@ -6,7 +6,8 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
+	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // ServiceTestHarness provides a fluent builder API for constructing ExecutionService
@@ -82,7 +83,7 @@ import (
 // ## Custom Dependencies
 //
 //	// Override specific mocks for specialized tests
-//	customStore := testutil.NewMockStateStore()
+//	customStore := testmocks.NewMockStateStore()
 //	svc, mocks := NewTestHarness(t).
 //	    WithStateStore(customStore).
 //	    Build()
@@ -117,21 +118,21 @@ import (
 // See .specify/implementation/C012/plan.md for full design rationale.
 type ServiceTestHarness struct {
 	t          *testing.T
-	builder    *testutil.ExecutionServiceBuilder
-	repository *testutil.MockWorkflowRepository
-	store      *testutil.MockStateStore
-	executor   *testutil.MockCommandExecutor
-	logger     *testutil.MockLogger
+	builder    *builders.ExecutionServiceBuilder
+	repository *testmocks.MockWorkflowRepository
+	store      *testmocks.MockStateStore
+	executor   *testmocks.MockCommandExecutor
+	logger     *testmocks.MockLogger
 }
 
 // TestMocks exposes mock instances for test assertions.
 // Returned by Build() alongside ExecutionService to enable verification
 // of mock interactions without global state.
 type TestMocks struct {
-	Repository *testutil.MockWorkflowRepository
-	StateStore *testutil.MockStateStore
-	Executor   *testutil.MockCommandExecutor
-	Logger     *testutil.MockLogger
+	Repository *testmocks.MockWorkflowRepository
+	StateStore *testmocks.MockStateStore
+	Executor   *testmocks.MockCommandExecutor
+	Logger     *testmocks.MockLogger
 }
 
 // NewTestHarness creates a new ServiceTestHarness with default mock dependencies.
@@ -140,10 +141,10 @@ type TestMocks struct {
 // Returns a harness ready for configuration via With*() methods.
 func NewTestHarness(t *testing.T) *ServiceTestHarness {
 	// Create default mock dependencies
-	repository := testutil.NewMockWorkflowRepository()
-	store := testutil.NewMockStateStore()
-	executor := testutil.NewMockCommandExecutor()
-	logger := testutil.NewMockLogger()
+	repository := testmocks.NewMockWorkflowRepository()
+	store := testmocks.NewMockStateStore()
+	executor := testmocks.NewMockCommandExecutor()
+	logger := testmocks.NewMockLogger()
 
 	// Configure executor with default success result for all commands
 	executor.SetCommandResult("", &ports.CommandResult{
@@ -153,7 +154,7 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 	})
 
 	// Create ExecutionServiceBuilder with the mocks
-	builder := testutil.NewExecutionServiceBuilder().
+	builder := builders.NewExecutionServiceBuilder().
 		WithWorkflowRepository(repository).
 		WithStateStore(store).
 		WithExecutor(executor).
@@ -180,10 +181,10 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 // Returns a harness ready for configuration via With*() methods.
 func NewTestHarnessWithEvaluator(t *testing.T, evaluator ports.ExpressionEvaluator) *ServiceTestHarness {
 	// Create default mock dependencies
-	repository := testutil.NewMockWorkflowRepository()
-	store := testutil.NewMockStateStore()
-	executor := testutil.NewMockCommandExecutor()
-	logger := testutil.NewMockLogger()
+	repository := testmocks.NewMockWorkflowRepository()
+	store := testmocks.NewMockStateStore()
+	executor := testmocks.NewMockCommandExecutor()
+	logger := testmocks.NewMockLogger()
 
 	// Configure executor with default success result for all commands
 	executor.SetCommandResult("", &ports.CommandResult{
@@ -193,7 +194,7 @@ func NewTestHarnessWithEvaluator(t *testing.T, evaluator ports.ExpressionEvaluat
 	})
 
 	// Create ExecutionServiceBuilder with the mocks and evaluator
-	builder := testutil.NewExecutionServiceBuilder().
+	builder := builders.NewExecutionServiceBuilder().
 		WithWorkflowRepository(repository).
 		WithStateStore(store).
 		WithExecutor(executor).
@@ -245,7 +246,7 @@ func (h *ServiceTestHarness) WithStateStore(store ports.StateStore) *ServiceTest
 	h.builder.WithStateStore(store)
 
 	// If it's a MockStateStore, update our reference for mock assertions
-	if mockStore, ok := store.(*testutil.MockStateStore); ok {
+	if mockStore, ok := store.(*testmocks.MockStateStore); ok {
 		h.store = mockStore
 	}
 
@@ -261,7 +262,7 @@ func (h *ServiceTestHarness) WithExecutor(executor ports.CommandExecutor) *Servi
 	h.builder.WithExecutor(executor)
 
 	// If it's a MockCommandExecutor, update our reference for mock assertions
-	if mockExecutor, ok := executor.(*testutil.MockCommandExecutor); ok {
+	if mockExecutor, ok := executor.(*testmocks.MockCommandExecutor); ok {
 		h.executor = mockExecutor
 	}
 

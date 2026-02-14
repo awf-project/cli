@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
 )
 
 // TestClassifyErrorType tests the error type classification logic
@@ -393,16 +393,16 @@ func createWorkflowWithErrorHook() *workflow.Workflow {
 // createSuccessfulWorkflow creates a workflow that completes successfully
 // without triggering any error hooks.
 func createSuccessfulWorkflow() *workflow.Workflow {
-	return testutil.NewWorkflowBuilder().
+	return builders.NewWorkflowBuilder().
 		WithName("test").
 		WithInitial("start").
 		WithStep(
-			testutil.NewCommandStep("start", "echo success").
+			builders.NewCommandStep("start", "echo success").
 				WithOnSuccess("done").
 				Build(),
 		).
 		WithStep(
-			testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
+			builders.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
 		).
 		Build()
 }

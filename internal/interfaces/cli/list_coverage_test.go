@@ -8,13 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/interfaces/cli"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/fixtures"
 )
 
 // These tests focus on code coverage, not strict behavior validation
 
 func TestList_TextFormat(t *testing.T) {
-	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML, "test2": testutil.FullWorkflowYAML})
+	dir := fixtures.SetupWorkflowsDir(t, map[string]string{"test": fixtures.SimpleWorkflowYAML, "test2": fixtures.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -24,7 +24,7 @@ func TestList_TextFormat(t *testing.T) {
 }
 
 func TestList_JSONFormat(t *testing.T) {
-	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
+	dir := fixtures.SetupWorkflowsDir(t, map[string]string{"test": fixtures.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -34,7 +34,7 @@ func TestList_JSONFormat(t *testing.T) {
 }
 
 func TestList_QuietFormat(t *testing.T) {
-	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
+	dir := fixtures.SetupWorkflowsDir(t, map[string]string{"test": fixtures.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -44,7 +44,7 @@ func TestList_QuietFormat(t *testing.T) {
 }
 
 func TestList_TableFormat(t *testing.T) {
-	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.FullWorkflowYAML})
+	dir := fixtures.SetupWorkflowsDir(t, map[string]string{"test": fixtures.FullWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -54,7 +54,7 @@ func TestList_TableFormat(t *testing.T) {
 }
 
 func TestList_VerboseFlag(t *testing.T) {
-	dir := testutil.SetupWorkflowsDir(t, map[string]string{"test": testutil.SimpleWorkflowYAML})
+	dir := fixtures.SetupWorkflowsDir(t, map[string]string{"test": fixtures.SimpleWorkflowYAML})
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -64,7 +64,7 @@ func TestList_VerboseFlag(t *testing.T) {
 }
 
 func TestList_NoWorkflows(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -74,7 +74,7 @@ func TestList_NoWorkflows(t *testing.T) {
 }
 
 func TestList_NoWorkflowsJSON(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -84,7 +84,7 @@ func TestList_NoWorkflowsJSON(t *testing.T) {
 }
 
 func TestList_BrokenWorkflow(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	workflowsDir := filepath.Join(dir, ".awf", "workflows")
 	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "broken.yaml"), []byte("name: broken\nstates:\n  bad: [[["), 0o644))
@@ -119,7 +119,7 @@ func TestListPrompts_NoDirectoryJSON(t *testing.T) {
 }
 
 func TestListPrompts_EmptyDirectory(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	cmd := cli.NewRootCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -129,7 +129,7 @@ func TestListPrompts_EmptyDirectory(t *testing.T) {
 }
 
 func TestListPrompts_WithFiles(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test content"), 0o644))
@@ -142,7 +142,7 @@ func TestListPrompts_WithFiles(t *testing.T) {
 }
 
 func TestListPrompts_JSONFormat(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
@@ -155,7 +155,7 @@ func TestListPrompts_JSONFormat(t *testing.T) {
 }
 
 func TestListPrompts_TableFormat(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
@@ -168,7 +168,7 @@ func TestListPrompts_TableFormat(t *testing.T) {
 }
 
 func TestListPrompts_QuietFormat(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	promptsDir := filepath.Join(dir, ".awf", "prompts")
 	require.NoError(t, os.WriteFile(filepath.Join(promptsDir, "test.md"), []byte("test"), 0o644))
@@ -181,7 +181,7 @@ func TestListPrompts_QuietFormat(t *testing.T) {
 }
 
 func TestListPrompts_NestedFiles(t *testing.T) {
-	dir := testutil.SetupTestDir(t)
+	dir := fixtures.SetupTestDir(t)
 
 	nestedDir := filepath.Join(dir, ".awf", "prompts", "sub", "nested")
 	require.NoError(t, os.MkdirAll(nestedDir, 0o755))

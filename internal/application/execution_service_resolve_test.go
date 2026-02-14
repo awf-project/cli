@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/builders"
 )
 
 // TestResolveOperationValue tests the recursive interpolation resolution
@@ -240,18 +240,18 @@ func TestResolveOperationValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wf := testutil.NewWorkflowBuilder().
+			wf := builders.NewWorkflowBuilder().
 				WithName("resolve-test").
 				WithInitial("op").
 				WithStep(
-					testutil.NewStepBuilder("op").
+					builders.NewStepBuilder("op").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.operation", tt.operationInputs).
 						WithOnSuccess("done").
 						Build(),
 				).
 				WithStep(
-					testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
+					builders.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
 				).
 				Build()
 
@@ -350,18 +350,18 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wf := testutil.NewWorkflowBuilder().
+			wf := builders.NewWorkflowBuilder().
 				WithName("edge-test").
 				WithInitial("op").
 				WithStep(
-					testutil.NewStepBuilder("op").
+					builders.NewStepBuilder("op").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.edge", tt.operationInputs).
 						WithOnSuccess("done").
 						Build(),
 				).
 				WithStep(
-					testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
+					builders.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
 				).
 				Build()
 
@@ -429,18 +429,18 @@ func TestResolveOperationValue_ErrorPropagation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wf := testutil.NewWorkflowBuilder().
+			wf := builders.NewWorkflowBuilder().
 				WithName("error-test").
 				WithInitial("op").
 				WithStep(
-					testutil.NewStepBuilder("op").
+					builders.NewStepBuilder("op").
 						WithType(workflow.StepTypeOperation).
 						WithOperation("test.error", tt.operationInputs).
 						WithOnSuccess("done").
 						Build(),
 				).
 				WithStep(
-					testutil.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
+					builders.NewTerminalStep("done", workflow.TerminalSuccess).Build(),
 				).
 				Build()
 

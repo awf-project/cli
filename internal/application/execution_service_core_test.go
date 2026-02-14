@@ -12,7 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
@@ -1908,8 +1908,8 @@ func TestExecutionService_SetAgentRegistry_Valid(t *testing.T) {
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Create mock registry with test provider
-	registry := testutil.NewMockAgentRegistry()
-	claude := testutil.NewMockAgentProvider("claude")
+	registry := testmocks.NewMockAgentRegistry()
+	claude := testmocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
 	// SetAgentRegistry should not panic

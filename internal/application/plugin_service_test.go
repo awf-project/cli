@@ -11,11 +11,11 @@ import (
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/plugin"
 	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // mockPluginManager is now consolidated in internal/testutil/mocks.go (C037).
-// Use testutil.NewMockPluginManager() instead of local implementation.
+// Use mocks.NewMockPluginManager() instead of local implementation.
 
 // mockPluginStore implements ports.PluginStore for testing.
 type mockPluginStore struct {
@@ -187,7 +187,7 @@ func (m *mockPluginLogger) Error(msg string, fields ...any)             { m.logs
 func (m *mockPluginLogger) WithContext(ctx map[string]any) ports.Logger { return m }
 
 func TestNewPluginService(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -203,7 +203,7 @@ func TestNewPluginService_NilDependencies(t *testing.T) {
 }
 
 func TestPluginService_DiscoverPlugins_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
 
@@ -219,7 +219,7 @@ func TestPluginService_DiscoverPlugins_Success(t *testing.T) {
 }
 
 func TestPluginService_DiscoverPlugins_EmptyDirectory(t *testing.T) {
-	manager := testutil.NewMockPluginManager() // No plugins
+	manager := mocks.NewMockPluginManager() // No plugins
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -232,7 +232,7 @@ func TestPluginService_DiscoverPlugins_EmptyDirectory(t *testing.T) {
 }
 
 func TestPluginService_DiscoverPlugins_FilterDisabled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("enabled-plugin", plugin.StatusDiscovered)
 	manager.AddPlugin("disabled-plugin", plugin.StatusDiscovered)
 
@@ -251,7 +251,7 @@ func TestPluginService_DiscoverPlugins_FilterDisabled(t *testing.T) {
 }
 
 func TestPluginService_DiscoverPlugins_ManagerError(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.SetDiscoverFunc(func(ctx context.Context) ([]*plugin.PluginInfo, error) {
 		return nil, errors.New("discovery failed")
 	})
@@ -269,7 +269,7 @@ func TestPluginService_DiscoverPlugins_ManagerError(t *testing.T) {
 }
 
 func TestPluginService_DiscoverPlugins_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -286,7 +286,7 @@ func TestPluginService_DiscoverPlugins_ContextCanceled(t *testing.T) {
 }
 
 func TestPluginService_LoadPlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -303,7 +303,7 @@ func TestPluginService_LoadPlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_LoadPlugin_NotFound(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -316,7 +316,7 @@ func TestPluginService_LoadPlugin_NotFound(t *testing.T) {
 }
 
 func TestPluginService_LoadPlugin_Disabled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("disabled-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -332,7 +332,7 @@ func TestPluginService_LoadPlugin_Disabled(t *testing.T) {
 }
 
 func TestPluginService_LoadPlugin_AlreadyLoaded(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusLoaded)
 
 	stateStore := newMockPluginStateStore()
@@ -347,7 +347,7 @@ func TestPluginService_LoadPlugin_AlreadyLoaded(t *testing.T) {
 }
 
 func TestPluginService_LoadPlugin_EmptyName(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -359,7 +359,7 @@ func TestPluginService_LoadPlugin_EmptyName(t *testing.T) {
 }
 
 func TestPluginService_InitPlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusLoaded)
 
 	stateStore := newMockPluginStateStore()
@@ -378,7 +378,7 @@ func TestPluginService_InitPlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_InitPlugin_NotLoaded(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	// Plugin discovered but not loaded - mock returns error for init on non-loaded
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 	manager.SetInitFunc(func(ctx context.Context, name string, config map[string]any) error {
@@ -397,7 +397,7 @@ func TestPluginService_InitPlugin_NotLoaded(t *testing.T) {
 }
 
 func TestPluginService_InitPlugin_AlreadyRunning(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -412,7 +412,7 @@ func TestPluginService_InitPlugin_AlreadyRunning(t *testing.T) {
 }
 
 func TestPluginService_InitPlugin_WithStoredConfig(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusLoaded)
 
 	var capturedConfig map[string]any
@@ -439,7 +439,7 @@ func TestPluginService_InitPlugin_WithStoredConfig(t *testing.T) {
 }
 
 func TestPluginService_LoadAndInitPlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -456,7 +456,7 @@ func TestPluginService_LoadAndInitPlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_LoadAndInitPlugin_LoadFails(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.SetLoadFunc(func(ctx context.Context, name string) error {
 		return errors.New("load failed")
 	})
@@ -473,7 +473,7 @@ func TestPluginService_LoadAndInitPlugin_LoadFails(t *testing.T) {
 }
 
 func TestPluginService_LoadAndInitPlugin_InitFails(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 	manager.SetInitFunc(func(ctx context.Context, name string, config map[string]any) error {
 		return errors.New("init failed")
@@ -491,7 +491,7 @@ func TestPluginService_LoadAndInitPlugin_InitFails(t *testing.T) {
 }
 
 func TestPluginService_ShutdownPlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -508,7 +508,7 @@ func TestPluginService_ShutdownPlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_ShutdownPlugin_NotRunning(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusStopped)
 
 	stateStore := newMockPluginStateStore()
@@ -523,7 +523,7 @@ func TestPluginService_ShutdownPlugin_NotRunning(t *testing.T) {
 }
 
 func TestPluginService_ShutdownPlugin_NotFound(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -536,7 +536,7 @@ func TestPluginService_ShutdownPlugin_NotFound(t *testing.T) {
 }
 
 func TestPluginService_ShutdownAll_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusRunning)
 	manager.AddPlugin("plugin-b", plugin.StatusRunning)
 	manager.AddPlugin("plugin-c", plugin.StatusStopped) // Already stopped
@@ -556,7 +556,7 @@ func TestPluginService_ShutdownAll_Success(t *testing.T) {
 }
 
 func TestPluginService_ShutdownAll_NoPlugins(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -568,7 +568,7 @@ func TestPluginService_ShutdownAll_NoPlugins(t *testing.T) {
 }
 
 func TestPluginService_ShutdownAll_PartialFailure(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusRunning)
 	manager.AddPlugin("plugin-b", plugin.StatusRunning)
 	manager.SetShutdownError(errors.New("shutdown failed for one plugin"))
@@ -585,7 +585,7 @@ func TestPluginService_ShutdownAll_PartialFailure(t *testing.T) {
 }
 
 func TestPluginService_EnablePlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDisabled)
 
 	stateStore := newMockPluginStateStore()
@@ -602,7 +602,7 @@ func TestPluginService_EnablePlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_EnablePlugin_AlreadyEnabled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -620,7 +620,7 @@ func TestPluginService_EnablePlugin_AlreadyEnabled(t *testing.T) {
 }
 
 func TestPluginService_EnablePlugin_SaveStateFails(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDisabled)
 
 	stateStore := newMockPluginStateStore()
@@ -637,7 +637,7 @@ func TestPluginService_EnablePlugin_SaveStateFails(t *testing.T) {
 }
 
 func TestPluginService_DisablePlugin_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -654,7 +654,7 @@ func TestPluginService_DisablePlugin_Success(t *testing.T) {
 }
 
 func TestPluginService_DisablePlugin_AlreadyDisabled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDisabled)
 
 	stateStore := newMockPluginStateStore()
@@ -671,7 +671,7 @@ func TestPluginService_DisablePlugin_AlreadyDisabled(t *testing.T) {
 }
 
 func TestPluginService_DisablePlugin_ShutdownsRunning(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -689,7 +689,7 @@ func TestPluginService_DisablePlugin_ShutdownsRunning(t *testing.T) {
 }
 
 func TestPluginService_SetPluginConfig_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -707,7 +707,7 @@ func TestPluginService_SetPluginConfig_Success(t *testing.T) {
 }
 
 func TestPluginService_SetPluginConfig_NilConfig(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -720,7 +720,7 @@ func TestPluginService_SetPluginConfig_NilConfig(t *testing.T) {
 }
 
 func TestPluginService_GetPluginConfig_Exists(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	stateStore.setPluginConfig("test-plugin", map[string]any{"key": "value"})
 
@@ -734,7 +734,7 @@ func TestPluginService_GetPluginConfig_Exists(t *testing.T) {
 }
 
 func TestPluginService_GetPluginConfig_NotExists(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -746,7 +746,7 @@ func TestPluginService_GetPluginConfig_NotExists(t *testing.T) {
 }
 
 func TestPluginService_GetPlugin_Exists(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -762,7 +762,7 @@ func TestPluginService_GetPlugin_Exists(t *testing.T) {
 }
 
 func TestPluginService_GetPlugin_NotExists(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -775,7 +775,7 @@ func TestPluginService_GetPlugin_NotExists(t *testing.T) {
 }
 
 func TestPluginService_ListPlugins(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusRunning)
 	manager.AddPlugin("plugin-b", plugin.StatusStopped)
 	manager.AddPlugin("plugin-c", plugin.StatusDisabled)
@@ -791,7 +791,7 @@ func TestPluginService_ListPlugins(t *testing.T) {
 }
 
 func TestPluginService_ListPlugins_Empty(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -803,7 +803,7 @@ func TestPluginService_ListPlugins_Empty(t *testing.T) {
 }
 
 func TestPluginService_ListEnabledPlugins(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("enabled-a", plugin.StatusRunning)
 	manager.AddPlugin("enabled-b", plugin.StatusLoaded)
 	manager.AddPlugin("disabled", plugin.StatusDisabled)
@@ -821,7 +821,7 @@ func TestPluginService_ListEnabledPlugins(t *testing.T) {
 }
 
 func TestPluginService_ListDisabledPlugins(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 
 	stateStore := newMockPluginStateStore()
 	stateStore.setPluginEnabled("disabled-a", false)
@@ -840,7 +840,7 @@ func TestPluginService_ListDisabledPlugins(t *testing.T) {
 }
 
 func TestPluginService_IsPluginEnabled_True(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	stateStore.setPluginEnabled("test-plugin", true)
 
@@ -854,7 +854,7 @@ func TestPluginService_IsPluginEnabled_True(t *testing.T) {
 }
 
 func TestPluginService_IsPluginEnabled_False(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	stateStore.setPluginEnabled("test-plugin", false)
 
@@ -868,7 +868,7 @@ func TestPluginService_IsPluginEnabled_False(t *testing.T) {
 }
 
 func TestPluginService_IsPluginEnabled_DefaultTrue(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore() // No explicit state
 	logger := newMockPluginLogger()
 
@@ -881,7 +881,7 @@ func TestPluginService_IsPluginEnabled_DefaultTrue(t *testing.T) {
 }
 
 func TestPluginService_SaveState_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -893,7 +893,7 @@ func TestPluginService_SaveState_Success(t *testing.T) {
 }
 
 func TestPluginService_SaveState_Error(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	stateStore.saveErr = errors.New("disk full")
 
@@ -908,7 +908,7 @@ func TestPluginService_SaveState_Error(t *testing.T) {
 }
 
 func TestPluginService_LoadState_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -920,7 +920,7 @@ func TestPluginService_LoadState_Success(t *testing.T) {
 }
 
 func TestPluginService_LoadState_Error(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	stateStore.loadErr = errors.New("file not found")
 
@@ -935,7 +935,7 @@ func TestPluginService_LoadState_Error(t *testing.T) {
 }
 
 func TestPluginService_StartupEnabledPlugins_Success(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-disabled", plugin.StatusDiscovered)
@@ -961,7 +961,7 @@ func TestPluginService_StartupEnabledPlugins_Success(t *testing.T) {
 }
 
 func TestPluginService_StartupEnabledPlugins_NoPlugins(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -974,7 +974,7 @@ func TestPluginService_StartupEnabledPlugins_NoPlugins(t *testing.T) {
 }
 
 func TestPluginService_StartupEnabledPlugins_PartialFailure(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-ok", plugin.StatusDiscovered)
 	manager.AddPlugin("plugin-fail", plugin.StatusDiscovered)
 
@@ -998,7 +998,7 @@ func TestPluginService_StartupEnabledPlugins_PartialFailure(t *testing.T) {
 }
 
 func TestPluginService_StartupEnabledPlugins_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -1016,7 +1016,7 @@ func TestPluginService_StartupEnabledPlugins_ContextCanceled(t *testing.T) {
 }
 
 func TestPluginService_ConcurrentOperations(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
@@ -1046,7 +1046,7 @@ func TestPluginService_ConcurrentOperations(t *testing.T) {
 }
 
 func TestPluginService_SpecialCharactersInPluginName(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	// Plugin names should be alphanumeric + hyphens per spec
 	manager.AddPlugin("valid-plugin-123", plugin.StatusDiscovered)
 
@@ -1061,7 +1061,7 @@ func TestPluginService_SpecialCharactersInPluginName(t *testing.T) {
 }
 
 func TestPluginService_VeryLongPluginName(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	longName := "very-long-plugin-name-that-exceeds-normal-length-expectations-" +
 		"and-keeps-going-for-a-while-to-test-boundary-conditions"
 	manager.AddPlugin(longName, plugin.StatusDiscovered)
@@ -1090,7 +1090,7 @@ func TestPluginService_NilManager_DiscoverPlugins(t *testing.T) {
 }
 
 func TestPluginService_NilStateStore_IsPluginEnabled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, nil, logger)
@@ -1103,7 +1103,7 @@ func TestPluginService_NilStateStore_IsPluginEnabled(t *testing.T) {
 
 // TestPluginService_ShutdownPlugin_ContextCanceled tests ShutdownPlugin with canceled context
 func TestPluginService_ShutdownPlugin_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -1123,7 +1123,7 @@ func TestPluginService_ShutdownPlugin_ContextCanceled(t *testing.T) {
 
 // TestPluginService_ShutdownPlugin_ManagerError tests ShutdownPlugin when manager returns error
 func TestPluginService_ShutdownPlugin_ManagerError(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 	shutdownErr := errors.New("shutdown hardware failure")
 	manager.SetShutdownFunc(func(ctx context.Context, name string) error {
@@ -1144,7 +1144,7 @@ func TestPluginService_ShutdownPlugin_ManagerError(t *testing.T) {
 
 // TestPluginService_EnablePlugin_ContextCanceled tests EnablePlugin with canceled context
 func TestPluginService_EnablePlugin_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusDisabled)
 
 	stateStore := newMockPluginStateStore()
@@ -1164,7 +1164,7 @@ func TestPluginService_EnablePlugin_ContextCanceled(t *testing.T) {
 
 // TestPluginService_DisablePlugin_ContextCanceled tests DisablePlugin with canceled context
 func TestPluginService_DisablePlugin_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -1184,7 +1184,7 @@ func TestPluginService_DisablePlugin_ContextCanceled(t *testing.T) {
 
 // TestPluginService_DisablePlugin_ShutdownError tests DisablePlugin when shutdown during disable fails
 func TestPluginService_DisablePlugin_ShutdownError(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 	shutdownErr := errors.New("plugin shutdown failed")
 	manager.SetShutdownFunc(func(ctx context.Context, name string) error {
@@ -1209,7 +1209,7 @@ func TestPluginService_DisablePlugin_ShutdownError(t *testing.T) {
 
 // TestPluginService_DisablePlugin_SetEnabledError tests DisablePlugin when SetEnabled fails
 func TestPluginService_DisablePlugin_SetEnabledError(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	manager.AddPlugin("test-plugin", plugin.StatusRunning)
 
 	stateStore := newMockPluginStateStore()
@@ -1234,7 +1234,7 @@ func TestPluginService_DisablePlugin_SetEnabledError(t *testing.T) {
 
 // TestPluginService_SetPluginConfig_ContextCanceled tests SetPluginConfig with canceled context
 func TestPluginService_SetPluginConfig_ContextCanceled(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 
@@ -1253,7 +1253,7 @@ func TestPluginService_SetPluginConfig_ContextCanceled(t *testing.T) {
 
 // TestPluginService_SetPluginConfig_SetConfigError tests SetPluginConfig when SetConfig fails
 func TestPluginService_SetPluginConfig_SetConfigError(t *testing.T) {
-	manager := testutil.NewMockPluginManager()
+	manager := mocks.NewMockPluginManager()
 	stateStore := newMockPluginStateStore()
 	configErr := errors.New("disk write failed")
 	stateStore.setConfigErr = configErr

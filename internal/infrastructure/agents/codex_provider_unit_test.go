@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: C025 - Unit Tests for CodexProvider (WITHOUT integration build tag)
@@ -66,7 +66,7 @@ func TestCodexProvider_Execute_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -140,7 +140,7 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -180,7 +180,7 @@ func TestCodexProvider_Execute_EmptyPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -225,7 +225,7 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -272,7 +272,7 @@ func TestCodexProvider_Execute_ContextErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -316,7 +316,7 @@ func TestCodexProvider_Execute_CLIErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetError(tt.mockErr)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -376,7 +376,7 @@ func TestCodexProvider_Execute_StdoutStderrCombination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			// MockCLIExecutor needs to return both stdout and stderr
 			mockExec.SetOutput(tt.stdout, tt.stderr)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
@@ -420,7 +420,7 @@ func TestCodexProvider_Execute_TokenEstimation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -434,7 +434,7 @@ func TestCodexProvider_Execute_TokenEstimation(t *testing.T) {
 }
 
 func TestCodexProvider_Execute_TimestampOrdering(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -448,7 +448,7 @@ func TestCodexProvider_Execute_TimestampOrdering(t *testing.T) {
 }
 
 func TestCodexProvider_Execute_ProviderName(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -503,7 +503,7 @@ func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -522,7 +522,7 @@ func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_NilState(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -553,7 +553,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
@@ -568,7 +568,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("second response"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -591,7 +591,7 @@ func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -612,7 +612,7 @@ func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
-	mockExec := testutil.NewMockCLIExecutor()
+	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response with tokens"), nil) // 20 chars = 5 tokens
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
@@ -668,7 +668,7 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
@@ -716,7 +716,7 @@ func TestCodexProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
@@ -751,7 +751,7 @@ func TestCodexProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetError(tt.mockErr)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
@@ -805,7 +805,7 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockExec := testutil.NewMockCLIExecutor()
+			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")

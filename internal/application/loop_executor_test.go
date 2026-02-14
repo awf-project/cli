@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanoix/awf/internal/application"
 	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil"
+	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 //
@@ -31,7 +31,7 @@ import (
 
 func TestLoopExecutor_NewLoopExecutor_RequiresExpressionEvaluator(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -45,7 +45,7 @@ func TestLoopExecutor_NewLoopExecutor_AcceptsPortsInterface(t *testing.T) {
 	// This test verifies compile-time compatibility:
 	// If ExpressionEvaluator parameter type changed from ports.ExpressionEvaluator,
 	// this would fail to compile
-	evaluator := *testutil.NewMockExpressionEvaluator()
+	evaluator := *mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 
 	executor := application.NewLoopExecutor(logger, &evaluator, resolver)
@@ -55,7 +55,7 @@ func TestLoopExecutor_NewLoopExecutor_AcceptsPortsInterface(t *testing.T) {
 
 func TestLoopExecutor_ParseItems_JSONArray(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -107,7 +107,7 @@ func TestLoopExecutor_ParseItems_JSONArray(t *testing.T) {
 
 func TestLoopExecutor_ParseItems_CommaSeparated(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -150,7 +150,7 @@ func TestLoopExecutor_ParseItems_CommaSeparated(t *testing.T) {
 
 func TestLoopExecutor_ParseItems_PrefersJSONOverCommaSeparated(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -164,7 +164,7 @@ func TestLoopExecutor_ParseItems_PrefersJSONOverCommaSeparated(t *testing.T) {
 
 func TestLoopExecutor_BuildBodyStepIndices_HappyPath(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -181,7 +181,7 @@ func TestLoopExecutor_BuildBodyStepIndices_HappyPath(t *testing.T) {
 
 func TestLoopExecutor_BuildBodyStepIndices_EmptyBody(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -195,7 +195,7 @@ func TestLoopExecutor_BuildBodyStepIndices_EmptyBody(t *testing.T) {
 
 func TestLoopExecutor_BuildBodyStepIndices_DuplicateStepName(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -212,7 +212,7 @@ func TestLoopExecutor_BuildBodyStepIndices_DuplicateStepName(t *testing.T) {
 
 func TestLoopExecutor_BuildBodyStepIndices_MultipleDuplicates(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -228,7 +228,7 @@ func TestLoopExecutor_BuildBodyStepIndices_MultipleDuplicates(t *testing.T) {
 
 func TestLoopExecutor_PushLoopContext_CreatesNewContext(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -249,7 +249,7 @@ func TestLoopExecutor_PushLoopContext_CreatesNewContext(t *testing.T) {
 
 func TestLoopExecutor_PushLoopContext_NestedLoops(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -270,7 +270,7 @@ func TestLoopExecutor_PushLoopContext_NestedLoops(t *testing.T) {
 
 func TestLoopExecutor_PopLoopContext_RestoresParent(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -292,7 +292,7 @@ func TestLoopExecutor_PopLoopContext_RestoresParent(t *testing.T) {
 
 func TestLoopExecutor_PopLoopContext_WithNilContext(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -308,7 +308,7 @@ func TestLoopExecutor_PopLoopContext_WithNilContext(t *testing.T) {
 
 func TestLoopExecutor_PopLoopContext_ReturnsToNil(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -325,7 +325,7 @@ func TestLoopExecutor_PopLoopContext_ReturnsToNil(t *testing.T) {
 
 func TestLoopExecutor_ParseItems_EdgeCases(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -368,7 +368,7 @@ func TestLoopExecutor_ParseItems_EdgeCases(t *testing.T) {
 
 func TestLoopExecutor_BuildBodyStepIndices_LargeBody(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -390,7 +390,7 @@ func TestLoopExecutor_BuildBodyStepIndices_LargeBody(t *testing.T) {
 
 func TestLoopExecutor_PushLoopContext_MultipleNestingLevels(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := testutil.NewMockExpressionEvaluator()
+	evaluator := mocks.NewMockExpressionEvaluator()
 	resolver := newMockResolver()
 	executor := application.NewLoopExecutor(logger, evaluator, resolver)
 
