@@ -25,9 +25,11 @@ awf/
 │   │   │   ├── hooks.go         # Pre/post hooks
 │   │   │   ├── template.go      # Workflow templates
 │   │   │   └── validation.go    # Input validation
-│   │   ├── operation/           # Operation interface
-│   │   │   ├── operation.go     # Operation contract
-│   │   │   └── result.go        # Result struct
+│   │   ├── operation/           # Operation interface and registry (F057)
+│   │   │   ├── doc.go           # Package documentation
+│   │   │   ├── operation.go     # Operation interface and sentinel errors
+│   │   │   ├── validate.go      # ValidateInputs function
+│   │   │   └── registry.go      # OperationRegistry (implements ports.OperationProvider)
 │   │   └── ports/               # Port interfaces
 │   │       ├── repository.go    # Workflow repository
 │   │       ├── store.go         # State store

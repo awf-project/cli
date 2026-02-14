@@ -128,6 +128,9 @@ components:
   domain-plugin:
     in: domain/plugin
 
+  domain-operation:
+    in: domain/operation
+
   # PUBLIC PACKAGES
   pkg-expression:
     in: ../pkg/expression
@@ -219,12 +222,19 @@ deps:
       - domain-workflow
       - domain-errors
       - domain-plugin
+      - domain-operation
     canUse:
       - go-stdlib
   domain-errors:
     canUse:
       - go-stdlib
   domain-plugin:
+    canUse:
+      - go-stdlib
+  domain-operation:
+    mayDependOn:
+      - domain-plugin
+      - domain-ports
     canUse:
       - go-stdlib
 
@@ -235,6 +245,7 @@ deps:
       - domain-ports
       - domain-errors
       - domain-plugin
+      - domain-operation
     canUse:
       - go-stdlib
       - go-sync
@@ -338,6 +349,7 @@ deps:
   infra-plugin:
     mayDependOn:
       - domain-plugin
+      - domain-operation
       - domain-ports
       - domain-errors
     canUse:
@@ -383,6 +395,7 @@ deps:
       - domain-ports
       - domain-errors
       - domain-plugin
+      - domain-operation
       - infra-agents
       - infra-analyzer
       - infra-config
@@ -429,6 +442,7 @@ deps:
       - domain-ports
       - domain-errors
       - domain-plugin
+      - domain-operation
       - application
       - infra-repository
       - infra-store

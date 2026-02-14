@@ -17,7 +17,7 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                      DOMAIN LAYER                           │
-│   Workflow │ Step │ Plugin │ Ports (Interfaces)             │
+│   Workflow │ Step │ Plugin │ Operation │ Ports (Interfaces)  │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
@@ -50,7 +50,8 @@ The core business logic. No external dependencies.
 **Components:**
 - `workflow/` - Workflow, Step, State, Context entities
 - `plugin/` - Plugin manifest, operation schema, state entities
-- `ports/` - Repository, StateStore, Executor, PluginManager interfaces
+- `operation/` - Operation interface, OperationRegistry, input validation (ValidateInputs)
+- `ports/` - Repository, StateStore, Executor, PluginManager, OperationProvider interfaces
 
 **Key Entities:**
 ```go
@@ -75,6 +76,27 @@ type ExecutionContext struct {
     States     map[string]StateResult
 }
 ```
+
+**Operation Interface and Registry (F057):**
+```go
+// Operation defines the contract for executable operations.
+type Operation interface {
+    Name() string
+    Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+    Schema() *plugin.OperationSchema
+}
+
+// OperationRegistry manages operation lifecycle with thread-safe access.
+// Implements ports.OperationProvider for seamless ExecutionService integration.
+type OperationRegistry struct {
+    operations map[string]Operation
+    mu         sync.RWMutex
+}
+```
+
+The `Operation` interface is distinct from `OperationProvider`: an `Operation` is a single executable operation (e.g., `http.get`), while `OperationProvider` manages a collection. The registry bridges the two by implementing `OperationProvider` using registered `Operation` instances.
+
+`ValidateInputs(schema, inputs)` is a standalone function that checks required fields, type correctness (`string`, `integer`, `boolean`, `array`, `object`), and applies defaults for optional inputs. It handles JSON float64→int coercion.
 
 **Ports (Interfaces):**
 ```go
@@ -393,14 +415,14 @@ make lint-arch-map   # Show component-to-package mapping
 | `commonVendors` | Shared libraries (all components) |
 | `commonComponents` | Shared packages (all components) |
 | `vendors` | Vendor library definitions |
-| `components` | 19 components across 4 layers |
+| `components` | 20 components across 4 layers |
 | `deps` | Dependency rules per component |
 
 **Validation Rules by Layer**:
 
 | Layer | Count | Max Dependencies | Rationale |
 |-------|-------|---------|-----------|
-| Domain | 4 | stdlib + sync only | Pure business logic |
+| Domain | 5 | stdlib + sync only | Pure business logic |
 | Application | 1 | domain only + stdlib | Orchestration, no infra |
 | Infrastructure | 12 | domain + vendors + stdlib | Concrete implementations |
 | Interfaces | 2 | all layers + stdlib | Delivery/wiring |

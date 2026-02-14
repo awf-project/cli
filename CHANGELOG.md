@@ -37,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F057**: Operation Interface and Registry Foundation
+  - New `internal/domain/operation/` package with `Operation` interface defining `Name()`, `Execute()`, `Schema()` contract
+  - `OperationRegistry` with thread-safe `Register`/`Unregister`/`Get`/`List` lifecycle management (sync.RWMutex)
+  - Standalone `ValidateInputs` function for runtime input validation against `OperationSchema` (required fields, type correctness, default values)
+  - Type validation for `string`, `integer`, `boolean`, `array`, `object` with JSON float64→int coercion
+  - Registry implements `ports.OperationProvider` for seamless `ExecutionService` integration
+  - Sentinel errors: `ErrOperationAlreadyRegistered`, `ErrOperationNotFound`, `ErrInvalidOperation`
+  - Updated `go-arch-lint` configuration with `domain-operation` component enforcing domain purity
+  - Comprehensive unit and integration test suites covering all 4 user stories
+
 - **F056**: Workflow Completion Notification Plugin
   - New `notify` operation provider with `notify.send` operation dispatching to 4 backends: `desktop`, `ntfy`, `slack`, `webhook`
   - Desktop backend uses OS-native notifications (`notify-send` on Linux, `osascript` on macOS)

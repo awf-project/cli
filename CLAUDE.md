@@ -221,9 +221,17 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 
 ## Architecture Rules
 
+Domain layer packages must restrict dependencies via go-arch-lint rules; domain/operation imports only domain/plugin, domain/ports, and stdlib
+
+Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
+
 ## Common Pitfalls
 
+Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
+
 ## Test Conventions
+
+Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
 
 ## Review Standards
 
