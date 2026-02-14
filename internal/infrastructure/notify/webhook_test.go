@@ -23,7 +23,7 @@ func TestNewWebhookBackend_CreatesValidInstance(t *testing.T) {
 	backend := newWebhookBackend()
 
 	require.NotNil(t, backend, "newWebhookBackend() should not return nil")
-	assert.NotNil(t, backend.sender, "sender should be initialized")
+	assert.NotNil(t, backend.client, "client should be initialized")
 }
 
 func TestNewWebhookBackend_MultipleInstances(t *testing.T) {

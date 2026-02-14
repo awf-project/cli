@@ -59,7 +59,7 @@ type yamlStep struct {
 	// Call workflow configuration (for sub-workflows - F023)
 	// Flat structure: workflow, call_inputs, call_outputs directly on step
 	Workflow    string            `yaml:"workflow"` // workflow name to invoke
-	CallInputs  map[string]string `yaml:"inputs"`   // parent var → sub-workflow input
+	CallInputs  map[string]any    `yaml:"inputs"`   // parent var → sub-workflow input (or operation inputs via shim)
 	CallOutputs map[string]string `yaml:"outputs"`  // sub-workflow output → parent var
 
 	// Agent configuration (for AI agent steps - F039)

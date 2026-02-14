@@ -25,7 +25,7 @@ func TestNewNtfyBackend_CreatesValidInstance(t *testing.T) {
 	require.NoError(t, err, "newNtfyBackend() should succeed with valid URL")
 	require.NotNil(t, backend, "newNtfyBackend() should not return nil")
 	assert.Equal(t, "https://ntfy.sh", backend.baseURL, "baseURL should be set correctly")
-	assert.NotNil(t, backend.sender, "sender should be initialized")
+	assert.NotNil(t, backend.client, "client should be initialized")
 }
 
 func TestNewNtfyBackend_MultipleInstances(t *testing.T) {

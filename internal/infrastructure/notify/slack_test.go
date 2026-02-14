@@ -47,7 +47,7 @@ func TestNewSlackBackend_CreatesValidInstance(t *testing.T) {
 	require.NoError(t, err, "newSlackBackend() should succeed with valid URL")
 	require.NotNil(t, backend, "newSlackBackend() should not return nil")
 	assert.Equal(t, "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX", backend.webhookURL, "webhookURL should be set correctly")
-	assert.NotNil(t, backend.sender, "sender should be initialized")
+	assert.NotNil(t, backend.client, "client should be initialized")
 }
 
 func TestNewSlackBackend_MultipleInstances(t *testing.T) {

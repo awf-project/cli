@@ -37,6 +37,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+
+- **F058**: Built-in HTTP Operation
+  - New `http` operation provider with `http.request` operation for declarative REST API calls
+  - Supports HTTP methods: `GET`, `POST`, `PUT`, `DELETE`
+  - Configurable timeout (default 30 seconds) and retryable status codes (429, 502, 503, etc.)
+  - Response capture: status code, body, headers — accessible via template interpolation
+  - Template interpolation in URL, headers, and body for dynamic requests
+  - 1MB response body limit to prevent memory exhaustion
+  - Integration with existing step-level retry mechanism for transient failures
+  - Wired into CLI via `CompositeOperationProvider` alongside GitHub and Notify providers
+  - Comprehensive integration tests covering 5 user stories (GET, POST/PUT/DELETE, response capture, timeout, retry)
+  - Shared `pkg/httputil` package with `Client` and `Response` utilities for HTTP operations
+  - Key Components:
+    - `internal/infrastructure/http/provider.go` - HTTPOperationProvider implementing `ports.OperationProvider`
+    - `internal/infrastructure/http/operations.go` - OperationSchema definition for `http.request`
+    - `pkg/httputil/client.go` - HTTP client with configurable timeout and convenience methods (Get/Post/Put/Delete)
+    - `pkg/httputil/response.go` - Response reading with bounded body support
+    - `tests/integration/http_operation_test.go` - 27 integration tests validating all user stories
+  - Refactored notify backends (ntfy, slack, webhook) to use shared `pkg/httputil.Client`, deleted `internal/infrastructure/notify/http.go`
+  - Documentation:
+    - `docs/user-guide/plugins.md` - HTTP Operation plugin section with examples
+    - `docs/user-guide/workflow-syntax.md` - HTTP Operations reference section
+    - `docs/user-guide/examples.md` - HTTP API integration example workflow
+    - `README.md` - Updated feature list
+
 - **F057**: Operation Interface and Registry Foundation
   - New `internal/domain/operation/` package with `Operation` interface defining `Name()`, `Execute()`, `Schema()` contract
   - `OperationRegistry` with thread-safe `Register`/`Unregister`/`Get`/`List` lifecycle management (sync.RWMutex)

@@ -21,6 +21,7 @@ commonComponents:
   - pkg-retry
   - pkg-stringutil
   - pkg-validation
+  - pkg-httputil
 
 vendors:
   go-stdlib:
@@ -147,6 +148,9 @@ components:
   pkg-stringutil:
     in: ../pkg/stringutil
 
+  pkg-httputil:
+    in: ../pkg/httputil
+
   pkg-validation:
     in: ../pkg/validation
 
@@ -175,6 +179,9 @@ components:
 
   infra-github:
     in: infrastructure/github
+
+  infra-http:
+    in: infrastructure/http
 
   infra-notify:
     in: infrastructure/notify
@@ -319,6 +326,17 @@ deps:
       - go-stdlib
       - go-sync
 
+  infra-http:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - infra-logger
+    canUse:
+      - go-stdlib
+      - go-sync
+
   infra-notify:
     mayDependOn:
       - domain-workflow
@@ -404,6 +422,7 @@ deps:
       - infra-executor
       - infra-expression
       - infra-github
+      - infra-http
       - infra-logger
       - infra-notify
       - infra-plugin

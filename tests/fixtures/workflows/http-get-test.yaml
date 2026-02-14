@@ -1,0 +1,31 @@
+# Feature: F058 - HTTP Operation Integration Test Fixture
+# This workflow tests basic HTTP GET operation
+
+name: http-get-test
+version: "1.0"
+
+inputs:
+  - name: url
+    type: string
+    required: true
+    description: "URL to fetch"
+
+states:
+  initial: fetch_data
+
+  fetch_data:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+      url: "{{inputs.url}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

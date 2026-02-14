@@ -1,6 +1,6 @@
 # Plugins
 
-AWF supports plugins to extend functionality with custom operations. AWF ships with **built-in plugins** for GitHub operations and notifications, and supports **external RPC plugins** for additional integrations.
+AWF supports plugins to extend functionality with custom operations. AWF ships with **built-in plugins** for HTTP requests, GitHub operations, and notifications, and supports **external RPC plugins** for additional integrations.
 
 ## Built-in GitHub Plugin
 
@@ -23,6 +23,139 @@ get_issue:
 ```
 
 See [Workflow Syntax - Operation State](workflow-syntax.md#operation-state) for complete reference and examples.
+
+---
+
+## Built-in HTTP Operation
+
+AWF includes a built-in HTTP operation provider that enables declarative REST API calls without shell commands. The `http.request` operation supports standard HTTP methods and captures structured responses for conditional routing.
+
+**Key features:**
+- 4 HTTP methods: GET, POST, PUT, DELETE
+- Configurable timeout (default 30 seconds)
+- Response capture: status code, body, headers
+- Template interpolation in URL, headers, and body
+- Retryable status codes for transient failures (429, 502, 503, etc.)
+- 1MB response body limit to prevent memory exhaustion
+
+```yaml
+fetch_user:
+  type: operation
+  operation: http.request
+  inputs:
+    method: GET
+    url: "https://api.example.com/users/{{.inputs.user_id}}"
+    headers:
+      Authorization: "Bearer {{.inputs.api_token}}"
+      Accept: "application/json"
+    timeout: 10
+  on_success: process
+  on_failure: error
+```
+
+### Operation Inputs
+
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | HTTP endpoint URL (must start with `http://` or `https://`) |
+| `method` | string | Yes | HTTP method: `GET`, `POST`, `PUT`, `DELETE` |
+| `headers` | object | No | Custom headers as key-value pairs |
+| `body` | string | No | Request body (for POST/PUT) |
+| `timeout` | integer | No | Request timeout in seconds (default: 30) |
+| `retryable_status_codes` | array | No | Status codes triggering retries (e.g., `[429, 502, 503]`) |
+
+### Operation Outputs
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `status_code` | integer | HTTP response status (200, 404, 503, etc.) |
+| `body` | string | Response body (truncated at 1MB) |
+| `headers` | object | Response headers (canonicalized names, multi-value joined with `, `) |
+| `body_truncated` | boolean | `true` if the response body exceeded 1MB and was truncated |
+
+### Examples
+
+**GET Request with Response Access:**
+
+```yaml
+fetch_data:
+  type: operation
+  operation: http.request
+  inputs:
+    method: GET
+    url: "https://api.example.com/status"
+    headers:
+      Accept: "application/json"
+  on_success: process
+  on_failure: error
+```
+
+**POST with Retry:**
+
+```yaml
+create_resource:
+  type: operation
+  operation: http.request
+  inputs:
+    method: POST
+    url: "https://api.example.com/resources"
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer {{.inputs.api_token}}"
+    body: '{"name": "{{.inputs.resource_name}}", "owner": "{{.inputs.user_id}}"}'
+    timeout: 15
+    retryable_status_codes: [429, 502, 503]
+  retry:
+    max_attempts: 3
+    backoff: exponential
+    initial_delay_ms: 1000
+  on_success: success
+  on_failure: error
+```
+
+**Multi-Step Workflow with Response Capture:**
+
+```yaml
+name: fetch-and-process
+version: "1.0.0"
+
+inputs:
+  - name: api_url
+    type: string
+    required: true
+  - name: api_key
+    type: string
+    required: true
+
+states:
+  initial: fetch
+
+  fetch:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+      url: "{{.inputs.api_url}}"
+      headers:
+        Authorization: "Bearer {{.inputs.api_key}}"
+    on_success: process_response
+    on_failure: handle_error
+
+  process_response:
+    type: step
+    command: echo "Got status {{.states.fetch.Response.status_code}}: {{.states.fetch.Response.body}}"
+    on_success: done
+
+  handle_error:
+    type: terminal
+    status: failure
+
+  done:
+    type: terminal
+    status: success
+```
+
+See [Workflow Syntax - HTTP Operations](workflow-syntax.md#http-operations) for complete reference.
 
 ---
 

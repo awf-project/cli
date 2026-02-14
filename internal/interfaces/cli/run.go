@@ -21,12 +21,14 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/executor"
 	infra_expression "github.com/vanoix/awf/internal/infrastructure/expression"
 	"github.com/vanoix/awf/internal/infrastructure/github"
+	"github.com/vanoix/awf/internal/infrastructure/http"
 	"github.com/vanoix/awf/internal/infrastructure/notify"
 	"github.com/vanoix/awf/internal/infrastructure/plugin"
 	"github.com/vanoix/awf/internal/infrastructure/repository"
 	"github.com/vanoix/awf/internal/infrastructure/store"
 	"github.com/vanoix/awf/internal/infrastructure/xdg"
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+	"github.com/vanoix/awf/pkg/httputil"
 	"github.com/vanoix/awf/pkg/interpolation"
 	"golang.org/x/term"
 )
@@ -261,7 +263,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 
-	// Setup operation providers (F054 GitHub + F056 Notify)
+	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
 	githubClient := github.NewClient(logger)
 	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
 
@@ -273,8 +275,12 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to register notify backends: %w", err)
 	}
 
-	// Wrap both providers in composite for coexistence
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider)
+	// Setup HTTP operation provider (F058)
+	httpClient := httputil.NewClient()
+	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
+
+	// Wrap all providers in composite for coexistence
+	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion
@@ -919,7 +925,7 @@ func runSingleStep(
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 
-	// Setup operation providers (F054 GitHub + F056 Notify)
+	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
 	githubClient := github.NewClient(logger)
 	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
 
@@ -931,8 +937,12 @@ func runSingleStep(
 		return fmt.Errorf("failed to register notify backends: %w", err)
 	}
 
-	// Wrap both providers in composite for coexistence
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider)
+	// Setup HTTP operation provider (F058)
+	httpClient := httputil.NewClient()
+	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
+
+	// Wrap all providers in composite for coexistence
+	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion
