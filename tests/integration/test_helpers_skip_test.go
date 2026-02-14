@@ -12,10 +12,6 @@ import (
 // Component: T003
 // Feature: C030
 
-// =============================================================================
-// Tests for Skip Helper Functions
-// =============================================================================
-
 // TestSkipInCI_Behavior verifies skipInCI helper behavior based on environment
 func TestSkipInCI_Behavior(t *testing.T) {
 	// Save original values
@@ -289,10 +285,6 @@ func TestSkipIfToolMissing_Behavior(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Integration Tests - Helper Function Interactions
-// =============================================================================
-
 // TestSkipHelpers_Integration verifies helpers work in realistic scenarios
 func TestSkipHelpers_Integration(t *testing.T) {
 	t.Run("multiple conditions combined", func(t *testing.T) {
@@ -329,10 +321,6 @@ func TestSkipHelpers_Integration(t *testing.T) {
 		t.Log("skipIfToolMissing: delegates to skipIfCLIMissing")
 	})
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 // TestSkipHelpers_ErrorHandling verifies helpers handle edge cases gracefully
 func TestSkipHelpers_ErrorHandling(t *testing.T) {
@@ -392,10 +380,6 @@ func TestSkipHelpers_ErrorHandling(t *testing.T) {
 		}
 	})
 }
-
-// =============================================================================
-// Documentation Tests
-// =============================================================================
 
 // TestSkipHelpers_Documentation documents expected behavior for future developers
 func TestSkipHelpers_Documentation(t *testing.T) {

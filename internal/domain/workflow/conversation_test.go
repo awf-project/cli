@@ -24,24 +24,13 @@ func mockExpressionValidator(expr string) error {
 	return nil
 }
 
-// =============================================================================
-// Component: conversation_domain_models
 // Feature: F033
-// =============================================================================
-
-// =============================================================================
-// TurnRole Constants Tests
-// =============================================================================
 
 func TestTurnRole_Constants(t *testing.T) {
 	assert.Equal(t, TurnRole("system"), TurnRoleSystem)
 	assert.Equal(t, TurnRole("user"), TurnRoleUser)
 	assert.Equal(t, TurnRole("assistant"), TurnRoleAssistant)
 }
-
-// =============================================================================
-// Turn Constructor Tests
-// =============================================================================
 
 func TestNewTurn(t *testing.T) {
 	tests := []struct {
@@ -96,10 +85,6 @@ func TestNewTurn_LargeContent(t *testing.T) {
 	assert.Equal(t, TurnRoleUser, turn.Role)
 	assert.Equal(t, largeContent, turn.Content)
 }
-
-// =============================================================================
-// Turn Validate Tests
-// =============================================================================
 
 func TestTurn_Validate(t *testing.T) {
 	tests := []struct {
@@ -192,20 +177,12 @@ func TestTurn_Validate(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ContextWindowStrategy Constants Tests
-// =============================================================================
-
 func TestContextWindowStrategy_Constants(t *testing.T) {
 	assert.Equal(t, ContextWindowStrategy(""), StrategyNone)
 	assert.Equal(t, ContextWindowStrategy("sliding_window"), StrategySlidingWindow)
 	assert.Equal(t, ContextWindowStrategy("summarize"), StrategySummarize)
 	assert.Equal(t, ContextWindowStrategy("truncate_middle"), StrategyTruncateMiddle)
 }
-
-// =============================================================================
-// ConversationConfig Validate Tests
-// =============================================================================
 
 func TestConversationConfig_Validate(t *testing.T) {
 	tests := []struct {
@@ -396,10 +373,6 @@ func TestConversationConfig_Validate_StopConditions(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ConversationConfig GetMaxTurns Tests
-// =============================================================================
-
 func TestConversationConfig_GetMaxTurns(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -443,20 +416,12 @@ func TestConversationConfig_GetMaxTurns(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// StopReason Constants Tests
-// =============================================================================
-
 func TestStopReason_Constants(t *testing.T) {
 	assert.Equal(t, StopReason("condition"), StopReasonCondition)
 	assert.Equal(t, StopReason("max_turns"), StopReasonMaxTurns)
 	assert.Equal(t, StopReason("max_tokens"), StopReasonMaxTokens)
 	assert.Equal(t, StopReason("error"), StopReasonError)
 }
-
-// =============================================================================
-// ConversationState Constructor Tests
-// =============================================================================
 
 func TestNewConversationState(t *testing.T) {
 	tests := []struct {
@@ -503,10 +468,6 @@ func TestNewConversationState(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ConversationState AddTurn Tests
-// =============================================================================
-
 func TestConversationState_AddTurn(t *testing.T) {
 	state := NewConversationState("You are a helper.")
 
@@ -543,13 +504,9 @@ func TestConversationState_AddTurn_NilTurn(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot add nil turn")
 
 	// State should be unchanged
-	assert.Equal(t, 0, len(state.Turns))
+	assert.Empty(t, state.Turns)
 	assert.Equal(t, 0, state.TotalTurns)
 }
-
-// =============================================================================
-// ConversationState GetTotalTokens Tests
-// =============================================================================
 
 func TestConversationState_GetTotalTokens(t *testing.T) {
 	state := &ConversationState{
@@ -568,10 +525,6 @@ func TestConversationState_GetTotalTokens_Empty(t *testing.T) {
 	state := &ConversationState{}
 	assert.Equal(t, 0, state.GetTotalTokens())
 }
-
-// =============================================================================
-// ConversationState GetLastTurn Tests
-// =============================================================================
 
 func TestConversationState_GetLastTurn(t *testing.T) {
 	state := &ConversationState{
@@ -597,10 +550,6 @@ func TestConversationState_GetLastTurn_Empty(t *testing.T) {
 	lastTurn := state.GetLastTurn()
 	assert.Nil(t, lastTurn)
 }
-
-// =============================================================================
-// ConversationState GetLastAssistantResponse Tests
-// =============================================================================
 
 func TestConversationState_GetLastAssistantResponse(t *testing.T) {
 	state := &ConversationState{
@@ -629,10 +578,6 @@ func TestConversationState_GetLastAssistantResponse_NoAssistant(t *testing.T) {
 	assert.Empty(t, response)
 }
 
-// =============================================================================
-// ConversationState IsStopped Tests
-// =============================================================================
-
 func TestConversationState_IsStopped(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -655,10 +600,6 @@ func TestConversationState_IsStopped(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ConversationResult Constructor Tests
-// =============================================================================
 
 func TestNewConversationResult(t *testing.T) {
 	provider := "claude"
@@ -706,10 +647,6 @@ func TestNewConversationResult_VariousProviders(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ConversationResult Duration Tests
-// =============================================================================
-
 func TestConversationResult_Duration(t *testing.T) {
 	start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	end := start.Add(10*time.Second + 500*time.Millisecond)
@@ -744,10 +681,6 @@ func TestConversationResult_Duration_Instant(t *testing.T) {
 	}
 	assert.Equal(t, time.Duration(0), result.Duration())
 }
-
-// =============================================================================
-// ConversationResult Success Tests
-// =============================================================================
 
 func TestConversationResult_Success(t *testing.T) {
 	tests := []struct {
@@ -794,10 +727,6 @@ func TestConversationResult_Success(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ConversationResult HasJSONResponse Tests
-// =============================================================================
-
 func TestConversationResult_HasJSONResponse(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -842,10 +771,6 @@ func TestConversationResult_HasJSONResponse(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ConversationResult TurnCount Tests
-// =============================================================================
-
 func TestConversationResult_TurnCount(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -888,10 +813,6 @@ func TestConversationResult_TurnCount(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
 
 func TestConversationConfig_CompleteExample(t *testing.T) {
 	config := ConversationConfig{
@@ -1074,10 +995,6 @@ func TestConversationResult_TextOnlyResponse(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 	assert.Equal(t, 3, result.TurnCount()) // System + User + Assistant
 }
-
-// =============================================================================
-// Edge Cases and Boundary Conditions
-// =============================================================================
 
 func TestConversationConfig_MaxTurnsBoundaries(t *testing.T) {
 	tests := []struct {

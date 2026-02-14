@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// TemplateNotFoundError Tests
-// =============================================================================
-
 func TestTemplateNotFoundError_Error_WithReferencedBy(t *testing.T) {
 	// Happy path: error with both TemplateName and ReferencedBy
 	err := &TemplateNotFoundError{
@@ -122,10 +118,6 @@ func TestTemplateNotFoundError_SpecialCharactersInNames(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// CircularTemplateError Tests
-// =============================================================================
-
 func TestCircularTemplateError_Error_SingleCycle(t *testing.T) {
 	// Happy path: circular reference with single cycle
 	err := &CircularTemplateError{
@@ -188,10 +180,6 @@ func TestCircularTemplateError_ImplementsErrorInterface(t *testing.T) {
 	require.NotNil(t, err)
 	require.NotEmpty(t, err.Error())
 }
-
-// =============================================================================
-// MissingParameterError Tests
-// =============================================================================
 
 func TestMissingParameterError_Error_WithRequiredList(t *testing.T) {
 	// Happy path: error with all fields populated
@@ -307,10 +295,6 @@ func TestMissingParameterError_SpecialCharactersInNames(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Integration Tests: All Template Errors
-// =============================================================================
 
 func TestTemplateErrors_AllImplementErrorInterface(t *testing.T) {
 	// Verify all template error types implement error interface

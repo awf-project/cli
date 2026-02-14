@@ -208,13 +208,10 @@ func TestExecutionService_detectLoopPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create minimal ExecutionService with nil dependencies (not needed for this helper)
 			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
-			// Act: Call the helper method
 			gotHadFailures, gotHasComplexity := execSvc.detectLoopPatterns(tt.result, tt.wf)
 
-			// Assert: Verify the results
 			assert.Equal(t, tt.wantHadFailures, gotHadFailures, "hadFailures mismatch")
 			assert.Equal(t, tt.wantHasComplexity, gotHasComplexity, "hasComplexSteps mismatch")
 		})
@@ -328,13 +325,10 @@ func TestExecutionService_shouldCheckLoopProblems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create minimal ExecutionService
 			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
-			// Act: Call the guard helper
 			got := execSvc.shouldCheckLoopProblems(tt.result, tt.step)
 
-			// Assert: Verify the result
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -393,10 +387,8 @@ func TestIsComplexStepType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act: Call the utility function
 			got := isComplexStepType(tt.stepType)
 
-			// Assert: Verify the result
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -440,13 +432,10 @@ func TestExecutionService_buildLoopFailureError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create minimal ExecutionService
 			execSvc := &ExecutionService{outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits())}
 
-			// Act: Build error message
 			got := execSvc.buildLoopFailureError(tt.hadFailures, tt.hasComplexSteps)
 
-			// Assert: Verify message content
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -538,7 +527,6 @@ func TestExecutionService_executeLoopPostHooks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Create mock dependencies
 			logger, hookExec := tt.setupMocks()
 
 			execSvc := &ExecutionService{
@@ -547,12 +535,10 @@ func TestExecutionService_executeLoopPostHooks(t *testing.T) {
 				hookExecutor:  hookExec,
 			}
 
-			// Act: Execute post hooks
 			assert.NotPanics(t, func() {
 				execSvc.executeLoopPostHooks(context.Background(), tt.step, tt.execCtx)
 			})
 
-			// Assert: Verify logging behavior
 			if tt.expectWarningLog {
 				// Should have logged a warning
 				hasWarning := false

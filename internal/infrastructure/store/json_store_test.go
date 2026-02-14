@@ -631,12 +631,9 @@ func TestJSONStore_RaceListSave(t *testing.T) {
 	assert.Len(t, ids, iterations)
 }
 
-// ============================================================================
-// T010: File Corruption Recovery Tests
 // Item: T010
 // Feature: C016
 // Description: Comprehensive tests for file corruption recovery scenarios
-// ============================================================================
 
 // TestJSONStore_Load_TruncatedJSON verifies recovery from truncated JSON files
 func TestJSONStore_Load_TruncatedJSON(t *testing.T) {

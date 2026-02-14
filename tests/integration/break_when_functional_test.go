@@ -30,10 +30,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Happy Path Tests - Normal break_when behavior
-// =============================================================================
-
 // TestBreakWhen_ExactStringMatch_Integration tests break_when with exact string equality.
 // This is the primary reproduction case from B003 bug report.
 //
@@ -235,10 +231,6 @@ states:
 	assert.Equal(t, "iteration\n", string(data),
 		"Loop should break when ExitCode == 0")
 }
-
-// =============================================================================
-// Edge Case Tests - Boundary conditions
-// =============================================================================
 
 // TestBreakWhen_EmptyOutput_Integration tests break_when with empty string output.
 //
@@ -510,10 +502,6 @@ states:
 		"Loop should stop at iteration 2, not run all 10 iterations")
 }
 
-// =============================================================================
-// Error Handling Tests - Invalid conditions
-// =============================================================================
-
 // TestBreakWhen_NonexistentState_ContinuesLoop_Integration tests break_when referencing missing state.
 //
 // Given: A while loop with break_when referencing non-existent state
@@ -579,10 +567,6 @@ states:
 	assert.Equal(t, "iteration\niteration\niteration\n", string(data),
 		"Loop should run all iterations when break_when references missing state")
 }
-
-// =============================================================================
-// Integration Tests - Complex scenarios
-// =============================================================================
 
 // TestBreakWhen_WithMultipleBodySteps_Integration tests break_when evaluating after multi-step body.
 //

@@ -21,14 +21,11 @@ import (
 // maintaining hexagonal architecture compliance.
 // This is the happy path test - the file should be clean after C044 migration.
 func TestTemplateServiceTest_NoInfrastructureImport(t *testing.T) {
-	// Arrange: locate the template_service_test.go file
 	sourceFile := "template_service_test.go"
 
-	// Act: read the file and check imports
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 
-	// Assert: verify no infrastructure imports
 	for _, imp := range imports {
 		cleanImp := strings.Trim(imp, `"`)
 		assert.NotContains(t, cleanImp, "infrastructure/repository",
@@ -47,14 +44,11 @@ func TestTemplateServiceTest_NoInfrastructureImport(t *testing.T) {
 // maintaining hexagonal architecture compliance.
 // This is the happy path test - the file should be clean after C044 migration.
 func TestTemplateServiceHelpersTest_NoInfrastructureImport(t *testing.T) {
-	// Arrange: locate the template_service_helpers_test.go file
 	sourceFile := "template_service_helpers_test.go"
 
-	// Act: read the file and check imports
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 
-	// Assert: verify no infrastructure imports
 	for _, imp := range imports {
 		cleanImp := strings.Trim(imp, `"`)
 		assert.NotContains(t, cleanImp, "infrastructure/repository",
@@ -72,14 +66,11 @@ func TestTemplateServiceHelpersTest_NoInfrastructureImport(t *testing.T) {
 // imports and uses testutil package for mock implementations.
 // This is an edge case ensuring the migration to centralized mocks is complete.
 func TestTemplateServiceTest_UseTestutilMocks(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_test.go"
 
-	// Act: read file imports
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 
-	// Assert: should import testutil
 	hasTestutilImport := false
 	for _, imp := range imports {
 		if strings.Contains(imp, "internal/testutil") {
@@ -95,14 +86,11 @@ func TestTemplateServiceTest_UseTestutilMocks(t *testing.T) {
 // template_service_helpers_test.go imports and uses testutil package for mocks.
 // This is an edge case ensuring the migration to centralized mocks is complete.
 func TestTemplateServiceHelpersTest_UseTestutilMocks(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_helpers_test.go"
 
-	// Act: read file imports
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 
-	// Assert: should import testutil
 	hasTestutilImport := false
 	for _, imp := range imports {
 		if strings.Contains(imp, "internal/testutil") {
@@ -118,15 +106,12 @@ func TestTemplateServiceHelpersTest_UseTestutilMocks(t *testing.T) {
 // template_service_test.go does not define a local mockTemplateRepository type.
 // This is an error handling test ensuring duplicate mock definitions were removed.
 func TestTemplateServiceTest_NoLocalMockTemplateRepository(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_test.go"
 
-	// Act: read and scan file content
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 	contentStr := string(content)
 
-	// Assert: should not define local mockTemplateRepository
 	assert.NotContains(t, contentStr, "type mockTemplateRepository struct",
 		"template_service_test.go should not define local mockTemplateRepository - use testutil.MockTemplateRepository")
 	assert.NotContains(t, contentStr, "func newMockTemplateRepository()",
@@ -139,15 +124,12 @@ func TestTemplateServiceTest_NoLocalMockTemplateRepository(t *testing.T) {
 // template_service_helpers_test.go does not define a local mockTemplateRepository.
 // This is an error handling test ensuring duplicate mock definitions were removed.
 func TestTemplateServiceHelpersTest_NoLocalMockTemplateRepository(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_helpers_test.go"
 
-	// Act: read and scan file content
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 	contentStr := string(content)
 
-	// Assert: should not define local mockTemplateRepository
 	assert.NotContains(t, contentStr, "type mockTemplateRepository struct",
 		"template_service_helpers_test.go should not define local mockTemplateRepository - use testutil.MockTemplateRepository")
 	assert.NotContains(t, contentStr, "func newMockTemplateRepository()",
@@ -160,12 +142,10 @@ func TestTemplateServiceHelpersTest_NoLocalMockTemplateRepository(t *testing.T) 
 // use domain layer error types, not infrastructure types.
 // This is an edge case ensuring proper layer separation for error handling.
 func TestTemplateServiceTest_UseDomainErrorTypes(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_test.go"
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err)
 
-	// Act: scan for error assertions
 	lines := strings.Split(string(content), "\n")
 	violations := []string{}
 
@@ -184,7 +164,6 @@ func TestTemplateServiceTest_UseDomainErrorTypes(t *testing.T) {
 		}
 	}
 
-	// Assert: no infrastructure error type references
 	assert.Empty(t, violations,
 		"template_service_test.go should use workflow.TemplateNotFoundError, not repository.TemplateNotFoundError")
 }
@@ -193,12 +172,10 @@ func TestTemplateServiceTest_UseDomainErrorTypes(t *testing.T) {
 // assertions use domain layer error types, not infrastructure types.
 // This is an edge case ensuring proper layer separation for error handling.
 func TestTemplateServiceHelpersTest_UseDomainErrorTypes(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_helpers_test.go"
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err)
 
-	// Act: scan for error assertions
 	lines := strings.Split(string(content), "\n")
 	violations := []string{}
 
@@ -217,7 +194,6 @@ func TestTemplateServiceHelpersTest_UseDomainErrorTypes(t *testing.T) {
 		}
 	}
 
-	// Assert: no infrastructure error type references
 	assert.Empty(t, violations,
 		"template_service_helpers_test.go should use workflow.TemplateNotFoundError, not repository.TemplateNotFoundError")
 }
@@ -233,11 +209,9 @@ func TestTemplateServiceTests_ArchitectureCompliance(t *testing.T) {
 
 	for _, sourceFile := range testFiles {
 		t.Run(sourceFile, func(t *testing.T) {
-			// Act
 			imports, err := extractImports(sourceFile)
 			require.NoError(t, err)
 
-			// Assert: application layer tests should only import from:
 			// - standard library
 			// - domain layer (ports, workflow)
 			// - testutil
@@ -268,7 +242,6 @@ func TestTemplateServiceTests_ArchitectureCompliance(t *testing.T) {
 // Tests should be in package application_test to avoid internal coupling.
 // This is an edge case for proper Go testing conventions.
 func TestTemplateServiceTest_PackageDeclaration(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_test.go"
 	file, err := os.Open(sourceFile)
 	require.NoError(t, err)
@@ -277,7 +250,6 @@ func TestTemplateServiceTest_PackageDeclaration(t *testing.T) {
 	scanner := bufio.NewScanner(file)
 	var packageLine string
 
-	// Act: find package declaration (first non-empty, non-comment line)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" && !strings.HasPrefix(line, "//") {
@@ -287,7 +259,6 @@ func TestTemplateServiceTest_PackageDeclaration(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 
-	// Assert: should use package application_test for black-box testing
 	assert.Equal(t, "package application_test", packageLine,
 		"template_service_test.go should use 'package application_test' for black-box testing")
 }
@@ -296,7 +267,6 @@ func TestTemplateServiceTest_PackageDeclaration(t *testing.T) {
 // declaration for the helpers test file.
 // This is an edge case for proper Go testing conventions.
 func TestTemplateServiceHelpersTest_PackageDeclaration(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_helpers_test.go"
 	file, err := os.Open(sourceFile)
 	require.NoError(t, err)
@@ -305,7 +275,6 @@ func TestTemplateServiceHelpersTest_PackageDeclaration(t *testing.T) {
 	scanner := bufio.NewScanner(file)
 	var packageLine string
 
-	// Act: find package declaration (first non-empty, non-comment line)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" && !strings.HasPrefix(line, "//") {
@@ -315,7 +284,6 @@ func TestTemplateServiceHelpersTest_PackageDeclaration(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 
-	// Assert: should use package application_test for black-box testing
 	assert.Equal(t, "package application_test", packageLine,
 		"template_service_helpers_test.go should use 'package application_test' for black-box testing")
 }
@@ -323,10 +291,8 @@ func TestTemplateServiceHelpersTest_PackageDeclaration(t *testing.T) {
 // TestTemplateServiceTest_NoRepositoryPackageReference is an error handling test
 // that detects if someone accidentally adds references to the repository package.
 func TestTemplateServiceTest_NoRepositoryPackageReference(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_test.go"
 
-	// Act: read and scan file line by line
 	file, err := os.Open(sourceFile)
 	require.NoError(t, err)
 	defer file.Close()
@@ -359,7 +325,6 @@ func TestTemplateServiceTest_NoRepositoryPackageReference(t *testing.T) {
 
 	require.NoError(t, scanner.Err())
 
-	// Assert: no violations found
 	assert.Empty(t, violations,
 		"found repository package references in template_service_test.go")
 }
@@ -367,10 +332,8 @@ func TestTemplateServiceTest_NoRepositoryPackageReference(t *testing.T) {
 // TestTemplateServiceHelpersTest_NoRepositoryPackageReference is an error
 // handling test for the helpers test file.
 func TestTemplateServiceHelpersTest_NoRepositoryPackageReference(t *testing.T) {
-	// Arrange
 	sourceFile := "template_service_helpers_test.go"
 
-	// Act: read and scan file line by line
 	file, err := os.Open(sourceFile)
 	require.NoError(t, err)
 	defer file.Close()
@@ -403,7 +366,6 @@ func TestTemplateServiceHelpersTest_NoRepositoryPackageReference(t *testing.T) {
 
 	require.NoError(t, scanner.Err())
 
-	// Assert: no violations found
 	assert.Empty(t, violations,
 		"found repository package references in template_service_helpers_test.go")
 }
@@ -419,11 +381,9 @@ func TestTemplateServiceTests_ImportOrder(t *testing.T) {
 
 	for _, sourceFile := range testFiles {
 		t.Run(sourceFile, func(t *testing.T) {
-			// Act
 			imports, err := extractImports(sourceFile)
 			require.NoError(t, err)
 
-			// Assert: categorize imports
 			var (
 				stdlibImports   []string
 				externalImports []string

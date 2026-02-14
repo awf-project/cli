@@ -25,10 +25,6 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/notify"
 )
 
-// =============================================================================
-// Happy Path: Config-Driven Registration
-// =============================================================================
-
 func TestNotifyBackendRegistration_FullConfiguration(t *testing.T) {
 	// GIVEN: Full notify configuration with ntfy and slack URLs
 	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,10 +161,6 @@ func TestNotifyBackendRegistration_PartialConfiguration(t *testing.T) {
 	assert.Contains(t, err.Error(), "not available", "should indicate backend not available")
 }
 
-// =============================================================================
-// Default Backend Precedence
-// =============================================================================
-
 func TestNotifyBackendRegistration_DefaultBackendFallback(t *testing.T) {
 	// GIVEN: Config with default_backend set to "desktop"
 	cfg := &config.ProjectConfig{}
@@ -225,10 +217,6 @@ func TestNotifyBackendRegistration_ExplicitBackendOverridesDefault(t *testing.T)
 	assert.NoError(t, err, "explicit backend should override default")
 	assert.True(t, result.Success)
 }
-
-// =============================================================================
-// Error Handling
-// =============================================================================
 
 func TestNotifyBackendRegistration_InvalidNtfyURL(t *testing.T) {
 	// GIVEN: Config with invalid ntfy URL
@@ -294,10 +282,6 @@ func TestNotifyBackendRegistration_DefaultBackendNotRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "not available", "should indicate backend unavailable")
 	assert.False(t, result.Success)
 }
-
-// =============================================================================
-// Execution Modes
-// =============================================================================
 
 func TestNotifyBackendRegistration_DryRunMode(t *testing.T) {
 	// GIVEN: Config with all backends configured
@@ -418,10 +402,6 @@ func TestNotifyBackendRegistration_ConfigChanges(t *testing.T) {
 	assert.Error(t, err, "ntfy should not be available in new config")
 	assert.Contains(t, err.Error(), "not available", "should indicate backend not available")
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestNotifyBackendRegistration_NilProvider(t *testing.T) {
 	// GIVEN: Nil provider

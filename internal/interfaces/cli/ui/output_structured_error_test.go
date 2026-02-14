@@ -13,15 +13,11 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
 // Component T013: WriteError() StructuredError Enhancement Tests
 // Tests for enhanced WriteError() that detects and formats StructuredError.
 // Tests compile but fail in RED phase (stub implementation).
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // Happy Path Tests: StructuredError Detection and Formatting
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_StructuredError_JSON(t *testing.T) {
 	tests := []struct {
@@ -171,9 +167,7 @@ func TestOutputWriter_WriteError_StructuredError_Text(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Edge Cases: Empty Details, Nil Cause, Wrapped Errors
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_StructuredError_EmptyDetails(t *testing.T) {
 	// StructuredError with nil details should not cause panic
@@ -299,9 +293,7 @@ func TestOutputWriter_WriteError_StructuredError_AllErrorCodes(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Error Handling: Backward Compatibility with Plain Errors
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_PlainError_JSON(t *testing.T) {
 	// Plain error (not StructuredError) should use fallback formatting
@@ -398,9 +390,7 @@ func TestOutputWriter_WriteError_MixedErrorTypes(t *testing.T) {
 	assert.Equal(t, "plain error", plain.Error)
 }
 
-// -----------------------------------------------------------------------------
 // Integration: Output Format Variations
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_StructuredError_AllFormats(t *testing.T) {
 	// Test StructuredError across all output formats
@@ -493,9 +483,7 @@ func TestOutputWriter_WriteError_StructuredError_WithDetails(t *testing.T) {
 	// This test documents that details exist but may not be in JSON output
 }
 
-// -----------------------------------------------------------------------------
 // RED Phase: Tests for Formatter Integration (Will Pass in GREEN Phase)
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_StructuredError_UsesFormatter_Text(t *testing.T) {
 	// GREEN phase: HumanErrorFormatter integration test
@@ -586,9 +574,7 @@ func TestOutputWriter_WriteError_StructuredError_FormatterWithCause_Text(t *test
 	// assert.Contains(t, output, "Caused by: permission denied")
 }
 
-// -----------------------------------------------------------------------------
 // Error Detection: errors.As() Behavior
-// -----------------------------------------------------------------------------
 
 func TestOutputWriter_WriteError_ErrorsAs_Detection(t *testing.T) {
 	// Verify that errors.As() correctly detects StructuredError
@@ -613,9 +599,7 @@ func TestOutputWriter_WriteError_ErrorsAs_Detection(t *testing.T) {
 	assert.False(t, isWrappedStructured, "errors.As should NOT detect improperly wrapped StructuredError")
 }
 
-// -----------------------------------------------------------------------------
 // Coverage: ErrorResponse JSON Schema
-// -----------------------------------------------------------------------------
 
 func TestErrorResponse_JSONSchema(t *testing.T) {
 	// Verify ErrorResponse has the expected JSON schema

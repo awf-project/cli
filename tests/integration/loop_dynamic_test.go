@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// F037: Dynamic Variable Interpolation in Loop max_iterations - Integration Tests
-// =============================================================================
-
 // TestDynamicMaxIterations_FromInput tests US1: max_iterations from input variable
 func TestDynamicMaxIterations_FromInput(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -84,7 +80,7 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Len(t, lines, 3, "expected 3 items with limit=3")
+	assert.Len(t, lines, 3)
 	assert.Equal(t, []string{"a", "b", "c"}, lines)
 }
 
@@ -218,7 +214,7 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Len(t, lines, 2, "expected 2 items with LOOP_LIMIT=2")
+	assert.Len(t, lines, 2)
 	assert.Equal(t, []string{"one", "two"}, lines)
 }
 
@@ -770,10 +766,6 @@ func TestDynamicMaxIterations_UsingFixtureFiles(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// US2: Interpolate Loop Condition Variables - Integration Tests
-// =============================================================================
-
 // TestDynamicLoopCondition_WithStepOutput tests US2: loop conditions referencing step outputs
 func TestDynamicLoopCondition_WithStepOutput(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -854,7 +846,7 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Len(t, lines, 3, "expected 3 iterations to reach threshold")
+	assert.Len(t, lines, 3)
 }
 
 // TestDynamicLoopCondition_UntilCondition tests until condition with interpolated variables
@@ -927,12 +919,8 @@ states:
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	// Loop should run 3 times: 2 polls before done, plus 1 more that triggers break
-	assert.GreaterOrEqual(t, len(lines), 3, "expected at least 3 iterations")
+	assert.GreaterOrEqual(t, len(lines), 3)
 }
-
-// =============================================================================
-// Edge Cases and Additional Scenarios
-// =============================================================================
 
 // TestDynamicMaxIterations_StringInputResolvesToInteger tests string input that parses to int
 func TestDynamicMaxIterations_StringInputResolvesToInteger(t *testing.T) {
@@ -1225,10 +1213,6 @@ states:
 		"error message should indicate division or integer issue, got: %s", err.Error())
 }
 
-// =============================================================================
-// US4: Validate Interpolated Loop Variables at Parse Time - Integration Tests
-// =============================================================================
-
 // TestDynamicMaxIterations_ValidationWarning tests US4: awf validate warns about undefined variables
 func TestDynamicMaxIterations_ValidationWarning(t *testing.T) {
 	// Use the invalid fixture with undefined variable
@@ -1500,12 +1484,8 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Len(t, lines, 2, "should process exactly 2 items with batch_count=2")
+	assert.Len(t, lines, 2)
 }
-
-// =============================================================================
-// F047: Loop JSON Serialization - Integration Tests
-// =============================================================================
 
 // TestForEachLoop_WithObjectItems_Integration tests US3: for_each loop with JSON objects
 // AC1: {{.loop.Item}} passed to call_workflow produces valid JSON
@@ -1536,19 +1516,19 @@ func TestForEachLoop_WithObjectItems_Integration(t *testing.T) {
 
 	// Then: Workflow should complete successfully
 	require.NoError(t, err, "workflow execution should not error")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete successfully")
-	assert.Equal(t, "done", execCtx.CurrentStep, "workflow should end at done state")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.Equal(t, "done", execCtx.CurrentStep)
 
 	// Then: Validation step should exist and pass (no Go map format)
 	validateState, ok := execCtx.GetStepState("validate_item")
 	require.True(t, ok, "validate_item state should exist")
-	assert.Equal(t, 0, validateState.ExitCode, "validate_item should succeed")
+	assert.Equal(t, 0, validateState.ExitCode)
 
 	// Verify validation output confirms JSON format
 	validationOutput := validateState.Output
-	assert.Contains(t, validationOutput, "VALIDATION_SUCCESS", "validation should confirm JSON format")
-	assert.NotContains(t, validationOutput, "map[", "output should not contain Go map format")
-	assert.NotContains(t, validationOutput, "VALIDATION_FAILED", "validation should not fail")
+	assert.Contains(t, validationOutput, "VALIDATION_SUCCESS")
+	assert.NotContains(t, validationOutput, "map[")
+	assert.NotContains(t, validationOutput, "VALIDATION_FAILED")
 }
 
 // TestForEachLoop_WithNestedStructures tests AC2: nested objects and arrays properly serialized
@@ -1580,13 +1560,13 @@ func TestForEachLoop_WithNestedStructures(t *testing.T) {
 
 	// Then: Workflow should complete and child validates nested JSON
 	require.NoError(t, err, "workflow with nested structures should not error")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	// Verify nested structures are valid JSON
 	validateState, ok := execCtx.GetStepState("validate_item")
 	require.True(t, ok, "validate_item state should exist")
-	assert.Equal(t, 0, validateState.ExitCode, "should validate nested JSON")
-	assert.Contains(t, validateState.Output, "VALIDATION_SUCCESS", "nested JSON should validate")
+	assert.Equal(t, 0, validateState.ExitCode)
+	assert.Contains(t, validateState.Output, "VALIDATION_SUCCESS")
 }
 
 // TestForEachLoop_MixedPrimitiveAndComplex tests mixed primitive and complex types in loop
@@ -1647,7 +1627,7 @@ states:
 
 	// Then: All items should be serialized appropriately
 	require.NoError(t, err, "workflow with mixed types should not error")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	// Verify output file contains properly serialized items
 	data, err := os.ReadFile(outputFile)
@@ -1655,16 +1635,16 @@ states:
 	output := string(data)
 
 	// Primitives should pass through unchanged
-	assert.Contains(t, output, "string", "string primitive should be preserved")
-	assert.Contains(t, output, "42", "number primitive should be preserved")
-	assert.Contains(t, output, "true", "boolean primitive should be preserved")
+	assert.Contains(t, output, "string")
+	assert.Contains(t, output, "42")
+	assert.Contains(t, output, "true")
 
 	// Complex types should be JSON
-	assert.Contains(t, output, `{"key":"value"}`, "object should be JSON")
+	assert.Contains(t, output, `{"key":"value"}`)
 	assert.Contains(t, output, "[1,2,3]", "array should be JSON")
 
 	// Should NOT contain Go map format
-	assert.NotContains(t, output, "map[", "should not have Go map format")
+	assert.NotContains(t, output, "map[")
 }
 
 // TestForEachLoop_EmptyObjectsAndArrays tests edge case: empty objects and arrays
@@ -1696,11 +1676,11 @@ func TestForEachLoop_EmptyObjectsAndArrays(t *testing.T) {
 
 	// Then: Empty structures should serialize as valid JSON
 	require.NoError(t, err, "workflow with empty structures should not error")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	validateState, ok := execCtx.GetStepState("validate_item")
 	require.True(t, ok, "validate_item state should exist")
-	assert.Equal(t, 0, validateState.ExitCode, "empty structures should validate as JSON")
+	assert.Equal(t, 0, validateState.ExitCode)
 }
 
 // TestForEachLoop_UnicodeAndSpecialChars tests edge case: unicode and special characters
@@ -1732,11 +1712,11 @@ func TestForEachLoop_UnicodeAndSpecialChars(t *testing.T) {
 
 	// Then: Unicode and special chars should be properly escaped in JSON
 	require.NoError(t, err, "workflow with unicode should not error")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	validateState, ok := execCtx.GetStepState("validate_item")
 	require.True(t, ok, "validate_item state should exist")
-	assert.Equal(t, 0, validateState.ExitCode, "unicode JSON should validate")
+	assert.Equal(t, 0, validateState.ExitCode)
 }
 
 // TestForEachLoop_BackwardCompatibility_StringItems tests AC4: existing workflows work unchanged
@@ -1787,17 +1767,17 @@ states:
 
 	// Then: String items should pass through unchanged (backward compatibility)
 	require.NoError(t, err, "string items workflow should work")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	data, err := os.ReadFile(outputFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 
-	assert.Len(t, lines, 3, "should have 3 items")
-	assert.Equal(t, "item1", lines[0], "string should not be quoted")
-	assert.Equal(t, "item2", lines[1], "string should not be quoted")
-	assert.Equal(t, "item3", lines[2], "string should not be quoted")
+	assert.Len(t, lines, 3)
+	assert.Equal(t, "item1", lines[0])
+	assert.Equal(t, "item2", lines[1])
+	assert.Equal(t, "item3", lines[2])
 
 	// Strings should NOT be JSON-quoted (backward compatibility)
-	assert.NotContains(t, string(data), `"item1"`, "strings should not be JSON-encoded")
+	assert.NotContains(t, string(data), `"item1"`)
 }

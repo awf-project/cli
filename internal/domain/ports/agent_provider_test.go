@@ -13,10 +13,6 @@ import (
 // Component: agent_provider_port
 // Feature: 39
 
-// ============================================================================
-// Mock Implementations
-// ============================================================================
-
 // mockAgentProvider is a test implementation of AgentProvider interface
 type mockAgentProvider struct {
 	name                      string
@@ -103,10 +99,6 @@ func (m *mockAgentRegistry) Has(name string) bool {
 	return ok
 }
 
-// ============================================================================
-// Interface Compliance Tests
-// ============================================================================
-
 func TestAgentProviderInterface(t *testing.T) {
 	var _ ports.AgentProvider = (*mockAgentProvider)(nil)
 }
@@ -115,12 +107,7 @@ func TestAgentRegistryInterface(t *testing.T) {
 	var _ ports.AgentRegistry = (*mockAgentRegistry)(nil)
 }
 
-// ============================================================================
-// AgentProvider Tests - Happy Path
-// ============================================================================
-
 func TestAgentProvider_Execute_HappyPath(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	ctx := context.Background()
 	prompt := "Analyze this code"
@@ -129,9 +116,7 @@ func TestAgentProvider_Execute_HappyPath(t *testing.T) {
 		"max_tokens": 4096,
 	}
 
-	// Act
 	result, err := provider.Execute(ctx, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -163,13 +148,9 @@ func TestAgentProvider_Name_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := newMockAgentProvider(tt.providerName)
 
-			// Act
 			name := provider.Name()
-
-			// Assert
 			if name != tt.providerName {
 				t.Errorf("expected name '%s', got '%s'", tt.providerName, name)
 			}
@@ -178,31 +159,21 @@ func TestAgentProvider_Name_HappyPath(t *testing.T) {
 }
 
 func TestAgentProvider_Validate_HappyPath(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 
-	// Act
 	err := provider.Validate()
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
 
-// ============================================================================
-// AgentProvider Tests - Edge Cases
-// ============================================================================
-
 func TestAgentProvider_Execute_EmptyPrompt(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	ctx := context.Background()
 	prompt := ""
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.Execute(ctx, prompt, options)
-	// Assert - should handle empty prompt gracefully
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -212,14 +183,11 @@ func TestAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 }
 
 func TestAgentProvider_Execute_NilOptions(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	ctx := context.Background()
 	prompt := "test prompt"
 
-	// Act
 	result, err := provider.Execute(ctx, prompt, nil)
-	// Assert - should handle nil options
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -229,16 +197,12 @@ func TestAgentProvider_Execute_NilOptions(t *testing.T) {
 }
 
 func TestAgentProvider_Execute_LargePrompt(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	ctx := context.Background()
-	// Create a large prompt (10KB)
 	largePrompt := string(make([]byte, 10240))
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.Execute(ctx, largePrompt, options)
-	// Assert - should handle large prompts
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -248,10 +212,8 @@ func TestAgentProvider_Execute_LargePrompt(t *testing.T) {
 }
 
 func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
-		// Check if context is cancelled
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -266,10 +228,8 @@ func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act
 	result, err := provider.Execute(ctx, "test", nil)
 
-	// Assert - should respect context cancellation
 	if err == nil {
 		t.Error("expected error from cancelled context")
 	}
@@ -278,22 +238,15 @@ func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentProvider Tests - Error Handling
-// ============================================================================
-
 func TestAgentProvider_Execute_ExecutionError(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	expectedErr := errors.New("execution failed")
 	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 		return nil, expectedErr
 	}
 
-	// Act
 	result, err := provider.Execute(context.Background(), "test", nil)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -306,7 +259,6 @@ func TestAgentProvider_Execute_ExecutionError(t *testing.T) {
 }
 
 func TestAgentProvider_Execute_PartialResult(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	expectedErr := errors.New("partial execution")
 	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
@@ -318,10 +270,8 @@ func TestAgentProvider_Execute_PartialResult(t *testing.T) {
 		return result, expectedErr
 	}
 
-	// Act
 	result, err := provider.Execute(context.Background(), "test", nil)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -334,17 +284,14 @@ func TestAgentProvider_Execute_PartialResult(t *testing.T) {
 }
 
 func TestAgentProvider_Validate_ValidationError(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	expectedErr := errors.New("binary not found")
 	provider.validateFunc = func() error {
 		return expectedErr
 	}
 
-	// Act
 	err := provider.Validate()
 
-	// Assert
 	if err == nil {
 		t.Error("expected validation error, got nil")
 	}
@@ -353,18 +300,11 @@ func TestAgentProvider_Validate_ValidationError(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentRegistry Tests - Happy Path
-// ============================================================================
-
 func TestAgentRegistry_Register_HappyPath(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	provider := newMockAgentProvider("claude")
 
-	// Act
 	err := registry.Register(provider)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -374,14 +314,11 @@ func TestAgentRegistry_Register_HappyPath(t *testing.T) {
 }
 
 func TestAgentRegistry_Get_HappyPath(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	provider := newMockAgentProvider("claude")
 	registry.Register(provider)
 
-	// Act
 	retrieved, err := registry.Get("claude")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -394,27 +331,22 @@ func TestAgentRegistry_Get_HappyPath(t *testing.T) {
 }
 
 func TestAgentRegistry_List_HappyPath(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	registry.Register(newMockAgentProvider("claude"))
 	registry.Register(newMockAgentProvider("codex"))
 	registry.Register(newMockAgentProvider("gemini"))
 
-	// Act
 	names := registry.List()
 
-	// Assert
 	if len(names) != 3 {
 		t.Errorf("expected 3 providers, got %d", len(names))
 	}
 }
 
 func TestAgentRegistry_Has_HappyPath(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	registry.Register(newMockAgentProvider("claude"))
 
-	// Act & Assert
 	if !registry.Has("claude") {
 		t.Error("expected Has('claude') to return true")
 	}
@@ -423,42 +355,30 @@ func TestAgentRegistry_Has_HappyPath(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentRegistry Tests - Edge Cases
-// ============================================================================
-
 func TestAgentRegistry_List_EmptyRegistry(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 
-	// Act
 	names := registry.List()
 
-	// Assert
 	if len(names) != 0 {
 		t.Errorf("expected 0 providers, got %d", len(names))
 	}
 }
 
 func TestAgentRegistry_Has_EmptyRegistry(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 
-	// Act
 	has := registry.Has("claude")
 
-	// Assert
 	if has {
 		t.Error("expected Has to return false for empty registry")
 	}
 }
 
 func TestAgentRegistry_Register_MultipleProviders(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	providers := []string{"claude", "codex", "gemini", "opencode", "custom"}
 
-	// Act
 	for _, name := range providers {
 		err := registry.Register(newMockAgentProvider(name))
 		if err != nil {
@@ -466,28 +386,20 @@ func TestAgentRegistry_Register_MultipleProviders(t *testing.T) {
 		}
 	}
 
-	// Assert
 	names := registry.List()
 	if len(names) != len(providers) {
 		t.Errorf("expected %d providers, got %d", len(providers), len(names))
 	}
 }
 
-// ============================================================================
-// AgentRegistry Tests - Error Handling
-// ============================================================================
-
 func TestAgentRegistry_Register_DuplicateProvider(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	provider1 := newMockAgentProvider("claude")
 	provider2 := newMockAgentProvider("claude")
 	registry.Register(provider1)
 
-	// Act
 	err := registry.Register(provider2)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error when registering duplicate provider")
 	}
@@ -497,13 +409,10 @@ func TestAgentRegistry_Register_DuplicateProvider(t *testing.T) {
 }
 
 func TestAgentRegistry_Get_NotFound(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 
-	// Act
 	provider, err := registry.Get("nonexistent")
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for nonexistent provider")
 	}
@@ -516,7 +425,6 @@ func TestAgentRegistry_Get_NotFound(t *testing.T) {
 }
 
 func TestAgentRegistry_Get_AfterRegisterError(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 	provider := newMockAgentProvider("claude")
 	registry.Register(provider)
@@ -524,9 +432,7 @@ func TestAgentRegistry_Get_AfterRegisterError(t *testing.T) {
 	// Try to register duplicate (should fail)
 	registry.Register(newMockAgentProvider("claude"))
 
-	// Act - Get should still work for the first registered provider
 	retrieved, err := registry.Get("claude")
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -538,12 +444,7 @@ func TestAgentRegistry_Get_AfterRegisterError(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Integration Tests
-// ============================================================================
-
 func TestAgentProvider_FullWorkflow(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 
 	// Register multiple providers
@@ -552,7 +453,6 @@ func TestAgentProvider_FullWorkflow(t *testing.T) {
 		registry.Register(newMockAgentProvider(name))
 	}
 
-	// Act - Get and execute each provider
 	for _, name := range providers {
 		provider, err := registry.Get(name)
 		if err != nil {
@@ -579,16 +479,11 @@ func TestAgentProvider_FullWorkflow(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentProvider.ExecuteConversation Tests - Feature F033
-// ============================================================================
-
 // Component: agent_provider_extension
 // Feature: F033
 
 // TestAgentProvider_ExecuteConversation_HappyPath tests normal conversation execution
 func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -608,9 +503,7 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 		"max_tokens": 4096,
 	}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -639,7 +532,6 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_WithConversationHistory tests execution with existing turns
 func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -659,9 +551,7 @@ func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T)
 	prompt := "Tell me more about it"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -720,7 +610,6 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := newMockAgentProvider("claude")
 			var capturedOptions map[string]any
 			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
@@ -735,9 +624,7 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 			state := workflow.NewConversationState("System prompt")
 			prompt := "Test prompt"
 
-			// Act
 			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -755,13 +642,8 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentProvider.ExecuteConversation Tests - Edge Cases
-// ============================================================================
-
 // TestAgentProvider_ExecuteConversation_EmptyPrompt tests conversation with empty prompt
 func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		if prompt == "" {
@@ -777,10 +659,8 @@ func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 	prompt := ""
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for empty prompt")
 	}
@@ -794,7 +674,6 @@ func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_NilState tests conversation with nil state
 func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		if state == nil {
@@ -810,10 +689,8 @@ func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for nil conversation state")
 	}
@@ -824,7 +701,6 @@ func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_EmptyState tests conversation with empty state (no turns)
 func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -839,9 +715,7 @@ func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	prompt := "Hello"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -855,7 +729,6 @@ func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_LargeConversationHistory tests with many turns
 func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -880,9 +753,7 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 	prompt := "100th question"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -896,7 +767,6 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 
 // TestAgentProvider_ExecuteConversation_LongPrompt tests with very long prompt
 func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -916,9 +786,7 @@ func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, longPrompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -927,13 +795,8 @@ func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// AgentProvider.ExecuteConversation Tests - Error Handling
-// ============================================================================
-
 // TestAgentProvider_ExecuteConversation_ProviderError tests error from provider
 func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	expectedError := errors.New("provider execution failed")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
@@ -945,10 +808,8 @@ func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error from provider")
 	}
@@ -962,7 +823,6 @@ func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_ContextCanceled tests canceled context
 func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		// Check for context cancellation
@@ -981,10 +841,8 @@ func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected error for canceled context")
 	}
@@ -998,7 +856,6 @@ func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_ContextTimeout tests timeout
 func TestAgentProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		// Simulate work that respects context
@@ -1019,10 +876,8 @@ func TestAgentProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected timeout error")
 	}
@@ -1066,7 +921,6 @@ func TestAgentProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			provider := newMockAgentProvider("claude")
 			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 				// Validate options
@@ -1088,10 +942,8 @@ func TestAgentProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 			state := workflow.NewConversationState("System prompt")
 			prompt := "What is Go?"
 
-			// Act
 			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
 
-			// Assert
 			if err == nil {
 				t.Errorf("expected error for %s", tt.name)
 			}
@@ -1111,7 +963,6 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 
 	for _, name := range providers {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			provider := newMockAgentProvider(name)
 			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 				result := workflow.NewConversationResult(name)
@@ -1125,9 +976,7 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 			prompt := "Test"
 			options := map[string]any{}
 
-			// Act
 			result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-			// Assert
 			if err != nil {
 				t.Errorf("unexpected error for %s: %v", name, err)
 			}
@@ -1141,13 +990,8 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Integration Tests - ExecuteConversation with Registry
-// ============================================================================
-
 // TestAgentProvider_ExecuteConversation_WithRegistry tests conversation through registry
 func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
-	// Arrange
 	registry := newMockAgentRegistry()
 
 	provider := newMockAgentProvider("claude")
@@ -1160,7 +1004,6 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 
 	registry.Register(provider)
 
-	// Act
 	retrieved, err := registry.Get("claude")
 	if err != nil {
 		t.Fatalf("failed to get provider: %v", err)
@@ -1169,7 +1012,6 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
 	result, err := retrieved.ExecuteConversation(ctx, state, "Test", nil)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1183,7 +1025,6 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_TokenCounting tests token usage tracking
 func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
-	// Arrange
 	provider := newMockAgentProvider("claude")
 	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
@@ -1201,9 +1042,7 @@ func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
-	// Assert
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1226,7 +1065,6 @@ func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 
 // TestAgentProvider_ExecuteConversation_NotImplementedError tests stub behavior
 func TestAgentProvider_ExecuteConversation_NotImplementedError(t *testing.T) {
-	// Arrange - Use default stub that returns "not implemented"
 	provider := newMockAgentProvider("claude")
 	// Don't override executeConversationFunc - use default stub
 
@@ -1235,10 +1073,8 @@ func TestAgentProvider_ExecuteConversation_NotImplementedError(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	// Act
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 
-	// Assert
 	if err == nil {
 		t.Error("expected 'not implemented' error from stub")
 	}

@@ -10,8 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// =============================================================================
-// F023: Sub-Workflow Fixture Validation Tests
 //
 // These tests verify that the sub-workflow YAML fixtures are:
 // 1. Present in the expected location
@@ -20,7 +18,6 @@ import (
 //
 // Note: These tests only validate YAML structure. Full workflow validation
 // will fail until the call_workflow step type is implemented.
-// =============================================================================
 
 const subworkflowFixturesPath = "../fixtures/workflows"
 

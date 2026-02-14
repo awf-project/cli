@@ -11,10 +11,6 @@ import (
 	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
-// =============================================================================
-// NewStructuredError Tests (Happy Path)
-// =============================================================================
-
 func TestNewStructuredError_WithAllFields(t *testing.T) {
 	// Given
 	causeErr := errors.New("underlying error")
@@ -75,10 +71,6 @@ func TestNewStructuredError_WithEmptyDetails(t *testing.T) {
 	assert.Empty(t, err.Details)
 	assert.NotNil(t, err.Details) // Not nil, just empty
 }
-
-// =============================================================================
-// Convenience Constructors Tests
-// =============================================================================
 
 func TestNewUserError(t *testing.T) {
 	// Given
@@ -145,10 +137,6 @@ func TestNewSystemError(t *testing.T) {
 	assert.Equal(t, 4, err.ExitCode())
 }
 
-// =============================================================================
-// Error Interface Compliance Tests
-// =============================================================================
-
 func TestStructuredError_Error(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -190,10 +178,6 @@ func TestStructuredError_Error(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Unwrap Tests
-// =============================================================================
 
 func TestStructuredError_Unwrap_WithCause(t *testing.T) {
 	// Given
@@ -241,10 +225,6 @@ func TestStructuredError_ErrorsIs_WithCause(t *testing.T) {
 	// When/Then
 	assert.True(t, errors.Is(err, causeErr))
 }
-
-// =============================================================================
-// Is Tests (Error Matching)
-// =============================================================================
 
 func TestStructuredError_Is_SameCode(t *testing.T) {
 	// Given
@@ -319,10 +299,6 @@ func TestStructuredError_ErrorsIs_Integration(t *testing.T) {
 	assert.True(t, errors.Is(actualErr, targetErr))
 }
 
-// =============================================================================
-// As Tests (Type Assertion)
-// =============================================================================
-
 func TestStructuredError_As_StructuredError(t *testing.T) {
 	// Given
 	original := domainerrors.NewStructuredError(
@@ -380,10 +356,6 @@ func TestStructuredError_ErrorsAs_Integration(t *testing.T) {
 	assert.Equal(t, original.Code, target.Code)
 }
 
-// =============================================================================
-// ExitCode Tests
-// =============================================================================
-
 func TestStructuredError_ExitCode(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -431,10 +403,6 @@ func TestStructuredError_ExitCode(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// WithDetails Tests
-// =============================================================================
-
 func TestStructuredError_WithDetails_AddsNewDetails(t *testing.T) {
 	// Given
 	original := domainerrors.NewStructuredError(
@@ -449,8 +417,8 @@ func TestStructuredError_WithDetails_AddsNewDetails(t *testing.T) {
 
 	// Then
 	assert.NotEqual(t, original, enhanced) // New instance
-	assert.Equal(t, 1, len(original.Details))
-	assert.Equal(t, 2, len(enhanced.Details))
+	assert.Len(t, original.Details, 1)
+	assert.Len(t, enhanced.Details, 2)
 	assert.Equal(t, 10, enhanced.Details["line"])
 	assert.Equal(t, 5, enhanced.Details["column"])
 }
@@ -487,7 +455,7 @@ func TestStructuredError_WithDetails_FromNilDetails(t *testing.T) {
 
 	// Then
 	assert.Nil(t, original.Details)
-	assert.Equal(t, 1, len(enhanced.Details))
+	assert.Len(t, enhanced.Details, 1)
 	assert.Equal(t, 30, enhanced.Details["timeout_seconds"])
 }
 
@@ -529,10 +497,6 @@ func TestStructuredError_WithDetails_PreservesOtherFields(t *testing.T) {
 	assert.Equal(t, original.Message, enhanced.Message)
 	assert.Equal(t, original.Cause, enhanced.Cause)
 }
-
-// =============================================================================
-// Format Tests (fmt.Formatter)
-// =============================================================================
 
 func TestStructuredError_Format_SimpleString(t *testing.T) {
 	// Given
@@ -620,10 +584,6 @@ func TestStructuredError_Format_VerboseWithCause(t *testing.T) {
 	assert.Contains(t, formatted, "path=/etc/config")
 	assert.Contains(t, formatted, "underlying IO error")
 }
-
-// =============================================================================
-// Edge Cases Tests
-// =============================================================================
 
 func TestStructuredError_EmptyMessage(t *testing.T) {
 	// Given
@@ -732,10 +692,6 @@ func TestStructuredError_AsWithCauseChain(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, domainerrors.ErrorCodeSystemIOReadFailed, target.Code)
 }
-
-// =============================================================================
-// Timestamp Tests
-// =============================================================================
 
 func TestStructuredError_TimestampIsRecent(t *testing.T) {
 	// Given

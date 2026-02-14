@@ -17,10 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// US1: DECLARATIVE ISSUE RETRIEVAL TESTS
-// =============================================================================
-
 // TestGitHubGetIssue_Success tests retrieving issue data via github.get_issue operation.
 // Acceptance Criteria: Issue fields (title, body, labels, state) available as step outputs
 func TestGitHubGetIssue_Success(t *testing.T) {
@@ -121,10 +117,6 @@ func TestGitHubGetIssue_AuthError(t *testing.T) {
 		"error should mention available auth methods (gh CLI or GITHUB_TOKEN)",
 	)
 }
-
-// =============================================================================
-// US2: DECLARATIVE PR CREATION TESTS
-// =============================================================================
 
 // TestGitHubCreatePR_Success tests creating pull request via github.create_pr operation.
 // Acceptance Criteria: PR created and URL/number available as outputs
@@ -238,10 +230,6 @@ func TestGitHubCreatePR_AlreadyExists(t *testing.T) {
 	assert.True(t, state.Response["already_exists"].(bool), "already_exists should be true")
 }
 
-// =============================================================================
-// US3: PROJECT STATUS MANAGEMENT TESTS
-// =============================================================================
-
 // TestGitHubSetProjectStatus_Success tests setting project field via github.set_project_status.
 // Acceptance Criteria: Issue's project status updated
 func TestGitHubSetProjectStatus_Success(t *testing.T) {
@@ -347,10 +335,6 @@ func TestGitHubSetProjectStatus_InvalidValue(t *testing.T) {
 		"error should list valid status options",
 	)
 }
-
-// =============================================================================
-// US4: BATCH OPERATIONS TESTS
-// =============================================================================
 
 // TestGitHubBatch_AllSucceed tests batch operation with all operations succeeding.
 // Acceptance Criteria: All operations complete and output contains success count
@@ -458,10 +442,6 @@ func TestGitHubBatch_AllSucceedStrategy(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// US5: AUTHENTICATION FALLBACK TESTS
-// =============================================================================
-
 // TestGitHubAuth_GHCLIAuth tests authentication via gh CLI.
 // Acceptance Criteria: gh CLI auth used when available
 func TestGitHubAuth_GHCLIAuth(t *testing.T) {
@@ -568,10 +548,6 @@ func TestGitHubAuth_NoAuthError(t *testing.T) {
 		"error should list both gh CLI and GITHUB_TOKEN as auth options",
 	)
 }
-
-// =============================================================================
-// WORKFLOW INTEGRATION TESTS
-// =============================================================================
 
 // TestGitHubOperations_WorkflowParsing tests YAML workflow parsing through execution.
 // Integration test: YAML parsing → operation step → provider dispatch → output interpolation

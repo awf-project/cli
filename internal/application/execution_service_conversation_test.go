@@ -16,10 +16,6 @@ import (
 // Component: execution_service_integration
 // Feature: F033 - Agent Conversations
 
-// =============================================================================
-// HAPPY PATH TESTS
-// =============================================================================
-
 // TestExecutionService_ConversationStep_RoutingToConversationMode tests that
 // when agent step has mode: conversation, it routes to executeConversationStep
 func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.T) {
@@ -217,10 +213,6 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
 
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
-
 // TestExecutionService_ConversationStep_SingleModeSkipsConversation tests that
 // agent steps with mode: single (default) skip conversation execution
 func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testing.T) {
@@ -399,10 +391,6 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	require.True(t, exists)
 	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
-
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
 
 // TestExecutionService_ConversationStep_NoConversationManagerConfigured tests
 // that conversation steps fail gracefully when conversation manager is not set

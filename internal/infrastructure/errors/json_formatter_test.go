@@ -56,7 +56,7 @@ func TestJSONErrorFormatter_HappyPath(t *testing.T) {
 				details, ok := result["details"].(map[string]any)
 				require.True(t, ok)
 				assert.Equal(t, "/path/to/workflow.yaml", details["path"])
-				assert.Equal(t, true, details["attempted"])
+				assert.True(t, details["attempted"].(bool))
 			},
 		},
 		{
@@ -116,7 +116,6 @@ func TestJSONErrorFormatter_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -125,10 +124,8 @@ func TestJSONErrorFormatter_HappyPath(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			assert.NotEmpty(t, output, "output should not be empty")
 			tt.validate(t, output)
 		})
@@ -291,14 +288,13 @@ func TestJSONErrorFormatter_EdgeCases(t *testing.T) {
 
 				details := result["details"].(map[string]any)
 				assert.Equal(t, float64(42), details["int"]) // JSON numbers are float64
-				assert.Equal(t, true, details["bool"])
+				assert.True(t, details["bool"].(bool))
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -307,10 +303,8 @@ func TestJSONErrorFormatter_EdgeCases(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -385,7 +379,6 @@ func TestJSONErrorFormatter_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(false)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -394,10 +387,8 @@ func TestJSONErrorFormatter_ErrorHandling(t *testing.T) {
 				tt.cause,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -405,7 +396,6 @@ func TestJSONErrorFormatter_ErrorHandling(t *testing.T) {
 
 // TestJSONErrorFormatter_TimestampFormat verifies timestamp is in ISO 8601 format.
 func TestJSONErrorFormatter_TimestampFormat(t *testing.T) {
-	// Arrange
 	formatter := NewJSONErrorFormatter(false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
@@ -414,10 +404,8 @@ func TestJSONErrorFormatter_TimestampFormat(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	var result map[string]any
 	err := json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err)
@@ -433,7 +421,6 @@ func TestJSONErrorFormatter_TimestampFormat(t *testing.T) {
 
 // TestJSONErrorFormatter_OutputStructure verifies the exact JSON structure.
 func TestJSONErrorFormatter_OutputStructure(t *testing.T) {
-	// Arrange
 	formatter := NewJSONErrorFormatter(false)
 	structuredErr := domainerrors.NewStructuredError(
 		domainerrors.ErrorCodeUserInputMissingFile,
@@ -444,10 +431,8 @@ func TestJSONErrorFormatter_OutputStructure(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	var result map[string]any
 	err := json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err)
@@ -501,7 +486,6 @@ func TestJSONErrorFormatter_AllErrorCategories(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
 				"test message",
@@ -509,10 +493,8 @@ func TestJSONErrorFormatter_AllErrorCategories(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			var result map[string]any
 			err := json.Unmarshal([]byte(output), &result)
 			require.NoError(t, err)
@@ -527,7 +509,6 @@ func TestJSONErrorFormatter_AllErrorCategories(t *testing.T) {
 
 // TestJSONErrorFormatter_ConsistentOutput verifies formatting is deterministic.
 func TestJSONErrorFormatter_ConsistentOutput(t *testing.T) {
-	// Arrange
 	formatter := NewJSONErrorFormatter(false)
 
 	// Create error with fixed timestamp for reproducibility
@@ -542,17 +523,14 @@ func TestJSONErrorFormatter_ConsistentOutput(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act - format multiple times
 	output1 := formatter.FormatError(structuredErr)
 	output2 := formatter.FormatError(structuredErr)
 
-	// Assert - outputs should be identical
 	assert.Equal(t, output1, output2, "formatting should be deterministic")
 }
 
 // TestJSONErrorFormatter_Idempotency verifies multiple calls produce same result.
 func TestJSONErrorFormatter_Idempotency(t *testing.T) {
-	// Arrange
 	formatter := NewJSONErrorFormatter(false)
 	structuredErr := &domainerrors.StructuredError{
 		Code:      domainerrors.ErrorCodeUserInputMissingFile,
@@ -562,22 +540,16 @@ func TestJSONErrorFormatter_Idempotency(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act - format 10 times
 	outputs := make([]string, 10)
 	for i := 0; i < 10; i++ {
 		outputs[i] = formatter.FormatError(structuredErr)
 	}
 
-	// Assert - all outputs identical
 	for i := 1; i < len(outputs); i++ {
 		assert.Equal(t, outputs[0], outputs[i],
 			"output %d should match output 0", i)
 	}
 }
-
-// =============================================================================
-// Hint Generation Tests (Component T009 - C048)
-// =============================================================================
 
 // TestJSONErrorFormatter_WithHints_HappyPath tests hint generation with various scenarios.
 func TestJSONErrorFormatter_WithHints_HappyPath(t *testing.T) {
@@ -748,7 +720,6 @@ func TestJSONErrorFormatter_WithHints_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(tt.noHints, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -757,10 +728,8 @@ func TestJSONErrorFormatter_WithHints_HappyPath(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			assert.NotEmpty(t, output, "output should not be empty")
 			tt.validate(t, output)
 		})
@@ -906,7 +875,6 @@ func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(false, tt.generators...)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -915,10 +883,8 @@ func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -926,7 +892,6 @@ func TestJSONErrorFormatter_HintGeneration_EdgeCases(t *testing.T) {
 
 // TestJSONErrorFormatter_HintOrdering verifies hints maintain generator order.
 func TestJSONErrorFormatter_HintOrdering(t *testing.T) {
-	// Arrange - multiple generators that return hints in specific order
 	generator1 := func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{
 			{Message: "Hint A1"},
@@ -954,10 +919,8 @@ func TestJSONErrorFormatter_HintOrdering(t *testing.T) {
 		nil,
 	)
 
-	// Act
 	output := formatter.FormatError(structuredErr)
 
-	// Assert
 	var result map[string]any
 	err := json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err)
@@ -1066,7 +1029,6 @@ func TestJSONErrorFormatter_HintContextAware(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			formatter := NewJSONErrorFormatter(false, tt.generator)
 			structuredErr := domainerrors.NewStructuredError(
 				tt.errCode,
@@ -1075,10 +1037,8 @@ func TestJSONErrorFormatter_HintContextAware(t *testing.T) {
 				nil,
 			)
 
-			// Act
 			output := formatter.FormatError(structuredErr)
 
-			// Assert
 			tt.validate(t, output)
 		})
 	}
@@ -1086,7 +1046,6 @@ func TestJSONErrorFormatter_HintContextAware(t *testing.T) {
 
 // TestJSONErrorFormatter_HintThreadSafety verifies concurrent hint generation is safe.
 func TestJSONErrorFormatter_HintThreadSafety(t *testing.T) {
-	// Arrange - create formatter with stateless generator
 	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{
 			{Message: "Thread-safe hint"},
@@ -1101,7 +1060,6 @@ func TestJSONErrorFormatter_HintThreadSafety(t *testing.T) {
 		nil,
 	)
 
-	// Act - format concurrently from multiple goroutines
 	const goroutines = 10
 	results := make([]string, goroutines)
 	done := make(chan bool)
@@ -1118,7 +1076,6 @@ func TestJSONErrorFormatter_HintThreadSafety(t *testing.T) {
 		<-done
 	}
 
-	// Assert - all results should be identical (formatter is stateless)
 	for i := 1; i < len(results); i++ {
 		assert.Equal(t, results[0], results[i],
 			"concurrent formatting should produce identical results")
@@ -1135,7 +1092,6 @@ func TestJSONErrorFormatter_HintThreadSafety(t *testing.T) {
 
 // TestJSONErrorFormatter_NoHints_PreservesErrorStructure verifies noHints doesn't break output.
 func TestJSONErrorFormatter_NoHints_PreservesErrorStructure(t *testing.T) {
-	// Arrange - create two formatters: one with hints, one without
 	generator := func(err *domainerrors.StructuredError) []domainerrors.Hint {
 		return []domainerrors.Hint{
 			{Message: "Test hint"},
@@ -1153,11 +1109,9 @@ func TestJSONErrorFormatter_NoHints_PreservesErrorStructure(t *testing.T) {
 		Timestamp: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 
-	// Act
 	outputWithHints := formatterWithHints.FormatError(structuredErr)
 	outputNoHints := formatterNoHints.FormatError(structuredErr)
 
-	// Assert
 	var resultWithHints, resultNoHints map[string]any
 
 	err := json.Unmarshal([]byte(outputWithHints), &resultWithHints)

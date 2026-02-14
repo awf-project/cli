@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Validate - Valid State References
-// =============================================================================
-
 func TestTemplateValidator_ValidStateReference(t *testing.T) {
 	w := &workflow.Workflow{
 		Name:    "state-ref-test",
@@ -92,10 +88,6 @@ func TestTemplateValidator_ValidStateReferenceAllProperties(t *testing.T) {
 
 	assert.False(t, result.HasErrors(), "all valid state properties should pass")
 }
-
-// =============================================================================
-// Validate - Invalid State References
-// =============================================================================
 
 func TestTemplateValidator_UndefinedStep(t *testing.T) {
 	w := newTestWorkflow()
@@ -350,10 +342,6 @@ func TestTemplateValidator_StateRefWithoutProperty(t *testing.T) {
 	require.True(t, result.HasErrors())
 }
 
-// =============================================================================
-// ComputeExecutionOrder Tests
-// =============================================================================
-
 func TestComputeExecutionOrder_LinearWorkflow(t *testing.T) {
 	steps := map[string]*workflow.Step{
 		"start": {
@@ -480,10 +468,6 @@ func TestComputeExecutionOrder_WithCycles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, order)
 }
-
-// =============================================================================
-// Parallel Step Validation Tests
-// =============================================================================
 
 func TestTemplateValidator_ParallelStepBranchRefs(t *testing.T) {
 	w := &workflow.Workflow{

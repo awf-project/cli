@@ -19,7 +19,6 @@ type MockPlugin struct {
 	ShutdownError  error
 }
 
-// NewMockPlugin creates a mock plugin for testing.
 func NewMockPlugin(name, version string) *MockPlugin {
 	return &MockPlugin{
 		PluginName:    name,
@@ -27,12 +26,10 @@ func NewMockPlugin(name, version string) *MockPlugin {
 	}
 }
 
-// Name returns the plugin name.
 func (m *MockPlugin) Name() string {
 	return m.PluginName
 }
 
-// Version returns the plugin version.
 func (m *MockPlugin) Version() string {
 	return m.PluginVersion
 }
@@ -61,14 +58,12 @@ func (m *MockPlugin) WasInitCalled() bool {
 	return m.InitCalled
 }
 
-// WasShutdownCalled returns whether Shutdown was called (thread-safe).
 func (m *MockPlugin) WasShutdownCalled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ShutdownCalled
 }
 
-// Reset clears the mock state.
 func (m *MockPlugin) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -87,7 +82,6 @@ type MockOperationHandler struct {
 	HandleFunc func(ctx context.Context, inputs map[string]any) (map[string]any, error)
 }
 
-// NewMockOperationHandler creates a mock operation handler.
 func NewMockOperationHandler() *MockOperationHandler {
 	return &MockOperationHandler{
 		Outputs: make(map[string]any),
@@ -110,14 +104,12 @@ func (m *MockOperationHandler) Handle(ctx context.Context, inputs map[string]any
 	return outputs, err
 }
 
-// GetCallCount returns the number of times Handle was called (thread-safe).
 func (m *MockOperationHandler) GetCallCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.CallCount
 }
 
-// Reset clears the mock state.
 func (m *MockOperationHandler) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -136,7 +128,6 @@ type MockOperationProvider struct {
 	HandleFunc     func(ctx context.Context, name string, inputs map[string]any) (*OperationResult, error)
 }
 
-// NewMockOperationProvider creates a mock operation provider.
 func NewMockOperationProvider(operations ...string) *MockOperationProvider {
 	return &MockOperationProvider{
 		OperationNames: operations,
@@ -152,7 +143,6 @@ func (m *MockOperationProvider) Operations() []string {
 	return m.OperationNames
 }
 
-// HandleOperation executes the specified operation.
 func (m *MockOperationProvider) HandleOperation(ctx context.Context, name string, inputs map[string]any) (*OperationResult, error) {
 	m.mu.Lock()
 	m.LastOperation = name
@@ -175,29 +165,22 @@ func (m *MockOperationProvider) HandleOperation(ctx context.Context, name string
 	return NewSuccessResult("ok", nil), nil
 }
 
-// SetResult configures the mock to return a specific result for all operations (test helper).
-//
-// Deprecated: Use SetCommandResult for operation-specific results. Migration tracked in #150.
 func (m *MockOperationProvider) SetResult(operation string, result *OperationResult) {
-	// Legacy behavior: delegates to SetCommandResult
 	m.SetCommandResult(operation, result)
 }
 
-// SetCommandResult configures the mock to return a specific result for a given operation (test helper).
 func (m *MockOperationProvider) SetCommandResult(operation string, result *OperationResult) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.Results[operation] = result
 }
 
-// SetError configures an error for an operation.
 func (m *MockOperationProvider) SetError(operation string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.Errors[operation] = err
 }
 
-// TestInputs creates a map of inputs for testing.
 func TestInputs(keyValues ...any) map[string]any {
 	result := make(map[string]any)
 	for i := 0; i < len(keyValues)-1; i += 2 {
@@ -208,7 +191,6 @@ func TestInputs(keyValues ...any) map[string]any {
 	return result
 }
 
-// TestConfig creates a plugin config map for testing.
 func TestConfig(keyValues ...any) map[string]any {
 	return TestInputs(keyValues...)
 }

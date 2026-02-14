@@ -12,10 +12,6 @@ import (
 // Component: C025 - Unit Tests for CustomProvider (WITHOUT integration build tag)
 // These tests use MockCLIExecutor to avoid external CLI dependencies
 
-// =============================================================================
-// Execute Method Tests - Template Processing
-// =============================================================================
-
 func TestCustomProvider_Execute_TemplateProcessing(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -55,10 +51,6 @@ func TestCustomProvider_Execute_TemplateProcessing(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Execute Method Tests - Validation Errors
-// =============================================================================
 
 func TestCustomProvider_Execute_EmptyPrompt(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
@@ -114,10 +106,6 @@ func TestCustomProvider_Execute_TemplateSyntaxError(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Execute Method Tests - Context Handling
-// =============================================================================
-
 func TestCustomProvider_Execute_ContextCancellation(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
@@ -130,10 +118,6 @@ func TestCustomProvider_Execute_ContextCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// =============================================================================
-// Execute Method Tests - CLI Execution Errors
-// =============================================================================
-
 func TestCustomProvider_Execute_CLIError(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
 	mockExec.SetError(assert.AnError)
@@ -144,10 +128,6 @@ func TestCustomProvider_Execute_CLIError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
-
-// =============================================================================
-// Execute Method Tests - Options Handling
-// =============================================================================
 
 func TestCustomProvider_Execute_WithOptions(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
@@ -168,10 +148,6 @@ func TestCustomProvider_Execute_WithOptions(t *testing.T) {
 	require.NotNil(t, result)
 	assert.NotEmpty(t, result.Output)
 }
-
-// =============================================================================
-// Execute Method Tests - JSON Auto-Detection
-// =============================================================================
 
 func TestCustomProvider_Execute_JSONAutoDetection(t *testing.T) {
 	tests := []struct {
@@ -215,10 +191,6 @@ func TestCustomProvider_Execute_JSONAutoDetection(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Execute Method Tests - Token Estimation & Timestamps
-// =============================================================================
-
 func TestCustomProvider_Execute_TokenEstimation(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
 	output := "This is a test output with some content"
@@ -248,10 +220,6 @@ func TestCustomProvider_Execute_Timestamps(t *testing.T) {
 	assert.True(t, result.CompletedAt.After(result.StartedAt) || result.CompletedAt.Equal(result.StartedAt))
 }
 
-// =============================================================================
-// ExecuteConversation Method Tests
-// =============================================================================
-
 func TestCustomProvider_ExecuteConversation_NotImplemented(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
 	provider := NewCustomProviderWithOptions("test", "echo {{.prompt}}", WithCustomExecutor(mockExec))
@@ -262,10 +230,6 @@ func TestCustomProvider_ExecuteConversation_NotImplemented(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "not implemented")
 }
-
-// =============================================================================
-// Provider Interface Methods Tests
-// =============================================================================
 
 func TestCustomProvider_Name(t *testing.T) {
 	tests := []struct {
@@ -316,10 +280,6 @@ func TestCustomProvider_Validate_InvalidTemplate(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "command template is invalid")
 }
-
-// =============================================================================
-// Constructor Tests
-// =============================================================================
 
 func TestCustomProvider_NewCustomProvider(t *testing.T) {
 	provider := NewCustomProvider("test", "echo {{.prompt}}")

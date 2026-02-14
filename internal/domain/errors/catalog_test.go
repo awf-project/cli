@@ -7,10 +7,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/errors"
 )
 
-// =============================================================================
-// CatalogEntry Tests
-// =============================================================================
-
 func TestCatalogEntry_Structure(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -73,10 +69,6 @@ func TestCatalogEntry_Structure(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ErrorCatalog Tests - Happy Path
-// =============================================================================
 
 func TestErrorCatalog_AllDefinedCodesHaveEntries(t *testing.T) {
 	// All error code constants should have catalog entries
@@ -164,10 +156,6 @@ func TestErrorCatalog_RelatedCodesAreValid(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ErrorCatalog Tests - Edge Cases
-// =============================================================================
-
 func TestErrorCatalog_NoEmptyStrings(t *testing.T) {
 	// Verify no catalog entries have empty Description or Resolution
 	for code, entry := range errors.ErrorCatalog {
@@ -203,10 +191,6 @@ func TestErrorCatalog_NoDuplicateCodes(t *testing.T) {
 	assert.Equal(t, len(errors.ErrorCatalog), len(seenCodes),
 		"Number of unique codes should match catalog size")
 }
-
-// =============================================================================
-// GetCatalogEntry Tests - Happy Path
-// =============================================================================
 
 func TestGetCatalogEntry_ValidCodes(t *testing.T) {
 	tests := []struct {
@@ -258,10 +242,6 @@ func TestGetCatalogEntry_ValidCodes(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// GetCatalogEntry Tests - Edge Cases
-// =============================================================================
-
 func TestGetCatalogEntry_InvalidCode(t *testing.T) {
 	tests := []struct {
 		name string
@@ -300,10 +280,6 @@ func TestGetCatalogEntry_ReturnsZeroValue(t *testing.T) {
 	assert.Equal(t, "", entry.Resolution)
 	assert.Nil(t, entry.RelatedCodes)
 }
-
-// =============================================================================
-// AllErrorCodes Tests - Happy Path
-// =============================================================================
 
 func TestAllErrorCodes_ReturnsAllCodes(t *testing.T) {
 	codes := errors.AllErrorCodes()
@@ -365,10 +341,6 @@ func TestAllErrorCodes_CoversAllCategories(t *testing.T) {
 	assert.True(t, categories["SYSTEM"], "Should have SYSTEM category codes")
 }
 
-// =============================================================================
-// AllErrorCodes Tests - Edge Cases
-// =============================================================================
-
 func TestAllErrorCodes_NoDuplicates(t *testing.T) {
 	codes := errors.AllErrorCodes()
 
@@ -407,10 +379,6 @@ func TestAllErrorCodes_ConsistentAcrossCalls(t *testing.T) {
 
 	assert.Equal(t, set1, set2, "Should return the same set of codes")
 }
-
-// =============================================================================
-// Integration Tests - Catalog + ErrorCode
-// =============================================================================
 
 func TestIntegration_CatalogCodesAreValid(t *testing.T) {
 	// Every code in the catalog should pass IsValid()
@@ -478,10 +446,6 @@ func TestIntegration_CatalogCodesMatchExitCodes(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestErrorCatalog_HandlesPanicGracefully(t *testing.T) {
 	// GetCatalogEntry should not panic with any input

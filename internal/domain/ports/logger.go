@@ -1,7 +1,5 @@
 package ports
 
-// Logger defines the logging contract for the domain layer.
-// Implementations live in infrastructure layer.
 type Logger interface {
 	Debug(msg string, fields ...any)
 	Info(msg string, fields ...any)

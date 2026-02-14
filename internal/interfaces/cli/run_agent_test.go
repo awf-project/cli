@@ -15,10 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// General Dry-Run Tests
-// =============================================================================
-
 // TestRunCommand_DryRun tests the dry-run functionality
 func TestRunCommand_DryRun(t *testing.T) {
 	tests := []struct {
@@ -192,10 +188,6 @@ states:
 		})
 	}
 }
-
-// =============================================================================
-// Agent Step Dry-Run Tests (F039)
-// =============================================================================
 
 // TestRunCommand_DryRun_AgentStep_Basic tests basic dry-run with agent step
 // AC8: --dry-run shows resolved prompt without invoking

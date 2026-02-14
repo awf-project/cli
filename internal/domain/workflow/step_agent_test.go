@@ -6,16 +6,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Step Agent Tests Extracted from step_test.go
 // Component: C013 - Domain Test File Splitting
 // Tests: 20 (8 CallWorkflow + 12 Agent)
 // Source: internal/domain/workflow/step_test.go
-// =============================================================================
-
-// =============================================================================
-// CallWorkflow Step Tests (F023)
-// =============================================================================
 
 func TestCallWorkflowStepValidation(t *testing.T) {
 	tests := []struct {
@@ -335,11 +328,9 @@ func TestCallWorkflowStepWithTemplateInterpolation(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // Agent Step Tests (F039)
 // Component: step_type_extension
 // Feature: 39 - AI Agent Step Type
-// =============================================================================
 
 func TestStepTypeAgent_String(t *testing.T) {
 	if got := workflow.StepTypeAgent.String(); got != "agent" {
@@ -903,7 +894,4 @@ func TestStep_Validate_AgentType_CompleteWorkflow(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Helper Functions
 // Note: containsString is defined in step_loop_test.go (shared across step tests)
-// =============================================================================

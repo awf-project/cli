@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestRunCommand_WiresGitHubOperationProvider(t *testing.T) {
 	// GIVEN: A temporary test directory with a workflow containing github operation
 	tmpDir := setupTestDir(t)
@@ -170,10 +166,6 @@ func TestResumeCommand_WiresGitHubOperationProvider(t *testing.T) {
 	// but GitHub provider wiring should not cause crashes
 	// Success criteria: no panic from nil provider during initialization
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestRunSingleStep_WiresGitHubOperationProvider(t *testing.T) {
 	// GIVEN: A workflow with github operation for single-step execution
@@ -360,10 +352,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestRunCommand_MissingGitHubAuth_GracefulError(t *testing.T) {
 	// GIVEN: A workflow requiring GitHub authentication
 	tmpDir := setupTestDir(t)
@@ -495,10 +483,6 @@ states:
 		// Expected: gh CLI error, network error, auth error, etc.
 	}
 }
-
-// =============================================================================
-// Integration Tests: Provider + Client + Logger Wiring
-// =============================================================================
 
 func TestRunCommand_FullWiringStack_NoNilPointers(t *testing.T) {
 	// GIVEN: A workflow exercising the full wiring stack

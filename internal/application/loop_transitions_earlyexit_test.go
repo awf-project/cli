@@ -11,8 +11,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Loop Early Exit Transition Tests
 // Component: T007
 // Feature: F048 - While Loop Transitions Support
 //
@@ -22,14 +20,8 @@ import (
 //
 // Early exit transitions set result.NextStep to allow the workflow to continue
 // at the specified external step after the loop exits.
-// =============================================================================
 
 // Component T007: Handle Early Exit Transitions
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests: Normal Early Exit Scenarios
-// =============================================================================
 
 // TestEarlyExitTransition_HappyPath_ExitFromFirstStep tests early exit when
 // the first step in a while loop body transitions to an external step.
@@ -40,7 +32,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromFirstStep(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -84,7 +75,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromFirstStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -96,7 +86,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromFirstStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -122,7 +111,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromMiddleStep(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -167,7 +155,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromMiddleStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -179,7 +166,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromMiddleStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -201,7 +187,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromLastStep(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -245,7 +230,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromLastStep(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -257,7 +241,6 @@ func TestEarlyExitTransition_HappyPath_ExitFromLastStep(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -283,7 +266,6 @@ func TestEarlyExitTransition_HappyPath_NoEarlyExit(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["states.step2.Output == 'done'"] = true
@@ -320,7 +302,6 @@ func TestEarlyExitTransition_HappyPath_NoEarlyExit(t *testing.T) {
 		return "", nil // No transitions
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -332,7 +313,6 @@ func TestEarlyExitTransition_HappyPath_NoEarlyExit(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -340,10 +320,6 @@ func TestEarlyExitTransition_HappyPath_NoEarlyExit(t *testing.T) {
 	assert.Equal(t, "", result.NextStep,
 		"result.NextStep should be empty when loop completes normally without early exit")
 }
-
-// =============================================================================
-// Edge Cases: Boundary Conditions
-// =============================================================================
 
 // TestEarlyExitTransition_EdgeCase_ExitOnSecondIteration tests early exit
 // that occurs in the second iteration, not the first.
@@ -354,7 +330,6 @@ func TestEarlyExitTransition_EdgeCase_ExitOnSecondIteration(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -399,7 +374,6 @@ func TestEarlyExitTransition_EdgeCase_ExitOnSecondIteration(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -411,7 +385,6 @@ func TestEarlyExitTransition_EdgeCase_ExitOnSecondIteration(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -433,7 +406,6 @@ func TestEarlyExitTransition_EdgeCase_MultipleExternalSteps(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -484,7 +456,6 @@ func TestEarlyExitTransition_EdgeCase_MultipleExternalSteps(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -496,7 +467,6 @@ func TestEarlyExitTransition_EdgeCase_MultipleExternalSteps(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -518,7 +488,6 @@ func TestEarlyExitTransition_EdgeCase_SingleStepBodyEarlyExit(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -554,7 +523,6 @@ func TestEarlyExitTransition_EdgeCase_SingleStepBodyEarlyExit(t *testing.T) {
 		return "external_step", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -566,7 +534,6 @@ func TestEarlyExitTransition_EdgeCase_SingleStepBodyEarlyExit(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -584,7 +551,6 @@ func TestEarlyExitTransition_EdgeCase_EmptyNextStepValue(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -622,7 +588,6 @@ func TestEarlyExitTransition_EdgeCase_EmptyNextStepValue(t *testing.T) {
 		return "", nil // Empty nextStep (no transition)
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -634,7 +599,6 @@ func TestEarlyExitTransition_EdgeCase_EmptyNextStepValue(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -647,10 +611,6 @@ func TestEarlyExitTransition_EdgeCase_EmptyNextStepValue(t *testing.T) {
 		"result.NextStep should be empty when no transitions occur")
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestEarlyExitTransition_ErrorHandling_StepErrorWithTransition tests that
 // when a step returns both an error and a nextStep, the error takes precedence
 // and result.NextStep should not be set (loop fails, doesn't exit gracefully).
@@ -661,7 +621,6 @@ func TestEarlyExitTransition_ErrorHandling_StepErrorWithTransition(t *testing.T)
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -702,7 +661,6 @@ func TestEarlyExitTransition_ErrorHandling_StepErrorWithTransition(t *testing.T)
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -714,15 +672,10 @@ func TestEarlyExitTransition_ErrorHandling_StepErrorWithTransition(t *testing.T)
 		},
 	)
 
-	// Assert
 	require.Error(t, err, "Error should propagate from step execution")
 	// result may be nil or partially populated on error
 	_ = result
 }
-
-// =============================================================================
-// Integration Tests: ExecuteForEach Early Exit
-// =============================================================================
 
 // TestEarlyExitTransition_Integration_ForEachEarlyExit verifies that T007
 // works correctly in ExecuteForEach context (parallel implementation).
@@ -733,7 +686,6 @@ func TestEarlyExitTransition_Integration_ForEachEarlyExit(t *testing.T) {
 	// Item: T007
 	// Feature: F048
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
@@ -776,7 +728,6 @@ func TestEarlyExitTransition_Integration_ForEachEarlyExit(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteForEach(
 		context.Background(),
 		wf,
@@ -788,7 +739,6 @@ func TestEarlyExitTransition_Integration_ForEachEarlyExit(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -805,10 +755,6 @@ func TestEarlyExitTransition_Integration_ForEachEarlyExit(t *testing.T) {
 		"result.NextStep should be set for ForEach early exit")
 }
 
-// =============================================================================
-// Spec Reproduction Test
-// =============================================================================
-
 // TestEarlyExitTransition_SpecReproduction tests the exact scenario from
 // the F048 spec where check_tests_passed transitions to run_fmt, exiting
 // the green_loop early and skipping prepare_impl_prompt and implement_item.
@@ -820,7 +766,6 @@ func TestEarlyExitTransition_SpecReproduction(t *testing.T) {
 	// Feature: F048
 	// Spec: .specify/implementation/F048/spec-content.md
 
-	// Arrange
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	evaluator.boolResults["true"] = true
@@ -865,7 +810,6 @@ func TestEarlyExitTransition_SpecReproduction(t *testing.T) {
 		return "", nil
 	}
 
-	// Act
 	result, err := loopExec.ExecuteWhile(
 		context.Background(),
 		wf,
@@ -877,7 +821,6 @@ func TestEarlyExitTransition_SpecReproduction(t *testing.T) {
 		},
 	)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -909,10 +852,6 @@ func TestEarlyExitTransition_SpecReproduction(t *testing.T) {
 	assert.Equal(t, "", result.NextStep,
 		"result.NextStep should be empty for intra-body transitions (T006, not T007)")
 }
-
-// =============================================================================
-// Documentation Test
-// =============================================================================
 
 // TestT007_ComponentBehavior documents the expected behavior of T007.
 func TestT007_ComponentBehavior(t *testing.T) {

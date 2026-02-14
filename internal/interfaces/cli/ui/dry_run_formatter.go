@@ -423,10 +423,6 @@ func stepTypeLabel(stepType workflow.StepType) string {
 	}
 }
 
-// =============================================================================
-// Field Formatters - Helper extraction to reduce formatStep complexity
-// =============================================================================
-
 // NewDryRunFormatterWithWriter creates a DryRunFormatter with custom writer (for testing).
 func NewDryRunFormatterWithWriter(out io.Writer, useColor bool) *DryRunFormatter {
 	return &DryRunFormatter{

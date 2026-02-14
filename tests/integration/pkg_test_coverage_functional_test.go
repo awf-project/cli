@@ -18,8 +18,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Pkg Test Coverage Functional Tests
 // Validates that pkg/interpolation improvements (LoopData.Parent,
 // StepStateData.Response/Tokens, expression namespaces) work correctly
 // in end-to-end workflow execution.
@@ -29,7 +27,6 @@ import (
 // - Agent step data access via StepStateData.Response and Tokens fields
 // - Expression namespace access (loop.*, context.*, error.*)
 // - Integration with full workflow execution pipeline
-// =============================================================================
 
 // TestNestedLoops_HappyPath verifies that nested loops can access parent
 // loop data through LoopData.Parent field in workflow execution.
@@ -107,7 +104,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -130,10 +126,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", tt.inputs)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err, "workflow should execute successfully")
 				if execCtx != nil {
@@ -201,7 +195,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -224,10 +217,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", nil)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err, "workflow should execute successfully")
 				if execCtx != nil {
@@ -335,7 +326,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -358,10 +348,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", nil)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err, "workflow should execute successfully")
 				if execCtx != nil {
@@ -483,7 +471,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -506,10 +493,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "test", nil)
 
-			// Assert
 			if tt.wantSuccess {
 				assert.NoError(t, err, "workflow should execute successfully")
 				if execCtx != nil {
@@ -577,7 +562,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -600,10 +584,8 @@ states:
 				WithLogger(log).
 				Build()
 
-			// Act
 			_, err := svc.Run(ctx, "test", nil)
 
-			// Assert
 			assert.Error(t, err, "workflow should fail with error")
 			if tt.wantErrMsg != "" {
 				assert.Contains(t, err.Error(), tt.wantErrMsg)

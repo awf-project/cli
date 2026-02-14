@@ -19,23 +19,18 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/store"
 )
 
-// =============================================================================
-// State Persistence Functional Tests
 // Validates that JSON store and SQLite history store work correctly
 // under various conditions including concurrency and corruption.
-// =============================================================================
 
 // TestJSONStore_ConcurrentAccess verifies that the JSON store handles
 // concurrent access correctly after C016 improvements.
 func TestJSONStore_ConcurrentAccess(t *testing.T) {
-	// Arrange
 	tmpDir := t.TempDir()
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
 	jsonStore := store.NewJSONStore(statesDir)
 
-	// Act - Save same ID concurrently
 	const numConcurrent = 10
 	var wg sync.WaitGroup
 	errors := make([]error, numConcurrent)
@@ -57,7 +52,6 @@ func TestJSONStore_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	// Assert - All saves succeeded (no corruption)
 	for i := 0; i < numConcurrent; i++ {
 		assert.NoError(t, errors[i], "concurrent save %d should succeed", i)
 	}
@@ -115,7 +109,6 @@ func TestJSONStore_FileCorruption(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			tmpDir := t.TempDir()
 			statesDir := filepath.Join(tmpDir, "states")
 			require.NoError(t, os.MkdirAll(statesDir, 0o755))
@@ -127,11 +120,9 @@ func TestJSONStore_FileCorruption(t *testing.T) {
 				tt.setupFile(t, statePath)
 			}
 
-			// Act
 			ctx := context.Background()
 			state, err := jsonStore.Load(ctx, "test-state")
 
-			// Assert
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorContains != "" {
@@ -151,7 +142,6 @@ func TestJSONStore_FileCorruption(t *testing.T) {
 // TestSQLiteHistoryStore_Integration verifies that the SQLite history
 // store works correctly after C016 improvements.
 func TestSQLiteHistoryStore_Integration(t *testing.T) {
-	// Arrange
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "history.db")
 
@@ -161,7 +151,6 @@ func TestSQLiteHistoryStore_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Act - Record multiple executions
 	for i := 0; i < 5; i++ {
 		record := &workflow.ExecutionRecord{
 			ID:           fmt.Sprintf("exec-%d", i+1),
@@ -182,7 +171,6 @@ func TestSQLiteHistoryStore_Integration(t *testing.T) {
 		WorkflowName: "test",
 	})
 
-	// Assert
 	require.NoError(t, err)
 	assert.Len(t, records, 5, "should have 5 history records")
 

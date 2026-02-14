@@ -24,10 +24,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Happy Path Tests - MockTemplateRepository functionality
-// =============================================================================
-
 // TestMockTemplateRepository_HappyPath validates normal template repository operations
 func TestMockTemplateRepository_HappyPath(t *testing.T) {
 	ctx := context.Background()
@@ -121,10 +117,6 @@ func TestMockTemplateRepository_UpdateExisting(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "updated", retrieved.Parameters[0].Name, "template should reflect update")
 }
-
-// =============================================================================
-// Edge Cases Tests
-// =============================================================================
 
 // TestMockTemplateRepository_EdgeCases validates boundary conditions
 func TestMockTemplateRepository_EdgeCases(t *testing.T) {
@@ -262,10 +254,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 	wg.Wait()
 }
 
-// =============================================================================
-// Error Injection Tests
-// =============================================================================
-
 // TestMockTemplateRepository_ErrorInjection validates error injection capabilities
 func TestMockTemplateRepository_ErrorInjection(t *testing.T) {
 	ctx := context.Background()
@@ -321,10 +309,6 @@ func TestMockTemplateRepository_ErrorPrecedence(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, customErr, err, "custom error should take precedence over not found")
 }
-
-// =============================================================================
-// Architecture Verification Tests
-// =============================================================================
 
 // TestTemplateServiceTests_NoInfrastructureImports verifies that template service tests
 // do not import infrastructure layer packages
@@ -447,10 +431,6 @@ func TestTemplateServiceTests_NoLocalMocks(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// C038 Integration Tests
-// =============================================================================
-
 // TestRegressionGuards_StillPass verifies that existing C038 regression tests
 // continue to pass after C044 implementation
 func TestRegressionGuards_StillPass(t *testing.T) {
@@ -518,10 +498,6 @@ func TestArchitectureCompliance_C044_NoInfrastructureImports(t *testing.T) {
 	// Success - no infrastructure imports needed
 	t.Log("C044 architecture compliance verified - MockTemplateRepository eliminates infrastructure dependencies")
 }
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
 
 // extractImportsFromFile extracts import statements from a Go source file
 func extractImportsFromFile(filename string) ([]string, error) {

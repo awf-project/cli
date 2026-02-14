@@ -19,10 +19,6 @@ import (
 // Feature: C019 - Resource Management Functional Tests
 // Comprehensive end-to-end validation of memory management features
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 // TestMemoryManagement_HappyPath_SmallWorkflow verifies normal workflow execution
 // with minimal memory footprint when no special configuration is needed.
 func TestMemoryManagement_HappyPath_SmallWorkflow(t *testing.T) {
@@ -114,10 +110,6 @@ states:
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 }
-
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
 
 // TestMemoryManagement_EdgeCase_ZeroIterations verifies behavior when loop
 // condition is false from the start.
@@ -353,10 +345,6 @@ states:
 	assert.Equal(t, workflow.StatusCompleted, loopState.Status)
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestMemoryManagement_ErrorHandling_InvalidOutputSize verifies rejection
 // of invalid output size configurations.
 func TestMemoryManagement_ErrorHandling_InvalidOutputSize(t *testing.T) {
@@ -501,10 +489,6 @@ states:
 	assert.NotEmpty(t, stepState.Output)
 	assert.LessOrEqual(t, len(stepState.Output), 1024)
 }
-
-// =============================================================================
-// Integration Tests - Multiple Features Together
-// =============================================================================
 
 // TestMemoryManagement_Integration_LoopWithOutputLimits verifies that
 // both loop iteration pruning and output truncation work together.

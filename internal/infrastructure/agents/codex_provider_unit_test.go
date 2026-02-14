@@ -15,10 +15,6 @@ import (
 // Component: C025 - Unit Tests for CodexProvider (WITHOUT integration build tag)
 // These tests use MockCLIExecutor to avoid external CLI dependencies
 
-// =============================================================================
-// Execute Method Tests
-// =============================================================================
-
 func TestCodexProvider_Execute_Success(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -463,10 +459,6 @@ func TestCodexProvider_Execute_ProviderName(t *testing.T) {
 	assert.Equal(t, "codex", result.Provider)
 }
 
-// =============================================================================
-// ExecuteConversation Method Tests
-// =============================================================================
-
 func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -831,10 +823,6 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 		})
 	}
 }
-
-// =============================================================================
-// Provider Interface Method Tests
-// =============================================================================
 
 func TestCodexProvider_Name(t *testing.T) {
 	provider := NewCodexProvider()

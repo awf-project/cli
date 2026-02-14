@@ -14,10 +14,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Test Helpers for Sub-Workflow Tests
-// =============================================================================
-
 // createParentChildWorkflows returns parent and child workflows for testing call_workflow.
 // Returns (parentWorkflow, childWorkflow) as separate workflow instances.
 func createParentChildWorkflows(parentName, childName string) (parentWf, childWf *workflow.Workflow) {
@@ -79,10 +75,6 @@ func createParentChildWorkflows(parentName, childName string) (parentWf, childWf
 	return parentWf, childWf
 }
 
-// =============================================================================
-// Error Variable Tests
-// =============================================================================
-
 func TestSubWorkflowErrors_Defined(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -113,10 +105,6 @@ func TestSubWorkflowErrors_Defined(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Basic Execution Tests (Happy Path)
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_BasicSuccess(t *testing.T) {
 	parentWf, childWf := createParentChildWorkflows("parent", "child")
@@ -184,10 +172,6 @@ func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// =============================================================================
-// Input Mapping Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 	// Child expecting specific inputs
@@ -320,10 +304,6 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
 
-// =============================================================================
-// Output Mapping Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_OutputMapping(t *testing.T) {
 	parentWf, childWf := createParentChildWorkflows("output-parent", "output-child")
 
@@ -409,10 +389,6 @@ func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// =============================================================================
-// Circular Detection Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_CircularDetection_Direct(t *testing.T) {
 	// Workflow A calls itself
@@ -558,10 +534,6 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 	assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
 }
 
-// =============================================================================
-// Nesting Depth Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 	// Create a valid 3-level nesting: A -> B -> C (no circular)
 	levelA := &workflow.Workflow{
@@ -680,10 +652,6 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrMaxNestingExceeded)
 }
-
-// =============================================================================
-// Error Propagation Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
 	// Child that fails
@@ -840,10 +808,6 @@ func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
 	assert.Equal(t, "done", ctx.CurrentStep)
 }
 
-// =============================================================================
-// Missing Sub-Workflow Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 	// Parent calls non-existent child
 	parentWf := &workflow.Workflow{
@@ -871,10 +835,6 @@ func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow file not found")
 }
-
-// =============================================================================
-// Timeout Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 	// Slow child workflow
@@ -946,10 +906,6 @@ func (m *slowMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*po
 	}
 }
 
-// =============================================================================
-// Missing Configuration Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
 	// Step with call_workflow type but nil CallWorkflow config
 	wf := &workflow.Workflow{
@@ -975,10 +931,6 @@ func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "call_workflow configuration is required")
 }
-
-// =============================================================================
-// Mixed Workflow Type Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 	// Child workflow
@@ -1045,10 +997,6 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 	assert.True(t, hasCall, "call step should be recorded")
 	assert.True(t, hasFinal, "finalize step should be recorded")
 }
-
-// =============================================================================
-// Error Message Quality Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 	tests := []struct {
@@ -1140,10 +1088,6 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// State Recording Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_RecordsStepState(t *testing.T) {
 	parentWf, childWf := createParentChildWorkflows("state-parent", "state-child")
 
@@ -1221,10 +1165,6 @@ func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
 	assert.NotEmpty(t, stepState.Error)
 }
 
-// =============================================================================
-// Context Cancellation Tests
-// =============================================================================
-
 func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 	// Child with slow step
 	childWf := &workflow.Workflow{
@@ -1281,10 +1221,6 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 	// When context is cancelled, status should be cancelled (not failed)
 	assert.Equal(t, workflow.StatusCancelled, result.Status)
 }
-
-// =============================================================================
-// Additional US3 Edge Case Tests (Circular Detection)
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) {
 	// Diamond pattern: A calls B and C, both B and C call D, D calls A
@@ -1423,10 +1359,6 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 	require.NoError(t, err, "calling same workflow from different parents should not be circular")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// =============================================================================
-// Additional US4 Edge Case Tests (Timeout and Nesting)
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T) {
 	// Child with slow operation
@@ -1611,10 +1543,6 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 	require.NoError(t, err, "exactly MaxCallStackDepth levels should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// =============================================================================
-// Call Stack State Verification Tests
-// =============================================================================
 
 func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 	// Child that fails

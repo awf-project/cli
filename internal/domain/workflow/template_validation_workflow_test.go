@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Validate - Valid Workflow
-// =============================================================================
-
 func TestTemplateValidator_ValidWorkflow(t *testing.T) {
 	w := newTestWorkflow()
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
@@ -37,10 +33,6 @@ func TestTemplateValidator_NoTemplateReferences(t *testing.T) {
 	assert.False(t, result.HasErrors())
 }
 
-// =============================================================================
-// Validate - Valid Workflow References
-// =============================================================================
-
 func TestTemplateValidator_ValidWorkflowReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo Workflow: {{workflow.Name}} ID: {{workflow.ID}}"
@@ -60,10 +52,6 @@ func TestTemplateValidator_ValidWorkflowReferenceAllProperties(t *testing.T) {
 
 	assert.False(t, result.HasErrors())
 }
-
-// =============================================================================
-// Validate - Invalid Workflow References
-// =============================================================================
 
 func TestTemplateValidator_InvalidWorkflowProperty(t *testing.T) {
 	w := newTestWorkflow()
@@ -102,10 +90,6 @@ func TestTemplateValidator_InvalidWorkflowPropertyCommonMistakes(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Validate - Valid Env References
-// =============================================================================
-
 func TestTemplateValidator_ValidEnvReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo HOME={{env.HOME}}"
@@ -127,10 +111,6 @@ func TestTemplateValidator_ValidEnvReferenceAnyVariable(t *testing.T) {
 	assert.False(t, result.HasErrors(), "any env reference should pass static validation")
 }
 
-// =============================================================================
-// Validate - Valid Context References
-// =============================================================================
-
 func TestTemplateValidator_ValidContextReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "cd {{context.WorkingDir}} && whoami"
@@ -150,10 +130,6 @@ func TestTemplateValidator_ValidContextReferenceAllProperties(t *testing.T) {
 
 	assert.False(t, result.HasErrors())
 }
-
-// =============================================================================
-// Validate - Invalid Context References
-// =============================================================================
 
 func TestTemplateValidator_InvalidContextProperty(t *testing.T) {
 	w := newTestWorkflow()

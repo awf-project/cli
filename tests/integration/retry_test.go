@@ -65,10 +65,6 @@ func (m *retryMockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
-// =============================================================================
-// Retry Integration Tests (F011)
-// =============================================================================
-
 func TestRetry_SucceedsOnNthAttempt_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")

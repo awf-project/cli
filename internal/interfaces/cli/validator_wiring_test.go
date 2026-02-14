@@ -20,10 +20,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
 func TestValidateCommand_WiresValidatorDependency(t *testing.T) {
 	// GIVEN: A temporary test directory with a valid workflow
 	tmpDir := setupTestDir(t)
@@ -153,10 +149,6 @@ func TestResumeCommand_WiresValidatorDependency(t *testing.T) {
 	// Success criteria: no panic, services instantiate correctly
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
 func TestRunDryRun_WiresValidatorDependency(t *testing.T) {
 	// GIVEN: A workflow for dry-run testing
 	tmpDir := setupTestDir(t)
@@ -271,10 +263,6 @@ states:
 	require.NoError(t, err, "single-step execution should work with validator wired")
 	assert.Contains(t, out.String(), "step one", "should execute specified step")
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestValidateCommand_ValidatorCatchesEmptyWorkflow(t *testing.T) {
 	// GIVEN: An empty/malformed workflow file

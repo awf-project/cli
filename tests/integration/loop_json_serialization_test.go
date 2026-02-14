@@ -20,10 +20,7 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Feature: F047 - Loop Item JSON Serialization
 // Functional Tests - End-to-End Scenarios
-// =============================================================================
 //
 // These tests validate the complete feature implementation across real-world
 // usage patterns, ensuring all acceptance criteria are met:

@@ -135,8 +135,3 @@ func truncateAtCharBoundary(s string, maxBytes int) string {
 
 	return truncated
 }
-
-// Config returns the current output limits configuration.
-func (l *OutputLimiter) Config() workflow.OutputLimits {
-	return l.config
-}

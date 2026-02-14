@@ -1184,15 +1184,12 @@ func TestMockPluginManager_Clear_ResetsState(t *testing.T) {
 	_, exists := pm.Get("plugin1")
 	assert.True(t, exists)
 
-	// Act: clear the mock
 	pm.Clear()
 
-	// Assert: plugins cleared
 	assert.Empty(t, pm.List())
 	_, exists = pm.Get("plugin1")
 	assert.False(t, exists)
 
-	// Assert: callbacks reset to defaults (no errors on standard operations)
 	plugins, err := pm.Discover(context.Background())
 	assert.NoError(t, err)
 	assert.Empty(t, plugins)

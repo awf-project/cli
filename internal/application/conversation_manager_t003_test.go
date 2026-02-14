@@ -12,9 +12,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Component T003: Replace duplicate evaluation code with evaluateTurnCompletion()
-// =============================================================================
 //
 // These tests verify the refactoring that replaces duplicate stop condition
 // evaluation code (lines 267-286) with a call to the evaluateTurnCompletion()
@@ -36,11 +33,6 @@ import (
 // - Edge case: both conditions configured but neither met
 // - Edge case: both conditions met (stop condition takes precedence)
 // - Error handling: stop condition evaluation error (logged but continues)
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
 
 // TestEvaluateTurnCompletion_HappyPath_StopConditionMet tests that when the
 // stop condition evaluates to true, the conversation stops with the correct
@@ -186,10 +178,6 @@ func TestEvaluateTurnCompletion_HappyPath_ContinueConversation(t *testing.T) {
 	require.NotNil(t, result)
 	// Conversation should continue until max turns
 }
-
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
 
 // TestEvaluateTurnCompletion_EdgeCase_StopConditionFalse tests that when the
 // stop condition evaluates to false, the conversation continues.
@@ -424,10 +412,6 @@ func TestEvaluateTurnCompletion_EdgeCase_BothConditionsMet(t *testing.T) {
 	// After refactoring, stop reason should be StopReasonCondition (takes precedence)
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 // TestEvaluateTurnCompletion_Error_StopConditionEvaluationFails tests that
 // when stop condition evaluation fails, the error is logged but the
 // conversation continues.
@@ -526,13 +510,9 @@ func TestEvaluateTurnCompletion_Error_StopConditionAndMaxTokensError(t *testing.
 	// After refactoring, should stop due to max tokens even though condition failed
 }
 
-// =============================================================================
-// Refactoring Verification Tests
-// =============================================================================
 //
 // These tests verify that the refactoring has been completed correctly by
 // checking the behavior specific to using evaluateTurnCompletion() helper.
-// =============================================================================
 
 // TestEvaluateTurnCompletion_Verification_MultiTurnWithStopCondition verifies
 // that the refactored code correctly uses evaluateTurnCompletion in the

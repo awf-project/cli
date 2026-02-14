@@ -14,10 +14,8 @@ import (
 
 // TestSimpleWorkflow_HappyPath tests the SimpleWorkflow factory with default configuration
 func TestSimpleWorkflow_HappyPath(t *testing.T) {
-	// Arrange & Act
 	wf := testutil.SimpleWorkflow()
 
-	// Assert
 	require.NotNil(t, wf, "SimpleWorkflow should return non-nil workflow")
 	assert.NotEmpty(t, wf.Name, "Workflow should have a name")
 	assert.NotEmpty(t, wf.Initial, "Workflow should have an initial step")
@@ -38,27 +36,21 @@ func TestSimpleWorkflow_HappyPath(t *testing.T) {
 
 // TestSimpleWorkflow_WithCustomName tests SimpleWorkflow with custom name parameter
 func TestSimpleWorkflow_WithCustomName(t *testing.T) {
-	// Arrange
 	customName := "my-custom-workflow"
 
-	// Act
 	wf := testutil.SimpleWorkflow(customName)
 
-	// Assert
 	assert.Equal(t, customName, wf.Name, "Workflow name should match custom parameter")
 	assert.NoError(t, wf.Validate(nil))
 }
 
 // TestSimpleWorkflow_WithMultipleParameters tests SimpleWorkflow with additional configuration options
 func TestSimpleWorkflow_WithMultipleParameters(t *testing.T) {
-	// Arrange
 	name := "test-workflow"
 	command := "echo 'test'"
 
-	// Act
 	wf := testutil.SimpleWorkflow(name, command)
 
-	// Assert
 	assert.Equal(t, name, wf.Name)
 	// Verify command step exists with the specified command
 	commandStepFound := false
@@ -73,10 +65,8 @@ func TestSimpleWorkflow_WithMultipleParameters(t *testing.T) {
 
 // TestLinearWorkflow_HappyPath tests LinearWorkflow factory with default 3-step chain
 func TestLinearWorkflow_HappyPath(t *testing.T) {
-	// Arrange & Act
 	wf := testutil.LinearWorkflow()
 
-	// Assert
 	require.NotNil(t, wf)
 	assert.NotEmpty(t, wf.Name)
 	assert.Equal(t, wf.Initial, wf.Steps[wf.Initial].Name, "Initial step name should match")
@@ -132,10 +122,8 @@ func TestLinearWorkflow_WithCustomStepCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			wf := testutil.LinearWorkflow(tt.stepCount)
 
-			// Assert
 			assert.Len(t, wf.Steps, tt.wantSteps, "Should have %d total steps", tt.wantSteps)
 			assert.NoError(t, wf.Validate(nil))
 		})
@@ -144,10 +132,8 @@ func TestLinearWorkflow_WithCustomStepCount(t *testing.T) {
 
 // TestLinearWorkflow_EdgeCase_ZeroSteps tests handling of edge case with zero steps
 func TestLinearWorkflow_EdgeCase_ZeroSteps(t *testing.T) {
-	// Act
 	wf := testutil.LinearWorkflow(0)
 
-	// Assert
 	// Should return minimal valid workflow (at least initial + terminal)
 	assert.GreaterOrEqual(t, len(wf.Steps), 1, "Should have at least one step")
 	assert.NoError(t, wf.Validate(nil), "Even zero-step workflow should be valid")
@@ -155,10 +141,8 @@ func TestLinearWorkflow_EdgeCase_ZeroSteps(t *testing.T) {
 
 // TestParallelWorkflow_HappyPath tests ParallelWorkflow with default 2 branches
 func TestParallelWorkflow_HappyPath(t *testing.T) {
-	// Arrange & Act
 	wf := testutil.ParallelWorkflow()
 
-	// Assert
 	require.NotNil(t, wf)
 	assert.NotEmpty(t, wf.Name)
 
@@ -197,10 +181,8 @@ func TestParallelWorkflow_WithCustomBranchCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			wf := testutil.ParallelWorkflow(tt.branchCount)
 
-			// Assert - find parallel step
 			var parallelStep *workflow.Step
 			for _, step := range wf.Steps {
 				if step.Type == workflow.StepTypeParallel {
@@ -228,10 +210,8 @@ func TestParallelWorkflow_WithStrategy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			wf := testutil.ParallelWorkflow(3, tt.strategy)
 
-			// Assert
 			var parallelStep *workflow.Step
 			for _, step := range wf.Steps {
 				if step.Type == workflow.StepTypeParallel {
@@ -248,10 +228,8 @@ func TestParallelWorkflow_WithStrategy(t *testing.T) {
 
 // TestLoopWorkflow_HappyPath tests LoopWorkflow with default for_each configuration
 func TestLoopWorkflow_HappyPath(t *testing.T) {
-	// Arrange & Act
 	wf := testutil.LoopWorkflow()
 
-	// Assert
 	require.NotNil(t, wf)
 	assert.NotEmpty(t, wf.Name)
 
@@ -282,10 +260,8 @@ func TestLoopWorkflow_HappyPath(t *testing.T) {
 
 // TestLoopWorkflow_ForEachType tests LoopWorkflow configured as for_each
 func TestLoopWorkflow_ForEachType(t *testing.T) {
-	// Act
 	wf := testutil.LoopWorkflow("for_each")
 
-	// Assert
 	var loopStep *workflow.Step
 	for _, step := range wf.Steps {
 		if step.Type == workflow.StepTypeForEach {
@@ -301,10 +277,8 @@ func TestLoopWorkflow_ForEachType(t *testing.T) {
 
 // TestLoopWorkflow_WhileType tests LoopWorkflow configured as while
 func TestLoopWorkflow_WhileType(t *testing.T) {
-	// Act
 	wf := testutil.LoopWorkflow("while")
 
-	// Assert
 	var loopStep *workflow.Step
 	for _, step := range wf.Steps {
 		if step.Type == workflow.StepTypeWhile {
@@ -320,13 +294,10 @@ func TestLoopWorkflow_WhileType(t *testing.T) {
 
 // TestLoopWorkflow_WithCustomItems tests LoopWorkflow with custom iteration items
 func TestLoopWorkflow_WithCustomItems(t *testing.T) {
-	// Arrange
 	items := []string{"item1", "item2", "item3"}
 
-	// Act
 	wf := testutil.LoopWorkflow("for_each", items)
 
-	// Assert
 	var loopStep *workflow.Step
 	for _, step := range wf.Steps {
 		if step.Type == workflow.StepTypeForEach {
@@ -343,10 +314,8 @@ func TestLoopWorkflow_WithCustomItems(t *testing.T) {
 
 // TestConversationWorkflow_HappyPath tests ConversationWorkflow with default agent configuration
 func TestConversationWorkflow_HappyPath(t *testing.T) {
-	// Arrange & Act
 	wf := testutil.ConversationWorkflow()
 
-	// Assert
 	require.NotNil(t, wf)
 	assert.NotEmpty(t, wf.Name)
 
@@ -387,10 +356,8 @@ func TestConversationWorkflow_WithCustomProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			wf := testutil.ConversationWorkflow(tt.provider, tt.model)
 
-			// Assert
 			var agentStep *workflow.Step
 			for _, step := range wf.Steps {
 				if step.Type == workflow.StepTypeAgent {
@@ -412,10 +379,8 @@ func TestConversationWorkflow_WithCustomProvider(t *testing.T) {
 
 // TestConversationWorkflow_WithMultiTurn tests ConversationWorkflow with multiple conversation steps
 func TestConversationWorkflow_WithMultiTurn(t *testing.T) {
-	// Act
 	wf := testutil.ConversationWorkflow("anthropic", "claude-3-opus", 3) // 3 turns
 
-	// Assert
 	// Count agent steps
 	agentStepCount := 0
 	for _, step := range wf.Steps {
@@ -443,10 +408,8 @@ func TestAllFixtures_ProduceValidWorkflows(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
 			wf := tt.fixtureFunc()
 
-			// Assert
 			require.NotNil(t, wf, "Fixture should return non-nil workflow")
 			assert.NotEmpty(t, wf.Name, "Workflow should have a name")
 			assert.NotEmpty(t, wf.Initial, "Workflow should have initial step")
@@ -460,11 +423,9 @@ func TestAllFixtures_ProduceValidWorkflows(t *testing.T) {
 
 // TestFixtures_AreIndependent tests that fixtures return new instances each time
 func TestFixtures_AreIndependent(t *testing.T) {
-	// Act
 	wf1 := testutil.SimpleWorkflow()
 	wf2 := testutil.SimpleWorkflow()
 
-	// Assert - different memory addresses
 	assert.NotSame(t, wf1, wf2, "Each call should return a new instance")
 
 	// Mutating one should not affect the other
@@ -478,7 +439,6 @@ func TestFixtures_ThreadSafe(t *testing.T) {
 	const goroutines = 50
 	results := make(chan *workflow.Workflow, goroutines)
 
-	// Act - concurrent fixture calls
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			wf := testutil.SimpleWorkflow()
@@ -486,7 +446,6 @@ func TestFixtures_ThreadSafe(t *testing.T) {
 		}()
 	}
 
-	// Assert - collect all results
 	workflows := make([]*workflow.Workflow, 0, goroutines)
 	for i := 0; i < goroutines; i++ {
 		wf := <-results
@@ -499,14 +458,12 @@ func TestFixtures_ThreadSafe(t *testing.T) {
 
 // TestFixtures_Integration_WithBuilders tests that fixtures work well with WorkflowBuilder
 func TestFixtures_Integration_WithBuilders(t *testing.T) {
-	// Act - start with fixture and customize with builder
 	wf := testutil.SimpleWorkflow()
 
 	builder := testutil.NewWorkflowBuilder()
 	builder.WithName("customized-" + wf.Name)
 	customized := builder.Build()
 
-	// Assert
 	assert.Contains(t, customized.Name, "customized-", "Builder should allow customization")
 	assert.NotEqual(t, wf.Name, customized.Name, "Builder should produce different workflow")
 }

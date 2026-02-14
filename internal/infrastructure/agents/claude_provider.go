@@ -22,9 +22,6 @@ type ClaudeProvider struct {
 	executor ports.CLIExecutor
 }
 
-// NewClaudeProvider creates a new ClaudeProvider.
-// If logger is nil, a NopLogger is used.
-// If no executor is provided via options, ExecCLIExecutor is used by default.
 func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
 	var log ports.Logger
 	if len(l) > 0 && l[0] != nil {
@@ -38,7 +35,6 @@ func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
 	}
 }
 
-// NewClaudeProviderWithOptions creates a new ClaudeProvider with functional options.
 func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider {
 	p := &ClaudeProvider{
 		logger:   logger.NopLogger{},
@@ -50,29 +46,23 @@ func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider 
 	return p
 }
 
-// Execute invokes the Claude CLI with the given prompt and options.
 func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("claude provider: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"-p", prompt}
 
-	// Apply options (only those supported by Claude CLI)
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
@@ -91,7 +81,6 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	}
 	// Note: temperature and max_tokens are validated but not passed to CLI
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
 
@@ -99,7 +88,6 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
@@ -110,10 +98,9 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
 		Tokens:          estimateTokens(outputStr),
-		TokensEstimated: true, // using rough estimation, not actual API usage
+		TokensEstimated: true,
 	}
 
-	// Parse JSON response if output format is JSON
 	if options != nil {
 		if format, ok := options["output_format"].(string); ok && format == "json" {
 			var jsonResp map[string]any
@@ -133,39 +120,31 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
-	// Validate state
 	if state == nil {
 		return nil, errors.New("conversation state cannot be nil")
 	}
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("claude provider: %w", err)
 	}
 
-	// Clone state to avoid modifying original
 	workingState := cloneState(state)
 
-	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
 	if err := workingState.AddTurn(userTurn); err != nil {
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"-p", prompt}
 
-	// Apply options (only those supported by Claude CLI)
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
@@ -183,7 +162,6 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 			"step", getStepName(options))
 	}
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
 
@@ -191,20 +169,17 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
 	outputStr := string(output)
 
-	// Add assistant turn to conversation history
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
 	if err := workingState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
 
-	// Estimate input tokens (all previous turns)
 	inputTokens := 0
 	for i := 0; i < len(workingState.Turns)-1; i++ {
 		if workingState.Turns[i].Tokens == 0 {
@@ -213,7 +188,6 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		inputTokens += workingState.Turns[i].Tokens
 	}
 
-	// Create result
 	result := &workflow.ConversationResult{
 		Provider:        "claude",
 		State:           workingState,
@@ -226,7 +200,6 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		CompletedAt:     completedAt,
 	}
 
-	// Parse JSON response if output format is JSON
 	if options != nil {
 		if format, ok := options["output_format"].(string); ok && format == "json" {
 			var jsonResp map[string]any
@@ -240,12 +213,10 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	return result, nil
 }
 
-// Name returns the provider identifier.
 func (p *ClaudeProvider) Name() string {
 	return "claude"
 }
 
-// Validate checks if the Claude CLI is installed and accessible.
 func (p *ClaudeProvider) Validate() error {
 	_, err := exec.LookPath("claude")
 	if err != nil {
@@ -254,27 +225,23 @@ func (p *ClaudeProvider) Validate() error {
 	return nil
 }
 
-// validateOptions validates provider-specific options.
 func validateOptions(options map[string]any) error {
 	if options == nil {
 		return nil
 	}
 
-	// Validate max_tokens
 	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
 		if maxTokens < 0 {
 			return errors.New("max_tokens must be non-negative")
 		}
 	}
 
-	// Validate temperature
 	if temp, ok := getFloatOption(options, "temperature"); ok {
 		if temp < 0 || temp > 1 {
 			return errors.New("temperature must be between 0 and 1")
 		}
 	}
 
-	// Validate model format
 	if model, ok := getStringOption(options, "model"); ok {
 		if !isValidClaudeModel(model) {
 			return fmt.Errorf("invalid model format: %s (must be an alias or start with 'claude-')", model)
@@ -284,7 +251,6 @@ func validateOptions(options map[string]any) error {
 	return nil
 }
 
-// isValidClaudeModel checks if the model is a valid alias or Claude model name.
 func isValidClaudeModel(model string) bool {
 	aliases := []string{"sonnet", "opus", "haiku"}
 	return slices.Contains(aliases, model) || strings.HasPrefix(model, "claude-")

@@ -17,7 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // Signal Handling Integration Tests (C010)
 // Tests validate graceful shutdown behavior on SIGINT/SIGTERM:
 // - Context cancellation triggers graceful shutdown
@@ -29,7 +28,6 @@ import (
 // Tests simulate OS signals via context cancellation instead of syscall.Kill()
 // for better test isolation and cross-platform compatibility. The signal handler
 // in run.go:33-48 translates signals to context cancellation internally.
-// =============================================================================
 
 // TestSignalHandling_SIGINTGracefulShutdown verifies graceful shutdown on SIGINT
 // Strategy: Cancel context during long-running step, verify StatusCancelled
@@ -54,7 +52,6 @@ func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -89,7 +86,6 @@ func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with delayed cancellation
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5] // strip .yaml
 
 			// Simulate signal by canceling context after delay
@@ -102,7 +98,6 @@ func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 			duration := time.Since(startTime)
 
-			// Assert - Layer 1: Error checking
 			// When context is cancelled, ExecutionService returns context.Canceled error
 			// along with the execution context (status=StatusCancelled)
 			if tt.wantErr {
@@ -113,12 +108,10 @@ func TestSignalHandling_SIGINTGracefulShutdown(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, tt.expectedStatus, execCtx.Status, "workflow status should be cancelled")
 			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "should be interrupted at expected step")
 
-			// Assert - Layer 3: Timing verification (5s graceful shutdown + 3x tolerance = 15s)
 			assert.WithinDuration(t, startTime, startTime.Add(duration), 15*time.Second,
 				"graceful shutdown should complete within 15s (3x tolerance)")
 		})
@@ -148,7 +141,6 @@ func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -181,7 +173,6 @@ func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Cancel context during execution
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -191,7 +182,6 @@ func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -200,12 +190,10 @@ func TestSignalHandling_SIGTERMGracefulShutdown(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
 			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep)
 
-			// Assert - Layer 3: State preservation - step1 should be completed
 			step1State, ok := execCtx.GetStepState("step1")
 			assert.True(t, ok, "step1 state should exist")
 			assert.NotNil(t, step1State, "step1 state should not be nil")
@@ -232,7 +220,6 @@ func TestSignalHandling_StatePreservation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -265,7 +252,6 @@ func TestSignalHandling_StatePreservation(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -275,7 +261,6 @@ func TestSignalHandling_StatePreservation(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -284,11 +269,9 @@ func TestSignalHandling_StatePreservation(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Context verification
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
 
-			// Assert - Layer 3: State store verification
 			// Verify state was saved to store
 			savedCtx, err := store.Load(context.Background(), execCtx.WorkflowID)
 			require.NoError(t, err)
@@ -318,7 +301,6 @@ func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -351,7 +333,6 @@ func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -361,7 +342,6 @@ func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -370,11 +350,9 @@ func TestSignalHandling_ParallelBranchCancellation(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
 
-			// Assert - Layer 3: Verify all branches were cancelled (none completed)
 			// Should have parallel_step state but no branch should have reached terminal
 			parallelState, ok := execCtx.GetStepState("parallel_step")
 			assert.True(t, ok, "parallel step state should exist")
@@ -413,7 +391,6 @@ func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange - First execution (will be cancelled)
 			ctx1, cancel1 := context.WithCancel(context.Background())
 			defer cancel1()
 
@@ -446,7 +423,6 @@ func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act - Part 1: Run and cancel
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -461,22 +437,18 @@ func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
 			require.NotNil(t, execCtx1, "execution context should be returned even on cancellation")
 			require.Equal(t, workflow.StatusCancelled, execCtx1.Status)
 
-			// Act - Part 2: Resume from saved state
 			ctx2 := context.Background()
 			execCtx2, err := svc.Resume(ctx2, execCtx1.WorkflowID, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Resumed execution completed
 			require.NotNil(t, execCtx2)
 			assert.Equal(t, workflow.StatusCompleted, execCtx2.Status, "resumed workflow should complete")
 
-			// Assert - Layer 3: Verify step1 was not re-executed (preserved from first run)
 			step1State, ok := execCtx2.GetStepState("step1")
 			assert.True(t, ok, "step1 state should exist from first run")
 			assert.NotNil(t, step1State)
@@ -503,7 +475,6 @@ func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -536,7 +507,6 @@ func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Cancel multiple times rapidly
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -549,7 +519,6 @@ func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
 
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking (no panic from multiple cancels)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -558,11 +527,9 @@ func TestSignalHandling_RapidSuccessiveSignals(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Status verification (single cancellation processed)
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
 
-			// Assert - Layer 3: Graceful shutdown (no panic, proper cleanup)
 			// If we reach here without panic, test passes
 			assert.NotEmpty(t, execCtx.WorkflowID, "workflow ID should be set")
 		})
@@ -588,7 +555,6 @@ func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -621,7 +587,6 @@ func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act
 			workflowName := tt.workflowFile[:len(tt.workflowFile)-5]
 
 			go func() {
@@ -633,7 +598,6 @@ func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 			duration := time.Since(startTime)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -642,7 +606,6 @@ func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
 			require.Error(t, err, "should return error on cancellation")
 			assert.ErrorIs(t, err, context.Canceled, "should be context.Canceled error")
 
-			// Assert - Layer 2: Status and timing
 			require.NotNil(t, execCtx, "execution context should be returned even on cancellation")
 			assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
 
@@ -652,7 +615,6 @@ func TestSignalHandling_ChildProcessCleanup(t *testing.T) {
 			assert.Less(t, duration.Seconds(), 15.0,
 				"child process should be terminated, not allowed to complete full sleep")
 
-			// Assert - Layer 3: No zombie processes
 			// Note: Verifying no zombies is platform-specific
 			// The ShellExecutor should handle process cleanup automatically
 			// This test verifies timing (child didn't run to completion)

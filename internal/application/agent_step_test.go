@@ -17,10 +17,6 @@ import (
 // Component: execution_service
 // Feature: 39 - Agent Step Type
 
-// ============================================================================
-// RED PHASE TESTS - Error Handling and Validation
-// ============================================================================
-
 // TestExecutionService_AgentStep_NoRegistryConfigured tests that agent steps fail
 // when no AgentRegistry is configured.
 func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
@@ -155,10 +151,6 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "nonexistent")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
 }
-
-// ============================================================================
-// HAPPY PATH TESTS
-// ============================================================================
 
 // TestExecutionService_AgentStep_BasicExecution tests that a basic agent step
 // executes successfully when the provider exists.
@@ -407,10 +399,6 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 	assert.Equal(t, "Analysis complete: Data looks good", analyzeState.Output)
 }
 
-// ============================================================================
-// TIMEOUT HANDLING TESTS - AC7
-// ============================================================================
-
 // TestExecutionService_AgentStep_StepTimeout tests that agent steps respect
 // the step-level timeout configuration.
 // AC7: Timeout handling
@@ -611,10 +599,6 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 	assert.Equal(t, workflow.StatusCancelled, execCtx.Status)
 }
 
-// ============================================================================
-// PARALLEL EXECUTION TESTS - AC10
-// ============================================================================
-
 // TestExecutionService_AgentStep_InParallelBranches tests that agent steps
 // work correctly within parallel execution branches.
 // AC10: Works with parallel steps
@@ -733,10 +717,6 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	assert.Equal(t, "Keywords: AI, ML, Data", keywordsState.Output)
 }
 
-// ============================================================================
-// PROMPT INTERPOLATION TESTS
-// ============================================================================
-
 // TestExecutionService_AgentStep_PromptInterpolation tests that agent prompts
 // are interpolated with context variables.
 func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
@@ -809,10 +789,6 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// ============================================================================
-// MULTIPLE PROVIDERS TESTS
-// ============================================================================
 
 // TestExecutionService_AgentStep_MultipleProviders tests that different
 // agent providers can be used in the same workflow.
@@ -926,10 +902,6 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	assert.Equal(t, "Review: Analysis is accurate", geminiState.Output)
 }
 
-// ============================================================================
-// SETTER METHOD TEST
-// ============================================================================
-
 // TestExecutionService_SetAgentRegistry tests the setter method.
 func TestExecutionService_SetAgentRegistry(t *testing.T) {
 	wfSvc := application.NewWorkflowService(
@@ -995,10 +967,6 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// ============================================================================
-// RESUME WORKFLOW TESTS
-// ============================================================================
 
 // TestExecutionService_Resume_WithAgentStep tests resuming a workflow
 // that has an agent step.
@@ -1075,10 +1043,6 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 	assert.Equal(t, "done", ctx.CurrentStep)
 }
 
-// ============================================================================
-// CONTINUE ON ERROR TESTS
-// ============================================================================
-
 // TestExecutionService_AgentStep_ContinueOnError tests that agent steps
 // can continue on error when configured.
 func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
@@ -1152,10 +1116,6 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, workflow.StatusFailed, state.Status)
 }
-
-// ============================================================================
-// ERROR MESSAGE TESTS
-// ============================================================================
 
 // TestExecutionService_AgentStep_ErrorMessages tests that error messages
 // include helpful context.
@@ -1257,10 +1217,6 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// EXECUTION ERROR TESTS
-// ============================================================================
 
 // TestExecutionService_AgentStep_ExecutionError tests handling of
 // provider execution errors.

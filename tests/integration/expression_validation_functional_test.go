@@ -38,10 +38,6 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
-// =============================================================================
-// Happy Path Tests: Valid Expression Syntax
-// =============================================================================
-
 func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
 	// Given: Real ExprValidator adapter (not mocked)
 	validator := expression.NewExprValidator()
@@ -102,10 +98,6 @@ func TestExpressionValidation_HappyPath_ValidExpressions(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Cases: Boundary Conditions and Unusual Inputs
-// =============================================================================
 
 func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
 	validator := expression.NewExprValidator()
@@ -191,10 +183,6 @@ func TestExpressionValidation_EdgeCases_BoundaryConditions(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling: Invalid Syntax and Error Messages
-// =============================================================================
-
 func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
 	validator := expression.NewExprValidator()
 
@@ -276,10 +264,6 @@ func TestExpressionValidation_ErrorHandling_InvalidSyntax(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Integration: Port Interface Compliance
-// =============================================================================
-
 func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
 	// Given: ExprValidator must implement ports.ExpressionValidator interface
 	var _ ports.ExpressionValidator = (*expression.ExprValidator)(nil)
@@ -292,10 +276,6 @@ func TestExpressionValidation_Integration_PortCompliance(t *testing.T) {
 	err := validator.Compile("turn_count >= 3")
 	assert.NoError(t, err, "interface method should work")
 }
-
-// =============================================================================
-// Integration: Real-World Conversation Stop Conditions
-// =============================================================================
 
 func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.T) {
 	validator := expression.NewExprValidator()
@@ -348,10 +328,6 @@ func TestExpressionValidation_Integration_ConversationStopConditions(t *testing.
 	}
 }
 
-// =============================================================================
-// Integration: Validator Factory Function
-// =============================================================================
-
 func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
 	// When: Creating multiple validator instances
 	validator1 := expression.NewExprValidator()
@@ -367,10 +343,6 @@ func TestExpressionValidation_Integration_ValidatorFactory(t *testing.T) {
 	assert.NoError(t, err1)
 	assert.NoError(t, err2)
 }
-
-// =============================================================================
-// Integration: Error Message Clarity
-// =============================================================================
 
 func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
 	validator := expression.NewExprValidator()
@@ -418,10 +390,6 @@ func TestExpressionValidation_Integration_ErrorMessageClarity(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Integration: Concurrent Validation
-// =============================================================================
 
 func TestExpressionValidation_Integration_ConcurrentValidation(t *testing.T) {
 	validator := expression.NewExprValidator()

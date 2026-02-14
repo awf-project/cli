@@ -15,9 +15,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// =============================================================================
 // mockPluginStore Tests (Happy Path)
-// =============================================================================
 
 func TestMockPluginStore_Save_HappyPath(t *testing.T) {
 	store := newMockPluginStore()
@@ -72,9 +70,7 @@ func TestMockPluginStore_ListDisabled_HappyPath(t *testing.T) {
 	assert.NotContains(t, disabled, "enabled")
 }
 
-// =============================================================================
 // mockPluginStore Tests (Edge Cases)
-// =============================================================================
 
 func TestMockPluginStore_GetState_NotExists(t *testing.T) {
 	store := newMockPluginStore()
@@ -104,9 +100,7 @@ func TestMockPluginStore_ListDisabled_AllEnabled(t *testing.T) {
 	assert.Empty(t, disabled, "Should return empty list when all plugins enabled")
 }
 
-// =============================================================================
 // mockPluginStore Tests (Error Handling)
-// =============================================================================
 
 func TestMockPluginStore_Save_Error(t *testing.T) {
 	store := newMockPluginStore()
@@ -158,9 +152,7 @@ func TestMockPluginStore_Load_WithCustomFunc(t *testing.T) {
 	assert.True(t, called, "Custom loadFunc should be called")
 }
 
-// =============================================================================
 // mockPluginConfig Tests (Happy Path)
-// =============================================================================
 
 func TestMockPluginConfig_SetEnabled_HappyPath(t *testing.T) {
 	config := newMockPluginConfig()
@@ -201,9 +193,7 @@ func TestMockPluginConfig_SetConfig_HappyPath(t *testing.T) {
 	assert.Equal(t, expectedConfig, config.GetConfig("test-plugin"))
 }
 
-// =============================================================================
 // mockPluginConfig Tests (Edge Cases)
-// =============================================================================
 
 func TestMockPluginConfig_GetConfig_NotExists(t *testing.T) {
 	config := newMockPluginConfig()
@@ -241,9 +231,7 @@ func TestMockPluginConfig_SetConfig_NilConfig(t *testing.T) {
 	assert.Nil(t, config.GetConfig("test-plugin"))
 }
 
-// =============================================================================
 // mockPluginConfig Tests (Error Handling)
-// =============================================================================
 
 func TestMockPluginConfig_SetEnabled_Error(t *testing.T) {
 	config := newMockPluginConfig()
@@ -256,9 +244,7 @@ func TestMockPluginConfig_SetEnabled_Error(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 }
 
-// =============================================================================
 // mockPluginStateStore Tests (Combined Interface)
-// =============================================================================
 
 func TestMockPluginStateStore_CombinesInterfaces(t *testing.T) {
 	stateStore := newMockPluginStateStore()
@@ -336,10 +322,6 @@ func TestMockPluginStateStore_HelperMethods(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Concurrency Tests
-// =============================================================================
-
 func TestMockPluginStore_ConcurrentAccess(t *testing.T) {
 	store := newMockPluginStore()
 	var wg sync.WaitGroup
@@ -410,10 +392,6 @@ func TestMockPluginStateStore_ConcurrentAccessSharedState(t *testing.T) {
 		assert.NotNil(t, state, "plugin %s should have state", pluginName)
 	}
 }
-
-// =============================================================================
-// Boundary Conditions
-// =============================================================================
 
 func TestMockPluginStore_EmptyStates(t *testing.T) {
 	store := newMockPluginStore()

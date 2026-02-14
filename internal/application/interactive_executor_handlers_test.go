@@ -15,17 +15,9 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// InteractiveExecutor Result Handlers Tests (C005 Phase 2: T004-T006)
-// =============================================================================
-
-// =============================================================================
-// T004: handleExecutionError Tests
-// =============================================================================
-
 func TestHandleExecutionError_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has OnFailure transition
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -56,17 +48,15 @@ func TestHandleExecutionError_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 	execErr := errors.New("execution failed")
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleExecutionError
 	nextStep, err := executor.HandleExecutionError(context.Background(), step, &state, execErr, intCtx)
 
-	// Assert: Should return OnFailure step with no error
 	require.NoError(t, err, "handleExecutionError should not return error when OnFailure is set")
 	assert.Equal(t, "error_handler", nextStep, "should return OnFailure step")
 }
 
 func TestHandleExecutionError_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has ContinueOnError=true
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -98,17 +88,15 @@ func TestHandleExecutionError_WithContinueOnError_ReturnsOnSuccess(t *testing.T)
 	execErr := errors.New("execution failed")
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleExecutionError
 	nextStep, err := executor.HandleExecutionError(context.Background(), step, &state, execErr, intCtx)
 
-	// Assert: Should return OnSuccess step with no error
 	require.NoError(t, err, "handleExecutionError should not return error when ContinueOnError is true")
 	assert.Equal(t, "next_step", nextStep, "should return OnSuccess step when ContinueOnError is true")
 }
 
 func TestHandleExecutionError_WithoutOnFailureOrContinue_ReturnsError(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has neither OnFailure nor ContinueOnError
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -138,10 +126,8 @@ func TestHandleExecutionError_WithoutOnFailureOrContinue_ReturnsError(t *testing
 	execErr := errors.New("execution failed")
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleExecutionError
 	nextStep, err := executor.HandleExecutionError(context.Background(), step, &state, execErr, intCtx)
 
-	// Assert: Should return error
 	require.Error(t, err, "handleExecutionError should return error when no OnFailure or ContinueOnError")
 	assert.Empty(t, nextStep, "nextStep should be empty when error is returned")
 	assert.Contains(t, err.Error(), "strict_step", "error should contain step name")
@@ -152,7 +138,6 @@ func TestHandleExecutionError_PostHooksExecuted(t *testing.T) {
 	// Test verifies that post-hooks are executed even when execution fails
 	// This is critical behavior that must be preserved during refactoring
 
-	// Arrange: Setup executor with mock hook executor
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -187,10 +172,8 @@ func TestHandleExecutionError_PostHooksExecuted(t *testing.T) {
 	execErr := errors.New("execution failed")
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleExecutionError
 	_, err := executor.HandleExecutionError(context.Background(), step, &state, execErr, intCtx)
 
-	// Assert: Should not return error and post-hooks should have been called
 	require.NoError(t, err, "handleExecutionError should not return error when OnFailure is set")
 	// Note: Since we can't directly verify hook execution in this stub phase,
 	// we verify the behavior indirectly through the error handling path
@@ -199,7 +182,6 @@ func TestHandleExecutionError_PostHooksExecuted(t *testing.T) {
 func TestHandleExecutionError_EmptyOnFailure_ContinueOnErrorFalse_ReturnsError(t *testing.T) {
 	// Feature: C005
 	// Edge case: OnFailure is set but empty string
-	// Arrange
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -231,21 +213,15 @@ func TestHandleExecutionError_EmptyOnFailure_ContinueOnErrorFalse_ReturnsError(t
 	execErr := errors.New("execution failed")
 	intCtx := interpolation.NewContext()
 
-	// Act
 	nextStep, err := executor.HandleExecutionError(context.Background(), step, &state, execErr, intCtx)
 
-	// Assert: Empty OnFailure should be treated as not set, should return error
 	require.Error(t, err, "should return error when OnFailure is empty and ContinueOnError is false")
 	assert.Empty(t, nextStep, "nextStep should be empty")
 }
 
-// =============================================================================
-// T005: handleNonZeroExit Tests
-// =============================================================================
-
 func TestHandleNonZeroExit_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has OnFailure transition
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -281,17 +257,15 @@ func TestHandleNonZeroExit_WithOnFailure_ReturnsOnFailureStep(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleNonZeroExit
 	nextStep, err := executor.HandleNonZeroExit(context.Background(), step, &state, result, intCtx)
 
-	// Assert: Should return OnFailure step with no error
 	require.NoError(t, err, "handleNonZeroExit should not return error when OnFailure is set")
 	assert.Equal(t, "error_handler", nextStep, "should return OnFailure step")
 }
 
 func TestHandleNonZeroExit_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has ContinueOnError=true
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -328,17 +302,15 @@ func TestHandleNonZeroExit_WithContinueOnError_ReturnsOnSuccess(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleNonZeroExit
 	nextStep, err := executor.HandleNonZeroExit(context.Background(), step, &state, result, intCtx)
 
-	// Assert: Should return OnSuccess step with no error
 	require.NoError(t, err, "handleNonZeroExit should not return error when ContinueOnError is true")
 	assert.Equal(t, "next_step", nextStep, "should return OnSuccess step when ContinueOnError is true")
 }
 
 func TestHandleNonZeroExit_WithoutOnFailureOrContinue_ReturnsError(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has neither OnFailure nor ContinueOnError
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -373,10 +345,8 @@ func TestHandleNonZeroExit_WithoutOnFailureOrContinue_ReturnsError(t *testing.T)
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleNonZeroExit
 	nextStep, err := executor.HandleNonZeroExit(context.Background(), step, &state, result, intCtx)
 
-	// Assert: Should return error with exit code
 	require.Error(t, err, "handleNonZeroExit should return error when no OnFailure or ContinueOnError")
 	assert.Empty(t, nextStep, "nextStep should be empty when error is returned")
 	assert.Contains(t, err.Error(), "strict_exit_step", "error should contain step name")
@@ -386,7 +356,6 @@ func TestHandleNonZeroExit_WithoutOnFailureOrContinue_ReturnsError(t *testing.T)
 func TestHandleNonZeroExit_PostHooksExecuted(t *testing.T) {
 	// Feature: C005
 	// Test verifies that post-hooks are executed even when exit code is non-zero
-	// Arrange
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -426,10 +395,8 @@ func TestHandleNonZeroExit_PostHooksExecuted(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act
 	_, err := executor.HandleNonZeroExit(context.Background(), step, &state, result, intCtx)
 
-	// Assert: Should not return error and post-hooks should have been called
 	require.NoError(t, err, "handleNonZeroExit should not return error when OnFailure is set")
 }
 
@@ -448,7 +415,6 @@ func TestHandleNonZeroExit_DifferentExitCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			executor := application.NewInteractiveExecutor(
 				wfSvc,
@@ -483,23 +449,17 @@ func TestHandleNonZeroExit_DifferentExitCodes(t *testing.T) {
 
 			intCtx := interpolation.NewContext()
 
-			// Act
 			_, err := executor.HandleNonZeroExit(context.Background(), step, &state, result, intCtx)
 
-			// Assert
 			require.Error(t, err, "should return error for exit code %d", tt.exitCode)
 			// Error message format should include exit code
 		})
 	}
 }
 
-// =============================================================================
-// T006: handleSuccess Tests
-// =============================================================================
-
 func TestHandleSuccess_WithTransitions_EvaluatesAndReturnsMatch(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has transitions
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -535,17 +495,15 @@ func TestHandleSuccess_WithTransitions_EvaluatesAndReturnsMatch(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleSuccess
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should evaluate transitions and return matched step
 	require.NoError(t, err, "handleSuccess should not return error on success")
 	assert.Equal(t, "matched_step", nextStep, "should return transition matched step")
 }
 
 func TestHandleSuccess_WithTransitionsNoMatch_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has transitions that don't match
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -581,17 +539,15 @@ func TestHandleSuccess_WithTransitionsNoMatch_ReturnsOnSuccess(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleSuccess
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should fallback to OnSuccess
 	require.NoError(t, err, "handleSuccess should not return error on success")
 	assert.Equal(t, "default_next", nextStep, "should return OnSuccess when no transition matches")
 }
 
 func TestHandleSuccess_WithoutTransitions_ReturnsOnSuccess(t *testing.T) {
 	// Feature: C005
-	// Arrange: Setup executor with step that has no transitions, only OnSuccess
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -621,10 +577,8 @@ func TestHandleSuccess_WithoutTransitions_ReturnsOnSuccess(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act: Call handleSuccess
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should return OnSuccess
 	require.NoError(t, err, "handleSuccess should not return error on success")
 	assert.Equal(t, "next_step", nextStep, "should return OnSuccess step")
 }
@@ -632,7 +586,6 @@ func TestHandleSuccess_WithoutTransitions_ReturnsOnSuccess(t *testing.T) {
 func TestHandleSuccess_EmptyOnSuccess_ReturnsEmptyString(t *testing.T) {
 	// Feature: C005
 	// Edge case: OnSuccess is empty (terminal step)
-	// Arrange
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -662,10 +615,8 @@ func TestHandleSuccess_EmptyOnSuccess_ReturnsEmptyString(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should return empty string (terminal)
 	require.NoError(t, err, "handleSuccess should not return error")
 	assert.Empty(t, nextStep, "should return empty string for terminal step")
 }
@@ -673,7 +624,6 @@ func TestHandleSuccess_EmptyOnSuccess_ReturnsEmptyString(t *testing.T) {
 func TestHandleSuccess_PostHooksExecuted(t *testing.T) {
 	// Feature: C005
 	// Test verifies that post-hooks are executed on success
-	// Arrange
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -707,10 +657,8 @@ func TestHandleSuccess_PostHooksExecuted(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should not return error
 	require.NoError(t, err, "handleSuccess should not return error")
 	assert.Equal(t, "next_step", nextStep, "should return next step")
 	// Note: Hook execution verification would require exposing hook executor or using test doubles
@@ -719,7 +667,6 @@ func TestHandleSuccess_PostHooksExecuted(t *testing.T) {
 func TestHandleSuccess_MultipleTransitions_ReturnsFirstMatch(t *testing.T) {
 	// Feature: C005
 	// Test that first matching transition is returned (order matters)
-	// Arrange
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -759,17 +706,11 @@ func TestHandleSuccess_MultipleTransitions_ReturnsFirstMatch(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should return first matching transition
 	require.NoError(t, err, "handleSuccess should not return error")
 	assert.Equal(t, "first_match", nextStep, "should return first matching transition")
 }
-
-// =============================================================================
-// Edge Cases and Error Scenarios
-// =============================================================================
 
 func TestHandleExecutionError_NilStep_ReturnsError(t *testing.T) {
 	// Feature: C053 - T008
@@ -814,7 +755,7 @@ func TestHandleNonZeroExit_NilResult_ReturnsError(t *testing.T) {
 func TestHandleSuccess_NilEvaluator_WithTransitions_ReturnsError(t *testing.T) {
 	// Feature: C005
 	// Test that evaluator is required when transitions are defined
-	// Arrange: Create executor without evaluator (pass nil)
+
 	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	executor := application.NewInteractiveExecutor(
 		wfSvc,
@@ -849,10 +790,8 @@ func TestHandleSuccess_NilEvaluator_WithTransitions_ReturnsError(t *testing.T) {
 
 	intCtx := interpolation.NewContext()
 
-	// Act
 	nextStep, err := executor.HandleSuccess(context.Background(), step, &state, intCtx)
 
-	// Assert: Should handle nil evaluator gracefully
 	// Current implementation likely skips transitions if evaluator is nil
 	// This test documents that behavior
 	assert.NoError(t, err, "should handle nil evaluator gracefully")

@@ -13,16 +13,10 @@ import (
 // Feature: C017
 // Component: T002 - CLI Test Fixture Functions
 
-// =============================================================================
-// SetupTestDir Tests
-// =============================================================================
-
 // TestSetupTestDir_HappyPath tests basic directory creation with .awf structure
 func TestSetupTestDir_HappyPath(t *testing.T) {
-	// Act
 	dir := testutil.SetupTestDir(t)
 
-	// Assert
 	require.NotEmpty(t, dir, "SetupTestDir should return non-empty directory path")
 
 	// Verify .awf directory exists
@@ -52,11 +46,9 @@ func TestSetupTestDir_HappyPath(t *testing.T) {
 
 // TestSetupTestDir_ReturnsUniqueDirectories tests that each call returns a unique directory
 func TestSetupTestDir_ReturnsUniqueDirectories(t *testing.T) {
-	// Act
 	dir1 := testutil.SetupTestDir(t)
 	dir2 := testutil.SetupTestDir(t)
 
-	// Assert
 	assert.NotEqual(t, dir1, dir2, "Each call should return a unique directory")
 
 	// Verify both directories exist independently
@@ -68,10 +60,8 @@ func TestSetupTestDir_ReturnsUniqueDirectories(t *testing.T) {
 
 // TestSetupTestDir_DirectoryPermissions tests that created directories have correct permissions
 func TestSetupTestDir_DirectoryPermissions(t *testing.T) {
-	// Act
 	dir := testutil.SetupTestDir(t)
 
-	// Assert - verify permissions are readable/writable
 	awfDir := filepath.Join(dir, ".awf")
 	stat, err := os.Stat(awfDir)
 	require.NoError(t, err)
@@ -87,7 +77,6 @@ func TestSetupTestDir_ThreadSafe(t *testing.T) {
 	const goroutines = 20
 	results := make(chan string, goroutines)
 
-	// Act - create directories concurrently
 	for range goroutines {
 		go func() {
 			dir := testutil.SetupTestDir(t)
@@ -95,7 +84,6 @@ func TestSetupTestDir_ThreadSafe(t *testing.T) {
 		}()
 	}
 
-	// Assert - collect all results
 	dirs := make([]string, 0, goroutines)
 	for range goroutines {
 		dir := <-results
@@ -111,21 +99,14 @@ func TestSetupTestDir_ThreadSafe(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// CreateTestWorkflow Tests
-// =============================================================================
-
 // TestCreateTestWorkflow_HappyPath tests creating a workflow file with valid YAML
 func TestCreateTestWorkflow_HappyPath(t *testing.T) {
-	// Arrange
 	dir := testutil.SetupTestDir(t)
 	workflowName := "simple.yaml"
 	workflowContent := testutil.SimpleWorkflowYAML
 
-	// Act
 	testutil.CreateTestWorkflow(t, dir, workflowName, workflowContent)
 
-	// Assert
 	workflowPath := filepath.Join(dir, ".awf", "workflows", workflowName)
 	content, err := os.ReadFile(workflowPath)
 	require.NoError(t, err, "Workflow file should exist and be readable")
@@ -134,15 +115,12 @@ func TestCreateTestWorkflow_HappyPath(t *testing.T) {
 
 // TestCreateTestWorkflow_MultipleFiles tests creating multiple workflow files in the same directory
 func TestCreateTestWorkflow_MultipleFiles(t *testing.T) {
-	// Arrange
 	dir := testutil.SetupTestDir(t)
 
-	// Act
 	testutil.CreateTestWorkflow(t, dir, "workflow1.yaml", testutil.SimpleWorkflowYAML)
 	testutil.CreateTestWorkflow(t, dir, "workflow2.yaml", testutil.FullWorkflowYAML)
 	testutil.CreateTestWorkflow(t, dir, "workflow3.yaml", testutil.BadWorkflowYAML)
 
-	// Assert
 	workflowsDir := filepath.Join(dir, ".awf", "workflows")
 	entries, err := os.ReadDir(workflowsDir)
 	require.NoError(t, err)
@@ -161,13 +139,10 @@ func TestCreateTestWorkflow_MultipleFiles(t *testing.T) {
 
 // TestCreateTestWorkflow_EmptyContent tests creating a workflow with empty content
 func TestCreateTestWorkflow_EmptyContent(t *testing.T) {
-	// Arrange
 	dir := testutil.SetupTestDir(t)
 
-	// Act
 	testutil.CreateTestWorkflow(t, dir, "empty.yaml", "")
 
-	// Assert
 	workflowPath := filepath.Join(dir, ".awf", "workflows", "empty.yaml")
 	content, err := os.ReadFile(workflowPath)
 	require.NoError(t, err)
@@ -176,15 +151,12 @@ func TestCreateTestWorkflow_EmptyContent(t *testing.T) {
 
 // TestCreateTestWorkflow_OverwriteExisting tests that creating a workflow twice overwrites the first
 func TestCreateTestWorkflow_OverwriteExisting(t *testing.T) {
-	// Arrange
 	dir := testutil.SetupTestDir(t)
 	workflowName := "test.yaml"
 
-	// Act
 	testutil.CreateTestWorkflow(t, dir, workflowName, "content1")
 	testutil.CreateTestWorkflow(t, dir, workflowName, "content2")
 
-	// Assert
 	workflowPath := filepath.Join(dir, ".awf", "workflows", workflowName)
 	content, err := os.ReadFile(workflowPath)
 	require.NoError(t, err)
@@ -206,13 +178,10 @@ func TestCreateTestWorkflow_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			dir := testutil.SetupTestDir(t)
 
-			// Act
 			testutil.CreateTestWorkflow(t, dir, tt.filename, testutil.SimpleWorkflowYAML)
 
-			// Assert
 			workflowPath := filepath.Join(dir, ".awf", "workflows", tt.filename)
 			_, err := os.Stat(workflowPath)
 			if tt.shouldCreate {
@@ -253,13 +222,10 @@ func TestCreateTestWorkflow_PathSeparatorFlattening(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			dir := testutil.SetupTestDir(t)
 
-			// Act
 			testutil.CreateTestWorkflow(t, dir, tt.inputName, testutil.SimpleWorkflowYAML)
 
-			// Assert - file should be created with flattened name
 			workflowPath := filepath.Join(dir, ".awf", "workflows", tt.expectedFile)
 			content, err := os.ReadFile(workflowPath)
 			require.NoError(t, err, "Flattened file %s should exist", tt.expectedFile)
@@ -275,22 +241,15 @@ func TestCreateTestWorkflow_PathSeparatorFlattening(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SetupWorkflowsDir Tests
-// =============================================================================
-
 // TestSetupWorkflowsDir_HappyPath tests creating directory with multiple workflows from map
 func TestSetupWorkflowsDir_HappyPath(t *testing.T) {
-	// Arrange
 	workflows := map[string]string{
 		"simple.yaml": testutil.SimpleWorkflowYAML,
 		"full.yaml":   testutil.FullWorkflowYAML,
 	}
 
-	// Act
 	dir := testutil.SetupWorkflowsDir(t, workflows)
 
-	// Assert
 	require.NotEmpty(t, dir, "Should return non-empty directory")
 
 	// Verify both workflows exist
@@ -310,13 +269,10 @@ func TestSetupWorkflowsDir_HappyPath(t *testing.T) {
 
 // TestSetupWorkflowsDir_EmptyMap tests behavior with empty workflow map
 func TestSetupWorkflowsDir_EmptyMap(t *testing.T) {
-	// Arrange
 	workflows := map[string]string{}
 
-	// Act
 	dir := testutil.SetupWorkflowsDir(t, workflows)
 
-	// Assert
 	require.NotEmpty(t, dir, "Should return directory even for empty map")
 
 	// Verify directory structure exists but no workflows
@@ -328,15 +284,12 @@ func TestSetupWorkflowsDir_EmptyMap(t *testing.T) {
 
 // TestSetupWorkflowsDir_SingleWorkflow tests creating directory with single workflow
 func TestSetupWorkflowsDir_SingleWorkflow(t *testing.T) {
-	// Arrange
 	workflows := map[string]string{
 		"test.yaml": testutil.SimpleWorkflowYAML,
 	}
 
-	// Act
 	dir := testutil.SetupWorkflowsDir(t, workflows)
 
-	// Assert
 	workflowPath := filepath.Join(dir, ".awf", "workflows", "test.yaml")
 	content, err := os.ReadFile(workflowPath)
 	require.NoError(t, err)
@@ -345,33 +298,24 @@ func TestSetupWorkflowsDir_SingleWorkflow(t *testing.T) {
 
 // TestSetupWorkflowsDir_LargeNumberOfWorkflows tests creating many workflows
 func TestSetupWorkflowsDir_LargeNumberOfWorkflows(t *testing.T) {
-	// Arrange
 	workflows := make(map[string]string)
 	for i := range 100 {
 		workflows[filepath.Join("workflow", string(rune('a'+i%26)), ".yaml")] = testutil.SimpleWorkflowYAML
 	}
 
-	// Act
 	dir := testutil.SetupWorkflowsDir(t, workflows)
 
-	// Assert
 	workflowsDir := filepath.Join(dir, ".awf", "workflows")
 	entries, err := os.ReadDir(workflowsDir)
 	require.NoError(t, err)
 	assert.Len(t, entries, len(workflows), "Should create all workflow files")
 }
 
-// =============================================================================
-// YAML Constants Tests
-// =============================================================================
-
 // TestSimpleWorkflowYAML_IsValidYAML tests that constant contains valid YAML syntax
 func TestSimpleWorkflowYAML_IsValidYAML(t *testing.T) {
-	// Act - parse as generic YAML to verify syntax
 	// Note: actual parsing uses workflow-specific parser, but this checks basic YAML validity
 	content := testutil.SimpleWorkflowYAML
 
-	// Assert
 	assert.NotEmpty(t, content, "SimpleWorkflowYAML should not be empty")
 	assert.Contains(t, content, "name:", "Should contain workflow name field")
 	assert.Contains(t, content, "states:", "Should contain states field")
@@ -380,10 +324,8 @@ func TestSimpleWorkflowYAML_IsValidYAML(t *testing.T) {
 
 // TestFullWorkflowYAML_ContainsInputs tests that FullWorkflowYAML includes input definitions
 func TestFullWorkflowYAML_ContainsInputs(t *testing.T) {
-	// Act
 	content := testutil.FullWorkflowYAML
 
-	// Assert
 	assert.Contains(t, content, "inputs:", "Should have inputs section")
 	assert.Contains(t, content, "var1", "Should have var1 input")
 	assert.Contains(t, content, "var2", "Should have var2 input")
@@ -394,25 +336,17 @@ func TestFullWorkflowYAML_ContainsInputs(t *testing.T) {
 
 // TestBadWorkflowYAML_ContainsInvalidReference tests that BadWorkflowYAML has intentional error
 func TestBadWorkflowYAML_ContainsInvalidReference(t *testing.T) {
-	// Act
 	content := testutil.BadWorkflowYAML
 
-	// Assert
 	assert.Contains(t, content, "on_success: nonexistent", "Should reference nonexistent step")
 	assert.NotContains(t, content, "nonexistent:", "Should not define the nonexistent step")
 }
 
-// =============================================================================
-// Integration Tests
-// =============================================================================
-
 // TestIntegration_SetupAndCreateWorkflow tests combining SetupTestDir and CreateTestWorkflow
 func TestIntegration_SetupAndCreateWorkflow(t *testing.T) {
-	// Act
 	dir := testutil.SetupTestDir(t)
 	testutil.CreateTestWorkflow(t, dir, "test.yaml", testutil.SimpleWorkflowYAML)
 
-	// Assert - verify complete structure
 	workflowPath := filepath.Join(dir, ".awf", "workflows", "test.yaml")
 	content, err := os.ReadFile(workflowPath)
 	require.NoError(t, err)
@@ -421,12 +355,10 @@ func TestIntegration_SetupAndCreateWorkflow(t *testing.T) {
 
 // TestIntegration_SetupWorkflowsDir_CreatesTempDir tests that SetupWorkflowsDir uses temp directory
 func TestIntegration_SetupWorkflowsDir_CreatesTempDir(t *testing.T) {
-	// Act
 	dir := testutil.SetupWorkflowsDir(t, map[string]string{
 		"test.yaml": testutil.SimpleWorkflowYAML,
 	})
 
-	// Assert - verify it's a temp directory (contains os.TempDir prefix)
 	assert.Contains(t, dir, os.TempDir(), "Should be in system temp directory")
 }
 

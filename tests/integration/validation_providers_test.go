@@ -31,10 +31,6 @@ import (
 	"github.com/vanoix/awf/internal/infrastructure/agents"
 )
 
-// =============================================================================
-// Happy Path Tests - Normal Provider Execution
-// =============================================================================
-
 func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 	provider := agents.NewClaudeProvider()
 	if err := provider.Validate(); err != nil {
@@ -209,10 +205,6 @@ func TestGeminiProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T)
 	}
 }
 
-// =============================================================================
-// Edge Cases - Boundary Values and Nil Handling
-// =============================================================================
-
 func TestClaudeProvider_Execute_EmptyAndNilOptions(t *testing.T) {
 	provider := agents.NewClaudeProvider()
 	if err := provider.Validate(); err != nil {
@@ -329,10 +321,6 @@ func TestConversationState_Cloning(t *testing.T) {
 	assert.NotEqual(t, initialState.TotalTokens, result.State.TotalTokens,
 		"Token counts should differ")
 }
-
-// =============================================================================
-// Error Handling - Invalid Options and Context Cancellation
-// =============================================================================
 
 func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
 	provider := agents.NewClaudeProvider()
@@ -491,10 +479,6 @@ func TestAllProviders_ContextTimeout(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Integration Tests - Full Workflow Execution
-// =============================================================================
-
 func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	provider := agents.NewCodexProvider()
 	if err := provider.Validate(); err != nil {
@@ -638,10 +622,6 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Backward Compatibility Tests
-// =============================================================================
-
 func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 	// Test that refactored providers work with existing workflow fixtures
 	// This ensures no behavioral changes (AC5)
@@ -686,10 +666,6 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 		assert.Len(t, result.State.Turns, 1)
 	})
 }
-
-// =============================================================================
-// Performance and Regression Tests
-// =============================================================================
 
 func TestPerformance_NoRegressionFromHelpers(t *testing.T) {
 	// Basic smoke test to ensure helper extraction doesn't cause performance issues

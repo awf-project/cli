@@ -11,10 +11,7 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// ServiceTestHarness Tests
 // Feature: C012 - Application Test Harness for Service Layer
-// =============================================================================
 //
 // This file contains tests for ServiceTestHarness builder methods.
 // Tests verify:
@@ -27,17 +24,10 @@ import (
 // - Method chaining behavior
 //
 // Test count: 15+ tests covering happy path, edge cases, error handling
-// =============================================================================
-
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
 
 func TestServiceTestHarness_NewTestHarness_CreatesHarnessWithDefaults(t *testing.T) {
-	// Arrange & Act
 	harness := NewTestHarness(t)
 
-	// Assert: Harness should be created with non-nil default mocks
 	require.NotNil(t, harness, "harness should not be nil")
 	assert.NotNil(t, harness.repository, "repository should be initialized")
 	assert.NotNil(t, harness.store, "state store should be initialized")
@@ -47,7 +37,6 @@ func TestServiceTestHarness_NewTestHarness_CreatesHarnessWithDefaults(t *testing
 }
 
 func TestServiceTestHarness_WithWorkflow_RegistersWorkflowInRepository(t *testing.T) {
-	// Arrange
 	wf := &workflow.Workflow{
 		Name:    "test-workflow",
 		Initial: "start",
@@ -66,14 +55,11 @@ func TestServiceTestHarness_WithWorkflow_RegistersWorkflowInRepository(t *testin
 	}
 	harness := NewTestHarness(t)
 
-	// Act
 	result := harness.WithWorkflow("test-workflow", wf)
 
-	// Assert: Should return harness for chaining
 	require.NotNil(t, result, "should return harness")
 	assert.Equal(t, harness, result, "should return same harness instance for chaining")
 
-	// Assert: Workflow should be registered in repository
 	loadedWf, err := harness.repository.Load(context.Background(), "test-workflow")
 	require.NoError(t, err, "should load workflow without error")
 	assert.Equal(t, "test-workflow", loadedWf.Name)
@@ -81,7 +67,6 @@ func TestServiceTestHarness_WithWorkflow_RegistersWorkflowInRepository(t *testin
 }
 
 func TestServiceTestHarness_WithCommandResult_ConfiguresExecutorResult(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 	expectedResult := &ports.CommandResult{
 		Stdout:   "hello world\n",
@@ -89,14 +74,11 @@ func TestServiceTestHarness_WithCommandResult_ConfiguresExecutorResult(t *testin
 		ExitCode: 0,
 	}
 
-	// Act
 	result := harness.WithCommandResult("echo hello", expectedResult)
 
-	// Assert: Should return harness for chaining
 	require.NotNil(t, result, "should return harness")
 	assert.Equal(t, harness, result, "should return same harness instance")
 
-	// Assert: Executor should return configured result
 	actualResult, err := harness.executor.Execute(context.Background(), &ports.Command{
 		Program: "echo hello",
 	})
@@ -106,7 +88,6 @@ func TestServiceTestHarness_WithCommandResult_ConfiguresExecutorResult(t *testin
 }
 
 func TestServiceTestHarness_WithStateStore_OverridesDefaultStore(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 	customStore := testutil.NewMockStateStore()
 	customStore.Save(context.Background(), &workflow.ExecutionContext{
@@ -114,30 +95,23 @@ func TestServiceTestHarness_WithStateStore_OverridesDefaultStore(t *testing.T) {
 		WorkflowName: "custom",
 	})
 
-	// Act
 	result := harness.WithStateStore(customStore)
 
-	// Assert: Should return harness for chaining
 	require.NotNil(t, result, "should return harness")
 	assert.Equal(t, harness, result, "should return same harness instance")
 
-	// Assert: Custom store should be used
 	ctx, err := customStore.Load(context.Background(), "custom-id")
 	require.NoError(t, err)
 	assert.Equal(t, "custom", ctx.WorkflowName)
 }
 
 func TestServiceTestHarness_Build_ReturnsServiceAndMocks(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 
-	// Act
 	svc, mocks := harness.Build()
 
-	// Assert: Service should be created
 	require.NotNil(t, svc, "ExecutionService should not be nil")
 
-	// Assert: Mocks tuple should be returned
 	require.NotNil(t, mocks, "TestMocks should not be nil")
 	assert.NotNil(t, mocks.Repository, "Repository mock should be accessible")
 	assert.NotNil(t, mocks.StateStore, "StateStore mock should be accessible")
@@ -146,7 +120,6 @@ func TestServiceTestHarness_Build_ReturnsServiceAndMocks(t *testing.T) {
 }
 
 func TestServiceTestHarness_FluentChaining_MultipleWithMethods(t *testing.T) {
-	// Arrange
 	wf := &workflow.Workflow{
 		Name:    "chained",
 		Initial: "step1",
@@ -164,7 +137,6 @@ func TestServiceTestHarness_FluentChaining_MultipleWithMethods(t *testing.T) {
 		},
 	}
 
-	// Act: Chain multiple With methods
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("chained", wf).
 		WithCommandResult("echo first", &ports.CommandResult{
@@ -173,18 +145,15 @@ func TestServiceTestHarness_FluentChaining_MultipleWithMethods(t *testing.T) {
 		}).
 		Build()
 
-	// Assert: Service should be fully configured
 	require.NotNil(t, svc, "service should be created")
 	require.NotNil(t, mocks, "mocks should be returned")
 
-	// Assert: Workflow should be registered
 	loadedWf, err := mocks.Repository.Load(context.Background(), "chained")
 	require.NoError(t, err)
 	assert.Equal(t, "chained", loadedWf.Name)
 }
 
 func TestServiceTestHarness_Build_ServiceCanExecuteWorkflow(t *testing.T) {
-	// Arrange: Create a simple executable workflow
 	wf := &workflow.Workflow{
 		Name:    "executable",
 		Initial: "start",
@@ -210,33 +179,23 @@ func TestServiceTestHarness_Build_ServiceCanExecuteWorkflow(t *testing.T) {
 		}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := svc.Run(context.Background(), "executable", nil)
 
-	// Assert: Workflow should execute successfully
 	require.NoError(t, err, "workflow execution should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
 }
 
-// =============================================================================
-// Edge Cases Tests
-// =============================================================================
-
 func TestServiceTestHarness_WithWorkflow_NilWorkflow_HandlesGracefully(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 
-	// Act
 	result := harness.WithWorkflow("nil-workflow", nil)
 
-	// Assert: Should handle nil workflow gracefully (or panic if design requires)
 	// This tests edge case behavior - the stub will determine actual behavior
 	assert.NotNil(t, result, "should return harness even with nil workflow")
 }
 
 func TestServiceTestHarness_WithWorkflow_EmptyName_HandlesGracefully(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 	wf := &workflow.Workflow{
 		Name:    "test",
@@ -246,15 +205,12 @@ func TestServiceTestHarness_WithWorkflow_EmptyName_HandlesGracefully(t *testing.
 		},
 	}
 
-	// Act
 	result := harness.WithWorkflow("", wf)
 
-	// Assert: Should handle empty name
 	assert.NotNil(t, result, "should return harness")
 }
 
 func TestServiceTestHarness_WithWorkflow_MultipleWorkflows_AllRegistered(t *testing.T) {
-	// Arrange
 	wf1 := &workflow.Workflow{
 		Name:    "workflow1",
 		Initial: "start",
@@ -270,12 +226,10 @@ func TestServiceTestHarness_WithWorkflow_MultipleWorkflows_AllRegistered(t *test
 		},
 	}
 
-	// Act: Register multiple workflows
 	harness := NewTestHarness(t).
 		WithWorkflow("workflow1", wf1).
 		WithWorkflow("workflow2", wf2)
 
-	// Assert: Both workflows should be registered
 	loaded1, err1 := harness.repository.Load(context.Background(), "workflow1")
 	loaded2, err2 := harness.repository.Load(context.Background(), "workflow2")
 
@@ -286,16 +240,13 @@ func TestServiceTestHarness_WithWorkflow_MultipleWorkflows_AllRegistered(t *test
 }
 
 func TestServiceTestHarness_WithCommandResult_MultipleCommands_AllConfigured(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t).
 		WithCommandResult("cmd1", &ports.CommandResult{Stdout: "output1\n", ExitCode: 0}).
 		WithCommandResult("cmd2", &ports.CommandResult{Stdout: "output2\n", ExitCode: 1})
 
-	// Act: Execute commands
 	result1, err1 := harness.executor.Execute(context.Background(), &ports.Command{Program: "cmd1"})
 	result2, err2 := harness.executor.Execute(context.Background(), &ports.Command{Program: "cmd2"})
 
-	// Assert: Each command should return configured result
 	require.NoError(t, err1)
 	require.NoError(t, err2)
 	assert.Equal(t, "output1\n", result1.Stdout)
@@ -305,45 +256,31 @@ func TestServiceTestHarness_WithCommandResult_MultipleCommands_AllConfigured(t *
 }
 
 func TestServiceTestHarness_WithCommandResult_NilResult_HandlesGracefully(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 
-	// Act
 	result := harness.WithCommandResult("test-cmd", nil)
 
-	// Assert: Should handle nil result gracefully
 	assert.NotNil(t, result, "should return harness")
 }
 
 func TestServiceTestHarness_WithStateStore_NilStore_HandlesGracefully(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t)
 
-	// Act
 	result := harness.WithStateStore(nil)
 
-	// Assert: Should handle nil store (implementation may choose to panic or use default)
 	assert.NotNil(t, result, "should return harness")
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestServiceTestHarness_Build_WithNoWorkflow_ReturnsValidService(t *testing.T) {
-	// Arrange: Build without registering any workflow
 	harness := NewTestHarness(t)
 
-	// Act
 	svc, mocks := harness.Build()
 
-	// Assert: Should still create valid service with empty repository
 	require.NotNil(t, svc, "service should be created")
 	require.NotNil(t, mocks, "mocks should be returned")
 }
 
 func TestServiceTestHarness_Build_AfterMultipleCalls_ReturnsNewInstances(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t).
 		WithWorkflow("test", &workflow.Workflow{
 			Name:    "test",
@@ -353,11 +290,9 @@ func TestServiceTestHarness_Build_AfterMultipleCalls_ReturnsNewInstances(t *test
 			},
 		})
 
-	// Act: Call Build multiple times
 	svc1, mocks1 := harness.Build()
 	svc2, mocks2 := harness.Build()
 
-	// Assert: Each Build should return distinct instances
 	require.NotNil(t, svc1)
 	require.NotNil(t, svc2)
 	require.NotNil(t, mocks1)
@@ -367,12 +302,7 @@ func TestServiceTestHarness_Build_AfterMultipleCalls_ReturnsNewInstances(t *test
 	// This test documents the behavior
 }
 
-// =============================================================================
-// Thread Safety Tests
-// =============================================================================
-
 func TestServiceTestHarness_Mocks_ThreadSafe_ConcurrentAccess(t *testing.T) {
-	// Arrange
 	harness := NewTestHarness(t).
 		WithWorkflow("concurrent", &workflow.Workflow{
 			Name:    "concurrent",
@@ -382,7 +312,6 @@ func TestServiceTestHarness_Mocks_ThreadSafe_ConcurrentAccess(t *testing.T) {
 			},
 		})
 
-	// Act: Access repository concurrently
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
@@ -397,16 +326,10 @@ func TestServiceTestHarness_Mocks_ThreadSafe_ConcurrentAccess(t *testing.T) {
 		<-done
 	}
 
-	// Assert: No race condition (verified by -race flag)
 	// This test should pass with `go test -race`
 }
 
-// =============================================================================
-// Integration Tests
-// =============================================================================
-
 func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
-	// Arrange: Create a multi-step workflow with real testutil builders
 	wf := testutil.NewWorkflowBuilder().
 		WithName("integration-test").
 		WithInitial("step1").
@@ -437,15 +360,12 @@ func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
 		}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := svc.Run(context.Background(), "integration-test", nil)
 
-	// Assert: Workflow should complete successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
 
-	// Assert: Can use mocks for verification
 	assert.NotNil(t, mocks.Repository, "should have repository reference")
 	assert.NotNil(t, mocks.Executor, "should have executor reference")
 
@@ -460,7 +380,6 @@ func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
 }
 
 func TestServiceTestHarness_Integration_UseTestutilFixtures(t *testing.T) {
-	// Arrange: Use testutil fixtures for common patterns
 	wf := testutil.NewWorkflowBuilder().
 		WithName("fixture-test").
 		WithInitial("start").
@@ -480,10 +399,8 @@ func TestServiceTestHarness_Integration_UseTestutilFixtures(t *testing.T) {
 		}).
 		Build()
 
-	// Act: Execute
 	ctx, err := svc.Run(context.Background(), "fixture-test", nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.NotNil(t, mocks.Logger, "logger should be available for assertions")

@@ -15,10 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Command Structure Tests
-// =============================================================================
-
 func TestRunCommand_NoArgs(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -62,10 +58,6 @@ func TestRunCommand_Exists(t *testing.T) {
 		t.Error("expected root command to have 'run' subcommand")
 	}
 }
-
-// =============================================================================
-// Basic Flag Tests
-// =============================================================================
 
 func TestRunCommand_HasInputFlag(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -135,10 +127,6 @@ func TestRunCommand_InvalidOutputMode(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Step and Mock Flags
-// =============================================================================
-
 func TestRunCommand_HasStepFlag(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -201,10 +189,6 @@ func TestRunCommand_MockFlagInHelp(t *testing.T) {
 	assert.Contains(t, output, "Mock state value")
 }
 
-// =============================================================================
-// Mode Flags (Dry-Run, Interactive, Breakpoint)
-// =============================================================================
-
 // TestRunCommand_HasDryRunFlag tests that --dry-run flag is recognized
 func TestRunCommand_HasDryRunFlag(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -252,10 +236,6 @@ func TestRunCommand_HasBreakpointFlag(t *testing.T) {
 	t.Error("run command not found")
 }
 
-// =============================================================================
-// Thread-Safe Directory Tests
-// =============================================================================
-
 // TestRunCommand_WorkflowsFlag_EmptyDirectory tests run command behavior with
 // an empty workflow directory using thread-safe patterns.
 // This test uses setupTestDir(t) which internally uses t.TempDir() and t.Setenv().
@@ -284,10 +264,6 @@ func TestRunCommand_WorkflowsFlag_EmptyDirectory(t *testing.T) {
 		strings.Contains(errStr, "workflow") || strings.Contains(errStr, "not found") || strings.Contains(errStr, "load"),
 		"expected workflow-related error, got: %s (tmpDir: %s)", errStr, tmpDir)
 }
-
-// =============================================================================
-// Mock Flag Parsing
-// =============================================================================
 
 func TestParseMockFlags(t *testing.T) {
 	tests := []struct {
@@ -364,10 +340,6 @@ func TestParseMockFlags(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// F035: Workflow Arguments Help Command Tests
-// =============================================================================
 
 // TestRunCommand_WorkflowHelp_WithInputs tests that `awf run <workflow> --help`
 // displays workflow-specific help including input parameters (US1)

@@ -17,7 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // Secret Masking Integration Tests (C011 - US3)
 // Tests validate that secret-prefixed variables are masked in logs:
 // - Variables prefixed with SECRET_ are masked in stdout/stderr
@@ -29,7 +28,6 @@ import (
 // Implementation Note:
 // Tests use real ShellExecutor and capture output via logger to verify
 // masking occurs at the infrastructure layer.
-// =============================================================================
 
 // TestSecretMasking_SECRET_Prefix_Integration verifies SECRET_* variables are masked in output
 // Feature: C011 - Task T007
@@ -63,7 +61,6 @@ func TestSecretMasking_SECRET_Prefix_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -95,22 +92,18 @@ func TestSecretMasking_SECRET_Prefix_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with secret variables
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err, "workflow should complete successfully")
 			}
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned")
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
 
-			// Assert - Layer 3: Secret masking verification
 			// Check step state output (masked by executor)
 			stepState, ok := execCtx.GetStepState("print_vars")
 			require.True(t, ok, "step state should exist")
@@ -173,7 +166,6 @@ func TestSecretMasking_API_KEY_Prefix_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -203,22 +195,18 @@ func TestSecretMasking_API_KEY_Prefix_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			// Assert - Layer 2: Status
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Secret masking
 			stepState, ok := execCtx.GetStepState("print_vars")
 			require.True(t, ok, "step state should exist")
 			outputContent := stepState.Output
@@ -277,7 +265,6 @@ func TestSecretMasking_PASSWORD_Prefix_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -307,22 +294,18 @@ func TestSecretMasking_PASSWORD_Prefix_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			// Assert - Layer 2: Status
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Secret masking
 			stepState, ok := execCtx.GetStepState("print_vars")
 			require.True(t, ok, "step state should exist")
 			outputContent := stepState.Output
@@ -385,7 +368,6 @@ func TestSecretMasking_NonSecrets_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -415,22 +397,18 @@ func TestSecretMasking_NonSecrets_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with mixed variables
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			// Assert - Layer 2: Status
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Verify selective masking
 			stepState, ok := execCtx.GetStepState("print_vars")
 			require.True(t, ok, "step state should exist")
 			outputContent := stepState.Output
@@ -487,7 +465,6 @@ func TestSecretMasking_ErrorOutput_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -517,20 +494,16 @@ func TestSecretMasking_ErrorOutput_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute failing workflow with secret
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err, "workflow should fail")
 			}
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusFailed, execCtx.Status)
 
-			// Assert - Layer 3: Secret masking in error output
 			// Check step stderr (masked by executor)
 			stepState, ok := execCtx.GetStepState("fail_with_secret")
 			require.True(t, ok, "step state should exist")
@@ -604,7 +577,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment with inline YAML
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -631,21 +603,17 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			execCtx, err := svc.Run(ctx, "test-case", tt.inputs)
 
-			// Assert - Layer 1: Error
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			// Assert - Layer 2: Status
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Case-insensitive masking
 			stepState, ok := execCtx.GetStepState("print_vars")
 			require.True(t, ok, "step state should exist")
 			outputContent := stepState.Output

@@ -26,11 +26,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Test Setup Helpers
-// =============================================================================
-
-// coverageTestEnv bundles all real dependencies for C054 functional tests.
 type coverageTestEnv struct {
 	execSvc   *application.ExecutionService
 	wfSvc     *application.WorkflowService
@@ -76,12 +71,6 @@ func (e *coverageTestEnv) writeWorkflow(t *testing.T, name, yaml string) {
 	require.NoError(t, os.WriteFile(path, []byte(yaml), 0o644))
 }
 
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
-// TestConditionalTransitions_ExpressionEvaluation validates that resolveNextStep
-// correctly evaluates expression-based transitions through the full Run() path.
 func TestConditionalTransitions_ExpressionEvaluation(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -145,8 +134,6 @@ states:
 	}
 }
 
-// TestLoopBreakTransition_Integration validates that a loop body step can
-// transition to a step outside the loop, causing an early exit.
 func TestLoopBreakTransition_Integration(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 	logFile := filepath.Join(env.tmpDir, "loop_break.log")
@@ -190,12 +177,10 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Equal(t, 3, len(lines), "should process a, b, STOP then break")
+	assert.Len(t, lines, 3)
 	assert.Equal(t, "STOP", lines[2])
 }
 
-// TestSingleStepExecution_WithRealShell validates ExecuteSingleStep with
-// real command execution, working directory, and mocked previous states.
 func TestSingleStepExecution_WithRealShell(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -234,8 +219,6 @@ states:
 	assert.Equal(t, 0, result.ExitCode)
 }
 
-// TestWorkflowValidation_ValidWorkflow validates that ValidateWorkflow
-// accepts a correctly structured workflow without error.
 func TestWorkflowValidation_ValidWorkflow(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -261,12 +244,6 @@ states:
 	assert.NoError(t, err)
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
-// TestSingleStepExecution_EdgeCases validates boundary conditions for
-// ExecuteSingleStep: terminal rejection, step not found, empty mocks.
 func TestSingleStepExecution_EdgeCases(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -313,7 +290,6 @@ states:
 		})
 	}
 
-	// Happy edge: step with no mocks and no inputs still works
 	t.Run("no mocks no inputs", func(t *testing.T) {
 		result, err := env.execSvc.ExecuteSingleStep(ctx, "edge-cases", "step1", nil, nil)
 
@@ -322,8 +298,6 @@ states:
 	})
 }
 
-// TestLoopMaxIterations_ExactBoundary validates that a loop completing at
-// exactly max_iterations succeeds (boundary case for executeLoopStep).
 func TestLoopMaxIterations_ExactBoundary(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 	logFile := filepath.Join(env.tmpDir, "max_iter.log")
@@ -361,11 +335,9 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Equal(t, 3, len(lines), "all 3 items processed at max_iterations=3")
+	assert.Len(t, lines, 3)
 }
 
-// TestConditionalTransitions_LegacyFallback validates that when no transitions
-// are defined, resolveNextStep falls back to on_success/on_failure.
 func TestConditionalTransitions_LegacyFallback(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -418,12 +390,6 @@ states:
 	}
 }
 
-// =============================================================================
-// Error Handling
-// =============================================================================
-
-// TestErrorClassification_RealFailures validates that real command failures
-// trigger the correct error classification through the execution pipeline.
 func TestErrorClassification_RealFailures(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -484,8 +450,6 @@ states:
 	}
 }
 
-// TestStepTimeout_Integration validates that step-level timeouts are applied
-// and the execution transitions to on_failure.
 func TestStepTimeout_Integration(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -525,8 +489,6 @@ states:
 	assert.Equal(t, workflow.StatusCompleted, handlerState.Status)
 }
 
-// TestSingleStepExecution_CommandErrors validates that ExecuteSingleStep
-// returns result (not error) for command failures, letting the caller decide.
 func TestSingleStepExecution_CommandErrors(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -569,8 +531,6 @@ states:
 	})
 }
 
-// TestWorkflowValidation_Errors validates that ValidateWorkflow returns
-// meaningful errors for invalid or missing workflows.
 func TestWorkflowValidation_Errors(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -608,13 +568,6 @@ states:
 	})
 }
 
-// =============================================================================
-// Integration: Components Working Together
-// =============================================================================
-
-// TestResumeExecution_WithStateTransitions validates the resume flow:
-// a workflow fails, state is persisted, and resume continues from the failed step
-// with correct transition evaluation.
 func TestResumeExecution_WithStateTransitions(t *testing.T) {
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -622,7 +575,6 @@ func TestResumeExecution_WithStateTransitions(t *testing.T) {
 	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	// Write a workflow where step2 always fails
 	logFile := filepath.Join(tmpDir, "resume.log")
 	wfYAML := `name: resume-transitions
 version: "1.0.0"
@@ -647,27 +599,21 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Run to completion first
 	execCtx, err := execSvc.Run(ctx, "resume-transitions", nil)
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
 
-	// Verify state was persisted
 	loaded, err := stateStore.Load(ctx, execCtx.WorkflowID)
 	require.NoError(t, err)
 	require.NotNil(t, loaded, "state should be persisted after execution")
 
-	// Verify log shows steps executed
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "STEP1")
 	assert.Contains(t, string(data), "STEP2")
 }
 
-// TestComplexWorkflow_MultipleCodePaths validates a workflow that exercises
-// multiple C054 code paths: transitions, error recovery, interpolation,
-// and continue_on_error in a single execution flow.
 func TestComplexWorkflow_MultipleCodePaths(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -759,8 +705,6 @@ states:
 	})
 }
 
-// TestOutputInterpolation_AcrossSteps validates that resolveOperationValue
-// and interpolation work correctly across step boundaries using real execution.
 func TestOutputInterpolation_AcrossSteps(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 
@@ -804,8 +748,6 @@ states:
 	assert.Contains(t, consumeState.Output, "TEST_VALUE")
 }
 
-// TestLoopWithContinueOnError_Integration validates that a loop body step
-// with continue_on_error proceeds to the next iteration instead of failing.
 func TestLoopWithContinueOnError_Integration(t *testing.T) {
 	env := setupCoverageTestEnv(t)
 	logFile := filepath.Join(env.tmpDir, "loop_continue.log")
@@ -845,11 +787,9 @@ states:
 	data, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	assert.Equal(t, 3, len(lines), "all items processed despite middle failure")
+	assert.Len(t, lines, 3)
 }
 
-// TestTransitionBasedOnExitCode validates that conditional transitions
-// can reference step exit codes for routing decisions.
 func TestTransitionBasedOnExitCode(t *testing.T) {
 	tests := []struct {
 		name          string

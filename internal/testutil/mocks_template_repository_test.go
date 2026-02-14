@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// Interface Compliance Checks (Compile-Time)
-// =============================================================================
-
 // Feature: C044 Fix Test Layer Purity Violations in Template Service Tests
 // Component: T004 MockTemplateRepository Tests
 
@@ -25,18 +21,12 @@ import (
 // interface, the code will not compile, catching interface mismatches early.
 var _ ports.TemplateRepository = (*testutil.MockTemplateRepository)(nil)
 
-// =============================================================================
-// MockTemplateRepository Tests
-// =============================================================================
-
 // Feature: C044 Fix Test Layer Purity Violations in Template Service Tests
 // Component: T004 MockTemplateRepository
 
 func TestMockTemplateRepository_NewMockTemplateRepository(t *testing.T) {
-	// Arrange & Act
 	repo := testutil.NewMockTemplateRepository()
 
-	// Assert
 	require.NotNil(t, repo, "NewMockTemplateRepository should return non-nil instance")
 
 	// Verify it's usable immediately
@@ -137,15 +127,12 @@ func TestMockTemplateRepository_GetTemplate_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act
 			got, err := repo.GetTemplate(ctx, tt.templateName)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -231,15 +218,12 @@ func TestMockTemplateRepository_GetTemplate_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act
 			got, err := repo.GetTemplate(ctx, tt.templateName)
 
-			// Assert
 			assert.Nil(t, got, "GetTemplate should return nil on error")
 			tt.checkErr(t, err)
 		})
@@ -294,17 +278,14 @@ func TestMockTemplateRepository_GetTemplate_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act - use first template name from repo
 			names, _ := repo.ListTemplates(ctx)
 			require.NotEmpty(t, names)
 			got, err := repo.GetTemplate(ctx, names[0])
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -352,15 +333,12 @@ func TestMockTemplateRepository_ListTemplates_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act
 			got, err := repo.ListTemplates(ctx)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -397,15 +375,12 @@ func TestMockTemplateRepository_ListTemplates_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act
 			got, err := repo.ListTemplates(ctx)
 
-			// Assert
 			assert.Error(t, err)
 			assert.Equal(t, tt.wantErr.Error(), err.Error())
 			assert.Nil(t, got, "ListTemplates should return nil on error")
@@ -456,15 +431,12 @@ func TestMockTemplateRepository_Exists_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			tt.setupFunc(repo)
 			ctx := context.Background()
 
-			// Act
 			got := repo.Exists(ctx, tt.templateName)
 
-			// Assert
 			assert.Equal(t, tt.want, got, "Exists should return correct boolean")
 		})
 	}
@@ -513,14 +485,11 @@ func TestMockTemplateRepository_AddTemplate_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			repo := testutil.NewMockTemplateRepository()
 			ctx := context.Background()
 
-			// Act
 			repo.AddTemplate(tt.templateName, tt.template)
 
-			// Assert
 			got, err := repo.GetTemplate(ctx, tt.templateName)
 			assert.NoError(t, err)
 			require.NotNil(t, got)
@@ -530,7 +499,6 @@ func TestMockTemplateRepository_AddTemplate_HappyPath(t *testing.T) {
 }
 
 func TestMockTemplateRepository_AddTemplate_Update(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
@@ -549,24 +517,20 @@ func TestMockTemplateRepository_AddTemplate_Update(t *testing.T) {
 		},
 	}
 
-	// Act - Add original
 	repo.AddTemplate("test-tpl", original)
 	gotOriginal, err := repo.GetTemplate(ctx, "test-tpl")
 	assert.NoError(t, err)
 	assert.Len(t, gotOriginal.Parameters, 1)
 
-	// Act - Update with new template
 	repo.AddTemplate("test-tpl", updated)
 	gotUpdated, err := repo.GetTemplate(ctx, "test-tpl")
 
-	// Assert
 	assert.NoError(t, err)
 	require.NotNil(t, gotUpdated)
 	assert.Len(t, gotUpdated.Parameters, 2, "AddTemplate should update existing template")
 }
 
 func TestMockTemplateRepository_Clear_HappyPath(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
@@ -579,19 +543,15 @@ func TestMockTemplateRepository_Clear_HappyPath(t *testing.T) {
 	_, err := repo.ListTemplates(ctx)
 	assert.Error(t, err) // Error is set
 
-	// Act
 	repo.Clear()
 
-	// Assert - All templates removed
 	names, err := repo.ListTemplates(ctx)
 	assert.NoError(t, err, "Clear should reset errors")
 	assert.Empty(t, names, "Clear should remove all templates")
 
-	// Assert - Exists returns false
 	assert.False(t, repo.Exists(ctx, "tpl1"))
 	assert.False(t, repo.Exists(ctx, "tpl2"))
 
-	// Assert - GetTemplate returns TemplateNotFoundError
 	tpl, err := repo.GetTemplate(ctx, "tpl1")
 	assert.Error(t, err)
 	assert.Nil(t, tpl)
@@ -600,34 +560,28 @@ func TestMockTemplateRepository_Clear_HappyPath(t *testing.T) {
 }
 
 func TestMockTemplateRepository_SetGetError_HappyPath(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
 	repo.AddTemplate("test", &workflow.Template{Name: "test"})
 	customErr := errors.New("custom get error")
 
-	// Act
 	repo.SetGetError(customErr)
 
-	// Assert
 	_, err := repo.GetTemplate(ctx, "test")
 	assert.Error(t, err)
 	assert.Equal(t, customErr.Error(), err.Error())
 }
 
 func TestMockTemplateRepository_SetListError_HappyPath(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
 	repo.AddTemplate("test", &workflow.Template{Name: "test"})
 	customErr := errors.New("custom list error")
 
-	// Act
 	repo.SetListError(customErr)
 
-	// Assert
 	_, err := repo.ListTemplates(ctx)
 	assert.Error(t, err)
 	assert.Equal(t, customErr.Error(), err.Error())
@@ -637,7 +591,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 	// This test verifies thread-safe concurrent access to the mock repository.
 	// Feature: C044 requires thread-safe mock implementations.
 
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
@@ -647,7 +600,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3) // 3 operations per goroutine
 
-	// Act - Concurrent writes
 	for i := 0; i < goroutines; i++ {
 		i := i
 		go func() {
@@ -659,7 +611,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 		}()
 	}
 
-	// Act - Concurrent reads (GetTemplate)
 	for i := 0; i < goroutines; i++ {
 		i := i
 		go func() {
@@ -671,7 +622,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 		}()
 	}
 
-	// Act - Concurrent reads (ListTemplates and Exists)
 	for i := 0; i < goroutines; i++ {
 		i := i
 		go func() {
@@ -684,7 +634,6 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 		}()
 	}
 
-	// Assert - Should complete without race conditions
 	wg.Wait()
 
 	// Verify final state is consistent
@@ -697,7 +646,6 @@ func TestMockTemplateRepository_ConcurrentErrorConfiguration(t *testing.T) {
 	// This test verifies thread-safe error configuration.
 	// Feature: C044 requires thread-safe error configuration.
 
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	ctx := context.Background()
 
@@ -705,7 +653,6 @@ func TestMockTemplateRepository_ConcurrentErrorConfiguration(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
 
-	// Act - Concurrent error configuration
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			defer wg.Done()
@@ -720,7 +667,6 @@ func TestMockTemplateRepository_ConcurrentErrorConfiguration(t *testing.T) {
 		}()
 	}
 
-	// Assert - Should complete without race conditions
 	wg.Wait()
 
 	// Verify final state
@@ -732,14 +678,12 @@ func TestMockTemplateRepository_ContextCancellation(t *testing.T) {
 	// This test verifies behavior with cancelled context.
 	// The mock should ignore context cancellation and always execute.
 
-	// Arrange
 	repo := testutil.NewMockTemplateRepository()
 	repo.AddTemplate("test", &workflow.Template{Name: "test"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act & Assert - Operations should work despite cancelled context
 	// (Mocks typically ignore context cancellation for simplicity)
 	tpl, err := repo.GetTemplate(ctx, "test")
 	assert.NoError(t, err)

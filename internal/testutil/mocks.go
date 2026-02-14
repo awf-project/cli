@@ -161,10 +161,6 @@ func (m *MockWorkflowRepository) Clear() {
 	m.existsErr = nil
 }
 
-// =============================================================================
-// MockTemplateRepository - T004 (C044)
-// =============================================================================
-
 // MockTemplateRepository is a thread-safe mock implementation of ports.TemplateRepository.
 // It uses sync.RWMutex to protect concurrent access to the templates map.
 //
@@ -270,10 +266,6 @@ func (m *MockTemplateRepository) Clear() {
 	m.getErr = nil
 	m.listErr = nil
 }
-
-// =============================================================================
-// MockStateStore - T003
-// =============================================================================
 
 // MockStateStore is a thread-safe mock implementation of ports.StateStore.
 // It uses sync.RWMutex to protect concurrent access to the states map.
@@ -437,10 +429,6 @@ func (m *MockStateStore) Clear() {
 	m.listErr = nil
 }
 
-// =============================================================================
-// MockCommandExecutor - T004
-// =============================================================================
-
 // MockCommandExecutor is a thread-safe mock implementation of ports.CommandExecutor.
 // It uses sync.Mutex to protect concurrent access to call history.
 //
@@ -535,10 +523,6 @@ func (m *MockCommandExecutor) Clear() {
 	m.results = make(map[string]*ports.CommandResult)
 	m.execErr = nil
 }
-
-// =============================================================================
-// MockLogger - T005
-// =============================================================================
 
 // MockLogger is a thread-safe mock implementation of ports.Logger.
 // It uses sync.Mutex to protect concurrent access to captured messages.
@@ -727,10 +711,6 @@ func (m *MockHistoryStore) Close() error {
 	return nil
 }
 
-// =============================================================================
-// MockExpressionValidator - T006
-// =============================================================================
-
 // MockExpressionValidator is a thread-safe mock implementation of ports.ExpressionValidator.
 // It uses sync.Mutex to protect concurrent access to configuration.
 //
@@ -789,10 +769,6 @@ func (m *MockExpressionValidator) Clear() {
 	m.compileErr = nil
 	m.compileFunc = nil
 }
-
-// =============================================================================
-// MockExpressionEvaluator - T005 (C042)
-// =============================================================================
 
 // MockExpressionEvaluator is a thread-safe mock implementation of ports.ExpressionEvaluator.
 // It uses sync.Mutex to protect concurrent access to configuration.
@@ -894,10 +870,6 @@ func (m *MockExpressionEvaluator) Clear() {
 	m.evaluateBoolFunc = nil
 	m.evaluateIntFunc = nil
 }
-
-// =============================================================================
-// MockPluginManager - T007 (C037)
-// =============================================================================
 
 // MockPluginManager is a thread-safe mock implementation of ports.PluginManager.
 // It uses sync.RWMutex to protect concurrent access to the plugins map.
@@ -1107,10 +1079,6 @@ func (m *MockPluginManager) Clear() {
 	m.shutdownError = nil
 }
 
-// =============================================================================
-// MockAgentRegistry - T001 (C038)
-// =============================================================================
-
 // MockAgentRegistry is a thread-safe mock implementation of ports.AgentRegistry.
 // It uses sync.RWMutex to protect concurrent access to the providers map.
 //
@@ -1195,10 +1163,6 @@ func (m *MockAgentRegistry) Clear() {
 
 	m.providers = make(map[string]ports.AgentProvider)
 }
-
-// =============================================================================
-// MockAgentProvider - T002 (C038)
-// =============================================================================
 
 // MockAgentProvider is a thread-safe mock implementation of ports.AgentProvider.
 // It uses sync.RWMutex to protect concurrent access to the mock state and
@@ -1329,10 +1293,6 @@ func (m *MockAgentProvider) Clear() {
 	m.validateFunc = nil
 }
 
-// =============================================================================
-// MockCLIExecutor - T003
-// =============================================================================
-
 // MockCLIExecutor is a thread-safe mock implementation of ports.CLIExecutor.
 // It uses sync.Mutex to protect concurrent access to call history.
 //
@@ -1420,10 +1380,6 @@ func (m *MockCLIExecutor) Clear() {
 	m.stderr = nil
 	m.execErr = nil
 }
-
-// =============================================================================
-// MockErrorFormatter - T006 (C047), Extended in T010 (C048)
-// =============================================================================
 
 // MockErrorFormatter is a thread-safe mock implementation of ports.ErrorFormatter.
 // It uses sync.Mutex to protect concurrent access to the format function and hint generators.

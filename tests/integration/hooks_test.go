@@ -17,7 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // Hook Lifecycle Integration Tests (C011 - US1)
 // Tests validate hook execution order and variable interpolation:
 // - workflow_start executes before first step
@@ -30,7 +29,6 @@ import (
 // Implementation Note (ADR-003):
 // Tests use file-based verification to avoid flaky timing assertions.
 // Hooks write to a shared log file, tests read file to assert order.
-// =============================================================================
 
 // TestHooks_WorkflowStartEnd_Integration verifies workflow_start/workflow_end execution order
 // Feature: C011 - Task T004
@@ -61,7 +59,6 @@ func TestHooks_WorkflowStartEnd_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -95,22 +92,18 @@ func TestHooks_WorkflowStartEnd_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err, "workflow should complete successfully")
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned")
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow should complete")
 
-			// Assert - Layer 3: Hook execution order verification
 			logData, err := os.ReadFile(logFile)
 			require.NoError(t, err, "log file should exist")
 
@@ -168,7 +161,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment with inline YAML
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -197,21 +189,17 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute failing workflow
 			execCtx, err := svc.Run(ctx, "test-error", nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err, "workflow should fail")
 			} else {
 				require.NoError(t, err)
 			}
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx, "execution context should be returned")
 			assert.Equal(t, tt.wantStatus, execCtx.Status, "workflow should have expected status")
 
-			// Assert - Layer 3: workflow_error hook execution verification
 			logData, err := os.ReadFile(logFile)
 			require.NoError(t, err, "log file should exist")
 			logContent := string(logData)
@@ -252,7 +240,6 @@ func TestHooks_StepPrePost_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -282,22 +269,18 @@ func TestHooks_StepPrePost_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Hook execution order
 			logData, err := os.ReadFile(logFile)
 			require.NoError(t, err)
 			logLines := strings.Split(strings.TrimSpace(string(logData)), "\n")
@@ -337,7 +320,6 @@ func TestHooks_FailurePropagation_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -367,20 +349,16 @@ func TestHooks_FailurePropagation_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with failing hook
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err, "workflow should fail due to hook failure")
 			}
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusFailed, execCtx.Status, "workflow should be marked as failed")
 
-			// Assert - Layer 3: Hook failure propagation verification
 			logData, err := os.ReadFile(logFile)
 			require.NoError(t, err)
 			logContent := string(logData)
@@ -431,7 +409,6 @@ func TestHooks_VariableInterpolation_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			workflowsDir := filepath.Join(tmpDir, "workflows")
@@ -461,22 +438,18 @@ func TestHooks_VariableInterpolation_Integration(t *testing.T) {
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with inputs
 			workflowName := strings.TrimSuffix(tt.workflowFile, ".yaml")
 			execCtx, err := svc.Run(ctx, workflowName, tt.inputs)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-			// Assert - Layer 3: Variable interpolation verification
 			logData, err := os.ReadFile(logFile)
 			require.NoError(t, err)
 			logContent := string(logData)

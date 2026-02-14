@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// =============================================================================
-// HAPPY PATH TESTS - Valid Schemas
-// =============================================================================
-
 // TestOperationSchemaValidate_ValidMinimal_Integration tests validation of a minimal valid operation schema.
 // Acceptance Criteria: OperationSchema.Validate() returns nil for valid schemas
 func TestOperationSchemaValidate_ValidMinimal_Integration(t *testing.T) {
@@ -135,10 +131,6 @@ func TestIsValidType_ValidTypes_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
 
 // TestOperationSchemaValidate_EmptyInputsMap_Integration tests handling of empty inputs map.
 // Acceptance Criteria: OperationSchema.Validate() handles empty inputs gracefully
@@ -291,10 +283,6 @@ func TestInputSchemaValidate_DefaultValues_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
 
 // TestOperationSchemaValidate_EmptyName_Integration tests rejection of empty name.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty Name with descriptive error
@@ -534,10 +522,6 @@ func TestIsValidType_InvalidTypes_Integration(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// INTEGRATION TESTS - Multiple Components Working Together
-// =============================================================================
 
 // TestOperationSchemaFullWorkflow_Integration tests complete validation workflow.
 // Acceptance Criteria: All validation methods work together correctly

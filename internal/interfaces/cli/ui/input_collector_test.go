@@ -13,16 +13,11 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
-// CLIInputCollector Tests (F046)
-// =============================================================================
-
 // TestCLIInputCollector_PromptForInput_RequiredString tests prompting for a required string input.
 // Component: cli_input_collector
 // Feature: F046
 // User Story: US1 - Prompt for Required Inputs
 func TestCLIInputCollector_PromptForInput_RequiredString(t *testing.T) {
-	// Arrange: Setup stdin with valid string input
 	stdin := strings.NewReader("test-value\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -35,10 +30,8 @@ func TestCLIInputCollector_PromptForInput_RequiredString(t *testing.T) {
 		Required:    true,
 	}
 
-	// Act: Prompt for input
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should return the input value
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", value, "should return the provided string value")
 	assert.Contains(t, stdout.String(), "project_name", "should display input name in prompt")
@@ -50,7 +43,6 @@ func TestCLIInputCollector_PromptForInput_RequiredString(t *testing.T) {
 // Feature: F046
 // User Story: US1
 func TestCLIInputCollector_PromptForInput_RequiredInteger(t *testing.T) {
-	// Arrange
 	stdin := strings.NewReader("42\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -63,10 +55,8 @@ func TestCLIInputCollector_PromptForInput_RequiredInteger(t *testing.T) {
 		Required:    true,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should coerce string to integer
 	require.NoError(t, err)
 	assert.Equal(t, 42, value, "should coerce string '42' to integer 42")
 }
@@ -89,7 +79,6 @@ func TestCLIInputCollector_PromptForInput_RequiredBoolean(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			stdin := strings.NewReader(tt.input)
 			stdout := new(bytes.Buffer)
 			colorizer := ui.NewColorizer(false)
@@ -101,10 +90,8 @@ func TestCLIInputCollector_PromptForInput_RequiredBoolean(t *testing.T) {
 				Required: true,
 			}
 
-			// Act
 			value, err := collector.PromptForInput(input)
 
-			// Assert: Should coerce string to boolean
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, value, "should coerce string to boolean")
 		})
@@ -116,7 +103,6 @@ func TestCLIInputCollector_PromptForInput_RequiredBoolean(t *testing.T) {
 // Feature: F046
 // User Story: US1-AC2 - Display enum options
 func TestCLIInputCollector_PromptForInput_EnumSmall(t *testing.T) {
-	// Arrange: Enum with 3 options, user selects option 2
 	stdin := strings.NewReader("2\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -132,10 +118,8 @@ func TestCLIInputCollector_PromptForInput_EnumSmall(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should display numbered list and return selected value
 	require.NoError(t, err)
 	assert.Equal(t, "staging", value, "should return 'staging' for selection 2")
 	assert.Contains(t, stdout.String(), "1. dev", "should display option 1")
@@ -148,7 +132,6 @@ func TestCLIInputCollector_PromptForInput_EnumSmall(t *testing.T) {
 // Feature: F046
 // User Story: US1
 func TestCLIInputCollector_PromptForInput_EnumLarge(t *testing.T) {
-	// Arrange: Enum with 12 options, fallback to freetext validation
 	stdin := strings.NewReader("option5\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -166,10 +149,8 @@ func TestCLIInputCollector_PromptForInput_EnumLarge(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should use freetext with validation for large enums
 	require.NoError(t, err)
 	assert.Equal(t, "option5", value, "should validate freetext against enum")
 	assert.Contains(t, stdout.String(), "Available values:", "should list available enum values")
@@ -180,7 +161,6 @@ func TestCLIInputCollector_PromptForInput_EnumLarge(t *testing.T) {
 // Feature: F046
 // User Story: US1-AC3 - Validate enum selection
 func TestCLIInputCollector_PromptForInput_EnumInvalidThenValid(t *testing.T) {
-	// Arrange: Invalid selection (4) then valid selection (2)
 	stdin := strings.NewReader("4\n2\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -195,10 +175,8 @@ func TestCLIInputCollector_PromptForInput_EnumInvalidThenValid(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should show error and re-prompt
 	require.NoError(t, err)
 	assert.Equal(t, "staging", value, "should accept valid selection after error")
 	assert.Contains(t, stdout.String(), "Error:", "should display error message for invalid selection")
@@ -210,7 +188,6 @@ func TestCLIInputCollector_PromptForInput_EnumInvalidThenValid(t *testing.T) {
 // Feature: F046
 // User Story: US2-AC2 - Use default values
 func TestCLIInputCollector_PromptForInput_OptionalWithDefault(t *testing.T) {
-	// Arrange: Empty input for optional field with default
 	stdin := strings.NewReader("\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -224,10 +201,8 @@ func TestCLIInputCollector_PromptForInput_OptionalWithDefault(t *testing.T) {
 		Default:     30,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should return default value for empty input
 	require.NoError(t, err)
 	assert.Equal(t, 30, value, "should return default value when input is empty")
 	assert.Contains(t, stdout.String(), "default: 30", "should display default value in prompt")
@@ -238,7 +213,6 @@ func TestCLIInputCollector_PromptForInput_OptionalWithDefault(t *testing.T) {
 // Feature: F046
 // User Story: US2-AC1 - Skip optional inputs
 func TestCLIInputCollector_PromptForInput_OptionalWithoutDefault(t *testing.T) {
-	// Arrange: Empty input for optional field without default
 	stdin := strings.NewReader("\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -251,10 +225,8 @@ func TestCLIInputCollector_PromptForInput_OptionalWithoutDefault(t *testing.T) {
 		Required:    false,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should return nil for empty optional input without default
 	require.NoError(t, err)
 	assert.Nil(t, value, "should return nil when optional input is empty and no default")
 	assert.Contains(t, stdout.String(), "optional", "should indicate input is optional")
@@ -265,7 +237,6 @@ func TestCLIInputCollector_PromptForInput_OptionalWithoutDefault(t *testing.T) {
 // Feature: F046
 // User Story: US3-AC2 - Error recovery
 func TestCLIInputCollector_PromptForInput_RequiredEmptyThenValid(t *testing.T) {
-	// Arrange: Empty input first, then valid input
 	stdin := strings.NewReader("\nvalid-value\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -277,10 +248,8 @@ func TestCLIInputCollector_PromptForInput_RequiredEmptyThenValid(t *testing.T) {
 		Required: true,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should show error and re-prompt
 	require.NoError(t, err)
 	assert.Equal(t, "valid-value", value, "should accept valid value after error")
 	assert.Contains(t, stdout.String(), "Error:", "should display error for empty required input")
@@ -292,7 +261,6 @@ func TestCLIInputCollector_PromptForInput_RequiredEmptyThenValid(t *testing.T) {
 // Feature: F046
 // User Story: US3-AC1 - Validation with error messages
 func TestCLIInputCollector_PromptForInput_ValidationPattern(t *testing.T) {
-	// Arrange: Invalid pattern first, then valid
 	stdin := strings.NewReader("abc123\nABCDEF\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -307,10 +275,8 @@ func TestCLIInputCollector_PromptForInput_ValidationPattern(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should validate pattern and re-prompt on failure
 	require.NoError(t, err)
 	assert.Equal(t, "ABCDEF", value, "should accept value matching pattern")
 	assert.Contains(t, stdout.String(), "Error:", "should display validation error")
@@ -325,7 +291,6 @@ func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
 	minVal := 1
 	maxVal := 100
 
-	// Arrange: Value below min, then above max, then valid
 	stdin := strings.NewReader("0\n150\n50\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -341,10 +306,8 @@ func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should validate range and re-prompt on failure
 	require.NoError(t, err)
 	assert.Equal(t, 50, value, "should accept value within range")
 	output := stdout.String()
@@ -358,7 +321,6 @@ func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
 // Feature: F046
 // User Story: US3-AC3 - Graceful cancellation
 func TestCLIInputCollector_PromptForInput_EOF(t *testing.T) {
-	// Arrange: Empty reader to simulate EOF
 	stdin := strings.NewReader("")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -370,10 +332,8 @@ func TestCLIInputCollector_PromptForInput_EOF(t *testing.T) {
 		Required: true,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should return error on EOF
 	require.Error(t, err)
 	assert.Nil(t, value, "should return nil value on EOF")
 	assert.Contains(t, err.Error(), "cancelled", "error should indicate cancellation")
@@ -398,7 +358,6 @@ func TestCLIInputCollector_PromptForInput_TypeCoercionInteger(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			stdin := strings.NewReader(tt.input)
 			stdout := new(bytes.Buffer)
 			colorizer := ui.NewColorizer(false)
@@ -410,10 +369,8 @@ func TestCLIInputCollector_PromptForInput_TypeCoercionInteger(t *testing.T) {
 				Required: true,
 			}
 
-			// Act
 			value, err := collector.PromptForInput(input)
 
-			// Assert
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -429,7 +386,6 @@ func TestCLIInputCollector_PromptForInput_TypeCoercionInteger(t *testing.T) {
 // Feature: F046
 // User Story: US3
 func TestCLIInputCollector_PromptForInput_ValidationFileExists(t *testing.T) {
-	// Arrange: Create temporary file in current directory for testing
 	tmpFile := "test_input_file.txt"
 	f, err := os.Create(tmpFile)
 	require.NoError(t, err)
@@ -451,10 +407,8 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExists(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should validate file existence
 	require.NoError(t, err)
 	assert.Equal(t, tmpFile, value, "should accept existing file")
 	assert.Contains(t, stdout.String(), "Error:", "should display error for non-existent file")
@@ -466,7 +420,6 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExists(t *testing.T) {
 // Feature: F046
 // User Story: US3
 func TestCLIInputCollector_PromptForInput_ValidationFileExtension(t *testing.T) {
-	// Arrange: Wrong extension then correct extension
 	stdin := strings.NewReader("config.txt\nconfig.yaml\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -481,10 +434,8 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExtension(t *testing.T) 
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should validate file extension
 	require.NoError(t, err)
 	assert.Equal(t, "config.yaml", value, "should accept file with valid extension")
 	assert.Contains(t, stdout.String(), "Error:", "should display error for invalid extension")
@@ -496,7 +447,6 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExtension(t *testing.T) 
 // Feature: F046
 // User Story: US1
 func TestCLIInputCollector_PromptForInput_DisplayFormatting(t *testing.T) {
-	// Arrange
 	stdin := strings.NewReader("test\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -509,10 +459,8 @@ func TestCLIInputCollector_PromptForInput_DisplayFormatting(t *testing.T) {
 		Required:    true,
 	}
 
-	// Act
 	_, err := collector.PromptForInput(input)
 
-	// Assert: Should display well-formatted prompt
 	require.NoError(t, err)
 	output := stdout.String()
 	assert.Contains(t, output, "api_key", "should display input name")
@@ -525,15 +473,12 @@ func TestCLIInputCollector_PromptForInput_DisplayFormatting(t *testing.T) {
 // Component: cli_input_collector
 // Feature: F046
 func TestCLIInputCollector_NewCLIInputCollector(t *testing.T) {
-	// Arrange
 	stdin := strings.NewReader("")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
 
-	// Act
 	collector := ui.NewCLIInputCollector(stdin, stdout, colorizer)
 
-	// Assert: Should create non-nil collector
 	assert.NotNil(t, collector, "should create collector instance")
 
 	// Verify collector implements InputCollector interface by calling a method
@@ -553,7 +498,6 @@ func TestCLIInputCollector_NewCLIInputCollector(t *testing.T) {
 // Feature: F046
 // User Story: US3-AC3
 func TestCLIInputCollector_PromptForInput_EOFWithoutNewline(t *testing.T) {
-	// Arrange: Reader returns EOF immediately without any data
 	stdin := &errorReader{err: io.EOF}
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -565,10 +509,8 @@ func TestCLIInputCollector_PromptForInput_EOFWithoutNewline(t *testing.T) {
 		Required: true,
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should handle EOF gracefully
 	require.Error(t, err)
 	assert.Nil(t, value, "should return nil on EOF")
 	assert.Contains(t, err.Error(), "cancelled", "should indicate cancellation")
@@ -588,7 +530,6 @@ func (r *errorReader) Read(p []byte) (n int, err error) {
 // Feature: F046
 // User Story: US1-AC2
 func TestCLIInputCollector_PromptForInput_EnumEdgeCaseExactly9Options(t *testing.T) {
-	// Arrange: Enum with exactly 9 options (boundary case)
 	stdin := strings.NewReader("9\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -603,10 +544,8 @@ func TestCLIInputCollector_PromptForInput_EnumEdgeCaseExactly9Options(t *testing
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should display numbered list and accept selection 9
 	require.NoError(t, err)
 	assert.Equal(t, "opt9", value, "should return last option for selection 9")
 	assert.Contains(t, stdout.String(), "9. opt9", "should display option 9")
@@ -617,7 +556,6 @@ func TestCLIInputCollector_PromptForInput_EnumEdgeCaseExactly9Options(t *testing
 // Feature: F046
 // User Story: US1
 func TestCLIInputCollector_PromptForInput_EnumEdgeCase10Options(t *testing.T) {
-	// Arrange: Enum with 10 options (just over boundary, should use freetext)
 	stdin := strings.NewReader("opt5\n")
 	stdout := new(bytes.Buffer)
 	colorizer := ui.NewColorizer(false)
@@ -632,10 +570,8 @@ func TestCLIInputCollector_PromptForInput_EnumEdgeCase10Options(t *testing.T) {
 		},
 	}
 
-	// Act
 	value, err := collector.PromptForInput(input)
 
-	// Assert: Should use freetext validation for 10+ options
 	require.NoError(t, err)
 	assert.Equal(t, "opt5", value, "should validate freetext against enum")
 	assert.NotContains(t, stdout.String(), "5. opt5", "should NOT display numbered list for 10+ options")

@@ -207,15 +207,6 @@
 //
 // Dependencies: Logger
 //
-// ## MemoryMonitor (memory_monitor.go)
-//
-// Runtime memory usage tracking:
-//   - MonitorMemory: Periodic memory usage checks
-//   - ReportMemoryPressure: Alert on high memory usage
-//   - TriggerGarbageCollection: Force GC under memory pressure
-//
-// Dependencies: Logger
-//
 // # Usage Examples
 //
 // ## Basic Workflow Execution

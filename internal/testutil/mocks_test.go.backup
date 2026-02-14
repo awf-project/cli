@@ -16,12 +16,7 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// Feature: C016 Missing Unit Tests for Input Validation and State Persistence
-// Component: T001 Testutil Interface Compliance
-
-// These compile-time assertions verify that mock implementations satisfy their
-// corresponding port interfaces. If a mock fails to implement its interface,
-// the code will not compile, catching interface mismatches early.
+// Compile-time interface compliance checks
 var (
 	_ ports.WorkflowRepository  = (*testutil.MockWorkflowRepository)(nil)
 	_ ports.StateStore          = (*testutil.MockStateStore)(nil)
@@ -31,28 +26,22 @@ var (
 	_ ports.ExpressionValidator = (*testutil.MockExpressionValidator)(nil)
 )
 
-// Feature: C007 Test Infrastructure Modernization
-// Component: T002 MockWorkflowRepository
-
 func TestMockWorkflowRepository_NewMockWorkflowRepository(t *testing.T) {
-	// Arrange & Act
 	repo := testutil.NewMockWorkflowRepository()
+	require.NotNil(t, repo)
 
-	require.NotNil(t, repo, "NewMockWorkflowRepository should return non-nil instance")
-
-	// Verify it's usable immediately
 	ctx := context.Background()
 	wf, err := repo.Load(ctx, "nonexistent")
-	assert.Error(t, err, "Load on empty repository should return error for nonexistent workflow")
-	assert.Nil(t, wf, "Load on empty repository should return nil for nonexistent workflow")
+	assert.Error(t, err)
+	assert.Nil(t, wf)
 
 	names, err := repo.List(ctx)
-	assert.NoError(t, err, "List on empty repository should not error")
-	assert.Empty(t, names, "List on empty repository should return empty slice")
+	assert.NoError(t, err)
+	assert.Empty(t, names)
 
 	exists, err := repo.Exists(ctx, "nonexistent")
-	assert.NoError(t, err, "Exists on empty repository should not error")
-	assert.False(t, exists, "Exists on empty repository should return false")
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
 func TestMockWorkflowRepository_Load_HappyPath(t *testing.T) {
@@ -214,7 +203,7 @@ func TestMockWorkflowRepository_List_HappyPath(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			assert.ElementsMatch(t, tt.want, got, "List should return all workflow names")
+			assert.ElementsMatch(t, tt.want, got)
 		})
 	}
 }

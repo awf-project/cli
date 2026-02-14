@@ -9,10 +9,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/ports"
 )
 
-// =============================================================================
-// Mock Implementations
-// =============================================================================
-
 // mockJSONFormatter simulates a JSON error formatter
 type mockJSONFormatter struct {
 	formatCalled bool
@@ -46,20 +42,12 @@ func (m *mockEmptyFormatter) FormatError(err *errors.StructuredError) string {
 	return ""
 }
 
-// =============================================================================
-// Interface Compliance Tests
-// =============================================================================
-
 func TestErrorFormatter_InterfaceCompliance(t *testing.T) {
 	// Verify that mock implementations satisfy the ErrorFormatter interface
 	var _ ports.ErrorFormatter = (*mockJSONFormatter)(nil)
 	var _ ports.ErrorFormatter = (*mockHumanFormatter)(nil)
 	var _ ports.ErrorFormatter = (*mockEmptyFormatter)(nil)
 }
-
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
 
 func TestErrorFormatter_FormatError_JSONStyle(t *testing.T) {
 	tests := []struct {
@@ -191,10 +179,6 @@ func TestErrorFormatter_MultipleFormats(t *testing.T) {
 	assert.Contains(t, humanOutput, "[USER.INPUT.VALIDATION_FAILED]", "Human format should include bracketed code")
 }
 
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
-
 func TestErrorFormatter_NilDetails(t *testing.T) {
 	// Error with nil details should be formatted correctly
 	err := errors.NewStructuredError(
@@ -321,7 +305,7 @@ func TestErrorFormatter_ComplexDetails(t *testing.T) {
 	output := formatter.FormatError(err)
 
 	assert.NotEmpty(t, output, "Should format error with complex details")
-	assert.Equal(t, 5, len(formatter.lastError.Details), "All detail keys should be preserved")
+	assert.Len(t, formatter.lastError.Details, 5)
 }
 
 func TestErrorFormatter_EmptyOutput(t *testing.T) {
@@ -338,10 +322,6 @@ func TestErrorFormatter_EmptyOutput(t *testing.T) {
 
 	assert.Empty(t, output, "Empty formatter should return empty string")
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestErrorFormatter_AllErrorCategories(t *testing.T) {
 	// Verify formatter works with all error categories

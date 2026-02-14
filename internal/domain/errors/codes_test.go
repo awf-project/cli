@@ -7,10 +7,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/errors"
 )
 
-// =============================================================================
-// ErrorCode Constants Tests
-// =============================================================================
-
 func TestErrorCodeConstants_USER_Category(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -202,10 +198,6 @@ func TestErrorCodeConstants_UniqueValues(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ErrorCode.Category() Tests
-// =============================================================================
-
 func TestErrorCode_Category_HappyPath(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -285,10 +277,6 @@ func TestErrorCode_Category_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ErrorCode.Subcategory() Tests
-// =============================================================================
 
 func TestErrorCode_Subcategory_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -379,10 +367,6 @@ func TestErrorCode_Subcategory_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ErrorCode.Specific() Tests
-// =============================================================================
 
 func TestErrorCode_Specific_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -479,10 +463,6 @@ func TestErrorCode_Specific_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ErrorCode.IsValid() Tests
-// =============================================================================
-
 func TestErrorCode_IsValid_HappyPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -576,10 +556,6 @@ func TestErrorCode_IsValid_InvalidFormats(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ErrorCode.ExitCode() Tests
-// =============================================================================
 
 func TestErrorCode_ExitCode_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -713,10 +689,6 @@ func TestErrorCode_ExitCode_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ErrorCode Taxonomy Coverage Tests
-// =============================================================================
 
 func TestErrorCode_Taxonomy_Coverage(t *testing.T) {
 	// Verify taxonomy covers all categories from spec

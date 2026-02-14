@@ -8,9 +8,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
 // mapLoopConfig Tests (F016)
-// =============================================================================
 
 func TestMapLoopConfig_ForEach(t *testing.T) {
 	tests := []struct {
@@ -240,9 +238,7 @@ func TestMapLoopConfig_NoLoop(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // parseStepType Tests for Loop Types (F016)
-// =============================================================================
 
 func TestParseStepType_LoopTypes(t *testing.T) {
 	tests := []struct {
@@ -273,9 +269,7 @@ func TestParseStepType_LoopTypes(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapStep Tests for Loop Steps (F016)
-// =============================================================================
 
 func TestMapStep_ForEachStep(t *testing.T) {
 	yamlStep := yamlStep{
@@ -358,10 +352,6 @@ func TestMapStep_LoopWithHooks(t *testing.T) {
 	assert.Equal(t, "Loop complete", step.Hooks.Post[0].Log)
 }
 
-// =============================================================================
-// Integration Tests - Full YAML Parsing (F016)
-// =============================================================================
-
 func TestMapLoopConfig_ItemsTypes(t *testing.T) {
 	// Test different item types that might come from YAML parsing
 	tests := []struct {
@@ -425,10 +415,6 @@ func TestMapStep_LoopPreservesOtherFields(t *testing.T) {
 	assert.True(t, step.ContinueOnError)
 	require.NotNil(t, step.Loop)
 }
-
-// =============================================================================
-// F037: Dynamic MaxIterations Tests
-// =============================================================================
 
 func TestMapLoopConfig_DynamicMaxIterations(t *testing.T) {
 	tests := []struct {

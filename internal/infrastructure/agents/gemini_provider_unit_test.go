@@ -15,10 +15,6 @@ import (
 // Component: C025 - Unit Tests for GeminiProvider (WITHOUT integration build tag)
 // These tests use MockCLIExecutor to avoid external CLI dependencies
 
-// =============================================================================
-// Execute Method Tests
-// =============================================================================
-
 func TestGeminiProvider_Execute_Success(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -402,10 +398,6 @@ func TestGeminiProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ExecuteConversation Method Tests
-// =============================================================================
-
 func TestGeminiProvider_ExecuteConversation_Success(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -734,18 +726,10 @@ func TestGeminiProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Provider Metadata Tests
-// =============================================================================
-
 func TestGeminiProvider_Name(t *testing.T) {
 	provider := NewGeminiProvider()
 	assert.Equal(t, "gemini", provider.Name())
 }
-
-// =============================================================================
-// Provider Constructor Tests
-// =============================================================================
 
 func TestGeminiProvider_NewGeminiProvider(t *testing.T) {
 	provider := NewGeminiProvider()
@@ -760,10 +744,6 @@ func TestGeminiProvider_NewGeminiProviderWithOptions(t *testing.T) {
 	assert.NotNil(t, provider)
 	assert.Equal(t, mockExec, provider.executor)
 }
-
-// =============================================================================
-// Edge Cases and Special Scenarios
-// =============================================================================
 
 func TestGeminiProvider_Execute_EmptyState(t *testing.T) {
 	mockExec := testutil.NewMockCLIExecutor()
@@ -813,10 +793,6 @@ func TestGeminiProvider_Execute_MultipleOptions(t *testing.T) {
 	assert.Contains(t, calls[0].Args, "--model")
 	assert.Contains(t, calls[0].Args, "gemini-pro")
 }
-
-// =============================================================================
-// Model Validation Tests
-// =============================================================================
 
 func TestGeminiProvider_ValidateGeminiOptions_ModelValidation(t *testing.T) {
 	tests := []struct {

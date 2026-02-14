@@ -25,7 +25,6 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 	// Build template data map
 	data := r.buildTemplateData(ctx)
 
-	// Create template with custom functions and namespace accessors
 	tmpl := template.New("cmd").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
@@ -40,13 +39,11 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 			"error":    r.makeErrorAccessor(ctx),
 		})
 
-	// Parse template
 	tmpl, err := tmpl.Parse(tmplStr)
 	if err != nil {
 		return "", &ParseError{Template: tmplStr, Cause: err}
 	}
 
-	// Execute template
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", r.wrapExecutionError(err, tmplStr)
@@ -77,7 +74,6 @@ func (r *TemplateResolver) buildTemplateData(ctx *Context) map[string]any {
 func (r *TemplateResolver) wrapExecutionError(err error, tmpl string) error {
 	errStr := err.Error()
 
-	// text/template error format: "... map has no entry for key \"foo\""
 	if strings.Contains(errStr, "map has no entry for key") {
 		start := strings.Index(errStr, "\"")
 		end := strings.LastIndex(errStr, "\"")
@@ -87,11 +83,9 @@ func (r *TemplateResolver) wrapExecutionError(err error, tmpl string) error {
 		}
 	}
 
-	// Handle nil pointer/zero value access (e.g., .error.Message when error is nil)
 	if strings.Contains(errStr, "nil pointer") ||
 		strings.Contains(errStr, "can't evaluate field") ||
 		strings.Contains(errStr, "is not a struct") {
-		// Try to extract the field name
 		if idx := strings.Index(errStr, "field "); idx != -1 {
 			rest := errStr[idx+6:]
 			if end := strings.IndexAny(rest, " "); end != -1 {
@@ -105,22 +99,17 @@ func (r *TemplateResolver) wrapExecutionError(err error, tmpl string) error {
 }
 
 // escapeTemplateFunc wraps ShellEscape to handle both strings and serializableItem.
-// This function is used in templates via {{escape .var}} syntax.
 func escapeTemplateFunc(v any) string {
-	// Handle serializableItem by extracting its serialized string
 	if item, ok := v.(serializableItem); ok {
 		return ShellEscape(item.String())
 	}
-	// Handle regular strings
 	if s, ok := v.(string); ok {
 		return ShellEscape(s)
 	}
-	// Fallback for other types: convert to string first
 	return ShellEscape(fmt.Sprintf("%v", v))
 }
 
 // jsonTemplateFunc serializes a value to JSON format.
-// This function is used in templates via {{json .var}} syntax.
 func jsonTemplateFunc(v any) (string, error) {
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {
@@ -155,19 +144,13 @@ func (s serializableItem) MarshalJSON() ([]byte, error) {
 // serializeLoopData creates a copy of LoopData with the Item field wrapped
 // in serializableItem for proper JSON representation in templates.
 func (r *TemplateResolver) serializeLoopData(loop *LoopData) *LoopData {
-	// Serialize the item using SerializeLoopItem
-	// SerializeLoopItem never returns an error (it handles failures internally via graceful degradation)
-	// nolint:errcheck // SerializeLoopItem always returns nil error
-	serialized, _ := SerializeLoopItem(loop.Item)
+	serialized, _ := SerializeLoopItem(loop.Item) //nolint:errcheck // never returns error
 
-	// Wrap the item in serializableItem to provide both automatic serialization
-	// via String() and correct JSON encoding via MarshalJSON()
 	wrappedItem := serializableItem{
 		original:   loop.Item,
 		serialized: serialized,
 	}
 
-	// Create a copy of LoopData with all fields preserved
 	return &LoopData{
 		Item:   wrappedItem,
 		Index:  loop.Index,
@@ -227,7 +210,6 @@ func (r *TemplateResolver) makeErrorAccessor(ctx *Context) func() (map[string]an
 }
 
 // makeInputsAccessor returns a function that provides the inputs map.
-// This allows {{inputs.name}} syntax without the leading dot.
 func (r *TemplateResolver) makeInputsAccessor(ctx *Context) func() map[string]any {
 	return func() map[string]any {
 		return ctx.Inputs
@@ -235,7 +217,6 @@ func (r *TemplateResolver) makeInputsAccessor(ctx *Context) func() map[string]an
 }
 
 // makeStatesAccessor returns a function that provides the states map.
-// This allows {{states.step_name.output}} syntax without the leading dot.
 func (r *TemplateResolver) makeStatesAccessor(ctx *Context) func() map[string]StepStateData {
 	return func() map[string]StepStateData {
 		return ctx.States
@@ -243,7 +224,6 @@ func (r *TemplateResolver) makeStatesAccessor(ctx *Context) func() map[string]St
 }
 
 // makeWorkflowAccessor returns a function that provides workflow metadata.
-// This allows {{workflow.id}}, {{workflow.name}} syntax without the leading dot.
 func (r *TemplateResolver) makeWorkflowAccessor(ctx *Context) func() WorkflowData {
 	return func() WorkflowData {
 		return ctx.Workflow
@@ -251,7 +231,6 @@ func (r *TemplateResolver) makeWorkflowAccessor(ctx *Context) func() WorkflowDat
 }
 
 // makeEnvAccessor returns a function that provides environment variables.
-// This allows {{env.VAR_NAME}} syntax without the leading dot.
 func (r *TemplateResolver) makeEnvAccessor(ctx *Context) func() map[string]string {
 	return func() map[string]string {
 		return ctx.Env

@@ -11,18 +11,6 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// Feature: C046
-// Integration tests validating correct context usage patterns in test files.
-// These tests verify that context.Background() is used appropriately in test
-// scenarios where an empty context is needed, confirming the semantic correctness
-// of the C046 changes.
-
-// =============================================================================
-// Happy Path Tests
-// =============================================================================
-
-// TestContextUsage_Integration validates that CLIExecutor implementations
-// work correctly with context.Background() in typical test scenarios.
 func TestContextUsage_Integration(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -64,14 +52,11 @@ func TestContextUsage_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := tt.setupExec()
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err, tt.description)
 			} else {
@@ -83,14 +68,10 @@ func TestContextUsage_Integration(t *testing.T) {
 	}
 }
 
-// TestContextUsage_MultipleExecutions verifies that context.Background()
-// can be safely reused across multiple test executions without side effects.
 func TestContextUsage_MultipleExecutions(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 	ctx := context.Background()
 
-	// Act - execute multiple commands with same context
 	results := make([]struct {
 		stdout []byte
 		stderr []byte
@@ -104,7 +85,6 @@ func TestContextUsage_MultipleExecutions(t *testing.T) {
 		results[i].err = err
 	}
 
-	// Assert - all executions should succeed independently
 	for i, result := range results {
 		assert.NoError(t, result.err, "Execution %d should succeed", i)
 		assert.NotNil(t, result.stdout, "Execution %d should have stdout", i)
@@ -112,12 +92,6 @@ func TestContextUsage_MultipleExecutions(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Edge Case Tests
-// =============================================================================
-
-// TestContextUsage_EdgeCases validates that context.Background() handles
-// boundary conditions correctly in test scenarios.
 func TestContextUsage_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -163,14 +137,11 @@ func TestContextUsage_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := agents.NewExecCLIExecutor()
 			ctx := tt.setupCtx()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			if tt.expectError {
 				assert.Error(t, err, tt.description)
 			} else {
@@ -182,36 +153,22 @@ func TestContextUsage_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestContextUsage_NilContextBehavior verifies that passing nil context
-// is handled appropriately (should panic or error, not silently succeed).
 func TestContextUsage_NilContextBehavior(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 
-	// Act & Assert
 	defer func() {
 		r := recover()
 		if r == nil {
-			// If no panic, check that error is returned
 			t.Log("No panic occurred; implementation returns error instead")
 		} else {
-			// Panic is acceptable for nil context
 			assert.NotNil(t, r, "Should panic with nil context")
 		}
 	}()
 
-	// This should either panic or return error
-	// Using Background() as the correct alternative in the test
 	_, _, err := executor.Run(context.Background(), "echo", "test")
 	assert.NoError(t, err, "Valid context should work")
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
-// TestContextUsage_ErrorHandling validates that context.Background()
-// properly propagates errors from command execution.
 func TestContextUsage_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -245,14 +202,11 @@ func TestContextUsage_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			executor := agents.NewExecCLIExecutor()
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err, tt.description)
 			} else {
@@ -264,8 +218,6 @@ func TestContextUsage_ErrorHandling(t *testing.T) {
 	}
 }
 
-// TestContextUsage_ErrorHandlingWithMock validates that mock executor
-// error injection works correctly with context.Background().
 func TestContextUsage_ErrorHandlingWithMock(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -293,21 +245,17 @@ func TestContextUsage_ErrorHandlingWithMock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			mock := testutil.NewMockCLIExecutor()
 			tt.setupMock(mock)
 			ctx := context.Background()
 
-			// Act
 			stdout, stderr, err := mock.Run(ctx, "tool", "arg")
 
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err, tt.description)
 			} else {
 				assert.NoError(t, err, tt.description)
 			}
-			// Note: Mock returns nil for stdout/stderr on error
 			if !tt.wantErr {
 				assert.NotNil(t, stdout)
 				assert.NotNil(t, stderr)
@@ -316,18 +264,12 @@ func TestContextUsage_ErrorHandlingWithMock(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Integration Tests
-// =============================================================================
-
 // TestContextUsage_FullWorkflow validates that context.Background() works
 // correctly in a complete test workflow simulating real usage.
 func TestContextUsage_FullWorkflow(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 	ctx := context.Background()
 
-	// Act - Simulate a complete workflow with multiple steps
 	steps := []struct {
 		binary string
 		args   []string
@@ -343,7 +285,6 @@ func TestContextUsage_FullWorkflow(t *testing.T) {
 		results[i] = err
 	}
 
-	// Assert - All steps should complete successfully
 	for i, err := range results {
 		assert.NoError(t, err, "Step %d should succeed with Background context", i+1)
 	}
@@ -352,15 +293,12 @@ func TestContextUsage_FullWorkflow(t *testing.T) {
 // TestContextUsage_CancellableContext validates that derived contexts
 // from context.Background() work correctly for cancellation scenarios.
 func TestContextUsage_CancellableContext(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Act - Execute with cancellable context
 	stdout, stderr, err := executor.Run(ctx, "echo", "test")
 
-	// Assert - Should work normally when not cancelled
 	assert.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
@@ -369,15 +307,12 @@ func TestContextUsage_CancellableContext(t *testing.T) {
 // TestContextUsage_TimeoutContext validates that timeout contexts
 // derived from context.Background() work correctly.
 func TestContextUsage_TimeoutContext(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Act - Execute with timeout context (command should complete quickly)
 	stdout, stderr, err := executor.Run(ctx, "echo", "test")
 
-	// Assert - Should complete before timeout
 	assert.NoError(t, err)
 	assert.NotNil(t, stdout)
 	assert.NotNil(t, stderr)
@@ -386,12 +321,10 @@ func TestContextUsage_TimeoutContext(t *testing.T) {
 // TestContextUsage_ConcurrentAccess validates that context.Background()
 // can be safely used concurrently across multiple test goroutines.
 func TestContextUsage_ConcurrentAccess(t *testing.T) {
-	// Arrange
 	executor := agents.NewExecCLIExecutor()
 	ctx := context.Background()
 	numGoroutines := 10
 
-	// Act - Concurrent executions with shared context
 	errors := make(chan error, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
@@ -407,21 +340,15 @@ func TestContextUsage_ConcurrentAccess(t *testing.T) {
 		results[i] = <-errors
 	}
 
-	// Assert - All concurrent executions should succeed
 	for i, err := range results {
 		assert.NoError(t, err, "Goroutine %d should succeed with shared Background context", i)
 	}
 }
 
-// =============================================================================
-// Semantic Correctness Tests
-// =============================================================================
-
 // TestContextUsage_SemanticCorrectness validates that context.Background()
 // is semantically appropriate for test scenarios (vs context.TODO()).
 func TestContextUsage_SemanticCorrectness(t *testing.T) {
 	t.Run("Background context is appropriate for tests", func(t *testing.T) {
-		// Arrange
 		executor := agents.NewExecCLIExecutor()
 
 		// context.Background() is correct because:
@@ -430,10 +357,8 @@ func TestContextUsage_SemanticCorrectness(t *testing.T) {
 		// 3. This is top-level test execution, not pending design
 		ctx := context.Background()
 
-		// Act
 		stdout, stderr, err := executor.Run(ctx, "echo", "semantic")
 
-		// Assert
 		require.NoError(t, err, "Background context should work correctly in tests")
 		assert.NotEmpty(t, stdout, "Should produce output")
 		assert.NotNil(t, stderr, "Should have stderr buffer")
@@ -456,7 +381,6 @@ func TestContextUsage_SemanticCorrectness(t *testing.T) {
 		ctxTODO := context.TODO()
 		stdoutTodo, stderrTodo, errTodo := executor.Run(ctxTODO, "echo", "test")
 
-		// Assert - Runtime behavior is identical
 		assert.Equal(t, errBg, errTodo, "Both should have same error status")
 		assert.Equal(t, len(stdoutBg), len(stdoutTodo), "Both should produce same output length")
 		assert.Equal(t, len(stderrBg), len(stderrTodo), "Both should have same stderr length")
@@ -466,10 +390,6 @@ func TestContextUsage_SemanticCorrectness(t *testing.T) {
 		// TODO suggests incomplete implementation
 	})
 }
-
-// =============================================================================
-// Acceptance Criteria Validation
-// =============================================================================
 
 // TestContextUsageAcceptanceCriteria validates that all acceptance criteria
 // from the C046 specification are met.

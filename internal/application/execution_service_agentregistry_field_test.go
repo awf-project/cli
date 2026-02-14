@@ -14,16 +14,13 @@ import (
 // field uses the ports.AgentRegistry interface type instead of a concrete implementation.
 // This test ensures compile-time compliance with the Dependency Inversion Principle.
 func TestExecutionService_AgentRegistryField_InterfaceType(t *testing.T) {
-	// Arrange: Create service with test harness
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Create a mock registry that implements ports.AgentRegistry
 	mockRegistry := &testAgentRegistry{}
 
-	// Act: Set the registry using the interface type
 	execSvc.SetAgentRegistry(mockRegistry)
 
-	// Assert: Verify no compilation error occurred (this test passing means field accepts interface)
 	assert.NotNil(t, execSvc)
 }
 
@@ -54,13 +51,10 @@ func TestExecutionService_SetAgentRegistry_AcceptsInterface(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			execSvc, _ := NewTestHarness(t).Build()
 
-			// Act: Should accept any implementation of ports.AgentRegistry
 			execSvc.SetAgentRegistry(tt.registry)
 
-			// Assert: No panic, method accepts interface type
 			assert.NotNil(t, execSvc)
 		})
 	}
@@ -70,16 +64,13 @@ func TestExecutionService_SetAgentRegistry_AcceptsInterface(t *testing.T) {
 // the ExecutionService can be created and used with the agentRegistry field
 // without importing infrastructure packages.
 func TestExecutionService_AgentRegistryField_NoInfrastructureDependency(t *testing.T) {
-	// Arrange: Create service with test harness (uses only domain interfaces)
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Create a registry using only the interface
 	var registry ports.AgentRegistry = &testAgentRegistry{}
 
-	// Act: Set the registry
 	execSvc.SetAgentRegistry(registry)
 
-	// Assert: Service creation successful without infrastructure imports
 	assert.NotNil(t, execSvc)
 	assert.NotNil(t, registry)
 }
@@ -107,13 +98,10 @@ func TestExecutionService_AgentRegistryField_MultipleImplementations(t *testing.
 
 	for _, impl := range implementations {
 		t.Run(impl.name, func(t *testing.T) {
-			// Arrange
 			execSvc, _ := NewTestHarness(t).Build()
 
-			// Act: Each implementation should be accepted
 			execSvc.SetAgentRegistry(impl.registry)
 
-			// Assert: Interface polymorphism works correctly
 			assert.NotNil(t, execSvc)
 		})
 	}
@@ -122,7 +110,6 @@ func TestExecutionService_AgentRegistryField_MultipleImplementations(t *testing.
 // TestExecutionService_AgentRegistryField_TypeSafety verifies that the field
 // maintains type safety by only accepting ports.AgentRegistry interface implementations.
 func TestExecutionService_AgentRegistryField_TypeSafety(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
 	// Create different implementations of the interface
@@ -134,10 +121,8 @@ func TestExecutionService_AgentRegistryField_TypeSafety(t *testing.T) {
 
 	for i, registry := range registries {
 		t.Run("accepts_implementation_"+string(rune('A'+i)), func(t *testing.T) {
-			// Act: Set each implementation
 			execSvc.SetAgentRegistry(registry)
 
-			// Assert: No type error, interface is accepted
 			assert.NotNil(t, execSvc)
 		})
 	}
@@ -146,41 +131,31 @@ func TestExecutionService_AgentRegistryField_TypeSafety(t *testing.T) {
 // TestExecutionService_AgentRegistryField_NilRegistry verifies that
 // a nil registry can be set without causing issues.
 func TestExecutionService_AgentRegistryField_NilRegistry(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
-	// Act: Set nil registry
 	execSvc.SetAgentRegistry(nil)
 
-	// Assert: Should not panic, nil is a valid interface value
 	assert.NotNil(t, execSvc)
 }
 
 // TestExecutionService_AgentRegistryField_ReassignRegistry verifies that
 // the registry can be reassigned with different implementations.
 func TestExecutionService_AgentRegistryField_ReassignRegistry(t *testing.T) {
-	// Arrange
 	execSvc, _ := NewTestHarness(t).Build()
 
 	first := &testAgentRegistry{}
 	second := &customTestAgentRegistry{}
 
-	// Act: Set first registry
 	execSvc.SetAgentRegistry(first)
 
-	// Assert: First assignment successful
 	assert.NotNil(t, execSvc)
 
-	// Act: Reassign with different implementation
 	execSvc.SetAgentRegistry(second)
 
-	// Assert: Reassignment successful
 	assert.NotNil(t, execSvc)
 
-	// Act: Set to nil
 	execSvc.SetAgentRegistry(nil)
 
-	// Assert: Can set to nil after setting concrete implementation
 	assert.NotNil(t, execSvc)
 }
 

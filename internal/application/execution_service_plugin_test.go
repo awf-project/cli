@@ -14,11 +14,9 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // executePluginOperation Tests
 // Feature: C054 - Increase Application Layer Test Coverage
 // Component: T006 - plugin_operation_coverage
-// =============================================================================
 //
 // This file tests the executePluginOperation function which handles plugin
 // operation lifecycle including timeouts, context cancellation, error handling,
@@ -29,7 +27,6 @@ import (
 // This function is private (executePluginOperation), so we test it indirectly
 // through the public API by constructing workflows with operation steps and
 // observing execution behavior through step states and error propagation.
-// =============================================================================
 
 // TestExecutePluginOperation_Timeout verifies that operation steps respect timeout configuration
 // and handle timeout errors appropriately.
@@ -82,7 +79,6 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step and timeout
 			provider := newMockOperationProviderWithDelay(tt.providerDelay)
 			provider.addOperation("slow.operation", "Slow operation", "test-plugin")
 
@@ -121,10 +117,8 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
 
-			// Assert: Check timeout behavior
 			if tt.expectTimeout && !tt.continueOnErr && tt.onFailure == "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "context deadline exceeded")
@@ -173,7 +167,6 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step
 			provider := newMockOperationProviderWithDelay(tt.providerDelay)
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 
@@ -210,10 +203,8 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 				}()
 			}
 
-			// Act: Execute workflow with cancellable context
 			execCtx, err := execSvc.Run(ctx, "cancel-test", nil)
 
-			// Assert: Should handle cancellation
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.expectedErrMessage)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
@@ -275,7 +266,6 @@ func TestExecutePluginOperation_ContinueOnError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 
@@ -312,10 +302,8 @@ func TestExecutePluginOperation_ContinueOnError(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "continue-test", nil)
 
-			// Assert: Check error propagation
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -357,7 +345,6 @@ func TestExecutePluginOperation_ExecutionErrorPropagation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step (no OnFailure, no ContinueOnError)
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 			provider.execError = tt.providerError
@@ -378,10 +365,8 @@ func TestExecutePluginOperation_ExecutionErrorPropagation(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "error-test", nil)
 
-			// Assert: Error propagates with format "step {name}: {original error}"
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "operation")
 			assert.Contains(t, err.Error(), tt.expectedMsg)
@@ -424,7 +409,6 @@ func TestExecutePluginOperation_OperationFailureWithoutMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation that returns Success=false
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 			provider.results["test.operation"] = &plugin.OperationResult{
@@ -460,10 +444,8 @@ func TestExecutePluginOperation_OperationFailureWithoutMessage(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "failure-test", nil)
 
-			// Assert: Check error message
 			if tt.hasOnFailure {
 				require.NoError(t, err)
 				assert.Equal(t, "failure_step", ctx.CurrentStep)
@@ -526,10 +508,8 @@ func TestExecutePluginOperation_PrePostHooks(t *testing.T) {
 
 			configureHookMocks(mocks, tt.preHookCommand, tt.expectPreLog, tt.postHookCommand, tt.expectPostLog)
 
-			// Act: Execute workflow
 			_, _ = execSvc.Run(context.Background(), "hook-test", nil)
 
-			// Assert: Verify hooks were called
 			assertHookExecution(t, mocks.Executor.GetCalls(), tt.preHookCommand, tt.postHookCommand)
 		})
 	}
@@ -670,7 +650,6 @@ func TestExecutePluginOperation_InputResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step and inputs
 			provider := newMockOperationProviderWithCapture()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 
@@ -697,10 +676,8 @@ func TestExecutePluginOperation_InputResolution(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow with inputs
 			ctx, err := execSvc.Run(context.Background(), "input-test", tt.workflowInput)
 
-			// Assert: Verify interpolation
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -758,7 +735,6 @@ func TestExecutePluginOperation_OutputSerialization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation that produces outputs
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 			provider.results["test.operation"] = &plugin.OperationResult{
@@ -787,10 +763,8 @@ func TestExecutePluginOperation_OutputSerialization(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "output-test", nil)
 
-			// Assert: Verify output serialization
 			require.NoError(t, err)
 			assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 
@@ -840,7 +814,6 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Workflow with operation step
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
 
@@ -890,10 +863,8 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			// Act: Execute workflow
 			ctx, err := execSvc.Run(context.Background(), "state-test", nil)
 
-			// Assert: Verify step state recording
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -920,10 +891,6 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Helper Types
-// =============================================================================
 
 // mockOperationProviderWithDelay simulates slow operations for timeout testing.
 type mockOperationProviderWithDelay struct {

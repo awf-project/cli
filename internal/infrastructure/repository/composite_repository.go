@@ -24,7 +24,6 @@ type CompositeRepository struct {
 	repos map[Source]*YAMLRepository
 }
 
-// NewCompositeRepository creates a repository that searches multiple paths
 func NewCompositeRepository(paths []SourcedPath) *CompositeRepository {
 	repos := make(map[Source]*YAMLRepository)
 	for _, sp := range paths {

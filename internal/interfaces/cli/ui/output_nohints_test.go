@@ -11,9 +11,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
-// Component T013: Thread noHints through OutputWriter to formatter
-// =============================================================================
 // These tests verify that the noHints flag is correctly threaded from
 // NewOutputWriter constructor through to the HumanErrorFormatter.
 

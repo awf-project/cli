@@ -27,10 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Happy Path Tests - Acceptance Criteria Verification
-// =============================================================================
-
 // TestDeadCode_Removal_Integration verifies that all dead test code identified
 // in C053 has been removed. Scans source files for patterns that should no longer exist.
 func TestDeadCode_Removal_Integration(t *testing.T) {
@@ -177,10 +173,6 @@ func TestShortModeSkip_Pattern_Integration(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
 // TestCleanup_LegitimateSkips_Preserved_Integration verifies that legitimate
 // conditional skips (testing.Short, root, CI, platform, CLI tools) are untouched.
 func TestCleanup_LegitimateSkips_Preserved_Integration(t *testing.T) {
@@ -257,10 +249,6 @@ func TestCleanup_FileIntegrity_Integration(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Error Handling Tests - Nil Guard Implementation
-// =============================================================================
-
 // TestNilGuard_ErrorMessages_Integration verifies that nil-guard error messages
 // are descriptive and actionable for debugging.
 func TestNilGuard_ErrorMessages_Integration(t *testing.T) {
@@ -325,10 +313,6 @@ func TestNilGuard_ErrorMessages_Integration(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Integration Tests - Overall Cleanup Validation
-// =============================================================================
-
 // TestCleanup_Metrics_Integration validates the overall cleanup metrics match expectations.
 func TestCleanup_Metrics_Integration(t *testing.T) {
 	repoRoot := getRepoRoot(t)
@@ -385,10 +369,6 @@ func TestCleanup_Metrics_Integration(t *testing.T) {
 			"CHANGELOG.md should document C053 cleanup work")
 	})
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 // getRepoRoot returns the repository root directory by walking up from cwd.
 func getRepoRoot(t *testing.T) string {

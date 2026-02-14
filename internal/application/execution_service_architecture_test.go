@@ -20,14 +20,11 @@ import (
 // does not import infrastructure packages, maintaining hexagonal architecture.
 // This is the happy path test - the file should be clean.
 func TestExecutionService_NoInfrastructureImport(t *testing.T) {
-	// Arrange: locate the execution_service.go file
 	sourceFile := "execution_service.go"
 
-	// Act: read the file and check imports
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 
-	// Assert: verify no infrastructure imports
 	for _, imp := range imports {
 		assert.NotContains(t, imp, "infrastructure/agents",
 			"execution_service.go must not import infrastructure/agents - violates DIP")
@@ -40,15 +37,12 @@ func TestExecutionService_NoInfrastructureImport(t *testing.T) {
 // uses the ports.AgentRegistry interface, not a concrete infrastructure type.
 // This is an edge case that ensures the refactoring is complete.
 func TestExecutionService_OnlyDomainPortsForAgentRegistry(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 
-	// Act: read file content
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err, "should be able to read source file")
 	contentStr := string(content)
 
-	// Assert: should use ports.AgentRegistry, not *agents.AgentRegistry
 	assert.Contains(t, contentStr, "ports.AgentRegistry",
 		"execution_service.go should use ports.AgentRegistry interface")
 	assert.NotContains(t, contentStr, "*agents.AgentRegistry",
@@ -61,14 +55,11 @@ func TestExecutionService_OnlyDomainPortsForAgentRegistry(t *testing.T) {
 // constraints for the application layer file.
 // This is an edge case ensuring clean architecture principles.
 func TestExecutionService_ArchitectureCompliance(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 
-	// Act
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err)
 
-	// Assert: application layer should only import from:
 	// - standard library
 	// - domain layer (ports, workflow)
 	// - pkg (utilities)
@@ -95,10 +86,8 @@ func TestExecutionService_ArchitectureCompliance(t *testing.T) {
 // TestExecutionService_NoAgentsPackageReference is an error handling test
 // that detects if someone accidentally adds references to the agents package.
 func TestExecutionService_NoAgentsPackageReference(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 
-	// Act: read and scan file line by line
 	file, err := os.Open(sourceFile)
 	require.NoError(t, err)
 	defer file.Close()
@@ -128,7 +117,6 @@ func TestExecutionService_NoAgentsPackageReference(t *testing.T) {
 
 	require.NoError(t, scanner.Err())
 
-	// Assert: no violations found
 	assert.Empty(t, violations, "found agents package references in execution_service.go")
 }
 
@@ -136,12 +124,10 @@ func TestExecutionService_NoAgentsPackageReference(t *testing.T) {
 // uses the interface type, not a concrete type.
 // This is a critical edge case for maintaining architectural boundaries.
 func TestExecutionService_FieldTypeIsInterface(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err)
 
-	// Act: find the agentRegistry field declaration
 	lines := strings.Split(string(content), "\n")
 	var fieldLine string
 	for _, line := range lines {
@@ -151,7 +137,6 @@ func TestExecutionService_FieldTypeIsInterface(t *testing.T) {
 		}
 	}
 
-	// Assert: field should be declared with ports.AgentRegistry interface type
 	require.NotEmpty(t, fieldLine, "should find agentRegistry field declaration")
 	assert.Contains(t, fieldLine, "ports.AgentRegistry",
 		"agentRegistry field should use ports.AgentRegistry interface type")
@@ -214,12 +199,10 @@ func extractImports(filename string) ([]string, error) {
 // method accepts the ports.AgentRegistry interface, not a concrete type.
 // This is an edge case for proper dependency inversion.
 func TestExecutionService_SetterAcceptsInterface(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 	content, err := os.ReadFile(sourceFile)
 	require.NoError(t, err)
 
-	// Act: find the SetAgentRegistry method signature
 	lines := strings.Split(string(content), "\n")
 	var methodLine string
 	for _, line := range lines {
@@ -229,7 +212,6 @@ func TestExecutionService_SetterAcceptsInterface(t *testing.T) {
 		}
 	}
 
-	// Assert: method should accept ports.AgentRegistry interface
 	if methodLine != "" {
 		assert.Contains(t, methodLine, "ports.AgentRegistry",
 			"SetAgentRegistry should accept ports.AgentRegistry interface parameter")
@@ -242,14 +224,11 @@ func TestExecutionService_SetterAcceptsInterface(t *testing.T) {
 // convention: stdlib, external, internal.
 // This is an edge case for code quality and maintainability.
 func TestExecutionService_ImportOrder(t *testing.T) {
-	// Arrange
 	sourceFile := "execution_service.go"
 
-	// Act
 	imports, err := extractImports(sourceFile)
 	require.NoError(t, err)
 
-	// Assert: categorize imports and verify order
 	var (
 		stdlibImports   []string
 		externalImports []string
@@ -273,8 +252,8 @@ func TestExecutionService_ImportOrder(t *testing.T) {
 	}
 
 	// Verify we have imports in expected categories
-	assert.NotEmpty(t, stdlibImports, "should have stdlib imports")
-	assert.NotEmpty(t, internalImports, "should have internal imports")
+	assert.NotEmpty(t, stdlibImports)
+	assert.NotEmpty(t, internalImports)
 
 	// Note: Import order is enforced by gofmt/goimports, so this is informational
 	t.Logf("Import categories - stdlib: %d, external: %d, internal: %d",

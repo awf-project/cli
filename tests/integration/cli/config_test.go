@@ -15,10 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Command Structure Tests
-// =============================================================================
-
 func TestConfigCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -77,10 +73,6 @@ func TestConfigShowCommand_NoExtraArgs(t *testing.T) {
 	err := cmd.Execute()
 	assert.Error(t, err, "expected error when extra argument provided")
 }
-
-// =============================================================================
-// US3: Display Config Values in Status
-// =============================================================================
 
 func TestConfigShow_ValidConfig_DisplaysAllInputs(t *testing.T) {
 	// US3 Acceptance: Given a valid config file, when I run `awf config show`,
@@ -179,10 +171,6 @@ inputs: {}
 	assert.Contains(t, output, ".awf/config.yaml")
 }
 
-// =============================================================================
-// Output Format Tests
-// =============================================================================
-
 func TestConfigShow_JSONFormat(t *testing.T) {
 	tmpDir := setupInitTestDir(t)
 
@@ -219,7 +207,7 @@ func TestConfigShow_JSONFormat(t *testing.T) {
 	assert.True(t, result.Exists, "exists should be true when config file exists")
 	assert.Contains(t, result.Path, "config.yaml")
 	assert.Equal(t, "test", result.Inputs["project"])
-	assert.Equal(t, true, result.Inputs["enabled"])
+	assert.True(t, result.Inputs["enabled"].(bool))
 }
 
 func TestConfigShow_JSONFormat_NoConfig(t *testing.T) {
@@ -310,10 +298,6 @@ func TestConfigShow_TableFormat(t *testing.T) {
 		"table should show input values",
 	)
 }
-
-// =============================================================================
-// Edge Cases and Error Handling
-// =============================================================================
 
 func TestConfigShow_AllInputTypes(t *testing.T) {
 	// Test that all YAML types are displayed correctly
@@ -448,10 +432,6 @@ func TestConfigShow_HintToRunInit(t *testing.T) {
 	assert.Contains(t, output, "init", "should suggest running 'awf init'")
 }
 
-// =============================================================================
-// Table-Driven Tests
-// =============================================================================
-
 func TestConfigShow_TableDriven(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -532,10 +512,6 @@ func TestConfigShow_TableDriven(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Internal Function Tests (for white-box testing)
-// =============================================================================
 
 func TestConfigShowOutput_JSONMarshaling(t *testing.T) {
 	output := cli.ConfigShowOutput{

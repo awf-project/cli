@@ -31,19 +31,3 @@ func DefaultLoopMemoryConfig() LoopMemoryConfig {
 		MaxRetainedIterations: 0, // unlimited by default
 	}
 }
-
-// MemoryConfig configures memory monitoring and threshold alerting.
-// C019: Provides observability for memory usage patterns in workflows.
-type MemoryConfig struct {
-	Enabled        bool  // Enable memory monitoring
-	ThresholdBytes int64 // Log warning when heap usage exceeds this (0 = disabled)
-}
-
-// DefaultMemoryConfig returns the default memory monitoring configuration.
-// Monitoring is disabled by default to maintain backward compatibility.
-func DefaultMemoryConfig() MemoryConfig {
-	return MemoryConfig{
-		Enabled:        false,
-		ThresholdBytes: 0,
-	}
-}

@@ -10,10 +10,6 @@ import (
 	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
-// =============================================================================
-// FileNotFoundHintGenerator Tests (Happy Path)
-// =============================================================================
-
 func TestFileNotFoundHintGenerator_ReturnsHints_ForMissingFileWithSimilarFile(t *testing.T) {
 	// Given: Create temp directory with similar workflow file
 	tmpDir := t.TempDir()
@@ -153,10 +149,6 @@ func TestFileNotFoundHintGenerator_FindsMultipleSimilarFiles_OrdersByRelevance(t
 		)
 	}
 }
-
-// =============================================================================
-// FileNotFoundHintGenerator Tests (Edge Cases)
-// =============================================================================
 
 func TestFileNotFoundHintGenerator_ReturnsEmptySlice_ForNonMissingFileError(t *testing.T) {
 	// Given: Different error code (not MISSING_FILE)
@@ -369,10 +361,6 @@ func TestFileNotFoundHintGenerator_LimitsNumberOfSuggestions(t *testing.T) {
 	assert.LessOrEqual(t, len(hints), 3, "should limit hints to max 3 to avoid overwhelming user")
 }
 
-// =============================================================================
-// FileNotFoundHintGenerator Tests (Error Handling)
-// =============================================================================
-
 func TestFileNotFoundHintGenerator_HandlesPermissionDeniedDirectory(t *testing.T) {
 	// Given: Create temp directory and restrict permissions
 	if os.Getuid() == 0 {
@@ -534,14 +522,6 @@ func TestFileNotFoundHintGenerator_ThreadSafety_NoConcurrentAccessIssues(t *test
 
 	// Then: No race conditions or panics (verified by -race flag in CI)
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
-// =============================================================================
-// InvalidStateHintGenerator Tests (Happy Path)
-// =============================================================================
 
 func TestInvalidStateHintGenerator_ReturnsHints_ForMissingStateWithSimilarState(t *testing.T) {
 	// Given: Error references typo'd state name with similar available state
@@ -728,10 +708,6 @@ func TestInvalidStateHintGenerator_HandlesSingleAvailableState(t *testing.T) {
 	}
 	assert.True(t, foundSuggestion, "should suggest the only available state")
 }
-
-// =============================================================================
-// InvalidStateHintGenerator Tests (Edge Cases)
-// =============================================================================
 
 func TestInvalidStateHintGenerator_ReturnsEmptySlice_ForNonMissingStateError(t *testing.T) {
 	// Given: Different error code (not MISSING_STATE)
@@ -1114,10 +1090,6 @@ func TestInvalidStateHintGenerator_HandlesVeryLongAvailableStatesList(t *testing
 	assert.LessOrEqual(t, len(hints), 3, "should limit to max 3 hints even with many states")
 }
 
-// =============================================================================
-// InvalidStateHintGenerator Tests (Error Handling)
-// =============================================================================
-
 func TestInvalidStateHintGenerator_HandlesUnicodeStateNames(t *testing.T) {
 	// Given: State names with Unicode characters
 	availableStates := []string{"初期化", "検証", "実行"}
@@ -1300,10 +1272,6 @@ func TestInvalidStateHintGenerator_HandlesDuplicateStatesInAvailableList(t *test
 	assert.NotNil(t, hints, "should return non-nil slice")
 	// Should handle duplicates gracefully (may or may not deduplicate suggestions)
 }
-
-// =============================================================================
-// YAMLSyntaxHintGenerator Tests (Happy Path)
-// =============================================================================
 
 func TestYAMLSyntaxHintGenerator_ReturnsHints_WithLineAndColumn(t *testing.T) {
 	// Given: YAML syntax error with line and column information
@@ -1500,10 +1468,6 @@ func TestYAMLSyntaxHintGenerator_SuggestsOnlineValidator(t *testing.T) {
 	// May suggest using online validator or documentation
 	// This is implementation-dependent, so we just verify hints are returned
 }
-
-// =============================================================================
-// YAMLSyntaxHintGenerator Tests (Edge Cases)
-// =============================================================================
 
 func TestYAMLSyntaxHintGenerator_ReturnsEmptySlice_ForNonYAMLSyntaxError(t *testing.T) {
 	// Given: Different error code (not YAML_SYNTAX)
@@ -1797,10 +1761,6 @@ func TestYAMLSyntaxHintGenerator_LimitsNumberOfHints(t *testing.T) {
 	assert.LessOrEqual(t, len(hints), 5, "should limit hints to reasonable number to avoid overwhelming user")
 }
 
-// =============================================================================
-// YAMLSyntaxHintGenerator Tests (Error Handling)
-// =============================================================================
-
 func TestYAMLSyntaxHintGenerator_ProvidesActionableGuidance_ForAllCases(t *testing.T) {
 	// Given: Various YAML syntax error scenarios
 	tests := []struct {
@@ -2005,10 +1965,6 @@ func TestYAMLSyntaxHintGenerator_ProvidesDifferentHints_BasedOnPosition(t *testi
 	}
 }
 
-// =============================================================================
-// MissingInputHintGenerator Tests (Happy Path)
-// =============================================================================
-
 func TestMissingInputHintGenerator_ReturnsHints_ForMissingRequiredInput(t *testing.T) {
 	// Given: Error for missing required input
 	structErr := domainerrors.NewStructuredError(
@@ -2177,10 +2133,6 @@ func TestMissingInputHintGenerator_LimitsNumberOfHints(t *testing.T) {
 	assert.NotNil(t, hints, "should return non-nil slice")
 	assert.LessOrEqual(t, len(hints), 5, "should limit hints to reasonable number to avoid overwhelming user")
 }
-
-// =============================================================================
-// MissingInputHintGenerator Tests (Edge Cases)
-// =============================================================================
 
 func TestMissingInputHintGenerator_ReturnsEmptySlice_ForNonValidationError(t *testing.T) {
 	// Given: Different error code (not VALIDATION_FAILED)
@@ -2544,10 +2496,6 @@ func TestMissingInputHintGenerator_HandlesInputNameWithWhitespace(t *testing.T) 
 	// Should handle whitespace in input names
 }
 
-// =============================================================================
-// MissingInputHintGenerator Tests (Error Handling)
-// =============================================================================
-
 func TestMissingInputHintGenerator_HandlesUnicodeInputNames(t *testing.T) {
 	// Given: Input names with Unicode characters
 	requiredInputs := []string{"ユーザー名", "パスワード"}
@@ -2767,10 +2715,6 @@ func TestMissingInputHintGenerator_SuggestsSimilarInputName_IfTypo(t *testing.T)
 	// (Implementation-dependent, so we just verify hints are returned)
 }
 
-// =============================================================================
-// CommandFailureHintGenerator Tests (Happy Path)
-// =============================================================================
-
 func TestCommandFailureHintGenerator_ReturnsPermissionHint_ForExitCode126(t *testing.T) {
 	// Given: Command execution failed with exit code 126 (permission denied)
 	structErr := domainerrors.NewStructuredError(
@@ -2908,10 +2852,6 @@ func TestCommandFailureHintGenerator_HandlesFloatExitCode(t *testing.T) {
 	// Then
 	assert.NotNil(t, hints, "should handle float exit codes gracefully")
 }
-
-// =============================================================================
-// CommandFailureHintGenerator Tests (Edge Cases)
-// =============================================================================
 
 func TestCommandFailureHintGenerator_ReturnsEmptySlice_ForWrongErrorCode(t *testing.T) {
 	// Given: Error with different error code
@@ -3107,10 +3047,6 @@ func TestCommandFailureHintGenerator_HandlesCommandWithSpecialCharacters(t *test
 	// Then
 	assert.NotNil(t, hints, "should handle commands with special characters")
 }
-
-// =============================================================================
-// CommandFailureHintGenerator Tests (Error Handling)
-// =============================================================================
 
 func TestCommandFailureHintGenerator_HandlesInvalidExitCodeType(t *testing.T) {
 	// Given: Exit code is not a number (e.g., boolean)
@@ -3329,10 +3265,6 @@ func TestCommandFailureHintGenerator_HandlesExitCode2_MisuseOfShellBuiltin(t *te
 	// Then
 	assert.NotNil(t, hints, "should handle exit code 2")
 }
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 // containsSubstring checks if a string contains a substring (case-insensitive for robustness)
 func containsSubstring(s, substr string) bool {

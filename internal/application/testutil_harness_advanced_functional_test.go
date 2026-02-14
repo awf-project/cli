@@ -12,10 +12,7 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
-// ServiceTestHarness Advanced Functional Tests
 // Feature: C012 - Application Test Harness for Service Layer
-// =============================================================================
 //
 // This file contains ADVANCED functional tests that validate ServiceTestHarness
 // works with complex features like hooks, custom state stores, and custom executors.
@@ -27,17 +24,11 @@ import (
 // - Thread Safety: Concurrent workflow execution
 //
 // Test count: 6+ advanced functional tests
-// =============================================================================
-
-// =============================================================================
-// Hooks Integration
-// =============================================================================
 
 func TestHarnessFunctional_WorkflowWithHooks_ExecutesHooksCorrectly(t *testing.T) {
 	// Demonstrates: Harness supports workflows with lifecycle hooks
 	// Validates: Hooks execute at correct workflow lifecycle points
 
-	// Arrange: Workflow with WorkflowStart and WorkflowEnd hooks
 	wf := &workflow.Workflow{
 		Name:    "workflow-with-hooks",
 		Initial: "main-task",
@@ -64,7 +55,6 @@ func TestHarnessFunctional_WorkflowWithHooks_ExecutesHooksCorrectly(t *testing.T
 		},
 	}
 
-	// Act: Set up with harness, configure results for workflow and hooks
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("workflow-with-hooks", wf).
 		WithCommandResult("echo 'Workflow started'", &ports.CommandResult{
@@ -83,7 +73,6 @@ func TestHarnessFunctional_WorkflowWithHooks_ExecutesHooksCorrectly(t *testing.T
 
 	ctx, err := svc.Run(context.Background(), "workflow-with-hooks", nil)
 
-	// Assert: Workflow completes successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep)
@@ -96,7 +85,6 @@ func TestHarnessFunctional_WorkflowWithFailureHooks_ExecutesOnFailure(t *testing
 	// Demonstrates: Harness handles failure hooks correctly
 	// Validates: WorkflowError hooks execute when workflow fails
 
-	// Arrange: Workflow with WorkflowError hook
 	wf := &workflow.Workflow{
 		Name:    "workflow-with-failure-hook",
 		Initial: "failing-task",
@@ -126,7 +114,6 @@ func TestHarnessFunctional_WorkflowWithFailureHooks_ExecutesOnFailure(t *testing
 		},
 	}
 
-	// Act: Configure failure and cleanup hook
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("workflow-with-failure-hook", wf).
 		WithCommandResult("exit 1", &ports.CommandResult{
@@ -141,7 +128,6 @@ func TestHarnessFunctional_WorkflowWithFailureHooks_ExecutesOnFailure(t *testing
 
 	ctx, err := svc.Run(context.Background(), "workflow-with-failure-hook", nil)
 
-	// Assert: Workflow fails as expected
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal failure")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
@@ -155,7 +141,6 @@ func TestHarnessFunctional_StepWithHooks_ExecutesStepHooks(t *testing.T) {
 	// Demonstrates: Harness supports step-level hooks
 	// Validates: Step Post hooks execute correctly
 
-	// Arrange: Workflow with step-level hooks
 	wf := &workflow.Workflow{
 		Name:    "step-level-hooks",
 		Initial: "task-with-hooks",
@@ -179,7 +164,6 @@ func TestHarnessFunctional_StepWithHooks_ExecutesStepHooks(t *testing.T) {
 		},
 	}
 
-	// Act: Configure task and step hook results
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("step-level-hooks", wf).
 		WithCommandResult("echo 'Task execution'", &ports.CommandResult{
@@ -194,20 +178,14 @@ func TestHarnessFunctional_StepWithHooks_ExecutesStepHooks(t *testing.T) {
 
 	ctx, err := svc.Run(context.Background(), "step-level-hooks", nil)
 
-	// Assert: Workflow completes with step hooks executed
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
-
-// =============================================================================
-// State Management - Custom State Store
-// =============================================================================
 
 func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 	// Demonstrates: Harness supports custom state store injection
 	// Validates: Custom state store receives and persists workflow state
 
-	// Arrange: Create custom state store that tracks state saves
 	customStore := testutil.NewMockStateStore()
 
 	wf := &workflow.Workflow{
@@ -234,7 +212,6 @@ func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 		},
 	}
 
-	// Act: Inject custom state store via WithStateStore
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("stateful-workflow", wf).
 		WithStateStore(customStore).
@@ -244,7 +221,6 @@ func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 
 	ctx, err := svc.Run(context.Background(), "stateful-workflow", nil)
 
-	// Assert: Workflow completes successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 
@@ -257,15 +233,10 @@ func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 	assert.NotNil(t, savedState, "State should be persisted")
 }
 
-// =============================================================================
-// Executor Customization
-// =============================================================================
-
 func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 	// Demonstrates: Harness supports custom executor injection
 	// Validates: Custom executor can replace default mock executor
 
-	// Arrange: Create custom executor with specific result
 	customExecutor := testutil.NewMockCommandExecutor()
 	customExecutor.SetCommandResult("custom command", &ports.CommandResult{
 		Stdout:   "Custom executor output\n",
@@ -290,7 +261,6 @@ func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 		},
 	}
 
-	// Act: Inject custom executor via WithExecutor
 	svc, mocks := NewTestHarness(t).
 		WithWorkflow("custom-executor-workflow", wf).
 		WithExecutor(customExecutor).
@@ -298,7 +268,6 @@ func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 
 	ctx, err := svc.Run(context.Background(), "custom-executor-workflow", nil)
 
-	// Assert: Workflow completes using custom executor
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 
@@ -311,15 +280,10 @@ func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 	assert.Contains(t, stepState.Output, "Custom executor output", "Should use custom executor result")
 }
 
-// =============================================================================
-// Thread Safety - Concurrent Execution
-// =============================================================================
-
 func TestHarnessFunctional_ConcurrentWorkflows_ThreadSafe(t *testing.T) {
 	// Demonstrates: Harness supports concurrent workflow execution
 	// Validates: Multiple workflows can execute safely in parallel
 
-	// Arrange: Create two independent workflows
 	wf1 := &workflow.Workflow{
 		Name:    "concurrent-wf-1",
 		Initial: "task1",
@@ -348,7 +312,6 @@ func TestHarnessFunctional_ConcurrentWorkflows_ThreadSafe(t *testing.T) {
 		},
 	}
 
-	// Act: Build service with both workflows
 	svc, _ := NewTestHarness(t).
 		WithWorkflow("concurrent-wf-1", wf1).
 		WithWorkflow("concurrent-wf-2", wf2).
@@ -376,7 +339,6 @@ func TestHarnessFunctional_ConcurrentWorkflows_ThreadSafe(t *testing.T) {
 	wg.Wait()
 	close(results)
 
-	// Assert: Both workflows complete without errors
 	errorCount := 0
 	for err := range results {
 		if err != nil {

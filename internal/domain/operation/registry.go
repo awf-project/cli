@@ -19,7 +19,6 @@ type OperationRegistry struct {
 	operations map[string]Operation
 }
 
-// NewOperationRegistry creates an empty operation registry.
 func NewOperationRegistry() *OperationRegistry {
 	return &OperationRegistry{
 		operations: make(map[string]Operation),
@@ -69,8 +68,6 @@ func (r *OperationRegistry) Get(name string) (Operation, bool) {
 	return op, found
 }
 
-// List returns all registered operations.
-// Returns an empty slice if no operations are registered.
 func (r *OperationRegistry) List() []Operation {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -86,8 +83,6 @@ func (r *OperationRegistry) List() []Operation {
 	return ops
 }
 
-// GetOperation returns an operation schema by name.
-// Implements ports.OperationProvider.
 func (r *OperationRegistry) GetOperation(name string) (*plugin.OperationSchema, bool) {
 	op, found := r.Get(name)
 	if !found {
@@ -96,8 +91,6 @@ func (r *OperationRegistry) GetOperation(name string) (*plugin.OperationSchema, 
 	return op.Schema(), true
 }
 
-// ListOperations returns all available operation schemas.
-// Implements ports.OperationProvider.
 func (r *OperationRegistry) ListOperations() []*plugin.OperationSchema {
 	ops := r.List()
 	if len(ops) == 0 {
@@ -111,8 +104,6 @@ func (r *OperationRegistry) ListOperations() []*plugin.OperationSchema {
 	return schemas
 }
 
-// Execute runs a registered operation with input validation.
-// Implements ports.OperationProvider.
 func (r *OperationRegistry) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
 	op, found := r.Get(name)
 	if !found {

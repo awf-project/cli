@@ -12,11 +12,8 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Retry Integration Tests
 // Feature: C008 - Test File Restructuring
 // Component: extract_retry_tests
-// =============================================================================
 //
 // This file contains all retry-related integration tests for ExecutionService.
 // Tests verify retry policies, backoff strategies, max attempts, retryable exit codes,
@@ -24,7 +21,6 @@ import (
 //
 // Extracted from: execution_service_test.go (lines 623-1085, 3033-3097)
 // Test count: 10 retry-related tests
-// =============================================================================
 
 // Mock types are defined in execution_service_specialized_mocks_test.go
 
@@ -463,7 +459,6 @@ func TestStepExecutorCallback_RetryPattern_ReturnsLoopNameAndNil(t *testing.T) {
 		t.Skip("skipping slow retry pattern integration test")
 	}
 
-	// Arrange: Setup workflow with retry pattern (on_failure -> loop)
 	repo := newMockRepository()
 	repo.workflows["loop-retry"] = &workflow.Workflow{
 		Name:    "loop-retry",
@@ -516,10 +511,8 @@ func TestStepExecutorCallback_RetryPattern_ReturnsLoopNameAndNil(t *testing.T) {
 		evaluator,
 	)
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "loop-retry", nil)
 
-	// Assert: Workflow completes after hitting max iterations
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep, "should complete via on_complete after max iterations")

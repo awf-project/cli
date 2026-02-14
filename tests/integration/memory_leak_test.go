@@ -19,10 +19,6 @@ import (
 // Feature: C019 - Resource Management Fixes
 // T016 - Integration tests for goroutine leak and memory bounds validation
 
-// =============================================================================
-// Goroutine Leak Tests (T001, T006)
-// =============================================================================
-
 // TestNoGoroutineLeak_NormalWorkflow verifies that a workflow completing normally
 // does not leak goroutines from signal handlers or other concurrent operations.
 // This test validates the fix for T001 (signal_handler_extraction).
@@ -205,10 +201,6 @@ states:
 		"goroutine leak detected after cancellation: before=%d, after=%d", before, after)
 }
 
-// =============================================================================
-// Memory Bounds Tests (T002, T003, T004, T007)
-// =============================================================================
-
 // TestMemoryBounds_10000Iterations verifies that workflows with 10,000 loop iterations
 // stay under 2GB memory usage when MaxRetainedIterations is configured.
 // This test validates the fix for T004 (loop_iteration_pruning).
@@ -277,7 +269,6 @@ states:
 		memoryUsed = 0
 	}
 
-	// Assert memory usage under 2GB (acceptance criterion from plan)
 	twoGB := uint64(2 * 1024 * 1024 * 1024)
 	assert.Less(t, memoryUsed, twoGB,
 		"memory usage exceeded 2GB: used=%d MB", memoryUsed/(1024*1024))
@@ -448,10 +439,6 @@ states:
 		"memory usage should be bounded by streaming: used=%d MB", memoryUsed/(1024*1024))
 }
 
-// =============================================================================
-// Backward Compatibility Tests
-// =============================================================================
-
 // TestBackwardCompatibility_DefaultBehavior verifies that workflows without
 // the new C019 configuration fields behave exactly as before (unlimited memory).
 func TestBackwardCompatibility_DefaultBehavior(t *testing.T) {
@@ -568,9 +555,5 @@ states:
 	// Note: MaxRetainedIterations=0 means unlimited (backward compatible default)
 	// Unit tests verify PrunedCount=0 directly; integration tests verify behavior
 }
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
 
 // Note: setupTestWorkflowService is now defined in test_helpers.go for shared use

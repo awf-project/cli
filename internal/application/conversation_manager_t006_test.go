@@ -11,9 +11,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Component T006 Tests - Fix Empty Prompt Bug in Multi-Turn Conversations
-// =============================================================================
 //
 // Component T006: Fix empty prompt bug at conversation_manager.go:252
 // - Replace `resolvedPrompt = ""` with `resolvedPrompt = step.Agent.Prompt`
@@ -23,13 +20,11 @@ import (
 // 1. Subsequent turns use configured prompt instead of empty string
 // 2. Multi-turn conversations complete successfully
 // 3. The fix maintains backward compatibility with single-turn conversations
-// =============================================================================
 
 // TestConversationManager_T006_HappyPath_MultiTurnWithConfiguredPrompt verifies
 // that subsequent turns use the configured prompt from step.Agent.Prompt instead
 // of an empty string.
 func TestConversationManager_T006_HappyPath_MultiTurnWithConfiguredPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false} // Never stop on condition
 	resolver := newMockResolver()
@@ -119,14 +114,12 @@ func TestConversationManager_T006_HappyPath_MultiTurnWithConfiguredPrompt(t *tes
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.NotNil(t, result.State)
-	assert.Equal(t, 3, result.State.TotalTurns, "should complete all 3 turns")
+	assert.Equal(t, 3, result.State.TotalTurns)
 
 	// Verify prompts: turn 1 uses InitialPrompt, turns 2-3 use Prompt
 	require.Len(t, receivedPrompts, 3, "should have received 3 prompts")
@@ -138,7 +131,6 @@ func TestConversationManager_T006_HappyPath_MultiTurnWithConfiguredPrompt(t *tes
 // TestConversationManager_T006_HappyPath_MultiTurnWithOnlyPrompt verifies
 // that subsequent turns work when only Prompt is configured (no InitialPrompt).
 func TestConversationManager_T006_HappyPath_MultiTurnWithOnlyPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -205,10 +197,8 @@ func TestConversationManager_T006_HappyPath_MultiTurnWithOnlyPrompt(t *testing.T
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.State.TotalTurns)
@@ -222,7 +212,6 @@ func TestConversationManager_T006_HappyPath_MultiTurnWithOnlyPrompt(t *testing.T
 // TestConversationManager_T006_HappyPath_SingleTurnBackwardCompatibility verifies
 // that the fix doesn't break single-turn conversations.
 func TestConversationManager_T006_HappyPath_SingleTurnBackwardCompatibility(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -266,10 +255,8 @@ func TestConversationManager_T006_HappyPath_SingleTurnBackwardCompatibility(t *t
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 1, result.State.TotalTurns)
@@ -279,7 +266,6 @@ func TestConversationManager_T006_HappyPath_SingleTurnBackwardCompatibility(t *t
 // TestConversationManager_T006_EdgeCase_HighTurnCount verifies that conversations
 // with many turns (10+) continue using the configured prompt.
 func TestConversationManager_T006_EdgeCase_HighTurnCount(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -333,10 +319,8 @@ func TestConversationManager_T006_EdgeCase_HighTurnCount(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, maxTurns, result.State.TotalTurns)
@@ -353,7 +337,6 @@ func TestConversationManager_T006_EdgeCase_HighTurnCount(t *testing.T) {
 // when Prompt field is empty (should fail validation, but if it reaches execution,
 // should handle gracefully).
 func TestConversationManager_T006_EdgeCase_EmptyPromptConfiguration(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -393,10 +376,8 @@ func TestConversationManager_T006_EdgeCase_EmptyPromptConfiguration(t *testing.T
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	// Note: This tests current behavior - if Prompt is empty, subsequent turns
 	// should use empty string (which may fail at provider level).
 	// The fix ensures we use step.Agent.Prompt, even if it's empty.
@@ -407,7 +388,6 @@ func TestConversationManager_T006_EdgeCase_EmptyPromptConfiguration(t *testing.T
 // TestConversationManager_T006_EdgeCase_PromptInterpolation verifies that
 // the prompt is re-interpolated for each turn.
 func TestConversationManager_T006_EdgeCase_PromptInterpolation(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	tokenizer := &mockTokenizer{count: 10}
@@ -477,10 +457,8 @@ func TestConversationManager_T006_EdgeCase_PromptInterpolation(t *testing.T) {
 		return ctx
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -493,7 +471,6 @@ func TestConversationManager_T006_EdgeCase_PromptInterpolation(t *testing.T) {
 // TestConversationManager_T006_ErrorHandling_ProviderFailsOnEmptyPrompt verifies
 // that if a provider rejects empty prompts, the error is properly propagated.
 func TestConversationManager_T006_ErrorHandling_ProviderFailsOnEmptyPrompt(t *testing.T) {
-	// Arrange
 	logger := newMockLogger()
 	evaluator := &mockEvaluator{result: false}
 	resolver := newMockResolver()
@@ -550,20 +527,14 @@ func TestConversationManager_T006_ErrorHandling_ProviderFailsOnEmptyPrompt(t *te
 		return interpolation.NewContext()
 	}
 
-	// Act
 	result, err := mgr.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
 
-	// Assert
 	// With the fix, this should succeed because turn 2 uses step.Agent.Prompt
 	// Without the fix, this would fail with ErrPromptEmpty
 	require.NoError(t, err, "should not fail when prompt is configured")
 	require.NotNil(t, result)
 	assert.Equal(t, 2, result.State.TotalTurns)
 }
-
-// =============================================================================
-// Test Helpers for Component T006
-// =============================================================================
 
 // mockAgentProviderWithPromptTracking tracks prompts received for verification
 type mockAgentProviderWithPromptTracking struct {

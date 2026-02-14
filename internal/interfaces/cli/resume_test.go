@@ -14,10 +14,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// Resume Command Unit Tests (F013)
-// =============================================================================
-
 func TestResumeCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
@@ -592,10 +588,6 @@ func TestResumeCommand_MultipleInputOverrides(t *testing.T) {
 	t.Error("resume command not found")
 }
 
-// =============================================================================
-// SQLite History Store Integration Tests (bug-48)
-// =============================================================================
-
 func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	// Test that resume command creates history.db (SQLite) instead of Badger directory
 	tmpDir := setupTestDir(t)
@@ -716,10 +708,6 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 		assert.NoError(t, err, "concurrent resume --list should not fail with lock errors")
 	}
 }
-
-// =============================================================================
-// T008: Config Integration Tests for Resume Command (F036)
-// =============================================================================
 
 // TestResumeCommand_ConfigIntegration tests that runResume properly integrates
 // with loadProjectConfig and mergeInputs.

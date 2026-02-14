@@ -17,14 +17,12 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // Parallel Execution Integration Tests (C009)
 // Tests validate CLI-level parallel execution for all strategies:
 // - all_succeed: workflow fails if any branch fails
 // - any_succeed: workflow succeeds if any branch succeeds
 // - best_effort: all branches complete regardless of failures
 // Also tests max_concurrent limit enforcement and failure propagation.
-// =============================================================================
 
 // TestParallelExecution_AllSucceedStrategy validates all_succeed strategy
 // Strategy behavior: workflow fails if ANY branch fails
@@ -160,7 +158,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -181,24 +178,20 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
-			assert.Equal(t, tt.expectedStatus, execCtx.Status, "workflow status mismatch")
-			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "final step mismatch")
+			assert.Equal(t, tt.expectedStatus, execCtx.Status)
+			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep)
 
-			// Assert - Layer 3: Output verification (all branches must have state)
 			parallelState, ok := execCtx.GetStepState("parallel_step")
-			require.True(t, ok, "parallel step state not found")
+			require.True(t, ok)
 			require.NotNil(t, parallelState)
 
 			// Verify all branches were executed
@@ -346,7 +339,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -367,24 +359,20 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
-			assert.Equal(t, tt.expectedStatus, execCtx.Status, "workflow status mismatch")
-			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "final step mismatch")
+			assert.Equal(t, tt.expectedStatus, execCtx.Status)
+			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep)
 
-			// Assert - Layer 3: Output verification
 			parallelState, ok := execCtx.GetStepState("parallel_step")
-			require.True(t, ok, "parallel step state not found")
+			require.True(t, ok)
 			require.NotNil(t, parallelState)
 
 			// Verify all branches were attempted
@@ -532,7 +520,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -553,24 +540,20 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
-			assert.Equal(t, tt.expectedStatus, execCtx.Status, "workflow status mismatch")
-			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "final step mismatch")
+			assert.Equal(t, tt.expectedStatus, execCtx.Status)
+			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep)
 
-			// Assert - Layer 3: Output verification
 			parallelState, ok := execCtx.GetStepState("parallel_step")
-			require.True(t, ok, "parallel step state not found")
+			require.True(t, ok)
 			require.NotNil(t, parallelState)
 
 			// Verify all branches completed (critical for best_effort)
@@ -688,7 +671,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -709,20 +691,16 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow with timing measurement
 			startTime := time.Now()
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 			elapsed := time.Since(startTime)
 
-			// Assert - Layer 1: Error checking
 			require.NoError(t, err)
 			require.NotNil(t, execCtx)
 
-			// Assert - Layer 2: Status verification
-			assert.Equal(t, workflow.StatusCompleted, execCtx.Status, "workflow status mismatch")
-			assert.Equal(t, "done", execCtx.CurrentStep, "final step mismatch")
+			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+			assert.Equal(t, "done", execCtx.CurrentStep)
 
-			// Assert - Layer 3: Timing verification (validates concurrency limit)
 			verifyTimingConstraints(t, elapsed, tt.minDuration, tt.maxDuration)
 
 			// Verify all branches completed
@@ -862,7 +840,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange: Setup test environment
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -883,41 +860,35 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act: Execute workflow
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 
-			// Assert - Layer 1: Error checking
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			// Assert - Layer 2: Status verification
 			require.NotNil(t, execCtx)
-			assert.Equal(t, tt.expectedStatus, execCtx.Status, "workflow status mismatch")
-			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep, "final step mismatch")
+			assert.Equal(t, tt.expectedStatus, execCtx.Status)
+			assert.Equal(t, tt.expectedStep, execCtx.CurrentStep)
 
-			// Assert - Layer 3: Verify branch error details in state
 			branchState, ok := execCtx.GetStepState(tt.failedBranch)
-			require.True(t, ok, "failed branch state not found")
-			require.NotNil(t, branchState, "failed branch state is nil")
+			require.True(t, ok)
+			require.NotNil(t, branchState)
 
 			// Verify failure was captured
-			assert.Equal(t, workflow.StatusFailed, branchState.Status, "branch should have failed status")
-			assert.Equal(t, tt.expectedCode, branchState.ExitCode, "exit code mismatch")
+			assert.Equal(t, workflow.StatusFailed, branchState.Status)
+			assert.Equal(t, tt.expectedCode, branchState.ExitCode)
 
 			// Verify error message is populated
-			assert.NotEmpty(t, branchState.Error, "error message should be populated")
+			assert.NotEmpty(t, branchState.Error)
 		})
 	}
 }
 
-// =============================================================================
 // B004 Bug Fix: Parallel Branch Validation (Integration Level)
 // Tests validate YAML → domain validation flow for parallel branch children
 // without required transitions (exemption from transition requirements)
-// =============================================================================
 
 // TestParallelValidation_BranchChildrenWithoutTransitions validates B004 fix:
 // parallel branch children should not require on_success/on_failure transitions.
@@ -1241,7 +1212,6 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -1261,10 +1231,8 @@ states:
 				WithLogger(logger).
 				Build()
 
-			// Act
 			execCtx, err := svc.Run(ctx, "workflow", nil)
 
-			// Assert
 			if tt.wantErr {
 				require.Error(t, err, tt.description)
 			} else {
@@ -1276,10 +1244,6 @@ states:
 		})
 	}
 }
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
 
 // verifyTimingConstraints validates execution duration with CI-friendly margins
 // ADR-004: Use 3x margin for CI variability to prevent flaky tests

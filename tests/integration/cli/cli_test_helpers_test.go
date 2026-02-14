@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// =============================================================================
-// Shared Test Helpers for CLI Integration Tests
-// =============================================================================
-
 // setupTestDir creates a temporary directory for test isolation.
 // Use this when you need a clean directory for XDG_CONFIG_HOME or similar.
 // Does NOT change the current working directory.

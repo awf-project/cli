@@ -17,9 +17,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// F019: Dry-Run Mode - Functional Tests
-// =============================================================================
 //
 // Acceptance Criteria:
 // - [x] `awf run --dry-run` shows execution plan
@@ -29,11 +26,8 @@ import (
 // - [x] Show hooks that would run
 // - [x] No side effects (no files written, commands run)
 //
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // Happy Path Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_SimpleWorkflow_ShowsExecutionPlan_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -47,16 +41,16 @@ func TestDryRun_SimpleWorkflow_ShowsExecutionPlan_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "valid-simple", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify execution plan structure
-	assert.Contains(t, output, "Dry Run: simple-workflow", "should contain workflow name in header")
-	assert.Contains(t, output, "Execution Plan:", "should contain execution plan section")
-	assert.Contains(t, output, "start", "should list the start step")
-	assert.Contains(t, output, "done", "should list the done step")
-	assert.Contains(t, output, "No commands will be executed", "should have dry-run footer")
+	assert.Contains(t, output, "Dry Run: simple-workflow")
+	assert.Contains(t, output, "Execution Plan:")
+	assert.Contains(t, output, "start")
+	assert.Contains(t, output, "done")
+	assert.Contains(t, output, "No commands will be executed")
 }
 
 func TestDryRun_WithInputs_ResolvesInterpolation_Integration(t *testing.T) {
@@ -76,14 +70,14 @@ func TestDryRun_WithInputs_ResolvesInterpolation_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run with inputs should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify input interpolation in commands
-	assert.Contains(t, output, "/path/to/test.txt", "should show resolved file_path in commands")
-	assert.Contains(t, output, "Inputs:", "should have inputs section")
-	assert.Contains(t, output, "file_path:", "should list file_path input")
+	assert.Contains(t, output, "/path/to/test.txt")
+	assert.Contains(t, output, "Inputs:")
+	assert.Contains(t, output, "file_path:")
 }
 
 func TestDryRun_ShowsDefaultInputValues_Integration(t *testing.T) {
@@ -108,8 +102,8 @@ func TestDryRun_ShowsDefaultInputValues_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify default values are displayed
-	assert.Contains(t, output, "count:", "should list count input")
-	assert.Contains(t, output, "(default)", "should indicate default values")
+	assert.Contains(t, output, "count:")
+	assert.Contains(t, output, "(default)")
 }
 
 func TestDryRun_ParallelWorkflow_ShowsBranchesAndStrategy_Integration(t *testing.T) {
@@ -124,16 +118,16 @@ func TestDryRun_ParallelWorkflow_ShowsBranchesAndStrategy_Integration(t *testing
 	cmd.SetArgs([]string{"run", "valid-parallel", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run of parallel workflow should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify parallel step details
-	assert.Contains(t, output, "[PARALLEL]", "should show parallel step marker")
-	assert.Contains(t, output, "Branches:", "should list branches")
-	assert.Contains(t, output, "task_a", "should show branch task_a")
-	assert.Contains(t, output, "Strategy:", "should show strategy")
-	assert.Contains(t, output, "best_effort", "should show best_effort strategy")
+	assert.Contains(t, output, "[PARALLEL]")
+	assert.Contains(t, output, "Branches:")
+	assert.Contains(t, output, "task_a")
+	assert.Contains(t, output, "Strategy:")
+	assert.Contains(t, output, "best_effort")
 }
 
 func TestDryRun_ForEachLoop_ShowsLoopConfiguration_Integration(t *testing.T) {
@@ -148,15 +142,15 @@ func TestDryRun_ForEachLoop_ShowsLoopConfiguration_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "loop-foreach", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run of loop workflow should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify loop configuration
-	assert.Contains(t, output, "[LOOP:for_each]", "should show for_each loop marker")
-	assert.Contains(t, output, "Items:", "should show items expression")
-	assert.Contains(t, output, "Body:", "should show body steps")
-	assert.Contains(t, output, "Max iterations:", "should show max iterations")
+	assert.Contains(t, output, "[LOOP:for_each]")
+	assert.Contains(t, output, "Items:")
+	assert.Contains(t, output, "Body:")
+	assert.Contains(t, output, "Max iterations:")
 }
 
 func TestDryRun_WhileLoop_ShowsCondition_Integration(t *testing.T) {
@@ -171,13 +165,13 @@ func TestDryRun_WhileLoop_ShowsCondition_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "loop-while", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run of while loop should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify while loop configuration
-	assert.Contains(t, output, "[LOOP:while]", "should show while loop marker")
-	assert.Contains(t, output, "Condition:", "should show condition")
+	assert.Contains(t, output, "[LOOP:while]")
+	assert.Contains(t, output, "Condition:")
 }
 
 func TestDryRun_NestedLoops_ShowsBothLoops_Integration(t *testing.T) {
@@ -192,13 +186,13 @@ func TestDryRun_NestedLoops_ShowsBothLoops_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "loop-nested", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run of nested loops should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify both loops are shown
-	assert.Contains(t, output, "outer_loop", "should show outer loop")
-	assert.Contains(t, output, "inner_loop", "should show inner loop")
+	assert.Contains(t, output, "outer_loop")
+	assert.Contains(t, output, "inner_loop")
 }
 
 func TestDryRun_WithHooks_ShowsPrePostHooks_Integration(t *testing.T) {
@@ -213,13 +207,13 @@ func TestDryRun_WithHooks_ShowsPrePostHooks_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "valid-with-hooks", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run of workflow with hooks should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify hooks are displayed
-	assert.Contains(t, output, "Hook (pre):", "should show pre hooks")
-	assert.Contains(t, output, "Hook (post):", "should show post hooks")
+	assert.Contains(t, output, "Hook (pre):")
+	assert.Contains(t, output, "Hook (post):")
 }
 
 func TestDryRun_WithRetry_ShowsRetryConfiguration_Integration(t *testing.T) {
@@ -244,9 +238,9 @@ func TestDryRun_WithRetry_ShowsRetryConfiguration_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify retry configuration
-	assert.Contains(t, output, "Retry:", "should show retry section")
-	assert.Contains(t, output, "3 attempts", "should show max attempts")
-	assert.Contains(t, output, "exponential", "should show backoff strategy")
+	assert.Contains(t, output, "Retry:")
+	assert.Contains(t, output, "3 attempts")
+	assert.Contains(t, output, "exponential")
 }
 
 func TestDryRun_WithCapture_ShowsCaptureConfiguration_Integration(t *testing.T) {
@@ -271,9 +265,9 @@ func TestDryRun_WithCapture_ShowsCaptureConfiguration_Integration(t *testing.T) 
 	output := buf.String()
 
 	// Verify capture configuration
-	assert.Contains(t, output, "Capture:", "should show capture section")
-	assert.Contains(t, output, "stdout", "should show stdout capture")
-	assert.Contains(t, output, "file_content", "should show capture variable name")
+	assert.Contains(t, output, "Capture:")
+	assert.Contains(t, output, "stdout")
+	assert.Contains(t, output, "file_content")
 }
 
 func TestDryRun_WithTimeout_ShowsTimeoutValue_Integration(t *testing.T) {
@@ -298,7 +292,7 @@ func TestDryRun_WithTimeout_ShowsTimeoutValue_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify timeout is displayed
-	assert.Contains(t, output, "Timeout:", "should show timeout section")
+	assert.Contains(t, output, "Timeout:")
 }
 
 func TestDryRun_ShowsTransitions_Integration(t *testing.T) {
@@ -318,8 +312,8 @@ func TestDryRun_ShowsTransitions_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify transitions are shown
-	assert.Contains(t, output, "on_success:", "should show success transitions")
-	assert.Contains(t, output, "on_failure:", "should show failure transitions")
+	assert.Contains(t, output, "on_success:")
+	assert.Contains(t, output, "on_failure:")
 }
 
 func TestDryRun_ConditionalTransitions_ShowsAllPaths_Integration(t *testing.T) {
@@ -344,9 +338,9 @@ func TestDryRun_ConditionalTransitions_ShowsAllPaths_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify conditional transitions are shown
-	assert.Contains(t, output, "when", "should show conditional transitions")
-	assert.Contains(t, output, "verbose_output", "should show verbose_output target")
-	assert.Contains(t, output, "large_count_handler", "should show large_count_handler target")
+	assert.Contains(t, output, "when")
+	assert.Contains(t, output, "verbose_output")
+	assert.Contains(t, output, "large_count_handler")
 }
 
 func TestDryRun_WithWorkingDirectory_ShowsDir_Integration(t *testing.T) {
@@ -366,8 +360,8 @@ func TestDryRun_WithWorkingDirectory_ShowsDir_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify working directory is displayed
-	assert.Contains(t, output, "Dir:", "should show working directory")
-	assert.Contains(t, output, "/tmp", "should show actual directory path")
+	assert.Contains(t, output, "Dir:")
+	assert.Contains(t, output, "/tmp")
 }
 
 func TestDryRun_ContinueOnError_ShowsFlag_Integration(t *testing.T) {
@@ -392,7 +386,7 @@ func TestDryRun_ContinueOnError_ShowsFlag_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify continue_on_error is shown
-	assert.Contains(t, output, "Continue on error:", "should show continue_on_error flag")
+	assert.Contains(t, output, "Continue on error:")
 }
 
 func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
@@ -412,7 +406,7 @@ func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify terminal steps with status
-	assert.Contains(t, output, "[T]", "should show terminal marker")
+	assert.Contains(t, output, "[T]")
 	// At least one terminal step should be shown
 	assert.True(t,
 		strings.Contains(output, "done") || strings.Contains(output, "error"),
@@ -420,9 +414,7 @@ func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
 	)
 }
 
-// -----------------------------------------------------------------------------
 // JSON Output Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_JSONOutput_ValidJSON_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -441,16 +433,16 @@ func TestDryRun_JSONOutput_ValidJSON_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run with JSON output should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify valid JSON
 	var plan workflow.DryRunPlan
 	err = json.Unmarshal([]byte(output), &plan)
-	require.NoError(t, err, "output should be valid JSON")
+	require.NoError(t, err)
 	assert.Equal(t, "simple-workflow", plan.WorkflowName)
-	assert.NotEmpty(t, plan.Steps, "should have steps")
+	assert.NotEmpty(t, plan.Steps)
 }
 
 func TestDryRun_JSONOutput_ContainsAllFields_Integration(t *testing.T) {
@@ -487,7 +479,7 @@ func TestDryRun_JSONOutput_ContainsAllFields_Integration(t *testing.T) {
 
 	// Verify inputs are included
 	filePathInput, ok := plan.Inputs["file_path"]
-	assert.True(t, ok, "should have file_path input")
+	assert.True(t, ok)
 	assert.Equal(t, "/test.txt", filePathInput.Value)
 }
 
@@ -521,16 +513,14 @@ func TestDryRun_JSONOutput_StepsHaveCorrectTypes_Integration(t *testing.T) {
 	for _, step := range plan.Steps {
 		if step.Type == workflow.StepTypeParallel {
 			hasParallelStep = true
-			assert.NotEmpty(t, step.Branches, "parallel step should have branches")
+			assert.NotEmpty(t, step.Branches)
 			break
 		}
 	}
-	assert.True(t, hasParallelStep, "should have a parallel step")
+	assert.True(t, hasParallelStep)
 }
 
-// -----------------------------------------------------------------------------
 // Quiet Mode Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_QuietMode_OutputsWorkflowNameOnly_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -549,15 +539,13 @@ func TestDryRun_QuietMode_OutputsWorkflowNameOnly_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run in quiet mode should succeed")
+	require.NoError(t, err)
 
 	output := strings.TrimSpace(buf.String())
-	assert.Equal(t, "simple-workflow", output, "quiet mode should output only workflow name")
+	assert.Equal(t, "simple-workflow", output)
 }
 
-// -----------------------------------------------------------------------------
 // No Side Effects Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_NoStateFiles_Created_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -572,12 +560,12 @@ func TestDryRun_NoStateFiles_Created_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "valid-simple", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run should succeed")
+	require.NoError(t, err)
 
 	// Verify no state files were created
 	entries, err := os.ReadDir(statesDir)
 	if err == nil {
-		assert.Empty(t, entries, "no state files should be created during dry-run")
+		assert.Empty(t, entries)
 	}
 	// It's also OK if the directory doesn't exist at all
 }
@@ -595,7 +583,7 @@ func TestDryRun_NoHistoryRecorded_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "valid-simple", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run should succeed")
+	require.NoError(t, err)
 
 	// Verify no history was recorded (directory should not exist or be empty)
 	entries, err := os.ReadDir(historyDir)
@@ -629,16 +617,14 @@ func TestDryRun_NoCommandExecution_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "valid-simple", "--dry-run", "--storage", tmpDir})
 
 	err = cmd.Execute()
-	require.NoError(t, err, "dry-run should succeed")
+	require.NoError(t, err)
 
 	// Verify marker file still exists (command that might delete it was not run)
 	_, err = os.Stat(markerFile)
-	assert.NoError(t, err, "marker file should still exist - commands should not run")
+	assert.NoError(t, err)
 }
 
-// -----------------------------------------------------------------------------
 // Error Handling Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_WorkflowNotFound_ReturnsError_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -653,7 +639,7 @@ func TestDryRun_WorkflowNotFound_ReturnsError_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "nonexistent-workflow", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	assert.Error(t, err, "dry-run of nonexistent workflow should fail")
+	assert.Error(t, err)
 }
 
 func TestDryRun_MissingRequiredInput_ReturnsError_Integration(t *testing.T) {
@@ -670,11 +656,11 @@ func TestDryRun_MissingRequiredInput_ReturnsError_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "dry-run-complete", "--dry-run", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	assert.Error(t, err, "dry-run with missing required input should fail")
+	assert.Error(t, err)
 
 	// Verify error message mentions the missing input
 	errOutput := errBuf.String() + buf.String() + err.Error()
-	assert.Contains(t, errOutput, "file_path", "error should mention missing input")
+	assert.Contains(t, errOutput, "file_path")
 }
 
 func TestDryRun_InvalidInputFormat_ReturnsError_Integration(t *testing.T) {
@@ -696,12 +682,10 @@ func TestDryRun_InvalidInputFormat_ReturnsError_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	assert.Error(t, err, "dry-run with invalid input format should fail")
+	assert.Error(t, err)
 }
 
-// -----------------------------------------------------------------------------
 // Edge Case Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_EmptyInputValue_Accepted_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -720,7 +704,7 @@ func TestDryRun_EmptyInputValue_Accepted_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run with empty input value should succeed")
+	require.NoError(t, err)
 }
 
 func TestDryRun_MultipleInputs_AllResolved_Integration(t *testing.T) {
@@ -742,14 +726,14 @@ func TestDryRun_MultipleInputs_AllResolved_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "dry-run with multiple inputs should succeed")
+	require.NoError(t, err)
 
 	output := buf.String()
 
 	// Verify all inputs are shown
 	assert.Contains(t, output, "file_path:", "should show file_path input")
 	assert.Contains(t, output, "count:", "should show count input")
-	assert.Contains(t, output, "verbose:", "should show verbose input")
+	assert.Contains(t, output, "verbose:")
 }
 
 func TestDryRun_WorkflowWithDescription_ShowsDescription_Integration(t *testing.T) {
@@ -774,7 +758,7 @@ func TestDryRun_WorkflowWithDescription_ShowsDescription_Integration(t *testing.
 	output := buf.String()
 
 	// Verify workflow description is shown
-	assert.Contains(t, output, "Complete workflow fixture", "should show workflow description")
+	assert.Contains(t, output, "Complete workflow fixture")
 }
 
 func TestDryRun_StepDescriptions_Shown_Integration(t *testing.T) {
@@ -799,12 +783,10 @@ func TestDryRun_StepDescriptions_Shown_Integration(t *testing.T) {
 	output := buf.String()
 
 	// Verify step descriptions are shown
-	assert.Contains(t, output, "Validate input file exists", "should show step description")
+	assert.Contains(t, output, "Validate input file exists")
 }
 
-// -----------------------------------------------------------------------------
 // Table-Driven Tests for Various Workflow Types
-// -----------------------------------------------------------------------------
 
 func TestDryRun_VariousWorkflows_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -911,9 +893,7 @@ func TestDryRun_VariousWorkflows_Integration(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Regression Tests
-// -----------------------------------------------------------------------------
 
 func TestDryRun_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 	originalPath := os.Getenv("AWF_WORKFLOWS_PATH")
@@ -931,8 +911,7 @@ func TestDryRun_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 
 	// Verify environment was not modified
 	currentPath := os.Getenv("AWF_WORKFLOWS_PATH")
-	assert.Equal(t, "../fixtures/workflows", currentPath,
-		"dry-run should not modify AWF_WORKFLOWS_PATH")
+	assert.Equal(t, "../fixtures/workflows", currentPath)
 
 	// Cleanup
 	if originalPath == "" {

@@ -25,10 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Happy Path Tests - Verification of acceptance criteria
-// =============================================================================
-
 // TestDocumentation_StatusFilterAlignment_Integration verifies that the
 // status filter documentation in commands.md uses "cancelled" consistently
 // with the actual implementation (StatusCancelled constant).
@@ -123,10 +119,6 @@ func TestFormatting_GofmtCompliance_Integration(t *testing.T) {
 		"all Go files should pass gofmt (zero diff). Run 'make fmt' to fix formatting issues.")
 }
 
-// =============================================================================
-// Edge Cases - Documentation semantics
-// =============================================================================
-
 // TestDocumentation_DescriptiveInterruptedText_Integration verifies that
 // descriptive uses of "interrupted" in documentation are preserved where
 // semantically correct.
@@ -159,10 +151,6 @@ func TestDocumentation_DescriptiveInterruptedText_Integration(t *testing.T) {
 
 	// No assertion here - this is informational to document ADR-001 trade-off
 }
-
-// =============================================================================
-// Integration Tests - Quality pipeline verification
-// =============================================================================
 
 // TestQualityPipeline_AllChecksPass_Integration verifies that the entire
 // quality pipeline (fmt + vet + lint + test) passes after C043 changes.
@@ -200,10 +188,6 @@ func TestQualityPipeline_AllChecksPass_Integration(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Error Handling Tests - File existence verification
-// =============================================================================
-
 // TestFileExistence_RequiredFiles_Integration verifies that all files
 // referenced in C043 tasks exist at their expected paths.
 //
@@ -225,6 +209,3 @@ func TestFileExistence_RequiredFiles_Integration(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Helper Functions
-// =============================================================================

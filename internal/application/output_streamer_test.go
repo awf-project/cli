@@ -50,7 +50,6 @@ func TestNewOutputStreamer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			streamer := application.NewOutputStreamer(tt.config)
 			require.NotNil(t, streamer)
-			assert.Equal(t, tt.config, streamer.Config())
 		})
 	}
 }
@@ -384,40 +383,13 @@ func TestOutputStreamer_CleanupTempFiles(t *testing.T) {
 	_, err = os.Stat(path)
 	require.NoError(t, err)
 
-	// Cleanup using streamer
-	err = streamer.Cleanup(path)
+	// Cleanup using os.Remove directly
+	err = os.Remove(path)
 	require.NoError(t, err)
 
 	// Verify file is deleted
 	_, err = os.Stat(path)
 	assert.True(t, os.IsNotExist(err), "file should be deleted after cleanup")
-}
-
-// TestOutputStreamer_Cleanup_NonexistentFile tests cleanup of nonexistent files (should not error).
-func TestOutputStreamer_Cleanup_NonexistentFile(t *testing.T) {
-	config := workflow.OutputLimits{
-		MaxSize:           100,
-		StreamLargeOutput: true,
-		TempDir:           t.TempDir(),
-	}
-	streamer := application.NewOutputStreamer(config)
-
-	// Should not error when cleaning up nonexistent file
-	err := streamer.Cleanup("/nonexistent/file/path.txt")
-	assert.NoError(t, err, "cleanup of nonexistent file should not error")
-}
-
-// TestOutputStreamer_Cleanup_EmptyPath tests cleanup with empty path (should not error).
-func TestOutputStreamer_Cleanup_EmptyPath(t *testing.T) {
-	config := workflow.OutputLimits{
-		MaxSize:           100,
-		StreamLargeOutput: true,
-		TempDir:           t.TempDir(),
-	}
-	streamer := application.NewOutputStreamer(config)
-
-	err := streamer.Cleanup("")
-	assert.NoError(t, err, "cleanup with empty path should not error")
 }
 
 // TestOutputStreamer_StreamOutput_SystemTempDir tests using system temp directory when not specified.
@@ -495,19 +467,6 @@ func TestOutputStreamer_StreamOutput_ConcurrentWrites(t *testing.T) {
 		// Cleanup
 		os.Remove(path)
 	}
-}
-
-// TestOutputStreamer_Config tests retrieving the configuration.
-func TestOutputStreamer_Config(t *testing.T) {
-	config := workflow.OutputLimits{
-		MaxSize:           2048,
-		StreamLargeOutput: true,
-		TempDir:           "/tmp/test",
-	}
-	streamer := application.NewOutputStreamer(config)
-
-	retrieved := streamer.Config()
-	assert.Equal(t, config, retrieved)
 }
 
 // TestOutputStreamer_StreamOutput_BoundaryValues tests edge cases around the size limit.

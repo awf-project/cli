@@ -22,24 +22,14 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// F048 Loop Body Transitions - Integration Tests
 // Consolidated from: f048_functional_test.go, loop_while_transitions_t009_test.go
-// =============================================================================
 
-// =============================================================================
-// Feature: F048 - Loop Body Transitions
 //
 // Comprehensive functional tests validating that transitions defined in
 // while/foreach loop body steps are honored correctly. These tests validate
 // the complete feature from end-to-end using real dependencies.
 //
 // Reference: .specify/implementation/F048/spec-content.md
-// =============================================================================
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
 
 // f048TestStore is a simple in-memory state store for F048 functional tests
 type f048TestStore struct {
@@ -200,10 +190,6 @@ func setupF048Test(t *testing.T, workflowYAML string) (*application.ExecutionSer
 	return execSvc, tmpDir, workflowName
 }
 
-// =============================================================================
-// HAPPY PATH TESTS
-// =============================================================================
-
 // TestHappyPath_SkipStepsInBody validates the main scenario from spec
 //
 // GIVEN a while loop with body steps containing transitions
@@ -262,10 +248,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -275,11 +259,11 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Contains(t, output, "run_tests", "run_tests should execute")
-	assert.Contains(t, output, "check_results", "check_results should execute")
-	assert.Contains(t, output, "run_fmt", "run_fmt should execute (transition target)")
-	assert.NotContains(t, output, "prepare_prompt", "prepare_prompt should be skipped")
-	assert.NotContains(t, output, "implement", "implement should be skipped")
+	assert.Contains(t, output, "run_tests")
+	assert.Contains(t, output, "check_results")
+	assert.Contains(t, output, "run_fmt")
+	assert.NotContains(t, output, "prepare_prompt")
+	assert.NotContains(t, output, "implement")
 }
 
 // TestHappyPath_ForEachWithTransitions validates transitions work in foreach loops
@@ -290,10 +274,6 @@ func TestHappyPath_ForEachWithTransitions(t *testing.T) {
 	// Skipped - foreach not yet implemented
 }
 */
-
-// =============================================================================
-// EDGE CASE TESTS
-// =============================================================================
 
 // TestEdgeCase_SkipToLastStep validates transition to the last step in body
 //
@@ -345,10 +325,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -358,8 +336,8 @@ states:
 
 	assert.Contains(t, output, "first")
 	assert.Contains(t, output, "last")
-	assert.NotContains(t, output, "middle1", "middle1 should be skipped")
-	assert.NotContains(t, output, "middle2", "middle2 should be skipped")
+	assert.NotContains(t, output, "middle1")
+	assert.NotContains(t, output, "middle2")
 }
 
 // TestEdgeCase_EarlyLoopExit validates transition outside loop body
@@ -408,10 +386,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -419,9 +395,9 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Contains(t, output, "check", "check should execute")
-	assert.Contains(t, output, "cleanup", "cleanup should execute after early exit")
-	assert.NotContains(t, output, "continue", "continue should be skipped")
+	assert.Contains(t, output, "check")
+	assert.Contains(t, output, "cleanup")
+	assert.NotContains(t, output, "continue")
 
 	// Verify loop only ran once (early exit)
 	lines := strings.Split(strings.TrimSpace(output), "\n")
@@ -431,7 +407,7 @@ states:
 			checkCount++
 		}
 	}
-	assert.Equal(t, 1, checkCount, "loop should exit after first iteration")
+	assert.Equal(t, 1, checkCount)
 }
 
 // TestEdgeCase_SingleStepBodyWithTransition validates single step body behavior
@@ -475,10 +451,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -487,7 +461,7 @@ states:
 	output := string(data)
 
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	assert.Equal(t, 2, len(lines), "should execute single step once, then cleanup")
+	assert.Len(t, lines, 2)
 	assert.Equal(t, "single", lines[0])
 	assert.Equal(t, "cleanup", lines[1])
 }
@@ -499,10 +473,6 @@ func TestEdgeCase_EmptyLoopBody(t *testing.T) {
 	// Skipped - empty body is invalid and correctly rejected
 }
 */
-
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
 
 // TestErrorHandling_InvalidTransitionTarget validates graceful degradation
 //
@@ -544,10 +514,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert - should complete despite invalid transition
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -605,10 +573,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -618,12 +584,8 @@ states:
 
 	assert.Contains(t, output, "failing")
 	assert.Contains(t, output, "recovery")
-	assert.NotContains(t, output, "should_not_run", "should_not_run should not execute")
+	assert.NotContains(t, output, "should_not_run")
 }
-
-// =============================================================================
-// INTEGRATION TESTS
-// =============================================================================
 
 // TestIntegration_FixtureWorkflow validates the complete loop-while-transitions.yaml fixture
 //
@@ -710,10 +672,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -724,15 +684,15 @@ states:
 	output := string(data)
 
 	// Verify nested loop execution
-	assert.Contains(t, output, "outer_step", "outer loop should start")
-	assert.Contains(t, output, "middle_step", "middle loop should execute")
-	assert.Contains(t, output, "inner_step", "inner loop should execute")
-	assert.Contains(t, output, "inner_check", "inner check should execute")
-	assert.Contains(t, output, "cleanup", "should transition to cleanup from innermost loop")
+	assert.Contains(t, output, "outer_step")
+	assert.Contains(t, output, "middle_step")
+	assert.Contains(t, output, "inner_step")
+	assert.Contains(t, output, "inner_check")
+	assert.Contains(t, output, "cleanup")
 
 	// Verify steps after transition are skipped
-	assert.NotContains(t, output, "middle_end", "middle_end should be skipped after transition")
-	assert.NotContains(t, output, "outer_end", "outer_end should be skipped after transition")
+	assert.NotContains(t, output, "middle_end")
+	assert.NotContains(t, output, "outer_end")
 }
 
 // TestLargeLoopBody_PerformanceValidation validates performance with large loop bodies
@@ -801,18 +761,15 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Act - measure execution time
 	start := time.Now()
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 	duration := time.Since(start)
 
-	// Assert - should complete successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-	// Assert - performance: should complete within 5 seconds
 	// Since we skip 98 steps, it should be very fast
-	assert.Less(t, duration, 5*time.Second, "execution should complete within 5 seconds")
+	assert.Less(t, duration, 5*time.Second)
 
 	// Verify execution log
 	data, err := os.ReadFile(executionLog)
@@ -820,17 +777,17 @@ states:
 	output := string(data)
 
 	// Should execute step_1 and step_100 only
-	assert.Contains(t, output, "step_1", "first step should execute")
-	assert.Contains(t, output, "step_100", "last step should execute (transition target)")
+	assert.Contains(t, output, "step_1")
+	assert.Contains(t, output, "step_100")
 
 	// Verify middle steps were skipped (sample a few)
-	assert.NotContains(t, output, "step_2", "step_2 should be skipped")
-	assert.NotContains(t, output, "step_50", "step_50 should be skipped")
-	assert.NotContains(t, output, "step_99", "step_99 should be skipped")
+	assert.NotContains(t, output, "step_2")
+	assert.NotContains(t, output, "step_50")
+	assert.NotContains(t, output, "step_99")
 
 	// Verify only 2 steps executed (not 100)
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	assert.Equal(t, 2, len(lines), "should execute only 2 steps (first and last)")
+	assert.Len(t, lines, 2)
 }
 
 func TestIntegration_FixtureWorkflow(t *testing.T) {
@@ -871,10 +828,8 @@ func TestIntegration_FixtureWorkflow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
@@ -884,8 +839,8 @@ func TestIntegration_FixtureWorkflow(t *testing.T) {
 	assert.Contains(t, states, "run_tests_green")
 	assert.Contains(t, states, "check_tests_passed")
 	assert.Contains(t, states, "run_fmt")
-	assert.NotContains(t, states, "prepare_impl_prompt", "should skip when tests pass")
-	assert.NotContains(t, states, "implement_item", "should skip when tests pass")
+	assert.NotContains(t, states, "prepare_impl_prompt")
+	assert.NotContains(t, states, "implement_item")
 }
 
 // TestIntegration_BackwardCompatibility validates loops without transitions still work
@@ -932,10 +887,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -944,7 +897,7 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Equal(t, "a\nb\nc\n", output, "should execute all steps sequentially")
+	assert.Equal(t, "a\nb\nc\n", output)
 }
 
 // TestIntegration_ConditionalTransitions validates complex conditional logic
@@ -1018,10 +971,8 @@ states:
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act
 	execCtx, err := execSvc.Run(ctx, workflowName, nil)
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
@@ -1043,28 +994,17 @@ states:
 			skipCount++
 		}
 	}
-	assert.Equal(t, 1, skipCount, "action_skip should execute only in iteration 1")
+	assert.Equal(t, 1, skipCount)
 
 	// Verify iteration 2: skipped action_skip
 	assert.Contains(t, output, "increment_2")
 	assert.Contains(t, output, "check_2")
 }
 
-// =============================================================================
-// While Loop Transitions Tests (from T009)
-// =============================================================================
-
-// =============================================================================
-// Item: T009
 // Feature: F048 - Loop Body Transitions
 //
 // Integration tests for loop-while-transitions.yaml fixture
 // Tests verify that transitions within while loop body steps are honored
-// =============================================================================
-
-// =============================================================================
-// Test Helpers (T009-specific, duplicated from execution_test.go/loop_test.go)
-// =============================================================================
 
 // mockStateStore for T009 integration tests
 type mockStateStoreT009 struct {
@@ -1133,16 +1073,11 @@ func (m *mockLoggerT009) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
-// =============================================================================
-// Tests
-// =============================================================================
-
 // TestWhileLoopBodyTransition_HappyPath tests the main scenario from the bug report
 // GIVEN a while loop with body steps containing transitions
 // WHEN check_tests_passed outputs "TESTS_PASSED"
 // THEN it should transition to run_fmt, skipping prepare_impl_prompt and implement_item
 func TestWhileLoopBodyTransition_HappyPath(t *testing.T) {
-	// Arrange: Load the fixture workflow
 	fixtureDir := "../../tests/fixtures/workflows"
 	tmpDir := t.TempDir()
 	testOutputFile := filepath.Join(tmpDir, "awf-test-output.txt")
@@ -1178,26 +1113,23 @@ func TestWhileLoopBodyTransition_HappyPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Act: Execute the workflow
 	execCtx, err := execSvc.Run(ctx, "test-while-transitions", nil)
 
-	// Assert: Workflow should complete successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
 
-	// Assert: Verify execution order - skipped steps should NOT appear in states
 	// Note: This test will FAIL until F048 is implemented (RED phase)
 	states := execCtx.States
 
 	// These steps SHOULD have executed
-	assert.Contains(t, states, "run_tests_green", "run_tests_green should execute")
-	assert.Contains(t, states, "check_tests_passed", "check_tests_passed should execute")
-	assert.Contains(t, states, "run_fmt", "run_fmt should execute (transition target)")
+	assert.Contains(t, states, "run_tests_green")
+	assert.Contains(t, states, "check_tests_passed")
+	assert.Contains(t, states, "run_fmt")
 
 	// These steps SHOULD be skipped when tests pass
-	assert.NotContains(t, states, "prepare_impl_prompt", "prepare_impl_prompt should be skipped")
-	assert.NotContains(t, states, "implement_item", "implement_item should be skipped")
+	assert.NotContains(t, states, "prepare_impl_prompt")
+	assert.NotContains(t, states, "implement_item")
 }
 
 // TestWhileLoopBodyTransition_EdgeCase_SkipToEnd tests transitioning to last step in body
@@ -1268,9 +1200,9 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Contains(t, output, "first", "first step should execute")
-	assert.Contains(t, output, "last", "last step should execute")
-	assert.NotContains(t, output, "middle", "middle step should be skipped")
+	assert.Contains(t, output, "first")
+	assert.Contains(t, output, "last")
+	assert.NotContains(t, output, "middle")
 }
 
 // TestWhileLoopBodyTransition_EdgeCase_EarlyExit tests transition outside loop body
@@ -1342,9 +1274,9 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Contains(t, output, "check", "check step should execute")
-	assert.Contains(t, output, "cleanup", "cleanup step should execute after early exit")
-	assert.NotContains(t, output, "continue", "continue step should be skipped")
+	assert.Contains(t, output, "check")
+	assert.Contains(t, output, "cleanup")
+	assert.NotContains(t, output, "continue")
 }
 
 // TestWhileLoopBodyTransition_EdgeCase_ConditionalSkip tests conditional transitions
@@ -1462,7 +1394,7 @@ states:
 			skipCount++
 		}
 	}
-	assert.Equal(t, 1, skipCount, "action_skip should execute only in iteration 1")
+	assert.Equal(t, 1, skipCount)
 }
 
 // TestWhileLoopBodyTransition_ErrorHandling_InvalidTarget tests graceful degradation
@@ -1603,7 +1535,7 @@ states:
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
 	// Should see single execution followed by cleanup
-	assert.Equal(t, 2, len(lines), "Should execute single step once, then cleanup")
+	assert.Len(t, lines, 2)
 	assert.Equal(t, "single", lines[0])
 	assert.Equal(t, "cleanup", lines[1])
 }
@@ -1674,5 +1606,5 @@ states:
 	require.NoError(t, err)
 	output := string(data)
 
-	assert.Equal(t, "a\nb\nc\n", output, "Should execute all steps sequentially")
+	assert.Equal(t, "a\nb\nc\n", output)
 }

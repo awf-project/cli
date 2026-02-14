@@ -197,10 +197,8 @@ func TestClient_RunHTTP_HappyPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			// Act
 			result, err := client.RunHTTP(ctx, tt.method, tt.path, tt.body)
 
-			// Assert - returns not-implemented error
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "not implemented")
 			assert.Nil(t, result)

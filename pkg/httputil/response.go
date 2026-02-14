@@ -27,30 +27,22 @@ type Response struct {
 func ReadBody(body io.ReadCloser, maxBodyBytes int64) (bodyStr string, truncated bool, err error) {
 	var data []byte
 
-	// If maxBodyBytes <= 0, read entire body without limit (notify backend behavior)
 	if maxBodyBytes <= 0 {
 		data, err = io.ReadAll(body)
-		// Tolerate EOF errors - these can happen with Content-Length mismatches
-		// but we still want to return the partial data we read
 		if err != nil && !isTolerableEOF(err) {
 			return "", false, fmt.Errorf("failed to read response body: %w", err)
 		}
 		return string(data), false, nil
 	}
 
-	// Read with size limit: use LimitReader to read maxBodyBytes+1
-	// If we get maxBodyBytes+1 bytes, the body was truncated
 	limitedReader := io.LimitReader(body, maxBodyBytes+1)
 	data, err = io.ReadAll(limitedReader)
 
-	// Tolerate EOF errors
 	if err != nil && !isTolerableEOF(err) {
 		return "", false, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Check if truncation occurred
 	if int64(len(data)) > maxBodyBytes {
-		// Truncate to maxBodyBytes
 		return string(data[:maxBodyBytes]), true, nil
 	}
 

@@ -11,10 +11,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
-// =============================================================================
-// DryRunFormatter Tests (F019)
-// =============================================================================
-
 func TestDryRunFormatter_Format_SimplePlan(t *testing.T) {
 	buf := new(bytes.Buffer)
 	formatter := ui.NewDryRunFormatter(buf, false) // no color for easier testing

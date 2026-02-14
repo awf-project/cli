@@ -9,9 +9,7 @@ import (
 	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
-// -----------------------------------------------------------------------------
 // Input Type Constants Tests
-// -----------------------------------------------------------------------------
 
 func TestInputTypeConstants_Values(t *testing.T) {
 	assert.Equal(t, "string", plugin.InputTypeString)
@@ -30,11 +28,9 @@ func TestValidInputTypes_ContainsAllTypes(t *testing.T) {
 	assert.Len(t, plugin.ValidInputTypes, 5)
 }
 
-// -----------------------------------------------------------------------------
 // Validation Rule Constants Tests
 // Component: T001
 // Feature: C029
-// -----------------------------------------------------------------------------
 
 func TestValidValidationRules_ContainsAllRules(t *testing.T) {
 	// Happy path: Verify all expected validation rules are present
@@ -152,9 +148,7 @@ func TestValidValidationRules_TableDriven_Membership(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // OperationSchema Tests
-// -----------------------------------------------------------------------------
 
 func TestOperationSchema_Creation(t *testing.T) {
 	schema := plugin.OperationSchema{
@@ -209,10 +203,8 @@ func TestOperationSchema_NoOutputs(t *testing.T) {
 	assert.Len(t, schema.Inputs, 1)
 }
 
-// -----------------------------------------------------------------------------
 // OperationSchema.Validate() Tests - Component T006
 // Feature: C029
-// -----------------------------------------------------------------------------
 
 // Happy Path Tests
 
@@ -1223,9 +1215,7 @@ func TestOperationSchema_GetRequiredInputs_LargeInputMap(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // InputSchema Tests
-// -----------------------------------------------------------------------------
 
 func TestInputSchema_AllTypes(t *testing.T) {
 	tests := []struct {
@@ -1332,11 +1322,8 @@ func TestInputSchema_Validation(t *testing.T) {
 
 // InputSchema.Validate Tests
 
-// ============================================================================
-// Component: T003
 // Feature: C029
 // InputSchema.Validate() Comprehensive Tests
-// ============================================================================
 
 // Happy Path Tests - Valid Schemas
 
@@ -1821,9 +1808,7 @@ func TestInputSchema_IsValidType_InvalidType_ReturnsFalse(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // OperationResult Tests
-// -----------------------------------------------------------------------------
 
 func TestOperationResult_Success(t *testing.T) {
 	result := plugin.OperationResult{

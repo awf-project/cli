@@ -79,36 +79,29 @@ func ExtractReferences(template string) ([]Reference, error) {
 	remaining := template
 
 	for {
-		// Find next {{
 		startIdx := strings.Index(remaining, "{{")
 		if startIdx == -1 {
 			break
 		}
 
-		// Find matching }}
 		endIdx := strings.Index(remaining[startIdx+2:], "}}")
 		if endIdx == -1 {
-			// No closing braces - incomplete template
 			break
 		}
-		endIdx += startIdx + 2 // Adjust to absolute position
+		endIdx += startIdx + 2
 
-		// Extract the content between {{ and }}
 		content := remaining[startIdx+2 : endIdx]
 		content = strings.TrimSpace(content)
 
-		// Skip empty braces
 		if content == "" {
 			remaining = remaining[endIdx+2:]
 			continue
 		}
 
-		// Parse the reference
 		ref := ParseReference(content)
 		ref.Raw = remaining[startIdx : endIdx+2]
 		refs = append(refs, ref)
 
-		// Move past this reference
 		remaining = remaining[endIdx+2:]
 	}
 
@@ -116,14 +109,12 @@ func ExtractReferences(template string) ([]Reference, error) {
 }
 
 // ParseReference parses a single reference path (without braces) into a Reference struct.
-// For example, "inputs.name" or "states.step.output".
-// Also handles Go template syntax with leading dot: ".states.step.output" -> "states.step.output".
+// Handles Go template syntax with leading dot: ".states.step.output" -> "states.step.output".
 func ParseReference(path string) Reference {
 	if path == "" {
 		return Reference{Type: TypeUnknown}
 	}
 
-	// Handle Go template syntax with leading dot (.states.X -> states.X)
 	path = strings.TrimPrefix(path, ".")
 
 	parts := strings.Split(path, ".")
@@ -144,31 +135,23 @@ func ParseReference(path string) Reference {
 
 	switch refType {
 	case TypeInputs:
-		// {{inputs.name}} -> Path = "name"
 		ref.Path = parts[1]
 	case TypeStates:
-		// {{states.step.output}} -> Path = "step", Property = "output"
 		ref.Path = parts[1]
 		if len(parts) >= 3 {
 			ref.Property = parts[2]
 		}
 	case TypeWorkflow:
-		// {{workflow.name}} -> Path = "name"
 		ref.Path = parts[1]
 	case TypeEnv:
-		// {{env.VAR}} -> Path = "VAR"
 		ref.Path = parts[1]
 	case TypeError:
-		// {{error.message}} -> Path = "message"
 		ref.Path = parts[1]
 	case TypeContext:
-		// {{context.working_dir}} -> Path = "working_dir"
 		ref.Path = parts[1]
 	case TypeLoop:
-		// {{loop.Index}} -> Path = "Index"
 		ref.Path = parts[1]
 	default:
-		// Unknown namespace, store entire remaining path
 		ref.Path = strings.Join(parts[1:], ".")
 	}
 

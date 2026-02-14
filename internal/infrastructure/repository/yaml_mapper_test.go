@@ -8,14 +8,9 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// Component: yaml_parsing
 // Feature: 39 - Agent Step Type
-// =============================================================================
 
-// =============================================================================
 // parseStepType Tests - Agent Case
-// =============================================================================
 
 func TestParseStepType_Agent(t *testing.T) {
 	tests := []struct {
@@ -56,9 +51,7 @@ func TestParseStepType_Agent(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapAgentConfigFlat Tests - Happy Path
-// =============================================================================
 
 func TestMapAgentConfigFlat_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -203,9 +196,7 @@ func TestMapAgentConfigFlat_HappyPath(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapAgentConfigFlat Tests - Edge Cases
-// =============================================================================
 
 func TestMapAgentConfigFlat_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -379,9 +370,7 @@ And more text explaining the task in great detail.`,
 	}
 }
 
-// =============================================================================
 // mapStep Integration Tests - Agent Type
-// =============================================================================
 
 func TestMapStep_AgentStep(t *testing.T) {
 	tests := []struct {
@@ -571,9 +560,7 @@ func TestMapStep_AgentStep(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapStep Integration Tests - Agent Preserves Other Fields
-// =============================================================================
 
 func TestMapStep_AgentPreservesOtherFields(t *testing.T) {
 	yamlStep := yamlStep{
@@ -612,10 +599,6 @@ func TestMapStep_AgentPreservesOtherFields(t *testing.T) {
 	assert.Equal(t, []string{"step1", "step2"}, step.DependsOn)
 }
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
 func TestMapStep_AgentStep_InvalidTimeout(t *testing.T) {
 	yamlStep := yamlStep{
 		Type:     "agent",
@@ -650,14 +633,9 @@ func TestMapStep_AgentStep_NoProvider(t *testing.T) {
 	assert.Nil(t, step.Agent)
 }
 
-// =============================================================================
-// Component: yaml_conversation_parsing
 // Feature: F033 - Agent Conversations
-// =============================================================================
 
-// =============================================================================
 // mapConversationConfig Tests - Happy Path
-// =============================================================================
 
 func TestMapConversationConfig_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -795,9 +773,7 @@ func TestMapConversationConfig_HappyPath(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapConversationConfig Tests - Edge Cases
-// =============================================================================
 
 func TestMapConversationConfig_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -928,9 +904,7 @@ func TestMapConversationConfig_EdgeCases(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapAgentConfigFlat Tests - Conversation Mode Happy Path
-// =============================================================================
 
 func TestMapAgentConfigFlat_ConversationMode_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -1072,9 +1046,7 @@ func TestMapAgentConfigFlat_ConversationMode_HappyPath(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // mapAgentConfigFlat Tests - Conversation Mode Edge Cases
-// =============================================================================
 
 func TestMapAgentConfigFlat_ConversationMode_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -1237,9 +1209,7 @@ Say "APPROVED" when satisfied.`,
 	}
 }
 
-// =============================================================================
 // mapStep Integration Tests - Agent Conversation Mode
-// =============================================================================
 
 func TestMapStep_AgentConversationMode(t *testing.T) {
 	tests := []struct {
@@ -1394,10 +1364,6 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Strategy Mapping Tests
-// =============================================================================
 
 func TestMapConversationConfig_StrategyMapping(t *testing.T) {
 	tests := []struct {

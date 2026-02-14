@@ -13,10 +13,6 @@ import (
 	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
-// =============================================================================
-// NewTemplateValidator Tests
-// =============================================================================
-
 func TestNewTemplateValidator(t *testing.T) {
 	w := newTestWorkflow()
 	v := workflow.NewTemplateValidator(w, newTestAnalyzer())
@@ -37,10 +33,6 @@ func TestNewTemplateValidator_NilWorkflow(t *testing.T) {
 	_ = v
 }
 
-// =============================================================================
-// Validate - Valid Input References
-// =============================================================================
-
 func TestTemplateValidator_ValidInputReference(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo Hello {{inputs.name}}"
@@ -60,10 +52,6 @@ func TestTemplateValidator_ValidMultipleInputReferences(t *testing.T) {
 
 	assert.False(t, result.HasErrors())
 }
-
-// =============================================================================
-// Validate - Invalid Input References
-// =============================================================================
 
 func TestTemplateValidator_UndefinedInput(t *testing.T) {
 	w := newTestWorkflow()
@@ -114,10 +102,6 @@ func TestTemplateValidator_UndefinedInputInMultipleSteps(t *testing.T) {
 	require.True(t, result.HasErrors())
 	assert.Len(t, result.Errors, 2, "should report errors from all steps")
 }
-
-// =============================================================================
-// Edge Cases - Empty Inputs
-// =============================================================================
 
 func TestTemplateValidator_EmptyInputsList(t *testing.T) {
 	w := &workflow.Workflow{

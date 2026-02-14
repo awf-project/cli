@@ -38,13 +38,9 @@ func TestReadBody_NoLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			bodyReader := io.NopCloser(strings.NewReader(tt.body))
 
-			// Act
 			got, truncated, err := ReadBody(bodyReader, 0)
-
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -90,13 +86,9 @@ func TestReadBody_WithLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			bodyReader := io.NopCloser(strings.NewReader(tt.body))
 
-			// Act
 			got, truncated, err := ReadBody(bodyReader, tt.maxBodyBytes)
-
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantBody, got, "body content mismatch")
 			assert.Equal(t, tt.wantTrunc, truncated, "truncation flag mismatch")
@@ -135,14 +127,10 @@ func TestReadBody_Truncation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			body := strings.Repeat("A", tt.bodySize)
 			bodyReader := io.NopCloser(strings.NewReader(body))
 
-			// Act
 			got, truncated, err := ReadBody(bodyReader, tt.maxBodyBytes)
-
-			// Assert
 			require.NoError(t, err)
 			assert.True(t, truncated, "truncation flag should be true")
 			assert.Len(t, got, int(tt.maxBodyBytes), "body should be truncated to maxBodyBytes")
@@ -190,16 +178,12 @@ func TestReadBody_EOFTolerance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			bodyReader := &errorReader{
 				data: []byte(tt.body),
 				err:  tt.readErr,
 			}
 
-			// Act
 			got, truncated, err := ReadBody(bodyReader, 0)
-
-			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -252,13 +236,9 @@ func TestReadBody_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
 			bodyReader := io.NopCloser(strings.NewReader(tt.body))
 
-			// Act
 			got, truncated, err := ReadBody(bodyReader, tt.maxBodyBytes)
-
-			// Assert
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantBody, got, "body content mismatch")
 			assert.Equal(t, tt.wantTrunc, truncated, "truncation flag mismatch")

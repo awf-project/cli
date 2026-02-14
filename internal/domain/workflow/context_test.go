@@ -153,10 +153,6 @@ func TestStepStateFields(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// F043: LoopContext JSON Serialization Tests
-// =============================================================================
-
 func TestLoopContext_JSONSerialize_SingleLevel(t *testing.T) {
 	ctx := &workflow.LoopContext{
 		Item:   "test-item",
@@ -454,10 +450,6 @@ func TestLoopContext_JSONSerialize_NilParent(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// F023: CallStack Tests for Sub-Workflow Circular Detection
-// =============================================================================
-
 func TestNewExecutionContext_CallStackInitialized(t *testing.T) {
 	ctx := workflow.NewExecutionContext("test-id", "test-workflow")
 
@@ -722,10 +714,6 @@ func TestCallStack_StackOrderPreserved(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// F033: StepState Conversation Extension Tests
-// =============================================================================
-
 // Component: step_state_extension
 // Feature: F033
 
@@ -957,7 +945,7 @@ func TestStepState_ConversationFields_EmptyConversation(t *testing.T) {
 	}
 
 	assert.NotNil(t, state.Conversation)
-	assert.Equal(t, 0, len(state.Conversation.Turns))
+	assert.Empty(t, state.Conversation.Turns)
 	assert.Equal(t, 0, state.TokensUsed)
 }
 

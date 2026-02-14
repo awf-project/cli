@@ -147,10 +147,6 @@ func TestTemplateResolver_States(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// StepStateData.Response Tests (C018-T004)
-// =============================================================================
-
 func TestTemplateResolver_StepStateDataResponse(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -787,10 +783,6 @@ func TestContextRuntimeValues(t *testing.T) {
 	// User and hostname may be empty in some environments
 }
 
-// =============================================================================
-// Loop Context Tests (F016)
-// =============================================================================
-
 func TestTemplateResolver_Loop(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1094,10 +1086,6 @@ func TestTemplateResolver_LoopItemTypes(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// F042: Loop Index1 (1-based index) Tests
-// =============================================================================
 
 func TestTemplateResolver_LoopIndex1(t *testing.T) {
 	resolver := interpolation.NewTemplateResolver()
@@ -1585,10 +1573,6 @@ func TestTemplateResolver_WithJSONFunction_UnmarshallableTypes(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// F047: Loop Item JSON Serialization Tests - Component T005
-// =============================================================================
-
 // TestTemplateResolver_LoopItemJSON_Map verifies that map items are serialized to JSON
 // Item: T005
 // Feature: F047
@@ -2053,9 +2037,6 @@ func TestTemplateResolver_LoopItemJSON_CombinedWithOtherNamespaces(t *testing.T)
 	assert.Equal(t, `Workflow: test, Step: result, Item: {"file":"data.json"}`, got)
 }
 
-// ============================================================================
-// T007: Unit Tests for Automatic Loop Item Serialization
-// ============================================================================
 // These tests verify that loop items are automatically serialized to JSON
 // when used in templates, without requiring explicit | json filter.
 // Item: T007
@@ -2872,14 +2853,6 @@ func TestTemplateResolver_AutomaticSerialization_PointerTypes(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Component T006: Expression Namespace Tests
-// =============================================================================
-
-// =============================================================================
-// StepStateData.TokensUsed Tests (C018-T005)
-// =============================================================================
-
 func TestTemplateResolver_StepStateDataTokensUsed(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -2982,10 +2955,6 @@ func TestTemplateResolver_StepStateDataTokensUsed(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// LoopData.Parent Tests (C018-T003)
-// =============================================================================
 
 func TestTemplateResolver_LoopDataParent(t *testing.T) {
 	resolver := interpolation.NewTemplateResolver()
@@ -3506,10 +3475,6 @@ func TestTemplateResolver_LoopDataParent_ErrorCases(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Component T006: Expression Namespace Tests
-// =============================================================================
 
 // TestTemplateResolver_ExpressionNamespaces tests lowercase expression namespace access
 // for loop, context, and error namespaces

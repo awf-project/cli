@@ -17,7 +17,6 @@ import (
 // Tests for setupSignalHandler function extracted from run.go
 
 func TestSetupSignalHandler_HappyPath_SIGINTCancelsContext(t *testing.T) {
-	// Arrange: Create context and track cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -26,7 +25,6 @@ func TestSetupSignalHandler_HappyPath_SIGINTCancelsContext(t *testing.T) {
 		callbackCalled = true
 	}
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	defer cleanup()
 
@@ -42,13 +40,11 @@ func TestSetupSignalHandler_HappyPath_SIGINTCancelsContext(t *testing.T) {
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	// Assert: Callback was called and context cancelled
 	assert.True(t, callbackCalled, "onSignal callback should have been called")
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_HappyPath_SIGTERMCancelsContext(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -57,7 +53,6 @@ func TestSetupSignalHandler_HappyPath_SIGTERMCancelsContext(t *testing.T) {
 		callbackCalled = true
 	}
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	defer cleanup()
 
@@ -73,17 +68,14 @@ func TestSetupSignalHandler_HappyPath_SIGTERMCancelsContext(t *testing.T) {
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	// Assert
 	assert.True(t, callbackCalled, "onSignal callback should have been called")
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_HappyPath_NilCallbackDoesNotPanic(t *testing.T) {
-	// Arrange: Create context with nil callback
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Act: Setup signal handler with nil callback (should not panic)
 	cleanup := setupSignalHandler(ctx, cancel, nil)
 	defer cleanup()
 
@@ -99,12 +91,10 @@ func TestSetupSignalHandler_HappyPath_NilCallbackDoesNotPanic(t *testing.T) {
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	// Assert: No panic occurred and context was cancelled
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_EdgeCase_ContextCancelledBeforeSignal(t *testing.T) {
-	// Arrange: Create context
 	ctx, cancel := context.WithCancel(context.Background())
 
 	callbackCalled := false
@@ -112,7 +102,6 @@ func TestSetupSignalHandler_EdgeCase_ContextCancelledBeforeSignal(t *testing.T) 
 		callbackCalled = true
 	}
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	defer cleanup()
 
@@ -122,13 +111,11 @@ func TestSetupSignalHandler_EdgeCase_ContextCancelledBeforeSignal(t *testing.T) 
 	// Wait for goroutine to process context cancellation
 	time.Sleep(100 * time.Millisecond)
 
-	// Assert: Callback should NOT have been called (context was cancelled, not signal received)
 	assert.False(t, callbackCalled, "onSignal callback should NOT be called when context cancelled externally")
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_EdgeCase_CleanupStopsSignalDelivery(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -137,14 +124,12 @@ func TestSetupSignalHandler_EdgeCase_CleanupStopsSignalDelivery(t *testing.T) {
 		callbackCalled = true
 	}
 
-	// Act: Setup and immediately cleanup
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	cleanup() // Call cleanup to stop signal notification
 
 	// Wait to verify goroutine exits cleanly
 	time.Sleep(100 * time.Millisecond)
 
-	// Assert: Callback was not called because cleanup stopped signal delivery
 	// Note: We cannot safely send signal after cleanup as it would affect the test process
 	// This test verifies that cleanup() can be called and doesn't panic
 	assert.False(t, callbackCalled, "onSignal callback should NOT be called")
@@ -152,7 +137,6 @@ func TestSetupSignalHandler_EdgeCase_CleanupStopsSignalDelivery(t *testing.T) {
 }
 
 func TestSetupSignalHandler_EdgeCase_MultipleSignalsIdempotent(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -161,7 +145,6 @@ func TestSetupSignalHandler_EdgeCase_MultipleSignalsIdempotent(t *testing.T) {
 		callCount++
 	}
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	defer cleanup()
 
@@ -177,18 +160,15 @@ func TestSetupSignalHandler_EdgeCase_MultipleSignalsIdempotent(t *testing.T) {
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	// Assert: Callback was called and context cancelled
 	assert.GreaterOrEqual(t, callCount, 1, "onSignal should be called at least once")
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_GoroutineLeakDetection_CleanupPreventsLeak(t *testing.T) {
-	// Arrange: Count goroutines before test
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond) // Allow GC to settle
 	beforeCount := runtime.NumGoroutine()
 
-	// Act: Create and cleanup signal handler 100 times
 	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cleanup := setupSignalHandler(ctx, cancel, nil)
@@ -205,7 +185,6 @@ func TestSetupSignalHandler_GoroutineLeakDetection_CleanupPreventsLeak(t *testin
 
 	afterCount := runtime.NumGoroutine()
 
-	// Assert: Goroutine count should not grow significantly
 	// Allow tolerance of 5 goroutines for runtime internals
 	assert.InDelta(t, beforeCount, afterCount, 5,
 		"goroutine count should not grow after cleanup (before=%d, after=%d)",
@@ -213,12 +192,10 @@ func TestSetupSignalHandler_GoroutineLeakDetection_CleanupPreventsLeak(t *testin
 }
 
 func TestSetupSignalHandler_GoroutineLeakDetection_ContextCancellationExitsGoroutine(t *testing.T) {
-	// Arrange: Count goroutines before test
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)
 	beforeCount := runtime.NumGoroutine()
 
-	// Act: Create signal handlers and cancel contexts (simulates workflow completion)
 	cleanups := make([]func(), 0, 50)
 	for i := 0; i < 50; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -241,18 +218,15 @@ func TestSetupSignalHandler_GoroutineLeakDetection_ContextCancellationExitsGorou
 
 	afterCount := runtime.NumGoroutine()
 
-	// Assert: No goroutine leak
 	assert.InDelta(t, beforeCount, afterCount, 5,
 		"goroutine count should not grow (before=%d, after=%d)",
 		beforeCount, afterCount)
 }
 
 func TestSetupSignalHandler_ErrorHandling_CleanupCalledMultipleTimes(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, nil)
 
 	// Call cleanup multiple times (should be idempotent)
@@ -261,15 +235,11 @@ func TestSetupSignalHandler_ErrorHandling_CleanupCalledMultipleTimes(t *testing.
 		cleanup()
 		cleanup()
 	}, "calling cleanup multiple times should not panic")
-
-	// Assert: No panic occurred
 }
 
 func TestSetupSignalHandler_ErrorHandling_CleanupAfterContextCancelled(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Act: Setup signal handler
 	cleanup := setupSignalHandler(ctx, cancel, nil)
 
 	// Cancel context first
@@ -281,12 +251,10 @@ func TestSetupSignalHandler_ErrorHandling_CleanupAfterContextCancelled(t *testin
 		cleanup()
 	}, "cleanup after context cancellation should not panic")
 
-	// Assert: No panic occurred
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_EdgeCase_RapidSetupCleanupCycles(t *testing.T) {
-	// Arrange & Act: Rapidly create and destroy signal handlers
 	for i := 0; i < 1000; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cleanup := setupSignalHandler(ctx, cancel, nil)
@@ -298,25 +266,20 @@ func TestSetupSignalHandler_EdgeCase_RapidSetupCleanupCycles(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	runtime.GC()
 
-	// Assert: No deadlock or panic occurred
 	// If we reach here, the test passes
 }
 
 func TestSetupSignalHandler_Boundary_ZeroDelayBetweenSetupAndCleanup(t *testing.T) {
-	// Arrange
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Act: Setup and cleanup with zero delay
 	cleanup := setupSignalHandler(ctx, cancel, nil)
 	cleanup() // Immediate cleanup
 
-	// Assert: No panic or deadlock
 	// This tests race condition between goroutine start and cleanup
 }
 
 func TestSetupSignalHandler_Integration_WorkflowCompletionScenario(t *testing.T) {
-	// Arrange: Simulate a workflow execution scenario
 	beforeGoroutines := runtime.NumGoroutine()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -325,7 +288,6 @@ func TestSetupSignalHandler_Integration_WorkflowCompletionScenario(t *testing.T)
 	})
 	defer cleanup()
 
-	// Act: Simulate workflow completing normally (no signal received)
 	// Workflow runs for a short time
 	time.Sleep(100 * time.Millisecond)
 
@@ -342,7 +304,6 @@ func TestSetupSignalHandler_Integration_WorkflowCompletionScenario(t *testing.T)
 
 	afterGoroutines := runtime.NumGoroutine()
 
-	// Assert: No goroutine leak
 	assert.InDelta(t, beforeGoroutines, afterGoroutines, 3,
 		"no goroutine leak after normal workflow completion (before=%d, after=%d)",
 		beforeGoroutines, afterGoroutines)
@@ -350,7 +311,6 @@ func TestSetupSignalHandler_Integration_WorkflowCompletionScenario(t *testing.T)
 }
 
 func TestSetupSignalHandler_Integration_SignalInterruptionScenario(t *testing.T) {
-	// Arrange: Simulate a workflow execution that gets interrupted
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -362,7 +322,6 @@ func TestSetupSignalHandler_Integration_SignalInterruptionScenario(t *testing.T)
 	cleanup := setupSignalHandler(ctx, cancel, onSignal)
 	defer cleanup()
 
-	// Act: Simulate workflow running, then receiving signal
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		err := syscall.Kill(os.Getpid(), syscall.SIGINT)
@@ -379,7 +338,6 @@ func TestSetupSignalHandler_Integration_SignalInterruptionScenario(t *testing.T)
 		t.Fatal("workflow was not interrupted within timeout")
 	}
 
-	// Assert: Workflow was interrupted properly
 	assert.True(t, interrupted, "interruption callback should have been called")
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 

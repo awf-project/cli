@@ -5,20 +5,15 @@ import (
 	"fmt"
 )
 
-// Transition defines a conditional transition to another state.
-// When the When expression evaluates to true (or When is empty for default),
-// the workflow transitions to the Goto state.
 type Transition struct {
-	When string // condition expression (empty = default/fallback)
-	Goto string // target state name
+	When string
+	Goto string
 }
 
-// Transitions is an ordered list of conditional transitions.
 // Evaluated in order; first match wins.
 // A transition with empty When serves as the default fallback.
 type Transitions []Transition
 
-// HasDefault returns true if the transitions include a default (unconditional) transition.
 func (t Transitions) HasDefault() bool {
 	for _, tr := range t {
 		if tr.When == "" {
@@ -28,7 +23,6 @@ func (t Transitions) HasDefault() bool {
 	return false
 }
 
-// Validate checks if the transition is valid.
 func (tr Transition) Validate() error {
 	if tr.Goto == "" {
 		return errors.New("transition goto is required")
@@ -36,7 +30,6 @@ func (tr Transition) Validate() error {
 	return nil
 }
 
-// String returns a human-readable representation of the transition.
 func (tr Transition) String() string {
 	if tr.When == "" {
 		return fmt.Sprintf("goto %s", tr.Goto)
@@ -44,7 +37,6 @@ func (tr Transition) String() string {
 	return fmt.Sprintf("when '%s' goto %s", tr.When, tr.Goto)
 }
 
-// Validate checks if all transitions are valid.
 func (t Transitions) Validate() error {
 	for i, tr := range t {
 		if err := tr.Validate(); err != nil {
@@ -54,7 +46,6 @@ func (t Transitions) Validate() error {
 	return nil
 }
 
-// GetTargetStates returns all target states referenced by these transitions.
 func (t Transitions) GetTargetStates() []string {
 	targets := make([]string, 0, len(t))
 	for _, tr := range t {
@@ -63,8 +54,6 @@ func (t Transitions) GetTargetStates() []string {
 	return targets
 }
 
-// DefaultIndex returns the index of the first default (unconditional) transition,
-// or -1 if there is no default.
 func (t Transitions) DefaultIndex() int {
 	for i, tr := range t {
 		if tr.When == "" {
@@ -74,15 +63,10 @@ func (t Transitions) DefaultIndex() int {
 	return -1
 }
 
-// EvaluatorFunc is a function that evaluates a condition expression.
 type EvaluatorFunc func(expr string) (bool, error)
 
-// EvaluateFirstMatch evaluates transitions in order and returns the first matching goto target.
-// Returns (goto, found, error). If no match is found and there's a default, returns the default.
-// If no match and no default, returns ("", false, nil).
 func (t Transitions) EvaluateFirstMatch(eval EvaluatorFunc) (nextStep string, found bool, err error) {
 	for _, tr := range t {
-		// Default transition (no condition) always matches
 		if tr.When == "" {
 			return tr.Goto, true, nil
 		}
@@ -97,6 +81,5 @@ func (t Transitions) EvaluateFirstMatch(eval EvaluatorFunc) (nextStep string, fo
 		}
 	}
 
-	// No match found
 	return "", false, nil
 }

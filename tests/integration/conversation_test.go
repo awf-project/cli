@@ -42,10 +42,6 @@ import (
 
 // Note: skipInCI helper is defined in agent_test.go to avoid duplication
 
-// =============================================================================
-// AC1: Conversation Mode Recognition - Validation
-// =============================================================================
-
 func TestConversationModeRecognizedByValidator(t *testing.T) {
 	// CI-enabled: Only validates YAML syntax, no external API calls required
 
@@ -107,19 +103,15 @@ func TestConversationModeRecognizedByValidator(t *testing.T) {
 
 			// Then: Conversation mode is recognized
 			if tt.shouldPass {
-				require.NoError(t, err, "Workflow with conversation mode should validate successfully")
+				require.NoError(t, err)
 				output := buf.String()
-				assert.Contains(t, output, "valid", "Should show workflow is valid")
+				assert.Contains(t, output, "valid")
 			} else {
-				require.Error(t, err, "Invalid workflow should fail validation")
+				require.Error(t, err)
 			}
 		})
 	}
 }
-
-// =============================================================================
-// AC1: Conversation Mode - List Command
-// =============================================================================
 
 func TestConversationWorkflowsListedSuccessfully(t *testing.T) {
 	// CI-enabled: Only lists workflow files, no external API calls required
@@ -140,14 +132,10 @@ func TestConversationWorkflowsListedSuccessfully(t *testing.T) {
 	require.NoError(t, err)
 	output := buf.String()
 
-	assert.Contains(t, output, "conversation-simple", "Simple conversation workflow should be listed")
-	assert.Contains(t, output, "conversation-multiturn", "Multi-turn conversation workflow should be listed")
-	assert.Contains(t, output, "conversation-window", "Context window conversation workflow should be listed")
+	assert.Contains(t, output, "conversation-simple")
+	assert.Contains(t, output, "conversation-multiturn")
+	assert.Contains(t, output, "conversation-window")
 }
-
-// =============================================================================
-// AC1 + AC2: Basic Conversation Execution - Simple Workflow
-// =============================================================================
 
 func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 	// Skip in CI: Requires real Claude API provider with ANTHROPIC_API_KEY and billable API calls
@@ -173,7 +161,7 @@ func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 	err := cmd.Execute()
 
 	// Then: Conversation executes successfully
-	require.NoError(t, err, "Conversation workflow should execute successfully")
+	require.NoError(t, err)
 
 	// Verify state file created
 	stateFiles, err := filepath.Glob(filepath.Join(tmpDir, "states", "*.json"))
@@ -203,10 +191,6 @@ func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 	require.True(t, ok, "Should have turns array")
 	assert.NotEmpty(t, turns, "Should have at least one turn")
 }
-
-// =============================================================================
-// AC1 + AC8: Dry-Run Shows Conversation Configuration
-// =============================================================================
 
 func TestDryRun_ConversationConfiguration(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -248,10 +232,6 @@ func TestDryRun_ConversationConfiguration(t *testing.T) {
 	// - stop_condition expression
 	// - context_window strategy
 }
-
-// =============================================================================
-// AC6: Max Turns Limit - Multi-Turn Workflow
-// =============================================================================
 
 func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -305,10 +285,6 @@ func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 	require.True(t, ok, "Should have stopped_by field")
 	assert.NotEmpty(t, stoppedBy, "Should indicate why conversation stopped")
 }
-
-// =============================================================================
-// AC3 + AC5: Context Window Management - Truncation with System Prompt
-// =============================================================================
 
 func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -375,10 +351,6 @@ func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 		}
 	}
 }
-
-// =============================================================================
-// AC4: Token Counting - Input and Output Tracking
-// =============================================================================
 
 func TestTokenCounting_InputOutputTracking(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -449,10 +421,6 @@ func TestTokenCounting_InputOutputTracking(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// AC7: Stop Condition - Expression Evaluation
-// =============================================================================
-
 func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
@@ -510,10 +478,6 @@ func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 	assert.Greater(t, totalTurns, 0.0, "Should have executed some turns")
 }
 
-// =============================================================================
-// AC6: Max Turns - Boundary Enforcement
-// =============================================================================
-
 func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
@@ -565,10 +529,6 @@ func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 	totalTurns := conversation["total_turns"].(float64)
 	assert.LessOrEqual(t, totalTurns, 3.0, "Should not exceed max_turns=3")
 }
-
-// =============================================================================
-// AC9: Injecting Context - Continue From Previous Conversation
-// =============================================================================
 
 func TestInjectContext_ContinueConversation(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -627,10 +587,6 @@ func TestInjectContext_ContinueConversation(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// AC8: State Interpolation - Access Conversation Data
-// =============================================================================
-
 func TestStateInterpolation_ConversationAccess(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
@@ -682,10 +638,6 @@ func TestStateInterpolation_ConversationAccess(t *testing.T) {
 	_, hasTokens := firstTurn["tokens"]
 	assert.True(t, hasTokens, "Tokens should be accessible")
 }
-
-// =============================================================================
-// AC: Parallel Conversations - Multiple Concurrent Conversations
-// =============================================================================
 
 func TestParallelConversations_ConcurrentExecution(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -744,10 +696,6 @@ func TestParallelConversations_ConcurrentExecution(t *testing.T) {
 	assert.NotNil(t, geminiConv, "Gemini branch should have conversation")
 }
 
-// =============================================================================
-// AC: Error Handling - Conversation Errors and Recovery
-// =============================================================================
-
 func TestErrorHandling_ConversationErrors(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
@@ -803,10 +751,6 @@ func TestErrorHandling_ConversationErrors(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Edge Case: Empty Conversation Configuration
-// =============================================================================
-
 func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
 	skipInCI(t)
@@ -853,10 +797,6 @@ func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 	assert.NotNil(t, conversation, "Should create conversation with defaults")
 }
 
-// =============================================================================
-// Integration: Diagram Generation with Conversation Steps
-// =============================================================================
-
 func TestDiagramGeneration_ConversationSteps(t *testing.T) {
 	// CI-enabled: Only generates DOT diagram from YAML, no external API calls required
 
@@ -882,10 +822,6 @@ func TestDiagramGeneration_ConversationSteps(t *testing.T) {
 
 	// Note: After implementation, conversation steps might have distinct visual styling
 }
-
-// =============================================================================
-// Integration: Help Command Shows Conversation Workflows
-// =============================================================================
 
 func TestHelpCommand_ConversationWorkflows(t *testing.T) {
 	// CI-enabled: Only displays workflow help from YAML, no external API calls required
@@ -922,10 +858,6 @@ func TestHelpCommand_ConversationWorkflows(t *testing.T) {
 	// - Max turns configuration
 	// - Stop condition description
 }
-
-// =============================================================================
-// Backwards Compatibility: Stateless Mode Still Works
-// =============================================================================
 
 func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	// Skip in CI: Requires real AI provider (claude/gemini/codex) with billable API calls
@@ -972,10 +904,6 @@ func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	_, hasConversation := analyzeStep["conversation"]
 	assert.False(t, hasConversation, "Stateless mode should not create conversation field")
 }
-
-// =============================================================================
-// Multi-Turn Conversation Without Empty Prompt Error (F051 regression)
-// =============================================================================
 
 func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
 	// Skip in CI: Requires real Claude API provider
@@ -1026,10 +954,6 @@ func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
 	totalTurns := conversation["total_turns"].(float64)
 	assert.Greater(t, totalTurns, 1.0, "Should complete more than 1 turn")
 }
-
-// =============================================================================
-// ExecuteConversationStep Delegation
-// =============================================================================
 
 func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 	// Skip in CI: Requires real Claude API provider
@@ -1083,10 +1007,6 @@ func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 	_, hasStoppedBy := conversation["stopped_by"]
 	assert.True(t, hasStoppedBy, "Conversation should have stopped_by from ConversationManager")
 }
-
-// =============================================================================
-// All Conversation Fixtures Execute Successfully
-// =============================================================================
 
 func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 	// Skip in CI: Requires real Claude API provider

@@ -86,8 +86,7 @@ func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 	s.conversationMgr = mgr
 }
 
-// NewExecutionService creates a new execution service.
-// historySvc can be nil to disable history recording.
+// NewExecutionService - historySvc can be nil to disable history recording.
 func NewExecutionService(
 	wfSvc *WorkflowService,
 	executor ports.CommandExecutor,
@@ -111,8 +110,7 @@ func NewExecutionService(
 	}
 }
 
-// NewExecutionServiceWithEvaluator creates a new execution service with expression evaluator.
-// This enables conditional transitions using the `when:` clause.
+// NewExecutionServiceWithEvaluator enables conditional transitions using the `when:` clause.
 func NewExecutionServiceWithEvaluator(
 	wfSvc *WorkflowService,
 	executor ports.CommandExecutor,

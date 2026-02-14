@@ -81,25 +81,3 @@ func (s *OutputStreamer) StreamBoth(output, stderr string) (outputPath, stderrPa
 
 	return outputPath, stderrPath, nil
 }
-
-// Cleanup removes a temporary file created by streaming.
-// Does not error if the file doesn't exist.
-func (s *OutputStreamer) Cleanup(path string) error {
-	// Return early if path is empty
-	if path == "" {
-		return nil
-	}
-
-	// Remove file, ignore error if file doesn't exist
-	err := os.Remove(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to cleanup temp file: %w", err)
-	}
-
-	return nil
-}
-
-// Config returns the current output limits configuration.
-func (s *OutputStreamer) Config() workflow.OutputLimits {
-	return s.config
-}

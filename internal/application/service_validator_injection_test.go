@@ -14,17 +14,14 @@ import (
 // TestNewWorkflowService_ValidatorInjection tests that the constructor
 // properly accepts and stores the validator parameter (happy path).
 func TestNewWorkflowService_ValidatorInjection(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	store := testutil.NewMockStateStore()
 	executor := testutil.NewMockCommandExecutor()
 	logger := testutil.NewMockLogger()
 	validator := testutil.NewMockExpressionValidator()
 
-	// Act
 	svc := application.NewWorkflowService(repo, store, executor, logger, validator)
 
-	// Assert
 	if svc == nil {
 		t.Fatal("expected service to be created, got nil")
 	}
@@ -49,16 +46,13 @@ func TestNewWorkflowService_ValidatorInjection(t *testing.T) {
 // TestNewWorkflowService_ValidatorNil tests that the service handles
 // nil validator gracefully (edge case).
 func TestNewWorkflowService_ValidatorNil(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	store := testutil.NewMockStateStore()
 	executor := testutil.NewMockCommandExecutor()
 	logger := testutil.NewMockLogger()
 
-	// Act - passing nil validator
 	svc := application.NewWorkflowService(repo, store, executor, logger, nil)
 
-	// Assert
 	if svc == nil {
 		t.Fatal("expected service to be created even with nil validator")
 	}
@@ -71,7 +65,6 @@ func TestNewWorkflowService_ValidatorNil(t *testing.T) {
 // TestValidateWorkflow_UsesInjectedValidator tests that ValidateWorkflow
 // uses the injected validator instead of creating its own (happy path).
 func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -102,9 +95,7 @@ func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "test")
-	// Assert
 	if err != nil {
 		t.Errorf("expected validation to pass, got error: %v", err)
 	}
@@ -116,7 +107,6 @@ func TestValidateWorkflow_UsesInjectedValidator(t *testing.T) {
 // TestValidateWorkflow_PropagatesValidatorErrors tests that validator
 // errors are properly propagated to the caller (error handling).
 func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -151,10 +141,8 @@ func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "invalid-expr")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected validation to fail with validator error, got nil")
 	}
@@ -171,7 +159,6 @@ func TestValidateWorkflow_PropagatesValidatorErrors(t *testing.T) {
 // TestValidateWorkflow_EmptyExpression tests handling of empty expressions
 // (edge case - validator should accept empty expressions as valid).
 func TestValidateWorkflow_EmptyExpression(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -201,9 +188,7 @@ func TestValidateWorkflow_EmptyExpression(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "empty-expr")
-	// Assert
 	if err != nil {
 		t.Errorf("expected validation to pass for empty expression, got error: %v", err)
 	}
@@ -212,7 +197,6 @@ func TestValidateWorkflow_EmptyExpression(t *testing.T) {
 // TestValidateWorkflow_MultipleExpressions tests validation with multiple
 // expressions in different steps (edge case - all expressions should be validated).
 func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -259,9 +243,7 @@ func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "multi-expr")
-	// Assert
 	if err != nil {
 		t.Fatalf("expected validation to pass, got error: %v", err)
 	}
@@ -293,7 +275,6 @@ func TestValidateWorkflow_MultipleExpressions(t *testing.T) {
 // validation fails correctly when the second of multiple expressions is invalid
 // (error handling edge case).
 func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -342,10 +323,8 @@ func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "partial-invalid")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected validation to fail with invalid expression, got nil")
 	}
@@ -358,7 +337,6 @@ func TestValidateWorkflow_ValidatorErrorInSecondExpression(t *testing.T) {
 // TestValidateWorkflow_WorkflowNotFound tests error handling when
 // workflow doesn't exist (error handling).
 func TestValidateWorkflow_WorkflowNotFound(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -370,10 +348,8 @@ func TestValidateWorkflow_WorkflowNotFound(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "nonexistent")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected error for nonexistent workflow, got nil")
 	}
@@ -385,7 +361,6 @@ func TestValidateWorkflow_WorkflowNotFound(t *testing.T) {
 // TestValidateWorkflow_ContextCancellation tests that validation respects
 // context cancellation (edge case - graceful shutdown).
 func TestValidateWorkflow_ContextCancellation(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -409,10 +384,8 @@ func TestValidateWorkflow_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Act
 	err := svc.ValidateWorkflow(ctx, "test")
 
-	// Assert
 	// Note: Current implementation may not check context during validation.
 	// This test documents the expected behavior if context checking is added.
 	// For now, we just verify the method doesn't panic with cancelled context.
@@ -422,7 +395,6 @@ func TestValidateWorkflow_ContextCancellation(t *testing.T) {
 // TestValidateWorkflow_StateReferenceErrorConversion tests that StateReferenceError
 // from domain validation is converted to a structured workflow error (coverage: lines 65-81).
 func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -449,10 +421,8 @@ func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "invalid-state-ref")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected validation to fail with StateReferenceError, got nil")
 	}
@@ -499,7 +469,6 @@ func TestValidateWorkflow_StateReferenceErrorConversion(t *testing.T) {
 // TestValidateWorkflow_LoadErrorPropagation tests that repository load errors
 // are properly wrapped and propagated (coverage: line 61).
 func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -515,10 +484,8 @@ func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "test-workflow")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected error from Load, got nil")
 	}
@@ -538,7 +505,6 @@ func TestValidateWorkflow_LoadErrorPropagation(t *testing.T) {
 // TestValidateWorkflow_GeneralValidationError tests that non-StateReferenceError
 // validation errors are properly wrapped (coverage: line 83).
 func TestValidateWorkflow_GeneralValidationError(t *testing.T) {
-	// Arrange
 	repo := testutil.NewMockWorkflowRepository()
 	validator := testutil.NewMockExpressionValidator()
 
@@ -559,10 +525,8 @@ func TestValidateWorkflow_GeneralValidationError(t *testing.T) {
 		validator,
 	)
 
-	// Act
 	err := svc.ValidateWorkflow(context.Background(), "invalid")
 
-	// Assert
 	if err == nil {
 		t.Fatal("expected validation error for empty workflow name, got nil")
 	}

@@ -42,10 +42,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// Happy Path Tests: US1 - Simple HTTP GET Request
-// =============================================================================
-
 func TestHTTPOperation_GET_Success(t *testing.T) {
 	// GIVEN: A workflow with http.request GET operation targeting httptest server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,13 +75,13 @@ func TestHTTPOperation_GET_Success(t *testing.T) {
 	require.NotNil(t, state.Response, "step should have response")
 
 	// These assertions will FAIL against stubs - assert real expected behavior
-	assert.Equal(t, 200, state.Response["status_code"], "status code should be 200")
-	assert.Contains(t, state.Response["body"], "success", "body should contain success message")
+	assert.Equal(t, 200, state.Response["status_code"])
+	assert.Contains(t, state.Response["body"], "success")
 
 	headers, ok := state.Response["headers"].(map[string]string)
 	require.True(t, ok, "headers should be map[string]string")
-	assert.Equal(t, "application/json", headers["Content-Type"], "Content-Type header should be present")
-	assert.Equal(t, "test-123", headers["X-Request-Id"], "custom header should be captured")
+	assert.Equal(t, "application/json", headers["Content-Type"])
+	assert.Equal(t, "test-123", headers["X-Request-Id"])
 }
 
 func TestHTTPOperation_GET_NonExistentHost(t *testing.T) {
@@ -110,10 +106,6 @@ func TestHTTPOperation_GET_NonExistentHost(t *testing.T) {
 		strings.Contains(errorMsg, "failure") || strings.Contains(errorMsg, "failed"),
 		"error should indicate workflow failure, got: %s", errorMsg)
 }
-
-// =============================================================================
-// Happy Path Tests: US2 - HTTP POST/PUT/DELETE with Body and Headers
-// =============================================================================
 
 func TestHTTPOperation_POST_WithJSONBody(t *testing.T) {
 	// GIVEN: A workflow with POST, Content-Type: application/json, and JSON body
@@ -153,17 +145,17 @@ func TestHTTPOperation_POST_WithJSONBody(t *testing.T) {
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
 	// Verify server received correct data
-	assert.Equal(t, "test-resource", receivedBody["name"], "server should receive JSON body")
-	assert.Equal(t, float64(42), receivedBody["value"], "server should receive all fields")
-	assert.Equal(t, "application/json", receivedHeaders.Get("Content-Type"), "Content-Type header should be sent")
+	assert.Equal(t, "test-resource", receivedBody["name"])
+	assert.Equal(t, float64(42), receivedBody["value"])
+	assert.Equal(t, "application/json", receivedHeaders.Get("Content-Type"))
 
 	// Verify response captured
 	state, exists := execCtx.GetStepState("create_resource")
 	require.True(t, exists)
 	require.NotNil(t, state.Response)
 
-	assert.Equal(t, 201, state.Response["status_code"], "status code should be 201")
-	assert.Contains(t, state.Response["body"], "created", "body should contain created status")
+	assert.Equal(t, 201, state.Response["status_code"])
+	assert.Contains(t, state.Response["body"], "created")
 }
 
 func TestHTTPOperation_PUT_NoContentResponse(t *testing.T) {
@@ -194,7 +186,7 @@ func TestHTTPOperation_PUT_NoContentResponse(t *testing.T) {
 	require.True(t, exists)
 	require.NotNil(t, state.Response)
 
-	assert.Equal(t, 204, state.Response["status_code"], "status code should be 204")
+	assert.Equal(t, 204, state.Response["status_code"])
 	body, _ := state.Response["body"].(string)
 	assert.Empty(t, body, "body should be empty for 204 response")
 }
@@ -233,13 +225,9 @@ func TestHTTPOperation_DELETE_NoBody(t *testing.T) {
 	require.True(t, exists)
 	require.NotNil(t, state.Response)
 
-	assert.Equal(t, 200, state.Response["status_code"], "status code should be 200")
-	assert.Contains(t, state.Response["body"], "deleted", "body should confirm deletion")
+	assert.Equal(t, 200, state.Response["status_code"])
+	assert.Contains(t, state.Response["body"], "deleted")
 }
-
-// =============================================================================
-// Happy Path Tests: US3 - Response Capture with Status, Headers, Body
-// =============================================================================
 
 func TestHTTPOperation_ResponseHeaders_TemplateInterpolation(t *testing.T) {
 	// GIVEN: Step A performs http.request, server returns X-Request-Id header
@@ -381,10 +369,6 @@ states:
 	assert.Equal(t, 401, state.Response["status_code"])
 }
 
-// =============================================================================
-// Happy Path Tests: US4 - Timeout Configuration
-// =============================================================================
-
 func TestHTTPOperation_Timeout_CustomValue(t *testing.T) {
 	// GIVEN: http.request with timeout: 1, server delays 3 seconds
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -442,7 +426,7 @@ states:
 	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
 
 	// Should timeout around 1 second, definitely before 2 seconds
-	assert.Less(t, elapsed, 2*time.Second, "should timeout within configured duration")
+	assert.Less(t, elapsed, 2*time.Second)
 
 	errorMsg := err.Error()
 	assert.True(t,
@@ -507,10 +491,6 @@ states:
 	require.True(t, exists)
 	assert.Equal(t, 200, state.Response["status_code"])
 }
-
-// =============================================================================
-// Happy Path Tests: US5 - Retryable HTTP Status Codes
-// =============================================================================
 
 func TestHTTPOperation_RetryableStatus_SignalsFailure(t *testing.T) {
 	// GIVEN: http.request with retryable_status_codes: [503], server returns 503
@@ -583,10 +563,6 @@ func TestHTTPOperation_RetryableStatus_EventualSuccess(t *testing.T) {
 	// - Retry config: max_attempts=3
 	// - Operation retries on 503 (retryable status) and succeeds on third attempt
 }
-
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
 
 func TestHTTPOperation_UnknownOperation_Error(t *testing.T) {
 	// GIVEN: Workflow with operation: http.unknown_operation
@@ -758,10 +734,6 @@ states:
 		"error should mention url validation, got: %s", errorMsg)
 }
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
-
 func TestHTTPOperation_HeaderCanonicalization(t *testing.T) {
 	// GIVEN: Server returns header "content-type"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -792,7 +764,7 @@ func TestHTTPOperation_HeaderCanonicalization(t *testing.T) {
 	require.True(t, ok)
 
 	// Header should be canonicalized
-	assert.Contains(t, headers, "Content-Type", "header should use canonical form")
+	assert.Contains(t, headers, "Content-Type")
 }
 
 func TestHTTPOperation_MultiValueHeaders_Joined(t *testing.T) {
@@ -828,9 +800,9 @@ func TestHTTPOperation_MultiValueHeaders_Joined(t *testing.T) {
 	require.True(t, exists, "Set-Cookie header should exist")
 
 	// Multi-value headers should be joined with ", "
-	assert.Contains(t, setCookie, "cookie1=value1", "first cookie should be present")
-	assert.Contains(t, setCookie, "cookie2=value2", "second cookie should be present")
-	assert.Contains(t, setCookie, ", ", "values should be joined with comma-space")
+	assert.Contains(t, setCookie, "cookie1=value1")
+	assert.Contains(t, setCookie, "cookie2=value2")
+	assert.Contains(t, setCookie, ", ")
 }
 
 func TestHTTPOperation_ResponseBody_SizeLimit(t *testing.T) {
@@ -861,7 +833,7 @@ func TestHTTPOperation_ResponseBody_SizeLimit(t *testing.T) {
 	require.True(t, exists)
 
 	body, _ := state.Response["body"].(string)
-	assert.LessOrEqual(t, len(body), 1<<20, "body should be truncated to 1MB")
+	assert.LessOrEqual(t, len(body), 1<<20)
 
 	truncated, _ := state.Response["body_truncated"].(bool)
 	assert.True(t, truncated, "body_truncated flag should be true")
@@ -987,7 +959,7 @@ states:
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-	assert.Equal(t, "/users/123", requestedPath, "URL should be interpolated")
+	assert.Equal(t, "/users/123", requestedPath)
 }
 
 func TestHTTPOperation_TemplateInterpolation_InBody(t *testing.T) {
@@ -1051,8 +1023,8 @@ states:
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 
-	assert.Equal(t, "test-user", receivedBody["name"], "body should be interpolated")
-	assert.Equal(t, true, receivedBody["active"])
+	assert.Equal(t, "test-user", receivedBody["name"])
+	assert.True(t, receivedBody["active"].(bool))
 }
 
 func TestHTTPOperation_TemplateInterpolation_InHeaders(t *testing.T) {
@@ -1116,10 +1088,6 @@ states:
 
 	assert.Equal(t, "Bearer secret-xyz-789", receivedHeaders.Get("Authorization"))
 }
-
-// =============================================================================
-// Wiring Tests: Provider Integration
-// =============================================================================
 
 func TestHTTPOperation_ProviderRegistration(t *testing.T) {
 	// GIVEN: HTTPOperationProvider wired into CompositeOperationProvider
@@ -1205,10 +1173,6 @@ states:
 	require.NotNil(t, state.Response)
 	assert.Contains(t, state.Response["body"], "http success")
 }
-
-// =============================================================================
-// Multi-Step Integration Tests
-// =============================================================================
 
 func TestHTTPOperation_MultiStep_GET_POST_ConditionalTransition(t *testing.T) {
 	// GIVEN: Workflow with:
@@ -1312,10 +1276,6 @@ states:
 	assert.Equal(t, "order_created", execCtx.CurrentStep,
 		"should have transitioned to order_created based on status_code == 201")
 }
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
 
 // setupHTTPTestWorkflowService creates a workflow service with HTTP operation provider wired.
 // This helper wires the complete stack: workflow service → execution service → composite provider.

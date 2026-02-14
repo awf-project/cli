@@ -12,11 +12,9 @@ import (
 	"github.com/vanoix/awf/internal/testutil"
 )
 
-// =============================================================================
 // resolveNextStep Tests
 // Feature: C054 - Increase Application Layer Test Coverage
 // Component: T003 - resolve_next_step_tests
-// =============================================================================
 //
 // This file tests the resolveNextStep function which determines the next step
 // using conditional transitions or legacy OnSuccess/OnFailure.
@@ -26,10 +24,8 @@ import (
 // This function is private (resolveNextStep), so we test it indirectly through
 // the public API by constructing workflows with steps that have transitions
 // and observing execution flow.
-// =============================================================================
 
 func TestResolveNextStep_LegacyOnSuccess(t *testing.T) {
-	// Arrange: Workflow with step using legacy OnSuccess (no transitions)
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -56,17 +52,14 @@ func TestResolveNextStep_LegacyOnSuccess(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow with successful command
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should follow OnSuccess path
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "success_step", ctx.CurrentStep, "should follow OnSuccess when no transitions and success=true")
 }
 
 func TestResolveNextStep_LegacyOnFailure(t *testing.T) {
-	// Arrange: Workflow with step using legacy OnFailure (no transitions)
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -93,16 +86,13 @@ func TestResolveNextStep_LegacyOnFailure(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	// Act: Execute workflow with failing command
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should follow OnFailure path
 	require.NoError(t, err)
 	assert.Equal(t, "failure_step", ctx.CurrentStep, "should follow OnFailure when no transitions and success=false")
 }
 
 func TestResolveNextStep_TransitionMatches(t *testing.T) {
-	// Arrange: Workflow with step that has matching transition
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -131,17 +121,14 @@ func TestResolveNextStep_TransitionMatches(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should follow transition instead of OnSuccess
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "matched_step", ctx.CurrentStep, "should follow matching transition over OnSuccess")
 }
 
 func TestResolveNextStep_TransitionNoMatch_FallbackToLegacy(t *testing.T) {
-	// Arrange: Workflow with transition that doesn't match
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -170,17 +157,14 @@ func TestResolveNextStep_TransitionNoMatch_FallbackToLegacy(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should fall back to OnSuccess when no transition matches
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "fallback_success", ctx.CurrentStep, "should fallback to OnSuccess when no transition matches")
 }
 
 func TestResolveNextStep_MultipleTransitions_FirstMatchWins(t *testing.T) {
-	// Arrange: Workflow with multiple transitions - first match should win
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -214,17 +198,14 @@ func TestResolveNextStep_MultipleTransitions_FirstMatchWins(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: First matching transition should be selected
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "first_match", ctx.CurrentStep, "should select first matching transition when multiple match")
 }
 
 func TestResolveNextStep_DefaultTransition_AlwaysMatches(t *testing.T) {
-	// Arrange: Workflow with default transition (empty When)
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -258,17 +239,14 @@ func TestResolveNextStep_DefaultTransition_AlwaysMatches(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Default transition should match when no conditional matches
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "default_target", ctx.CurrentStep, "should match default transition (empty When)")
 }
 
 func TestResolveNextStep_TransitionWithBooleanExpression(t *testing.T) {
-	// Arrange: Workflow with transition using arithmetic comparison expression
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -297,17 +275,14 @@ func TestResolveNextStep_TransitionWithBooleanExpression(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Transition with arithmetic expression should evaluate correctly
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "math_matched", ctx.CurrentStep, "should evaluate arithmetic expression in transition")
 }
 
 func TestResolveNextStep_NoEvaluator_FallbackToLegacy(t *testing.T) {
-	// Arrange: Workflow with transitions but no evaluator configured (evaluator=nil)
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -337,17 +312,14 @@ func TestResolveNextStep_NoEvaluator_FallbackToLegacy(t *testing.T) {
 						WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 						Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should fall back to legacy OnSuccess when evaluator is nil
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "legacy_success", ctx.CurrentStep, "should fallback to OnSuccess when evaluator is nil")
 }
 
 func TestResolveNextStep_EmptyOnSuccessReturnsEmptyString(t *testing.T) {
-	// Arrange: Step with empty OnSuccess - should return empty string (workflow end)
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -370,17 +342,14 @@ func TestResolveNextStep_EmptyOnSuccessReturnsEmptyString(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Terminal step with empty OnSuccess should complete successfully
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.Equal(t, "done", ctx.CurrentStep, "should be on terminal step")
 }
 
 func TestResolveNextStep_TransitionEvaluationError(t *testing.T) {
-	// Arrange: Workflow with invalid transition expression
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "start",
@@ -409,10 +378,8 @@ func TestResolveNextStep_TransitionEvaluationError(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	// Act: Execute workflow
 	ctx, err := execSvc.Run(context.Background(), "test", nil)
 
-	// Assert: Should fail with evaluation error
 	require.Error(t, err, "should return error when transition evaluation fails")
 	assert.Contains(t, err.Error(), "evaluate transitions", "error should indicate transition evaluation failure")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)

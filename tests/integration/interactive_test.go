@@ -15,9 +15,6 @@ import (
 	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
-// =============================================================================
-// F020: Interactive Mode - Functional Tests
-// =============================================================================
 //
 // Acceptance Criteria:
 // - [x] `awf run --interactive` enables step-by-step mode
@@ -28,11 +25,8 @@ import (
 // - [x] Allow modifying inputs during execution
 // - [x] Support breakpoints on specific states
 //
-// =============================================================================
 
-// -----------------------------------------------------------------------------
 // Happy Path Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_ContinueThroughAllSteps_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -51,15 +45,15 @@ func TestInteractive_ContinueThroughAllSteps_Integration(t *testing.T) {
 	cmd.SetArgs([]string{"run", "interactive-test", "--interactive", "--storage", tmpDir})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "interactive mode should succeed")
+	require.NoError(t, err)
 
 	output := stdout.String()
 
-	assert.Contains(t, output, "Interactive Mode", "should show interactive mode header")
-	assert.Contains(t, output, "interactive-test", "should show workflow name")
-	assert.Contains(t, output, "[Step", "should show step indicator")
-	assert.Contains(t, output, "[c]ontinue", "should show continue option")
-	assert.Contains(t, output, "completed successfully", "should complete workflow")
+	assert.Contains(t, output, "Interactive Mode")
+	assert.Contains(t, output, "interactive-test")
+	assert.Contains(t, output, "[Step")
+	assert.Contains(t, output, "[c]ontinue")
+	assert.Contains(t, output, "completed successfully")
 }
 
 func TestInteractive_ShowsStepDetails_Integration(t *testing.T) {
@@ -82,11 +76,11 @@ func TestInteractive_ShowsStepDetails_Integration(t *testing.T) {
 	output := stdout.String()
 
 	// Should show step details
-	assert.Contains(t, output, "Type:", "should show step type")
-	assert.Contains(t, output, "Command:", "should show command")
-	assert.Contains(t, output, "step_one", "should show step name")
-	assert.Contains(t, output, "step_two", "should show second step")
-	assert.Contains(t, output, "step_three", "should show third step")
+	assert.Contains(t, output, "Type:")
+	assert.Contains(t, output, "Command:")
+	assert.Contains(t, output, "step_one")
+	assert.Contains(t, output, "step_two")
+	assert.Contains(t, output, "step_three")
 }
 
 func TestInteractive_ShowsStepResult_Integration(t *testing.T) {
@@ -109,10 +103,10 @@ func TestInteractive_ShowsStepResult_Integration(t *testing.T) {
 	output := stdout.String()
 
 	// Should show step result
-	assert.Contains(t, output, "Exit", "should show exit code")
-	assert.Contains(t, output, "Duration", "should show duration")
-	assert.Contains(t, output, "Next", "should show next step")
-	assert.Contains(t, output, "Step 1:", "should show step 1 output")
+	assert.Contains(t, output, "Exit")
+	assert.Contains(t, output, "Duration")
+	assert.Contains(t, output, "Next")
+	assert.Contains(t, output, "Step 1:")
 }
 
 func TestInteractive_ShowsResolvedCommand_Integration(t *testing.T) {
@@ -140,7 +134,7 @@ func TestInteractive_ShowsResolvedCommand_Integration(t *testing.T) {
 	output := stdout.String()
 
 	// Should show resolved command with interpolated values
-	assert.Contains(t, output, "custom_message", "should show resolved input in command")
+	assert.Contains(t, output, "custom_message")
 }
 
 func TestInteractive_ShowsTransitions_Integration(t *testing.T) {
@@ -163,12 +157,10 @@ func TestInteractive_ShowsTransitions_Integration(t *testing.T) {
 	output := stdout.String()
 
 	// Should show transitions
-	assert.Contains(t, output, "on_success:", "should show success transition")
+	assert.Contains(t, output, "on_success:")
 }
 
-// -----------------------------------------------------------------------------
 // Action Tests: Abort
-// -----------------------------------------------------------------------------
 
 func TestInteractive_AbortStopsExecution_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -190,9 +182,9 @@ func TestInteractive_AbortStopsExecution_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "borted", "should indicate workflow was aborted")
+	assert.Contains(t, output, "borted")
 	// Should NOT contain step_two or step_three execution
-	assert.NotContains(t, output, "Executing step_two", "should not execute step_two after abort")
+	assert.NotContains(t, output, "Executing step_two")
 }
 
 func TestInteractive_AbortAfterFirstStep_Integration(t *testing.T) {
@@ -214,13 +206,11 @@ func TestInteractive_AbortAfterFirstStep_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "Step 1:", "should have executed step_one")
-	assert.Contains(t, output, "borted", "should show aborted message")
+	assert.Contains(t, output, "Step 1:")
+	assert.Contains(t, output, "borted")
 }
 
-// -----------------------------------------------------------------------------
 // Action Tests: Skip
-// -----------------------------------------------------------------------------
 
 func TestInteractive_SkipJumpsToNextStep_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -241,11 +231,11 @@ func TestInteractive_SkipJumpsToNextStep_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "kipped", "should indicate step was skipped")
+	assert.Contains(t, output, "kipped")
 	// The command preview shows the resolved command, but skip means no execution
 	// Check that step_one was not executed (no "Executing step_one" message)
-	assert.NotContains(t, output, "Executing step_one", "should not execute step_one")
-	assert.Contains(t, output, "Executing step_two", "should execute step_two")
+	assert.NotContains(t, output, "Executing step_one")
+	assert.Contains(t, output, "Executing step_two")
 }
 
 func TestInteractive_SkipMultipleSteps_Integration(t *testing.T) {
@@ -268,13 +258,11 @@ func TestInteractive_SkipMultipleSteps_Integration(t *testing.T) {
 
 	output := stdout.String()
 	// Should complete successfully with only step_three executed
-	assert.Contains(t, output, "Step 3:", "should have step_three output")
-	assert.Contains(t, output, "completed successfully", "should complete workflow")
+	assert.Contains(t, output, "Step 3:")
+	assert.Contains(t, output, "completed successfully")
 }
 
-// -----------------------------------------------------------------------------
 // Action Tests: Inspect
-// -----------------------------------------------------------------------------
 
 func TestInteractive_InspectShowsContext_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -300,10 +288,10 @@ func TestInteractive_InspectShowsContext_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "ontext", "should show context section")
-	assert.Contains(t, output, "Inputs:", "should show inputs header")
-	assert.Contains(t, output, "message", "should show message input")
-	assert.Contains(t, output, "test_value", "should show input value")
+	assert.Contains(t, output, "ontext")
+	assert.Contains(t, output, "Inputs:")
+	assert.Contains(t, output, "message")
+	assert.Contains(t, output, "test_value")
 }
 
 func TestInteractive_InspectShowsStatesAfterExecution_Integration(t *testing.T) {
@@ -325,8 +313,8 @@ func TestInteractive_InspectShowsStatesAfterExecution_Integration(t *testing.T) 
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "States:", "should show states section")
-	assert.Contains(t, output, "step_one", "should show step_one state")
+	assert.Contains(t, output, "States:")
+	assert.Contains(t, output, "step_one")
 }
 
 func TestInteractive_MultipleInspects_Integration(t *testing.T) {
@@ -350,12 +338,10 @@ func TestInteractive_MultipleInspects_Integration(t *testing.T) {
 	output := stdout.String()
 	// Should show context multiple times
 	contextCount := strings.Count(output, "Inputs:")
-	assert.GreaterOrEqual(t, contextCount, 2, "should show context at least twice")
+	assert.GreaterOrEqual(t, contextCount, 2)
 }
 
-// -----------------------------------------------------------------------------
 // Action Tests: Edit
-// -----------------------------------------------------------------------------
 
 func TestInteractive_EditModifiesInput_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -382,7 +368,7 @@ func TestInteractive_EditModifiesInput_Integration(t *testing.T) {
 
 	output := stdout.String()
 	// Should use the edited value
-	assert.Contains(t, output, "new_message", "should use edited input value")
+	assert.Contains(t, output, "new_message")
 }
 
 func TestInteractive_EditShowsCurrentValue_Integration(t *testing.T) {
@@ -409,7 +395,7 @@ func TestInteractive_EditShowsCurrentValue_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "current", "should show current value during edit")
+	assert.Contains(t, output, "current")
 }
 
 func TestInteractive_EditEmptyKeepsCurrentValue_Integration(t *testing.T) {
@@ -436,12 +422,10 @@ func TestInteractive_EditEmptyKeepsCurrentValue_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "keep_this", "should keep current value when edit is empty")
+	assert.Contains(t, output, "keep_this")
 }
 
-// -----------------------------------------------------------------------------
 // Action Tests: Retry
-// -----------------------------------------------------------------------------
 
 func TestInteractive_RetryReExecutesStep_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -467,7 +451,7 @@ func TestInteractive_RetryReExecutesStep_Integration(t *testing.T) {
 	output := stdout.String()
 	// Should show step_one execution twice
 	execCount := strings.Count(output, "Executing step_one")
-	assert.GreaterOrEqual(t, execCount, 2, "should execute step_one at least twice after retry")
+	assert.GreaterOrEqual(t, execCount, 2)
 }
 
 func TestInteractive_RetryNotAvailableOnFirstPrompt_Integration(t *testing.T) {
@@ -490,12 +474,10 @@ func TestInteractive_RetryNotAvailableOnFirstPrompt_Integration(t *testing.T) {
 
 	output := stdout.String()
 	// First prompt should not show retry option
-	assert.Contains(t, output, "retry not available", "should indicate retry not available")
+	assert.Contains(t, output, "retry not available")
 }
 
-// -----------------------------------------------------------------------------
 // Breakpoint Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_BreakpointPausesOnlyAtSpecified_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -522,7 +504,7 @@ func TestInteractive_BreakpointPausesOnlyAtSpecified_Integration(t *testing.T) {
 
 	output := stdout.String()
 	// Should pause only at step_two
-	assert.Contains(t, output, "step_two", "should show step_two")
+	assert.Contains(t, output, "step_two")
 	// step_one should execute without prompting (not in the prompt lines)
 	// step_three should also execute without prompting
 }
@@ -551,7 +533,7 @@ func TestInteractive_MultipleBreakpoints_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "completed successfully", "should complete workflow")
+	assert.Contains(t, output, "completed successfully")
 }
 
 func TestInteractive_BreakpointWithSeparateFlags_Integration(t *testing.T) {
@@ -579,12 +561,10 @@ func TestInteractive_BreakpointWithSeparateFlags_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "completed successfully", "should complete workflow")
+	assert.Contains(t, output, "completed successfully")
 }
 
-// -----------------------------------------------------------------------------
 // Edge Case Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_InvalidInputRepromptsUser_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -605,8 +585,8 @@ func TestInteractive_InvalidInputRepromptsUser_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "invalid", "should show error for invalid input")
-	assert.Contains(t, output, "completed successfully", "should complete after valid input")
+	assert.Contains(t, output, "invalid")
+	assert.Contains(t, output, "completed successfully")
 }
 
 func TestInteractive_MultipleInvalidInputs_Integration(t *testing.T) {
@@ -630,7 +610,7 @@ func TestInteractive_MultipleInvalidInputs_Integration(t *testing.T) {
 	output := stdout.String()
 	// Should show multiple invalid errors
 	invalidCount := strings.Count(output, "invalid")
-	assert.GreaterOrEqual(t, invalidCount, 3, "should show at least 3 invalid errors")
+	assert.GreaterOrEqual(t, invalidCount, 3)
 }
 
 func TestInteractive_EmptyInputRepromptsUser_Integration(t *testing.T) {
@@ -652,7 +632,7 @@ func TestInteractive_EmptyInputRepromptsUser_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "completed successfully", "should complete after valid input")
+	assert.Contains(t, output, "completed successfully")
 }
 
 func TestInteractive_CaseInsensitiveActions_Integration(t *testing.T) {
@@ -674,12 +654,10 @@ func TestInteractive_CaseInsensitiveActions_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "completed successfully", "should accept uppercase actions")
+	assert.Contains(t, output, "completed successfully")
 }
 
-// -----------------------------------------------------------------------------
 // Error Handling Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_WorkflowNotFound_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -695,7 +673,7 @@ func TestInteractive_WorkflowNotFound_Integration(t *testing.T) {
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found", "error should mention workflow not found")
+	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestInteractive_InvalidBreakpoint_StillRuns_Integration(t *testing.T) {
@@ -724,9 +702,7 @@ func TestInteractive_InvalidBreakpoint_StillRuns_Integration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// -----------------------------------------------------------------------------
 // State Persistence Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_AbortPersistsState_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -751,7 +727,7 @@ func TestInteractive_AbortPersistsState_Integration(t *testing.T) {
 	entries, err := os.ReadDir(statesDir)
 	// State directory may or may not exist depending on implementation
 	if err == nil && len(entries) > 0 {
-		assert.NotEmpty(t, entries, "should have saved state files")
+		assert.NotEmpty(t, entries)
 	}
 }
 
@@ -776,13 +752,11 @@ func TestInteractive_CompletionPersistsState_Integration(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	entries, err := os.ReadDir(statesDir)
 	if err == nil && len(entries) > 0 {
-		assert.NotEmpty(t, entries, "should have saved state files")
+		assert.NotEmpty(t, entries)
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Integration with Other Features Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_WithInputs_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -808,8 +782,8 @@ func TestInteractive_WithInputs_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "custom_msg", "should use custom message input")
-	assert.Contains(t, output, "count is 5", "should use custom count input")
+	assert.Contains(t, output, "custom_msg")
+	assert.Contains(t, output, "count is 5")
 }
 
 func TestInteractive_ParallelWorkflow_Integration(t *testing.T) {
@@ -831,8 +805,8 @@ func TestInteractive_ParallelWorkflow_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "Interactive Mode", "should show interactive mode")
-	assert.Contains(t, output, "parallel", "should show parallel step")
+	assert.Contains(t, output, "Interactive Mode")
+	assert.Contains(t, output, "parallel")
 }
 
 func TestInteractive_LoopWorkflow_Integration(t *testing.T) {
@@ -854,8 +828,8 @@ func TestInteractive_LoopWorkflow_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "Interactive Mode", "should show interactive mode")
-	assert.Contains(t, output, "for_each", "should show for_each loop type")
+	assert.Contains(t, output, "Interactive Mode")
+	assert.Contains(t, output, "for_each")
 }
 
 func TestInteractive_SimpleWorkflow_Integration(t *testing.T) {
@@ -877,15 +851,13 @@ func TestInteractive_SimpleWorkflow_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "Interactive Mode", "should show interactive mode header")
-	assert.Contains(t, output, "simple-workflow", "should show workflow name")
-	assert.Contains(t, output, "hello world", "should show step output")
-	assert.Contains(t, output, "completed successfully", "should complete workflow")
+	assert.Contains(t, output, "Interactive Mode")
+	assert.Contains(t, output, "simple-workflow")
+	assert.Contains(t, output, "hello world")
+	assert.Contains(t, output, "completed successfully")
 }
 
-// -----------------------------------------------------------------------------
 // Table-Driven Tests for Action Combinations
-// -----------------------------------------------------------------------------
 
 func TestInteractive_ActionCombinations_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -954,9 +926,7 @@ func TestInteractive_ActionCombinations_Integration(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Regression Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 	originalPath := os.Getenv("AWF_WORKFLOWS_PATH")
@@ -977,8 +947,7 @@ func TestInteractive_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 
 	// Verify environment was not modified
 	currentPath := os.Getenv("AWF_WORKFLOWS_PATH")
-	assert.Equal(t, "../fixtures/workflows", currentPath,
-		"interactive mode should not modify AWF_WORKFLOWS_PATH")
+	assert.Equal(t, "../fixtures/workflows", currentPath)
 
 	// Cleanup
 	if originalPath == "" {
@@ -1034,15 +1003,13 @@ func TestInteractive_FlagOrderDoesNotMatter_Integration(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err, "interactive mode should work regardless of flag order")
+	require.NoError(t, err)
 
 	output := stdout.String()
-	assert.Contains(t, output, "Interactive Mode", "should be in interactive mode")
+	assert.Contains(t, output, "Interactive Mode")
 }
 
-// -----------------------------------------------------------------------------
 // Output Format Tests
-// -----------------------------------------------------------------------------
 
 func TestInteractive_ShowsCorrectStepCount_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../fixtures/workflows")
@@ -1065,9 +1032,9 @@ func TestInteractive_ShowsCorrectStepCount_Integration(t *testing.T) {
 
 	// Should show step counts (N/M format)
 	// interactive-test has 5 states total but only 3 non-terminal steps
-	assert.Contains(t, output, "[Step 1/", "should show step 1 count")
-	assert.Contains(t, output, "[Step 2/", "should show step 2 count")
-	assert.Contains(t, output, "[Step 3/", "should show step 3 count")
+	assert.Contains(t, output, "[Step 1/")
+	assert.Contains(t, output, "[Step 2/")
+	assert.Contains(t, output, "[Step 3/")
 }
 
 func TestInteractive_ShowsStepTypeForDifferentSteps_Integration(t *testing.T) {
@@ -1091,6 +1058,6 @@ func TestInteractive_ShowsStepTypeForDifferentSteps_Integration(t *testing.T) {
 
 	// Should show different types for different steps
 	// The implementation shows "command" for regular steps and "parallel" for parallel steps
-	assert.Contains(t, output, "Type: command", "should show command step type")
-	assert.Contains(t, output, "Type: parallel", "should show parallel type")
+	assert.Contains(t, output, "Type: command")
+	assert.Contains(t, output, "Type: parallel")
 }

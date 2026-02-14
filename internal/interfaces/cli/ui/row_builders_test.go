@@ -8,10 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
 // formatInputRow Tests (C004 - Component T008)
 // Feature: C004 - Extract row builders to reduce writeValidationResultTable complexity
-// =============================================================================
 
 func TestFormatInputRow_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -297,9 +295,7 @@ func TestFormatInputRow_DefaultValueDashSubstitution(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // formatStepRow Tests (C004 - Component T008)
-// =============================================================================
 
 func TestFormatStepRow_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -525,9 +521,7 @@ func TestFormatStepRow_TerminalHandling(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // renderStatusHeader Tests (C004 - Component T008)
-// =============================================================================
 
 func TestRenderStatusHeader_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -712,10 +706,6 @@ func TestRenderStatusHeader_Integration(t *testing.T) {
 	// Outputs should be different
 	assert.NotEqual(t, firstOutput, secondOutput)
 }
-
-// =============================================================================
-// Cross-Function Integration Tests (C004 - Component T008)
-// =============================================================================
 
 func TestRowBuilders_IntegrationWithValidationTable(t *testing.T) {
 	// Test that all three helpers work together to build a complete validation table

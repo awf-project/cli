@@ -21,10 +21,6 @@ import (
 	"github.com/vanoix/awf/pkg/interpolation"
 )
 
-// =============================================================================
-// For-Each Loop Integration Tests
-// =============================================================================
-
 func TestForEachLoop_Simple_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "output.log")
@@ -252,10 +248,6 @@ states:
 	expected := "S1:x\nS2:x\nS3:x\nS1:y\nS2:y\nS3:y\n"
 	assert.Equal(t, expected, string(data))
 }
-
-// =============================================================================
-// While Loop Integration Tests
-// =============================================================================
 
 func TestWhileLoop_Simple_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -527,13 +519,9 @@ states:
 
 	// Verify the Output state was captured correctly
 	testState, exists := execCtx.States["run_tests"]
-	require.True(t, exists, "run_tests state should exist")
-	assert.Equal(t, "TESTS_PASSED", testState.Output, "Output should be TESTS_PASSED")
+	require.True(t, exists)
+	assert.Equal(t, "TESTS_PASSED", testState.Output)
 }
-
-// =============================================================================
-// Error Handling Integration Tests
-// =============================================================================
 
 func TestForEachLoop_StepError_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -596,10 +584,6 @@ states:
 	assert.Equal(t, "ok\nfail\nERROR\n", string(data))
 }
 
-// =============================================================================
-// Fixtures Integration Tests
-// =============================================================================
-
 func TestLoopFixtures_Integration(t *testing.T) {
 	fixturesPath := "../fixtures/workflows"
 
@@ -635,10 +619,6 @@ func TestLoopFixtures_Integration(t *testing.T) {
 		assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	})
 }
-
-// =============================================================================
-// F042: Index1 (1-based index) Integration Tests
-// =============================================================================
 
 func TestForEachLoop_WithIndex1_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -758,9 +738,6 @@ func (e *alwaysTrueEvaluator) EvaluateInt(expr string, ctx *interpolation.Contex
 	return 0, nil
 }
 
-// =============================================================================
-// Feature: F042 - Loop Context Variables Functional Tests
-// =============================================================================
 //
 // These tests validate that loop context variables (index, index1, item, first,
 // last, length) work correctly in various scenarios including conditional
@@ -1233,7 +1210,7 @@ AFTER LOOP: workflow=foreach-cleared
 	assert.Equal(t, expected, string(data))
 
 	// Also verify that execCtx.CurrentLoop is nil after workflow completes
-	assert.Nil(t, execCtx.CurrentLoop, "loop context should be cleared after completion")
+	assert.Nil(t, execCtx.CurrentLoop)
 }
 
 // TestLoopSingleItem_EdgeCase_Integration tests edge case with single item.
@@ -1634,9 +1611,6 @@ FINISHED
 	assert.Equal(t, expected, string(data))
 }
 
-// =============================================================================
-// Nested Loops Integration Tests
-// =============================================================================
 //
 // NOTE: Nested loops are NOT YET IMPLEMENTED.
 // These tests document the expected behavior for when nested loop support
@@ -2059,9 +2033,6 @@ states:
 	assert.Equal(t, expected, string(data))
 }
 
-// =============================================================================
-// F043: Nested Loop Parent Access Integration Tests
-// =============================================================================
 // These tests verify the {{.loop.Parent.*}} template access feature for nested loops.
 
 // TestNestedLoops_ParentAccess_Integration tests that inner loops can access
@@ -2506,9 +2477,6 @@ states:
 	assert.Contains(t, lines, "item=item2")
 }
 
-// =============================================================================
-// F043: Additional Nested Loop Integration Tests
-// =============================================================================
 // Feature: F043
 // These tests cover edge cases, error handling, and combined feature scenarios
 // for nested loop execution with parent context access.
@@ -3434,10 +3402,6 @@ AFTER outer=Y idx=1 (restored)
 	assert.Equal(t, expected, string(data))
 }
 
-// =============================================================================
-// F048: Loop Body Transitions Integration Tests (T012)
-// =============================================================================
-
 // TestWhileLoop_BodyTransitions_SkipSteps tests transitions within while loop body
 // GIVEN a while loop with body steps containing transitions
 // WHEN a transition condition is met within the body
@@ -3636,7 +3600,7 @@ states:
 	// Edge case: Verify only one iteration happened (early exit)
 	// Count occurrences of "Step 1 executed" - should be exactly 1
 	count := strings.Count(logContent, "Step 1 executed")
-	assert.Equal(t, 1, count, "Expected exactly one iteration before early exit")
+	assert.Equal(t, 1, count)
 }
 
 // TestForEachLoop_BodyTransitions_SkipSteps tests transitions within foreach loop body
@@ -3749,7 +3713,7 @@ states:
 			heavyCount++
 		}
 	}
-	assert.Equal(t, 1, heavyCount, "Expected heavy processing only for item2")
+	assert.Equal(t, 1, heavyCount)
 }
 
 // TestWhileLoop_BodyTransitions_InvalidTarget tests graceful degradation for invalid targets
@@ -3841,7 +3805,7 @@ states:
 			count++
 		}
 	}
-	assert.Equal(t, 2, count, "Expected 2 iterations with graceful degradation")
+	assert.Equal(t, 2, count)
 
 	// Edge case: Warning should be logged (implementation will verify this)
 	// Note: Actual warning logging will be implemented in the feature
@@ -3937,7 +3901,7 @@ states:
 			countA++
 		}
 	}
-	assert.Equal(t, 2, countA, "Expected 2 iterations")
+	assert.Equal(t, 2, countA)
 
 	// Edge case: Verify no transitions were applied (sequential order preserved)
 	// Expected pattern: A\nB\n (repeated)

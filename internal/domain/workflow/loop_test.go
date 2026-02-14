@@ -9,10 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// LoopType Tests
-// =============================================================================
-
 func TestLoopType_String(t *testing.T) {
 	tests := []struct {
 		loopType LoopType
@@ -28,10 +24,6 @@ func TestLoopType_String(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// LoopConfig Tests
-// =============================================================================
 
 func TestLoopConfig_Validate_ForEach(t *testing.T) {
 	tests := []struct {
@@ -236,19 +228,11 @@ func TestLoopConfig_Validate_InvalidType(t *testing.T) {
 	assert.Contains(t, err.Error(), "type")
 }
 
-// =============================================================================
-// Constants Tests
-// =============================================================================
-
 func TestLoopConstants(t *testing.T) {
 	assert.Equal(t, 100, DefaultMaxIterations)
 	assert.Equal(t, 10000, MaxAllowedIterations)
 	assert.Greater(t, MaxAllowedIterations, DefaultMaxIterations)
 }
-
-// =============================================================================
-// IterationResult Tests
-// =============================================================================
 
 func TestIterationResult_Duration(t *testing.T) {
 	start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -315,10 +299,6 @@ func TestIterationResult_Fields(t *testing.T) {
 	assert.Equal(t, start, result.StartedAt)
 	assert.Equal(t, end, result.CompletedAt)
 }
-
-// =============================================================================
-// LoopResult Tests
-// =============================================================================
 
 func TestNewLoopResult(t *testing.T) {
 	result := NewLoopResult()
@@ -432,10 +412,6 @@ func TestLoopResult_AddIteration(t *testing.T) {
 	assert.False(t, result.AllSucceeded())
 }
 
-// =============================================================================
-// Integration-style Tests
-// =============================================================================
-
 func TestLoopConfig_WithAllFields(t *testing.T) {
 	config := LoopConfig{
 		Type:           LoopTypeForEach,
@@ -519,10 +495,6 @@ func TestLoopResult_BrokenAtIteration(t *testing.T) {
 	assert.Equal(t, 2, result.BrokeAt)
 	assert.True(t, result.WasBroken())
 }
-
-// =============================================================================
-// MaxIterationsExpr Tests (F037)
-// =============================================================================
 
 func TestLoopConfig_IsMaxIterationsDynamic(t *testing.T) {
 	tests := []struct {

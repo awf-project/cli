@@ -982,7 +982,7 @@ func TestSQLiteHistoryStore_GetStats_CompletedStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, stats.TotalExecutions)
-	assert.Equal(t, 2, stats.SuccessCount, "'success' and 'completed' both count as success")
+	assert.Equal(t, 2, stats.SuccessCount)
 	assert.Equal(t, 1, stats.FailedCount)
 }
 
@@ -1018,10 +1018,6 @@ func TestSQLiteHistoryStore_List_SameCompletionTime(t *testing.T) {
 		assert.Equal(t, sameTime.Unix(), r.CompletedAt.Unix())
 	}
 }
-
-// ============================================================================
-// CONCURRENCY TESTS - Critical for bug-48 fix
-// ============================================================================
 
 func TestSQLiteHistoryStore_ConcurrentWrites(t *testing.T) {
 	t.Parallel()
@@ -1190,11 +1186,11 @@ func TestSQLiteHistoryStore_MultipleConnections(t *testing.T) {
 	// Both connections should see all data
 	records1, err := s1.List(ctx, &workflow.HistoryFilter{Limit: 100})
 	require.NoError(t, err)
-	assert.Len(t, records1, 2, "first connection should see both records")
+	assert.Len(t, records1, 2)
 
 	records2, err := s2.List(ctx, &workflow.HistoryFilter{Limit: 100})
 	require.NoError(t, err)
-	assert.Len(t, records2, 2, "second connection should see both records")
+	assert.Len(t, records2, 2)
 
 	// Open third connection to stress test
 	s3, err := store.NewSQLiteHistoryStore(path)
@@ -1213,7 +1209,7 @@ func TestSQLiteHistoryStore_MultipleConnections(t *testing.T) {
 	// All three connections should see all 3 records
 	records3, err := s3.List(ctx, &workflow.HistoryFilter{Limit: 100})
 	require.NoError(t, err)
-	assert.Len(t, records3, 3, "third connection should see all records")
+	assert.Len(t, records3, 3)
 
 	// Clean up in order
 	require.NoError(t, s3.Close())
@@ -1284,7 +1280,7 @@ func TestSQLiteHistoryStore_ConcurrentConnectionsWithInterleavedOps(t *testing.T
 	records, err := connections[0].List(ctx, &workflow.HistoryFilter{Limit: 1000})
 	require.NoError(t, err)
 	expectedRecords := numConnections * opsPerConnection
-	assert.Len(t, records, expectedRecords, "all concurrent operations should succeed")
+	assert.Len(t, records, expectedRecords)
 }
 
 // TestSQLiteHistoryStore_BusyTimeout verifies that SQLite properly handles
@@ -1355,12 +1351,8 @@ func TestSQLiteHistoryStore_BusyTimeout(t *testing.T) {
 	// Verify all writes succeeded despite contention
 	records, err := s1.List(ctx, &workflow.HistoryFilter{Limit: 1000})
 	require.NoError(t, err)
-	assert.Len(t, records, iterations*2, "all writes should succeed with busy_timeout")
+	assert.Len(t, records, iterations*2)
 }
-
-// ============================================================================
-// EDGE CASES AND ERROR HANDLING
-// ============================================================================
 
 func TestSQLiteHistoryStore_NilFilter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
@@ -1563,10 +1555,6 @@ func TestSQLiteHistoryStore_VeryLongErrorMessage(t *testing.T) {
 	assert.Equal(t, longMessage, records[0].ErrorMessage)
 }
 
-// ============================================================================
-// PROCESS-LEVEL CONCURRENCY TEST (simulates actual bug-48 scenario)
-// ============================================================================
-
 // TestSQLiteHistoryStore_MultiProcessConcurrency tests the actual bug-48 scenario:
 // multiple processes trying to access the same database simultaneously.
 // This test spawns actual child processes to verify SQLite handles this correctly.
@@ -1680,7 +1668,7 @@ func TestSQLiteHistoryStore_WALModeEnabled(t *testing.T) {
 	// Read from other connection should see the data (WAL provides read consistency)
 	records, err := s2.List(ctx, &workflow.HistoryFilter{Limit: 1})
 	require.NoError(t, err)
-	assert.Len(t, records, 1, "second connection should see data written by first")
+	assert.Len(t, records, 1)
 }
 
 // TestSQLiteHistoryStore_SimulateWorkflowExecution simulates the actual workflow
@@ -1752,7 +1740,7 @@ func TestSQLiteHistoryStore_SimulateWorkflowExecution(t *testing.T) {
 
 	records, err := verifyStore.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
 	require.NoError(t, err)
-	assert.Len(t, records, numWorkflows, "all workflow executions should be recorded")
+	assert.Len(t, records, numWorkflows)
 }
 
 // TestSQLiteHistoryStore_RealMultiProcessWithHelper uses a helper binary to

@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Validation Code Constants Tests
-// =============================================================================
-
 func TestValidationCodes_Exist(t *testing.T) {
 	// Verify all validation codes are defined as non-empty strings
 	codes := []struct {
@@ -42,10 +38,6 @@ func TestValidationCodes_Exist(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Sub-Workflow Validation Codes Tests
-// =============================================================================
 
 func TestSubWorkflowValidationCodes_Exist(t *testing.T) {
 	tests := []struct {
@@ -92,10 +84,6 @@ func TestSubWorkflowValidationCodes_UniqueValues(t *testing.T) {
 		seen[strCode] = true
 	}
 }
-
-// =============================================================================
-// ValidationError with Sub-Workflow Codes Tests
-// =============================================================================
 
 func TestValidationError_CircularWorkflowCall(t *testing.T) {
 	err := ValidationError{
@@ -153,10 +141,6 @@ func TestValidationError_SubWorkflow_WithoutPath(t *testing.T) {
 	assert.Contains(t, errStr, "circular dependency detected")
 	assert.NotContains(t, errStr, ":")
 }
-
-// =============================================================================
-// ValidationResult with Sub-Workflow Codes Tests
-// =============================================================================
 
 func TestValidationResult_AddError_SubWorkflowCodes(t *testing.T) {
 	tests := []struct {
@@ -283,10 +267,6 @@ func TestValidationResult_AllIssues_IncludesSubWorkflowCodes(t *testing.T) {
 	assert.Equal(t, ErrMaxNestingExceeded, issues[1].Code)
 }
 
-// =============================================================================
-// Validation Level Tests
-// =============================================================================
-
 func TestValidationLevel_Constants(t *testing.T) {
 	assert.Equal(t, ValidationLevel("error"), ValidationLevelError)
 	assert.Equal(t, ValidationLevel("warning"), ValidationLevelWarning)
@@ -313,10 +293,6 @@ func TestValidationError_IsError(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 func TestValidationError_EmptyMessage(t *testing.T) {
 	err := ValidationError{
