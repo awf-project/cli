@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/vanoix/awf/pkg/httputil"
+	"github.com/awf-project/awf/pkg/httputil"
 )
 
 var webhookBackendCounter uint64

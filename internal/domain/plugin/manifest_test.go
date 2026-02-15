@@ -3,9 +3,9 @@ package plugin_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 func TestValidCapabilities_ContainsExpectedValues(t *testing.T) {
@@ -163,7 +163,7 @@ func TestManifest_FullManifest(t *testing.T) {
 		Description: "A marketplace plugin",
 		Author:      "AWF Team",
 		License:     "MIT",
-		Homepage:    "https://github.com/vanoix/awf",
+		Homepage:    "https://github.com/awf-project/awf",
 		Capabilities: []string{
 			plugin.CapabilityOperations,
 			plugin.CapabilityCommands,
@@ -424,7 +424,7 @@ func TestManifest_HomepageFormats(t *testing.T) {
 		name     string
 		homepage string
 	}{
-		{name: "GitHub URL", homepage: "https://github.com/vanoix/awf"},
+		{name: "GitHub URL", homepage: "https://github.com/awf-project/awf"},
 		{name: "GitLab URL", homepage: "https://gitlab.com/project/repo"},
 		{name: "Custom domain", homepage: "https://awf-plugin.example.com"},
 		{name: "HTTP URL", homepage: "http://example.com"},
@@ -451,7 +451,7 @@ func TestManifest_AuthorFormats(t *testing.T) {
 		{name: "Simple name", author: "John Doe"},
 		{name: "Organization", author: "AWF Team"},
 		{name: "With email", author: "John Doe <john@example.com>"},
-		{name: "With URL", author: "AWF Team (https://github.com/vanoix)"},
+		{name: "With URL", author: "AWF Team (https://github.com/awf-project)"},
 	}
 
 	for _, tt := range tests {
@@ -1660,7 +1660,7 @@ func TestManifestValidate_HappyPath(t *testing.T) {
 				Description: "A marketplace integration plugin",
 				Author:      "AWF Team <team@awf.dev>",
 				License:     "MIT",
-				Homepage:    "https://github.com/vanoix/awf",
+				Homepage:    "https://github.com/awf-project/awf",
 				Capabilities: []string{
 					plugin.CapabilityOperations,
 					plugin.CapabilityCommands,

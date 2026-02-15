@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
-	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/ports"
+	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
 )
 
 // PluginSystemResult contains the initialized plugin system components.

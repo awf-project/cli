@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/vanoix/awf/internal/domain/workflow"
+import "github.com/awf-project/awf/internal/domain/workflow"
 
 // InputCollector defines the contract for collecting missing workflow inputs interactively.
 // This port is used for pre-execution input collection when required inputs are missing

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 const fixturesPath = "../../../tests/fixtures/plugins"

@@ -70,4 +70,4 @@ When using AWF:
 
 Subscribe to security advisories:
 - Watch this repository (Releases only)
-- Check [GitHub Security Advisories](https://github.com/vanoix/gustave/security/advisories)
+- Check [GitHub Security Advisories](https://github.com/awf-project/awf/security/advisories)

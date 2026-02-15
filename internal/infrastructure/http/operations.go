@@ -1,6 +1,6 @@
 package http
 
-import "github.com/vanoix/awf/internal/domain/plugin"
+import "github.com/awf-project/awf/internal/domain/plugin"
 
 // AllOperations returns all HTTP operation schemas.
 func AllOperations() []plugin.OperationSchema {

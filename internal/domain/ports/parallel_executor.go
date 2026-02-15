@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // ParallelExecutor defines the contract for executing parallel branches.

@@ -3,8 +3,8 @@ package workflow_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // Feature: C019 - Memory leak fixes with output limiting and streaming

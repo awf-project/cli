@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // Component: T001

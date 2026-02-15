@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 // TestErrorCommand_Exists verifies that the error command is registered in the root command.

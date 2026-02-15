@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 func TestPluginStatus_Values(t *testing.T) {

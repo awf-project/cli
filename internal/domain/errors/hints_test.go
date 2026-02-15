@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
 func TestHint_Construction_WithValidMessage(t *testing.T) {

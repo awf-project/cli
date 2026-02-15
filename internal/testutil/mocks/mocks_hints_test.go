@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/testutil/mocks"
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/testutil/mocks"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

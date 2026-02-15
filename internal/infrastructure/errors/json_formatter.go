@@ -3,8 +3,8 @@ package errfmt
 import (
 	"encoding/json"
 
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/domain/ports"
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // JSONErrorFormatter implements the ErrorFormatter port interface, providing

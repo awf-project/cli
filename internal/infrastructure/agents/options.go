@@ -1,6 +1,6 @@
 package agents
 
-import "github.com/vanoix/awf/internal/domain/ports"
+import "github.com/awf-project/awf/internal/domain/ports"
 
 type ClaudeProviderOption func(*ClaudeProvider)
 

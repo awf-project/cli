@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // ManifestParseError represents an error during plugin manifest parsing.

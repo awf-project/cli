@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // Plugin defines the contract that all plugins must implement.

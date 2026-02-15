@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // Operation defines an executable operation with typed inputs and schema.

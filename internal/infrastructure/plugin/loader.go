@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // LoaderError represents an error during plugin loading operations.

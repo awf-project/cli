@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/awf-project/awf/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: C025 - Unit Tests for CustomProvider (WITHOUT integration build tag)

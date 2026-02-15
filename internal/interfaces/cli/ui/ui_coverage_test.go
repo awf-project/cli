@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 )
 
 // TestWriteDryRun_AllFormats tests WriteDryRun with all output formats

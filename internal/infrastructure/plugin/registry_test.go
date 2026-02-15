@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // --- Interface compliance tests ---

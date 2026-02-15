@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 func TestRunCommand_WiresNotifyOperationProvider(t *testing.T) {

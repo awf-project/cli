@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // This file contains thread-safe mock implementations of domain port interfaces.

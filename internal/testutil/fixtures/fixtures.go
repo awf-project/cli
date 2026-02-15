@@ -3,7 +3,7 @@ package fixtures
 import (
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // This file contains workflow fixture factories for creating common test workflows

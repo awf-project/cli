@@ -119,7 +119,7 @@
 //
 //	import (
 //	    "context"
-//	    "github.com/vanoix/awf/pkg/plugin/sdk"
+//	    "github.com/awf-project/awf/pkg/plugin/sdk"
 //	)
 //
 //	type SlackPlugin struct {

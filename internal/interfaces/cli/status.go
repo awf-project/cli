@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/infrastructure/store"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func newStatusCommand(cfg *Config) *cobra.Command {

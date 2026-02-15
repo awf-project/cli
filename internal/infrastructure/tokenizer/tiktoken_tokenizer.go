@@ -3,8 +3,8 @@ package tokenizer
 import (
 	"fmt"
 
+	"github.com/awf-project/awf/internal/domain/ports"
 	tiktoken "github.com/pkoukk/tiktoken-go"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // TiktokenTokenizer implements ports.Tokenizer using pkoukk/tiktoken-go library.

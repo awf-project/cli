@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	workflow "github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	workflow "github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
 )
 
 // Signal Handling Integration Tests (C010)

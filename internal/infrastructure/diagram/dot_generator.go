@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // Generator generates DOT format output from workflow definitions.

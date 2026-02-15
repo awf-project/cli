@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // YAMLTemplateRepository loads templates from YAML files.

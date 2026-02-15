@@ -10,9 +10,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // CustomProvider implements AgentProvider for user-defined command templates.

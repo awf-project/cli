@@ -21,9 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
 )
 
 // TestDocumentation_StatusFilterAlignment_Integration verifies that the
@@ -209,4 +209,3 @@ func TestFileExistence_RequiredFiles_Integration(t *testing.T) {
 		assert.NoError(t, err, "file should exist: %s", file)
 	}
 }
-

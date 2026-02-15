@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 //

@@ -17,9 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
 )
 
 // TestPackageDocumentation_WorkflowPackage validates workflow package documentation

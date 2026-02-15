@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // ErrRPCNotImplemented indicates a stub method that needs implementation.

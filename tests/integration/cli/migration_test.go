@@ -307,7 +307,7 @@ func TestIntegrationTestMigration_ImportsUpdated(t *testing.T) {
 		node, err := parser.ParseFile(fset, file, nil, parser.ImportsOnly)
 		require.NoError(t, err, "should parse file %s", file)
 
-		// Then: Should import github.com/vanoix/awf/internal/interfaces/cli
+		// Then: Should import github.com/awf-project/awf/internal/interfaces/cli
 		hasCliImport := false
 		for _, imp := range node.Imports {
 			importPath := strings.Trim(imp.Path.Value, `"`)

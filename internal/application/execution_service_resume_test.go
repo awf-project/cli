@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 // executeFromStep Tests

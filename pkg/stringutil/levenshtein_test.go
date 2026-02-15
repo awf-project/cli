@@ -3,8 +3,8 @@ package stringutil_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/pkg/stringutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/pkg/stringutil"
 )
 
 func TestLevenshteinDistance(t *testing.T) {

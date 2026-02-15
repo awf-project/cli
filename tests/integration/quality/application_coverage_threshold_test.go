@@ -21,10 +21,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/internal/testutil/builders"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/testutil/builders"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 func findProjectRootC027() (string, error) {
@@ -323,7 +323,7 @@ func TestArchitectureCompliance_NoInfrastructureImports(t *testing.T) {
 				content, err := os.ReadFile(filePath)
 				require.NoError(t, err)
 
-				assert.NotContains(t, string(content), `"github.com/vanoix/awf/internal/infrastructure`,
+				assert.NotContains(t, string(content), `"github.com/awf-project/awf/internal/infrastructure`,
 					"test file %s should not import infrastructure packages (C038 compliance)", file.Name())
 
 				assert.NotContains(t, string(content), `infrastructure/agents`,

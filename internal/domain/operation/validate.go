@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // ValidateInputs validates runtime inputs against an operation schema.

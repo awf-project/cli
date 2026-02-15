@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	domerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	domerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // Component T013: WriteError() StructuredError Enhancement Tests

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 // TestInitGlobalCommand tests the `awf init --global` feature (F044 US4).

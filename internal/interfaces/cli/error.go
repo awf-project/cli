@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // newErrorCommand creates the error code lookup command.

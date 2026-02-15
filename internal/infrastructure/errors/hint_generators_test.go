@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
 func TestFileNotFoundHintGenerator_ReturnsHints_ForMissingFileWithSimilarFile(t *testing.T) {

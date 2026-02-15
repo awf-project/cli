@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // RED Phase: Test stubs for interpolation error types

@@ -1,6 +1,6 @@
 package github
 
-import "github.com/vanoix/awf/internal/domain/plugin"
+import "github.com/awf-project/awf/internal/domain/plugin"
 
 // AllOperations returns all 9 GitHub operation schemas that can be registered
 // with the OperationRegistry. Each operation defines its input/output schema,

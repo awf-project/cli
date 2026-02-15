@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/internal/infrastructure/repository"
+	"github.com/awf-project/awf/internal/infrastructure/xdg"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
-	"github.com/vanoix/awf/internal/infrastructure/xdg"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func TestDefaultConfig(t *testing.T) {

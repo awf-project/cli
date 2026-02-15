@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 func TestExecutionRecord_Fields(t *testing.T) {

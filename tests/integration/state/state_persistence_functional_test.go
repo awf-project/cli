@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/infrastructure/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/store"
 )
 
 // Validates that JSON store and SQLite history store work correctly

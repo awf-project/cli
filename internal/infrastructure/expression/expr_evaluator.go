@@ -5,10 +5,10 @@ import (
 	"math"
 	"regexp"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/pkg/expression"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/expr-lang/expr"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/pkg/expression"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // ExprEvaluator implements ports.ExpressionEvaluator using the expr-lang/expr library.

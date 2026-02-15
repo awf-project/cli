@@ -17,10 +17,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/infrastructure/expression"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/infrastructure/expression"
 )
 
 // TestNoExprLangImportInApplicationLayer verifies that no file in the

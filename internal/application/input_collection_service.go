@@ -1,8 +1,8 @@
 package application
 
 import (
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // InputCollectionService coordinates interactive collection of missing workflow inputs.

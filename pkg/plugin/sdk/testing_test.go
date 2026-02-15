@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/pkg/plugin/sdk"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/pkg/plugin/sdk"
 )
 
 // MockPlugin tests

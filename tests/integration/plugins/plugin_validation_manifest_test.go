@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
+	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
-	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
 )
 
 // TestManifestValidation_ValidSimple_Integration tests validation of a minimal valid manifest.

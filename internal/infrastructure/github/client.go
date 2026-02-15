@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // Client wraps GitHub API interactions via gh CLI and HTTP API with authentication fallback.

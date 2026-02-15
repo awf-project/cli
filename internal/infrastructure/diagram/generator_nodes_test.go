@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 func TestGenerator_generateNodes_SingleCommandStep(t *testing.T) {

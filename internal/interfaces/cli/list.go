@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/awf-project/awf/internal/infrastructure/repository"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func newListCommand(cfg *Config) *cobra.Command {

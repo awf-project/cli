@@ -56,7 +56,7 @@ Generate interactive HTML documentation:
 # Start local Go documentation server
 godoc -http=:6060
 
-# Then visit http://localhost:6060/pkg/github.com/vanoix/awf/internal/domain/workflow/
+# Then visit http://localhost:6060/pkg/github.com/awf-project/awf/internal/domain/workflow/
 ```
 
 ## Documentation Structure

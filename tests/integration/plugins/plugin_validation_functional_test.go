@@ -8,9 +8,9 @@ package plugins_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 // TestOperationSchemaValidate_ValidMinimal_Integration tests validation of a minimal valid operation schema.

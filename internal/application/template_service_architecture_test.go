@@ -221,7 +221,7 @@ func TestTemplateServiceTests_ArchitectureCompliance(t *testing.T) {
 				cleanImp := strings.Trim(imp, `"`)
 
 				// Skip standard library and external packages
-				if !strings.Contains(cleanImp, "github.com/vanoix/awf") {
+				if !strings.Contains(cleanImp, "github.com/awf-project/awf") {
 					continue
 				}
 
@@ -395,7 +395,7 @@ func TestTemplateServiceTests_ImportOrder(t *testing.T) {
 
 				if strings.Contains(cleanImp, ".") {
 					// External package
-					if strings.Contains(cleanImp, "github.com/vanoix/awf") {
+					if strings.Contains(cleanImp, "github.com/awf-project/awf") {
 						internalImports = append(internalImports, cleanImp)
 					} else {
 						externalImports = append(externalImports, cleanImp)

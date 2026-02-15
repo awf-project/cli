@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 func TestTemplateResolver_Inputs(t *testing.T) {

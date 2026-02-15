@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/ports"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

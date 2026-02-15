@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // ParallelExecutor executes parallel branches using errgroup with semaphore.

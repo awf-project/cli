@@ -7,10 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/awf-project/awf/internal/infrastructure/config"
+	"github.com/awf-project/awf/internal/infrastructure/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/infrastructure/config"
-	"github.com/vanoix/awf/internal/infrastructure/notify"
 )
 
 // TestRegisterNotifyBackends_AlwaysEnabledBackends tests that desktop and webhook

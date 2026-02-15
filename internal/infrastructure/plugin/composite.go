@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // CompositeOperationProvider wraps multiple OperationProvider instances into a single provider,

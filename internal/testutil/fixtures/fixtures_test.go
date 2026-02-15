@@ -3,11 +3,11 @@ package fixtures_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/testutil/builders"
+	"github.com/awf-project/awf/internal/testutil/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil/builders"
-	"github.com/vanoix/awf/internal/testutil/fixtures"
 )
 
 // Feature: C007

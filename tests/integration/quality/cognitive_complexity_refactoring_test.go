@@ -10,12 +10,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/infrastructure/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
 )
 
 // Tests validate that refactored code maintains exact behavioral compatibility

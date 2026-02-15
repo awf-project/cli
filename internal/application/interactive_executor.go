@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/google/uuid"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // InteractiveExecutor executes workflows in step-by-step interactive mode.

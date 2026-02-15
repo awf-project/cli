@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/pkg/httputil"
 )
 
 // --- Mock Logger ---

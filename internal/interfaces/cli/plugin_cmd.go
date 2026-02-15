@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/awf-project/awf/internal/application"
+	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/application"
-	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func newPluginCommand(cfg *Config) *cobra.Command {

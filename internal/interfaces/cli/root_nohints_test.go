@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/interfaces/cli"
+	"github.com/awf-project/awf/internal/interfaces/cli"
 )
 
 // Component T012: Tests for --no-hints persistent flag registration

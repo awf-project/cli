@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 // mockPluginStore Tests (Happy Path)

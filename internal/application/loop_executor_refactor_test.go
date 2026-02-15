@@ -4,11 +4,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/testutil/mocks"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 //
