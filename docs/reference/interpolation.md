@@ -178,6 +178,104 @@ deploy:
     deploy.sh --env={{.env.DEPLOY_ENV}} --token={{.env.API_TOKEN}}
 ```
 
+### AWF Directory Context
+
+Access system directories configured per XDG standards:
+
+```yaml
+{{.awf.config_dir}}      # ~/.config/awf (or $XDG_CONFIG_HOME/awf)
+{{.awf.data_dir}}        # ~/.local/share/awf (or $XDG_DATA_HOME/awf)
+{{.awf.cache_dir}}       # ~/.cache/awf (or $XDG_CACHE_HOME/awf)
+{{.awf.prompts_dir}}     # Designated prompts directory within config_dir
+{{.awf.workflows_dir}}   # Designated workflows directory within config_dir
+{{.awf.plugins_dir}}     # Plugin installation directory
+```
+
+Example:
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt_file: "{{.awf.prompts_dir}}/code_review.md"
+  on_success: done
+```
+
+## Template Helper Functions
+
+When interpolating template expressions, the following helper functions are available:
+
+### `split`
+
+Split a string into an array by delimiter:
+
+```yaml
+{{split "apple,banana,orange" ","}}
+```
+
+Returns: `["apple" "banana" "orange"]`
+
+Use in templates with `range` to iterate:
+```markdown
+{{range split .states.select.Output ","}}
+- {{trimSpace .}}
+{{end}}
+```
+
+### `join`
+
+Join an array into a string with separator:
+
+```yaml
+{{join (split .states.agents.Output ",") " | "}}
+```
+
+Returns: `apple | banana | orange`
+
+### `readFile`
+
+Read and inline file contents (with 1MB size limit):
+
+```markdown
+## Specification
+
+{{readFile .states.spec_path.Output}}
+```
+
+The file path is relative to the workflow directory. Fails if:
+- File doesn't exist
+- File exceeds 1MB (prevents accidental large file loading)
+- Path is not readable
+
+### `trimSpace`
+
+Remove leading and trailing whitespace:
+
+```yaml
+Result: {{trimSpace .states.process.Output}}
+```
+
+Useful for cleaning multiline outputs or removing shell command trailing newlines.
+
+### Example: String Manipulation
+
+```markdown
+# Analysis Report
+
+## Available Agents
+{{range split .states.list_agents.Output ","}}
+- {{trimSpace .}}
+{{end}}
+
+## Combined Skills
+Skills: {{join .states.available_skills.Output ", "}}
+
+## Research Summary
+{{readFile .states.research_summary_path.Output}}
+
+## Status
+{{trimSpace .states.final_status.Output}}
+```
+
 ### Loop Context Variables
 
 Available inside `for_each` and `while` loops:

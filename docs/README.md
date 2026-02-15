@@ -25,6 +25,7 @@ Learn how to use AWF effectively:
 - [Commands](user-guide/commands.md) - All CLI commands and flags
 - [Interactive Input Collection](user-guide/interactive-inputs.md) - Automatic prompting for missing workflow inputs
 - [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents (Claude, Codex, Gemini) in workflows
+  - [External Prompt Files](user-guide/agent-steps.md#external-prompt-files) - Load prompts from Markdown files with template interpolation
 - [Conversation Mode](user-guide/conversation-steps.md) - Multi-turn conversations with context window management
 - [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference

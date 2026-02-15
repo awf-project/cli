@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	domerrors "github.com/awf-project/awf/internal/domain/errors"
 	"github.com/awf-project/awf/internal/domain/ports"
@@ -76,6 +79,81 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 		}
 		return fmt.Errorf("validate workflow %s: %w", name, err)
 	}
+
+	return s.validatePromptFiles(wf)
+}
+
+func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
+	for _, step := range wf.Steps {
+		if step.Type != workflow.StepTypeAgent || step.Agent == nil {
+			continue
+		}
+
+		if step.Agent.PromptFile == "" {
+			continue
+		}
+
+		// Skip validation for paths with template expressions — resolved at runtime
+		if strings.Contains(step.Agent.PromptFile, "{{") {
+			continue
+		}
+
+		path := step.Agent.PromptFile
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(wf.SourceDir, path)
+		}
+
+		info, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return domerrors.NewStructuredError(
+					domerrors.ErrorCodeUserInputMissingFile,
+					fmt.Sprintf("prompt_file not found: %s", step.Agent.PromptFile),
+					map[string]any{
+						"path": path,
+						"step": step.Name,
+					},
+					err,
+				)
+			}
+			return domerrors.NewStructuredError(
+				domerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("prompt_file cannot be accessed: %s", step.Agent.PromptFile),
+				map[string]any{
+					"path": path,
+					"step": step.Name,
+				},
+				err,
+			)
+		}
+
+		if info.IsDir() {
+			return domerrors.NewStructuredError(
+				domerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("prompt_file is a directory, not a file: %s", step.Agent.PromptFile),
+				map[string]any{
+					"path": path,
+					"step": step.Name,
+				},
+				nil,
+			)
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return domerrors.NewStructuredError(
+				domerrors.ErrorCodeUserInputMissingFile,
+				fmt.Sprintf("prompt_file cannot be read: %s", step.Agent.PromptFile),
+				map[string]any{
+					"path": path,
+					"step": step.Name,
+				},
+				err,
+			)
+		}
+		_ = f.Close()
+	}
+
 	return nil
 }
 

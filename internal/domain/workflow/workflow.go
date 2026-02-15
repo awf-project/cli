@@ -27,6 +27,7 @@ type Workflow struct {
 	Initial     string           // initial state name
 	Steps       map[string]*Step // state name -> step
 	Hooks       WorkflowHooks    // workflow-level hooks
+	SourceDir   string           // workflow file directory for path resolution (runtime metadata)
 }
 
 // GetStep retrieves a step by name.

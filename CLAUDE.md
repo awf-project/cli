@@ -229,6 +229,10 @@ Use pkg pattern for cross-layer HTTP utilities (pkg/httputil) to avoid infrastru
 
 Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
 
+Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
+
+Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
+
 ## Common Pitfalls
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -237,11 +241,19 @@ Never duplicate HTTP client logic across notification backends; extract to pkg/h
 
 Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
 
+Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; enables consistent behavior regardless of CLI invocation location
+
+Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent accidental memory issues and provide fast failure feedback for misconfigured paths
+
+Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
 
 Use HTTPDoer interface in pkg/httputil tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
+
+Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 
 ## Review Standards
 

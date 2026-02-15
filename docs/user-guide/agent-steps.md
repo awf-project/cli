@@ -167,6 +167,196 @@ review:
 
 See [Variable Interpolation Reference](../reference/interpolation.md) for complete details.
 
+## External Prompt Files
+
+Instead of inlining prompts in YAML, you can load prompts from external Markdown files using the `prompt_file` field:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt_file: prompts/code_review.md
+  timeout: 120
+  on_success: done
+```
+
+**File:** `prompts/code_review.md`
+```markdown
+# Code Review Instructions
+
+Analyze the following file for:
+- Performance issues
+- Security vulnerabilities
+- Code style violations
+
+## File Path
+{{.inputs.file_path}}
+
+## File Content
+{{.inputs.file_content}}
+
+## Language
+{{.inputs.language}}
+```
+
+### Features
+
+- **Full Template Interpolation** — Same variable access as inline prompts
+- **Helper Functions** — String manipulation directly in templates
+- **Path Resolution** — Relative paths resolve to workflow directory
+- **XDG Directory Support** — Access system directories via `{{.awf.*}}`
+
+### Mutual Exclusivity
+
+You cannot specify both `prompt` and `prompt_file` on the same agent step:
+
+```yaml
+# ❌ Invalid: both prompt and prompt_file
+step:
+  type: agent
+  provider: claude
+  prompt: "Do this"
+  prompt_file: "prompts/template.md"  # ERROR: only one allowed
+
+# ✅ Valid: prompt only
+step:
+  type: agent
+  provider: claude
+  prompt: "Do this"
+
+# ✅ Valid: prompt_file only
+step:
+  type: agent
+  provider: claude
+  prompt_file: "prompts/template.md"
+```
+
+### Path Resolution
+
+Paths can be:
+
+1. **Relative to workflow directory:**
+   ```yaml
+   prompt_file: prompts/analyze.md           # Resolves to <workflow_dir>/prompts/analyze.md
+   ```
+
+2. **Absolute paths:**
+   ```yaml
+   prompt_file: /home/user/my-prompts/template.md
+   ```
+
+3. **Home directory expansion:**
+   ```yaml
+   prompt_file: ~/my-prompts/template.md      # Expands to user's home directory
+   ```
+
+4. **XDG-compliant system directories:**
+   ```yaml
+   prompt_file: "{{.awf.prompts_dir}}/analyze.md"  # ~/.config/awf/prompts/analyze.md (or per XDG_CONFIG_HOME)
+   prompt_file: "{{.awf.data_dir}}/templates/*.md"
+   ```
+
+### Template Helper Functions
+
+When interpolating prompt templates, four helper functions are available:
+
+#### `split`
+
+Split a string into an array:
+
+```markdown
+## Selected Agents
+
+{{range split .states.select_agents.Output ","}}
+- {{trimSpace .}}
+{{end}}
+```
+
+#### `join`
+
+Join an array into a string:
+
+```markdown
+Skills to use: {{join .states.available_skills.Output ", "}}
+```
+
+#### `readFile`
+
+Inline file contents (with 1MB size limit):
+
+```markdown
+## Specification
+
+{{readFile .states.get_spec.Output}}
+```
+
+#### `trimSpace`
+
+Remove leading/trailing whitespace:
+
+```markdown
+Result: {{trimSpace .states.process.Output}}
+```
+
+### Example: Multi-File Workflow
+
+**Workflow:** `code-review.yaml`
+```yaml
+name: code-review
+version: "1.0.0"
+
+inputs:
+  - name: file_path
+    type: string
+    required: true
+    validation:
+      file_exists: true
+  - name: focus_areas
+    type: string
+
+states:
+  initial: read_file
+
+  read_file:
+    type: step
+    command: cat "{{.inputs.file_path}}"
+    on_success: analyze
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt_file: prompts/code_review.md
+    timeout: 120
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+**Template:** `prompts/code_review.md`
+```markdown
+# Code Review
+
+File: `{{.inputs.file_path}}`
+
+Focus on:
+{{.inputs.focus_areas}}
+
+## Code to Review
+
+{{.states.read_file.Output}}
+
+Provide:
+1. Issues found
+2. Suggested fixes
+3. Overall assessment
+```
+
+Run:
+```bash
+awf run code-review --input file_path=main.py --input focus_areas="Performance and security"
+```
+
 ## Capturing Responses
 
 Agent responses are automatically captured in the execution state:

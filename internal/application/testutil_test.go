@@ -6,6 +6,7 @@ import (
 	"github.com/awf-project/awf/internal/application"
 	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/infrastructure/xdg"
 	"github.com/awf-project/awf/internal/testutil/builders"
 	testmocks "github.com/awf-project/awf/internal/testutil/mocks"
 )
@@ -278,6 +279,16 @@ func (h *ServiceTestHarness) WithExecutor(executor ports.CommandExecutor) *Servi
 func (h *ServiceTestHarness) Build() (*application.ExecutionService, *TestMocks) {
 	// Build the ExecutionService using the configured builder
 	service := h.builder.Build()
+
+	// F063/T012: Inject AWF XDG directory paths for template interpolation
+	// This populates the .awf namespace in interpolation contexts
+	service.SetAWFPaths(map[string]string{
+		"prompts_dir":   xdg.AWFPromptsDir(),
+		"config_dir":    xdg.AWFConfigDir(),
+		"data_dir":      xdg.AWFDataDir(),
+		"workflows_dir": xdg.AWFWorkflowsDir(),
+		"plugins_dir":   xdg.AWFPluginsDir(),
+	})
 
 	// Create TestMocks tuple with references to all mocks
 	mocks := &TestMocks{

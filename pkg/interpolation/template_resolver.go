@@ -28,15 +28,20 @@ func (r *TemplateResolver) Resolve(tmplStr string, ctx *Context) (string, error)
 	tmpl := template.New("cmd").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
-			"escape":   escapeTemplateFunc,
-			"json":     jsonTemplateFunc,
-			"inputs":   r.makeInputsAccessor(ctx),
-			"states":   r.makeStatesAccessor(ctx),
-			"workflow": r.makeWorkflowAccessor(ctx),
-			"env":      r.makeEnvAccessor(ctx),
-			"loop":     r.makeLoopAccessor(ctx),
-			"context":  r.makeContextAccessor(ctx),
-			"error":    r.makeErrorAccessor(ctx),
+			"escape":    escapeTemplateFunc,
+			"json":      jsonTemplateFunc,
+			"split":     splitTemplateFunc,
+			"join":      joinTemplateFunc,
+			"readFile":  readFileTemplateFunc,
+			"trimSpace": trimSpaceTemplateFunc,
+			"inputs":    r.makeInputsAccessor(ctx),
+			"states":    r.makeStatesAccessor(ctx),
+			"workflow":  r.makeWorkflowAccessor(ctx),
+			"env":       r.makeEnvAccessor(ctx),
+			"loop":      r.makeLoopAccessor(ctx),
+			"context":   r.makeContextAccessor(ctx),
+			"error":     r.makeErrorAccessor(ctx),
+			"awf":       r.makeAWFAccessor(ctx),
 		})
 
 	tmpl, err := tmpl.Parse(tmplStr)
@@ -59,6 +64,7 @@ func (r *TemplateResolver) buildTemplateData(ctx *Context) map[string]any {
 		"workflow": ctx.Workflow,
 		"env":      ctx.Env,
 		"context":  ctx.Context,
+		"awf":      ctx.AWF,
 	}
 	if ctx.Error != nil {
 		data["error"] = ctx.Error
@@ -234,5 +240,12 @@ func (r *TemplateResolver) makeWorkflowAccessor(ctx *Context) func() WorkflowDat
 func (r *TemplateResolver) makeEnvAccessor(ctx *Context) func() map[string]string {
 	return func() map[string]string {
 		return ctx.Env
+	}
+}
+
+// makeAWFAccessor returns a function that provides AWF directory paths.
+func (r *TemplateResolver) makeAWFAccessor(ctx *Context) func() map[string]string {
+	return func() map[string]string {
+		return ctx.AWF
 	}
 }

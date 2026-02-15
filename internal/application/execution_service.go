@@ -48,6 +48,7 @@ type ExecutionService struct {
 	agentRegistry     ports.AgentRegistry
 	conversationMgr   ConversationExecutor // F033: Multi-turn conversation orchestration (interface for testability)
 	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
+	awfPaths          map[string]string    // F063: XDG directory paths injected at construction (prompts_dir, config_dir, etc.)
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -84,6 +85,12 @@ func (s *ExecutionService) SetEvaluator(evaluator ports.ExpressionEvaluator) {
 // Accepts ConversationExecutor interface to allow dependency injection and testing with mocks.
 func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 	s.conversationMgr = mgr
+}
+
+// SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
+// Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir.
+func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
+	s.awfPaths = paths
 }
 
 // NewExecutionService - historySvc can be nil to disable history recording.
@@ -275,7 +282,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeAgent:
-			nextStep, err = s.executeAgentStep(ctx, step, execCtx)
+			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -526,6 +533,13 @@ func (s *ExecutionService) buildInterpolationContext(
 		env[k] = v // Override with workflow-specific env
 	}
 
+	// Populate AWF context with XDG directory paths (F063/T012)
+	// Paths are injected via SetAWFPaths() to avoid infrastructure import in application layer
+	awfContext := s.awfPaths
+	if awfContext == nil {
+		awfContext = map[string]string{}
+	}
+
 	intCtx := &interpolation.Context{
 		Inputs: execCtx.Inputs,
 		States: states,
@@ -542,6 +556,7 @@ func (s *ExecutionService) buildInterpolationContext(
 			Hostname:   hostname,
 		},
 		Error: nil, // Set in error hooks (F008)
+		AWF:   awfContext,
 	}
 
 	// Include loop context if we're inside a loop (with parent chain for nested loops)
@@ -791,7 +806,7 @@ func (s *ExecutionService) executeLoopStep(
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeAgent:
-			nextStep, err = s.executeAgentStep(ctx, bodyStep, execCtx)
+			nextStep, err = s.executeAgentStep(ctx, wf, bodyStep, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
 		}
@@ -1311,7 +1326,7 @@ func (a *stepExecutorAdapter) ExecuteStep(
 	var err error
 	switch step.Type {
 	case workflow.StepTypeAgent:
-		_, err = a.execSvc.executeAgentStep(ctx, step, execCtx)
+		_, err = a.execSvc.executeAgentStep(ctx, wf, step, execCtx)
 	case workflow.StepTypeParallel:
 		_, err = a.execSvc.executeParallelStep(ctx, wf, step, execCtx)
 	case workflow.StepTypeForEach, workflow.StepTypeWhile:
@@ -1497,7 +1512,7 @@ func (s *ExecutionService) executeFromStep(
 		case workflow.StepTypeCallWorkflow:
 			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeAgent:
-			nextStep, err = s.executeAgentStep(ctx, step, execCtx)
+			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
 		default:
 			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		}
@@ -1703,6 +1718,7 @@ var ErrNoAgentRegistry = errors.New("agent registry not configured")
 //nolint:gocognit // Complexity 39: agent step execution handles conversation/single modes, retries, context windows, token management. Inherent to agent orchestration.
 func (s *ExecutionService) executeAgentStep(
 	ctx context.Context,
+	wf *workflow.Workflow,
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
@@ -1753,8 +1769,18 @@ func (s *ExecutionService) executeAgentStep(
 		return s.executeConversationStep(stepCtx, step, execCtx)
 	}
 
+	// F063: Load prompt from file if prompt_file is specified
+	promptToResolve := step.Agent.Prompt
+	if step.Agent.PromptFile != "" {
+		loadedPrompt, err := loadPromptFile(stepCtx, step.Agent.PromptFile, wf, intCtx)
+		if err != nil {
+			return "", fmt.Errorf("step %s: load prompt file: %w", step.Name, err)
+		}
+		promptToResolve = loadedPrompt
+	}
+
 	// Resolve prompt via interpolation
-	resolvedPrompt, err := s.resolver.Resolve(step.Agent.Prompt, intCtx)
+	resolvedPrompt, err := s.resolver.Resolve(promptToResolve, intCtx)
 	if err != nil {
 		return "", fmt.Errorf("step %s: resolve prompt: %w", step.Name, err)
 	}
