@@ -262,6 +262,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+	execSvc.SetAWFPaths(buildAWFPaths())
 
 	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
 	githubClient := github.NewClient(logger)
@@ -436,6 +437,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	exprValidator := infra_expression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	dryRunExec := application.NewDryRunExecutor(wfSvc, resolver, exprEvaluator, logger)
+	dryRunExec.SetAWFPaths(buildAWFPaths())
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -924,6 +926,7 @@ func runSingleStep(
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+	execSvc.SetAWFPaths(buildAWFPaths())
 
 	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
 	githubClient := github.NewClient(logger)
@@ -1205,4 +1208,15 @@ func registerNotifyBackends(provider *notify.NotifyOperationProvider, cfg *confi
 	}
 
 	return nil
+}
+
+// buildAWFPaths returns the AWF XDG directory paths for template interpolation (F063).
+func buildAWFPaths() map[string]string {
+	return map[string]string{
+		"prompts_dir":   xdg.AWFPromptsDir(),
+		"config_dir":    xdg.AWFConfigDir(),
+		"data_dir":      xdg.AWFDataDir(),
+		"workflows_dir": xdg.AWFWorkflowsDir(),
+		"plugins_dir":   xdg.AWFPluginsDir(),
+	}
 }

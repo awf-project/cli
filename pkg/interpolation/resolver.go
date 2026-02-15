@@ -16,6 +16,7 @@ type Context struct {
 	Context  ContextData
 	Error    *ErrorData
 	Loop     *LoopData // loop iteration data
+	AWF      map[string]string
 }
 
 // LoopData holds loop iteration context for interpolation.
@@ -77,5 +78,6 @@ func NewContext() *Context {
 		Inputs: make(map[string]any),
 		States: make(map[string]StepStateData),
 		Env:    make(map[string]string),
+		AWF:    make(map[string]string),
 	}
 }

@@ -13,6 +13,7 @@ const DefaultAgentTimeout = 300
 type AgentConfig struct {
 	Provider      string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, custom
 	Prompt        string              `yaml:"prompt"`         // prompt template with {{inputs.*}} and {{states.*}} (single mode) or initial prompt (conversation mode)
+	PromptFile    string              `yaml:"prompt_file"`    // path to external prompt template file (mutually exclusive with Prompt)
 	Options       map[string]any      `yaml:"options"`        // provider-specific options (model, temperature, max_tokens, etc.)
 	Timeout       int                 `yaml:"timeout"`        // seconds, 0 = use DefaultAgentTimeout
 	Command       string              `yaml:"command"`        // custom command template (for custom provider)
@@ -42,8 +43,17 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 		return errors.New("mode must be 'single' or 'conversation'")
 	}
 
+	// Validate mutual exclusivity of Prompt and PromptFile
+	if c.Prompt != "" && c.PromptFile != "" {
+		return errors.New("prompt and prompt_file are mutually exclusive")
+	}
+
 	// Mode-specific validation
 	if c.Mode == "conversation" {
+		// prompt_file not supported in conversation mode (deferred per spec)
+		if c.PromptFile != "" {
+			return errors.New("prompt_file is not supported in conversation mode")
+		}
 		// In conversation mode, require either InitialPrompt or Prompt
 		if c.InitialPrompt == "" && c.Prompt == "" {
 			return errors.New("initial_prompt or prompt is required in conversation mode")
@@ -54,9 +64,9 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 				return err
 			}
 		}
-	} else if c.Prompt == "" {
-		// In single mode, require Prompt
-		return errors.New("prompt is required")
+	} else if c.Prompt == "" && c.PromptFile == "" {
+		// In single mode, require either Prompt or PromptFile
+		return errors.New("prompt or prompt_file is required")
 	}
 
 	// Validate timeout (must be non-negative)

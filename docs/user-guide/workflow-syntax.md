@@ -155,6 +155,7 @@ refine_code:
 | `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `custom` |
 | `mode` | string | No | Set to `conversation` for multi-turn mode |
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
+| `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`) |
 | `system_prompt` | string | No | System message (for conversation mode, preserved across turns) |
 | `initial_prompt` | string | No* | First user message (for conversation mode) |
 | `conversation` | object | No | Conversation configuration (required if mode=conversation) |
@@ -164,7 +165,7 @@ refine_code:
 | `on_failure` | string | No | Next state on failure |
 | `retry` | object | No | Retry configuration (same as step retry) |
 
-\* Use `prompt` for single-turn mode, `initial_prompt` for conversation mode.
+\* Use `prompt` or `prompt_file` for single-turn mode (mutually exclusive), `initial_prompt` for conversation mode. See [Agent Steps - External Prompt Files](agent-steps.md#external-prompt-files) for `prompt_file` details.
 
 ### Conversation Configuration
 

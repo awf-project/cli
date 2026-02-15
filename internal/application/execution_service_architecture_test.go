@@ -29,7 +29,7 @@ func TestExecutionService_NoInfrastructureImport(t *testing.T) {
 		assert.NotContains(t, imp, "infrastructure/agents",
 			"execution_service.go must not import infrastructure/agents - violates DIP")
 		assert.NotContains(t, imp, "infrastructure/",
-			"execution_service.go should not import any infrastructure packages")
+			"execution_service.go must not import infrastructure packages - violates hexagonal architecture")
 	}
 }
 

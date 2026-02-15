@@ -212,6 +212,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+	execSvc.SetAWFPaths(buildAWFPaths())
 
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)

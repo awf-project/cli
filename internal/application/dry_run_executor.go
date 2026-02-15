@@ -17,6 +17,7 @@ type DryRunExecutor struct {
 	evaluator   ports.ExpressionEvaluator
 	templateSvc *TemplateService
 	logger      ports.Logger
+	awfPaths    map[string]string // F063: XDG directory paths injected from interfaces layer
 }
 
 func NewDryRunExecutor(
@@ -35,6 +36,11 @@ func NewDryRunExecutor(
 
 func (e *DryRunExecutor) SetTemplateService(svc *TemplateService) {
 	e.templateSvc = svc
+}
+
+// SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
+func (e *DryRunExecutor) SetAWFPaths(paths map[string]string) {
+	e.awfPaths = paths
 }
 
 func (e *DryRunExecutor) Execute(ctx context.Context, workflowName string, inputs map[string]any) (*workflow.DryRunPlan, error) {
@@ -70,6 +76,14 @@ func (e *DryRunExecutor) buildPlan(ctx context.Context, wf *workflow.Workflow, i
 	}
 	interpCtx.Workflow.Name = wf.Name
 
+	// Populate AWF context with XDG directory paths (F063)
+	// Paths are injected via SetAWFPaths() to avoid infrastructure import in application layer
+	if e.awfPaths != nil {
+		interpCtx.AWF = e.awfPaths
+	} else {
+		interpCtx.AWF = map[string]string{}
+	}
+
 	plan := &workflow.DryRunPlan{
 		WorkflowName: wf.Name,
 		Description:  wf.Description,
@@ -100,7 +114,7 @@ func (e *DryRunExecutor) buildPlan(ctx context.Context, wf *workflow.Workflow, i
 			continue
 		}
 
-		dryRunStep, err := e.buildStepPlan(step, interpCtx)
+		dryRunStep, err := e.buildStepPlan(ctx, step, wf, interpCtx)
 		if err != nil {
 			return nil, fmt.Errorf("step '%s': %w", stepName, err)
 		}
@@ -145,7 +159,7 @@ func (e *DryRunExecutor) collectNextSteps(step *workflow.Step) []string {
 	return nextSteps
 }
 
-func (e *DryRunExecutor) buildStepPlan(step *workflow.Step, interpCtx *interpolation.Context) (*workflow.DryRunStep, error) {
+func (e *DryRunExecutor) buildStepPlan(ctx context.Context, step *workflow.Step, wf *workflow.Workflow, interpCtx *interpolation.Context) (*workflow.DryRunStep, error) {
 	dryRunStep := &workflow.DryRunStep{
 		Name:            step.Name,
 		Type:            step.Type,
@@ -197,7 +211,11 @@ func (e *DryRunExecutor) buildStepPlan(step *workflow.Step, interpCtx *interpola
 	}
 
 	if step.Agent != nil {
-		dryRunStep.Agent = e.buildAgentConfig(step.Agent, interpCtx)
+		var err error
+		dryRunStep.Agent, err = e.buildAgentConfig(ctx, step.Agent, wf, interpCtx)
+		if err != nil {
+			return nil, fmt.Errorf("build agent config: %w", err)
+		}
 	}
 
 	return dryRunStep, nil
@@ -334,15 +352,26 @@ func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Con
 	return resolved
 }
 
-func (e *DryRunExecutor) buildAgentConfig(agent *workflow.AgentConfig, interpCtx *interpolation.Context) *workflow.DryRunAgent {
+func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.AgentConfig, wf *workflow.Workflow, interpCtx *interpolation.Context) (*workflow.DryRunAgent, error) {
 	dryRunAgent := &workflow.DryRunAgent{
 		Provider: agent.Provider,
 		Timeout:  agent.Timeout,
 		Options:  make(map[string]any),
 	}
 
-	if agent.Prompt != "" {
-		dryRunAgent.ResolvedPrompt = e.resolveCommand(agent.Prompt, interpCtx)
+	// F063: Load and resolve prompt from file if prompt_file is specified
+	promptToResolve := agent.Prompt
+	if agent.PromptFile != "" {
+		loadedPrompt, err := loadPromptFile(ctx, agent.PromptFile, wf, interpCtx)
+		if err != nil {
+			return nil, fmt.Errorf("load prompt file: %w", err)
+		}
+		promptToResolve = loadedPrompt
+	}
+
+	// Resolve prompt via interpolation
+	if promptToResolve != "" {
+		dryRunAgent.ResolvedPrompt = e.resolveCommand(promptToResolve, interpCtx)
 	}
 
 	for key, value := range agent.Options {
@@ -353,5 +382,5 @@ func (e *DryRunExecutor) buildAgentConfig(agent *workflow.AgentConfig, interpCtx
 		dryRunAgent.CLICommand = e.resolveCommand(agent.Command, interpCtx)
 	}
 
-	return dryRunAgent
+	return dryRunAgent, nil
 }

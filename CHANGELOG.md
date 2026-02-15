@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F063**: Prompt File Loading for Agent Steps
 
 - **F058**: Built-in HTTP Operation
   - New `http` operation provider with `http.request` operation for declarative REST API calls
@@ -213,6 +214,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F063**: Prompt File Loading for Agent Steps
 - **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
   - Created `doc.go` files for 9 undocumented packages: `agents`, `executor`, `expression`, `logger`, `plugin`, `repository`, `store`, `cli`, `cli/ui`
   - Three documentation tiers scaled by package complexity: concise (~20-30 lines), medium (~40-50 lines), comprehensive (~60-80 lines)

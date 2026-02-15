@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,11 @@ import (
 
 // mapToDomain converts a yamlWorkflow to a domain Workflow.
 func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		absPath = filePath
+	}
+
 	wf := &workflow.Workflow{
 		Name:        y.Name,
 		Description: y.Description,
@@ -23,6 +29,7 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 		Inputs:      mapInputs(y.Inputs),
 		Steps:       make(map[string]*workflow.Step),
 		Hooks:       mapWorkflowHooks(y.Hooks),
+		SourceDir:   filepath.Dir(absPath),
 	}
 
 	// Map steps
@@ -415,6 +422,7 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 	return &workflow.AgentConfig{
 		Provider:      y.Provider,
 		Prompt:        y.Prompt,
+		PromptFile:    y.PromptFile,
 		Options:       y.Options,
 		Mode:          y.Mode,
 		SystemPrompt:  y.SystemPrompt,
