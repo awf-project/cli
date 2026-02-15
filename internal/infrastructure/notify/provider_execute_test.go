@@ -64,45 +64,6 @@ func TestNotifyOperationProvider_Execute_Desktop_HappyPath(t *testing.T) {
 	assert.Equal(t, "notification sent", result.Outputs["response"])
 }
 
-func TestNotifyOperationProvider_Execute_Ntfy_HappyPath(t *testing.T) {
-	provider := NewNotifyOperationProvider(&mockLogger{})
-
-	// Register ntfy backend with mock
-	mockNtfy := &mockBackendFunc{
-		sendFunc: func(ctx context.Context, payload NotificationPayload) (*BackendResult, error) {
-			assert.Equal(t, "Build Complete", payload.Title)
-			assert.Equal(t, "Build #123 succeeded", payload.Message)
-			assert.Equal(t, "high", payload.Priority)
-			assert.Equal(t, "ci-builds", payload.Metadata["topic"])
-			return &BackendResult{
-				Backend:    "ntfy",
-				StatusCode: 200,
-				Response:   `{"id": "abc123"}`,
-			}, nil
-		},
-	}
-	err := provider.RegisterBackend("ntfy", mockNtfy)
-	require.NoError(t, err, "backend registration should succeed")
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"backend":  "ntfy",
-		"title":    "Build Complete",
-		"message":  "Build #123 succeeded",
-		"priority": "high",
-		"topic":    "ci-builds",
-	}
-
-	result, err := provider.Execute(ctx, "notify.send", inputs)
-
-	require.NoError(t, err, "ntfy backend should succeed")
-	require.NotNil(t, result)
-	assert.True(t, result.Success)
-	assert.Equal(t, "ntfy", result.Outputs["backend"])
-	assert.Equal(t, 200, result.Outputs["status"])
-	assert.Contains(t, result.Outputs["response"], "abc123")
-}
-
 func TestNotifyOperationProvider_Execute_Webhook_HappyPath(t *testing.T) {
 	provider := NewNotifyOperationProvider(&mockLogger{})
 
@@ -137,40 +98,6 @@ func TestNotifyOperationProvider_Execute_Webhook_HappyPath(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Equal(t, "webhook", result.Outputs["backend"])
 	assert.Equal(t, 201, result.Outputs["status"])
-}
-
-func TestNotifyOperationProvider_Execute_Slack_HappyPath(t *testing.T) {
-	provider := NewNotifyOperationProvider(&mockLogger{})
-
-	// Replace slack backend with mock
-	mockSlack := &mockBackendFunc{
-		sendFunc: func(ctx context.Context, payload NotificationPayload) (*BackendResult, error) {
-			assert.Equal(t, "Release", payload.Title)
-			assert.Equal(t, "v1.2.3 released", payload.Message)
-			return &BackendResult{
-				Backend:    "slack",
-				StatusCode: 200,
-				Response:   "ok",
-			}, nil
-		},
-	}
-	err := provider.RegisterBackend("slack", mockSlack)
-	require.NoError(t, err, "backend registration should succeed")
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"backend": "slack",
-		"title":   "Release",
-		"message": "v1.2.3 released",
-	}
-
-	result, err := provider.Execute(ctx, "notify.send", inputs)
-
-	require.NoError(t, err, "slack backend should succeed")
-	require.NotNil(t, result)
-	assert.True(t, result.Success)
-	assert.Equal(t, "slack", result.Outputs["backend"])
-	assert.Equal(t, 200, result.Outputs["status"])
 }
 
 // --- Input Validation Tests ---
@@ -328,29 +255,6 @@ func TestNotifyOperationProvider_Execute_UnknownBackend(t *testing.T) {
 
 // --- Backend-Specific Validation Tests ---
 
-func TestNotifyOperationProvider_Execute_Ntfy_MissingTopic(t *testing.T) {
-	provider := NewNotifyOperationProvider(&mockLogger{})
-	ctx := context.Background()
-
-	// Register mock ntfy backend to test input validation
-	mockNtfy := &mockBackendFunc{}
-	err := provider.RegisterBackend("ntfy", mockNtfy)
-	require.NoError(t, err, "backend registration should succeed")
-
-	inputs := map[string]any{
-		"backend": "ntfy",
-		"message": "test message",
-		// Missing topic
-	}
-
-	result, err := provider.Execute(ctx, "notify.send", inputs)
-
-	require.Error(t, err, "ntfy backend should require topic")
-	require.NotNil(t, result)
-	assert.False(t, result.Success)
-	assert.Contains(t, err.Error(), "requires 'topic'")
-}
-
 func TestNotifyOperationProvider_Execute_Webhook_MissingURL(t *testing.T) {
 	provider := NewNotifyOperationProvider(&mockLogger{})
 	ctx := context.Background()
@@ -376,39 +280,21 @@ func TestNotifyOperationProvider_Execute_Webhook_MissingURL(t *testing.T) {
 
 // --- Backend Unavailable Tests ---
 
-func TestNotifyOperationProvider_Execute_NtfyNotConfigured(t *testing.T) {
+func TestNotifyOperationProvider_Execute_UnknownBackendNotConfigured(t *testing.T) {
 	provider := NewNotifyOperationProvider(&mockLogger{})
 	ctx := context.Background()
 
 	inputs := map[string]any{
-		"backend": "ntfy",
-		"message": "test",
-		"topic":   "test-topic",
-	}
-
-	result, err := provider.Execute(ctx, "notify.send", inputs)
-
-	require.Error(t, err, "ntfy should not be available when not configured")
-	require.NotNil(t, result)
-	assert.False(t, result.Success)
-	assert.Contains(t, err.Error(), "backend \"ntfy\" not available")
-}
-
-func TestNotifyOperationProvider_Execute_SlackNotConfigured(t *testing.T) {
-	provider := NewNotifyOperationProvider(&mockLogger{})
-	ctx := context.Background()
-
-	inputs := map[string]any{
-		"backend": "slack",
+		"backend": "unknown",
 		"message": "test",
 	}
 
 	result, err := provider.Execute(ctx, "notify.send", inputs)
 
-	require.Error(t, err, "slack should not be available when not configured")
+	require.Error(t, err, "unknown backend should not be available when not configured")
 	require.NotNil(t, result)
 	assert.False(t, result.Success)
-	assert.Contains(t, err.Error(), "backend \"slack\" not available")
+	assert.Contains(t, err.Error(), "backend \"unknown\" not available")
 }
 
 // --- Backend Failure Tests ---
@@ -675,35 +561,9 @@ func TestNotifyOperationProvider_Execute_ContextCancellation(t *testing.T) {
 func TestNotifyOperationProvider_Execute_MetadataPassthrough(t *testing.T) {
 	provider := NewNotifyOperationProvider(&mockLogger{})
 
-	mockNtfy := &mockBackendFunc{
-		sendFunc: func(ctx context.Context, payload NotificationPayload) (*BackendResult, error) {
-			assert.Equal(t, "test-topic", payload.Metadata["topic"], "topic should be in metadata")
-			return &BackendResult{Backend: "ntfy", StatusCode: 200, Response: "OK"}, nil
-		},
-	}
-	err := provider.RegisterBackend("ntfy", mockNtfy)
-	require.NoError(t, err, "backend registration should succeed")
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"backend": "ntfy",
-		"message": "test",
-		"topic":   "test-topic",
-	}
-
-	result, err := provider.Execute(ctx, "notify.send", inputs)
-
-	require.NoError(t, err)
-	assert.True(t, result.Success)
-}
-
-func TestNotifyOperationProvider_Execute_MultipleMetadataFields(t *testing.T) {
-	provider := NewNotifyOperationProvider(&mockLogger{})
-
 	mockWebhook := &mockBackendFunc{
 		sendFunc: func(ctx context.Context, payload NotificationPayload) (*BackendResult, error) {
-			assert.Equal(t, "https://example.com/hook", payload.Metadata["webhook_url"])
-			assert.Equal(t, "#general", payload.Metadata["channel"])
+			assert.Equal(t, "https://example.com/hook", payload.Metadata["webhook_url"], "webhook_url should be in metadata")
 			return &BackendResult{Backend: "webhook", StatusCode: 200, Response: "OK"}, nil
 		},
 	}
@@ -715,7 +575,6 @@ func TestNotifyOperationProvider_Execute_MultipleMetadataFields(t *testing.T) {
 		"backend":     "webhook",
 		"message":     "test",
 		"webhook_url": "https://example.com/hook",
-		"channel":     "#general",
 	}
 
 	result, err := provider.Execute(ctx, "notify.send", inputs)

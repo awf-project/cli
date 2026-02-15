@@ -2,9 +2,9 @@
 //
 // The notify package provides concrete implementations of the OperationProvider port
 // defined in the domain layer, enabling workflow steps to send notifications through
-// multiple backends (desktop, ntfy, slack, webhook) without shell scripting. The
-// provider supports built-in notification backends with 10-second HTTP timeout for
-// network-based backends and platform detection for desktop notifications.
+// multiple backends (desktop, webhook) without shell scripting. The provider supports
+// built-in notification backends with 10-second HTTP timeout for network-based backends
+// and platform detection for desktop notifications.
 //
 // # Architecture Role
 //
@@ -24,7 +24,7 @@
 // ## Declarative Operations (operations.go)
 //
 // Supported notification operations:
-//   - notify.send: Send notification via configured backend (desktop, ntfy, slack, webhook)
+//   - notify.send: Send notification via configured backend (desktop, webhook)
 //
 // Each operation is registered as an OperationSchema with input validation, output
 // schema, and backend selection support.
@@ -56,20 +56,6 @@
 //   - macOS: Uses osascript with 'display notification' AppleScript
 //   - Detects platform at runtime and fails gracefully on unsupported systems
 //
-// ## NtfyBackend (ntfy.go)
-//
-// ntfy.sh push notification service:
-//   - HTTP POST to configured ntfy_url + topic
-//   - Supports self-hosted ntfy servers via config
-//   - 10-second timeout for network requests
-//
-// ## SlackBackend (slack.go)
-//
-// Slack incoming webhook integration:
-//   - HTTP POST with formatted message blocks
-//   - Includes workflow name, status, duration in structured fields
-//   - Requires slack_webhook_url in config
-//
 // ## WebhookBackend (webhook.go)
 //
 // Generic HTTP webhook integration:
@@ -82,8 +68,6 @@
 // ## NotifyConfig (types.go)
 //
 // Configuration resolution from .awf/config.yaml:
-//   - ntfy_url: Base URL for ntfy server (e.g., "https://ntfy.sh")
-//   - slack_webhook_url: Slack incoming webhook URL
 //   - default_backend: Backend to use when not specified in operation inputs
 //
 // Configuration values are loaded at provider initialization and injected into
@@ -120,7 +104,7 @@
 // # Performance and Security
 //
 // Performance characteristics:
-//   - HTTP timeout: 10 seconds for all network-based backends (ntfy, slack, webhook)
+//   - HTTP timeout: 10 seconds for network-based backends (webhook)
 //   - Desktop notifications: Platform-specific, typically <100ms
 //   - No retries: Failed notifications return error immediately
 //

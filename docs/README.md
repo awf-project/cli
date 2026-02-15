@@ -31,7 +31,7 @@ Learn how to use AWF effectively:
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference
   - [GitHub Operations](user-guide/workflow-syntax.md#github-operations) - Built-in GitHub plugin with declarative operations
   - [HTTP Operations](user-guide/workflow-syntax.md#http-operations) - Built-in HTTP operation for REST API calls
-  - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop, ntfy, Slack, and webhook backends
+  - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop and webhook backends
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
 - [Examples](user-guide/examples.md) - Real-world workflow examples

@@ -135,90 +135,6 @@ func TestNotifyDesktop_TemplateInterpolation(t *testing.T) {
 	assert.Contains(t, title, "notify-desktop-test", "title should contain resolved workflow name")
 }
 
-// TestNotifyNtfy_Success tests sending notification to ntfy topic.
-// Acceptance Criteria: HTTP POST sent to ntfy_url/topic with payload
-func TestNotifyNtfy_Success(t *testing.T) {
-	skipInCI(t)
-
-	// Given: mock ntfy server
-	receivedRequests := make([]*http.Request, 0)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedRequests = append(receivedRequests, r)
-
-		// Verify request
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Contains(t, r.URL.Path, "/test-topic", "should POST to topic endpoint")
-
-		// Read body
-		body, _ := io.ReadAll(r.Body)
-		assert.NotEmpty(t, body, "request body should not be empty")
-
-		// Respond with ntfy success
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"ntfy123","time":1234567890}`))
-	}))
-	defer server.Close()
-
-	// Setup workflow service with ntfy_url config
-	repoRoot := getRepoRoot(t)
-	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	config := notify.NotifyConfig{
-		NtfyURL: server.URL,
-	}
-	execSvc, _ := setupNotifyTestWorkflowService(t, workflowsDir, statesDir, config)
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"topic":    "test-topic",
-		"message":  "Test notification",
-		"priority": "high",
-	}
-
-	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "notify-ntfy-test", inputs)
-
-	// Then: ntfy notification sent successfully
-	require.NoError(t, err, "ntfy notification workflow should succeed")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
-	require.Len(t, receivedRequests, 1, "should have made one HTTP request")
-
-	// Verify step state
-	state, exists := execCtx.GetStepState("send_ntfy_notification")
-	require.True(t, exists)
-	require.NotNil(t, state.Response)
-	assert.Equal(t, "ntfy", state.Response["backend"], "backend should be ntfy")
-}
-
-// TestNotifyNtfy_MissingURL tests error handling when ntfy_url not configured.
-// Acceptance Criteria: Step fails with error indicating missing configuration
-func TestNotifyNtfy_MissingURL(t *testing.T) {
-	skipInCI(t)
-
-	// Given: notify config without ntfy_url
-	repoRoot := getRepoRoot(t)
-	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	config := notify.NotifyConfig{} // No ntfy_url configured
-	execSvc, _ := setupNotifyTestWorkflowService(t, workflowsDir, statesDir, config)
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"topic":   "test-topic",
-		"message": "Test notification",
-	}
-
-	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "notify-ntfy-test", inputs)
-
-	// Then: error indicates missing configuration
-	require.Error(t, err, "ntfy notification should fail without url config")
-	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
-	assert.Contains(t, err.Error(), "ntfy_url", "error should mention missing ntfy_url")
-}
-
 // TestNotifyWebhook_Success tests sending webhook notification.
 // Acceptance Criteria: HTTP POST sent to webhook URL with JSON payload
 func TestNotifyWebhook_Success(t *testing.T) {
@@ -337,88 +253,6 @@ func TestNotifyWebhook_Timeout(t *testing.T) {
 	require.Error(t, err, "webhook notification should timeout after 10 seconds")
 	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
 	assert.Contains(t, err.Error(), "timeout", "error should mention timeout")
-}
-
-// TestNotifySlack_Success tests sending Slack notification.
-// Acceptance Criteria: POST sent to Slack webhook with formatted message block
-func TestNotifySlack_Success(t *testing.T) {
-	skipInCI(t)
-
-	// Given: mock Slack webhook server
-	var receivedPayload map[string]any
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Contains(t, r.Header.Get("Content-Type"), "application/json")
-
-		// Read body
-		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &receivedPayload)
-
-		// Respond with Slack success
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	}))
-	defer server.Close()
-
-	repoRoot := getRepoRoot(t)
-	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	config := notify.NotifyConfig{
-		SlackWebhookURL: server.URL,
-	}
-	execSvc, _ := setupNotifyTestWorkflowService(t, workflowsDir, statesDir, config)
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"title":   "Test Slack Notification",
-		"message": "Workflow completed successfully",
-	}
-
-	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "notify-slack-test", inputs)
-
-	// Then: Slack notification sent successfully
-	require.NoError(t, err, "Slack notification workflow should succeed")
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
-
-	// Verify payload has Slack message blocks
-	require.NotNil(t, receivedPayload, "server should have received payload")
-	assert.Contains(t, receivedPayload, "blocks", "payload should contain Slack blocks")
-
-	// Verify step state
-	state, exists := execCtx.GetStepState("send_slack_notification")
-	require.True(t, exists)
-	require.NotNil(t, state.Response)
-	assert.Equal(t, "slack", state.Response["backend"], "backend should be slack")
-}
-
-// TestNotifySlack_MissingWebhookURL tests error when slack_webhook_url not configured.
-// Acceptance Criteria: Step fails with error indicating missing Slack configuration
-func TestNotifySlack_MissingWebhookURL(t *testing.T) {
-	skipInCI(t)
-
-	// Given: notify config without slack_webhook_url
-	repoRoot := getRepoRoot(t)
-	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	config := notify.NotifyConfig{} // No slack_webhook_url configured
-	execSvc, _ := setupNotifyTestWorkflowService(t, workflowsDir, statesDir, config)
-
-	ctx := context.Background()
-	inputs := map[string]any{
-		"message": "Test Slack notification",
-	}
-
-	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "notify-slack-test", inputs)
-
-	// Then: error indicates missing configuration
-	require.Error(t, err, "Slack notification should fail without webhook url")
-	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
-	assert.Contains(t, err.Error(), "slack_webhook_url", "error should mention missing slack_webhook_url")
 }
 
 // TestNotifyConfig_DefaultBackend tests using default_backend from .awf/config.yaml.
@@ -733,18 +567,8 @@ func setupNotifyTestWorkflowService(t *testing.T, workflowsDir, statesDir string
 	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
 	notifyProvider := notify.NewNotifyOperationProvider(logger)
 
-	// Register backends based on config (mirrors registerNotifyBackends in run.go)
+	// Register backends (desktop and webhook only, per C058)
 	_ = notifyProvider.RegisterBackend("desktop", notify.NewDesktopBackend())
-	if config.NtfyURL != "" {
-		ntfyBackend, err := notify.NewNtfyBackend(config.NtfyURL)
-		require.NoError(t, err, "failed to create ntfy backend")
-		_ = notifyProvider.RegisterBackend("ntfy", ntfyBackend)
-	}
-	if config.SlackWebhookURL != "" {
-		slackBackend, err := notify.NewSlackBackend(config.SlackWebhookURL)
-		require.NoError(t, err, "failed to create slack backend")
-		_ = notifyProvider.RegisterBackend("slack", slackBackend)
-	}
 	_ = notifyProvider.RegisterBackend("webhook", notify.NewWebhookBackend())
 	if config.DefaultBackend != "" {
 		notifyProvider.SetDefaultBackend(config.DefaultBackend)

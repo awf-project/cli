@@ -26,20 +26,8 @@ import (
 )
 
 func TestNotifyBackendRegistration_FullConfiguration(t *testing.T) {
-	// GIVEN: Full notify configuration with ntfy and slack URLs
-	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ntfyServer.Close()
-
-	slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer slackServer.Close()
-
+	// GIVEN: Full notify configuration
 	cfg := &config.ProjectConfig{}
-	cfg.Notify.NtfyURL = ntfyServer.URL
-	cfg.Notify.SlackWebhookURL = slackServer.URL
 	cfg.Notify.DefaultBackend = "desktop"
 
 	logger := &mockLogger{}
@@ -48,7 +36,7 @@ func TestNotifyBackendRegistration_FullConfiguration(t *testing.T) {
 	// WHEN: Registering backends
 	err := registerNotifyBackends(provider, cfg, logger)
 
-	// THEN: All four backends should be registered
+	// THEN: Both backends should be registered
 	require.NoError(t, err, "registration should succeed")
 
 	// Verify desktop backend is registered and callable
@@ -69,23 +57,6 @@ func TestNotifyBackendRegistration_FullConfiguration(t *testing.T) {
 	})
 	assert.NoError(t, err, "desktop backend should execute")
 	assert.True(t, result.Success, "desktop backend should succeed")
-
-	// Test ntfy backend (with mock server)
-	result, err = provider.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "ntfy",
-		"message": "test",
-		"topic":   "test-topic",
-	})
-	assert.NoError(t, err, "ntfy backend should execute")
-	assert.True(t, result.Success, "ntfy backend should succeed")
-
-	// Test slack backend (with mock server)
-	result, err = provider.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "slack",
-		"message": "test",
-	})
-	assert.NoError(t, err, "slack backend should execute")
-	assert.True(t, result.Success, "slack backend should succeed")
 
 	// Test webhook backend
 	webhookServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,23 +113,6 @@ func TestNotifyBackendRegistration_PartialConfiguration(t *testing.T) {
 	})
 	assert.NoError(t, err, "webhook backend should be available")
 	assert.True(t, result.Success)
-
-	// Ntfy should fail (not registered)
-	_, err = provider.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "ntfy",
-		"message": "test",
-		"topic":   "test",
-	})
-	assert.Error(t, err, "ntfy backend should not be available")
-	assert.Contains(t, err.Error(), "not available", "should indicate backend not available")
-
-	// Slack should fail (not registered)
-	_, err = provider.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "slack",
-		"message": "test",
-	})
-	assert.Error(t, err, "slack backend should not be available")
-	assert.Contains(t, err.Error(), "not available", "should indicate backend not available")
 }
 
 func TestNotifyBackendRegistration_DefaultBackendFallback(t *testing.T) {
@@ -218,50 +172,10 @@ func TestNotifyBackendRegistration_ExplicitBackendOverridesDefault(t *testing.T)
 	assert.True(t, result.Success)
 }
 
-func TestNotifyBackendRegistration_InvalidNtfyURL(t *testing.T) {
-	// GIVEN: Config with invalid ntfy URL
-	cfg := &config.ProjectConfig{}
-	cfg.Notify.NtfyURL = "not-a-valid-url"
-
-	logger := &mockLogger{}
-	provider := notify.NewNotifyOperationProvider(logger)
-
-	// WHEN: Attempting to register backends
-	err := registerNotifyBackends(provider, cfg, logger)
-
-	// THEN: Registration should succeed (validation happens during backend creation)
-	// but we expect NewNtfyBackend to fail with invalid URL
-	if err == nil {
-		t.Skip("Backend creation validation not yet implemented - ntfy registration should fail with invalid URL")
-	}
-	assert.Error(t, err, "should reject invalid ntfy URL")
-	assert.Contains(t, err.Error(), "ntfy", "error should mention ntfy backend")
-}
-
-func TestNotifyBackendRegistration_InvalidSlackWebhookURL(t *testing.T) {
-	// GIVEN: Config with non-HTTPS slack webhook URL
-	cfg := &config.ProjectConfig{}
-	cfg.Notify.SlackWebhookURL = "http://insecure.slack.com/webhook"
-
-	logger := &mockLogger{}
-	provider := notify.NewNotifyOperationProvider(logger)
-
-	// WHEN: Attempting to register backends
-	err := registerNotifyBackends(provider, cfg, logger)
-
-	// THEN: Registration should succeed (validation happens during backend creation)
-	// but we expect NewSlackBackend to fail with invalid URL
-	if err == nil {
-		t.Skip("Backend creation validation not yet implemented - slack registration should fail with non-HTTPS URL")
-	}
-	assert.Error(t, err, "should reject non-HTTPS slack webhook")
-	assert.Contains(t, err.Error(), "slack", "error should mention slack backend")
-}
-
 func TestNotifyBackendRegistration_DefaultBackendNotRegistered(t *testing.T) {
-	// GIVEN: Config with default_backend="ntfy" but no ntfy_url
+	// GIVEN: Config with default_backend set to unknown backend
 	cfg := &config.ProjectConfig{}
-	cfg.Notify.DefaultBackend = "ntfy" // Set default to backend that won't be registered
+	cfg.Notify.DefaultBackend = "unknown" // Set default to backend that doesn't exist
 
 	logger := &mockLogger{}
 	provider := notify.NewNotifyOperationProvider(logger)
@@ -284,14 +198,8 @@ func TestNotifyBackendRegistration_DefaultBackendNotRegistered(t *testing.T) {
 }
 
 func TestNotifyBackendRegistration_DryRunMode(t *testing.T) {
-	// GIVEN: Config with all backends configured
-	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not make HTTP request in dry-run mode")
-	}))
-	defer ntfyServer.Close()
-
+	// GIVEN: Config with backends configured
 	cfg := &config.ProjectConfig{}
-	cfg.Notify.NtfyURL = ntfyServer.URL
 
 	logger := &mockLogger{}
 	provider := notify.NewNotifyOperationProvider(logger)
@@ -323,7 +231,6 @@ func TestNotifyBackendRegistration_DryRunMode(t *testing.T) {
 func TestNotifyBackendRegistration_ResumeCommand(t *testing.T) {
 	// GIVEN: Backends registered during initial run
 	cfg := &config.ProjectConfig{}
-	cfg.Notify.NtfyURL = "https://ntfy.example.com"
 
 	logger1 := &mockLogger{}
 	provider1 := notify.NewNotifyOperationProvider(logger1)
@@ -351,56 +258,6 @@ func TestNotifyBackendRegistration_ResumeCommand(t *testing.T) {
 	})
 	assert.NoError(t, err, "backends should be available after re-registration")
 	assert.True(t, result.Success)
-}
-
-func TestNotifyBackendRegistration_ConfigChanges(t *testing.T) {
-	// GIVEN: Initial run with ntfy configured
-	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ntfyServer.Close()
-
-	cfg1 := &config.ProjectConfig{}
-	cfg1.Notify.NtfyURL = ntfyServer.URL
-
-	logger1 := &mockLogger{}
-	provider1 := notify.NewNotifyOperationProvider(logger1)
-
-	err := registerNotifyBackends(provider1, cfg1, logger1)
-	require.NoError(t, err)
-
-	// WHEN: Second run with ntfy removed and slack added
-	slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer slackServer.Close()
-
-	cfg2 := &config.ProjectConfig{}
-	cfg2.Notify.SlackWebhookURL = slackServer.URL
-	// NtfyURL removed
-
-	logger2 := &mockLogger{}
-	provider2 := notify.NewNotifyOperationProvider(logger2)
-	err = registerNotifyBackends(provider2, cfg2, logger2)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	// THEN: New provider should have slack, not ntfy
-	result, err := provider2.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "slack",
-		"message": "test",
-	})
-	assert.NoError(t, err, "slack should be available in new config")
-	assert.True(t, result.Success)
-
-	_, err = provider2.Execute(ctx, "notify.send", map[string]interface{}{
-		"backend": "ntfy",
-		"message": "test",
-		"topic":   "test",
-	})
-	assert.Error(t, err, "ntfy should not be available in new config")
-	assert.Contains(t, err.Error(), "not available", "should indicate backend not available")
 }
 
 func TestNotifyBackendRegistration_NilProvider(t *testing.T) {

@@ -30,9 +30,7 @@ func TestRunCommand_LoadsNotifyConfig_AllFields(t *testing.T) {
 
 	// Create config with all notify fields populated
 	configContent := `notify:
-  ntfy_url: "https://ntfy.example.com"
-  slack_webhook_url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
-  default_backend: "ntfy"
+  default_backend: "desktop"
 `
 	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
@@ -47,7 +45,6 @@ states:
     operation: notify.send
     inputs:
       message: "Test with loaded config"
-      topic: "test-topic"
     on_success: done
   done:
     type: terminal
@@ -63,106 +60,11 @@ states:
 
 	err = cmd.Execute()
 	// THEN: Config should be loaded and passed to NotifyOperationProvider
-	// The provider will attempt to use the ntfy_url from config
 	if err != nil {
 		errMsg := err.Error()
 		// Should not fail from missing config - config should be loaded
 		assert.NotContains(t, errMsg, "nil pointer", "config should be loaded without nil errors")
 		assert.NotContains(t, errMsg, "missing configuration", "config values should be loaded")
-		// Expected: execution errors (no actual ntfy server), not config errors
-	}
-}
-
-func TestRunCommand_LoadsNotifyConfig_NtfyOnly(t *testing.T) {
-	// GIVEN: A config with only ntfy_url configured
-	tmpDir := setupTestDir(t)
-
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
-
-	configContent := `notify:
-  ntfy_url: "https://ntfy.sh"
-`
-	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0o644)
-	require.NoError(t, err)
-
-	workflowContent := `name: ntfy-config
-version: "1.0.0"
-states:
-  initial: start
-  start:
-    type: operation
-    operation: notify.send
-    inputs:
-      backend: ntfy
-      message: "Ntfy with config"
-      topic: "test"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "ntfy-config.yaml", workflowContent)
-
-	// WHEN: Running workflow with ntfy backend
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "ntfy-config"})
-
-	err = cmd.Execute()
-	// THEN: Ntfy URL from config should be loaded and available to provider
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "ntfy_url not configured", "ntfy_url should be loaded from config")
-		assert.NotContains(t, errMsg, "nil pointer", "should not panic from missing config")
-	}
-}
-
-func TestRunCommand_LoadsNotifyConfig_SlackOnly(t *testing.T) {
-	// GIVEN: A config with only slack_webhook_url configured
-	tmpDir := setupTestDir(t)
-
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
-
-	configContent := `notify:
-  slack_webhook_url: "https://hooks.slack.com/test"
-`
-	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0o644)
-	require.NoError(t, err)
-
-	workflowContent := `name: slack-config
-version: "1.0.0"
-states:
-  initial: start
-  start:
-    type: operation
-    operation: notify.send
-    inputs:
-      backend: slack
-      message: "Slack with config"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "slack-config.yaml", workflowContent)
-
-	// WHEN: Running workflow with slack backend
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "slack-config"})
-
-	err = cmd.Execute()
-	// THEN: Slack webhook URL from config should be loaded
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "slack_webhook_url not configured", "webhook URL should be loaded from config")
-		assert.NotContains(t, errMsg, "nil pointer", "should not panic")
 	}
 }
 
@@ -318,9 +220,7 @@ func TestRunCommand_LoadsNotifyConfig_PartialNotifySection(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	configContent := `notify:
-  ntfy_url: "https://ntfy.sh"
-  # slack_webhook_url not provided
-  # default_backend not provided
+  default_backend: "desktop"
 `
 	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
@@ -334,9 +234,8 @@ states:
     type: operation
     operation: notify.send
     inputs:
-      backend: ntfy
+      backend: desktop
       message: "Partial config"
-      topic: "test"
     on_success: done
   done:
     type: terminal
@@ -368,8 +267,7 @@ func TestRunSingleStep_LoadsNotifyConfig(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	configContent := `notify:
-  ntfy_url: "https://ntfy.example.com"
-  default_backend: "ntfy"
+  default_backend: "desktop"
 `
 	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
@@ -384,7 +282,6 @@ states:
     operation: notify.send
     inputs:
       message: "Single step with config"
-      topic: "test"
     on_success: second
   second:
     type: step
@@ -426,8 +323,7 @@ func TestRunCommand_LoadsNotifyConfig_WithInputsSection(t *testing.T) {
 	configContent := `inputs:
   user_name: "test-user"
 notify:
-  ntfy_url: "https://ntfy.sh"
-  default_backend: "ntfy"
+  default_backend: "desktop"
 `
 	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
@@ -442,7 +338,6 @@ states:
     operation: notify.send
     inputs:
       message: "Hello {{inputs.user_name}}"
-      topic: "test"
     on_success: done
   done:
     type: terminal
@@ -527,7 +422,7 @@ func TestRunCommand_LoadsNotifyConfig_UnknownKeys(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	configContent := `notify:
-  ntfy_url: "https://ntfy.sh"
+  default_backend: "desktop"
   unknown_field: "value"
   another_unknown: 123
 `
@@ -543,9 +438,8 @@ states:
     type: operation
     operation: notify.send
     inputs:
-      backend: ntfy
+      backend: desktop
       message: "Test"
-      topic: "test"
     on_success: done
   done:
     type: terminal
@@ -678,9 +572,7 @@ func TestRunCommand_NotifyConfigWiringToProvider_FullStack(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
 
 	configContent := `notify:
-  ntfy_url: "https://ntfy.example.com"
-  slack_webhook_url: "https://hooks.slack.com/test"
-  default_backend: "ntfy"
+  default_backend: "desktop"
 inputs:
   workflow_name: "integration-test"
 `
@@ -697,7 +589,6 @@ states:
     operation: notify.send
     inputs:
       message: "Testing {{inputs.workflow_name}}"
-      topic: "awf-test"
     on_success: done
   done:
     type: terminal

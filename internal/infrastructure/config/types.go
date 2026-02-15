@@ -13,9 +13,7 @@ type ProjectConfig struct {
 	// Loaded from .awf/config.yaml under "notify:" key.
 	// Type is defined in internal/infrastructure/notify/types.go
 	Notify struct {
-		NtfyURL         string `yaml:"ntfy_url"`
-		SlackWebhookURL string `yaml:"slack_webhook_url"`
-		DefaultBackend  string `yaml:"default_backend"`
+		DefaultBackend string `yaml:"default_backend"`
 	} `yaml:"notify"`
 }
 

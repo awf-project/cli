@@ -453,19 +453,17 @@ label_multiple:
 
 ### Notification Operations
 
-AWF includes a built-in notification provider with a single `notify.send` operation that dispatches to four backends. See [Plugins - Built-in Notification Plugin](plugins.md#built-in-notification-plugin) for configuration details.
+AWF includes a built-in notification provider with a single `notify.send` operation that dispatches to two backends. See [Plugins - Built-in Notification Plugin](plugins.md#built-in-notification-plugin) for configuration details.
 
 #### notify.send
 
 | Input | Type | Required | Description |
 |-------|------|----------|-------------|
-| `backend` | string | Yes | Backend: `desktop`, `ntfy`, `slack`, `webhook` |
+| `backend` | string | Yes | Backend: `desktop`, `webhook` |
 | `message` | string | Yes | Notification message body |
 | `title` | string | No | Notification title (defaults to "AWF Workflow") |
 | `priority` | string | No | Priority: `low`, `default`, `high` |
-| `topic` | string | No | ntfy topic name (required for `ntfy` backend) |
 | `webhook_url` | string | No | Webhook URL (required for `webhook` backend) |
-| `channel` | string | No | Slack channel override |
 
 **Outputs:** `backend`, `status`, `response`
 
@@ -502,37 +500,7 @@ states:
     status: failure
 ```
 
-**Push notification via ntfy:**
-
-```yaml
-notify_phone:
-  type: operation
-  operation: notify.send
-  inputs:
-    backend: ntfy
-    topic: my-builds
-    title: "Deploy Status"
-    message: "{{workflow.name}}: {{states.deploy.Output}}"
-    priority: high
-  on_success: done
-  on_failure: error
-```
-
-**Slack team notification:**
-
-```yaml
-notify_slack:
-  type: operation
-  operation: notify.send
-  inputs:
-    backend: slack
-    title: "Workflow Complete"
-    message: "{{workflow.name}} succeeded in {{workflow.duration}}"
-  on_success: done
-  on_failure: error
-```
-
-**Generic webhook (Discord, Teams, PagerDuty, etc.):**
+**Generic webhook (ntfy, Slack, Discord, Teams, PagerDuty, etc.):**
 
 ```yaml
 notify_webhook:

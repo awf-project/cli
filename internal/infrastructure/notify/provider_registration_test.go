@@ -41,16 +41,6 @@ func TestRegisterBackend_HappyPath(t *testing.T) {
 			backend:     &mockBackend{},
 		},
 		{
-			name:        "register_ntfy",
-			backendName: "ntfy",
-			backend:     &mockBackend{},
-		},
-		{
-			name:        "register_slack",
-			backendName: "slack",
-			backend:     &mockBackend{},
-		},
-		{
 			name:        "register_webhook",
 			backendName: "webhook",
 			backend:     &mockBackend{},
@@ -79,23 +69,15 @@ func TestRegisterBackend_MultipleBackends(t *testing.T) {
 	provider := NewNotifyOperationProvider(&mockLogger{})
 
 	desktop := &mockBackend{}
-	ntfy := &mockBackend{}
-	slack := &mockBackend{}
 	webhook := &mockBackend{}
 
 	err1 := provider.RegisterBackend("desktop", desktop)
-	err2 := provider.RegisterBackend("ntfy", ntfy)
-	err3 := provider.RegisterBackend("slack", slack)
-	err4 := provider.RegisterBackend("webhook", webhook)
+	err2 := provider.RegisterBackend("webhook", webhook)
 
 	assert.NoError(t, err1)
 	assert.NoError(t, err2)
-	assert.NoError(t, err3)
-	assert.NoError(t, err4)
-	assert.Len(t, provider.backends, 4, "should have 4 registered backends")
+	assert.Len(t, provider.backends, 2, "should have 2 registered backends")
 	assert.Equal(t, desktop, provider.backends["desktop"])
-	assert.Equal(t, ntfy, provider.backends["ntfy"])
-	assert.Equal(t, slack, provider.backends["slack"])
 	assert.Equal(t, webhook, provider.backends["webhook"])
 }
 
@@ -172,8 +154,6 @@ func TestSetDefaultBackend_HappyPath(t *testing.T) {
 		defaultBackend string
 	}{
 		{"set_desktop", "desktop"},
-		{"set_ntfy", "ntfy"},
-		{"set_slack", "slack"},
 		{"set_webhook", "webhook"},
 		{"set_custom", "custom"},
 	}
@@ -195,11 +175,11 @@ func TestSetDefaultBackend_OverwritePrevious(t *testing.T) {
 	provider.SetDefaultBackend("desktop")
 	assert.Equal(t, "desktop", provider.defaultBackend)
 
-	provider.SetDefaultBackend("ntfy")
-	assert.Equal(t, "ntfy", provider.defaultBackend, "second call should overwrite first")
+	provider.SetDefaultBackend("webhook")
+	assert.Equal(t, "webhook", provider.defaultBackend, "second call should overwrite first")
 
-	provider.SetDefaultBackend("slack")
-	assert.Equal(t, "slack", provider.defaultBackend, "third call should overwrite second")
+	provider.SetDefaultBackend("custom")
+	assert.Equal(t, "custom", provider.defaultBackend, "third call should overwrite second")
 }
 
 func TestSetDefaultBackend_EmptyString(t *testing.T) {
@@ -252,8 +232,6 @@ func TestNewNotifyOperationProvider_BackendsNotHardcoded(t *testing.T) {
 
 	assert.Empty(t, provider.backends, "backends should NOT be hardcoded in constructor")
 	assert.NotContains(t, provider.backends, "desktop", "desktop backend should not be pre-registered")
-	assert.NotContains(t, provider.backends, "ntfy", "ntfy backend should not be pre-registered")
-	assert.NotContains(t, provider.backends, "slack", "slack backend should not be pre-registered")
 	assert.NotContains(t, provider.backends, "webhook", "webhook backend should not be pre-registered")
 }
 
