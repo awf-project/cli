@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/vanoix/awf/internal/domain/workflow"
+import "github.com/awf-project/awf/internal/domain/workflow"
 
 // StepPresenter defines the contract for displaying step lifecycle information.
 // Implementations handle rendering of step execution progress and outcomes.

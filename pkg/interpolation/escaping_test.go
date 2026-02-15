@@ -3,8 +3,8 @@ package interpolation_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 func TestShellEscape(t *testing.T) {

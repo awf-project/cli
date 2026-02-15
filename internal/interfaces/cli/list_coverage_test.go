@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/awf/internal/testutil/fixtures"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/interfaces/cli"
-	"github.com/vanoix/awf/internal/testutil/fixtures"
 )
 
 // These tests focus on code coverage, not strict behavior validation

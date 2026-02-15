@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 // --- Constructor Tests ---

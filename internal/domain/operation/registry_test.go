@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/operation"
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/operation"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 // Note: mockOperation is defined in operation_test.go and reused here

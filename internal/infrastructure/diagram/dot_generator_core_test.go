@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 func TestNewGenerator(t *testing.T) {

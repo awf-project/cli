@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // DryRunExecutor walks through a workflow without executing commands.

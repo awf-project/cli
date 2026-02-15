@@ -35,10 +35,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/interfaces/cli"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
 )
 
 // Note: skipInCI helper is defined in agent_test.go to avoid duplication

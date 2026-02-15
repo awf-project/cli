@@ -8,15 +8,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/infrastructure/executor"
+	infraExpr "github.com/awf-project/awf/internal/infrastructure/expression"
+	"github.com/awf-project/awf/internal/infrastructure/repository"
+	"github.com/awf-project/awf/internal/infrastructure/store"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/infrastructure/executor"
-	infraExpr "github.com/vanoix/awf/internal/infrastructure/expression"
-	"github.com/vanoix/awf/internal/infrastructure/repository"
-	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // conditionsMockLogger for integration tests

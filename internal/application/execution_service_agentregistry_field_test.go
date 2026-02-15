@@ -3,8 +3,8 @@ package application_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // Component: T004

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // Compile-time check that OperationRegistry implements ports.OperationProvider.

@@ -29,13 +29,13 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 ## Installation
 
 ```bash
-go install github.com/vanoix/awf/cmd/awf@latest
+go install github.com/awf-project/awf/cmd/awf@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/vanoix/awf.git
+git clone https://github.com/awf-project/awf.git
 cd awf && make build && make install
 ```
 

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/pkg/httputil"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/pkg/httputil"
 )
 
 // Compile-time interface check

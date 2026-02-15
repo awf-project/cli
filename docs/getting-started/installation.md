@@ -27,7 +27,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 The fastest way to install AWF:
 
 ```bash
-go install github.com/vanoix/awf/cmd/awf@latest
+go install github.com/awf-project/awf/cmd/awf@latest
 ```
 
 This installs the `awf` binary to your `$GOPATH/bin` directory.
@@ -38,7 +38,7 @@ For the latest development version or to contribute:
 
 ```bash
 # Clone the repository
-git clone https://github.com/vanoix/awf.git
+git clone https://github.com/awf-project/awf.git
 cd awf
 
 # Build the binary

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vanoix/awf/internal/interfaces/cli"
+	"github.com/awf-project/awf/internal/interfaces/cli"
 )
 
 func main() {

@@ -3,9 +3,9 @@ package workflow_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/workflow"
 )
 
 func TestTemplate_Validate(t *testing.T) {

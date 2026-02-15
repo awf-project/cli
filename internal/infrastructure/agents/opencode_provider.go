@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // OpenCodeProvider implements AgentProvider for OpenCode CLI.

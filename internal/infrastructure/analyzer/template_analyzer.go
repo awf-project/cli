@@ -3,8 +3,8 @@ package analyzer
 import (
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // InterpolationAnalyzer adapts pkg/interpolation to the workflow.TemplateAnalyzer interface.

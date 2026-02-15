@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/plugin"
-	infrastructurePlugin "github.com/vanoix/awf/internal/infrastructure/plugin"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 // TestPluginDiscovery_Integration tests discovering plugins from a directory.

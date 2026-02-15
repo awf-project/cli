@@ -18,11 +18,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/testutil/mocks"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
 )
 
 // TestMockTemplateRepository_HappyPath validates normal template repository operations

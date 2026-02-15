@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 func TestNewRootCommand(t *testing.T) {

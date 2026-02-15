@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/tests/integration/testhelpers"
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/tests/integration/testhelpers"
 )
 
 type mockLogger struct {

@@ -5,10 +5,10 @@ import (
 	"os"
 	"sort"
 
+	"github.com/awf-project/awf/internal/infrastructure/config"
+	"github.com/awf-project/awf/internal/infrastructure/xdg"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/infrastructure/config"
-	"github.com/vanoix/awf/internal/infrastructure/xdg"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // newConfigCommand creates the config command group.

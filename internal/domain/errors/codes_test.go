@@ -3,8 +3,8 @@ package errors_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/errors"
 )
 
 func TestErrorCodeConstants_USER_Category(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/vanoix/awf/internal/infrastructure/xdg"
+	"github.com/awf-project/awf/internal/infrastructure/xdg"
 )
 
 var (

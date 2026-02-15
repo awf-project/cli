@@ -3,10 +3,10 @@ package expression
 import (
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Component: T003

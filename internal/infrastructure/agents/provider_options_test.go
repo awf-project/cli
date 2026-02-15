@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/awf-project/awf/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Component: T004 - Provider Constructor Functional Options

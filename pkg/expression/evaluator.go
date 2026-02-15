@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/expr-lang/expr"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Evaluator evaluates conditional expressions against a context.

@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/infrastructure/agents"
+	"github.com/awf-project/awf/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/infrastructure/agents"
-	"github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 func TestContextUsage_Integration(t *testing.T) {

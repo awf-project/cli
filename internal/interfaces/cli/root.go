@@ -3,8 +3,8 @@ package cli
 import (
 	"os"
 
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // Version information (set at build time via ldflags)

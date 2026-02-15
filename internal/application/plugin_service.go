@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
-	"github.com/vanoix/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/ports"
 )
 
 // ErrPluginDisabled indicates the plugin is disabled and cannot be loaded.

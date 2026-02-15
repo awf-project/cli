@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
 func TestNewStructuredError_WithAllFields(t *testing.T) {

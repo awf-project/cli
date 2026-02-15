@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	domerrors "github.com/vanoix/awf/internal/domain/errors"
+	domerrors "github.com/awf-project/awf/internal/domain/errors"
 )
 
 func TestParseError_ToStructuredError_ExtractsLineNumber(t *testing.T) {

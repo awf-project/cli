@@ -62,9 +62,9 @@ jobs:
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
           COMMIT=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          go build -ldflags "-X github.com/vanoix/awf/internal/interfaces/cli.Version=${VERSION} \
-            -X github.com/vanoix/awf/internal/interfaces/cli.Commit=${COMMIT} \
-            -X github.com/vanoix/awf/internal/interfaces/cli.BuildDate=${BUILD_DATE}" \
+          go build -ldflags "-X github.com/awf-project/awf/internal/interfaces/cli.Version=${VERSION} \
+            -X github.com/awf-project/awf/internal/interfaces/cli.Commit=${COMMIT} \
+            -X github.com/awf-project/awf/internal/interfaces/cli.BuildDate=${BUILD_DATE}" \
             -o awf-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/awf
 
       - uses: actions/upload-artifact@v6

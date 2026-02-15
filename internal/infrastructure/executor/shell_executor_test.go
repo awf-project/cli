@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 func TestShellExecutor_Execute_SimpleCommand(t *testing.T) {

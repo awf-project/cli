@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // MockProvider provides deterministic responses for testing without external CLI calls.

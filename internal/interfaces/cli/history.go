@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/infrastructure/logger"
+	"github.com/awf-project/awf/internal/infrastructure/store"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/infrastructure/logger"
-	"github.com/vanoix/awf/internal/infrastructure/store"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // HistoryInfo is the JSON/output structure for history command.

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	domerrors "github.com/awf-project/awf/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
-	domerrors "github.com/vanoix/awf/internal/domain/errors"
 )
 
 // TestCategorizeError_StructuredError tests the Phase 1 behavior:

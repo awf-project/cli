@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	domerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/domain/workflow"
+	domerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 const fixturesPath = "../../../tests/fixtures/workflows"

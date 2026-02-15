@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/operation"
+	"github.com/awf-project/awf/internal/domain/plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/operation"
-	"github.com/vanoix/awf/internal/domain/plugin"
 )
 
 // mockOperation is a test double for operation execution.

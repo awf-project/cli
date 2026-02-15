@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/vanoix/awf/internal/domain/errors"
+import "github.com/awf-project/awf/internal/domain/errors"
 
 // ErrorFormatter defines the contract for formatting structured errors
 // into different output representations (JSON, human-readable, etc.).

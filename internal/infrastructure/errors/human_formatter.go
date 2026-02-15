@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	domainerrors "github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/fatih/color"
-	domainerrors "github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // HumanErrorFormatter implements the ErrorFormatter port interface, providing

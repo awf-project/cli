@@ -6,9 +6,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // RenderWorkflowHelp renders workflow-specific help output including workflow

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/expr-lang/expr"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // ExprValidator implements ports.ExpressionValidator using the expr-lang/expr library.

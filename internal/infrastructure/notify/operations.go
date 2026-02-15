@@ -1,6 +1,6 @@
 package notify
 
-import "github.com/vanoix/awf/internal/domain/plugin"
+import "github.com/awf-project/awf/internal/domain/plugin"
 
 // AllOperations returns all notification operation schemas that can be registered
 // with the OperationRegistry. Currently defines a single operation: notify.send.

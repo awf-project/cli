@@ -5,11 +5,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	testmocks "github.com/awf-project/awf/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/domain/ports"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	testmocks "github.com/vanoix/awf/internal/testutil/mocks"
 )
 
 // Feature: C012 - Application Test Harness for Service Layer

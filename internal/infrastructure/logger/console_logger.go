@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/fatih/color"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // ConsoleLogger implements ports.Logger with human-readable console output.

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/awf-project/awf/internal/infrastructure/xdg"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/infrastructure/xdg"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 const (
@@ -171,7 +171,7 @@ func createConfigFile(path string, force bool) error {
 	}
 
 	content := `# AWF Configuration
-# https://github.com/vanoix/awf
+# https://github.com/awf-project/awf
 
 version: "1"
 
@@ -226,7 +226,7 @@ func createProjectConfigFile(path string, force bool) error {
 	}
 
 	content := `# AWF Project Configuration
-# https://github.com/vanoix/awf
+# https://github.com/awf-project/awf
 #
 # This file provides default values for workflow inputs.
 # CLI --input flags override these values.

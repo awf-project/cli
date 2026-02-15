@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 const (

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 func TestOutputWriter_WriteWorkflows_JSON(t *testing.T) {

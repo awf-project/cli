@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 func TestNewFileSystemLoader(t *testing.T) {

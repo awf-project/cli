@@ -19,10 +19,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/awf-project/awf/internal/infrastructure/config"
+	"github.com/awf-project/awf/internal/infrastructure/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/infrastructure/config"
-	"github.com/vanoix/awf/internal/infrastructure/notify"
 )
 
 func TestNotifyBackendRegistration_FullConfiguration(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/plugin"
+	"github.com/awf-project/awf/internal/domain/plugin"
 )
 
 const pluginsFileName = "plugins.json"

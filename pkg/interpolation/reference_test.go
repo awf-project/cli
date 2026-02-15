@@ -3,9 +3,9 @@ package interpolation_test
 import (
 	"testing"
 
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 func TestExtractReferences_NamespaceTypes(t *testing.T) {

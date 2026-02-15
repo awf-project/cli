@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // RED Phase: Test stubs for unexported status.go helper functions

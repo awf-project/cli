@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // mapToDomain converts a yamlWorkflow to a domain Workflow.

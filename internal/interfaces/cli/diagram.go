@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/awf-project/awf/internal/infrastructure/diagram"
+	"github.com/awf-project/awf/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
-	"github.com/vanoix/awf/internal/infrastructure/diagram"
-	"github.com/vanoix/awf/internal/interfaces/cli/ui"
 )
 
 // diagramOptions holds command-specific flags for the diagram command.

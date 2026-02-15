@@ -3,7 +3,7 @@ package workflow_test
 import (
 	"testing"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // Component: C013 - Domain Test File Splitting

@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/awf/pkg/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/pkg/validation"
 )
 
 // TestValidateRules_HappyPath validates normal usage with all validation types

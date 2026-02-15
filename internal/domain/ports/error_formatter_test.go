@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/domain/errors"
+	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/domain/errors"
-	"github.com/vanoix/awf/internal/domain/ports"
 )
 
 // mockJSONFormatter simulates a JSON error formatter

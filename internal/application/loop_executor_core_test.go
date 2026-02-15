@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/application"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
-	"github.com/vanoix/awf/internal/application"
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
 )
 
 // Source: loop_executor_test.go | Tests: 10 | Component: C014-T009

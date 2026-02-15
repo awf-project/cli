@@ -5,7 +5,7 @@ package subworkflows_test
 import (
 	"context"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/internal/domain/workflow"
 )
 
 // mockStateStore for subworkflow integration tests

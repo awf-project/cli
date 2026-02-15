@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vanoix/awf/internal/interfaces/cli"
 )
 
 // TestRunHelp_WorkflowWithInputs_Integration tests US1: View Workflow Input Arguments

@@ -317,7 +317,7 @@ The application layer can depend on domain components and stdlib only — no inf
 ```go
 import (
     "fmt"
-    "github.com/vanoix/awf/internal/domain"
+    "github.com/awf-project/awf/internal/domain"
     "os"
 )
 ```
@@ -328,7 +328,7 @@ import (
     "fmt"
     "os"
 
-    "github.com/vanoix/awf/internal/domain"
+    "github.com/awf-project/awf/internal/domain"
 )
 ```
 

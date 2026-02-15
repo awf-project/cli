@@ -6,8 +6,8 @@ package workflow_test
 import (
 	"fmt"
 
-	"github.com/vanoix/awf/internal/domain/workflow"
-	"github.com/vanoix/awf/pkg/interpolation"
+	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/awf/pkg/interpolation"
 )
 
 // testAnalyzer: Template analysis helper for tests
