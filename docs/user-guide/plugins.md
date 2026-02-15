@@ -161,11 +161,11 @@ See [Workflow Syntax - HTTP Operations](workflow-syntax.md#http-operations) for 
 
 ## Built-in Notification Plugin
 
-AWF includes a built-in notification provider that sends alerts when workflows complete. It exposes a single `notify.send` operation that dispatches to four backends: desktop notifications, [ntfy](https://ntfy.sh), Slack, and generic webhooks.
+AWF includes a built-in notification provider that sends alerts when workflows complete. It exposes a single `notify.send` operation that dispatches to two backends: desktop notifications and generic webhooks.
 
 **Key features:**
 - 1 operation: `notify.send` with backend dispatch
-- 4 backends: `desktop`, `ntfy`, `slack`, `webhook`
+- 2 backends: `desktop`, `webhook`
 - 10-second HTTP timeout for network backends (prevents workflow stalls)
 - Platform detection for desktop notifications (`notify-send` on Linux, `osascript` on macOS)
 - All inputs support AWF template interpolation (`{{workflow.name}}`, `{{workflow.duration}}`, etc.)
@@ -175,7 +175,7 @@ notify_team:
   type: operation
   operation: notify.send
   inputs:
-    backend: slack
+    backend: desktop
     title: "Build Complete"
     message: "{{workflow.name}} finished in {{workflow.duration}}"
   on_success: done
@@ -187,21 +187,17 @@ notify_team:
 | Backend | Transport | Required Config | Required Inputs |
 |---------|-----------|-----------------|-----------------|
 | `desktop` | OS-native (`notify-send` / `osascript`) | None | `message` |
-| `ntfy` | HTTP POST to ntfy server | `ntfy_url` in config | `message`, `topic` |
-| `slack` | HTTP POST to Slack webhook | `slack_webhook_url` in config | `message` |
 | `webhook` | HTTP POST to arbitrary URL | None | `message`, `webhook_url` |
 
 ### Operation Inputs
 
 | Input | Type | Required | Description |
 |-------|------|----------|-------------|
-| `backend` | string | Yes | Notification backend: `desktop`, `ntfy`, `slack`, `webhook` |
+| `backend` | string | Yes | Notification backend: `desktop`, `webhook` |
 | `message` | string | Yes | Notification message body |
 | `title` | string | No | Notification title (defaults to "AWF Workflow") |
 | `priority` | string | No | Priority: `low`, `default`, `high` (defaults to `default`) |
-| `topic` | string | No | ntfy topic name (required for `ntfy` backend) |
 | `webhook_url` | string | No | Webhook URL (required for `webhook` backend) |
-| `channel` | string | No | Slack channel override |
 
 ### Operation Outputs
 
@@ -218,15 +214,11 @@ Configure notification backends in `.awf/config.yaml`:
 ```yaml
 plugins:
   notify:
-    ntfy_url: "https://ntfy.sh"
-    slack_webhook_url: "https://hooks.slack.com/services/..."
     default_backend: "desktop"
 ```
 
 | Config Key | Description |
 |------------|-------------|
-| `ntfy_url` | Base URL for ntfy server (required for `ntfy` backend) |
-| `slack_webhook_url` | Slack incoming webhook URL (required for `slack` backend) |
 | `default_backend` | Backend to use when `backend` input is omitted |
 
 When both a config `default_backend` and an explicit `backend` input are set, the explicit input takes precedence.
@@ -235,11 +227,7 @@ When both a config `default_backend` and an explicit `backend` input are set, th
 
 **Desktop** - Uses `notify-send` on Linux and `osascript -e 'display notification'` on macOS. Fails gracefully on unsupported platforms (e.g., headless servers).
 
-**ntfy** - Posts to `<ntfy_url>/<topic>` with the notification payload. Supports priority mapping. Ideal for self-hosted push notifications to mobile devices.
-
-**Slack** - Posts a formatted message block to the configured Slack incoming webhook URL. Includes workflow name, status, and duration in the message.
-
-**Webhook** - Sends a generic JSON POST to any URL. The payload includes `workflow`, `status`, `duration`, `message`, and `outputs` fields. Use this for Discord, Teams, PagerDuty, or any HTTP integration.
+**Webhook** - Sends a generic JSON POST to any URL. The payload includes `workflow`, `status`, `duration`, `message`, and `outputs` fields. Use this for ntfy, Slack, Discord, Teams, PagerDuty, or any HTTP integration.
 
 See [Workflow Syntax - Notification Operations](workflow-syntax.md#notification-operations) for complete examples.
 
@@ -270,9 +258,9 @@ Each plugin must have:
 
 ```
 plugins/
-└── awf-plugin-slack/
+└── awf-plugin-github/
     ├── plugin.yaml         # Plugin manifest
-    └── awf-plugin-slack    # Executable binary
+    └── awf-plugin-github   # Executable binary
 ```
 
 ### Plugin Manifest
@@ -280,17 +268,17 @@ plugins/
 Every plugin requires a `plugin.yaml` manifest:
 
 ```yaml
-name: awf-plugin-slack
+name: awf-plugin-github
 version: 1.0.0
-description: Slack notifications for AWF workflows
+description: GitHub integration for AWF workflows
 awf_version: ">=0.4.0"
 capabilities:
   - operations
 config:
-  webhook_url:
+  token:
     type: string
     required: true
-    description: Slack webhook URL
+    description: GitHub API token
 ```
 
 #### Manifest Fields
@@ -325,18 +313,18 @@ Output shows all discovered plugins with their status:
 
 ```
 NAME                VERSION  STATUS   CAPABILITIES  DESCRIPTION
-awf-plugin-slack    1.0.0    enabled  operations    Slack notifications
-awf-plugin-github   2.1.0    disabled operations    GitHub API integration
+awf-plugin-github   2.1.0    enabled  operations    GitHub API integration
+awf-plugin-metrics  1.0.0    disabled operations    Metrics collection
 ```
 
 #### Enable/Disable Plugins
 
 ```bash
 # Disable a plugin
-awf plugin disable awf-plugin-slack
+awf plugin disable awf-plugin-github
 
 # Enable a plugin
-awf plugin enable awf-plugin-slack
+awf plugin enable awf-plugin-github
 ```
 
 Plugin state persists across AWF restarts.
@@ -360,9 +348,10 @@ states:
 
   notify:
     type: step
-    operation: slack.send_message    # Plugin operation
+    operation: notify.send            # Built-in operation
     inputs:
-      channel: "#deployments"
+      backend: webhook
+      webhook_url: "https://example.com/hooks/deployments"
       message: "Deploy completed: {{.states.deploy.Output}}"
     on_success: done
     on_failure: error
@@ -395,8 +384,6 @@ Configure plugins via environment variables or config file:
 ```yaml
 # .awf.yaml
 plugins:
-  awf-plugin-slack:
-    webhook_url: "https://hooks.slack.com/services/..."
   awf-plugin-github:
     token: "${GITHUB_TOKEN}"
 ```

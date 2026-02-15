@@ -11,46 +11,31 @@ import (
 // --- Happy Path Tests ---
 
 func TestAllOperations_ReturnsOneOperation(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: it returns exactly 1 operation
 	assert.Len(t, ops, 1, "AllOperations should return 1 notification operation")
 }
 
 func TestAllOperations_NotifySendOperationExists(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: the notify.send operation exists
 	require.Len(t, ops, 1)
 	assert.Equal(t, "notify.send", ops[0].Name, "operation name should be notify.send")
 }
 
 func TestAllOperations_NotifySendHasDescription(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: notify.send has a non-empty description
 	require.Len(t, ops, 1)
 	assert.NotEmpty(t, ops[0].Description, "notify.send should have a description")
 	assert.Contains(t, ops[0].Description, "notification", "description should mention notifications")
 }
 
 func TestAllOperations_NotifySendHasInputs(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: notify.send has inputs defined
 	require.Len(t, ops, 1)
 	assert.NotEmpty(t, ops[0].Inputs, "notify.send should have inputs")
 }
 
 func TestAllOperations_NotifySendHasOutputs(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: notify.send has outputs defined
 	require.Len(t, ops, 1)
 	assert.NotEmpty(t, ops[0].Outputs, "notify.send should have outputs")
 }
@@ -69,8 +54,6 @@ func TestNotifySendOperation_RequiredInputs(t *testing.T) {
 	assert.Equal(t, plugin.InputTypeString, backendInput.Type, "backend should be string type")
 	assert.NotEmpty(t, backendInput.Description, "backend should have description")
 	assert.Contains(t, backendInput.Description, "desktop", "backend description should list desktop")
-	assert.Contains(t, backendInput.Description, "ntfy", "backend description should list ntfy")
-	assert.Contains(t, backendInput.Description, "slack", "backend description should list slack")
 	assert.Contains(t, backendInput.Description, "webhook", "backend description should list webhook")
 
 	// Verify message is required
@@ -106,22 +89,10 @@ func TestNotifySendOperation_OptionalInputs(t *testing.T) {
 			description: "low",
 		},
 		{
-			name:        "topic",
-			shouldExist: true,
-			inputType:   plugin.InputTypeString,
-			description: "ntfy",
-		},
-		{
 			name:        "webhook_url",
 			shouldExist: true,
 			inputType:   plugin.InputTypeString,
 			description: "webhook",
-		},
-		{
-			name:        "channel",
-			shouldExist: true,
-			inputType:   plugin.InputTypeString,
-			description: "channel",
 		},
 	}
 
@@ -168,19 +139,10 @@ func TestNotifySendOperation_BackendSpecificInputs(t *testing.T) {
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Verify topic is marked for ntfy backend
-	topicInput := op.Inputs["topic"]
-	assert.Contains(t, topicInput.Description, "ntfy", "topic should be associated with ntfy backend")
-	assert.Contains(t, topicInput.Description, "required", "topic description should indicate it's required for ntfy")
-
 	// Verify webhook_url is marked for webhook backend
 	webhookInput := op.Inputs["webhook_url"]
 	assert.Contains(t, webhookInput.Description, "webhook", "webhook_url should be associated with webhook backend")
 	assert.Contains(t, webhookInput.Description, "required", "webhook_url description should indicate it's required for webhook")
-
-	// Verify channel is for Slack
-	channelInput := op.Inputs["channel"]
-	assert.Contains(t, channelInput.Description, "Slack", "channel should be associated with Slack")
 }
 
 func TestNotifySendOperation_Outputs(t *testing.T) {
@@ -211,9 +173,9 @@ func TestNotifySendOperation_AllInputCount(t *testing.T) {
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Verify total input count (2 required + 5 optional = 7)
-	expectedInputs := []string{"backend", "message", "title", "priority", "topic", "webhook_url", "channel"}
-	assert.Len(t, op.Inputs, len(expectedInputs), "notify.send should have exactly 7 inputs")
+	// Verify total input count (2 required + 3 optional = 5)
+	expectedInputs := []string{"backend", "message", "title", "priority", "webhook_url"}
+	assert.Len(t, op.Inputs, len(expectedInputs), "notify.send should have exactly 5 inputs")
 
 	for _, inputName := range expectedInputs {
 		_, exists := op.Inputs[inputName]
@@ -224,11 +186,9 @@ func TestNotifySendOperation_AllInputCount(t *testing.T) {
 // --- Edge Case Tests ---
 
 func TestAllOperations_ImmutabilityCheck(t *testing.T) {
-	// Given: AllOperations is called twice
 	ops1 := AllOperations()
 	ops2 := AllOperations()
 
-	// Then: both calls return the same data
 	require.Len(t, ops1, len(ops2))
 	assert.Equal(t, ops1[0].Name, ops2[0].Name)
 	assert.Equal(t, ops1[0].Description, ops2[0].Description)
@@ -237,21 +197,16 @@ func TestAllOperations_ImmutabilityCheck(t *testing.T) {
 }
 
 func TestAllOperations_NoEmptyName(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
-
-	// Then: the operation name is not empty
 	require.Len(t, ops, 1)
 	assert.NotEmpty(t, ops[0].Name, "operation name should not be empty")
 }
 
 func TestAllOperations_AllInputsHaveDescriptions(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Then: all inputs have non-empty descriptions
 	for inputName, inputSchema := range op.Inputs {
 		assert.NotEmpty(t, inputSchema.Description,
 			"input %q should have a description", inputName)
@@ -259,12 +214,10 @@ func TestAllOperations_AllInputsHaveDescriptions(t *testing.T) {
 }
 
 func TestAllOperations_AllInputsHaveValidTypes(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Then: all inputs have valid types
 	validTypes := map[string]bool{
 		plugin.InputTypeString:  true,
 		plugin.InputTypeInteger: true,
@@ -280,12 +233,10 @@ func TestAllOperations_AllInputsHaveValidTypes(t *testing.T) {
 }
 
 func TestAllOperations_AllInputsAreStringType(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Then: all notify.send inputs should be string type (FR-001)
 	for inputName, inputSchema := range op.Inputs {
 		assert.Equal(t, plugin.InputTypeString, inputSchema.Type,
 			"input %q should be string type", inputName)
@@ -303,9 +254,7 @@ func TestNotifySendOperation_NoUnexpectedInputs(t *testing.T) {
 		"message":     true,
 		"title":       true,
 		"priority":    true,
-		"topic":       true,
 		"webhook_url": true,
-		"channel":     true,
 	}
 
 	for inputName := range op.Inputs {
@@ -344,31 +293,27 @@ func TestNotifySendOperation_OptionalInputsCount(t *testing.T) {
 		}
 	}
 
-	// Should have exactly 5 optional inputs
-	assert.Equal(t, 5, optionalCount, "should have exactly 5 optional inputs")
+	// Should have exactly 3 optional inputs
+	assert.Equal(t, 3, optionalCount, "should have exactly 3 optional inputs")
 }
 
 // --- Error Handling Tests ---
 
 func TestAllOperations_NoEmptyOutputFields(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Then: no output field is empty
 	for _, outputField := range op.Outputs {
 		assert.NotEmpty(t, outputField, "output field should not be empty")
 	}
 }
 
 func TestAllOperations_NoDuplicateOutputFields(t *testing.T) {
-	// Given: AllOperations is called
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Then: no duplicate output fields
 	seen := make(map[string]bool)
 	for _, outputField := range op.Outputs {
 		assert.False(t, seen[outputField],
@@ -411,18 +356,13 @@ func TestNotifySendOperation_InputDescriptionsProvideGuidance(t *testing.T) {
 	}{
 		{
 			inputName:   "backend",
-			mustContain: []string{"desktop", "ntfy", "slack", "webhook"},
+			mustContain: []string{"desktop", "webhook"},
 			description: "backend description should list all supported backends",
 		},
 		{
 			inputName:   "priority",
 			mustContain: []string{"low", "default", "high"},
 			description: "priority description should list valid values",
-		},
-		{
-			inputName:   "topic",
-			mustContain: []string{"ntfy"},
-			description: "topic description should indicate ntfy association",
 		},
 		{
 			inputName:   "webhook_url",
@@ -461,14 +401,14 @@ func TestNotifySendOperation_SupportsTemplateInterpolation(t *testing.T) {
 	}
 }
 
-func TestNotifySendOperation_FourBackendsSupported(t *testing.T) {
+func TestNotifySendOperation_TwoBackendsSupported(t *testing.T) {
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Verify all four backends mentioned (FR-002)
+	// Verify supported backends mentioned
 	backendInput := op.Inputs["backend"]
-	backends := []string{"desktop", "ntfy", "slack", "webhook"}
+	backends := []string{"desktop", "webhook"}
 
 	for _, backend := range backends {
 		assert.Contains(t, backendInput.Description, backend,
@@ -495,7 +435,7 @@ func TestNotifySendOperation_OutputsMatchFR004(t *testing.T) {
 func TestNotifySendOperation_FR001Compliance(t *testing.T) {
 	// FR-001: The plugin must expose a single operation `notify.send` accepting
 	// inputs: backend (required), title (optional), message (required),
-	// priority (optional), and backend-specific inputs (topic, webhook_url, channel)
+	// priority (optional), and backend-specific inputs (webhook_url)
 
 	ops := AllOperations()
 	require.Len(t, ops, 1, "FR-001: must expose single operation")
@@ -510,14 +450,12 @@ func TestNotifySendOperation_FR001Compliance(t *testing.T) {
 	// Optional inputs
 	assert.False(t, op.Inputs["title"].Required, "FR-001: title must be optional")
 	assert.False(t, op.Inputs["priority"].Required, "FR-001: priority must be optional")
-	assert.False(t, op.Inputs["topic"].Required, "FR-001: topic must be optional")
 	assert.False(t, op.Inputs["webhook_url"].Required, "FR-001: webhook_url must be optional")
-	assert.False(t, op.Inputs["channel"].Required, "FR-001: channel must be optional")
 }
 
 func TestNotifySendOperation_FR002Compliance(t *testing.T) {
-	// FR-002: The plugin must support four notification backends:
-	// desktop, ntfy, slack, webhook
+	// FR-002: The plugin must support two notification backends:
+	// desktop, webhook
 
 	ops := AllOperations()
 	require.Len(t, ops, 1)
@@ -525,7 +463,7 @@ func TestNotifySendOperation_FR002Compliance(t *testing.T) {
 	op := ops[0]
 	backendDesc := op.Inputs["backend"].Description
 
-	backends := []string{"desktop", "ntfy", "slack", "webhook"}
+	backends := []string{"desktop", "webhook"}
 	for _, backend := range backends {
 		assert.Contains(t, backendDesc, backend,
 			"FR-002: backend description must mention %s", backend)

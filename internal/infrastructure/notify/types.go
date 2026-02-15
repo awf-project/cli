@@ -34,7 +34,7 @@ type BackendResult struct {
 }
 
 // Backend defines how a notification is delivered.
-// Each backend implementation (desktop, ntfy, slack, webhook) implements
+// Each backend implementation (desktop, webhook) implements
 // this interface with backend-specific delivery logic.
 type Backend interface {
 	// Send delivers a notification using this backend.
@@ -47,13 +47,7 @@ type Backend interface {
 // These values are loaded at provider initialization and used by backends
 // to resolve configuration like URLs and default backend selection.
 type NotifyConfig struct {
-	// NtfyURL is the base URL for the ntfy server (e.g., "https://ntfy.sh")
-	NtfyURL string
-
-	// SlackWebhookURL is the Slack incoming webhook URL
-	SlackWebhookURL string
-
 	// DefaultBackend is the backend to use when not specified in operation inputs
-	// (valid values: "desktop", "ntfy", "slack", "webhook")
+	// (valid values: "desktop", "webhook")
 	DefaultBackend string
 }

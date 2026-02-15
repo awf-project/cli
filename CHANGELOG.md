@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **C058**: Removed `ntfy` and `slack` notification backends — use `webhook` backend
+  - The `webhook` backend is a superset: any HTTP POST target (ntfy, Slack, Discord, Teams, PagerDuty) works via URL + headers + body configuration
+  - Removed fields: `ntfy_url` and `slack_webhook_url` from `.awf/config.yaml`
+  - Removed files: `ntfy.go`, `ntfy_test.go`, `slack.go`, `slack_test.go`
+  - **Migration (ntfy)** — use `http.request` for custom payload format:
+    ```yaml
+    # Before
+    notify:
+      type: operation
+      operation: notify.send
+      inputs:
+        backend: ntfy
+        title: "Build done"
+        message: "Workflow complete"
+        topic: my-topic
+
+    # After (option A: webhook with fixed JSON structure)
+    notify:
+      type: operation
+      operation: notify.send
+      inputs:
+        backend: webhook
+        webhook_url: "https://ntfy.sh/my-topic"
+        title: "Build done"
+        message: "Workflow complete"
+
+    # After (option B: http.request for full control)
+    notify:
+      type: operation
+      operation: http.request
+      inputs:
+        url: "https://ntfy.sh/my-topic"
+        method: POST
+        body: '{"topic":"my-topic","title":"Build done","message":"Workflow complete"}'
+    ```
+  - **Migration (Slack)** — use `http.request` for Slack's JSON format:
+    ```yaml
+    # Before
+    notify:
+      type: operation
+      operation: notify.send
+      inputs:
+        backend: slack
+        title: "Build done"
+        message: "Workflow complete"
+
+    # After (http.request for Slack payload format)
+    notify:
+      type: operation
+      operation: http.request
+      inputs:
+        url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: '{"text":"*Build done*\nWorkflow complete"}'
+    ```
+  - **Risk**: Workflows using `backend: ntfy` or `backend: slack` will fail with unknown backend error
+
 - **C057**: Removed deprecated `Tokens` field from `StepState` — use `TokensUsed`
   - Template interpolation: `{{states.step_name.Tokens}}` → `{{states.step_name.TokensUsed}}`
   - Expression conditions: `states.step_name.Tokens > 0` → `states.step_name.TokensUsed > 0`

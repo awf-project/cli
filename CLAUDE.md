@@ -233,6 +233,8 @@ Implement prompt file loading in application layer (ExecutionService); domain la
 
 Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
 
+Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
+
 ## Common Pitfalls
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -247,11 +249,19 @@ Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent acci
 
 Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
 
+Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
+
+Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; ensures consistent behavior regardless of CLI invocation location
+
+Enforce 1MB size limit on loaded prompt files via io.LimitReader; prevents accidental memory issues and provides fast failure feedback for misconfigured paths
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
 
 Use HTTPDoer interface in pkg/httputil tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
+
+Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 
 Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 

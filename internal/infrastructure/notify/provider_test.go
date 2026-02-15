@@ -109,7 +109,7 @@ func TestNotifyOperationProvider_GetOperation_RequiredInputs(t *testing.T) {
 	}
 
 	// Verify optional inputs
-	optionalInputs := []string{"title", "priority", "topic", "webhook_url", "channel"}
+	optionalInputs := []string{"title", "priority", "webhook_url"}
 	for _, inputName := range optionalInputs {
 		input, exists := op.Inputs[inputName]
 		require.True(t, exists, "optional input %s should exist", inputName)

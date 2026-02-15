@@ -59,6 +59,42 @@ func TestProjectConfig_EmptyInputs(t *testing.T) {
 	}
 }
 
+func TestProjectConfig_NotifyOnlyDefaultBackend(t *testing.T) {
+	cfg := &ProjectConfig{
+		Notify: struct {
+			DefaultBackend string `yaml:"default_backend"`
+		}{
+			DefaultBackend: "desktop",
+		},
+	}
+
+	if cfg.Notify.DefaultBackend != "desktop" {
+		t.Errorf("Notify.DefaultBackend = %q, want %q", cfg.Notify.DefaultBackend, "desktop")
+	}
+}
+
+func TestProjectConfig_NotifyWebhookBackend(t *testing.T) {
+	cfg := &ProjectConfig{
+		Notify: struct {
+			DefaultBackend string `yaml:"default_backend"`
+		}{
+			DefaultBackend: "webhook",
+		},
+	}
+
+	if cfg.Notify.DefaultBackend != "webhook" {
+		t.Errorf("Notify.DefaultBackend = %q, want %q", cfg.Notify.DefaultBackend, "webhook")
+	}
+}
+
+func TestProjectConfig_NotifyEmptyBackend(t *testing.T) {
+	cfg := &ProjectConfig{}
+
+	if cfg.Notify.DefaultBackend != "" {
+		t.Errorf("Notify.DefaultBackend = %q, want empty string for zero value", cfg.Notify.DefaultBackend)
+	}
+}
+
 func TestConfigError_Error_WithPath(t *testing.T) {
 	tests := []struct {
 		name string

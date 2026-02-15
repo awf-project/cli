@@ -103,88 +103,6 @@ states:
 	}
 }
 
-func TestRunCommand_WiresNotifyProvider_NtfyBackend(t *testing.T) {
-	// GIVEN: A workflow with ntfy.sh notification
-	tmpDir := setupTestDir(t)
-
-	// Create storage directories
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
-
-	workflowContent := `name: ntfy-notify
-version: "1.0.0"
-states:
-  initial: start
-  start:
-    type: operation
-    operation: notify.send
-    inputs:
-      backend: ntfy
-      message: "Ntfy notification test"
-      topic: "awf-test"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "ntfy-notify.yaml", workflowContent)
-
-	// WHEN: Running workflow with ntfy backend
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "ntfy-notify"})
-
-	err := cmd.Execute()
-	// THEN: Notify provider is wired and handles ntfy backend
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "nil pointer", "should not panic")
-		assert.NotContains(t, errMsg, "operation not found", "notify.send should be available")
-	}
-}
-
-func TestRunCommand_WiresNotifyProvider_SlackBackend(t *testing.T) {
-	// GIVEN: A workflow with Slack notification
-	tmpDir := setupTestDir(t)
-
-	// Create storage directories
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
-
-	workflowContent := `name: slack-notify
-version: "1.0.0"
-states:
-  initial: start
-  start:
-    type: operation
-    operation: notify.send
-    inputs:
-      backend: slack
-      message: "Slack notification test"
-      channel: "#general"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "slack-notify.yaml", workflowContent)
-
-	// WHEN: Running workflow with slack backend
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "slack-notify"})
-
-	err := cmd.Execute()
-	// THEN: Notify provider is wired and handles slack backend
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "nil pointer", "should not panic")
-		assert.NotContains(t, errMsg, "operation not found", "notify.send should be available")
-	}
-}
-
 func TestRunCommand_WiresNotifyProvider_WebhookBackend(t *testing.T) {
 	// GIVEN: A workflow with webhook notification
 	tmpDir := setupTestDir(t)
@@ -400,14 +318,14 @@ states:
             inputs:
               backend: desktop
               message: "Desktop notification"
-      - name: ntfy_branch
+      - name: webhook_branch
         steps:
           - type: operation
             operation: notify.send
             inputs:
-              backend: ntfy
-              message: "Ntfy notification"
-              topic: "awf-test"
+              backend: webhook
+              message: "Webhook notification"
+              webhook_url: "https://example.com/webhook"
     on_complete: done
   done:
     type: terminal

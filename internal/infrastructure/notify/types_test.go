@@ -94,17 +94,16 @@ func TestNotificationPayload_Construction(t *testing.T) {
 }
 
 func TestNotificationPayload_EmptyMessage(t *testing.T) {
-	// Edge case: empty message (validation should happen in provider, not type)
 	payload := NotificationPayload{
 		Title:   "Some Title",
 		Message: "",
 	}
 
+	assert.Equal(t, "Some Title", payload.Title)
 	assert.Empty(t, payload.Message, "empty message should be allowed at type level")
 }
 
 func TestNotificationPayload_LongMessage(t *testing.T) {
-	// Edge case: very long message
 	longMessage := make([]byte, 10000)
 	for i := range longMessage {
 		longMessage[i] = 'a'
@@ -118,7 +117,6 @@ func TestNotificationPayload_LongMessage(t *testing.T) {
 }
 
 func TestNotificationPayload_MetadataModification(t *testing.T) {
-	// Test that metadata is modifiable (not immutable at type level)
 	payload := NotificationPayload{
 		Message: "Test",
 		Metadata: map[string]string{
@@ -128,19 +126,19 @@ func TestNotificationPayload_MetadataModification(t *testing.T) {
 
 	payload.Metadata["key2"] = "value2"
 
+	assert.Equal(t, "Test", payload.Message)
 	assert.Len(t, payload.Metadata, 2, "metadata should be modifiable")
 	assert.Equal(t, "value2", payload.Metadata["key2"])
 }
 
 func TestNotificationPayload_NilMetadata(t *testing.T) {
-	// Edge case: nil metadata
 	payload := NotificationPayload{
 		Message:  "Test",
 		Metadata: nil,
 	}
 
+	assert.Equal(t, "Test", payload.Message)
 	assert.Nil(t, payload.Metadata)
-	// Should not panic when accessed
 	_, exists := payload.Metadata["key"]
 	assert.False(t, exists)
 }
@@ -167,20 +165,20 @@ func TestBackendResult_Construction(t *testing.T) {
 			},
 		},
 		{
-			name: "http_backend_result_with_success_status",
+			name: "webhook_backend_result_with_success_status",
 			result: BackendResult{
-				Backend:    "ntfy",
+				Backend:    "webhook",
 				StatusCode: 200,
 				Response:   `{"id":"abc123","time":1234567890}`,
 			},
 			validate: func(t *testing.T, r BackendResult) {
-				assert.Equal(t, "ntfy", r.Backend)
+				assert.Equal(t, "webhook", r.Backend)
 				assert.Equal(t, 200, r.StatusCode)
 				assert.Contains(t, r.Response, "abc123")
 			},
 		},
 		{
-			name: "http_backend_result_with_error_status",
+			name: "webhook_backend_result_with_error_status",
 			result: BackendResult{
 				Backend:    "webhook",
 				StatusCode: 500,
@@ -193,27 +191,14 @@ func TestBackendResult_Construction(t *testing.T) {
 			},
 		},
 		{
-			name: "slack_backend_result_with_ok_response",
-			result: BackendResult{
-				Backend:    "slack",
-				StatusCode: 200,
-				Response:   "ok",
-			},
-			validate: func(t *testing.T, r BackendResult) {
-				assert.Equal(t, "slack", r.Backend)
-				assert.Equal(t, 200, r.StatusCode)
-				assert.Equal(t, "ok", r.Response)
-			},
-		},
-		{
 			name: "backend_result_with_empty_response",
 			result: BackendResult{
-				Backend:    "ntfy",
+				Backend:    "webhook",
 				StatusCode: 204,
 				Response:   "",
 			},
 			validate: func(t *testing.T, r BackendResult) {
-				assert.Equal(t, "ntfy", r.Backend)
+				assert.Equal(t, "webhook", r.Backend)
 				assert.Equal(t, 204, r.StatusCode)
 				assert.Empty(t, r.Response)
 			},
@@ -255,7 +240,9 @@ func TestBackendResult_StatusCodeRanges(t *testing.T) {
 				Response:   "test response",
 			}
 
+			assert.Equal(t, "test", result.Backend)
 			assert.Equal(t, tt.statusCode, result.StatusCode)
+			assert.Equal(t, "test response", result.Response)
 		})
 	}
 }
@@ -273,6 +260,8 @@ func TestBackendResult_LongResponse(t *testing.T) {
 		Response:   string(longResponse),
 	}
 
+	assert.Equal(t, "webhook", result.Backend)
+	assert.Equal(t, 200, result.StatusCode)
 	assert.Len(t, result.Response, 100000, "should handle long responses")
 }
 
@@ -284,6 +273,8 @@ func TestBackendResult_SpecialCharactersInResponse(t *testing.T) {
 		Response:   `{"message":"Test with \"quotes\" and\nnewlines"}`,
 	}
 
+	assert.Equal(t, "webhook", result.Backend)
+	assert.Equal(t, 200, result.StatusCode)
 	assert.Contains(t, result.Response, `\"quotes\"`)
 	assert.Contains(t, result.Response, `\n`)
 }
@@ -408,66 +399,25 @@ func TestNotifyConfig_Construction(t *testing.T) {
 			name:   "empty_config",
 			config: NotifyConfig{},
 			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Empty(t, c.NtfyURL)
-				assert.Empty(t, c.SlackWebhookURL)
 				assert.Empty(t, c.DefaultBackend)
 			},
 		},
 		{
-			name: "ntfy_config_only",
-			config: NotifyConfig{
-				NtfyURL: "https://ntfy.sh",
-			},
-			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Equal(t, "https://ntfy.sh", c.NtfyURL)
-				assert.Empty(t, c.SlackWebhookURL)
-				assert.Empty(t, c.DefaultBackend)
-			},
-		},
-		{
-			name: "slack_config_only",
-			config: NotifyConfig{
-				SlackWebhookURL: "https://hooks.slack.com/services/XXX/YYY/ZZZ",
-			},
-			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Empty(t, c.NtfyURL)
-				assert.Equal(t, "https://hooks.slack.com/services/XXX/YYY/ZZZ", c.SlackWebhookURL)
-				assert.Empty(t, c.DefaultBackend)
-			},
-		},
-		{
-			name: "default_backend_only",
+			name: "desktop_backend",
 			config: NotifyConfig{
 				DefaultBackend: "desktop",
 			},
 			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Empty(t, c.NtfyURL)
-				assert.Empty(t, c.SlackWebhookURL)
 				assert.Equal(t, "desktop", c.DefaultBackend)
 			},
 		},
 		{
-			name: "full_config",
+			name: "webhook_backend",
 			config: NotifyConfig{
-				NtfyURL:         "https://ntfy.example.com",
-				SlackWebhookURL: "https://hooks.slack.com/services/ABC/DEF/GHI",
-				DefaultBackend:  "ntfy",
+				DefaultBackend: "webhook",
 			},
 			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Equal(t, "https://ntfy.example.com", c.NtfyURL)
-				assert.Equal(t, "https://hooks.slack.com/services/ABC/DEF/GHI", c.SlackWebhookURL)
-				assert.Equal(t, "ntfy", c.DefaultBackend)
-			},
-		},
-		{
-			name: "self_hosted_ntfy_url",
-			config: NotifyConfig{
-				NtfyURL:        "http://localhost:8080",
-				DefaultBackend: "ntfy",
-			},
-			validate: func(t *testing.T, c NotifyConfig) {
-				assert.Equal(t, "http://localhost:8080", c.NtfyURL)
-				assert.Equal(t, "ntfy", c.DefaultBackend)
+				assert.Equal(t, "webhook", c.DefaultBackend)
 			},
 		},
 	}
@@ -480,8 +430,7 @@ func TestNotifyConfig_Construction(t *testing.T) {
 }
 
 func TestNotifyConfig_DefaultBackendValues(t *testing.T) {
-	// Edge case: test all valid backend values
-	backends := []string{"desktop", "ntfy", "slack", "webhook"}
+	backends := []string{"desktop", "webhook"}
 
 	for _, backend := range backends {
 		t.Run(backend, func(t *testing.T) {
@@ -503,29 +452,20 @@ func TestNotifyConfig_InvalidBackendValue(t *testing.T) {
 	assert.Equal(t, "invalid-backend", config.DefaultBackend, "type should accept any string")
 }
 
-func TestNotifyConfig_URLFormats(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-	}{
-		{"http_url", "http://example.com"},
-		{"https_url", "https://example.com"},
-		{"url_with_port", "https://example.com:8080"},
-		{"url_with_path", "https://example.com/path/to/resource"},
-		{"url_with_query", "https://example.com?key=value"},
-		{"localhost_url", "http://localhost:3000"},
-		{"ip_address_url", "http://192.168.1.1:8080"},
+func TestNotifyConfig_OnlyDefaultBackendField(t *testing.T) {
+	config := NotifyConfig{
+		DefaultBackend: "webhook",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := NotifyConfig{
-				NtfyURL: tt.url,
-			}
+	assert.Equal(t, "webhook", config.DefaultBackend)
+}
 
-			assert.Equal(t, tt.url, config.NtfyURL)
-		})
+func TestNotifyConfig_NoLegacyFields(t *testing.T) {
+	config := NotifyConfig{
+		DefaultBackend: "desktop",
 	}
+
+	assert.NotEmpty(t, config.DefaultBackend, "DefaultBackend field should exist")
 }
 
 // --- Mock implementations for testing ---

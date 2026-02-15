@@ -1141,8 +1141,6 @@ func isTerminal(r io.Reader) bool {
 // This function reads backend configuration from .awf/config.yaml and registers
 // the appropriate backends with the NotifyOperationProvider. It supports:
 //   - Desktop notifications (always enabled)
-//   - Ntfy (if ntfy_url is configured)
-//   - Slack (if slack_webhook_url is configured)
 //   - Webhook (always enabled, URL provided per-operation)
 //
 // If default_backend is configured, it sets the default backend for the provider.
@@ -1170,38 +1168,14 @@ func registerNotifyBackends(provider *notify.NotifyOperationProvider, cfg *confi
 	}
 	logger.Debug("registered desktop notification backend")
 
-	// 2. Register ntfy backend if cfg.Notify.NtfyURL is set
-	if strings.TrimSpace(cfg.Notify.NtfyURL) != "" {
-		ntfyBackend, err := notify.NewNtfyBackend(cfg.Notify.NtfyURL)
-		if err != nil {
-			return fmt.Errorf("failed to create ntfy backend: %w", err)
-		}
-		if err := provider.RegisterBackend("ntfy", ntfyBackend); err != nil {
-			return fmt.Errorf("failed to register ntfy backend: %w", err)
-		}
-		logger.Debug("registered ntfy notification backend", "url", cfg.Notify.NtfyURL)
-	}
-
-	// 3. Register slack backend if cfg.Notify.SlackWebhookURL is set
-	if strings.TrimSpace(cfg.Notify.SlackWebhookURL) != "" {
-		slackBackend, err := notify.NewSlackBackend(cfg.Notify.SlackWebhookURL)
-		if err != nil {
-			return fmt.Errorf("failed to create slack backend: %w", err)
-		}
-		if err := provider.RegisterBackend("slack", slackBackend); err != nil {
-			return fmt.Errorf("failed to register slack backend: %w", err)
-		}
-		logger.Debug("registered slack notification backend")
-	}
-
-	// 4. Register webhook backend (always enabled)
+	// 2. Register webhook backend (always enabled)
 	webhookBackend := notify.NewWebhookBackend()
 	if err := provider.RegisterBackend("webhook", webhookBackend); err != nil {
 		return fmt.Errorf("failed to register webhook backend: %w", err)
 	}
 	logger.Debug("registered webhook notification backend")
 
-	// 5. Set default backend if cfg.Notify.DefaultBackend is set
+	// 3. Set default backend if cfg.Notify.DefaultBackend is set
 	if strings.TrimSpace(cfg.Notify.DefaultBackend) != "" {
 		provider.SetDefaultBackend(cfg.Notify.DefaultBackend)
 		logger.Debug("set default notification backend", "backend", cfg.Notify.DefaultBackend)

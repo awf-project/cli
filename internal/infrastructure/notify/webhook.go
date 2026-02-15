@@ -28,7 +28,7 @@ type webhookBackend struct {
 }
 
 // newWebhookBackend creates a new webhook notification backend.
-// Unlike ntfy and slack, webhook URLs are provided per-request via metadata.
+// Webhook URLs are provided per-request via metadata rather than at construction time.
 func newWebhookBackend() *webhookBackend {
 	return &webhookBackend{
 		client: httputil.NewClient(httputil.WithTimeout(10 * time.Second)),
@@ -37,7 +37,7 @@ func newWebhookBackend() *webhookBackend {
 }
 
 // NewWebhookBackend creates a new webhook notification backend (exported).
-// Unlike ntfy and slack, webhook URLs are provided per-request via metadata.
+// Webhook URLs are provided per-request via metadata rather than at construction time.
 // This is the public API used for CLI wiring in run.go.
 func NewWebhookBackend() Backend {
 	return newWebhookBackend()

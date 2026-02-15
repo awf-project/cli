@@ -784,7 +784,7 @@ awf plugin enable <name>
 
 ```bash
 # Enable a plugin
-awf plugin enable awf-plugin-slack
+awf plugin enable awf-plugin-github
 ```
 
 ---
@@ -807,7 +807,7 @@ awf plugin disable <name>
 
 ```bash
 # Disable a plugin
-awf plugin disable awf-plugin-slack
+awf plugin disable awf-plugin-github
 ```
 
 ---

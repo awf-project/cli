@@ -10,7 +10,7 @@ import (
 )
 
 // NotifyOperationProvider implements ports.OperationProvider for notification operations.
-// Dispatches notify.send operation to backend-specific handlers (desktop, ntfy, slack, webhook).
+// Dispatches notify.send operation to backend-specific handlers (desktop, webhook).
 //
 // The provider manages:
 //   - Operation schema registry (notify.send)
@@ -54,7 +54,7 @@ func NewNotifyOperationProvider(logger ports.Logger) *NotifyOperationProvider {
 
 // RegisterBackend registers a notification backend with the provider.
 //
-// Backends are registered by name (e.g., "desktop", "ntfy", "slack", "webhook")
+// Backends are registered by name (e.g., "desktop", "webhook")
 // and must implement the Backend interface. Registration is idempotent: duplicate
 // registrations for the same name return an error.
 //
@@ -198,14 +198,8 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 	metadata := make(map[string]string)
 
 	// Add backend-specific inputs to metadata
-	if topic, _ := extractStringInput(inputs, "topic", false); topic != "" { //nolint:errcheck // optional input
-		metadata["topic"] = topic
-	}
 	if webhookURL, _ := extractStringInput(inputs, "webhook_url", false); webhookURL != "" { //nolint:errcheck // optional input
 		metadata["webhook_url"] = webhookURL
-	}
-	if channel, _ := extractStringInput(inputs, "channel", false); channel != "" { //nolint:errcheck // optional input
-		metadata["channel"] = channel
 	}
 
 	// Construct notification payload
@@ -256,8 +250,6 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 	}, nil
 }
 
-// extractStringInput safely extracts a string input from the inputs map.
-// Returns the string value and error if required input is missing or invalid type.
 func extractStringInput(inputs map[string]any, key string, required bool) (string, error) {
 	value, ok := inputs[key]
 	if !ok {
@@ -275,22 +267,8 @@ func extractStringInput(inputs map[string]any, key string, required bool) (strin
 	return strings.TrimSpace(strValue), nil
 }
 
-// validateBackendInputs checks that backend-specific required inputs are present.
-// For example, ntfy requires 'topic', webhook requires 'webhook_url'.
-//
-// Note: This only validates known backends with specific input requirements.
-// Unknown/custom backends are allowed and skip validation (open/closed principle).
 func validateBackendInputs(backend string, _ *plugin.OperationSchema, inputs map[string]any) error {
-	switch backend {
-	case "ntfy":
-		topic, err := extractStringInput(inputs, "topic", false)
-		if err != nil {
-			return err
-		}
-		if topic == "" {
-			return fmt.Errorf("backend %q requires 'topic' input", backend)
-		}
-	case "webhook":
+	if backend == "webhook" {
 		webhookURL, err := extractStringInput(inputs, "webhook_url", false)
 		if err != nil {
 			return err
@@ -298,12 +276,6 @@ func validateBackendInputs(backend string, _ *plugin.OperationSchema, inputs map
 		if webhookURL == "" {
 			return fmt.Errorf("backend %q requires 'webhook_url' input", backend)
 		}
-	case "slack":
-		// Slack uses config slack_webhook_url, no input validation needed
-	case "desktop":
-		// Desktop has no special input requirements
-	default:
-		// Custom/unknown backends are allowed - no validation
 	}
 	return nil
 }
