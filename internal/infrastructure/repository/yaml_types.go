@@ -65,10 +65,11 @@ type yamlStep struct {
 
 	// Agent configuration (for AI agent steps - F039)
 	// Flat structure: provider, prompt, options directly on step
-	Provider   string         `yaml:"provider"`    // agent provider: claude, codex, gemini, opencode, custom
-	Prompt     string         `yaml:"prompt"`      // prompt template with {{inputs.*}} and {{states.*}}
-	PromptFile string         `yaml:"prompt_file"` // path to external prompt template file
-	Options    map[string]any `yaml:"options"`     // provider-specific options (model, temperature, max_tokens, etc.)
+	Provider     string         `yaml:"provider"`      // agent provider: claude, codex, gemini, opencode, custom
+	Prompt       string         `yaml:"prompt"`        // prompt template with {{inputs.*}} and {{states.*}}
+	PromptFile   string         `yaml:"prompt_file"`   // path to external prompt template file
+	Options      map[string]any `yaml:"options"`       // provider-specific options (model, temperature, max_tokens, etc.)
+	OutputFormat string         `yaml:"output_format"` // output post-processing: json, text (F065)
 
 	// Agent conversation mode (F033) - extends agent configuration
 	Mode          string                  `yaml:"mode"`           // execution mode: "single" (default) or "conversation"

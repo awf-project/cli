@@ -22,6 +22,7 @@ commonComponents:
   - pkg-stringutil
   - pkg-validation
   - pkg-httputil
+  - pkg-output
 
 vendors:
   go-stdlib:
@@ -150,6 +151,9 @@ components:
 
   pkg-httputil:
     in: ../pkg/httputil
+
+  pkg-output:
+    in: ../pkg/output
 
   pkg-validation:
     in: ../pkg/validation

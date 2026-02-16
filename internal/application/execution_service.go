@@ -12,6 +12,7 @@ import (
 	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/awf/pkg/output"
 	"github.com/awf-project/awf/pkg/retry"
 	"github.com/awf-project/awf/pkg/validation"
 	"github.com/google/uuid"
@@ -515,6 +516,7 @@ func (s *ExecutionService) buildInterpolationContext(
 			Status:     state.Status.String(),
 			Response:   state.Response,
 			TokensUsed: state.TokensUsed,
+			JSON:       state.JSON,
 		}
 	}
 
@@ -1830,6 +1832,11 @@ func (s *ExecutionService) executeAgentStep(
 		state.Response = result.Response
 		// AC6: Token usage in states.step_name.tokens_used
 		state.TokensUsed = result.Tokens
+
+		// F065: Apply output format post-processing
+		if err := s.applyOutputFormat(step, &state, execCtx); err != nil {
+			return "", err
+		}
 	}
 
 	// Handle execution error (e.g., context cancelled, provider error)
@@ -1969,6 +1976,11 @@ func (s *ExecutionService) executeConversationStep(
 		state.Response = result.Response
 		state.TokensUsed = result.TokensTotal
 		state.Conversation = result.State
+
+		// F065: Apply output format post-processing
+		if formatErr := s.applyOutputFormat(step, &state, execCtx); formatErr != nil {
+			return "", formatErr
+		}
 	}
 
 	// 7. Handle execution error
@@ -2094,4 +2106,24 @@ func classifyErrorType(err error) string {
 	default:
 		return "execution"
 	}
+}
+
+// applyOutputFormat applies output_format post-processing to agent step output.
+// It strips code fences and optionally validates/parses JSON, updating state accordingly.
+func (s *ExecutionService) applyOutputFormat(step *workflow.Step, state *workflow.StepState, execCtx *workflow.ExecutionContext) error {
+	if step.Agent.OutputFormat == workflow.OutputFormatNone {
+		return nil
+	}
+	processedOutput, parsedJSON, formatErr := output.ProcessOutputFormat(state.Output, string(step.Agent.OutputFormat))
+	if formatErr != nil {
+		state.Status = workflow.StatusFailed
+		state.Error = formatErr.Error()
+		execCtx.SetStepState(step.Name, *state)
+		return fmt.Errorf("step %s: output format processing: %w", step.Name, formatErr)
+	}
+	state.Output = processedOutput
+	if parsedJSON != nil {
+		state.JSON = parsedJSON
+	}
+	return nil
 }

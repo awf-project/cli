@@ -104,6 +104,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F065**: Output Format for Agent Steps
+  - New `output_format` field on agent steps: `json` (fence stripping + JSON validation) or `text` (fence stripping only)
+  - Automatic markdown code fence stripping from agent output (outermost `` ```lang...``` `` removed)
+  - Parsed JSON accessible via `{{.states.step.JSON.field}}` dot notation in templates
+  - Invalid JSON with `output_format: json` fails the step with descriptive error (first 200 chars of malformed output)
+  - Domain validation rejects unknown `output_format` values at `awf validate` time
+  - New `pkg/output` package for reusable output processing utilities
+  - Dry-run mode displays configured output format
+  - Full backward compatibility: steps without `output_format` behave unchanged
 - **F064**: Script File Loading for Step States
   - New `script_file` field on step states to reference external shell scripts instead of inline `command`
   - Mutual exclusivity validation: `command` and `script_file` cannot both be set on the same step
@@ -291,6 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F065**: Output Format for Agent Steps
 - **F063**: Prompt File Loading for Agent Steps
 - **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
   - Created `doc.go` files for 9 undocumented packages: `agents`, `executor`, `expression`, `logger`, `plugin`, `repository`, `store`, `cli`, `cli/ui`

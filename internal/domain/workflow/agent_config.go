@@ -9,6 +9,21 @@ import (
 // DefaultAgentTimeout is the default timeout in seconds for agent execution.
 const DefaultAgentTimeout = 300
 
+// OutputFormat represents the format for agent output post-processing.
+type OutputFormat string
+
+const (
+	OutputFormatNone OutputFormat = ""
+	OutputFormatJSON OutputFormat = "json"
+	OutputFormatText OutputFormat = "text"
+)
+
+var validOutputFormats = map[OutputFormat]bool{
+	OutputFormatNone: true,
+	OutputFormatJSON: true,
+	OutputFormatText: true,
+}
+
 // AgentConfig holds configuration for invoking an AI agent.
 type AgentConfig struct {
 	Provider      string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, custom
@@ -21,6 +36,7 @@ type AgentConfig struct {
 	SystemPrompt  string              `yaml:"system_prompt"`  // system prompt preserved across conversation (conversation mode only)
 	InitialPrompt string              `yaml:"initial_prompt"` // first user message in conversation mode (overrides Prompt if set)
 	Conversation  *ConversationConfig `yaml:"conversation"`   // conversation-specific configuration (conversation mode only)
+	OutputFormat  OutputFormat        `yaml:"output_format"`  // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
 }
 
 // Validate checks if the agent configuration is valid.
@@ -41,6 +57,12 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 	// Validate mode value
 	if c.Mode != "single" && c.Mode != "conversation" {
 		return errors.New("mode must be 'single' or 'conversation'")
+	}
+
+	// Normalize and validate output_format
+	c.OutputFormat = OutputFormat(strings.TrimSpace(strings.ToLower(string(c.OutputFormat))))
+	if !validOutputFormats[c.OutputFormat] {
+		return errors.New("output_format must be 'json', 'text', or empty")
 	}
 
 	// Validate mutual exclusivity of Prompt and PromptFile

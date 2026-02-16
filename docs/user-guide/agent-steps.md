@@ -160,7 +160,8 @@ review:
 **Available Variables:**
 - `{{.inputs.*}}` - Workflow input values
 - `{{.states.step_name.Output}}` - Previous step raw output
-- `{{.states.step_name.Response}}` - Previous step parsed JSON
+- `{{.states.step_name.Response}}` - Previous step parsed JSON (heuristic)
+- `{{.states.step_name.JSON}}` - Parsed JSON from `output_format: json` (explicit)
 - `{{.env.VAR_NAME}}` - Environment variables
 - `{{.workflow.id}}` - Workflow execution ID
 - `{{.workflow.name}}` - Workflow name
@@ -363,8 +364,9 @@ Agent responses are automatically captured in the execution state:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `{{.states.step_name.Output}}` | string | Raw response text from the agent |
-| `{{.states.step_name.Response}}` | object | Parsed JSON response (if valid) |
+| `{{.states.step_name.Output}}` | string | Raw response text (or cleaned text if `output_format` is set) |
+| `{{.states.step_name.Response}}` | object | Parsed JSON response (automatic heuristic) |
+| `{{.states.step_name.JSON}}` | object | Parsed JSON from `output_format: json` (explicit, see [Output Formatting](#output-formatting)) |
 | `{{.states.step_name.TokensUsed}}` | int | Tokens consumed by this step |
 | `{{.states.step_name.ExitCode}}` | int | 0 for success, non-zero for failure |
 
@@ -389,6 +391,137 @@ process_response:
   command: echo "Found {{.states.analyze.Response.issues}} issues"
   on_success: done
 ```
+
+## Output Formatting
+
+When an agent wraps its output in markdown code fences (common with many LLMs), use `output_format` to automatically strip the fences and optionally validate the content:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Return JSON analysis"
+  output_format: json
+  on_success: process
+```
+
+### Available Formats
+
+#### `json` Format
+
+Strips markdown code fences and validates the output as valid JSON. Parsed JSON is accessible via `{{.states.step_name.JSON}}`:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: |
+    Analyze the code and return results as JSON:
+    {
+      "issues": [<list of issues>],
+      "severity": "high|medium|low"
+    }
+  output_format: json
+  on_success: process_results
+
+process_results:
+  type: step
+  command: echo "Severity: {{.states.analyze.JSON.severity}}"
+  on_success: done
+```
+
+**Behavior:**
+- Strips outermost markdown code fences (e.g., ````json ... ``` ``)
+- Validates stripped content as valid JSON
+- Stores parsed JSON in `{{.states.step_name.JSON}}`
+- If validation fails, step fails with a descriptive error
+- Works with both objects and arrays
+
+**Example agent output:**
+```
+The analysis shows the following:
+```json
+{"issues": ["buffer overflow", "memory leak"], "severity": "high"}
+```
+```
+
+**After processing:**
+- `{{.states.analyze.Output}}` = `{"issues": ["buffer overflow", "memory leak"], "severity": "high"}`
+- `{{.states.analyze.JSON.issues}}` = `["buffer overflow", "memory leak"]`
+- `{{.states.analyze.JSON.severity}}` = `"high"`
+
+#### `text` Format
+
+Strips markdown code fences without JSON validation. Useful for code or plain text output:
+
+```yaml
+generate_code:
+  type: agent
+  provider: claude
+  prompt: "Generate a Python function to..."
+  output_format: text
+  on_success: save_code
+
+save_code:
+  type: step
+  command: echo "{{.states.generate_code.Output}}" > generated.py
+  on_success: done
+```
+
+**Behavior:**
+- Strips outermost markdown code fences (e.g., ````python ... ``` ``)
+- Returns clean text in `{{.states.step_name.Output}}`
+- Does not populate `{{.states.step_name.JSON}}`
+
+**Example agent output:**
+```
+Here's the function:
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+```
+```
+
+**After processing:**
+- `{{.states.generate_code.Output}}` = `def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)`
+
+#### No Format (Default)
+
+Omit `output_format` for backward compatibility. Raw agent output is stored unchanged:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Analyze this code"
+  on_success: next
+```
+
+### Error Handling
+
+When `output_format: json` is specified but the output is invalid JSON:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Return valid JSON"
+  output_format: json
+  timeout: 60
+  on_failure: handle_json_error
+
+handle_json_error:
+  type: step
+  command: echo "JSON parsing failed"
+  on_success: done
+```
+
+**Error message includes:**
+- Clear indication of JSON validation failure
+- First 200 characters of the malformed output (for debugging)
+- Suggestions on how to fix the issue
 
 ## Multi-Turn Conversations
 

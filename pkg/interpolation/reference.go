@@ -50,6 +50,7 @@ var ValidStateProperties = map[string]bool{
 	"Status":     true,
 	"Response":   true,
 	"TokensUsed": true,
+	"JSON":       true,
 }
 
 // ValidErrorProperties lists known error properties in error hooks.
