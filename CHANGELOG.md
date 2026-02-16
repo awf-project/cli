@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **C059**: Removed unimplemented GitHub plugin stubs and dead HTTP code
+  - Removed `github.set_project_status` operation stub (was never implemented, returned error at runtime)
+  - Removed `RunHTTP()` method from HTTP client (was speculative functionality that never materialized)
+  - GitHub plugin now provides 8 operations instead of 9
+  - **Rationale**: Dead code removal following YAGNI principles — if these capabilities are needed later, they should be implemented properly with full design rather than resurrected from error-returning stubs
+  - **Migration**: No action required; removed operations were non-functional and returned errors
+  - **Impact**: Workflows attempting to use `github.set_project_status` will fail validation instead of runtime
+
 - **C058**: Removed `ntfy` and `slack` notification backends — use `webhook` backend
   - The `webhook` backend is a superset: any HTTP POST target (ntfy, Slack, Discord, Teams, PagerDuty) works via URL + headers + body configuration
   - Removed fields: `ntfy_url` and `slack_webhook_url` from `.awf/config.yaml`
@@ -143,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Wired into CLI via `CompositeOperationProvider` wrapping both GitHub and Notify providers in `run.go`
 
 - **F054**: GitHub CLI plugin for declarative operations
-  - New `github` operation provider with 9 operation types: `get_issue`, `get_pr`, `create_pr`, `create_issue`, `add_labels`, `set_project_status`, `list_comments`, `add_comment`, `batch`
+  - New `github` operation provider with 8 operation types: `get_issue`, `get_pr`, `create_pr`, `create_issue`, `add_labels`, `list_comments`, `add_comment`, `batch`
   - Batch executor with 3 strategies: `all_succeed` (fail-fast), `any_succeed` (first-wins), `best_effort` (run-all)
   - Configurable concurrency limiting via semaphore pattern (default: 3)
   - Authentication fallback chain: gh CLI → GITHUB_TOKEN → structured error with remediation hints

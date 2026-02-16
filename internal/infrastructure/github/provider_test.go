@@ -47,7 +47,7 @@ func TestNewGitHubOperationProvider_RegistersAllOperations(t *testing.T) {
 
 	provider := NewGitHubOperationProvider(runner, logger)
 
-	// AllOperations() returns 9 operations (per spec)
+	// AllOperations() returns 8 operations (per spec)
 	expectedOps := AllOperations()
 	assert.Len(t, provider.operations, len(expectedOps), "should register all operations")
 
@@ -91,7 +91,6 @@ func TestGitHubOperationProvider_GetOperation_P2Operations(t *testing.T) {
 		opName string
 	}{
 		{"add_labels", "github.add_labels"},
-		{"set_project_status", "github.set_project_status"},
 		{"list_comments", "github.list_comments"},
 		{"add_comment", "github.add_comment"},
 		{"batch", "github.batch"},
@@ -157,7 +156,7 @@ func TestGitHubOperationProvider_ListOperations_ReturnsAllOperations(t *testing.
 
 	require.NotNil(t, ops, "should return all registered operations")
 
-	// Verify all 9 operation names are present
+	// Verify all 8 operation names are present
 	names := make(map[string]bool)
 	for _, op := range ops {
 		names[op.Name] = true
@@ -172,9 +171,9 @@ func TestGitHubOperationProvider_ListOperations_ExpectedCount(t *testing.T) {
 
 	ops := provider.ListOperations()
 
-	// 9 operations: 4 P1 + 5 P2
+	// 8 operations: 4 P1 + 4 P2
 	require.NotNil(t, ops, "should return operations")
-	assert.Len(t, ops, 9, "should return 9 operations (4 P1 + 5 P2)")
+	assert.Len(t, ops, 8, "should return 8 operations (4 P1 + 4 P2)")
 }
 
 func TestGitHubOperationProvider_ListOperations_NotNilEvenWhenEmpty(t *testing.T) {
@@ -486,16 +485,6 @@ func TestGitHubOperationProvider_Execute_AllP2Operations(t *testing.T) {
 			},
 		},
 		{
-			name:      "set_project_status",
-			operation: "github.set_project_status",
-			inputs: map[string]any{
-				"number":  123,
-				"project": "Project 1",
-				"field":   "Status",
-				"value":   "In Progress",
-			},
-		},
-		{
 			name:      "list_comments",
 			operation: "github.list_comments",
 			inputs:    map[string]any{"number": 123},
@@ -525,16 +514,9 @@ func TestGitHubOperationProvider_Execute_AllP2Operations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := provider.Execute(ctx, tt.operation, tt.inputs)
 
-			if tt.operation == "github.set_project_status" {
-				// set_project_status returns Success:false but no error
-				require.NoError(t, err, "should not return error")
-				assert.NotNil(t, result, "result should not be nil")
-				assert.False(t, result.Success, "set_project_status not yet implemented")
-			} else {
-				require.NoError(t, err, "should not return error with mock")
-				assert.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.Success, "should return success with mock")
-			}
+			require.NoError(t, err, "should not return error with mock")
+			assert.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.Success, "should return success with mock")
 		})
 	}
 }

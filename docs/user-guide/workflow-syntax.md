@@ -329,7 +329,7 @@ states:
 
 ### GitHub Operations
 
-AWF includes a built-in GitHub plugin with 9 declarative operations. Authentication is handled automatically via `gh` CLI or `GITHUB_TOKEN` environment variable. The repository is auto-detected from git remote when the `repo` input is omitted.
+AWF includes a built-in GitHub plugin with 8 declarative operations. Authentication is handled automatically via `gh` CLI or `GITHUB_TOKEN` environment variable. The repository is auto-detected from git remote when the `repo` input is omitted.
 
 #### Issue & PR Operations
 
@@ -342,12 +342,6 @@ AWF includes a built-in GitHub plugin with 9 declarative operations. Authenticat
 | `github.add_labels` | Add labels to issue or PR | `number`, `labels` | `labels` |
 | `github.add_comment` | Add a comment | `number`, `body` | `comment_id`, `url` |
 | `github.list_comments` | List comments | `number` | `comments`, `total` |
-
-#### Project Operations
-
-| Operation | Description | Required Inputs | Outputs |
-|-----------|-------------|-----------------|---------|
-| `github.set_project_status` | Set project field value | `number`, `project`, `field`, `value` | `project_id`, `item_id`, `field_name`, `value` |
 
 #### Common Optional Inputs
 

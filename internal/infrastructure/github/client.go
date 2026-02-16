@@ -70,22 +70,6 @@ func (c *Client) RunGH(ctx context.Context, args []string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// RunHTTP executes a direct HTTP request to the GitHub API as a fallback when gh CLI is unavailable.
-// Uses: net/http with manual authentication header injection
-//
-// Parameters:
-//   - ctx: context for cancellation and timeout control
-//   - method: HTTP method (GET, POST, PATCH, DELETE)
-//   - path: API path relative to https://api.github.com (e.g., "/repos/owner/repo/issues/42")
-//   - body: request body as JSON bytes (nil for GET requests)
-//
-// Returns:
-//   - []byte: JSON response from GitHub API
-//   - error: HTTP error or JSON parsing error
-func (c *Client) RunHTTP(ctx context.Context, method, path string, body []byte) ([]byte, error) {
-	return nil, fmt.Errorf("RunHTTP not implemented: use gh CLI instead")
-}
-
 // DetectRepo determines the GitHub repository from git remote configuration.
 // Parses git remote URL to extract owner/repo.
 //

@@ -69,19 +69,6 @@ func TestGitHubOperationProvider_Execute_DispatchesToCorrectHandler(t *testing.T
 			expectError:   false,
 		},
 		{
-			name:      "dispatch set_project_status to handler",
-			operation: "github.set_project_status",
-			inputs: map[string]any{
-				"number":  123,
-				"project": "Project 1",
-				"field":   "Status",
-				"value":   "In Progress",
-				"repo":    "owner/repo",
-			},
-			expectSuccess: false, // not yet implemented
-			expectError:   false, // returns result with Success:false, not error
-		},
-		{
 			name:          "dispatch list_comments to handler",
 			operation:     "github.list_comments",
 			inputs:        map[string]any{"number": 123, "repo": "owner/repo"},
@@ -314,11 +301,6 @@ func TestGitHubOperationProvider_Execute_DispatchHandlesAllRegisteredOperations(
 			case "github.add_labels":
 				inputs["number"] = 123
 				inputs["labels"] = []string{"bug"}
-			case "github.set_project_status":
-				inputs["number"] = 123
-				inputs["project"] = "Project"
-				inputs["field"] = "Status"
-				inputs["value"] = "Done"
 			case "github.list_comments":
 				inputs["number"] = 123
 			case "github.add_comment":
@@ -336,16 +318,9 @@ func TestGitHubOperationProvider_Execute_DispatchHandlesAllRegisteredOperations(
 				_, _ = provider.Execute(ctx, op.Name, inputs)
 			}, "dispatch should not panic for registered operation: %s", op.Name)
 
-			// Most operations succeed with mock, except set_project_status
-			if op.Name == "github.set_project_status" {
-				require.NoError(t, err, "should not return error, just Success:false")
-				require.NotNil(t, result, "result should not be nil")
-				assert.False(t, result.Success, "set_project_status not yet implemented")
-			} else {
-				require.NoError(t, err, "operation %s should succeed with mock", op.Name)
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.Success, "operation %s should return success", op.Name)
-			}
+			require.NoError(t, err, "operation %s should succeed with mock", op.Name)
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.Success, "operation %s should return success", op.Name)
 		})
 	}
 }

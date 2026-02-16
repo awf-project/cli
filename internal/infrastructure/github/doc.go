@@ -2,15 +2,14 @@
 //
 // The github package provides concrete implementations of the OperationProvider port
 // defined in the domain layer, enabling workflow steps to perform declarative GitHub
-// operations (issue retrieval, PR creation, project status updates) without shell
-// scripting or jq parsing. The provider uses gh CLI as the primary backend with
-// direct HTTP API fallback for environments without gh installed.
+// operations (issue retrieval, PR creation) without shell scripting or jq parsing.
+// The provider uses gh CLI as the execution backend.
 //
 // # Architecture Role
 //
 // In the hexagonal architecture:
 //   - Implements domain/ports.OperationProvider (GitHubOperationProvider adapter)
-//   - Registers 9 GitHub operations via OperationRegistry at startup
+//   - Registers 8 GitHub operations via OperationRegistry at startup
 //   - Application layer orchestrates operation steps via the OperationProvider port
 //   - Domain layer defines operation contracts without GitHub coupling
 //
@@ -29,7 +28,6 @@
 //   - github.create_issue: Create new issue with title, body, labels
 //   - github.create_pr: Create pull request with title, body, base, head
 //   - github.add_labels: Add labels to issue or PR
-//   - github.set_project_status: Update GitHub Projects v2 field values
 //   - github.list_comments: Retrieve issue/PR comments
 //   - github.add_comment: Add comment to issue or PR
 //   - github.batch: Execute multiple GitHub operations with concurrency control
@@ -67,7 +65,6 @@
 //
 // Backend execution layer:
 //   - RunGH: Invoke gh CLI with context cancellation via os/exec
-//   - RunHTTP: Not yet implemented — returns error directing users to gh CLI
 //   - DetectRepo: Auto-detect repository from git remote URL parsing (uses sync.Once for thread safety)
 //
 // Uses os/exec for gh CLI invocation. Retry logic for rate limiting is planned but not yet implemented.
@@ -77,7 +74,6 @@
 // Authentication resolution:
 //   - DetectAuth: Determine active auth method (gh CLI, GITHUB_TOKEN, none)
 //   - Priority chain: gh auth status > GITHUB_TOKEN env var > none
-//   - No fallback to HTTP API currently (RunHTTP not implemented)
 //
 // # Error Handling
 //
