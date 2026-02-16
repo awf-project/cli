@@ -1188,6 +1188,7 @@ func registerNotifyBackends(provider *notify.NotifyOperationProvider, cfg *confi
 func buildAWFPaths() map[string]string {
 	return map[string]string{
 		"prompts_dir":   xdg.AWFPromptsDir(),
+		"scripts_dir":   xdg.AWFScriptsDir(),
 		"config_dir":    xdg.AWFConfigDir(),
 		"data_dir":      xdg.AWFDataDir(),
 		"workflows_dir": xdg.AWFWorkflowsDir(),

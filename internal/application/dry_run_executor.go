@@ -173,8 +173,18 @@ func (e *DryRunExecutor) buildStepPlan(ctx context.Context, step *workflow.Step,
 		Status:          step.Status,
 	}
 
-	if step.Command != "" {
-		dryRunStep.Command = e.resolveCommand(step.Command, interpCtx)
+	commandToResolve := step.Command
+	if step.ScriptFile != "" {
+		loadedScript, err := loadScriptFile(ctx, step.ScriptFile, wf, interpCtx)
+		if err != nil {
+			return nil, fmt.Errorf("load script file: %w", err)
+		}
+		commandToResolve = loadedScript
+		dryRunStep.ScriptFile = step.ScriptFile
+	}
+
+	if commandToResolve != "" {
+		dryRunStep.Command = e.resolveCommand(commandToResolve, interpCtx)
 	}
 
 	dryRunStep.Hooks = e.buildHooks(step.Hooks, interpCtx)
@@ -359,7 +369,6 @@ func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.A
 		Options:  make(map[string]any),
 	}
 
-	// F063: Load and resolve prompt from file if prompt_file is specified
 	promptToResolve := agent.Prompt
 	if agent.PromptFile != "" {
 		loadedPrompt, err := loadPromptFile(ctx, agent.PromptFile, wf, interpCtx)
@@ -368,8 +377,6 @@ func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.A
 		}
 		promptToResolve = loadedPrompt
 	}
-
-	// Resolve prompt via interpolation
 	if promptToResolve != "" {
 		dryRunAgent.ResolvedPrompt = e.resolveCommand(promptToResolve, interpCtx)
 	}

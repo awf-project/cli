@@ -365,6 +365,12 @@ func (b *StepBuilder) WithCommand(command string) *StepBuilder {
 	return b
 }
 
+// WithScriptFile sets the script_file field for the step.
+func (b *StepBuilder) WithScriptFile(scriptFile string) *StepBuilder {
+	b.step.ScriptFile = scriptFile
+	return b
+}
+
 // WithDir sets the working directory for command execution.
 func (b *StepBuilder) WithDir(dir string) *StepBuilder {
 	b.step.Dir = dir

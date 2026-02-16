@@ -70,6 +70,7 @@ type Step struct {
 	Type            StepType
 	Description     string
 	Command         string               // for command type
+	ScriptFile      string               // F064: external script file (XOR with Command)
 	Dir             string               // working directory for command execution
 	Operation       string               // F021: plugin operation name (e.g., "slack.send")
 	OperationInputs map[string]any       // F021: plugin operation input parameters
@@ -103,8 +104,11 @@ func (s *Step) Validate(validator ExpressionCompiler) error {
 
 	switch s.Type {
 	case StepTypeCommand:
-		if s.Command == "" {
-			return errors.New("command is required for command-type steps")
+		if s.Command == "" && s.ScriptFile == "" {
+			return errors.New("either command or script_file is required for command-type steps")
+		}
+		if s.Command != "" && s.ScriptFile != "" {
+			return errors.New("command and script_file are mutually exclusive")
 		}
 	case StepTypeParallel:
 		if len(s.Branches) == 0 {
