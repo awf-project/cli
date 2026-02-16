@@ -7,12 +7,11 @@ import (
 	"github.com/awf-project/awf/pkg/interpolation"
 )
 
-// loadPromptFile loads a prompt template file referenced by AgentConfig.PromptFile.
-func loadPromptFile(
+func loadScriptFile(
 	ctx context.Context,
-	promptFile string,
+	scriptFile string,
 	wf *workflow.Workflow,
 	intCtx *interpolation.Context,
 ) (string, error) {
-	return loadExternalFile(ctx, promptFile, wf, intCtx)
+	return loadExternalFile(ctx, scriptFile, wf, intCtx)
 }

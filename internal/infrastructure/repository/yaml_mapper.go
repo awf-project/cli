@@ -98,6 +98,7 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		Type:            stepType,
 		Description:     y.Description,
 		Command:         y.Command,
+		ScriptFile:      y.ScriptFile,
 		Dir:             y.Dir,
 		Operation:       y.Operation,
 		OperationInputs: operationInputs,

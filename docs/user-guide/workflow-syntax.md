@@ -89,7 +89,8 @@ my_step:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `command` | string | - | Shell command to execute |
+| `command` | string | - | Shell command to execute (mutually exclusive with `script_file`) |
+| `script_file` | string | - | Path to external shell script file (mutually exclusive with `command`) |
 | `dir` | string | cwd | Working directory (supports interpolation) |
 | `timeout` | int | 0 | Execution timeout in seconds (0 = no timeout) |
 | `on_success` | string | - | Next state on success (exit code 0) |
@@ -97,6 +98,112 @@ my_step:
 | `continue_on_error` | bool | false | Always follow `on_success` regardless of exit code |
 | `retry` | object | - | Retry configuration |
 | `transitions` | array | - | Conditional transitions |
+
+### External Script Files
+
+Instead of inlining shell commands in YAML, you can load commands from external script files using the `script_file` field:
+
+```yaml
+deploy:
+  type: step
+  script_file: scripts/deploy.sh
+  timeout: 60
+  on_success: verify
+  on_failure: error
+```
+
+**File:** `scripts/deploy.sh`
+```bash
+#!/bin/sh
+echo "Deploying version {{.inputs.version}} to {{.inputs.env}}"
+kubectl apply -f manifests/
+kubectl rollout status deployment/app
+```
+
+#### Mutual Exclusivity
+
+You cannot specify both `command` and `script_file` on the same step:
+
+```yaml
+# ❌ Invalid: both command and script_file
+step:
+  type: step
+  command: echo "hello"
+  script_file: scripts/hello.sh  # ERROR: only one allowed
+
+# ✅ Valid: command only
+step:
+  type: step
+  command: echo "hello"
+
+# ✅ Valid: script_file only
+step:
+  type: step
+  script_file: scripts/hello.sh
+```
+
+#### Path Resolution
+
+Script file paths are resolved in this order:
+
+1. **Absolute paths** — used as-is:
+   ```yaml
+   script_file: /opt/company/scripts/deploy.sh
+   ```
+
+2. **Home directory expansion** — tilde is expanded:
+   ```yaml
+   script_file: ~/scripts/build.sh
+   ```
+
+3. **Relative to workflow directory** — resolved against the workflow file's location:
+   ```yaml
+   script_file: scripts/test.sh  # Resolves to <workflow_dir>/scripts/test.sh
+   ```
+
+4. **XDG scripts directory** — via template interpolation:
+   ```yaml
+   script_file: "{{.awf.scripts_dir}}/checks/lint.sh"  # ~/.config/awf/scripts/checks/lint.sh
+   ```
+
+#### Template Interpolation
+
+Script file paths support template interpolation before resolution. Loaded script contents also undergo template interpolation with full access to workflow context variables:
+
+```yaml
+build:
+  type: step
+  script_file: scripts/build.sh
+  on_success: done
+```
+
+**File:** `scripts/build.sh`
+```bash
+#!/bin/sh
+echo "Building {{.inputs.target}}"
+cd {{.inputs.project_dir}}
+make build
+echo "Build output: {{.states.prepare.Output}}"
+```
+
+#### Dry Run
+
+In `--dry-run` mode, the resolved script file path is displayed along with the loaded and interpolated content:
+
+```bash
+awf run deploy --dry-run
+# Shows resolved script path and interpolated content
+```
+
+#### Error Handling
+
+| Error | Cause | Exit Code |
+|-------|-------|-----------|
+| File not found | Script file path does not exist | 1 |
+| Permission denied | Script file is not readable | 1 |
+| File too large | Script file exceeds 1MB size limit | 1 |
+
+Error messages include the resolved file path for easy debugging.
 
 ---
 

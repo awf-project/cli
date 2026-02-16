@@ -359,7 +359,7 @@ func (s *ExecutionService) executeStep(
 	}
 
 	// T007: Resolve command and directory
-	cmd, err := s.resolveStepCommand(step, intCtx)
+	cmd, err := s.resolveStepCommand(stepCtx, wf, step, intCtx)
 	if err != nil {
 		return "", err
 	}
@@ -1032,11 +1032,20 @@ func (s *ExecutionService) prepareStepExecution(
 // building a ports.Command struct ready for execution.
 // Returns the fully resolved command or an interpolation error.
 func (s *ExecutionService) resolveStepCommand(
+	ctx context.Context,
+	wf *workflow.Workflow,
 	step *workflow.Step,
 	intCtx *interpolation.Context,
 ) (*ports.Command, error) {
-	// resolve command variables
-	resolvedCmd, err := s.resolver.Resolve(step.Command, intCtx)
+	commandToResolve := step.Command
+	if step.ScriptFile != "" {
+		loadedContent, err := loadScriptFile(ctx, step.ScriptFile, wf, intCtx)
+		if err != nil {
+			return nil, err
+		}
+		commandToResolve = loadedContent
+	}
+	resolvedCmd, err := s.resolver.Resolve(commandToResolve, intCtx)
 	if err != nil {
 		return nil, fmt.Errorf("interpolate command: %w", err)
 	}

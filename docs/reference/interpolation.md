@@ -187,16 +187,22 @@ Access system directories configured per XDG standards:
 {{.awf.data_dir}}        # ~/.local/share/awf (or $XDG_DATA_HOME/awf)
 {{.awf.cache_dir}}       # ~/.cache/awf (or $XDG_CACHE_HOME/awf)
 {{.awf.prompts_dir}}     # Designated prompts directory within config_dir
+{{.awf.scripts_dir}}     # Designated scripts directory within config_dir
 {{.awf.workflows_dir}}   # Designated workflows directory within config_dir
 {{.awf.plugins_dir}}     # Plugin installation directory
 ```
 
-Example:
+Examples:
 ```yaml
 analyze:
   type: agent
   provider: claude
   prompt_file: "{{.awf.prompts_dir}}/code_review.md"
+  on_success: done
+
+deploy:
+  type: step
+  script_file: "{{.awf.scripts_dir}}/deploy.sh"
   on_success: done
 ```
 

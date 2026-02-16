@@ -215,7 +215,8 @@ func TestExecutionService_resolveStepCommand(t *testing.T) {
 				resolver:      mockResolver,
 			}
 
-			cmd, err := svc.resolveStepCommand(tt.step, tt.intCtx)
+			wf := &workflow.Workflow{SourceDir: "/tmp"}
+			cmd, err := svc.resolveStepCommand(context.Background(), wf, tt.step, tt.intCtx)
 
 			if tt.expectError {
 				assert.Error(t, err, "should return interpolation error")

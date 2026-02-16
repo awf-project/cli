@@ -25,6 +25,7 @@ type yamlStep struct {
 	Description     string           `yaml:"description"`
 	Operation       string           `yaml:"operation"`
 	Command         string           `yaml:"command"`
+	ScriptFile      string           `yaml:"script_file"`
 	Dir             string           `yaml:"dir"`
 	Timeout         string           `yaml:"timeout"`
 	OnSuccess       string           `yaml:"on_success"`

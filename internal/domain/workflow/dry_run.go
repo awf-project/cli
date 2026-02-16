@@ -19,6 +19,7 @@ type DryRunStep struct {
 	Type            StepType
 	Description     string
 	Command         string
+	ScriptFile      string
 	Dir             string
 	Hooks           DryRunHooks
 	Transitions     []DryRunTransition

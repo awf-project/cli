@@ -104,6 +104,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F064**: Script File Loading for Step States
+  - New `script_file` field on step states to reference external shell scripts instead of inline `command`
+  - Mutual exclusivity validation: `command` and `script_file` cannot both be set on the same step
+  - Path resolution supports relative (to workflow source dir), absolute, tilde-expansion, and `{{.awf.scripts_dir}}` template paths
+  - Loaded script contents pass through Go template interpolation with full workflow context (inputs, step outputs, AWF variables)
+  - Shared `loadExternalFile()` helper in application layer, reused by both prompt file and script file loading
+  - Dry-run mode displays resolved script file path and loaded content
+  - 1MB file size limit via `io.LimitReader` to prevent memory issues
+  - YAML mapping for `script_file` field in workflow definitions
+
 - **F063**: Prompt File Loading for Agent Steps
 
 - **F058**: Built-in HTTP Operation
