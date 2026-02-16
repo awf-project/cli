@@ -41,10 +41,11 @@ states:
 Access output, exit code, and token usage from previous steps:
 
 ```yaml
-{{.states.step_name.Output}}            # Command output (raw text or JSON)
+{{.states.step_name.Output}}            # Command output (raw text, or cleaned if output_format set)
 {{.states.step_name.ExitCode}}          # Exit code (0 for success, non-zero for failure)
 {{.states.step_name.TokensUsed}}        # Tokens consumed by agent steps
-{{.states.step_name.Response.field}}    # Parsed field from operation/agent structured output
+{{.states.step_name.Response.field}}    # Parsed field from operation/agent structured output (heuristic)
+{{.states.step_name.JSON.field}}        # Parsed field from output_format: json (explicit)
 ```
 
 #### Output
@@ -143,6 +144,59 @@ states:
 ```
 
 See [Workflow Syntax - Operation State](../user-guide/workflow-syntax.md#operation-state) for the full list of available operations and their output fields.
+
+#### JSON (Explicit Output Formatting)
+
+When an agent step uses `output_format: json`, the parsed JSON is accessible via `JSON`:
+
+```yaml
+{{.states.step_name.JSON.field}}         # Access a JSON object field
+{{.states.step_name.JSON}}               # Full parsed JSON object
+```
+
+**Key differences from `Response`:**
+- `JSON` is only populated when `output_format: json` is explicitly set on the agent step
+- `Response` is populated automatically for all agent outputs if valid JSON is detected (heuristic)
+- `JSON` represents explicitly formatted output; `Response` is automatic best-effort parsing
+
+Example with `output_format: json`:
+
+```yaml
+states:
+  initial: analyze
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt: "Return JSON analysis with 'issues' and 'severity' fields"
+    output_format: json
+    on_success: process
+    on_failure: error
+
+  process:
+    type: step
+    command: |
+      echo "Severity: {{.states.analyze.JSON.severity}}"
+      echo "Issues: {{.states.analyze.JSON.issues}}"
+    on_success: done
+
+  done:
+    type: terminal
+  error:
+    type: terminal
+    status: failure
+```
+
+If agent returns:
+```json
+{"issues": ["buffer overflow", "memory leak"], "severity": "high"}
+```
+
+Then:
+- `{{.states.analyze.JSON.severity}}` = `"high"`
+- `{{.states.analyze.JSON.issues}}` = `["buffer overflow", "memory leak"]`
+
+See [Agent Steps - Output Formatting](../user-guide/agent-steps.md#output-formatting) for detailed examples and best practices.
 
 ### Workflow Metadata
 

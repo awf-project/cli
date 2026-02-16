@@ -265,6 +265,7 @@ refine_code:
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`) |
 | `system_prompt` | string | No | System message (for conversation mode, preserved across turns) |
 | `initial_prompt` | string | No* | First user message (for conversation mode) |
+| `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Conversation configuration (required if mode=conversation) |
 | `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
 | `timeout` | int | No | Execution timeout in seconds (0 = no timeout) |

@@ -81,4 +81,5 @@ type DryRunAgent struct {
 	CLICommand     string
 	Options        map[string]any
 	Timeout        int
+	OutputFormat   OutputFormat
 }

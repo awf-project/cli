@@ -364,9 +364,10 @@ func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Con
 
 func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.AgentConfig, wf *workflow.Workflow, interpCtx *interpolation.Context) (*workflow.DryRunAgent, error) {
 	dryRunAgent := &workflow.DryRunAgent{
-		Provider: agent.Provider,
-		Timeout:  agent.Timeout,
-		Options:  make(map[string]any),
+		Provider:     agent.Provider,
+		Timeout:      agent.Timeout,
+		OutputFormat: agent.OutputFormat,
+		Options:      make(map[string]any),
 	}
 
 	promptToResolve := agent.Prompt

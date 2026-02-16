@@ -86,10 +86,10 @@ states:
       Review this code and suggest improvements:
 
       {{.states.read_file.Output}}
+    output_format: json
     options:
       model: claude-sonnet-4-20250514
       max_tokens: 4096
-      output_format: json
     timeout: 120
     on_success: done
     on_failure: error

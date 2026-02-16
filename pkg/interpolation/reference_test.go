@@ -403,9 +403,9 @@ func TestValidationMaps(t *testing.T) {
 		{
 			name:           "ValidStateProperties",
 			validMap:       interpolation.ValidStateProperties,
-			expectedKeys:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed"},
+			expectedKeys:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed", "JSON"},
 			invalidKeys:    []string{"stdout", "result", ""},
-			forbiddenLower: []string{"output", "stderr", "exit_code", "status", "response", "tokens"},
+			forbiddenLower: []string{"output", "stderr", "exit_code", "status", "response", "tokens", "json"},
 		},
 		{
 			name:           "ValidErrorProperties",
@@ -665,9 +665,9 @@ func TestValidationMaps_Comprehensive(t *testing.T) {
 		},
 		"ValidStateProperties": {
 			validMap:   interpolation.ValidStateProperties,
-			required:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed"},
+			required:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed", "JSON"},
 			invalid:    []string{"stdout", "result", ""},
-			deprecated: []string{"output", "stderr", "exit_code", "status", "response", "tokensused"},
+			deprecated: []string{"output", "stderr", "exit_code", "status", "response", "tokensused", "json"},
 		},
 		"ValidErrorProperties": {
 			validMap:   interpolation.ValidErrorProperties,
