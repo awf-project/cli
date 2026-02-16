@@ -143,217 +143,6 @@ func TestClient_RunGH_NonAuthenticatedUser(t *testing.T) {
 	t.Skip("requires controlled gh auth state - integration test")
 }
 
-// TestClient_RunHTTP_HappyPath tests successful HTTP API execution
-func TestClient_RunHTTP_HappyPath(t *testing.T) {
-	tests := []struct {
-		name       string
-		method     string
-		path       string
-		body       []byte
-		wantJSON   string
-		wantStatus int
-	}{
-		{
-			name:       "GET issue",
-			method:     "GET",
-			path:       "/repos/owner/repo/issues/42",
-			body:       nil,
-			wantJSON:   `{"title":"Fix bug","state":"open"}`,
-			wantStatus: 200,
-		},
-		{
-			name:       "POST create issue",
-			method:     "POST",
-			path:       "/repos/owner/repo/issues",
-			body:       []byte(`{"title":"New issue","body":"Description"}`),
-			wantJSON:   `{"number":43,"url":"https://github.com/owner/repo/issues/43"}`,
-			wantStatus: 201,
-		},
-		{
-			name:       "PATCH update issue",
-			method:     "PATCH",
-			path:       "/repos/owner/repo/issues/42",
-			body:       []byte(`{"state":"closed"}`),
-			wantJSON:   `{"state":"closed"}`,
-			wantStatus: 200,
-		},
-		{
-			name:       "DELETE remove label",
-			method:     "DELETE",
-			path:       "/repos/owner/repo/issues/42/labels/bug",
-			body:       nil,
-			wantJSON:   `[]`,
-			wantStatus: 204,
-		},
-	}
-
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-
-			result, err := client.RunHTTP(ctx, tt.method, tt.path, tt.body)
-
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "not implemented")
-			assert.Nil(t, result)
-		})
-	}
-}
-
-// TestClient_RunHTTP_ContextCancellation tests cancellation during HTTP request
-func TestClient_RunHTTP_ContextCancellation(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	result, err := client.RunHTTP(ctx, "GET", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_ContextTimeout tests timeout during HTTP request
-func TestClient_RunHTTP_ContextTimeout(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
-	defer cancel()
-
-	time.Sleep(10 * time.Millisecond)
-
-	result, err := client.RunHTTP(ctx, "GET", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_EmptyPath tests handling of empty API path
-func TestClient_RunHTTP_EmptyPath(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	result, err := client.RunHTTP(context.Background(), "GET", "", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_InvalidMethod tests handling of invalid HTTP method
-func TestClient_RunHTTP_InvalidMethod(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	result, err := client.RunHTTP(context.Background(), "INVALID", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_NonAuthenticatedUser tests HTTP fallback with no auth
-func TestClient_RunHTTP_NonAuthenticatedUser(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "none"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	result, err := client.RunHTTP(context.Background(), "GET", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_LargeRequestBody tests handling of large JSON payload
-func TestClient_RunHTTP_LargeRequestBody(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	// Create large body (10KB)
-	largeBody := make([]byte, 10*1024)
-	for i := range largeBody {
-		largeBody[i] = byte('a' + (i % 26))
-	}
-
-	result, err := client.RunHTTP(context.Background(), "POST", "/repos/owner/repo/issues", largeBody)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_RunHTTP_SpecialCharactersInPath tests URL encoding
-func TestClient_RunHTTP_SpecialCharactersInPath(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-	}{
-		{
-			name: "path with spaces",
-			path: "/repos/owner with space/repo/issues/42",
-		},
-		{
-			name: "path with special chars",
-			path: "/repos/owner/repo/labels/bug%3Acritical",
-		},
-		{
-			name: "path with unicode",
-			path: "/repos/owner/repo/issues/comments?body=日本語",
-		},
-	}
-
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := client.RunHTTP(context.Background(), "GET", tt.path, nil)
-
-			// Returns not-implemented error
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "not implemented")
-			assert.Nil(t, result)
-		})
-	}
-}
-
 // TestClient_DetectRepo_HappyPath tests successful repository detection from git remote
 func TestClient_DetectRepo_HappyPath(t *testing.T) {
 	ctx := context.Background()
@@ -411,80 +200,9 @@ func TestClient_DetectRepo_EdgeCases(t *testing.T) {
 	t.Skip("requires controlled remote URLs with edge cases - integration test")
 }
 
-// TestClient_ErrorHandling_RateLimitExceeded tests GitHub API rate limiting
-func TestClient_ErrorHandling_RateLimitExceeded(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	// Simulate rate limit response
-	result, err := client.RunHTTP(context.Background(), "GET", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
-}
-
-// TestClient_ErrorHandling_NotFound tests handling of 404 responses
-func TestClient_ErrorHandling_NotFound(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-	}{
-		{
-			name: "issue not found",
-			path: "/repos/owner/repo/issues/99999",
-		},
-		{
-			name: "pr not found",
-			path: "/repos/owner/repo/pulls/99999",
-		},
-		{
-			name: "repo not found",
-			path: "/repos/nonexistent/repo/issues/1",
-		},
-	}
-
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := client.RunHTTP(context.Background(), "GET", tt.path, nil)
-
-			// Returns not-implemented error
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "not implemented")
-			assert.Nil(t, result)
-		})
-	}
-}
-
 // TestClient_ErrorHandling_InvalidJSON tests handling of malformed JSON responses
 func TestClient_ErrorHandling_InvalidJSON(t *testing.T) {
 	t.Skip("requires controlled malformed gh response - integration test")
-}
-
-// TestClient_ErrorHandling_NetworkFailure tests handling of network errors
-func TestClient_ErrorHandling_NetworkFailure(t *testing.T) {
-	client := &Client{
-		authMethod: AuthMethod{Type: "token", Token: "ghp_test123"},
-		repo:       "owner/repo",
-		logger:     &mockLogger{},
-	}
-
-	result, err := client.RunHTTP(context.Background(), "GET", "/repos/owner/repo/issues/42", nil)
-
-	// Returns not-implemented error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Nil(t, result)
 }
 
 // TestClient_ErrorHandling_GHCLINotFound tests behavior when gh CLI is not installed
@@ -576,16 +294,11 @@ func TestClient_ThreadSafety(t *testing.T) {
 	concurrency := 10
 
 	// Launch concurrent goroutines
-	done := make(chan bool, concurrency*3)
+	done := make(chan bool, concurrency*2)
 
 	for range concurrency {
 		go func() {
 			_, _ = client.RunGH(ctx, []string{"issue", "list"})
-			done <- true
-		}()
-
-		go func() {
-			_, _ = client.RunHTTP(ctx, "GET", "/repos/owner/repo/issues", nil)
 			done <- true
 		}()
 
@@ -596,7 +309,7 @@ func TestClient_ThreadSafety(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < concurrency*3; i++ {
+	for i := 0; i < concurrency*2; i++ {
 		<-done
 	}
 

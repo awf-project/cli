@@ -310,48 +310,6 @@ states:
 	}
 }
 
-func TestRunCommand_ProjectStatusOperationWiring(t *testing.T) {
-	// GIVEN: A workflow using github.set_project_status operation
-	tmpDir := setupTestDir(t)
-
-	// Create storage directories
-	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "history"), 0o755)
-
-	workflowContent := `name: project-status
-version: "1.0.0"
-states:
-  initial: start
-  start:
-    type: operation
-    operation: github.set_project_status
-    inputs:
-      issue: 1
-      project: "Project Board"
-      field: "Status"
-      value: "In Progress"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "project-status.yaml", workflowContent)
-
-	// WHEN: Running workflow with project status operation
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "project-status"})
-
-	err := cmd.Execute()
-	// THEN: Project status operation should be wired
-	if err != nil {
-		errMsg := err.Error()
-		// Operation should be registered and invoked
-		assert.NotContains(t, errMsg, "no operation provider", "project status operation needs provider")
-	}
-}
-
 func TestRunCommand_MissingGitHubAuth_GracefulError(t *testing.T) {
 	// GIVEN: A workflow requiring GitHub authentication
 	tmpDir := setupTestDir(t)

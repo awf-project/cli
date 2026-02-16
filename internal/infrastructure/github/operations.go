@@ -2,13 +2,13 @@ package github
 
 import "github.com/awf-project/awf/internal/domain/plugin"
 
-// AllOperations returns all 9 GitHub operation schemas that can be registered
+// AllOperations returns all 8 GitHub operation schemas that can be registered
 // with the OperationRegistry. Each operation defines its input/output schema,
 // validation rules, and field selection support.
 //
 // Operations are organized by priority tier (P1, P2, P3) matching the spec:
 //   - P1 (Must Have): get_issue, get_pr, create_pr, create_issue
-//   - P2 (Should Have): add_labels, set_project_status, list_comments, add_comment, batch
+//   - P2 (Should Have): add_labels, list_comments, add_comment, batch
 func AllOperations() []plugin.OperationSchema {
 	return []plugin.OperationSchema{
 		// P1: Get Issue - Retrieve GitHub issue data
@@ -74,20 +74,6 @@ func AllOperations() []plugin.OperationSchema {
 				"repo":   {Type: plugin.InputTypeString, Required: false, Description: "Repository (owner/repo format, auto-detected if omitted)"},
 			},
 			Outputs: []string{"labels"},
-		},
-
-		// P2: Set Project Status - Set GitHub Project field value
-		{
-			Name:        "github.set_project_status",
-			Description: "Set GitHub Project field value for an issue or PR",
-			Inputs: map[string]plugin.InputSchema{
-				"number":  {Type: plugin.InputTypeInteger, Required: true, Description: "Issue or PR number"},
-				"project": {Type: plugin.InputTypeString, Required: true, Description: "Project identifier"},
-				"field":   {Type: plugin.InputTypeString, Required: true, Description: "Field name to update"},
-				"value":   {Type: plugin.InputTypeString, Required: true, Description: "New field value"},
-				"repo":    {Type: plugin.InputTypeString, Required: false, Description: "Repository (owner/repo format, auto-detected if omitted)"},
-			},
-			Outputs: []string{"project_id", "item_id", "field_name", "value"},
 		},
 
 		// P2: List Comments - List comments on an issue or PR

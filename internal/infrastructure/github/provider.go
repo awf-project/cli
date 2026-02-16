@@ -18,16 +18,16 @@ type GHRunner interface {
 }
 
 // GitHubOperationProvider implements ports.OperationProvider for GitHub operations.
-// Dispatches to operation-specific handlers for the 9 GitHub operation types.
+// Dispatches to operation-specific handlers for the 8 GitHub operation types.
 //
 // Operations are organized by priority tier:
 //   - P1 (Must Have): get_issue, get_pr, create_pr, create_issue
-//   - P2 (Should Have): add_labels, set_project_status, list_comments, add_comment, batch
+//   - P2 (Should Have): add_labels, list_comments, add_comment, batch
 type GitHubOperationProvider struct {
 	runner GHRunner
 	logger ports.Logger
 
-	// operations holds the registry of all 9 operation schemas
+	// operations holds the registry of all 8 operation schemas
 	operations map[string]*plugin.OperationSchema
 }
 
@@ -83,8 +83,6 @@ func (p *GitHubOperationProvider) Execute(ctx context.Context, name string, inpu
 		return p.handleCreateIssue(ctx, inputs)
 	case "github.add_labels":
 		return p.handleAddLabels(ctx, inputs)
-	case "github.set_project_status":
-		return p.handleSetProjectStatus(ctx, inputs)
 	case "github.list_comments":
 		return p.handleListComments(ctx, inputs)
 	case "github.add_comment":
@@ -489,27 +487,6 @@ func (p *GitHubOperationProvider) handleBatch(ctx context.Context, inputs map[st
 			"succeeded": batchResult.Succeeded,
 			"failed":    batchResult.Failed,
 			"results":   batchResult.Results,
-		},
-	}, nil
-}
-
-// handleSetProjectStatus sets a GitHub Project field value for an issue or PR.
-func (p *GitHubOperationProvider) handleSetProjectStatus(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-	if p.logger != nil {
-		p.logger.Warn("github.set_project_status requires GitHub Projects v2 GraphQL API, not yet implemented")
-	}
-
-	_ = ctx
-	_ = inputs
-
-	return &plugin.OperationResult{
-		Success: false,
-		Error:   "github.set_project_status: not yet implemented (requires GitHub Projects v2 GraphQL API)",
-		Outputs: map[string]any{
-			"project_id": "",
-			"item_id":    "",
-			"field_name": "",
-			"value":      "",
 		},
 	}, nil
 }
