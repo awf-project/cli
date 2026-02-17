@@ -79,7 +79,7 @@ func preprocessExpression(exprStr string) string {
 }
 
 // BuildExprContext converts an interpolation.Context to a map for expression evaluation.
-// The map structure allows dot-access patterns like inputs.name, states.step.exit_code.
+// The map structure allows dot-access patterns like inputs.name, states.step.ExitCode.
 func BuildExprContext(ctx *interpolation.Context) map[string]any {
 	result := map[string]any{
 		"inputs":   make(map[string]any),

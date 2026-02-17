@@ -391,29 +391,7 @@ func (s *ExecutionService) resolveNextStep(
 	intCtx *interpolation.Context,
 	success bool,
 ) (string, error) {
-	// If transitions are defined, evaluate them first
-	if len(step.Transitions) > 0 && s.evaluator != nil {
-		evalFunc := func(expr string) (bool, error) {
-			return s.evaluator.EvaluateBool(expr, intCtx)
-		}
-
-		nextStep, found, err := step.Transitions.EvaluateFirstMatch(evalFunc)
-		if err != nil {
-			return "", fmt.Errorf("evaluate transitions: %w", err)
-		}
-		if found {
-			s.logger.Debug("transition matched", "step", step.Name, "next", nextStep)
-			return nextStep, nil
-		}
-		// No transition matched, fall through to legacy handling
-		s.logger.Debug("no transition matched, using legacy", "step", step.Name)
-	}
-
-	// Legacy fallback: use OnSuccess/OnFailure
-	if success {
-		return step.OnSuccess, nil
-	}
-	return step.OnFailure, nil
+	return resolveNextStep(step, intCtx, success, s.evaluator, s.logger)
 }
 
 // checkpoint saves the current execution state.
@@ -1186,6 +1164,7 @@ func (s *ExecutionService) handleExecutionError(
 
 // handleNonZeroExit processes non-zero exit codes, following OnFailure or ContinueOnError paths.
 // Updates state, executes post-hooks, and returns the next step or error.
+// Transitions are evaluated first (ADR-001); ContinueOnError/OnFailure are legacy fallback.
 func (s *ExecutionService) handleNonZeroExit(
 	stepCtx context.Context,
 	step *workflow.Step,
@@ -1194,7 +1173,6 @@ func (s *ExecutionService) handleNonZeroExit(
 	result *ports.CommandResult,
 ) (string, error) {
 	state.Status = workflow.StatusFailed
-	// Include stderr in error if available, otherwise just exit code
 	if result.Stderr != "" {
 		state.Error = result.Stderr
 	} else {
@@ -1208,16 +1186,16 @@ func (s *ExecutionService) handleNonZeroExit(
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
-	// If continue_on_error is true, follow on_success path
-	if step.ContinueOnError {
-		return step.OnSuccess, nil
+	// Transitions take priority over ContinueOnError/OnFailure (ADR-001).
+	// Pass ContinueOnError as success so the legacy fallback selects OnSuccess vs OnFailure correctly.
+	nextStep, err := s.resolveNextStep(step, intCtx, step.ContinueOnError)
+	if err != nil {
+		return "", err
+	}
+	if nextStep != "" || step.ContinueOnError {
+		return nextStep, nil
 	}
 
-	if step.OnFailure != "" {
-		return step.OnFailure, nil
-	}
-
-	// Return error with stderr if available for better error classification
 	if result.Stderr != "" {
 		return "", fmt.Errorf("step %s: %s", step.Name, result.Stderr)
 	}

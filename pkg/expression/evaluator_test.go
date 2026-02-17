@@ -625,10 +625,10 @@ func TestBuildExprContext(t *testing.T) {
 				"inputs": map[string]any{"mode": "full", "count": 10},
 				"states": map[string]any{
 					"step1": map[string]any{
-						"output":    "out",
-						"stderr":    "err",
-						"exit_code": 0,
-						"status":    "completed",
+						"output":   "out",
+						"stderr":   "err",
+						"ExitCode": 0,
+						"status":   "completed",
 					},
 				},
 				"env": map[string]any{"HOME": "/home/user"},
@@ -1309,6 +1309,361 @@ func TestBuildExprContext_NilSafety(t *testing.T) {
 			result := BuildExprContext(tt.ctx)
 			require.NotNil(t, result)
 			tt.checkFunc(t, result)
+		})
+	}
+}
+
+func TestExprEvaluator_ExitCodeNumericOperators(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		ctx     *interpolation.Context
+		want    bool
+		wantErr bool
+	}{
+		// Equality operator (==)
+		{
+			name: "exit code equality true",
+			expr: `states.build.ExitCode == 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"build": {ExitCode: 0},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code equality false",
+			expr: `states.build.ExitCode == 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"build": {ExitCode: 1},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code equality with non-zero value",
+			expr: `states.lint.ExitCode == 2`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"lint": {ExitCode: 2},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Inequality operator (!=)
+		{
+			name: "exit code inequality true",
+			expr: `states.test.ExitCode != 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"test": {ExitCode: 1},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code inequality false",
+			expr: `states.test.ExitCode != 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"test": {ExitCode: 0},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code inequality with specific value",
+			expr: `states.check.ExitCode != 42`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check": {ExitCode: 1},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+
+		// Greater than operator (>)
+		{
+			name: "exit code greater than true",
+			expr: `states.build.ExitCode > 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"build": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code greater than false equal",
+			expr: `states.build.ExitCode > 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"build": {ExitCode: 1},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code greater than false less",
+			expr: `states.build.ExitCode > 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"build": {ExitCode: 0},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Less than operator (<)
+		{
+			name: "exit code less than true",
+			expr: `states.check.ExitCode < 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code less than false equal",
+			expr: `states.check.ExitCode < 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check": {ExitCode: 5},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code less than false greater",
+			expr: `states.check.ExitCode < 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check": {ExitCode: 10},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Greater than or equal operator (>=)
+		{
+			name: "exit code greater or equal true (greater)",
+			expr: `states.deploy.ExitCode >= 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"deploy": {ExitCode: 5},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code greater or equal true (equal)",
+			expr: `states.deploy.ExitCode >= 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"deploy": {ExitCode: 5},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code greater or equal false",
+			expr: `states.deploy.ExitCode >= 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"deploy": {ExitCode: 2},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Less than or equal operator (<=)
+		{
+			name: "exit code less or equal true (less)",
+			expr: `states.verify.ExitCode <= 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"verify": {ExitCode: 0},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code less or equal true (equal)",
+			expr: `states.verify.ExitCode <= 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"verify": {ExitCode: 1},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code less or equal false",
+			expr: `states.verify.ExitCode <= 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"verify": {ExitCode: 2},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Compound conditions: ExitCode with Output (US2 - mixed routing)
+		{
+			name: "exit code and output true",
+			expr: `states.check.ExitCode == 0 && states.output.Output contains "READY"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":  {ExitCode: 0},
+					"output": {Output: "System READY for deployment"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code and output false (exit code mismatch)",
+			expr: `states.check.ExitCode == 0 && states.output.Output contains "READY"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":  {ExitCode: 1},
+					"output": {Output: "System READY for deployment"},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code and output false (output mismatch)",
+			expr: `states.check.ExitCode == 0 && states.output.Output contains "READY"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":  {ExitCode: 0},
+					"output": {Output: "System failed"},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "exit code or output true (exit code matches)",
+			expr: `states.check.ExitCode == 0 || states.fallback.Output contains "ERROR"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":    {ExitCode: 0},
+					"fallback": {Output: "All clear"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code or output true (output matches)",
+			expr: `states.check.ExitCode == 0 || states.fallback.Output contains "ERROR"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":    {ExitCode: 1},
+					"fallback": {Output: "ERROR: deployment failed"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code or output false (neither matches)",
+			expr: `states.check.ExitCode == 0 || states.fallback.Output contains "ERROR"`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"check":    {ExitCode: 1},
+					"fallback": {Output: "All clear"},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+
+		// Range-based routing (US3 - numeric range operators)
+		{
+			name: "exit code in range (> 1)",
+			expr: `states.step.ExitCode > 1`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code == specific value (== 3)",
+			expr: `states.step.ExitCode == 3`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code not equal (!= 0)",
+			expr: `states.step.ExitCode != 0`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "exit code in upper range (< 5)",
+			expr: `states.step.ExitCode < 5`,
+			ctx: &interpolation.Context{
+				States: map[string]interpolation.StepStateData{
+					"step": {ExitCode: 3},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := NewExprEvaluator()
+			got, err := e.Evaluate(tt.expr, tt.ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

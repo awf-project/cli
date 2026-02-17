@@ -61,8 +61,9 @@ analyze:
 
 #### ExitCode
 
-The exit code from the step's command execution. Use in transitions and expressions:
+The exit code from the step's command execution. Use in transitions, expressions, and templates:
 
+**In transitions (numeric comparison):**
 ```yaml
 transitions:
   - when: "states.test_run.ExitCode == 0"
@@ -70,6 +71,28 @@ transitions:
   - when: "states.test_run.ExitCode > 0"
     goto: failure
 ```
+
+**In templates (as string):**
+```yaml
+report_failure:
+  type: step
+  command: |
+    echo "Test failed with exit code: {{.states.test_run.ExitCode}}"
+    notify-on-error --code={{.states.test_run.ExitCode}}
+```
+
+**Numeric range expressions:**
+```yaml
+transitions:
+  - when: "states.build.ExitCode >= 100 and states.build.ExitCode < 128"
+    goto: handle_user_error
+  - when: "states.build.ExitCode >= 128"
+    goto: handle_signal
+```
+
+On POSIX systems, exit codes are typically 0–255. Exit code 0 indicates success; non-zero indicates failure.
+
+**Transition priority:** Transitions are evaluated on both success and failure paths. When a matching transition is found, it takes priority over `on_success`, `on_failure`, and `continue_on_error`. If no transition matches, the legacy routing applies as fallback.
 
 #### TokensUsed
 

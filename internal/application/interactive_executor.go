@@ -532,26 +532,7 @@ func (e *InteractiveExecutor) resolveNextStep(
 	intCtx *interpolation.Context,
 	success bool,
 ) (string, error) {
-	// If transitions are defined, evaluate them first
-	if len(step.Transitions) > 0 && e.evaluator != nil {
-		evalFunc := func(expr string) (bool, error) {
-			return e.evaluator.EvaluateBool(expr, intCtx)
-		}
-
-		nextStep, found, err := step.Transitions.EvaluateFirstMatch(evalFunc)
-		if err != nil {
-			return "", fmt.Errorf("evaluate transitions: %w", err)
-		}
-		if found {
-			return nextStep, nil
-		}
-	}
-
-	// Legacy fallback
-	if success {
-		return step.OnSuccess, nil
-	}
-	return step.OnFailure, nil
+	return resolveNextStep(step, intCtx, success, e.evaluator, e.logger)
 }
 
 // HandleExecutionError handles the case where command execution returns an error.
@@ -603,10 +584,23 @@ func (e *InteractiveExecutor) HandleNonZeroExit(
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
-	// Determine next step based on error handling configuration
-	if step.ContinueOnError {
-		return step.OnSuccess, nil
+	intCtx.States[step.Name] = interpolation.StepStateData{
+		Output:   state.Output,
+		Stderr:   state.Stderr,
+		ExitCode: state.ExitCode,
+		Status:   state.Status.String(),
 	}
+
+	// Evaluate transitions first (success=false for non-zero exit), then fall back to legacy routing
+	nextStep, err := e.resolveNextStep(step, intCtx, step.ContinueOnError)
+	if err != nil {
+		return "", err
+	}
+	if nextStep != "" || step.ContinueOnError {
+		return nextStep, nil
+	}
+
+	// Fall back to legacy OnFailure
 	if step.OnFailure != "" {
 		return step.OnFailure, nil
 	}

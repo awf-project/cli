@@ -104,6 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F068**: Exit Code Based Transition Routing
+  - Transitions with `when` conditions are now evaluated on non-zero exit paths, not just success paths
+  - `states.<step>.ExitCode` supports all 6 numeric comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) in transition conditions
+  - Transitions take priority over `continue_on_error` and `on_failure` when defined (first matching transition wins)
+  - Exit code and output conditions can be mixed freely in the same workflow (e.g., step 1 routes by `ExitCode`, step 2 routes by `Output`)
+  - Extracted shared `resolveNextStep` into package-level function to eliminate duplication between `ExecutionService` and `InteractiveExecutor`
+  - Full backward compatibility: workflows without `ExitCode` transitions behave unchanged
 - **F065**: Output Format for Agent Steps
   - New `output_format` field on agent steps: `json` (fence stripping + JSON validation) or `text` (fence stripping only)
   - Automatic markdown code fence stripping from agent output (outermost `` ```lang...``` `` removed)
@@ -300,6 +307,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F068**: Exit Code Based Transition Routing
 - **F065**: Output Format for Agent Steps
 - **F063**: Prompt File Loading for Agent Steps
 - **C056**: Add doc.go to 9 Key Infrastructure and Interface Packages
