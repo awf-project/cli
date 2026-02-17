@@ -161,10 +161,35 @@ Script file paths are resolved in this order:
    script_file: scripts/test.sh  # Resolves to <workflow_dir>/scripts/test.sh
    ```
 
-4. **XDG scripts directory** — via template interpolation:
+4. **XDG scripts directory with local override** — via template interpolation with local-before-global resolution:
    ```yaml
-   script_file: "{{.awf.scripts_dir}}/checks/lint.sh"  # ~/.config/awf/scripts/checks/lint.sh
+   script_file: "{{.awf.scripts_dir}}/checks/lint.sh"
+   # Checks in order:
+   # 1. <workflow_dir>/scripts/checks/lint.sh (local override)
+   # 2. ~/.config/awf/scripts/checks/lint.sh (global fallback)
    ```
+
+##### Local-Before-Global Resolution
+
+When using `{{.awf.scripts_dir}}` in `script_file`, AWF prioritizes local project files over global ones:
+
+- **If local file exists** at `<workflow_dir>/scripts/<suffix>` → use it
+- **If local file missing** → fall back to global `~/.config/awf/scripts/<suffix>`
+
+This enables shared scripts at the global level while allowing projects to override them locally:
+
+```yaml
+# Workflow at: ~/myproject/.awf/workflows/deploy.yaml
+steps:
+  deploy:
+    type: step
+    script_file: "{{.awf.scripts_dir}}/deploy.sh"
+    on_success: verify
+```
+
+Resolution order:
+1. Check `~/myproject/.awf/workflows/scripts/deploy.sh` (local override)
+2. Check `~/.config/awf/scripts/deploy.sh` (global shared)
 
 #### Template Interpolation
 

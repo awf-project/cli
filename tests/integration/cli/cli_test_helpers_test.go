@@ -3,9 +3,12 @@
 package cli_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/awf-project/awf/internal/interfaces/cli"
 )
 
 // setupTestDir creates a temporary directory for test isolation.
@@ -56,6 +59,22 @@ func createTestWorkflow(t *testing.T, baseDir, filename, content string) {
 	if err := os.WriteFile(workflowPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write workflow file: %v", err)
 	}
+}
+
+// runCLI creates a root command, sets the given args, executes it, and returns
+// the combined stdout+stderr output along with any error.
+func runCLI(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(args)
+
+	err := cmd.Execute()
+
+	return out.String(), err
 }
 
 // findRepoRoot walks up the directory tree to find the repository root
