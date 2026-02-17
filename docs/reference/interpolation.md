@@ -283,6 +283,33 @@ deploy:
   on_success: done
 ```
 
+#### Local-Before-Global Resolution
+
+When using `{{.awf.prompts_dir}}` or `{{.awf.scripts_dir}}`, AWF implements **local-before-global resolution**. This enables per-project overrides of shared global files:
+
+1. **Local override preferred** — If a file exists in the workflow's local directory (`<workflow_dir>/prompts/` or `<workflow_dir>/scripts/`), it is used
+2. **Global fallback** — If no local file exists, the global XDG directory is used
+3. **Example**: `script_file: "{{.awf.scripts_dir}}/deploy.sh"` checks for:
+   - `<workflow_dir>/scripts/deploy.sh` (local override)
+   - Then `~/.config/awf/scripts/deploy.sh` (global fallback)
+
+This allows teams to maintain shared scripts globally while letting projects override them locally:
+
+```yaml
+# Project structure
+my-project/
+├── .awf/
+│   ├── workflows/
+│   │   └── deploy.yaml
+│   └── scripts/
+│       └── deploy.sh        # Local override — takes precedence
+└── ...
+
+# ~/.config/awf/scripts/deploy.sh exists globally but is superseded
+```
+
+The same behavior applies to `prompt_file` with `{{.awf.prompts_dir}}`.
+
 ## Template Helper Functions
 
 When interpolating template expressions, the following helper functions are available:
