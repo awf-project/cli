@@ -1188,12 +1188,63 @@ process:
 | `when` | string | Expression to evaluate (optional for default) |
 | `goto` | string | Target state if condition matches |
 
+### Exit Code Routing Examples
+
+Route based on command exit codes:
+
+```yaml
+test_runner:
+  type: step
+  command: pytest
+  transitions:
+    - when: "states.test_runner.ExitCode == 0"
+      goto: deploy
+    - when: "states.test_runner.ExitCode > 1"
+      goto: critical_failure
+    - when: "states.test_runner.ExitCode != 0"  # Catch exit code 1
+      goto: report_warnings
+    - goto: unknown_error
+```
+
+### Output-Based Routing Examples
+
+Route based on command output:
+
+```yaml
+check_config:
+  type: step
+  command: validate-config.sh
+  transitions:
+    - when: "states.check_config.Output contains 'READY'"
+      goto: deploy
+    - when: "states.check_config.Output contains 'WARNING'"
+      goto: review_config
+    - goto: abort
+```
+
+### Combined Routing
+
+Mix exit code and output conditions:
+
+```yaml
+build:
+  type: step
+  command: make build
+  transitions:
+    - when: "states.build.ExitCode == 0 and states.build.Output contains 'OPTIMIZED'"
+      goto: fast_deploy
+    - when: "states.build.ExitCode == 0"
+      goto: standard_deploy
+    - goto: fix_errors
+```
+
 ### Supported Operators
 
 | Type | Operators |
 |------|-----------|
-| Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` |
+| Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` (numeric for ExitCode, string for Output) |
 | Logical | `and`, `or`, `not` |
+| String | `contains`, `startsWith`, `endsWith` |
 | Grouping | `(expr)` |
 
 ### Available Variables
@@ -1201,11 +1252,17 @@ process:
 | Variable | Description |
 |----------|-------------|
 | `inputs.name` | Input values |
-| `states.step_name.ExitCode` | Step exit code |
-| `states.step_name.Output` | Step output |
+| `states.step_name.ExitCode` | Step exit code (integer, POSIX 0-255) |
+| `states.step_name.Output` | Step output (string) |
 | `env.VAR_NAME` | Environment variables |
 
-Transitions are evaluated in order; first match wins. A transition without `when` acts as default fallback.
+### Transition Evaluation
+
+- Transitions are evaluated **on both success and failure paths** (non-zero exit codes included)
+- Transitions are evaluated **in order**; first matching condition wins
+- When a transition matches, it **takes priority** over `on_success`, `on_failure`, and `continue_on_error`
+- A transition without `when` acts as **default fallback**
+- If no transition matches and no default fallback exists, falls back to legacy `on_success`/`on_failure` behavior
 
 ---
 

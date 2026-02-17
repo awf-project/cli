@@ -153,7 +153,7 @@ states:
     type: step
     command: exit 0
     transitions:
-      - when: 'states.check.exit_code == 0'
+      - when: 'states.check.ExitCode == 0'
         goto: success
       - goto: failure
   success:
@@ -272,7 +272,7 @@ func TestExpressionEvaluator_Integration(t *testing.T) {
 	}{
 		{
 			name: "access nested state data",
-			expr: `states.build.exit_code == 0 and states.build.output != ""`,
+			expr: `states.build.ExitCode == 0 and states.build.Output != ""`,
 			ctx: &interpolation.Context{
 				States: map[string]interpolation.StepStateData{
 					"build": {ExitCode: 0, Output: "success"},
@@ -827,4 +827,363 @@ states:
 			assert.Equal(t, tt.wantFinalStep, execCtx.CurrentStep)
 		})
 	}
+}
+
+func TestExitCodeRouting_US1_BasicRouting(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: exit-code-routing-test
+states:
+  initial: build
+  build:
+    type: step
+    command: exit 42
+    transitions:
+      - when: 'states.build.ExitCode == 42'
+        goto: handle_exit_42
+      - goto: handle_other_exit
+  handle_exit_42:
+    type: terminal
+    status: success
+  handle_other_exit:
+    type: terminal
+    status: failure
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "handle_exit_42", execCtx.CurrentStep)
+}
+
+func TestExitCodeRouting_US1_MultipleExitCodes(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: multi-exit-code-test
+states:
+  initial: check
+  check:
+    type: step
+    command: echo "checking"
+    transitions:
+      - when: 'states.check.ExitCode == 0'
+        goto: success_path
+      - when: 'states.check.ExitCode != 0'
+        goto: failure_path
+      - goto: unknown_path
+  success_path:
+    type: terminal
+    status: success
+  failure_path:
+    type: terminal
+    status: failure
+  unknown_path:
+    type: terminal
+    status: failure
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "success_path", execCtx.CurrentStep)
+}
+
+func TestExitCodeRouting_US2_MixedExitCodeAndOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: mixed-routing-test
+states:
+  initial: step1
+  step1:
+    type: step
+    command: echo "ready" && exit 1
+    capture:
+      stdout: output
+    transitions:
+      - when: 'states.step1.ExitCode == 1'
+        goto: step2
+      - goto: error1
+  step2:
+    type: step
+    command: echo "processing"
+    capture:
+      stdout: output
+    transitions:
+      - when: 'states.step2.Output contains "processing"'
+        goto: final_success
+      - goto: error2
+  final_success:
+    type: terminal
+    status: success
+  error1:
+    type: terminal
+    status: failure
+  error2:
+    type: terminal
+    status: failure
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "final_success", execCtx.CurrentStep)
+}
+
+func TestExitCodeRouting_US3_NumericOperators(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: numeric-ops-test
+states:
+  initial: check_gt
+  check_gt:
+    type: step
+    command: exit 3
+    transitions:
+      - when: 'states.check_gt.ExitCode > 1'
+        goto: success1
+      - goto: failure1
+  success1:
+    type: step
+    command: echo "check_eq"
+    transitions:
+      - when: 'states.check_gt.ExitCode == 3'
+        goto: success2
+      - goto: failure2
+  success2:
+    type: step
+    command: echo "check_ne"
+    transitions:
+      - when: 'states.check_gt.ExitCode != 0'
+        goto: success3
+      - goto: failure3
+  success3:
+    type: step
+    command: echo "check_lt"
+    transitions:
+      - when: 'states.check_gt.ExitCode < 5'
+        goto: success4
+      - goto: failure4
+  success4:
+    type: terminal
+    status: success
+  failure1:
+    type: terminal
+    status: failure
+  failure2:
+    type: terminal
+    status: failure
+  failure3:
+    type: terminal
+    status: failure
+  failure4:
+    type: terminal
+    status: failure
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "success4", execCtx.CurrentStep)
+}
+
+func TestExitCodeRouting_US4_InterpolationContext(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: interpolation-test
+states:
+  initial: step1
+  step1:
+    type: step
+    command: exit 2
+    transitions:
+      - when: 'states.step1.ExitCode == 2'
+        goto: step2
+      - goto: error
+  step2:
+    type: step
+    command: echo "code={{states.step1.ExitCode}}"
+    on_success: final
+  error:
+    type: terminal
+    status: failure
+  final:
+    type: terminal
+    status: success
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "final", execCtx.CurrentStep)
+}
+
+func TestExitCodeRouting_FixExitCodeCasing(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	workflow := `
+name: exit-code-casing-test
+states:
+  initial: check
+  check:
+    type: step
+    command: exit 0
+    transitions:
+      - when: 'states.check.ExitCode == 0'
+        goto: success
+      - goto: failure
+  success:
+    type: terminal
+    status: success
+  failure:
+    type: terminal
+    status: failure
+`
+	workflowPath := filepath.Join(tmpDir, "workflow.yaml")
+	err := os.WriteFile(workflowPath, []byte(workflow), 0o644)
+	require.NoError(t, err)
+
+	log := &conditionsMockLogger{}
+	repo := repository.NewYAMLRepository(tmpDir)
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	shellExecutor := executor.NewShellExecutor()
+	parallelExecutor := application.NewParallelExecutor(log)
+	resolver := interpolation.NewTemplateResolver()
+	exprEvaluator := infraExpr.NewExprEvaluator()
+
+	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, log, infraExpr.NewExprValidator())
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		shellExecutor,
+		parallelExecutor,
+		stateStore,
+		log,
+		resolver,
+		nil,
+		exprEvaluator,
+	)
+
+	ctx := context.Background()
+	execCtx, err := execSvc.Run(ctx, "workflow", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "success", execCtx.CurrentStep)
 }
