@@ -373,3 +373,188 @@ func TestLoadExternalFile_InterpolationError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "interpolate")
 }
+
+func TestLoadExternalFile_LocalOverridesGlobalScriptsDir(t *testing.T) {
+	globalDir := t.TempDir()
+	sourceDir := t.TempDir()
+
+	globalScriptsDir := filepath.Join(globalDir, "scripts")
+	globalFile := filepath.Join(globalScriptsDir, "deploy.sh")
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+	require.NoError(t, os.WriteFile(globalFile, []byte("global content"), 0o644))
+
+	localFile := filepath.Join(sourceDir, "scripts", "deploy.sh")
+	require.NoError(t, os.MkdirAll(filepath.Dir(localFile), 0o755))
+	require.NoError(t, os.WriteFile(localFile, []byte("local content"), 0o644))
+
+	wf := &workflow.Workflow{Name: "test", SourceDir: sourceDir}
+	intCtx := &interpolation.Context{
+		AWF: map[string]string{"scripts_dir": globalScriptsDir},
+	}
+
+	result, err := loadExternalFile(context.Background(), "{{.awf.scripts_dir}}/deploy.sh", wf, intCtx)
+
+	require.NoError(t, err)
+	assert.Equal(t, "local content", result, "local script should override global")
+}
+
+func TestLoadExternalFile_FallbackToGlobalScriptsDir(t *testing.T) {
+	globalDir := t.TempDir()
+	sourceDir := t.TempDir()
+
+	globalScriptsDir := filepath.Join(globalDir, "scripts")
+	globalFile := filepath.Join(globalScriptsDir, "deploy.sh")
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+	require.NoError(t, os.WriteFile(globalFile, []byte("global content"), 0o644))
+
+	wf := &workflow.Workflow{Name: "test", SourceDir: sourceDir}
+	intCtx := &interpolation.Context{
+		AWF: map[string]string{"scripts_dir": globalScriptsDir},
+	}
+
+	result, err := loadExternalFile(context.Background(), "{{.awf.scripts_dir}}/deploy.sh", wf, intCtx)
+
+	require.NoError(t, err)
+	assert.Equal(t, "global content", result, "should fallback to global when no local exists")
+}
+
+func TestLoadExternalFile_LocalOverridesGlobalPromptsDir(t *testing.T) {
+	globalDir := t.TempDir()
+	sourceDir := t.TempDir()
+
+	globalPromptsDir := filepath.Join(globalDir, "prompts")
+	globalFile := filepath.Join(globalPromptsDir, "system.md")
+	require.NoError(t, os.MkdirAll(globalPromptsDir, 0o755))
+	require.NoError(t, os.WriteFile(globalFile, []byte("global prompt"), 0o644))
+
+	localFile := filepath.Join(sourceDir, "prompts", "system.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(localFile), 0o755))
+	require.NoError(t, os.WriteFile(localFile, []byte("local prompt"), 0o644))
+
+	wf := &workflow.Workflow{Name: "test", SourceDir: sourceDir}
+	intCtx := &interpolation.Context{
+		AWF: map[string]string{"prompts_dir": globalPromptsDir},
+	}
+
+	result, err := loadExternalFile(context.Background(), "{{.awf.prompts_dir}}/system.md", wf, intCtx)
+
+	require.NoError(t, err)
+	assert.Equal(t, "local prompt", result, "local prompt should override global")
+}
+
+func TestResolveLocalOverGlobal(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T, sourceDir, globalDir string) (interpolatedPath string, awfMap map[string]string)
+		wantPath string // "local" = under sourceDir, "unchanged" = same as interpolatedPath
+	}{
+		{
+			name: "local scripts_dir overrides global when local file exists",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				globalFile := filepath.Join(globalDir, "scripts", "deploy.sh")
+				require.NoError(t, os.MkdirAll(filepath.Dir(globalFile), 0o755))
+				require.NoError(t, os.WriteFile(globalFile, []byte("global"), 0o644))
+
+				localPath := filepath.Join(sourceDir, "scripts", "deploy.sh")
+				require.NoError(t, os.MkdirAll(filepath.Dir(localPath), 0o755))
+				require.NoError(t, os.WriteFile(localPath, []byte("local"), 0o644))
+
+				return globalFile, map[string]string{"scripts_dir": filepath.Join(globalDir, "scripts")}
+			},
+			wantPath: "local",
+		},
+		{
+			name: "local prompts_dir overrides global when local file exists",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				globalFile := filepath.Join(globalDir, "prompts", "greet.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(globalFile), 0o755))
+				require.NoError(t, os.WriteFile(globalFile, []byte("global"), 0o644))
+
+				localPath := filepath.Join(sourceDir, "prompts", "greet.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(localPath), 0o755))
+				require.NoError(t, os.WriteFile(localPath, []byte("local"), 0o644))
+
+				return globalFile, map[string]string{"prompts_dir": filepath.Join(globalDir, "prompts")}
+			},
+			wantPath: "local",
+		},
+		{
+			name: "fallback to global scripts_dir when no local file",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				globalFile := filepath.Join(globalDir, "scripts", "deploy.sh")
+				require.NoError(t, os.MkdirAll(filepath.Dir(globalFile), 0o755))
+				require.NoError(t, os.WriteFile(globalFile, []byte("global"), 0o644))
+
+				return globalFile, map[string]string{"scripts_dir": filepath.Join(globalDir, "scripts")}
+			},
+			wantPath: "unchanged",
+		},
+		{
+			name: "absolute non-XDG path is unchanged",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				otherFile := filepath.Join(globalDir, "other.sh")
+				require.NoError(t, os.WriteFile(otherFile, []byte("other"), 0o644))
+
+				return otherFile, map[string]string{"scripts_dir": filepath.Join(globalDir, "scripts")}
+			},
+			wantPath: "unchanged",
+		},
+		{
+			name: "nested subpath preserves structure in local resolution",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				globalFile := filepath.Join(globalDir, "scripts", "ci", "build.sh")
+				require.NoError(t, os.MkdirAll(filepath.Dir(globalFile), 0o755))
+				require.NoError(t, os.WriteFile(globalFile, []byte("global"), 0o644))
+
+				localPath := filepath.Join(sourceDir, "scripts", "ci", "build.sh")
+				require.NoError(t, os.MkdirAll(filepath.Dir(localPath), 0o755))
+				require.NoError(t, os.WriteFile(localPath, []byte("local"), 0o644))
+
+				return filepath.Join(globalDir, "scripts", "ci", "build.sh"),
+					map[string]string{"scripts_dir": filepath.Join(globalDir, "scripts")}
+			},
+			wantPath: "local",
+		},
+		{
+			name: "empty AWF map returns path unchanged",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				otherFile := filepath.Join(globalDir, "file.sh")
+				require.NoError(t, os.WriteFile(otherFile, []byte("content"), 0o644))
+
+				return otherFile, map[string]string{}
+			},
+			wantPath: "unchanged",
+		},
+		{
+			name: "nil AWF map returns path unchanged",
+			setup: func(t *testing.T, sourceDir, globalDir string) (string, map[string]string) {
+				otherFile := filepath.Join(globalDir, "file.sh")
+				require.NoError(t, os.WriteFile(otherFile, []byte("content"), 0o644))
+
+				return otherFile, nil
+			},
+			wantPath: "unchanged",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceDir := t.TempDir()
+			globalDir := t.TempDir()
+
+			interpolatedPath, awfMap := tt.setup(t, sourceDir, globalDir)
+
+			result := resolveLocalOverGlobal(interpolatedPath, sourceDir, awfMap)
+
+			switch tt.wantPath {
+			case "local":
+				assert.NotEqual(t, interpolatedPath, result, "expected local path, got unchanged global path")
+				assert.True(t, strings.HasPrefix(result, sourceDir), "expected path under sourceDir, got: %s", result)
+				_, statErr := os.Stat(result)
+				assert.NoError(t, statErr, "resolved local path must exist")
+			case "unchanged":
+				assert.Equal(t, interpolatedPath, result, "expected path unchanged")
+			}
+		})
+	}
+}

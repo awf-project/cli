@@ -235,6 +235,8 @@ Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application 
 
 Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
 
+Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
+
 ## Common Pitfalls
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -255,6 +257,10 @@ Always resolve relative prompt file paths against workflow.SourceDir, not curren
 
 Enforce 1MB size limit on loaded prompt files via io.LimitReader; prevents accidental memory issues and provides fast failure feedback for misconfigured paths
 
+Always resolve script_file and prompt_file paths against workflow.SourceDir first, then check for local XDG overrides via resolveLocalOverGlobal() before falling back to global XDG paths
+
+Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -264,6 +270,8 @@ Use HTTPDoer interface in pkg/httputil tests to mock HTTP behavior (timeouts, DN
 Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 
 Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
+
+Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
 
 ## Review Standards
 

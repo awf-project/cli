@@ -14,6 +14,34 @@ import (
 
 const maxExternalFileSize = 1024 * 1024
 
+// resolveLocalOverGlobal prefers a workflow-local file over the global XDG path when the
+// interpolated path falls under scripts_dir or prompts_dir. Returns the original path otherwise.
+func resolveLocalOverGlobal(interpolatedPath, sourceDir string, awfMap map[string]string) string {
+	allowedKeys := []string{"scripts_dir", "prompts_dir"}
+
+	for _, key := range allowedKeys {
+		globalDir, ok := awfMap[key]
+		if !ok || globalDir == "" {
+			continue
+		}
+
+		suffix, hasPrefix := strings.CutPrefix(interpolatedPath, globalDir+string(filepath.Separator))
+		if !hasPrefix {
+			continue
+		}
+
+		// Derive local subdir name from map key: "scripts_dir" → "scripts"
+		localSubdir := strings.TrimSuffix(key, "_dir")
+		localPath := filepath.Join(sourceDir, localSubdir, suffix)
+
+		if _, err := os.Stat(localPath); err == nil {
+			return localPath
+		}
+	}
+
+	return interpolatedPath
+}
+
 // loadExternalFile loads file contents with path resolution and 1MB size limit.
 // Shared by loadPromptFile and loadScriptFile.
 func loadExternalFile(
@@ -31,14 +59,14 @@ func loadExternalFile(
 		return "", fmt.Errorf("interpolate file path: %w", err)
 	}
 
-	resolvedPath := interpolatedPath
-	if strings.HasPrefix(interpolatedPath, "~/") {
+	resolvedPath := resolveLocalOverGlobal(interpolatedPath, wf.SourceDir, intCtx.AWF)
+	if strings.HasPrefix(resolvedPath, "~/") {
 		var homeDir string
 		homeDir, err = os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("expand tilde in file path: %w", err)
 		}
-		resolvedPath = filepath.Join(homeDir, interpolatedPath[2:])
+		resolvedPath = filepath.Join(homeDir, resolvedPath[2:])
 
 		// Convenience: if ~/path doesn't exist in $HOME, try workflow.SourceDir/path instead.
 		// Allows users to write "~/scripts/foo.sh" for workflow-relative files.

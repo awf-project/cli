@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
+  - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
+  - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
+  - Applies to both `script_file` and `prompt_file` fields
+  - **Workaround removal**: Users no longer need to use relative paths to get local-first resolution
 
 - **B004**: Validator no longer forces dead-code transitions on parallel branch children
   - Parallel branch children (`step.Branches`) can now omit `on_success`/`on_failure` and `Transitions`
@@ -234,6 +239,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
 
 ### Fixed
+- **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
+  - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
+  - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
+  - Applies to both `script_file` and `prompt_file` fields
+  - **Workaround removal**: Users no longer need to use relative paths to get local-first resolution
 
 - **B003**: Fixed while loop `break_when` condition not evaluating correctly
   - Root cause: Integration tests used `simpleExpressionEvaluator` mock with outdated lowercase keys (`output`, `exit_code`) and hardcoded value matching
@@ -607,6 +617,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
+- **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
+  - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
+  - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
+  - Applies to both `script_file` and `prompt_file` fields
+  - **Workaround removal**: Users no longer need to use relative paths to get local-first resolution
 
 - **[B002] CLIExecutor Missing Process Group Management**
   - Fixed orphan process accumulation when agent provider processes (claude, codex, gemini, opencode) persist after workflow cancellation
@@ -768,6 +783,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML parsing reports all errors instead of silently skipping malformed steps
 
 ### Fixed
+- **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
+  - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
+  - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
+  - Applies to both `script_file` and `prompt_file` fields
+  - **Workaround removal**: Users no longer need to use relative paths to get local-first resolution
 
 - **F048**: Loop body transitions now honored (while and foreach loops)
   - Loop executor now evaluates transitions after each body step execution

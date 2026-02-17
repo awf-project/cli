@@ -3,12 +3,10 @@
 package cli_test
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,16 +34,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "script-file-basic.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "script-file-basic", "--dry-run"})
-
-	err = cmd.Execute()
+	output, err := runCLI(t, "run", "script-file-basic", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "basic script executed", "script should be loaded and executed")
 }
 
@@ -76,16 +66,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "relative-path.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "relative-path", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "relative-path", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "relative script executed", "should load script from relative path")
 }
 
@@ -118,16 +100,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "awf-scripts-dir.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "awf-scripts-dir", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "awf-scripts-dir", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "awf scripts dir executed", "should resolve AWF scripts directory template variable")
 }
 
@@ -158,16 +132,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "absolute-path.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "absolute-path", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "absolute-path", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "absolute path executed", "should load script from absolute path")
 }
 
@@ -203,16 +169,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "tilde-expansion.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "tilde-expansion", "--dry-run"})
-
-	err = cmd.Execute()
+	output, err := runCLI(t, "run", "tilde-expansion", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "tilde path executed", "should expand tilde to home directory")
 }
 
@@ -243,16 +201,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "content-interpolation.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "content-interpolation", "--dry-run", "--input=value=TestData"})
-
-	err = cmd.Execute()
+	output, err := runCLI(t, "run", "content-interpolation", "--dry-run", "--input=value=TestData")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "Value: TestData", "script content should be interpolated with input value")
 }
 
@@ -283,16 +233,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "dry-run-test.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "dry-run-test", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "dry-run-test", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "echo \"dry run test\"", "dry run should show resolved script content")
 }
 
@@ -314,16 +256,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "missing-file.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "missing-file", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "missing-file", "--dry-run")
 	require.Error(t, err, "should fail with missing file error")
-
-	output := out.String()
 	assert.Contains(t, output, "file not found", "error should mention missing script file")
 	assert.Contains(t, output, "missing.sh", "error should include the file path")
 }
@@ -347,16 +281,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "mutual-exclusivity.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "mutual-exclusivity"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "validate", "mutual-exclusivity")
 	require.Error(t, err, "validation should fail when both command and script_file are set")
-
-	output := out.String()
 	assert.Contains(t, output, "mutually exclusive", "error should mention mutual exclusivity")
 }
 
@@ -383,16 +309,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "nested-path.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "nested-path", "--dry-run"})
-
-	err = cmd.Execute()
+	output, err := runCLI(t, "run", "nested-path", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "local script", "nested script should be loaded and executed")
 }
 
@@ -433,16 +351,53 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "multiple-steps.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"run", "multiple-steps", "--dry-run"})
-
-	err := cmd.Execute()
+	output, err := runCLI(t, "run", "multiple-steps", "--dry-run")
 	require.NoError(t, err)
-
-	output := out.String()
 	assert.Contains(t, output, "step one executed", "first script should be loaded")
 	assert.Contains(t, output, "step two executed", "second script should be loaded")
+}
+
+// TestRunCommand_ScriptFile_LocalOverridesGlobalAWFScriptsDir verifies local scripts take precedence over global XDG scripts
+// AC: When both local and global scripts exist, {{.awf.scripts_dir}} resolves to the local workflow-relative script
+// Regression guard for B005
+func TestRunCommand_ScriptFile_LocalOverridesGlobalAWFScriptsDir(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalScriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+
+	globalScriptContent := `#!/bin/sh
+echo "GLOBAL SCRIPT"
+`
+	globalScriptPath := filepath.Join(globalScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(globalScriptPath, []byte(globalScriptContent), 0o755))
+
+	localScriptsDir := filepath.Join(tmpDir, ".awf", "workflows", "scripts")
+	require.NoError(t, os.MkdirAll(localScriptsDir, 0o755))
+
+	localScriptContent := `#!/bin/sh
+echo "LOCAL SCRIPT"
+`
+	localScriptPath := filepath.Join(localScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(localScriptPath, []byte(localScriptContent), 0o755))
+
+	workflowContent := `name: local-override-test
+version: "1.0.0"
+states:
+  initial: deploy
+  deploy:
+    type: step
+    script_file: "{{.awf.scripts_dir}}/deploy.sh"
+    on_success: done
+  done:
+    type: terminal
+`
+	createTestWorkflow(t, tmpDir, "local-override-test.yaml", workflowContent)
+
+	output, err := runCLI(t, "run", "local-override-test", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, output, "LOCAL SCRIPT", "local script should take precedence over global XDG script")
+	assert.NotContains(t, output, "GLOBAL SCRIPT", "global script should not be used when local exists")
 }
