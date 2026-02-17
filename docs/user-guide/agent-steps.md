@@ -251,11 +251,35 @@ Paths can be:
    prompt_file: ~/my-prompts/template.md      # Expands to user's home directory
    ```
 
-4. **XDG-compliant system directories:**
+4. **XDG prompts directory with local override** — via template interpolation with local-before-global resolution:
    ```yaml
-   prompt_file: "{{.awf.prompts_dir}}/analyze.md"  # ~/.config/awf/prompts/analyze.md (or per XDG_CONFIG_HOME)
-   prompt_file: "{{.awf.data_dir}}/templates/*.md"
+   prompt_file: "{{.awf.prompts_dir}}/analyze.md"
+   # Checks in order:
+   # 1. <workflow_dir>/prompts/analyze.md (local override)
+   # 2. ~/.config/awf/prompts/analyze.md (global fallback)
    ```
+
+#### Local-Before-Global Resolution
+
+When using `{{.awf.prompts_dir}}` in `prompt_file`, AWF prioritizes local project files over global ones:
+
+- **If local file exists** at `<workflow_dir>/prompts/<suffix>` → use it
+- **If local file missing** → fall back to global `~/.config/awf/prompts/<suffix>`
+
+This enables shared prompts at the global level while allowing projects to override them locally:
+
+```yaml
+# Workflow at: ~/myproject/.awf/workflows/review.yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt_file: "{{.awf.prompts_dir}}/code_review.md"
+  on_success: done
+```
+
+Resolution order:
+1. Check `~/myproject/.awf/workflows/prompts/code_review.md` (local override)
+2. Check `~/.config/awf/prompts/code_review.md` (global shared)
 
 ### Template Helper Functions
 
