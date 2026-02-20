@@ -982,8 +982,11 @@ func TestInteractiveExecutor_executeLoopStep_LoopBodyError(t *testing.T) {
 
 	ctx, err := exec.Run(context.Background(), "failloop", nil)
 
-	require.NoError(t, err) // Workflow completes via error handler
+	// The "error" terminal step has TerminalFailure status, so it returns an error.
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error", "error must reference the failure terminal step")
 	require.NotNil(t, ctx)
+	assert.Equal(t, workflow.StatusFailed, ctx.Status)
 
 	// Verify loop failed
 	loopState, exists := ctx.GetStepState("loop")

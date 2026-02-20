@@ -237,6 +237,8 @@ Inject optional dependencies like XDG paths via SetAWFPaths() pattern in applica
 
 Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
 
+Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
+
 ## Common Pitfalls
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -261,6 +263,10 @@ Always resolve script_file and prompt_file paths against workflow.SourceDir firs
 
 Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
 
+Never initialize interpolation context with nil AWF map in loadExternalFile() and related functions; always pass initialized empty map to prevent nil dereference in resolveLocalOverGlobal() and path resolution helpers
+
+Always use interpolateTerminalMessage() in application layer to evaluate template variables in Step.Message at runtime; store message verbatim during parsing to preserve {{var}} syntax until execution time
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -272,6 +278,8 @@ Write unit tests for prompt file validation, interpolation, and YAML mapping bef
 Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 
 Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
+
+Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 
 ## Review Standards
 

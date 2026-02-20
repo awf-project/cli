@@ -62,6 +62,7 @@ type ExecutionContext struct {
 	WorkflowName string
 	Status       ExecutionStatus
 	CurrentStep  string
+	ExitCode     int // process exit code propagated from terminal steps (FR-004)
 	Inputs       map[string]any
 	States       map[string]StepState
 	Env          map[string]string

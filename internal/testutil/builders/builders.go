@@ -455,6 +455,20 @@ func (b *StepBuilder) WithLoop(loop *workflow.LoopConfig) *StepBuilder {
 	return b
 }
 
+// WithMessage sets the message template for terminal-type steps.
+// The message is stored as-is and interpolated at runtime.
+func (b *StepBuilder) WithMessage(message string) *StepBuilder {
+	b.step.Message = message
+	return b
+}
+
+// WithExitCode sets the process exit code for terminal-type steps (FR-004).
+// Defaults to 0; inline error terminals default to 1 at parse time.
+func (b *StepBuilder) WithExitCode(code int) *StepBuilder {
+	b.step.ExitCode = code
+	return b
+}
+
 // WithOperation sets operation details for operation-type steps.
 func (b *StepBuilder) WithOperation(operation string, inputs map[string]any) *StepBuilder {
 	b.step.Operation = operation

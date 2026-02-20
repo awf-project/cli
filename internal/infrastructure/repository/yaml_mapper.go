@@ -32,7 +32,7 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 		SourceDir:   filepath.Dir(absPath),
 	}
 
-	// Map steps
+	// Map steps and collect synthesized inline error terminals
 	for name := range y.States.Steps {
 		step := y.States.Steps[name]
 		domainStep, err := mapStep(filePath, name, &step)
@@ -40,6 +40,20 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 			return nil, err
 		}
 		wf.Steps[name] = domainStep
+
+		// Inline on_failure: synthesize and inject a terminal step for this step
+		if obj, ok := step.OnFailure.(map[string]any); ok {
+			synthYAML, err := synthesizeInlineErrorTerminal(name, obj)
+			if err != nil {
+				return nil, err
+			}
+			synthName := "__inline_error_" + name
+			synthStep, err := mapStep(filePath, synthName, synthYAML)
+			if err != nil {
+				return nil, err
+			}
+			wf.Steps[synthName] = synthStep
+		}
 	}
 
 	return wf, nil
@@ -93,6 +107,12 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		}
 	}
 
+	// Handle polymorphic OnFailure: string (step name) or inline error object
+	onFailureStr, err := normalizeOnFailure(filePath, name, y.OnFailure)
+	if err != nil {
+		return nil, err
+	}
+
 	step := &workflow.Step{
 		Name:            name,
 		Type:            stepType,
@@ -106,7 +126,7 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		Strategy:        y.Strategy,
 		MaxConcurrent:   y.MaxConcurrent,
 		OnSuccess:       y.OnSuccess,
-		OnFailure:       y.OnFailure,
+		OnFailure:       onFailureStr,
 		Transitions:     mapTransitions(y.Transitions),
 		DependsOn:       y.DependsOn,
 		ContinueOnError: y.ContinueOnError,
@@ -114,6 +134,8 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		Capture:         mapCapture(y.Capture),
 		Hooks:           mapStepHooks(y.Hooks),
 		Status:          workflow.TerminalStatus(y.Status),
+		Message:         y.Message,
+		ExitCode:        y.ExitCode,
 		Loop:            mapLoopConfig(y),
 		TemplateRef:     mapTemplateRef(y.UseTemplate, y.Parameters),
 		CallWorkflow:    mapCallWorkflowFlat(y),
@@ -462,4 +484,73 @@ func mapConversationConfig(y *yamlConversationConfig) *workflow.ConversationConf
 		ContinueFrom:     y.ContinueFrom,
 		InjectContext:    y.InjectContext,
 	}
+}
+
+// normalizeOnFailure normalizes on_failure to a step name string.
+// Accepts a named terminal reference (string) or an inline error object (map).
+func normalizeOnFailure(filePath, stepName string, onFailure any) (string, error) {
+	if onFailure == nil {
+		return "", nil
+	}
+
+	if s, ok := onFailure.(string); ok {
+		return s, nil
+	}
+
+	obj, ok := onFailure.(map[string]any)
+	if !ok {
+		return "", NewParseError(filePath, "states."+stepName+".on_failure", "must be a string or object")
+	}
+
+	if err := validateInlineErrorObject(filePath, stepName, obj); err != nil {
+		return "", err
+	}
+
+	return "__inline_error_" + stepName, nil
+}
+
+// synthesizeInlineErrorTerminal creates a terminal yamlStep from an inline error object.
+// It extracts the message and optional status fields to build the synthesized terminal definition.
+func synthesizeInlineErrorTerminal(stepName string, inlineError map[string]any) (*yamlStep, error) {
+	msgVal := inlineError["message"]
+	// Type-assertion is defensive; validateInlineErrorObject already validated this field.
+	msg, ok := msgVal.(string)
+	if !ok {
+		return nil, fmt.Errorf("step %s: on_failure.message must be a string", stepName)
+	}
+
+	// FR-004: extract status (integer exit code); default to 1 when omitted.
+	// YAML unmarshals integers as int; JSON round-trips may produce float64.
+	exitCode := 1
+	if statusVal, exists := inlineError["status"]; exists && statusVal != nil {
+		switch v := statusVal.(type) {
+		case int:
+			exitCode = v
+		case float64:
+			exitCode = int(v)
+		}
+	}
+
+	return &yamlStep{
+		Type:     "terminal",
+		Status:   "failure",
+		Message:  msg,
+		ExitCode: exitCode,
+	}, nil
+}
+
+// validateInlineErrorObject validates the inline error object fields.
+// It ensures the required message field is present and non-empty.
+func validateInlineErrorObject(filePath, stepName string, obj map[string]any) error {
+	msg, exists := obj["message"]
+	if !exists {
+		return NewParseError(filePath, "states."+stepName+".on_failure.message", "required field missing")
+	}
+
+	msgStr, ok := msg.(string)
+	if !ok || msgStr == "" {
+		return NewParseError(filePath, "states."+stepName+".on_failure.message", "must be a non-empty string")
+	}
+
+	return nil
 }

@@ -87,6 +87,8 @@ type Step struct {
 	Hooks           StepHooks            // pre/post hooks
 	ContinueOnError bool                 // don't fail workflow on error
 	Status          TerminalStatus       // for terminal type: success or failure
+	Message         string               // for terminal type: message template (interpolated at runtime)
+	ExitCode        int                  // for terminal type: process exit code (FR-004: inline default 1)
 	Loop            *LoopConfig          // for for_each and while types
 	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
 	CallWorkflow    *CallWorkflowConfig  // for call_workflow type: sub-workflow configuration

@@ -155,11 +155,21 @@ func (e *InteractiveExecutor) Run(ctx context.Context, workflowName string, inpu
 
 		// Terminal state - workflow complete
 		if step.Type == workflow.StepTypeTerminal {
-			execCtx.Status = workflow.StatusCompleted
+			var terminalErr error
+			if step.Status == workflow.TerminalFailure {
+				execCtx.Status = workflow.StatusFailed
+				if msg := e.interpolateTerminalMessage(step.Message, e.buildInterpolationContext(execCtx)); msg != "" {
+					terminalErr = errors.New(msg)
+				} else {
+					terminalErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+				}
+			} else {
+				execCtx.Status = workflow.StatusCompleted
+			}
 			execCtx.CompletedAt = time.Now()
 			e.checkpoint(ctx, execCtx)
 			e.prompt.ShowCompleted(execCtx.Status)
-			return execCtx, nil
+			return execCtx, terminalErr
 		}
 
 		// Build interpolation context for display
@@ -375,6 +385,20 @@ func (e *InteractiveExecutor) checkpoint(ctx context.Context, execCtx *workflow.
 	if err := e.store.Save(ctx, execCtx); err != nil {
 		e.logger.Warn("checkpoint failed", "workflow_id", execCtx.WorkflowID, "error", err)
 	}
+}
+
+// interpolateTerminalMessage interpolates a terminal step message template.
+// Falls back to the raw message on interpolation error so the message is never silently lost.
+func (e *InteractiveExecutor) interpolateTerminalMessage(message string, intCtx *interpolation.Context) string {
+	if message == "" {
+		return ""
+	}
+	interpolated, err := e.resolver.Resolve(message, intCtx)
+	if err != nil {
+		e.logger.Warn("terminal message interpolation failed", "error", err, "message", message)
+		return message
+	}
+	return interpolated
 }
 
 // buildInterpolationContext converts ExecutionContext to interpolation.Context.

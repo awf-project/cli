@@ -94,7 +94,7 @@ my_step:
 | `dir` | string | cwd | Working directory (supports interpolation) |
 | `timeout` | int | 0 | Execution timeout in seconds (0 = no timeout) |
 | `on_success` | string | - | Next state on success (exit code 0) |
-| `on_failure` | string | - | Next state on failure (exit code ≠ 0) |
+| `on_failure` | string or object | - | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `continue_on_error` | bool | false | Always follow `on_success` regardless of exit code |
 | `retry` | object | - | Retry configuration |
 | `transitions` | array | - | Conditional transitions |
@@ -295,7 +295,7 @@ refine_code:
 | `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
 | `timeout` | int | No | Execution timeout in seconds (0 = no timeout) |
 | `on_success` | string | No | Next state on success |
-| `on_failure` | string | No | Next state on failure |
+| `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `retry` | object | No | Retry configuration (same as step retry) |
 
 \* Use `prompt` or `prompt_file` for single-turn mode (mutually exclusive), `initial_prompt` for conversation mode. See [Agent Steps - External Prompt Files](agent-steps.md#external-prompt-files) for `prompt_file` details.
@@ -417,7 +417,7 @@ get_issue:
 | `operation` | string | Yes | Operation name (e.g., `github.get_issue`) |
 | `inputs` | map | Varies | Input parameters (validated against operation schema) |
 | `on_success` | string | No | Next state on success |
-| `on_failure` | string | No | Next state on failure |
+| `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or [inline object](#inline-error-shorthand) |
 | `retry` | object | No | Retry configuration (same as step retry) |
 
 ### Operation Output
@@ -769,6 +769,83 @@ error:
 | Option | Type | Values | Description |
 |--------|------|--------|-------------|
 | `status` | string | `success`, `failure` | Terminal status |
+| `message` | string | - | Terminal message (displayed in output, supports template interpolation) |
+
+### Inline Error Shorthand
+
+Instead of defining separate named terminal states, you can specify an inline error object directly on `on_failure`:
+
+```yaml
+build:
+  type: step
+  command: go build ./cmd/...
+  on_success: test
+  on_failure: {message: "Build failed"}
+
+test:
+  type: step
+  command: go test ./...
+  on_success: done
+  on_failure: {message: "Tests failed", status: 2}
+
+done:
+  type: terminal
+  status: success
+```
+
+When an inline error is triggered, AWF automatically synthesizes an anonymous terminal state with the specified message and status (default: 1).
+
+#### Inline Error Syntax
+
+The `on_failure` field accepts either:
+- **String** (named terminal reference, backward compatible): `on_failure: error_terminal`
+- **Object** (inline error, F066): `on_failure: {message: "...", status: 3}`
+
+#### Inline Error Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | Yes | Terminal message (can use template interpolation: `{{.inputs.*}}`, `{{.states.*}}`, `{{.env.*}}`) |
+| `status` | int | No | Exit code (default: `1` for failure) |
+
+#### Template Interpolation in Messages
+
+Inline error messages support full template interpolation, including references to step outputs:
+
+```yaml
+build:
+  type: step
+  command: make build
+  on_failure: {message: "Build failed: {{.states.build.Output}}"}
+
+test:
+  type: step
+  command: go test ./...
+  on_failure: {message: "Tests failed in {{.inputs.environment}}", status: 5}
+```
+
+#### Backward Compatibility
+
+Existing workflows using named terminal references continue to work unchanged:
+
+```yaml
+# Still works — routes to named terminal state
+on_failure: error_terminal
+```
+
+You can mix inline errors and named references in the same workflow:
+
+```yaml
+build:
+  type: step
+  command: make build
+  on_failure: {message: "Build failed"}  # Inline error
+
+test:
+  type: step
+  command: npm test
+  on_failure: error_terminal           # Named reference
+```
 
 ---
 
@@ -811,7 +888,7 @@ Branch children (`lint`, `test`, `build` above) do not need `on_success`/`on_fai
 | `strategy` | string | `all_succeed` | Execution strategy |
 | `max_concurrent` | int | unlimited | Maximum concurrent steps |
 | `on_success` | string | - | Next state when all branches complete successfully |
-| `on_failure` | string | - | Next state on branch failure |
+| `on_failure` | string or object | - | Next state on branch failure — string (named terminal ref) or [inline object](#inline-error-shorthand) |
 
 ### Parallel Strategies
 

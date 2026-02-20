@@ -30,6 +30,7 @@ Learn how to use AWF effectively:
 - [Conversation Mode](user-guide/conversation-steps.md) - Multi-turn conversations with context window management
 - [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference
+  - [Inline Error Shorthand](user-guide/workflow-syntax.md#inline-error-shorthand) - Specify error messages directly on steps without separate terminal states
   - [External Script Files](user-guide/workflow-syntax.md#external-script-files) - Load shell commands from external `.sh` files with template interpolation
   - [GitHub Operations](user-guide/workflow-syntax.md#github-operations) - Built-in GitHub plugin with declarative operations
   - [HTTP Operations](user-guide/workflow-syntax.md#http-operations) - Built-in HTTP operation for REST API calls

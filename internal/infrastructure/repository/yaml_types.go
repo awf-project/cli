@@ -29,7 +29,7 @@ type yamlStep struct {
 	Dir             string           `yaml:"dir"`
 	Timeout         string           `yaml:"timeout"`
 	OnSuccess       string           `yaml:"on_success"`
-	OnFailure       string           `yaml:"on_failure"`
+	OnFailure       any              `yaml:"on_failure"` // F066: string (named terminal) or map[string]any (inline error)
 	Transitions     []yamlTransition `yaml:"transitions"`
 	DependsOn       []string         `yaml:"depends_on"`
 	Parallel        []string         `yaml:"parallel"`
@@ -41,6 +41,7 @@ type yamlStep struct {
 	ContinueOnError bool             `yaml:"continue_on_error"`
 	Status          string           `yaml:"status"`  // for terminal steps
 	Message         string           `yaml:"message"` // for terminal steps
+	ExitCode        int              // for synthesized inline error terminals (FR-004); set programmatically, not from YAML
 
 	// Loop configuration (for for_each and while types)
 	Items         any      `yaml:"items"`          // string or []any for for_each
