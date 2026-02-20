@@ -109,6 +109,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F066**: Inline Error Terminal Shorthand for on_failure
+  - `on_failure` now accepts an inline object `{message: "...", status: N}` in addition to the existing string form
+  - Inline objects are synthesized into anonymous terminal states at parse time — no changes to execution engine
+  - `message` field supports full template interpolation (`{{inputs.*}}`, `{{states.*}}`, `{{env.*}}`)
+  - `status` defaults to exit code `1` when omitted
+  - `awf validate` reports clear errors for missing or empty `message`
+  - Works in parallel step branches
+  - Full backward compatibility: existing string-form `on_failure` references are unchanged
 - **F068**: Exit Code Based Transition Routing
   - Transitions with `when` conditions are now evaluated on non-zero exit paths, not just success paths
   - `states.<step>.ExitCode` supports all 6 numeric comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) in transition conditions
@@ -317,6 +325,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F066**: Inline Error Terminal Shorthand for on_failure
+  - `on_failure` accepts inline object `{message: "...", status: N}` as shorthand for named terminal states
+  - Synthesized at parse time; `message` supports interpolation; `status` defaults to `1`
 - **F068**: Exit Code Based Transition Routing
 - **F065**: Output Format for Agent Steps
 - **F063**: Prompt File Loading for Agent Steps

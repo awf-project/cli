@@ -652,6 +652,23 @@ error_path:
   status: failure
 ```
 
+You can also use **inline error shorthand** to avoid defining separate terminal states:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Review: {{.inputs.code}}"
+  timeout: 120
+  on_success: done
+  on_failure: {message: "Agent analysis failed", status: 3}
+
+done:
+  type: terminal
+```
+
+See [Workflow Syntax — Inline Error Shorthand](workflow-syntax.md#inline-error-shorthand) for full details.
+
 ### Common Error Scenarios
 
 | Error | Cause | Solution |

@@ -8,6 +8,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-c
 ## Features
 
 - **State Machine Execution** - Define workflows as state machines with conditional transitions based on exit codes, command output, or custom expressions
+- **Inline Error Handling** - Specify error messages and exit codes directly on steps without creating separate terminal states
 - **Agent Steps** - Invoke AI CLI agents (Claude, Codex, Gemini) with prompt templates and response parsing
 - **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support

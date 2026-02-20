@@ -256,7 +256,12 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			// Check terminal status: failure or success (default)
 			if step.Status == workflow.TerminalFailure {
 				execCtx.Status = workflow.StatusFailed
-				execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+				execCtx.ExitCode = step.ExitCode
+				if msg := s.interpolateTerminalMessage(step.Message, s.buildInterpolationContext(execCtx)); msg != "" {
+					execErr = errors.New(msg)
+				} else {
+					execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+				}
 			} else {
 				execCtx.Status = workflow.StatusCompleted
 			}
@@ -1474,7 +1479,12 @@ func (s *ExecutionService) executeFromStep(
 			// Check terminal status: failure or success (default)
 			if step.Status == workflow.TerminalFailure {
 				execCtx.Status = workflow.StatusFailed
-				execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+				execCtx.ExitCode = step.ExitCode
+				if msg := s.interpolateTerminalMessage(step.Message, s.buildInterpolationContext(execCtx)); msg != "" {
+					execErr = errors.New(msg)
+				} else {
+					execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
+				}
 			} else {
 				execCtx.Status = workflow.StatusCompleted
 			}
@@ -2104,4 +2114,18 @@ func (s *ExecutionService) applyOutputFormat(step *workflow.Step, state *workflo
 		state.JSON = parsedJSON
 	}
 	return nil
+}
+
+// interpolateTerminalMessage interpolates a terminal step message template using the current execution context.
+// Returns the interpolated message, falling back to the raw template on interpolation error.
+func (s *ExecutionService) interpolateTerminalMessage(message string, intCtx *interpolation.Context) string {
+	if message == "" {
+		return ""
+	}
+	interpolated, err := s.resolver.Resolve(message, intCtx)
+	if err != nil {
+		s.logger.Warn("terminal message interpolation failed", "error", err, "message", message)
+		return message
+	}
+	return interpolated
 }
