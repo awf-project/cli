@@ -453,7 +453,6 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 		Conversation:  mapConversationConfig(y.Conversation),
 		OutputFormat:  workflow.OutputFormat(y.OutputFormat),
 		// Timeout is handled separately via step.Timeout
-		Command: "", // Not supported in flat structure - stub
 	}
 }
 

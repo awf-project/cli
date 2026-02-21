@@ -20,7 +20,7 @@ import (
 )
 
 func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create .awf directory but no workflow
 
@@ -36,7 +36,7 @@ func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
 }
 
 func TestRunCommand_SingleStep_StepNotFound(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow without the requested step
 	workflowContent := `name: test
@@ -64,7 +64,7 @@ states:
 }
 
 func TestRunCommand_SingleStep_Success(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
@@ -96,7 +96,7 @@ states:
 }
 
 func TestRunCommand_SingleStep_WithInputs(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
@@ -130,7 +130,7 @@ states:
 }
 
 func TestRunCommand_SingleStep_WithMocks(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
@@ -171,7 +171,7 @@ states:
 }
 
 func TestRunCommand_SingleStep_TerminalStepError(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create storage directories (states and history for Badger)
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755)
@@ -215,7 +215,7 @@ func TestRunCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := setupTestDir(t)
+			tmpDir := setupInitTestDir(t)
 
 			// Setup workflow and directories
 			require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
@@ -265,7 +265,7 @@ states:
 
 // TestRunCommand_SingleStep_SQLiteHistory verifies single step execution uses SQLite
 func TestRunCommand_SingleStep_SQLiteHistory(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Setup
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
@@ -301,7 +301,7 @@ states:
 // TestRunCommand_ConcurrentWorkflows validates that bug-48 is fixed
 // Multiple workflows should be able to run concurrently without lock errors
 func TestRunCommand_ConcurrentWorkflows(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Setup workflow and directories
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))

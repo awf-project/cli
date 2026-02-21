@@ -16,7 +16,7 @@ import (
 
 func TestListCommand_NoWorkflows(t *testing.T) {
 	// Use temp directory for XDG to isolate from global workflows
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	cmd := cli.NewRootCommand()
@@ -84,7 +84,7 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("displays no prompts message when directory is empty", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
 
 		// Isolate from global prompts
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
@@ -107,7 +107,7 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("displays prompts directory not found hint", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
 
 		// Isolate from global prompts
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
@@ -129,7 +129,8 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("lists prompt files with metadata", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Create prompts directory with files
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
@@ -162,7 +163,8 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("lists nested prompt directories", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		// Create nested prompt structure
 		nestedDir := filepath.Join(tmpDir, ".awf", "prompts", "ai", "agents")
@@ -189,7 +191,8 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("outputs JSON format", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
 		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
@@ -217,7 +220,8 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("outputs table format", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 		promptsDir := filepath.Join(tmpDir, ".awf", "prompts")
 		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
@@ -244,7 +248,7 @@ func TestListPromptsCommand(t *testing.T) {
 	})
 
 	t.Run("outputs quiet format with names only", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
+		tmpDir := setupInitTestDir(t)
 
 		// Isolate from global prompts
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)

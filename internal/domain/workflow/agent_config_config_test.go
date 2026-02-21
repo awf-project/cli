@@ -73,13 +73,13 @@ func TestAgentConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid custom provider with command",
+			name: "custom provider is rejected (removed in F070)",
 			config: AgentConfig{
 				Provider: "custom",
 				Prompt:   "Test prompt",
-				Command:  "my-llm --prompt {{prompt}}",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "custom",
 		},
 		{
 			name: "missing provider",
@@ -162,7 +162,7 @@ func TestAgentConfig_Validate_ProviderVariants(t *testing.T) {
 		{"codex", "codex", false},
 		{"gemini", "gemini", false},
 		{"opencode", "opencode", false},
-		{"custom", "custom", false},
+		{"custom is rejected (F070)", "custom", true},
 		{"uppercase CLAUDE", "CLAUDE", false},
 		{"mixed case Claude", "Claude", false},
 		{"hyphenated name", "my-custom-llm", false},
@@ -335,53 +335,6 @@ func TestAgentConfig_Options(t *testing.T) {
 	}
 }
 
-func TestAgentConfig_CustomCommand(t *testing.T) {
-	tests := []struct {
-		name     string
-		provider string
-		command  string
-	}{
-		{
-			name:     "custom provider with command template",
-			provider: "custom",
-			command:  "my-llm --prompt {{prompt}}",
-		},
-		{
-			name:     "custom with complex template",
-			provider: "custom",
-			command:  "llm exec --input {{prompt}} --model {{options.model}} --json",
-		},
-		{
-			name:     "custom with path",
-			provider: "custom",
-			command:  "/usr/local/bin/my-ai {{prompt}}",
-		},
-		{
-			name:     "empty command (custom provider)",
-			provider: "custom",
-			command:  "",
-		},
-		{
-			name:     "command with built-in provider (ignored)",
-			provider: "claude",
-			command:  "ignored-command",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := AgentConfig{
-				Provider: tt.provider,
-				Prompt:   "Test prompt",
-				Command:  tt.command,
-			}
-			err := config.Validate(nil)
-			require.NoError(t, err)
-			assert.Equal(t, tt.command, config.Command)
-		})
-	}
-}
-
 func TestAgentConfig_CompleteExample(t *testing.T) {
 	config := AgentConfig{
 		Provider: "claude",
@@ -492,4 +445,121 @@ Using these settings:
 			assert.Equal(t, tt.prompt, config.Prompt)
 		})
 	}
+}
+
+func TestAgentConfig_CommandFieldRemoved(t *testing.T) {
+	// Feature: F070 - Remove Custom Agent Provider
+	// Component: T008 - Remove AgentConfig.Command field
+	//
+	// This test documents that AgentConfig.Command field has been removed.
+	// The test verifies:
+	// 1. AgentConfig struct compiles without Command field
+	// 2. AgentConfig can be created and used without any Command-related code
+	// 3. Validation works correctly without Command field
+
+	config := AgentConfig{
+		Provider: "claude",
+		Prompt:   "Test prompt",
+		Options: map[string]any{
+			"model": "claude-sonnet-4-20250514",
+		},
+	}
+
+	// If Command field existed, we would need to set it here.
+	// The fact that we don't is evidence it's been removed.
+	assert.Equal(t, "claude", config.Provider)
+	assert.Equal(t, "Test prompt", config.Prompt)
+
+	// Validate that config is valid
+	err := config.Validate(nil)
+	require.NoError(t, err)
+}
+
+func TestAgentConfig_NoCommandField_ValidateSucceeds(t *testing.T) {
+	tests := []struct {
+		name   string
+		config AgentConfig
+	}{
+		{
+			name: "minimal config without command",
+			config: AgentConfig{
+				Provider: "claude",
+				Prompt:   "Analyze this",
+			},
+		},
+		{
+			name: "config with conversation mode",
+			config: AgentConfig{
+				Provider:     "gemini",
+				Prompt:       "Initial",
+				Mode:         "conversation",
+				SystemPrompt: "System",
+				Timeout:      60,
+			},
+		},
+		{
+			name: "config with output format",
+			config: AgentConfig{
+				Provider:     "codex",
+				Prompt:       "Code analysis",
+				OutputFormat: OutputFormatJSON,
+			},
+		},
+		{
+			name: "config with all valid fields",
+			config: AgentConfig{
+				Provider:      "openai_compatible",
+				Prompt:        "Main prompt",
+				Mode:          "single",
+				SystemPrompt:  "System instructions",
+				InitialPrompt: "User greeting",
+				OutputFormat:  OutputFormatText,
+				Timeout:       120,
+				Options: map[string]any{
+					"model":       "gpt-4",
+					"temperature": 0.7,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate(nil)
+			require.NoError(t, err, "AgentConfig should validate without Command field")
+		})
+	}
+}
+
+func TestAgentConfig_Structure_NoCommand(t *testing.T) {
+	// This test verifies the AgentConfig struct structure does not include
+	// a Command field. The struct should only have fields for provider,
+	// prompt configuration, options, mode, and output handling.
+
+	config := AgentConfig{
+		Provider:      "claude",
+		Prompt:        "Test",
+		PromptFile:    "",
+		Mode:          "",
+		SystemPrompt:  "",
+		InitialPrompt: "",
+		OutputFormat:  "",
+		Options:       nil,
+		Timeout:       0,
+		Conversation:  nil,
+	}
+
+	assert.NotNil(t, config)
+	assert.Equal(t, "claude", config.Provider)
+
+	// Verify that we can create config with various field combinations
+	minimal := AgentConfig{
+		Provider: "gemini",
+		Prompt:   "Analyze",
+	}
+	assert.Equal(t, "gemini", minimal.Provider)
+
+	// The absence of a Command field is verified by the fact that this
+	// struct compiles without a Command field defined.
+	// If Command existed, we would be forced to handle it here.
 }

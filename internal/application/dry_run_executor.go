@@ -386,9 +386,5 @@ func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.A
 		dryRunAgent.Options[key] = value
 	}
 
-	if agent.Command != "" {
-		dryRunAgent.CLICommand = e.resolveCommand(agent.Command, interpCtx)
-	}
-
 	return dryRunAgent, nil
 }

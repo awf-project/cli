@@ -284,7 +284,7 @@ refine_code:
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `custom` |
+| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
 | `mode` | string | No | Set to `conversation` for multi-turn mode |
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`) |
@@ -311,13 +311,13 @@ refine_code:
 
 ### Available Providers
 
-| Provider | Binary | Description |
+| Provider | Binary/Endpoint | Description |
 |----------|--------|-------------|
-| `claude` | `claude` | Anthropic Claude CLI |
-| `codex` | `codex` | OpenAI Codex CLI |
-| `gemini` | `gemini` | Google Gemini CLI |
-| `opencode` | `opencode` | OpenCode CLI |
-| `custom` | user-defined | Custom command template |
+| `claude` | `claude` CLI | Anthropic Claude CLI |
+| `codex` | `codex` CLI | OpenAI Codex CLI |
+| `gemini` | `gemini` CLI | Google Gemini CLI |
+| `opencode` | `opencode` CLI | OpenCode CLI |
+| `openai_compatible` | HTTP API | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
 
 ### Agent Output
 
@@ -374,23 +374,25 @@ states:
 
 **See Also:** [Conversation Mode Guide](conversation-steps.md) for detailed examples and best practices.
 
-### Custom Provider
+### OpenAI-Compatible Provider
 
-For AI CLIs not natively supported, use the `custom` provider with a command template:
+For any backend implementing the [Chat Completions API](https://platform.openai.com/docs/api-reference/chat) (OpenAI, Ollama, vLLM, Groq, LM Studio), use `openai_compatible`. Unlike CLI-based providers, this sends HTTP requests directly — no CLI tool installation required.
 
 ```yaml
 analyze:
   type: agent
-  provider: custom
-  command: "my-ai-tool --prompt {{prompt}} --json"
+  provider: openai_compatible
   prompt: "Analyze: {{.inputs.data}}"
+  options:
+    base_url: http://localhost:11434/v1
+    model: llama3
   timeout: 60
   on_success: next
 ```
 
-The `{{prompt}}` placeholder is replaced with the resolved prompt. Note that prompt text is automatically shell-escaped to prevent injection.
+Required options: `base_url` (root API URL, `/chat/completions` appended automatically) and `model`. Optional: `api_key` (falls back to `OPENAI_API_KEY` env var), `temperature` (0-2), `max_tokens`, `top_p`, `system_prompt`.
 
-**See Also:** [Agent Steps Guide](agent-steps.md) for detailed examples and best practices.
+**See Also:** [Agent Steps Guide](agent-steps.md#openai-compatible-provider) for detailed examples and backend configurations.
 
 ---
 

@@ -1,6 +1,6 @@
 # Agent Steps Guide
 
-Invoke AI agents (Claude, Codex, Gemini, OpenCode) in your workflows with structured prompts and response parsing.
+Invoke AI agents (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
 
 ## Overview
 
@@ -100,39 +100,41 @@ refactor:
   on_success: next
 ```
 
-### Custom Provider
+### OpenAI-Compatible Provider
 
-For unsupported AI CLIs, use the `custom` provider with a command template.
+For any backend that implements the [Chat Completions API](https://platform.openai.com/docs/api-reference/chat) (OpenAI, Ollama, vLLM, Groq, LM Studio, etc.), use the `openai_compatible` provider. Unlike CLI-based providers, this sends HTTP requests directly — no CLI tool installation required.
 
 ```yaml
-my_ai:
+analyze:
   type: agent
-  provider: custom
-  command: "my-ai-tool --prompt={{prompt}} --json --timeout=30"
+  provider: openai_compatible
   prompt: "Analyze: {{.inputs.data}}"
+  options:
+    base_url: http://localhost:11434/v1
+    model: llama3
+    api_key: "{{.env.OPENAI_API_KEY}}"
   timeout: 60
   on_success: next
 ```
 
-The `{{prompt}}` placeholder is replaced with the resolved prompt. **Security Warning**: The prompt is NOT automatically shell-escaped. To prevent command injection, use one of these approaches:
+**Required Options:**
+- `base_url`: Root URL of the API (e.g., `http://localhost:11434/v1`). The provider appends `/chat/completions` automatically.
+- `model`: Model identifier (e.g., `llama3`, `gpt-4o`, `mixtral`)
 
-1. **Heredoc syntax** (recommended):
-   ```yaml
-   command: |
-     my-ai-tool --json <<'EOF'
-     {{prompt}}
-     EOF
-   ```
+**Optional Options:**
+- `api_key`: API key for authentication. Falls back to `OPENAI_API_KEY` environment variable if not set. Omit for local endpoints that don't require auth (e.g., Ollama).
+- `temperature`: Creativity level (0-2)
+- `max_tokens`: Maximum response tokens
+- `top_p`: Nucleus sampling threshold
+- `system_prompt`: System message prepended to conversation (used in `mode: conversation`)
 
-2. **Manual escaping**:
-   ```yaml
-   command: "my-ai-tool --prompt={{escape .prompt}} --json"
-   ```
+**Token Tracking:** Unlike CLI-based providers that estimate tokens from output length, `openai_compatible` reports actual token usage from the API response.
 
-This allows you to integrate:
-- Local LLMs (Ollama, LM Studio, etc.)
-- Proprietary CLI tools
-- Custom scripts or wrappers
+**Example backends:**
+- **Ollama**: `base_url: http://localhost:11434/v1`, `model: llama3`
+- **OpenAI**: `base_url: https://api.openai.com/v1`, `model: gpt-4o`
+- **Groq**: `base_url: https://api.groq.com/openai/v1`, `model: mixtral-8x7b-32768`
+- **vLLM**: `base_url: http://localhost:8000/v1`, `model: your-model`
 
 ## Prompt Templates
 
@@ -675,7 +677,7 @@ See [Workflow Syntax — Inline Error Shorthand](workflow-syntax.md#inline-error
 |-------|-------|----------|
 | Provider not found | CLI tool not installed | Install required CLI (e.g., `claude install`) |
 | Timeout | Agent response took too long | Increase timeout or reduce prompt complexity |
-| Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `opencode`, or `custom` |
+| Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `opencode`, or `openai_compatible` |
 | Command failed | Provider CLI returned error | Check provider configuration and logs |
 
 ### Debugging

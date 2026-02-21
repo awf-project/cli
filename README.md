@@ -3,17 +3,18 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
 
-A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.
+A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.
 
 ## Features
 
 - **State Machine Execution** - Define workflows as state machines with conditional transitions based on exit codes, command output, or custom expressions
 - **Inline Error Handling** - Specify error messages and exit codes directly on steps without creating separate terminal states
-- **Agent Steps** - Invoke AI CLI agents (Claude, Codex, Gemini) with prompt templates and response parsing
+- **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
 - **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support
 - **External Script Files** - Load shell commands from `.sh` files with template interpolation, path resolution, and local override support
 - **Conversation Mode** - Multi-turn conversations with automatic context window management and token counting
+- **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
 - **Loop Constructs** - For-each and while loops with full context access
 - **Sub-Workflows** - Invoke workflows from other workflows with input/output mapping
