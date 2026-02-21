@@ -164,7 +164,7 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := setupTestDir(t)
+			tmpDir := setupInitTestDir(t)
 
 			tt.setupWorkflow(t, tmpDir)
 
@@ -194,7 +194,7 @@ states:
 // TestRunCommand_DryRun_AgentStep_Basic tests basic dry-run with agent step
 // AC8: --dry-run shows resolved prompt without invoking
 func TestRunCommand_DryRun_AgentStep_Basic(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with a simple agent step
 	workflowContent := `name: agent-basic
@@ -230,7 +230,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_ResolvedPrompt(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with interpolated prompt
 	workflowContent := `name: agent-interpolated
@@ -273,7 +273,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_CLICommand(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with agent CLI command syntax
 	workflowContent := `name: agent-cli
@@ -306,7 +306,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_WithOptions(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with agent options
 	workflowContent := `name: agent-options
@@ -343,7 +343,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_CustomProvider(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with custom provider
 	workflowContent := `name: agent-custom
@@ -376,7 +376,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_Parallel(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with parallel agent steps
 	workflowContent := `name: agent-parallel
@@ -422,7 +422,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_MultiTurn(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with sequential agent steps
 	workflowContent := `name: agent-multiturn
@@ -461,7 +461,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_WithTimeout(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with agent timeout
 	workflowContent := `name: agent-timeout
@@ -496,7 +496,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_MixedSteps(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow mixing agent and regular steps
 	workflowContent := `name: agent-mixed
@@ -539,7 +539,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_JSONOutput(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with agent that expects JSON output
 	workflowContent := `name: agent-json
@@ -572,7 +572,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_InvalidPromptSyntax(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with invalid interpolation syntax
 	workflowContent := `name: agent-invalid
@@ -620,7 +620,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_EmptyPrompt(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with empty prompt
 	workflowContent := `name: agent-empty
@@ -657,7 +657,7 @@ states:
 }
 
 func TestRunCommand_DryRun_AgentStep_LongPrompt(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create a workflow with a very long prompt
 

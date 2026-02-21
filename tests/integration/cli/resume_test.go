@@ -433,7 +433,7 @@ func TestResumeCommand_WorkflowDefinitionDeleted(t *testing.T) {
 }
 
 func TestResumeCommand_Success(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory
 	statesDir := filepath.Join(tmpDir, "states")
@@ -592,7 +592,7 @@ func TestResumeCommand_MultipleInputOverrides(t *testing.T) {
 
 func TestResumeCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	// Test that resume command creates history.db (SQLite) instead of Badger directory
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory
 	statesDir := filepath.Join(tmpDir, "states")
@@ -766,7 +766,7 @@ func TestResumeCommand_ConfigIntegration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("Scenario: %s", tt.description)
 
-			tmpDir := setupTestDir(t)
+			tmpDir := setupInitTestDir(t)
 
 			// Create states directory
 			statesDir := filepath.Join(tmpDir, "states")
@@ -854,16 +854,7 @@ func TestResumeCommand_ConfigError_Propagates(t *testing.T) {
 	// Spec: FR-005 - Invalid YAML in config file produces exit code 1 with descriptive error
 
 	t.Run("invalid YAML config should cause error", func(t *testing.T) {
-		tmpDir := setupTestDir(t)
-
-		// This test needs to change directory because config loading uses
-		// LocalConfigPath() which returns ".awf/config.yaml" (relative path).
-		// Unlike other tests that use AWF_WORKFLOWS_PATH for workflow loading,
-		// there's no environment variable for config path override.
-		origDir, cdErr := os.Getwd()
-		require.NoError(t, cdErr)
-		defer func() { _ = os.Chdir(origDir) }()
-		require.NoError(t, os.Chdir(tmpDir))
+		tmpDir := setupInitTestDir(t)
 
 		// Create states directory
 		statesDir := filepath.Join(tmpDir, "states")
@@ -927,7 +918,7 @@ states:
 func TestResumeCommand_NoConfigFile_Succeeds(t *testing.T) {
 	// Spec: FR-004 - Missing config file is not an error; system proceeds with empty defaults
 
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory (no .awf/config.yaml)
 	statesDir := filepath.Join(tmpDir, "states")
@@ -991,7 +982,7 @@ states:
 func TestResumeCommand_ConfigWithCLIInputMerge(t *testing.T) {
 	// Test the merge order: config < CLI (CLI wins)
 
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory
 	statesDir := filepath.Join(tmpDir, "states")
@@ -1074,7 +1065,7 @@ states:
 func TestResumeCommand_ConfigYAMLComments(t *testing.T) {
 	// Spec: NFR-003 - Config file supports YAML comments for documentation
 
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory
 	statesDir := filepath.Join(tmpDir, "states")
@@ -1153,7 +1144,7 @@ states:
 
 // TestResumeCommand_ConfigEmptyInputs tests behavior with empty inputs section.
 func TestResumeCommand_ConfigEmptyInputs(t *testing.T) {
-	tmpDir := setupTestDir(t)
+	tmpDir := setupInitTestDir(t)
 
 	// Create states directory
 	statesDir := filepath.Join(tmpDir, "states")

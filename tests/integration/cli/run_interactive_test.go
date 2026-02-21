@@ -165,7 +165,7 @@ states:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := setupTestDir(t)
+			tmpDir := setupInitTestDir(t)
 
 			tt.setupWorkflow(t, tmpDir)
 
@@ -320,7 +320,7 @@ func TestRunCommand_PromptResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := setupTestDir(t)
+			tmpDir := setupInitTestDir(t)
 
 			// Setup prompts directory and files
 			tt.setupPrompt(t, tmpDir)
