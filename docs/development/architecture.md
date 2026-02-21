@@ -187,7 +187,7 @@ Implements domain ports with concrete technologies.
 **Location:** `internal/infrastructure/`
 
 **Adapters:**
-- `agents/` - AI agent providers (Claude, Gemini, Codex, OpenCode, Custom) implementing `AgentProvider`
+- `agents/` - AI agent providers (Claude, Gemini, Codex, OpenCode, OpenAI-Compatible) implementing `AgentProvider`
 - `config/` - Configuration file loading
 - `diagram/` - Workflow diagram generation (DOT/Graphviz)
 - `errors/` - Error formatting adapters implementing `ErrorFormatter`

@@ -2,7 +2,7 @@
 //
 // The agents package provides concrete implementations of the AgentProvider and AgentRegistry
 // ports defined in the domain layer, enabling workflow steps to invoke AI agents (Claude, Gemini,
-// Codex, OpenCode, and custom CLI tools) for code generation, analysis, and decision-making tasks.
+// Codex, OpenCode, and OpenAI-compatible endpoints) for code generation, analysis, and decision-making tasks.
 // Each provider wraps a CLI executor and handles model-specific invocation patterns, streaming
 // output, and error mapping.
 //
@@ -55,13 +55,16 @@
 //   - Name: Returns "opencode"
 //   - Validate: Checks CLI tool availability
 //
-// ## CustomProvider (custom_provider.go)
+// ## OpenAICompatibleProvider (openai_compatible_provider.go)
 //
-// Generic wrapper for custom CLI tools:
-//   - Execute: Single-shot execution via configurable command template
-//   - ExecuteConversation: Not supported
-//   - Name: Returns user-configured name
-//   - Validate: Checks command template syntax
+// HTTP adapter for any OpenAI-compatible API endpoint (Ollama, LM Studio, vLLM, etc.):
+//   - Execute: Single-shot prompt via Chat Completions API
+//   - ExecuteConversation: Multi-turn conversation with history
+//   - Name: Returns "openai_compatible" for registry lookup
+//   - Validate: Checks base_url and model configuration
+//
+// Configuration via agent options: base_url, api_key, model, temperature.
+// Falls back to OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY env vars.
 //
 // # Registry and Discovery
 //
@@ -94,7 +97,7 @@
 //   - WithGeminiExecutor: Inject custom executor for Gemini provider
 //   - WithCodexExecutor: Inject custom executor for Codex provider
 //   - WithOpenCodeExecutor: Inject custom executor for OpenCode provider
-//   - WithCustomExecutor: Inject custom executor for Custom provider
+//   - WithHTTPClient: Inject custom HTTP client for OpenAICompatible provider
 //
 // Each provider accepts zero or more options at construction time for dependency injection.
 package agents

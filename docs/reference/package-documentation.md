@@ -165,7 +165,7 @@ Used for large packages with 8+ files or complex cross-concerns.
 // # Architecture Role
 //
 // This package implements the application-level agent execution layer, coordinating
-// Claude, Gemini, Codex, OpenCode, and custom agent providers. It handles provider
+// Claude, Gemini, Codex, OpenCode, and OpenAI-compatible agent providers. It handles provider
 // selection, prompt templating, response parsing, and integration with the
 // ExecutionService for multi-turn conversations.
 //
@@ -175,7 +175,7 @@ Used for large packages with 8+ files or complex cross-concerns.
 //   - ClaudeProvider - Claude via claude CLI
 //   - GeminiProvider - Gemini API
 //   - CodexProvider - OpenAI Codex (legacy)
-//   - CustomProvider - User-defined command
+//   - OpenAICompatibleProvider - Any OpenAI-compatible API endpoint
 //
 // Execution:
 //   - CLIExecutor - Invokes shell commands with context

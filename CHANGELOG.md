@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **F070**: Replaced `custom` agent provider with `openai_compatible` provider
+  - **BREAKING**: `provider: custom` workflows will fail validation with migration guidance
+  - **BREAKING**: `AgentConfig.Command` field removed from domain model and YAML mapping
+  - New `openai_compatible` provider speaks Chat Completions API over HTTP (OpenAI, Ollama, vLLM, Groq, LM Studio)
+  - Native multi-turn conversation support via `ExecuteConversation` (replaces "not implemented" error)
+  - Accurate token tracking from API `usage` fields instead of character-based estimation
+  - Structured HTTP error mapping: 401→auth, 429→rate limit, 5xx→server, timeout→deadline
+  - API key resolution: `options.api_key` first, falls back to `OPENAI_API_KEY` env var
+  - Response body limited to 10MB via `io.LimitReader`; API keys never logged or exposed in errors
+  - Deleted: `custom_provider.go`, `custom_provider_test.go`, `custom_provider_unit_test.go`
+  - **Migration (CLI tools)**: Use `type: step` with `command:` instead of `provider: custom`
+  - **Migration (LLM APIs)**: Use `provider: openai_compatible` with `base_url` and `model` options
+
 - **C059**: Removed unimplemented GitHub plugin stubs and dead HTTP code
   - Removed `github.set_project_status` operation stub (was never implemented, returned error at runtime)
   - Removed `RunHTTP()` method from HTTP client (was speculative functionality that never materialized)
@@ -109,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure
   - `on_failure` now accepts an inline object `{message: "...", status: N}` in addition to the existing string form
   - Inline objects are synthesized into anonymous terminal states at parse time — no changes to execution engine
@@ -325,6 +339,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure
   - `on_failure` accepts inline object `{message: "...", status: N}` as shorthand for named terminal states
   - Synthesized at parse time; `message` supports interpolation; `status` defaults to `1`
@@ -653,7 +668,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **F032**: Agent Step Type
   - `type: agent` invokes AI CLI tools (Claude, Codex, Gemini, OpenCode) as workflow steps
   - Provider registry with configurable `model`, `max_tokens`, `temperature`, and `timeout`
-  - `custom` provider for unsupported CLIs via command template with `{{prompt}}` placeholder
+  - `openai_compatible` provider for any Chat Completions API endpoint (see F070)
   - Prompt templates with full variable interpolation (`{{.inputs.*}}`, `{{.states.*}}`, `{{.env.*}}`)
   - Automatic JSON response parsing stored in `{{.states.step_name.Response}}`
   - Token usage tracking accessible via `{{.states.step_name.TokensUsed}}`

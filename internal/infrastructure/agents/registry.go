@@ -75,6 +75,7 @@ func (r *AgentRegistry) RegisterDefaults() error {
 		NewClaudeProvider(),
 		NewCodexProvider(),
 		NewGeminiProvider(),
+		NewOpenAICompatibleProvider(),
 		NewOpenCodeProvider(),
 	}
 

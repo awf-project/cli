@@ -372,15 +372,18 @@ func TestStep_Validate_AgentType_HappyPath(t *testing.T) {
 			},
 		},
 		{
-			name: "valid agent step with custom provider",
+			name: "valid agent step with openai_compatible provider",
 			step: workflow.Step{
-				Name: "custom_agent",
+				Name: "openai_agent",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider: "custom",
+					Provider: "openai_compatible",
 					Prompt:   "Process {{inputs.text}}",
-					Command:  "python3 custom_agent.py --prompt={{prompt}}",
 					Timeout:  120,
+					Options: map[string]any{
+						"base_url": "http://localhost:11434/v1",
+						"model":    "llama3.2",
+					},
 				},
 			},
 		},

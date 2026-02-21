@@ -267,6 +267,10 @@ Never initialize interpolation context with nil AWF map in loadExternalFile() an
 
 Always use interpolateTerminalMessage() in application layer to evaluate template variables in Step.Message at runtime; store message verbatim during parsing to preserve {{var}} syntax until execution time
 
+Extract validation functions with cognitive complexity > 30 into smaller helper functions to maintain readability
+
+Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -280,6 +284,8 @@ Write unit tests for prompt file validation, interpolation, and YAML mapping bef
 Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
 
 Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
+
+Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 
 ## Review Standards
 

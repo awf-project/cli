@@ -268,10 +268,11 @@ func TestAgentRegistry_RegisterDefaults(t *testing.T) {
 
 	// Verify default providers are registered
 	list := registry.List()
-	assert.Len(t, list, 4)
+	assert.Len(t, list, 5)
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 }
 
@@ -279,7 +280,7 @@ func TestAgentRegistry_RegisterDefaults_EachProviderRetrievable(t *testing.T) {
 	registry := NewAgentRegistry()
 	_ = registry.RegisterDefaults()
 
-	tests := []string{"claude", "codex", "gemini", "opencode"}
+	tests := []string{"claude", "codex", "gemini", "openai_compatible", "opencode"}
 
 	for _, name := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -290,6 +291,20 @@ func TestAgentRegistry_RegisterDefaults_EachProviderRetrievable(t *testing.T) {
 			assert.Equal(t, name, provider.Name())
 		})
 	}
+}
+
+func TestAgentRegistry_RegisterDefaults_OpenAICompatibleRegistered(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	err := registry.RegisterDefaults()
+
+	require.NoError(t, err)
+	assert.True(t, registry.Has("openai_compatible"))
+
+	provider, err := registry.Get("openai_compatible")
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+	assert.Equal(t, "openai_compatible", provider.Name())
 }
 
 func TestAgentRegistry_RegisterDefaults_Twice(t *testing.T) {
@@ -377,27 +392,6 @@ func TestAgentRegistry_ThreadSafety_ConcurrentList(t *testing.T) {
 	}
 }
 
-func TestAgentRegistry_CustomProviderIntegration(t *testing.T) {
-	registry := NewAgentRegistry()
-	_ = registry.RegisterDefaults()
-
-	// Add custom provider
-	customProvider := NewCustomProvider("my-custom", "echo {{.prompt}}")
-	err := registry.Register(customProvider)
-
-	require.NoError(t, err)
-
-	// Verify it's in the list
-	list := registry.List()
-	assert.Len(t, list, 5) // 4 defaults + 1 custom
-	assert.Contains(t, list, "my-custom")
-
-	// Verify it's retrievable
-	retrieved, err := registry.Get("my-custom")
-	require.NoError(t, err)
-	assert.Equal(t, "my-custom", retrieved.Name())
-}
-
 func TestAgentRegistry_OverwritePrevention(t *testing.T) {
 	registry := NewAgentRegistry()
 	provider1 := &mockProvider{name: "test"}
@@ -451,14 +445,15 @@ func TestAgentRegistry_RegisterDefaults_PartialFailure(t *testing.T) {
 
 	// Verify RegisterDefaults continues on error - other providers should be registered
 	list := registry.List()
-	assert.Len(t, list, 4, "All 4 default providers should be registered (1 pre-existing + 3 new)")
+	assert.Len(t, list, 5, "All 5 default providers should be registered (1 pre-existing + 4 new)")
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 
 	// Verify each provider is retrievable
-	for _, name := range []string{"claude", "codex", "gemini", "opencode"} {
+	for _, name := range []string{"claude", "codex", "gemini", "openai_compatible", "opencode"} {
 		provider, getErr := registry.Get(name)
 		assert.NoError(t, getErr, "Provider %s should be retrievable", name)
 		assert.NotNil(t, provider)
@@ -477,16 +472,17 @@ func TestAgentRegistry_RegisterDefaults_EmptyRegistry(t *testing.T) {
 	// Should succeed without errors
 	require.NoError(t, err)
 
-	// Verify all 4 default providers are registered
+	// Verify all 5 default providers are registered
 	list := registry.List()
-	assert.Len(t, list, 4)
+	assert.Len(t, list, 5)
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 
 	// Verify each provider is retrievable and functional
-	for _, name := range []string{"claude", "codex", "gemini", "opencode"} {
+	for _, name := range []string{"claude", "codex", "gemini", "openai_compatible", "opencode"} {
 		provider, getErr := registry.Get(name)
 		require.NoError(t, getErr, "Provider %s should be retrievable", name)
 		require.NotNil(t, provider)
@@ -512,12 +508,13 @@ func TestAgentRegistry_RegisterDefaults_MultiplePreRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "claude")
 	assert.Contains(t, err.Error(), "gemini")
 
-	// All 4 providers should still be registered
+	// All 5 providers should still be registered
 	list := registry.List()
-	assert.Len(t, list, 4)
+	assert.Len(t, list, 5)
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 }
 
@@ -532,14 +529,15 @@ func TestAgentRegistry_RegisterDefaults_AllPreRegistered(t *testing.T) {
 	// Try to register defaults again
 	err2 := registry.RegisterDefaults()
 
-	// Should fail with aggregated error for all 4 providers
+	// Should fail with aggregated error for all 5 providers
 	assert.Error(t, err2)
 	assert.Contains(t, err2.Error(), "claude")
 	assert.Contains(t, err2.Error(), "codex")
 	assert.Contains(t, err2.Error(), "gemini")
+	assert.Contains(t, err2.Error(), "openai_compatible")
 	assert.Contains(t, err2.Error(), "opencode")
 
-	// Should still have exactly 4 providers (no duplicates)
+	// Should still have exactly 5 providers (no duplicates)
 	list := registry.List()
-	assert.Len(t, list, 4)
+	assert.Len(t, list, 5)
 }

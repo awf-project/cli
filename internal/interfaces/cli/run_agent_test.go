@@ -340,39 +340,6 @@ states:
 	assert.Contains(t, output, "Generate a haiku", "should show prompt")
 }
 
-func TestRunCommand_DryRun_AgentStep_CustomProvider(t *testing.T) {
-	tmpDir := setupTestDir(t)
-
-	// Create a workflow with custom provider
-	workflowContent := `name: agent-custom
-version: "1.0.0"
-states:
-  initial: query
-  query:
-    type: agent
-    provider: gemini
-    prompt: "Explain quantum computing"
-    on_success: done
-  done:
-    type: terminal
-`
-	createTestWorkflow(t, tmpDir, "agent-custom.yaml", workflowContent)
-
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "agent-custom", "--dry-run"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	output := out.String()
-
-	assert.Contains(t, output, "query", "should display step name")
-	assert.Contains(t, output, "gemini", "should show custom provider")
-}
-
 func TestRunCommand_DryRun_AgentStep_Parallel(t *testing.T) {
 	tmpDir := setupTestDir(t)
 

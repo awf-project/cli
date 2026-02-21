@@ -245,67 +245,6 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCustomProvider_NewWithOptions_HappyPath(t *testing.T) {
-	tests := []struct {
-		name            string
-		providerName    string
-		commandTemplate string
-		setupMock       func(*mocks.MockCLIExecutor)
-		options         []CustomProviderOption
-	}{
-		{
-			name:            "no options uses default executor",
-			providerName:    "my-agent",
-			commandTemplate: "my-agent --prompt {{.Prompt}}",
-			setupMock: func(m *mocks.MockCLIExecutor) {
-				m.SetOutput([]byte("custom agent output"), []byte(""))
-			},
-			options: nil,
-		},
-		{
-			name:            "with custom executor option",
-			providerName:    "my-agent",
-			commandTemplate: "my-agent --prompt {{.Prompt}}",
-			setupMock: func(m *mocks.MockCLIExecutor) {
-				m.SetOutput([]byte("mock custom agent output"), []byte(""))
-			},
-			options: []CustomProviderOption{
-				WithCustomExecutor(mocks.NewMockCLIExecutor()),
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var mockExec *mocks.MockCLIExecutor
-			var opts []CustomProviderOption
-			if tt.setupMock != nil {
-				mockExec = mocks.NewMockCLIExecutor()
-				tt.setupMock(mockExec)
-				// Always use mock executor for testing
-				opts = []CustomProviderOption{WithCustomExecutor(mockExec)}
-			} else if tt.options != nil {
-				opts = tt.options
-			}
-
-			provider := NewCustomProviderWithOptions(tt.providerName, tt.commandTemplate, opts...)
-
-			require.NotNil(t, provider)
-			assert.NotNil(t, provider.executor)
-			assert.Equal(t, tt.providerName, provider.name)
-			assert.Equal(t, tt.commandTemplate, provider.commandTemplate)
-
-			// Verify executor is functional
-			if mockExec != nil {
-				ctx := context.Background()
-				result, err := provider.Execute(ctx, "test prompt", nil)
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-			}
-		})
-	}
-}
-
 func TestProviderOptions_EdgeCases(t *testing.T) {
 	t.Run("nil executor option panics are prevented", func(t *testing.T) {
 		// Note: Passing nil executor should work but will cause runtime issues later
@@ -327,10 +266,6 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		// OpenCode
 		opencodeProvider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(nil))
 		assert.NotNil(t, opencodeProvider)
-
-		// Custom
-		customProvider := NewCustomProviderWithOptions("test", "test {{.Prompt}}", WithCustomExecutor(nil))
-		assert.NotNil(t, customProvider)
 	})
 
 	t.Run("empty options slice behaves like no options", func(t *testing.T) {
@@ -381,10 +316,6 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		opencodeProvider := NewOpenCodeProvider()
 		assert.NotNil(t, opencodeProvider)
 		assert.NotNil(t, opencodeProvider.executor)
-
-		customProvider := NewCustomProvider("test", "test {{.Prompt}}")
-		assert.NotNil(t, customProvider)
-		assert.NotNil(t, customProvider.executor)
 	})
 }
 
@@ -443,20 +374,6 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "opencode execution failed")
-	})
-
-	t.Run("custom provider executor error propagates", func(t *testing.T) {
-		mockExec := mocks.NewMockCLIExecutor()
-		mockExec.SetError(errors.New("custom CLI failed"))
-
-		provider := NewCustomProviderWithOptions("test", "test {{.Prompt}}", WithCustomExecutor(mockExec))
-		ctx := context.Background()
-
-		result, err := provider.Execute(ctx, "test prompt", nil)
-
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "execution failed")
 	})
 }
 
@@ -545,29 +462,6 @@ func TestProviderOptions_Integration(t *testing.T) {
 		calls := mockExec.GetCalls()
 		require.Len(t, calls, 1)
 		assert.Equal(t, "opencode", calls[0].Name)
-	})
-
-	t.Run("custom provider with mock executor executes successfully", func(t *testing.T) {
-		mockExec := mocks.NewMockCLIExecutor()
-		mockExec.SetOutput([]byte("Custom agent response"), []byte(""))
-
-		provider := NewCustomProviderWithOptions(
-			"my-agent",
-			"my-agent --prompt {{.Prompt}}",
-			WithCustomExecutor(mockExec),
-		)
-		ctx := context.Background()
-
-		result, err := provider.Execute(ctx, "Test prompt", nil)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, "my-agent", result.Provider)
-		assert.Contains(t, result.Output, "Custom agent response")
-
-		// Verify executor was called
-		calls := mockExec.GetCalls()
-		require.Len(t, calls, 1)
 	})
 
 	t.Run("multiple providers can use different executors", func(t *testing.T) {

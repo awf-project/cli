@@ -26,12 +26,11 @@ var validOutputFormats = map[OutputFormat]bool{
 
 // AgentConfig holds configuration for invoking an AI agent.
 type AgentConfig struct {
-	Provider      string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, custom
+	Provider      string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, openai_compatible
 	Prompt        string              `yaml:"prompt"`         // prompt template with {{inputs.*}} and {{states.*}} (single mode) or initial prompt (conversation mode)
 	PromptFile    string              `yaml:"prompt_file"`    // path to external prompt template file (mutually exclusive with Prompt)
 	Options       map[string]any      `yaml:"options"`        // provider-specific options (model, temperature, max_tokens, etc.)
 	Timeout       int                 `yaml:"timeout"`        // seconds, 0 = use DefaultAgentTimeout
-	Command       string              `yaml:"command"`        // custom command template (for custom provider)
 	Mode          string              `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
 	SystemPrompt  string              `yaml:"system_prompt"`  // system prompt preserved across conversation (conversation mode only)
 	InitialPrompt string              `yaml:"initial_prompt"` // first user message in conversation mode (overrides Prompt if set)
@@ -46,6 +45,11 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 	c.Provider = strings.TrimSpace(c.Provider)
 	if c.Provider == "" {
 		return errors.New("provider is required")
+	}
+
+	// Reject deprecated custom provider with migration guidance
+	if c.Provider == "custom" {
+		return errors.New("provider 'custom' has been removed; use 'type: step' for shell commands or 'provider: openai_compatible' for LLM API calls")
 	}
 
 	// Normalize mode (default to "single")
