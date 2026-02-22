@@ -36,35 +36,36 @@ Include:
 
 ## Security Considerations
 
-AWF executes shell commands defined in workflow YAML files. Be aware of:
+AWF is a powerful orchestration tool that combines AI agents and shell execution. This combination introduces specific security risks:
 
-### Command Execution
+### ⚠️ Operational Risks
 
-- AWF uses `/bin/sh -c` for command execution
-- Only run workflows from trusted sources
-- Review workflow files before execution
+- **Arbitrary Code Execution:** AWF is designed to execute shell commands (`/bin/sh -c`) defined in YAML workflows. It runs with the same permissions as the user executing the CLI.
+- **AI Non-Determinism (Hallucinations):** AI agents (LLMs) are probabilistic models. They can produce unexpected, incorrect, or destructive output ("hallucinations"). A prompt that seems safe can generate a harmful command in certain contexts.
+- **Untrusted Workflows:** Treat workflow files (`.yaml`) and prompt files (`.md`) as executable scripts. Never run a workflow from an untrusted source without a thorough manual audit.
 
-### Secret Handling
+### Data Security
 
-- Variables prefixed with `SECRET_`, `API_KEY`, or `PASSWORD` are masked in logs
-- Use environment variables for sensitive values
-- Never commit secrets to workflow files
+- **Prompt Injection:** Be aware that prompts processed by agents could theoretically contain malicious instructions if they include untrusted input from previous steps or external files.
+- **Secret Handling:** Variables prefixed with `SECRET_`, `API_KEY`, or `PASSWORD` are masked in logs. Always use environment variables for sensitive values and never commit secrets to workflow files.
+- **Local Context:** AWF is intended for local or controlled environments. Do not expose the CLI as a public service or through a network gateway without extreme caution.
 
 ### File System Access
 
-- AWF reads/writes state files to `.awf/storage/`
-- Atomic writes prevent corruption (temp file + rename)
-- File locking prevents concurrent access issues
+- **Atomic Writes:** AWF uses a temp file + rename pattern for all state file writes to prevent corruption.
+- **File Locking:** AWF uses `flock` to prevent concurrent access issues when writing to the JSON state store.
 
-### Best Practices
+### Safe Usage Best Practices
 
-When using AWF:
-- Review workflow YAML files before running
-- Use `awf validate` to check workflow syntax
-- Use `awf run --dry-run` to preview execution
-- Keep AWF updated to latest version
-- Use environment variables for secrets
-- Restrict file permissions on `.awf/` directory
+To minimize risk while using AWF:
+
+1. **Audit First:** Manually review all workflow YAML and prompt files before execution.
+2. **Validate Syntax:** Use `awf validate` to check workflow syntax.
+3. **Dry-Run Mode:** Use `awf run --dry-run` to preview the execution plan.
+4. **Interactive Mode:** Use `awf run --interactive` to approve each command step-by-step.
+5. **Sandboxing:** Run AWF in isolated environments (Docker, VM, DevContainer) when executing workflows that modify the system or come from external sources.
+6. **Least Privilege:** Run AWF with the minimum necessary permissions. Avoid running as root.
+7. **Keep Updated:** Keep AWF and its dependencies updated to the latest version.
 
 ## Security Updates
 

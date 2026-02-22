@@ -77,6 +77,20 @@ awf run hello --input name=World
 
 See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
 
+## ⚠️ Security & Risk Disclaimer
+
+AWF is a powerful orchestration tool that grants AI agents and workflows direct access to your system's shell. While this enables complex automation, it carries significant risks:
+
+1. **Arbitrary Code Execution:** Workflows behave like shell scripts. **Never run a workflow definition (YAML) from an untrusted source** without auditing it first.
+2. **AI Non-Determinism:** AI agents (LLMs) can produce incorrect, unexpected, or destructive output ("hallucinations"). A prompt that seems safe might generate a harmful command in a specific context.
+3. **No Sandboxing:** By default, AWF executes commands with the same privileges as the user running the CLI.
+
+**Best Practices for Safe Execution:**
+* **Audit Workflows:** Always review the YAML and prompt files before execution.
+* **Use Dry-Run:** Preview the execution plan using `awf run --dry-run`.
+* **Interactive Mode:** Use `awf run --interactive` to approve commands step-by-step.
+* **Isolate Execution:** Run risky workflows or those from external sources within a sandboxed environment (e.g., Docker, VM).
+
 ## Commands
 
 | Command | Description |

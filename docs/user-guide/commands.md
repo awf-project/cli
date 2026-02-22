@@ -118,6 +118,8 @@ $XDG_CONFIG_HOME/awf/
 
 Execute a workflow.
 
+> **⚠️ Security Warning:** This command executes arbitrary shell commands on your system. Only run workflows from trusted sources. Use `--dry-run` or `--interactive` to audit execution plans from untrusted workflows.
+
 ```bash
 awf run <workflow> [flags]
 ```

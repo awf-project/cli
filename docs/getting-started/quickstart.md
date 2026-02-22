@@ -2,6 +2,8 @@
 
 Get AWF running in 5 minutes.
 
+> **⚠️ Security & Risk Disclaimer:** AWF executes real shell commands and interacts with non-deterministic AI agents. Always audit workflows from untrusted sources. It is recommended to use `awf run --dry-run` or `awf run --interactive` when testing new or external workflows.
+
 ## 1. Initialize AWF
 
 ```bash

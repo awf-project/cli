@@ -2,6 +2,8 @@
 
 Welcome to the AWF (AI Workflow CLI) documentation.
 
+> **⚠️ Security Warning:** AWF executes shell commands and interacts with AI agents. Agents can "hallucinate" and produce destructive commands. Never run untrusted workflows and always review them using `--dry-run` or `--interactive` mode. See [Security Policy](../.github/SECURITY.md) for more.
+
 ## Quick Navigation
 
 | Section | Description |
