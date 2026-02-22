@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ var (
 	_ ports.AgentRegistry       = (*MockAgentRegistry)(nil)
 	_ ports.AgentProvider       = (*MockAgentProvider)(nil)
 	_ ports.ErrorFormatter      = (*MockErrorFormatter)(nil)
+	_ ports.AuditTrailWriter    = (*MockAuditTrailWriter)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1491,4 +1493,112 @@ func (m *MockErrorFormatter) Clear() {
 	m.formatFunc = nil
 	m.hintGenerators = make([]domainerrors.HintGenerator, 0)
 	m.hintsEnabled = false
+}
+
+// MockAuditTrailWriter is a thread-safe mock implementation of ports.AuditTrailWriter.
+// It uses sync.RWMutex to protect concurrent access to the events slice.
+// Supports lifecycle state tracking (isClosed) for write-after-close and close-idempotency tests.
+//
+// Usage:
+//
+//	writer := testutil.NewMockAuditTrailWriter()
+//	err := writer.Write(ctx, &event)
+//	events := writer.GetEvents()
+type MockAuditTrailWriter struct {
+	mu       sync.RWMutex
+	events   []workflow.AuditEvent
+	writeErr error
+	closeErr error
+	isClosed bool
+}
+
+// NewMockAuditTrailWriter creates a new thread-safe mock audit trail writer.
+func NewMockAuditTrailWriter() *MockAuditTrailWriter {
+	return &MockAuditTrailWriter{
+		events: make([]workflow.AuditEvent, 0),
+	}
+}
+
+// Write appends an audit event to the recorded events.
+// Returns error if writer is closed or writeErr is set.
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) Write(ctx context.Context, event *workflow.AuditEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.isClosed {
+		return fmt.Errorf("writer is closed")
+	}
+
+	if m.writeErr != nil {
+		return m.writeErr
+	}
+
+	m.events = append(m.events, *event)
+	return nil
+}
+
+// Close closes the writer. Returns error if already closed or closeErr is set.
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.isClosed {
+		return fmt.Errorf("already closed")
+	}
+
+	m.isClosed = true
+
+	return m.closeErr
+}
+
+// GetEvents returns all recorded audit events (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) GetEvents() []workflow.AuditEvent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]workflow.AuditEvent, len(m.events))
+	copy(result, m.events)
+	return result
+}
+
+// SetWriteError configures the mock to return an error on Write calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) SetWriteError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.writeErr = err
+}
+
+// SetCloseError configures the mock to return an error on Close calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) SetCloseError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.closeErr = err
+}
+
+// IsClosed returns whether the writer has been closed (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) IsClosed() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.isClosed
+}
+
+// Clear removes all recorded events, resets errors, and reopens the writer (test helper).
+// Thread-safe for concurrent access.
+func (m *MockAuditTrailWriter) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.events = make([]workflow.AuditEvent, 0)
+	m.writeErr = nil
+	m.closeErr = nil
+	m.isClosed = false
 }

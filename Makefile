@@ -1,4 +1,4 @@
-.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint fmt vet clean tidy verify lint-arch lint-arch-map quality fix
+.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint format vet clean tidy verify lint-arch lint-arch-map quality fix
 
 .DEFAULT_GOAL := help
 
@@ -24,7 +24,7 @@ help:
 	@echo "  test-race        Run tests with race detector"
 	@echo ""
 	@echo "Code Quality:"
-	@echo "  fmt              Format code with gofumpt"
+	@echo "  format              Format code with gofumpt"
 	@echo "  vet              Run go vet"
 	@echo "  lint             Run golangci-lint"
 	@echo "  quality          Run all quality checks (lint+fmt+vet+test)"
@@ -95,7 +95,7 @@ lint:
 	golangci-lint run
 
 # Format code with gofumpt (stricter than gofmt)
-fmt:
+format:
 	go run mvdan.cc/gofumpt@latest -w .
 
 # Vet code
@@ -103,7 +103,7 @@ vet:
 	go vet ./...
 
 # Run all quality checks
-quality: lint fmt vet lint-arch test
+quality: lint format vet lint-arch test
 	@echo "All quality checks passed"
 
 # Auto-fix linter issues

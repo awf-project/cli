@@ -124,6 +124,7 @@ type ServiceTestHarness struct {
 	store      *testmocks.MockStateStore
 	executor   *testmocks.MockCommandExecutor
 	logger     *testmocks.MockLogger
+	auditTrail *testmocks.MockAuditTrailWriter
 }
 
 // TestMocks exposes mock instances for test assertions.
@@ -134,6 +135,7 @@ type TestMocks struct {
 	StateStore *testmocks.MockStateStore
 	Executor   *testmocks.MockCommandExecutor
 	Logger     *testmocks.MockLogger
+	AuditTrail *testmocks.MockAuditTrailWriter
 }
 
 // NewTestHarness creates a new ServiceTestHarness with default mock dependencies.
@@ -146,6 +148,7 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 	store := testmocks.NewMockStateStore()
 	executor := testmocks.NewMockCommandExecutor()
 	logger := testmocks.NewMockLogger()
+	auditTrail := testmocks.NewMockAuditTrailWriter()
 
 	// Configure executor with default success result for all commands
 	executor.SetCommandResult("", &ports.CommandResult{
@@ -168,6 +171,7 @@ func NewTestHarness(t *testing.T) *ServiceTestHarness {
 		store:      store,
 		executor:   executor,
 		logger:     logger,
+		auditTrail: auditTrail,
 	}
 }
 
@@ -186,6 +190,7 @@ func NewTestHarnessWithEvaluator(t *testing.T, evaluator ports.ExpressionEvaluat
 	store := testmocks.NewMockStateStore()
 	executor := testmocks.NewMockCommandExecutor()
 	logger := testmocks.NewMockLogger()
+	auditTrail := testmocks.NewMockAuditTrailWriter()
 
 	// Configure executor with default success result for all commands
 	executor.SetCommandResult("", &ports.CommandResult{
@@ -209,6 +214,7 @@ func NewTestHarnessWithEvaluator(t *testing.T, evaluator ports.ExpressionEvaluat
 		store:      store,
 		executor:   executor,
 		logger:     logger,
+		auditTrail: auditTrail,
 	}
 }
 
@@ -270,6 +276,19 @@ func (h *ServiceTestHarness) WithExecutor(executor ports.CommandExecutor) *Servi
 	return h
 }
 
+// WithAuditTrailWriter overrides the default mock audit trail writer with a custom implementation.
+// Useful for tests requiring specialized audit behavior (e.g., error injection, verification).
+//
+// Returns the harness for method chaining.
+func (h *ServiceTestHarness) WithAuditTrailWriter(writer ports.AuditTrailWriter) *ServiceTestHarness {
+	// If it's a MockAuditTrailWriter, update our reference for mock assertions
+	if mockWriter, ok := writer.(*testmocks.MockAuditTrailWriter); ok {
+		h.auditTrail = mockWriter
+	}
+
+	return h
+}
+
 // Build constructs the ExecutionService and returns it along with mock references.
 // Terminal method in the fluent builder chain.
 //
@@ -289,6 +308,7 @@ func (h *ServiceTestHarness) Build() (*application.ExecutionService, *TestMocks)
 		"workflows_dir": xdg.AWFWorkflowsDir(),
 		"plugins_dir":   xdg.AWFPluginsDir(),
 	})
+	service.SetAuditTrailWriter(h.auditTrail)
 
 	// Create TestMocks tuple with references to all mocks
 	mocks := &TestMocks{
@@ -296,6 +316,7 @@ func (h *ServiceTestHarness) Build() (*application.ExecutionService, *TestMocks)
 		StateStore: h.store,
 		Executor:   h.executor,
 		Logger:     h.logger,
+		AuditTrail: h.auditTrail,
 	}
 
 	return service, mocks

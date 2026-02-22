@@ -4512,3 +4512,449 @@ func TestMockErrorFormatter_RealWorld_CompactFormatter(t *testing.T) {
 
 	assert.Equal(t, "EXECUTION.COMMAND.TIMEOUT", result)
 }
+
+// TestMockAuditTrailWriter_HappyPath verifies basic write and retrieval operations.
+func TestMockAuditTrailWriter_HappyPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+		testFunc  func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+	}{
+		{
+			name: "write single event and retrieve it",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+					ExecutionID:   "test-id-1",
+					User:          "testuser",
+					WorkflowName:  "test-workflow",
+				}
+				err := writer.Write(ctx, &event)
+				require.NoError(t, err)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 1)
+				assert.Equal(t, "test-id-1", events[0].ExecutionID)
+				assert.Equal(t, workflow.EventWorkflowStarted, events[0].Event)
+			},
+		},
+		{
+			name: "write multiple events in sequence",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				for i := 1; i <= 3; i++ {
+					event := workflow.AuditEvent{
+						SchemaVersion: 1,
+						Event:         workflow.EventWorkflowStarted,
+						ExecutionID:   "id-" + string(rune(48+i)),
+						WorkflowName:  "workflow-" + string(rune(48+i)),
+					}
+					err := writer.Write(ctx, &event)
+					require.NoError(t, err)
+				}
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 3)
+				assert.Equal(t, "id-1", events[0].ExecutionID)
+				assert.Equal(t, "id-2", events[1].ExecutionID)
+				assert.Equal(t, "id-3", events[2].ExecutionID)
+			},
+		},
+		{
+			name: "preserve event order",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				startEvent := workflow.AuditEvent{
+					Event:       workflow.EventWorkflowStarted,
+					ExecutionID: "exec-123",
+				}
+				completedEvent := workflow.AuditEvent{
+					Event:       workflow.EventWorkflowCompleted,
+					ExecutionID: "exec-123",
+				}
+				require.NoError(t, writer.Write(ctx, &startEvent))
+				require.NoError(t, writer.Write(ctx, &completedEvent))
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 2)
+				assert.Equal(t, workflow.EventWorkflowStarted, events[0].Event)
+				assert.Equal(t, workflow.EventWorkflowCompleted, events[1].Event)
+			},
+		},
+		{
+			name:      "close returns no error by default",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				err := writer.Close()
+				assert.NoError(t, err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writer := mocks.NewMockAuditTrailWriter()
+			tt.setupFunc(t, writer)
+			tt.testFunc(t, writer)
+		})
+	}
+}
+
+// TestMockAuditTrailWriter_EdgeCases verifies boundary conditions.
+func TestMockAuditTrailWriter_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+		testFunc  func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+	}{
+		{
+			name: "get events returns empty slice when no events written",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				assert.NotNil(t, events)
+				assert.Len(t, events, 0)
+			},
+		},
+		{
+			name: "event with nil inputs field is captured",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+					ExecutionID:   "test-nil-inputs",
+					WorkflowName:  "test",
+					Inputs:        nil,
+				}
+				err := writer.Write(ctx, &event)
+				require.NoError(t, err)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 1)
+				assert.Nil(t, events[0].Inputs)
+			},
+		},
+		{
+			name: "event with empty execution ID is captured",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+					ExecutionID:   "",
+					WorkflowName:  "test",
+				}
+				err := writer.Write(ctx, &event)
+				require.NoError(t, err)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 1)
+				assert.Equal(t, "", events[0].ExecutionID)
+			},
+		},
+		{
+			name: "completed event with nil exit code is captured",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowCompleted,
+					ExecutionID:   "test-exec",
+					Status:        "success",
+					ExitCode:      nil,
+				}
+				err := writer.Write(ctx, &event)
+				require.NoError(t, err)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				events := writer.GetEvents()
+				require.Len(t, events, 1)
+				assert.Nil(t, events[0].ExitCode)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writer := mocks.NewMockAuditTrailWriter()
+			tt.setupFunc(t, writer)
+			tt.testFunc(t, writer)
+		})
+	}
+}
+
+// TestMockAuditTrailWriter_ErrorHandling verifies error injection and handling.
+func TestMockAuditTrailWriter_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupFunc   func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+		testFunc    func(t *testing.T, writer *mocks.MockAuditTrailWriter)
+		expectedErr bool
+	}{
+		{
+			name: "write returns configured error",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				testErr := errors.New("write failed")
+				writer.SetWriteError(testErr)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+				}
+				err := writer.Write(ctx, &event)
+				require.Error(t, err)
+				assert.Equal(t, "write failed", err.Error())
+			},
+			expectedErr: true,
+		},
+		{
+			name: "close returns configured error",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				testErr := errors.New("close failed")
+				writer.SetCloseError(testErr)
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				err := writer.Close()
+				require.Error(t, err)
+				assert.Equal(t, "close failed", err.Error())
+			},
+			expectedErr: true,
+		},
+		{
+			name: "write error prevents event recording",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				writer.SetWriteError(errors.New("write failed"))
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+					ExecutionID:   "test-id",
+				}
+				_ = writer.Write(ctx, &event)
+				events := writer.GetEvents()
+				assert.Empty(t, events)
+			},
+			expectedErr: true,
+		},
+		{
+			name: "clear resets write error",
+			setupFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				writer.SetWriteError(errors.New("write failed"))
+				writer.Clear()
+			},
+			testFunc: func(t *testing.T, writer *mocks.MockAuditTrailWriter) {
+				ctx := context.Background()
+				event := workflow.AuditEvent{
+					SchemaVersion: 1,
+					Event:         workflow.EventWorkflowStarted,
+				}
+				err := writer.Write(ctx, &event)
+				assert.NoError(t, err)
+			},
+			expectedErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writer := mocks.NewMockAuditTrailWriter()
+			tt.setupFunc(t, writer)
+			tt.testFunc(t, writer)
+		})
+	}
+}
+
+// TestMockAuditTrailWriter_ClearFunctionality verifies clear operation.
+func TestMockAuditTrailWriter_ClearFunctionality(t *testing.T) {
+	ctx := context.Background()
+	writer := mocks.NewMockAuditTrailWriter()
+
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   "test-id",
+	}
+	require.NoError(t, writer.Write(ctx, &event))
+	require.Len(t, writer.GetEvents(), 1)
+
+	writer.Clear()
+
+	events := writer.GetEvents()
+	assert.Empty(t, events)
+}
+
+// TestMockAuditTrailWriter_ClearResetsAllState verifies clear resets all state including errors.
+func TestMockAuditTrailWriter_ClearResetsAllState(t *testing.T) {
+	ctx := context.Background()
+	writer := mocks.NewMockAuditTrailWriter()
+
+	writer.SetWriteError(errors.New("write failed"))
+	writer.SetCloseError(errors.New("close failed"))
+
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   "test-id",
+	}
+	require.Error(t, writer.Write(ctx, &event))
+
+	writer.Clear()
+
+	assert.NoError(t, writer.Write(ctx, &event))
+	assert.NoError(t, writer.Close())
+	assert.Len(t, writer.GetEvents(), 1)
+}
+
+// TestMockAuditTrailWriter_GetEventsCopy verifies isolation of returned slice.
+func TestMockAuditTrailWriter_GetEventsCopy(t *testing.T) {
+	ctx := context.Background()
+	writer := mocks.NewMockAuditTrailWriter()
+
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   "test-id",
+	}
+	require.NoError(t, writer.Write(ctx, &event))
+
+	events1 := writer.GetEvents()
+	events2 := writer.GetEvents()
+
+	assert.Equal(t, events1, events2)
+	assert.NotSame(t, &events1, &events2)
+}
+
+// TestMockAuditTrailWriter_ThreadSafety verifies concurrent access safety.
+func TestMockAuditTrailWriter_ThreadSafety(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+	ctx := context.Background()
+
+	done := make(chan bool, 3)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			event := workflow.AuditEvent{
+				SchemaVersion: 1,
+				Event:         workflow.EventWorkflowStarted,
+				ExecutionID:   "id-1",
+			}
+			_ = writer.Write(ctx, &event)
+		}
+		done <- true
+	}()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			_ = writer.GetEvents()
+		}
+		done <- true
+	}()
+
+	go func() {
+		for i := 0; i < 3; i++ {
+			writer.Clear()
+		}
+		done <- true
+	}()
+
+	<-done
+	<-done
+	<-done
+
+	assert.NotNil(t, writer.GetEvents())
+}
+
+// TestMockAuditTrailWriter_InterfaceCompliance verifies the mock implements the interface.
+func TestMockAuditTrailWriter_InterfaceCompliance(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+
+	ctx := context.Background()
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+	}
+
+	err := writer.Write(ctx, &event)
+	assert.Nil(t, err)
+
+	err = writer.Close()
+	assert.Nil(t, err)
+}
+
+// TestMockAuditTrailWriter_WriteAfterClose verifies write returns error after close.
+func TestMockAuditTrailWriter_WriteAfterClose(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+	ctx := context.Background()
+
+	err := writer.Close()
+	require.NoError(t, err)
+
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   "after-close",
+	}
+
+	err = writer.Write(ctx, &event)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "closed")
+	assert.Empty(t, writer.GetEvents())
+}
+
+// TestMockAuditTrailWriter_CloseTwice verifies double close returns error.
+func TestMockAuditTrailWriter_CloseTwice(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+
+	err1 := writer.Close()
+	assert.NoError(t, err1)
+
+	err2 := writer.Close()
+	assert.Error(t, err2)
+	assert.Contains(t, err2.Error(), "already closed")
+}
+
+// TestMockAuditTrailWriter_IsClosed verifies IsClosed getter tracks state.
+func TestMockAuditTrailWriter_IsClosed(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+
+	assert.False(t, writer.IsClosed())
+
+	writer.Close()
+
+	assert.True(t, writer.IsClosed())
+}
+
+// TestMockAuditTrailWriter_ClearResetsIsClosed verifies Clear reopens the writer.
+func TestMockAuditTrailWriter_ClearResetsIsClosed(t *testing.T) {
+	writer := mocks.NewMockAuditTrailWriter()
+	ctx := context.Background()
+
+	writer.Close()
+	assert.True(t, writer.IsClosed())
+
+	writer.Clear()
+	assert.False(t, writer.IsClosed())
+
+	// Writer should be usable again after Clear
+	event := workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   "after-clear",
+	}
+	err := writer.Write(ctx, &event)
+	assert.NoError(t, err)
+	assert.Len(t, writer.GetEvents(), 1)
+}

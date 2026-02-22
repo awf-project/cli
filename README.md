@@ -29,6 +29,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
+- **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
 - **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation

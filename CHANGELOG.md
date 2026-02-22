@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F071**: Structured Audit Trail for Workflow Executions
 - **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure
   - `on_failure` now accepts an inline object `{message: "...", status: N}` in addition to the existing string form
@@ -339,6 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F071**: Structured Audit Trail for Workflow Executions
 - **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure
   - `on_failure` accepts inline object `{message: "...", status: N}` as shorthand for named terminal states

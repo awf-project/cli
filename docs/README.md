@@ -37,6 +37,7 @@ Learn how to use AWF effectively:
   - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop and webhook backends
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
+- [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 
 ## Reference
@@ -48,6 +49,7 @@ Technical reference documentation:
 - [Variable Interpolation](reference/interpolation.md) - Template variables and syntax
 - [Input Validation](reference/validation.md) - Validation rules for workflow inputs
 - [Loop Reference](reference/loop.md) - Loop control flow and transitions
+- [Audit Trail Schema](reference/audit-trail-schema.md) - JSONL entry format, fields, and constraints
 - [Package Documentation](reference/package-documentation.md) - Discovering code documentation with `go doc`
 
 ## Development

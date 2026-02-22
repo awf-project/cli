@@ -166,6 +166,9 @@ components:
   infra-agents:
     in: infrastructure/agents
 
+  infra-audit:
+    in: infrastructure/audit
+
   infra-analyzer:
     in: infrastructure/analyzer
 
@@ -282,6 +285,13 @@ deps:
       - zap
       - yaml
       - uuid
+
+  infra-audit:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+    canUse:
+      - go-stdlib
 
   infra-analyzer:
     mayDependOn:
@@ -425,6 +435,7 @@ deps:
       - domain-plugin
       - domain-operation
       - infra-agents
+      - infra-audit
       - infra-analyzer
       - infra-config
       - infra-diagram
