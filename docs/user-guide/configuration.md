@@ -43,6 +43,7 @@ This is useful for:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AWF_CONFIG_PATH` | `.awf/config.yaml` | Absolute or relative path to the configuration file |
+| `AWF_AUDIT_LOG` | `$XDG_DATA_HOME/awf/audit.jsonl` | Audit trail file path; set to `off` to disable |
 
 ---
 
@@ -434,8 +435,57 @@ See [Plugins](plugins.md) for full plugin documentation.
 
 ---
 
+## Environment Variables
+
+AWF respects the following environment variables to control behavior and override defaults:
+
+### Core Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWF_CONFIG_PATH` | `.awf/config.yaml` | Path to project configuration file (absolute or relative) |
+
+### Audit Trail
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWF_AUDIT_LOG` | `$XDG_DATA_HOME/awf/audit.jsonl` | Path to audit trail file. Set to `off` to disable audit recording. |
+
+See [Audit Trail](audit-trail.md) for complete audit trail configuration and usage guide.
+
+### XDG Directories
+
+AWF follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) standard:
+
+| Variable | Default (Linux) | Purpose |
+|----------|-----------------|---------|
+| `XDG_CONFIG_HOME` | `~/.config` | Project configuration directory (not typically overridden) |
+| `XDG_DATA_HOME` | `~/.local/share` | Audit trail and runtime data storage |
+
+When `$XDG_DATA_HOME` is not set, AWF defaults to `~/.local/share`.
+
+### Examples
+
+```bash
+# Use custom config file
+export AWF_CONFIG_PATH="/etc/awf/config.yaml"
+
+# Store audit trail in syslog-compatible location
+export AWF_AUDIT_LOG="/var/log/awf/audit.jsonl"
+
+# Disable audit trail for rapid iteration
+export AWF_AUDIT_LOG=off
+
+# Use custom data directory (affects audit trail storage)
+export XDG_DATA_HOME="/var/lib/awf"
+awf run my-workflow
+```
+
+---
+
 ## See Also
 
 - [Commands](commands.md) - CLI command reference
 - [Workflow Syntax](workflow-syntax.md) - Workflow YAML syntax
 - [Plugins](plugins.md) - Plugin system and configuration
+- [Audit Trail](audit-trail.md) - Structured audit logging for workflow executions

@@ -16,9 +16,10 @@ import (
 	"github.com/awf-project/awf/internal/domain/ports"
 	"github.com/awf-project/awf/internal/domain/workflow"
 	"github.com/awf-project/awf/internal/infrastructure/agents"
+	"github.com/awf-project/awf/internal/infrastructure/audit"
 	"github.com/awf-project/awf/internal/infrastructure/config"
 	"github.com/awf-project/awf/internal/infrastructure/executor"
-	infra_expression "github.com/awf-project/awf/internal/infrastructure/expression"
+	infraexpression "github.com/awf-project/awf/internal/infrastructure/expression"
 	"github.com/awf-project/awf/internal/infrastructure/github"
 	"github.com/awf-project/awf/internal/infrastructure/http"
 	"github.com/awf-project/awf/internal/infrastructure/notify"
@@ -250,10 +251,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
-	exprValidator := infra_expression.NewExprValidator()
+	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := infra_expression.NewExprEvaluator()
+	exprEvaluator := infraexpression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Setup agent registry for F039 agent step execution
@@ -263,6 +264,16 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 	execSvc.SetAWFPaths(buildAWFPaths())
+
+	// Setup audit trail writer (F071)
+	if auditWriter, auditCleanup, auditErr := buildAuditWriter(logger); auditErr != nil {
+		logger.Warn("failed to initialize audit writer, audit trail disabled", "error", auditErr)
+	} else {
+		defer auditCleanup()
+		if auditWriter != nil {
+			execSvc.SetAuditTrailWriter(auditWriter)
+		}
+	}
 
 	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
 	githubClient := github.NewClient(logger)
@@ -431,10 +442,10 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 		silent:    cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable,
 	}
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := infra_expression.NewExprEvaluator()
+	exprEvaluator := infraexpression.NewExprEvaluator()
 
 	// Create services
-	exprValidator := infra_expression.NewExprValidator()
+	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	dryRunExec := application.NewDryRunExecutor(wfSvc, resolver, exprEvaluator, logger)
 	dryRunExec.SetAWFPaths(buildAWFPaths())
@@ -501,10 +512,10 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		silent:    false,
 	}
 	resolver := interpolation.NewTemplateResolver()
-	exprEvaluator := infra_expression.NewExprEvaluator()
+	exprEvaluator := infraexpression.NewExprEvaluator()
 
 	// Create services
-	exprValidator := infra_expression.NewExprValidator()
+	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 
@@ -914,10 +925,10 @@ func runSingleStep(
 	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
-	exprValidator := infra_expression.NewExprValidator()
+	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := infra_expression.NewExprEvaluator()
+	exprEvaluator := infraexpression.NewExprEvaluator()
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
 
 	// Setup agent registry for F039 agent step execution
@@ -1194,4 +1205,31 @@ func buildAWFPaths() map[string]string {
 		"workflows_dir": xdg.AWFWorkflowsDir(),
 		"plugins_dir":   xdg.AWFPluginsDir(),
 	}
+}
+
+// buildAuditWriter creates a FileAuditTrailWriter based on the AWF_AUDIT_LOG env var.
+// Returns (nil, noop, nil) when AWF_AUDIT_LOG=off.
+// The caller must defer the returned cleanup func.
+func buildAuditWriter(logger ports.Logger) (ports.AuditTrailWriter, func(), error) {
+	auditLog := os.Getenv("AWF_AUDIT_LOG")
+	if auditLog == "off" {
+		return nil, func() {}, nil
+	}
+
+	auditPath := auditLog
+	if auditPath == "" {
+		auditPath = filepath.Join(xdg.AWFDataDir(), "audit.jsonl")
+	}
+
+	w, err := audit.NewFileAuditTrailWriter(auditPath)
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	cleanup := func() {
+		if closeErr := w.Close(); closeErr != nil {
+			logger.Error("failed to close audit writer", "error", closeErr)
+		}
+	}
+	return w, cleanup, nil
 }

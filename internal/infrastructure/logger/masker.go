@@ -12,6 +12,7 @@ var DefaultSecretPatterns = []string{
 	"SECRET_",
 	"API_KEY",
 	"PASSWORD",
+	"TOKEN",
 }
 
 // NewSecretMasker creates a masker with default patterns plus any additional ones.

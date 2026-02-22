@@ -271,6 +271,12 @@ Extract validation functions with cognitive complexity > 30 into smaller helper 
 
 Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
 
+Pass structs larger than 128 bytes by pointer in function parameters and method receivers to avoid expensive value copying
+
+Never check if maps are nil before calling len(); Go defines len() as zero for nil maps
+
+Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time

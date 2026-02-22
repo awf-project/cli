@@ -214,6 +214,16 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	execSvc.SetAgentRegistry(agentRegistry)
 	execSvc.SetAWFPaths(buildAWFPaths())
 
+	// Setup audit trail writer (F071)
+	if auditWriter, auditCleanup, auditErr := buildAuditWriter(logger); auditErr != nil {
+		logger.Warn("failed to initialize audit writer, audit trail disabled", "error", auditErr)
+	} else {
+		defer auditCleanup()
+		if auditWriter != nil {
+			execSvc.SetAuditTrailWriter(auditWriter)
+		}
+	}
+
 	if stdoutWriter != nil {
 		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)
 	}

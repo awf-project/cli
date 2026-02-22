@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"strings"
 	"time"
 
@@ -47,9 +48,10 @@ type ExecutionService struct {
 	templateSvc       *TemplateService
 	operationProvider ports.OperationProvider
 	agentRegistry     ports.AgentRegistry
-	conversationMgr   ConversationExecutor // F033: Multi-turn conversation orchestration (interface for testability)
-	outputLimiter     *OutputLimiter       // C019: Prevent OOM from unbounded output accumulation
-	awfPaths          map[string]string    // F063: XDG directory paths injected at construction (prompts_dir, config_dir, etc.)
+	conversationMgr   ConversationExecutor
+	outputLimiter     *OutputLimiter
+	awfPaths          map[string]string
+	auditTrailWriter  ports.AuditTrailWriter
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -92,6 +94,88 @@ func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 // Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir.
 func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
 	s.awfPaths = paths
+}
+
+// SetAuditTrailWriter configures the audit trail writer for F071 structured audit events.
+// When nil, audit emission is skipped without error.
+func (s *ExecutionService) SetAuditTrailWriter(w ports.AuditTrailWriter) {
+	s.auditTrailWriter = w
+}
+
+func (s *ExecutionService) resolveAuditUser() string {
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	if name := os.Getenv("USER"); name != "" {
+		return name
+	}
+	return "unknown"
+}
+
+// secretPrefixes are the patterns checked (case-insensitive prefix match) to identify secret keys.
+// This mirrors infrastructure/logger.DefaultSecretPatterns without importing infrastructure.
+var secretPrefixes = []string{"SECRET_", "API_KEY", "PASSWORD", "TOKEN"}
+
+// isSecretInputKey returns true if the key matches any known secret prefix.
+func isSecretInputKey(key string) bool {
+	upper := strings.ToUpper(key)
+	for _, prefix := range secretPrefixes {
+		if strings.HasPrefix(upper, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ExecutionService) emitAuditStarted(ctx context.Context, execCtx *workflow.ExecutionContext, inputs map[string]any) {
+	if s.auditTrailWriter == nil {
+		return
+	}
+
+	// Build masked copy of inputs: secret keys replaced with "***"
+	var maskedInputs map[string]any
+	if len(inputs) > 0 {
+		maskedInputs = make(map[string]any, len(inputs))
+		for k, v := range inputs {
+			if isSecretInputKey(k) {
+				maskedInputs[k] = "***"
+			} else {
+				maskedInputs[k] = v
+			}
+		}
+	}
+
+	auditUser := s.resolveAuditUser()
+	event := workflow.NewStartedEvent(execCtx, maskedInputs, auditUser)
+	if err := s.auditTrailWriter.Write(ctx, &event); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("audit trail write failed", "error", err, "event", workflow.EventWorkflowStarted)
+		}
+	}
+}
+
+func (s *ExecutionService) emitAuditCompleted(ctx context.Context, execCtx *workflow.ExecutionContext, errorMsg string) {
+	if s.auditTrailWriter == nil {
+		return
+	}
+
+	// Ensure CompletedAt is set so duration calculation is meaningful.
+	// Guarantee at least 1ms elapsed to avoid zero-duration audit events.
+	if execCtx.CompletedAt.IsZero() {
+		completedAt := time.Now()
+		if !completedAt.After(execCtx.StartedAt.Add(time.Millisecond - 1)) {
+			completedAt = execCtx.StartedAt.Add(time.Millisecond)
+		}
+		execCtx.CompletedAt = completedAt
+	}
+
+	auditUser := s.resolveAuditUser()
+	event := workflow.NewCompletedEvent(execCtx, auditUser, errorMsg)
+	if err := s.auditTrailWriter.Write(ctx, &event); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("audit trail write failed", "error", err, "event", workflow.EventWorkflowCompleted)
+		}
+	}
 }
 
 // NewExecutionService - historySvc can be nil to disable history recording.
@@ -229,12 +313,15 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 	s.logger.Info("starting workflow", "workflow", wf.Name, "id", execCtx.WorkflowID)
 
+	// emit audit started event before workflow_start hooks
+	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
+
 	// execute workflow_start hooks
 	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
-		s.recordHistory(execCtx)
+		s.recordExecutionEnd(ctx, execCtx, err.Error())
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
 
@@ -267,7 +354,11 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			}
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
-			s.recordHistory(execCtx)
+			terminalErrMsg := ""
+			if execErr != nil {
+				terminalErrMsg = execErr.Error()
+			}
+			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -297,7 +388,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
-			s.recordHistory(execCtx)
+			s.recordExecutionEnd(ctx, execCtx, err.Error())
 			execErr = err
 			break
 		}
@@ -320,7 +411,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
-			s.recordHistory(execCtx)
+			s.recordExecutionEnd(hookCtx, execCtx, "workflow cancelled")
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
@@ -463,6 +554,11 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 	} else {
 		s.logger.Debug("recorded execution history", "workflow_id", execCtx.WorkflowID, "status", record.Status)
 	}
+}
+
+func (s *ExecutionService) recordExecutionEnd(ctx context.Context, execCtx *workflow.ExecutionContext, errorMsg string) {
+	s.recordHistory(execCtx)
+	s.emitAuditCompleted(ctx, execCtx, errorMsg)
 }
 
 // buildLoopDataChain recursively converts domain LoopContext to interpolation LoopData.
@@ -1419,12 +1515,15 @@ func (s *ExecutionService) Resume(
 	// 7. Execute from current step
 	s.logger.Info("resuming workflow", "id", workflowID, "from", execCtx.CurrentStep)
 
+	// emit audit started event before workflow_start hooks (resume path)
+	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
+
 	// execute workflow_start hooks (on resume we might want these again)
 	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
-		s.recordHistory(execCtx)
+		s.recordExecutionEnd(ctx, execCtx, err.Error())
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
 
@@ -1456,6 +1555,8 @@ func (s *ExecutionService) ListResumable(ctx context.Context) ([]*workflow.Execu
 
 // executeFromStep continues workflow execution from the specified starting step.
 // It handles the execution loop, hooks, and state transitions.
+//
+//nolint:gocognit // Complexity 31: main execution loop orchestrates step dispatch, hooks, cancellation, and error handling as a cohesive unit.
 func (s *ExecutionService) executeFromStep(
 	ctx context.Context,
 	wf *workflow.Workflow,
@@ -1490,7 +1591,11 @@ func (s *ExecutionService) executeFromStep(
 			}
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
-			s.recordHistory(execCtx)
+			terminalErrMsg := ""
+			if execErr != nil {
+				terminalErrMsg = execErr.Error()
+			}
+			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -1520,7 +1625,7 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
-			s.recordHistory(execCtx)
+			s.recordExecutionEnd(ctx, execCtx, err.Error())
 			execErr = err
 			break
 		}
@@ -1543,7 +1648,7 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
-			s.recordHistory(execCtx)
+			s.recordExecutionEnd(hookCtx, execCtx, "workflow cancelled")
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}

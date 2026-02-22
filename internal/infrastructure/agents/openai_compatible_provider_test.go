@@ -49,7 +49,7 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -109,7 +109,7 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnWithOptions(t *testing.T)
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -172,7 +172,7 @@ func TestOpenAICompatibleProvider_IntegrationConversation(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -205,9 +205,9 @@ func TestOpenAICompatibleProvider_IntegrationConversation(t *testing.T) {
 	defer cancel()
 
 	result, err := provider.ExecuteConversation(ctx, state, "What about the third question?", map[string]any{
-		"base_url":       server.URL,
-		"model":          "test-model",
-		"system_prompt":  "You are a helpful assistant.",
+		"base_url":      server.URL,
+		"model":         "test-model",
+		"system_prompt": "You are a helpful assistant.",
 	})
 
 	require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestOpenAICompatibleProvider_IntegrationHTTP401Unauthorized(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -284,7 +284,7 @@ func TestOpenAICompatibleProvider_IntegrationHTTP429RateLimit(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -317,7 +317,7 @@ func TestOpenAICompatibleProvider_IntegrationHTTP500ServerError(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -372,7 +372,7 @@ func TestOpenAICompatibleProvider_IntegrationRequestBodyValidation(t *testing.T)
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -433,7 +433,7 @@ func TestOpenAICompatibleProvider_IntegrationJSONOutput(t *testing.T) {
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -493,7 +493,7 @@ func TestOpenAICompatibleProvider_IntegrationBaseURLNormalization(t *testing.T) 
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -548,7 +548,7 @@ func TestOpenAICompatibleProvider_IntegrationConversationWithSystemPrompt(t *tes
 	defer server.Close()
 
 	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10*time.Second),
+		httputil.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -571,9 +571,9 @@ func TestOpenAICompatibleProvider_IntegrationConversationWithSystemPrompt(t *tes
 	defer cancel()
 
 	_, err := provider.ExecuteConversation(ctx, state, "Follow-up", map[string]any{
-		"base_url":       server.URL,
-		"model":          "test-model",
-		"system_prompt":  "You are an expert assistant.",
+		"base_url":      server.URL,
+		"model":         "test-model",
+		"system_prompt": "You are an expert assistant.",
 	})
 
 	require.NoError(t, err)
