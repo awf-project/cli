@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strconv"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // ParseError represents an error during YAML parsing.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 )
 
 func TestCompositeRepository_Load(t *testing.T) {

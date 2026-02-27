@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // OutputStreamer handles streaming large outputs to temporary files.

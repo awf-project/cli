@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // Compile-time assertion that AgentRegistry implements ports.AgentRegistry

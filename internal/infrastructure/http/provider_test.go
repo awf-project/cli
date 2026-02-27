@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +65,7 @@ func TestHTTPOperationProvider_ImplementsInterface(t *testing.T) {
 // --- Constructor tests ---
 
 func TestNewHTTPOperationProvider(t *testing.T) {
-	client := httputil.NewClient()
+	client := httpx.NewClient()
 	logger := &mockLogger{}
 
 	provider := NewHTTPOperationProvider(client, logger)
@@ -75,7 +75,7 @@ func TestNewHTTPOperationProvider(t *testing.T) {
 }
 
 func TestNewHTTPOperationProvider_RegistersAllOperations(t *testing.T) {
-	client := httputil.NewClient()
+	client := httpx.NewClient()
 	logger := &mockLogger{}
 
 	provider := NewHTTPOperationProvider(client, logger)
@@ -137,29 +137,29 @@ func TestHTTPOperationProvider_GetOperation_ValidatesSchema(t *testing.T) {
 	// Verify required inputs
 	urlInput := op.Inputs["url"]
 	assert.True(t, urlInput.Required, "url should be required")
-	assert.Equal(t, plugin.InputTypeString, urlInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeString, urlInput.Type)
 
 	methodInput := op.Inputs["method"]
 	assert.True(t, methodInput.Required, "method should be required")
-	assert.Equal(t, plugin.InputTypeString, methodInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeString, methodInput.Type)
 
 	// Verify optional inputs
 	headersInput := op.Inputs["headers"]
 	assert.False(t, headersInput.Required, "headers should be optional")
-	assert.Equal(t, plugin.InputTypeObject, headersInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeObject, headersInput.Type)
 
 	bodyInput := op.Inputs["body"]
 	assert.False(t, bodyInput.Required, "body should be optional")
-	assert.Equal(t, plugin.InputTypeString, bodyInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeString, bodyInput.Type)
 
 	timeoutInput := op.Inputs["timeout"]
 	assert.False(t, timeoutInput.Required, "timeout should be optional")
-	assert.Equal(t, plugin.InputTypeInteger, timeoutInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeInteger, timeoutInput.Type)
 	assert.Equal(t, 30, timeoutInput.Default, "default timeout should be 30 seconds")
 
 	retryableInput := op.Inputs["retryable_status_codes"]
 	assert.False(t, retryableInput.Required, "retryable_status_codes should be optional")
-	assert.Equal(t, plugin.InputTypeArray, retryableInput.Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, retryableInput.Type)
 
 	// Verify outputs
 	expectedOutputs := []string{"status_code", "body", "headers", "body_truncated"}
@@ -559,7 +559,7 @@ func TestHTTPOperationProvider_Execute_ConnectionError(t *testing.T) {
 		err: errors.New("connection refused"),
 	}
 
-	client := httputil.NewClient(httputil.WithDoer(mockDoer))
+	client := httpx.NewClient(httpx.WithDoer(mockDoer))
 	provider := NewHTTPOperationProvider(client, &mockLogger{})
 
 	inputs := map[string]any{
@@ -784,7 +784,7 @@ func TestHTTPOperationProvider_Execute_DefaultTimeout(t *testing.T) {
 // --- Helper functions ---
 
 func newTestProvider() *HTTPOperationProvider {
-	client := httputil.NewClient()
+	client := httpx.NewClient()
 	logger := &mockLogger{}
 	return NewHTTPOperationProvider(client, logger)
 }

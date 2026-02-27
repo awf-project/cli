@@ -3,7 +3,7 @@ package expression
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

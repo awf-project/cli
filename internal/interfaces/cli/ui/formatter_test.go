@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 )
 
 func TestFormatter_Verbose(t *testing.T) {

@@ -11,25 +11,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/awf-project/awf/internal/application"
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/agents"
-	"github.com/awf-project/awf/internal/infrastructure/audit"
-	"github.com/awf-project/awf/internal/infrastructure/config"
-	"github.com/awf-project/awf/internal/infrastructure/executor"
-	infraexpression "github.com/awf-project/awf/internal/infrastructure/expression"
-	"github.com/awf-project/awf/internal/infrastructure/github"
-	"github.com/awf-project/awf/internal/infrastructure/http"
-	"github.com/awf-project/awf/internal/infrastructure/notify"
-	"github.com/awf-project/awf/internal/infrastructure/plugin"
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/internal/infrastructure/store"
-	"github.com/awf-project/awf/internal/infrastructure/xdg"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
-	"github.com/awf-project/awf/pkg/httputil"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
+	"github.com/awf-project/cli/internal/infrastructure/audit"
+	"github.com/awf-project/cli/internal/infrastructure/config"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
+	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/github"
+	"github.com/awf-project/cli/internal/infrastructure/http"
+	"github.com/awf-project/cli/internal/infrastructure/notify"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/pkg/httpx"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -288,11 +288,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Setup HTTP operation provider (F058)
-	httpClient := httputil.NewClient()
+	httpClient := httpx.NewClient()
 	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
 
 	// Wrap all providers in composite for coexistence
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
+	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion
@@ -952,11 +952,11 @@ func runSingleStep(
 	}
 
 	// Setup HTTP operation provider (F058)
-	httpClient := httputil.NewClient()
+	httpClient := httpx.NewClient()
 	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
 
 	// Wrap all providers in composite for coexistence
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
+	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
 
 	// Setup template service for workflow template expansion

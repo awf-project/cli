@@ -3,8 +3,8 @@ package application_test
 import (
 	"context"
 
-	"github.com/awf-project/awf/internal/infrastructure/expression"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 //

@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/pkg/httpx"
 )
 
 var webhookBackendCounter uint64
@@ -20,7 +20,7 @@ var webhookBackendCounter uint64
 // The webhook URL is provided dynamically via the operation input (webhook_url).
 type webhookBackend struct {
 	// client handles HTTP POST requests with timeout and context support
-	client *httputil.Client
+	client *httpx.Client
 
 	// id uniquely identifies this backend instance for testing purposes.
 	// Without this field, Go would optimize empty structs to share the same memory location.
@@ -31,7 +31,7 @@ type webhookBackend struct {
 // Webhook URLs are provided per-request via metadata rather than at construction time.
 func newWebhookBackend() *webhookBackend {
 	return &webhookBackend{
-		client: httputil.NewClient(httputil.WithTimeout(10 * time.Second)),
+		client: httpx.NewClient(httpx.WithTimeout(10 * time.Second)),
 		id:     atomic.AddUint64(&webhookBackendCounter, 1),
 	}
 }

@@ -119,7 +119,7 @@
 //
 //	import (
 //	    "context"
-//	    "github.com/awf-project/awf/pkg/plugin/sdk"
+//	    "github.com/awf-project/cli/pkg/plugin/sdk"
 //	)
 //
 //	type SlackPlugin struct {
@@ -339,7 +339,7 @@
 //
 // See also:
 //   - internal/domain/operation: Domain operation interface and result types
-//   - internal/infrastructure/plugin: Plugin loader and registry implementation
+//   - internal/infrastructure/pluginmgr: Plugin loader and registry implementation
 //   - docs/plugin-development.md: Complete plugin development guide
 //   - examples/plugins/: Example plugin implementations
 package sdk

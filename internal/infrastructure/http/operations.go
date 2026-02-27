@@ -1,44 +1,44 @@
 package http
 
-import "github.com/awf-project/awf/internal/domain/plugin"
+import "github.com/awf-project/cli/internal/domain/pluginmodel"
 
 // AllOperations returns all HTTP operation schemas.
-func AllOperations() []plugin.OperationSchema {
-	return []plugin.OperationSchema{
+func AllOperations() []pluginmodel.OperationSchema {
+	return []pluginmodel.OperationSchema{
 		// http.request - Perform HTTP request
 		{
 			Name:        "http.request",
 			Description: "Perform HTTP request (GET, POST, PUT, DELETE) with configurable timeout and headers",
-			Inputs: map[string]plugin.InputSchema{
+			Inputs: map[string]pluginmodel.InputSchema{
 				"url": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    true,
 					Description: "Target URL (must start with http:// or https://)",
 					Validation:  "url",
 				},
 				"method": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    true,
 					Description: "HTTP method: GET, POST, PUT, DELETE (case-insensitive)",
 				},
 				"headers": {
-					Type:        plugin.InputTypeObject,
+					Type:        pluginmodel.InputTypeObject,
 					Required:    false,
 					Description: "HTTP headers (key-value pairs)",
 				},
 				"body": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    false,
 					Description: "Request body (raw string, JSON encoding is caller's responsibility)",
 				},
 				"timeout": {
-					Type:        plugin.InputTypeInteger,
+					Type:        pluginmodel.InputTypeInteger,
 					Required:    false,
 					Description: "Request timeout in seconds (default: 30)",
 					Default:     30,
 				},
 				"retryable_status_codes": {
-					Type:        plugin.InputTypeArray,
+					Type:        pluginmodel.InputTypeArray,
 					Required:    false,
 					Description: "HTTP status codes that should be treated as retryable failures (e.g., [429, 502, 503])",
 				},

@@ -22,12 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/executor"
-	infraExpr "github.com/awf-project/awf/internal/infrastructure/expression"
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
+	infraExpr "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // TestBreakWhen_ExactStringMatch_Integration tests break_when with exact string equality.

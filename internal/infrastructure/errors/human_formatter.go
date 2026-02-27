@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	domainerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/ports"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/fatih/color"
 )
 

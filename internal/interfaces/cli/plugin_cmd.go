@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/awf-project/awf/internal/application"
-	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/application"
+	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
 

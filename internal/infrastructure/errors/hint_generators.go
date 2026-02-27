@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/pkg/stringutil"
+	"github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/pkg/stringutil"
 )
 
 // FileNotFoundHintGenerator examines file-not-found errors and generates actionable hints

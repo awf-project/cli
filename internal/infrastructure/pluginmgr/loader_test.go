@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 func TestNewFileSystemLoader(t *testing.T) {
@@ -125,7 +125,7 @@ func TestFileSystemLoader_DiscoverPlugins_SkipsInvalidPlugins(t *testing.T) {
 	// Invalid plugins should be skipped or have Failed status
 	validCount := 0
 	for _, p := range plugins {
-		if p.Status == plugin.StatusLoaded || p.Status == plugin.StatusDiscovered {
+		if p.Status == pluginmodel.StatusLoaded || p.Status == pluginmodel.StatusDiscovered {
 			validCount++
 		}
 	}
@@ -212,8 +212,8 @@ func TestFileSystemLoader_LoadPlugin_ValidSimple(t *testing.T) {
 	if info.Path != pluginDir {
 		t.Errorf("PluginInfo.Path = %q, want %q", info.Path, pluginDir)
 	}
-	if info.Status != plugin.StatusLoaded {
-		t.Errorf("PluginInfo.Status = %q, want %q", info.Status, plugin.StatusLoaded)
+	if info.Status != pluginmodel.StatusLoaded {
+		t.Errorf("PluginInfo.Status = %q, want %q", info.Status, pluginmodel.StatusLoaded)
 	}
 	if info.LoadedAt == 0 {
 		t.Error("PluginInfo.LoadedAt should be set")
@@ -377,14 +377,14 @@ func TestFileSystemLoader_LoadPlugin_FileInsteadOfDirectory(t *testing.T) {
 func TestFileSystemLoader_ValidatePlugin_ValidPlugin(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
-	info := &plugin.PluginInfo{
+	info := &pluginmodel.PluginInfo{
 		Path:   "/plugins/test-plugin",
-		Status: plugin.StatusLoaded,
-		Manifest: &plugin.Manifest{
+		Status: pluginmodel.StatusLoaded,
+		Manifest: &pluginmodel.Manifest{
 			Name:         "test-plugin",
 			Version:      "1.0.0",
 			AWFVersion:   ">=0.4.0",
-			Capabilities: []string{plugin.CapabilityOperations},
+			Capabilities: []string{pluginmodel.CapabilityOperations},
 		},
 	}
 
@@ -406,9 +406,9 @@ func TestFileSystemLoader_ValidatePlugin_NilInfo(t *testing.T) {
 func TestFileSystemLoader_ValidatePlugin_NilManifest(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
-	info := &plugin.PluginInfo{
+	info := &pluginmodel.PluginInfo{
 		Path:     "/plugins/test-plugin",
-		Status:   plugin.StatusLoaded,
+		Status:   pluginmodel.StatusLoaded,
 		Manifest: nil,
 	}
 
@@ -421,10 +421,10 @@ func TestFileSystemLoader_ValidatePlugin_NilManifest(t *testing.T) {
 func TestFileSystemLoader_ValidatePlugin_InvalidCapability(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
-	info := &plugin.PluginInfo{
+	info := &pluginmodel.PluginInfo{
 		Path:   "/plugins/test-plugin",
-		Status: plugin.StatusLoaded,
-		Manifest: &plugin.Manifest{
+		Status: pluginmodel.StatusLoaded,
+		Manifest: &pluginmodel.Manifest{
 			Name:         "test-plugin",
 			Version:      "1.0.0",
 			AWFVersion:   ">=0.4.0",
@@ -444,10 +444,10 @@ func TestFileSystemLoader_ValidatePlugin_InvalidCapability(t *testing.T) {
 func TestFileSystemLoader_ValidatePlugin_EmptyCapabilities(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
-	info := &plugin.PluginInfo{
+	info := &pluginmodel.PluginInfo{
 		Path:   "/plugins/test-plugin",
-		Status: plugin.StatusLoaded,
-		Manifest: &plugin.Manifest{
+		Status: pluginmodel.StatusLoaded,
+		Manifest: &pluginmodel.Manifest{
 			Name:         "test-plugin",
 			Version:      "1.0.0",
 			AWFVersion:   ">=0.4.0",
@@ -475,14 +475,14 @@ func TestFileSystemLoader_ValidatePlugin_InvalidName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &plugin.PluginInfo{
+			info := &pluginmodel.PluginInfo{
 				Path:   "/plugins/test-plugin",
-				Status: plugin.StatusLoaded,
-				Manifest: &plugin.Manifest{
+				Status: pluginmodel.StatusLoaded,
+				Manifest: &pluginmodel.Manifest{
 					Name:         tt.badName,
 					Version:      "1.0.0",
 					AWFVersion:   ">=0.4.0",
-					Capabilities: []string{plugin.CapabilityOperations},
+					Capabilities: []string{pluginmodel.CapabilityOperations},
 				},
 			}
 
@@ -508,14 +508,14 @@ func TestFileSystemLoader_ValidatePlugin_InvalidVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &plugin.PluginInfo{
+			info := &pluginmodel.PluginInfo{
 				Path:   "/plugins/test-plugin",
-				Status: plugin.StatusLoaded,
-				Manifest: &plugin.Manifest{
+				Status: pluginmodel.StatusLoaded,
+				Manifest: &pluginmodel.Manifest{
 					Name:         "test-plugin",
 					Version:      tt.badVersion,
 					AWFVersion:   ">=0.4.0",
-					Capabilities: []string{plugin.CapabilityOperations},
+					Capabilities: []string{pluginmodel.CapabilityOperations},
 				},
 			}
 
@@ -545,14 +545,14 @@ func TestFileSystemLoader_ValidatePlugin_InvalidAWFVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &plugin.PluginInfo{
+			info := &pluginmodel.PluginInfo{
 				Path:   "/plugins/test-plugin",
-				Status: plugin.StatusLoaded,
-				Manifest: &plugin.Manifest{
+				Status: pluginmodel.StatusLoaded,
+				Manifest: &pluginmodel.Manifest{
 					Name:         "test-plugin",
 					Version:      "1.0.0",
 					AWFVersion:   tt.awfVersion,
-					Capabilities: []string{plugin.CapabilityOperations},
+					Capabilities: []string{pluginmodel.CapabilityOperations},
 				},
 			}
 
@@ -570,17 +570,17 @@ func TestFileSystemLoader_ValidatePlugin_InvalidAWFVersion(t *testing.T) {
 func TestFileSystemLoader_ValidatePlugin_MultipleCapabilities(t *testing.T) {
 	loader := NewFileSystemLoader(NewManifestParser())
 
-	info := &plugin.PluginInfo{
+	info := &pluginmodel.PluginInfo{
 		Path:   "/plugins/test-plugin",
-		Status: plugin.StatusLoaded,
-		Manifest: &plugin.Manifest{
+		Status: pluginmodel.StatusLoaded,
+		Manifest: &pluginmodel.Manifest{
 			Name:       "test-plugin",
 			Version:    "1.0.0",
 			AWFVersion: ">=0.4.0",
 			Capabilities: []string{
-				plugin.CapabilityOperations,
-				plugin.CapabilityCommands,
-				plugin.CapabilityValidators,
+				pluginmodel.CapabilityOperations,
+				pluginmodel.CapabilityCommands,
+				pluginmodel.CapabilityValidators,
 			},
 		},
 	}
@@ -748,8 +748,8 @@ func TestFileSystemLoader_ImplementsPluginLoader(t *testing.T) {
 	// Compile-time check that FileSystemLoader implements the interface
 	// This test doesn't need to run anything - it's a compile check
 	var _ interface {
-		DiscoverPlugins(context.Context, string) ([]*plugin.PluginInfo, error)
-		LoadPlugin(context.Context, string) (*plugin.PluginInfo, error)
-		ValidatePlugin(*plugin.PluginInfo) error
+		DiscoverPlugins(context.Context, string) ([]*pluginmodel.PluginInfo, error)
+		LoadPlugin(context.Context, string) (*pluginmodel.PluginInfo, error)
+		ValidatePlugin(*pluginmodel.PluginInfo) error
 	} = (*FileSystemLoader)(nil)
 }

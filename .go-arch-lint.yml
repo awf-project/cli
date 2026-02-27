@@ -21,7 +21,7 @@ commonComponents:
   - pkg-retry
   - pkg-stringutil
   - pkg-validation
-  - pkg-httputil
+  - pkg-httpx
   - pkg-output
 
 vendors:
@@ -128,7 +128,7 @@ components:
     in: domain/errors
 
   domain-plugin:
-    in: domain/plugin
+    in: domain/pluginmodel
 
   domain-operation:
     in: domain/operation
@@ -149,8 +149,8 @@ components:
   pkg-stringutil:
     in: ../pkg/stringutil
 
-  pkg-httputil:
-    in: ../pkg/httputil
+  pkg-httpx:
+    in: ../pkg/httpx
 
   pkg-output:
     in: ../pkg/output
@@ -200,7 +200,7 @@ components:
     in: infrastructure/logger
 
   infra-plugin:
-    in: infrastructure/plugin
+    in: infrastructure/pluginmgr
 
   infra-repository:
     in: infrastructure/repository

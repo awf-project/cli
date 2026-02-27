@@ -1,12 +1,12 @@
-package plugin
+package pluginmgr
 
 import (
 	"fmt"
 	"sync"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +44,7 @@ func TestNewOperationRegistry_MultipleInstances(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_ValidOperation(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "slack.send",
 		Description: "Send message to Slack",
 		PluginName:  "awf-plugin-slack",
@@ -68,7 +68,7 @@ func TestOperationRegistry_RegisterOperation_NilOperation(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_EmptyName(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "",
 		Description: "Empty name operation",
 		PluginName:  "test-plugin",
@@ -80,12 +80,12 @@ func TestOperationRegistry_RegisterOperation_EmptyName(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_DuplicateName(t *testing.T) {
 	registry := NewOperationRegistry()
-	op1 := &plugin.OperationSchema{
+	op1 := &pluginmodel.OperationSchema{
 		Name:        "my.operation",
 		Description: "First operation",
 		PluginName:  "plugin-a",
 	}
-	op2 := &plugin.OperationSchema{
+	op2 := &pluginmodel.OperationSchema{
 		Name:        "my.operation",
 		Description: "Duplicate operation",
 		PluginName:  "plugin-b",
@@ -100,7 +100,7 @@ func TestOperationRegistry_RegisterOperation_DuplicateName(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_MultipleOperations(t *testing.T) {
 	registry := NewOperationRegistry()
-	operations := []*plugin.OperationSchema{
+	operations := []*pluginmodel.OperationSchema{
 		{Name: "op.one", Description: "First", PluginName: "plugin-a"},
 		{Name: "op.two", Description: "Second", PluginName: "plugin-a"},
 		{Name: "op.three", Description: "Third", PluginName: "plugin-b"},
@@ -116,18 +116,18 @@ func TestOperationRegistry_RegisterOperation_MultipleOperations(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_WithInputs(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "http.request",
 		Description: "Make HTTP request",
 		PluginName:  "awf-plugin-http",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"url": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Target URL",
 			},
 			"method": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    false,
 				Default:     "GET",
 				Description: "HTTP method",
@@ -147,7 +147,7 @@ func TestOperationRegistry_RegisterOperation_WithInputs(t *testing.T) {
 
 func TestOperationRegistry_RegisterOperation_SetsSource(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "test.operation",
 		Description: "Test",
 		PluginName:  "my-test-plugin",
@@ -165,7 +165,7 @@ func TestOperationRegistry_RegisterOperation_SetsSource(t *testing.T) {
 
 func TestOperationRegistry_UnregisterOperation_Existing(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "to.remove",
 		Description: "Will be removed",
 		PluginName:  "test-plugin",
@@ -197,7 +197,7 @@ func TestOperationRegistry_UnregisterOperation_EmptyName(t *testing.T) {
 
 func TestOperationRegistry_UnregisterOperation_ClearsSource(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "test.op",
 		Description: "Test",
 		PluginName:  "my-plugin",
@@ -215,7 +215,7 @@ func TestOperationRegistry_UnregisterOperation_ClearsSource(t *testing.T) {
 
 func TestOperationRegistry_UnregisterOperation_AllowsReregistration(t *testing.T) {
 	registry := NewOperationRegistry()
-	op1 := &plugin.OperationSchema{
+	op1 := &pluginmodel.OperationSchema{
 		Name:        "reusable.op",
 		Description: "First version",
 		PluginName:  "plugin-a",
@@ -228,7 +228,7 @@ func TestOperationRegistry_UnregisterOperation_AllowsReregistration(t *testing.T
 	require.NoError(t, err)
 
 	// Should be able to register again with different plugin
-	op2 := &plugin.OperationSchema{
+	op2 := &pluginmodel.OperationSchema{
 		Name:        "reusable.op",
 		Description: "Second version",
 		PluginName:  "plugin-b",
@@ -251,7 +251,7 @@ func TestOperationRegistry_Operations_Empty(t *testing.T) {
 
 func TestOperationRegistry_Operations_ReturnsAll(t *testing.T) {
 	registry := NewOperationRegistry()
-	operations := []*plugin.OperationSchema{
+	operations := []*pluginmodel.OperationSchema{
 		{Name: "op.a", PluginName: "plugin-1"},
 		{Name: "op.b", PluginName: "plugin-1"},
 		{Name: "op.c", PluginName: "plugin-2"},
@@ -286,7 +286,7 @@ func TestOperationRegistry_Operations_NotNilEvenWhenEmpty(t *testing.T) {
 
 func TestOperationRegistry_GetOperation_Existing(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "find.me",
 		Description: "Findable operation",
 		PluginName:  "test-plugin",
@@ -319,7 +319,7 @@ func TestOperationRegistry_GetOperation_EmptyName(t *testing.T) {
 
 func TestOperationRegistry_GetOperation_CaseSensitive(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "My.Operation",
 		Description: "Case sensitive",
 		PluginName:  "test-plugin",
@@ -339,7 +339,7 @@ func TestOperationRegistry_GetOperation_CaseSensitive(t *testing.T) {
 
 func TestOperationRegistry_UnregisterPluginOperations_RemovesAll(t *testing.T) {
 	registry := NewOperationRegistry()
-	operations := []*plugin.OperationSchema{
+	operations := []*pluginmodel.OperationSchema{
 		{Name: "plugin-a.op1", PluginName: "plugin-a"},
 		{Name: "plugin-a.op2", PluginName: "plugin-a"},
 		{Name: "plugin-b.op1", PluginName: "plugin-b"},
@@ -385,11 +385,11 @@ func TestOperationRegistry_UnregisterPluginOperations_PartialRemoval(t *testing.
 
 	// Register operations from multiple plugins
 	for i := 0; i < 5; i++ {
-		opA := &plugin.OperationSchema{
+		opA := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("plugin-a.op%d", i),
 			PluginName: "plugin-a",
 		}
-		opB := &plugin.OperationSchema{
+		opB := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("plugin-b.op%d", i),
 			PluginName: "plugin-b",
 		}
@@ -415,7 +415,7 @@ func TestOperationRegistry_UnregisterPluginOperations_PartialRemoval(t *testing.
 
 func TestOperationRegistry_GetPluginOperations_ReturnsMatching(t *testing.T) {
 	registry := NewOperationRegistry()
-	operations := []*plugin.OperationSchema{
+	operations := []*pluginmodel.OperationSchema{
 		{Name: "target.op1", PluginName: "target-plugin"},
 		{Name: "target.op2", PluginName: "target-plugin"},
 		{Name: "other.op1", PluginName: "other-plugin"},
@@ -463,7 +463,7 @@ func TestOperationRegistry_Count_AfterRegistration(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	for i := 0; i < 5; i++ {
-		op := &plugin.OperationSchema{
+		op := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("op.%d", i),
 			PluginName: "test-plugin",
 		}
@@ -478,7 +478,7 @@ func TestOperationRegistry_Count_AfterUnregistration(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	for i := 0; i < 5; i++ {
-		op := &plugin.OperationSchema{
+		op := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("op.%d", i),
 			PluginName: "test-plugin",
 		}
@@ -496,7 +496,7 @@ func TestOperationRegistry_Count_AfterUnregistration(t *testing.T) {
 
 func TestOperationRegistry_GetOperationSource_Existing(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "sourced.op",
 		Description: "Has known source",
 		PluginName:  "source-plugin",
@@ -533,7 +533,7 @@ func TestOperationRegistry_Clear_PopulatedRegistry(t *testing.T) {
 	registry := NewOperationRegistry()
 
 	for i := 0; i < 5; i++ {
-		op := &plugin.OperationSchema{
+		op := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("op.%d", i),
 			PluginName: "test-plugin",
 		}
@@ -550,7 +550,7 @@ func TestOperationRegistry_Clear_PopulatedRegistry(t *testing.T) {
 
 func TestOperationRegistry_Clear_AllowsReregistration(t *testing.T) {
 	registry := NewOperationRegistry()
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "clearable.op",
 		Description: "Can be re-registered",
 		PluginName:  "test-plugin",
@@ -579,7 +579,7 @@ func TestOperationRegistry_ConcurrentRegister(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(n int) {
 			defer wg.Done()
-			op := &plugin.OperationSchema{
+			op := &pluginmodel.OperationSchema{
 				Name:       fmt.Sprintf("concurrent.op.%d", n),
 				PluginName: fmt.Sprintf("plugin-%d", n%5),
 			}
@@ -602,7 +602,7 @@ func TestOperationRegistry_ConcurrentUnregister(t *testing.T) {
 
 	// Pre-register operations
 	for i := 0; i < operations; i++ {
-		op := &plugin.OperationSchema{
+		op := &pluginmodel.OperationSchema{
 			Name:       fmt.Sprintf("to.unregister.%d", i),
 			PluginName: "test-plugin",
 		}
@@ -637,7 +637,7 @@ func TestOperationRegistry_ConcurrentReadWrite(t *testing.T) {
 	for i := 0; i < iterations/2; i++ {
 		go func(n int) {
 			defer wg.Done()
-			op := &plugin.OperationSchema{
+			op := &pluginmodel.OperationSchema{
 				Name:       fmt.Sprintf("readwrite.op.%d", n),
 				PluginName: "test-plugin",
 			}
@@ -672,7 +672,7 @@ func TestOperationRegistry_ConcurrentPluginOperations(t *testing.T) {
 	// Register operations for multiple plugins
 	for p := 0; p < plugins; p++ {
 		for o := 0; o < opsPerPlugin; o++ {
-			op := &plugin.OperationSchema{
+			op := &pluginmodel.OperationSchema{
 				Name:       fmt.Sprintf("plugin-%d.op-%d", p, o),
 				PluginName: fmt.Sprintf("plugin-%d", p),
 			}
@@ -717,7 +717,7 @@ func TestOperationRegistry_SpecialCharactersInName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			registry := NewOperationRegistry()
-			op := &plugin.OperationSchema{
+			op := &pluginmodel.OperationSchema{
 				Name:        tt.opName,
 				Description: "Test",
 				PluginName:  "test-plugin",
@@ -742,7 +742,7 @@ func TestOperationRegistry_LongOperationName(t *testing.T) {
 
 	// Very long operation name
 	longName := "this.is.a.very.long.operation.name.that.might.cause.issues.with.certain.implementations.but.should.work.fine"
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        longName,
 		Description: "Long name operation",
 		PluginName:  "test-plugin",
@@ -780,7 +780,7 @@ func TestRegistryErrors(t *testing.T) {
 func TestOperationRegistry_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
-		operations []*plugin.OperationSchema
+		operations []*pluginmodel.OperationSchema
 		query      string
 		wantFound  bool
 	}{
@@ -792,7 +792,7 @@ func TestOperationRegistry_TableDriven(t *testing.T) {
 		},
 		{
 			name: "single operation - found",
-			operations: []*plugin.OperationSchema{
+			operations: []*pluginmodel.OperationSchema{
 				{Name: "single.op", PluginName: "plugin"},
 			},
 			query:     "single.op",
@@ -800,7 +800,7 @@ func TestOperationRegistry_TableDriven(t *testing.T) {
 		},
 		{
 			name: "single operation - not found",
-			operations: []*plugin.OperationSchema{
+			operations: []*pluginmodel.OperationSchema{
 				{Name: "single.op", PluginName: "plugin"},
 			},
 			query:     "other.op",
@@ -808,7 +808,7 @@ func TestOperationRegistry_TableDriven(t *testing.T) {
 		},
 		{
 			name: "multiple operations - found",
-			operations: []*plugin.OperationSchema{
+			operations: []*pluginmodel.OperationSchema{
 				{Name: "op.one", PluginName: "plugin-a"},
 				{Name: "op.two", PluginName: "plugin-a"},
 				{Name: "op.three", PluginName: "plugin-b"},
@@ -818,7 +818,7 @@ func TestOperationRegistry_TableDriven(t *testing.T) {
 		},
 		{
 			name: "multiple operations - not found",
-			operations: []*plugin.OperationSchema{
+			operations: []*pluginmodel.OperationSchema{
 				{Name: "op.one", PluginName: "plugin-a"},
 				{Name: "op.two", PluginName: "plugin-a"},
 			},

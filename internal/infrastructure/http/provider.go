@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/httpx"
 )
 
 // Compile-time interface check
@@ -27,17 +27,17 @@ var _ ports.OperationProvider = (*HTTPOperationProvider)(nil)
 //   - Response capture with body size limiting
 //   - Retryable status code signaling
 type HTTPOperationProvider struct {
-	client *httputil.Client
+	client *httpx.Client
 	logger ports.Logger
 
 	// operations holds the registry of HTTP operation schemas
-	operations map[string]*plugin.OperationSchema
+	operations map[string]*pluginmodel.OperationSchema
 }
 
-func NewHTTPOperationProvider(client *httputil.Client, logger ports.Logger) *HTTPOperationProvider {
+func NewHTTPOperationProvider(client *httpx.Client, logger ports.Logger) *HTTPOperationProvider {
 	// Build operation registry from schema definitions
 	ops := AllOperations()
-	registry := make(map[string]*plugin.OperationSchema, len(ops))
+	registry := make(map[string]*pluginmodel.OperationSchema, len(ops))
 	for i := range ops {
 		registry[ops[i].Name] = &ops[i]
 	}
@@ -49,13 +49,13 @@ func NewHTTPOperationProvider(client *httputil.Client, logger ports.Logger) *HTT
 	}
 }
 
-func (p *HTTPOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (p *HTTPOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, found := p.operations[name]
 	return op, found
 }
 
-func (p *HTTPOperationProvider) ListOperations() []*plugin.OperationSchema {
-	result := make([]*plugin.OperationSchema, 0, len(p.operations))
+func (p *HTTPOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	result := make([]*pluginmodel.OperationSchema, 0, len(p.operations))
 	for _, op := range p.operations {
 		result = append(result, op)
 	}
@@ -66,7 +66,7 @@ func (p *HTTPOperationProvider) ListOperations() []*plugin.OperationSchema {
 // Dispatches to handleHTTPRequest for http.request operation.
 //
 // Implements ports.OperationProvider.
-func (p *HTTPOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *HTTPOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	// Dispatch to handler
 	switch name {
 	case "http.request":
@@ -78,16 +78,16 @@ func (p *HTTPOperationProvider) Execute(ctx context.Context, name string, inputs
 
 // handleHTTPRequest executes an HTTP request with the given inputs.
 // Validates method and URL, constructs request with headers and body,
-// executes via httputil.Client, captures response, and signals retryable failures.
+// executes via httpx.Client, captures response, and signals retryable failures.
 //
 // Parameters:
 //   - ctx: request context with timeout
 //   - inputs: operation inputs (url, method, headers, body, timeout, retryable_status_codes)
 //
 // Returns:
-//   - *plugin.OperationResult: execution result with status_code, body, headers, body_truncated outputs
+//   - *pluginmodel.OperationResult: execution result with status_code, body, headers, body_truncated outputs
 //   - error: nil on success, non-nil on failure
-func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	// Validate required inputs
 	if err := validateRequiredInputs(inputs); err != nil {
 		return failureResult(err.Error()), nil
@@ -118,7 +118,7 @@ func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs ma
 		defer cancel()
 	}
 
-	// Execute HTTP request via httputil.Client (1MB body limit per NFR-005)
+	// Execute HTTP request via httpx.Client (1MB body limit per NFR-005)
 	const maxBodyBytes = 1 << 20
 	resp, err := p.client.Do(ctxWithTimeout, method, url, headers, body, maxBodyBytes)
 	if err != nil {
@@ -127,7 +127,7 @@ func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs ma
 
 	// Check if status code is retryable
 	if isRetryableStatus(resp.StatusCode, retryableStatusCodes) {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: buildOutputs(resp),
 			Error:   fmt.Sprintf("http.request: retryable status code %d", resp.StatusCode),
@@ -135,7 +135,7 @@ func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs ma
 	}
 
 	// Success - return response data
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: buildOutputs(resp),
 		Error:   "",
@@ -254,7 +254,7 @@ func extractRetryableStatusCodes(inputs map[string]any) []int {
 
 // handleRequestError converts HTTP request errors to operation results.
 // timeout is the user-specified timeout (0 means default was used).
-func handleRequestError(err error, timeout time.Duration) *plugin.OperationResult {
+func handleRequestError(err error, timeout time.Duration) *pluginmodel.OperationResult {
 	if errors.Is(err, context.DeadlineExceeded) {
 		if timeout > 0 {
 			return failureResult("http.request: request timeout after " + timeout.String())
@@ -273,8 +273,8 @@ func isRetryableStatus(statusCode int, retryableCodes []int) bool {
 }
 
 // failureResult creates an operation result for failures
-func failureResult(errorMsg string) *plugin.OperationResult {
-	return &plugin.OperationResult{
+func failureResult(errorMsg string) *pluginmodel.OperationResult {
+	return &pluginmodel.OperationResult{
 		Success: false,
 		Outputs: make(map[string]any),
 		Error:   errorMsg,
@@ -282,7 +282,7 @@ func failureResult(errorMsg string) *plugin.OperationResult {
 }
 
 // buildOutputs creates the outputs map from HTTP response
-func buildOutputs(resp *httputil.Response) map[string]any {
+func buildOutputs(resp *httpx.Response) map[string]any {
 	return map[string]any{
 		"status_code":    resp.StatusCode,
 		"body":           resp.Body,

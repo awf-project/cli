@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // GHRunner abstracts GitHub CLI command execution for testability.
@@ -28,13 +28,13 @@ type GitHubOperationProvider struct {
 	logger ports.Logger
 
 	// operations holds the registry of all 8 operation schemas
-	operations map[string]*plugin.OperationSchema
+	operations map[string]*pluginmodel.OperationSchema
 }
 
 func NewGitHubOperationProvider(runner GHRunner, logger ports.Logger) *GitHubOperationProvider {
 	// Build operation registry from schema definitions
 	ops := AllOperations()
-	registry := make(map[string]*plugin.OperationSchema, len(ops))
+	registry := make(map[string]*pluginmodel.OperationSchema, len(ops))
 	for i := range ops {
 		registry[ops[i].Name] = &ops[i]
 	}
@@ -46,13 +46,13 @@ func NewGitHubOperationProvider(runner GHRunner, logger ports.Logger) *GitHubOpe
 	}
 }
 
-func (p *GitHubOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (p *GitHubOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, found := p.operations[name]
 	return op, found
 }
 
-func (p *GitHubOperationProvider) ListOperations() []*plugin.OperationSchema {
-	result := make([]*plugin.OperationSchema, 0, len(p.operations))
+func (p *GitHubOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	result := make([]*pluginmodel.OperationSchema, 0, len(p.operations))
 	for _, op := range p.operations {
 		result = append(result, op)
 	}
@@ -63,7 +63,7 @@ func (p *GitHubOperationProvider) ListOperations() []*plugin.OperationSchema {
 // Dispatches to operation-specific handler methods based on operation name.
 //
 // Implements ports.OperationProvider.
-func (p *GitHubOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	if p.runner == nil {
 		return nil, fmt.Errorf("github provider: runner not initialized")
 	}
@@ -101,7 +101,7 @@ func (p *GitHubOperationProvider) Execute(ctx context.Context, name string, inpu
 //   - repo: repository in owner/repo format (optional, auto-detected)
 //
 // Outputs: JSON fields from gh CLI (number, title, body, state, labels)
-func (p *GitHubOperationProvider) handleGetIssue(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleGetIssue(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	number := formatNumber(inputs["number"])
 	if number == "" {
 		return nil, fmt.Errorf("github.get_issue: number is required")
@@ -119,11 +119,11 @@ func (p *GitHubOperationProvider) handleGetIssue(ctx context.Context, inputs map
 		if p.logger != nil {
 			p.logger.Warn("github.get_issue failed", "error", err.Error(), "number", number, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.get_issue: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.get_issue: %w", err)
 	}
 
 	outputs := parseJSONOutputs(out)
-	return &plugin.OperationResult{Success: true, Outputs: outputs}, nil
+	return &pluginmodel.OperationResult{Success: true, Outputs: outputs}, nil
 }
 
 // handleGetPR retrieves pull request information via gh CLI.
@@ -133,7 +133,7 @@ func (p *GitHubOperationProvider) handleGetIssue(ctx context.Context, inputs map
 //   - repo: repository in owner/repo format (optional, auto-detected)
 //
 // Outputs: JSON fields from gh CLI (number, title, body, state, headRefName, baseRefName, mergeable, mergedAt, labels)
-func (p *GitHubOperationProvider) handleGetPR(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleGetPR(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	number := formatNumber(inputs["number"])
 	if number == "" {
 		return nil, fmt.Errorf("github.get_pr: number is required")
@@ -151,11 +151,11 @@ func (p *GitHubOperationProvider) handleGetPR(ctx context.Context, inputs map[st
 		if p.logger != nil {
 			p.logger.Warn("github.get_pr failed", "error", err.Error(), "number", number, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.get_pr: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.get_pr: %w", err)
 	}
 
 	outputs := parseJSONOutputs(out)
-	return &plugin.OperationResult{Success: true, Outputs: outputs}, nil
+	return &pluginmodel.OperationResult{Success: true, Outputs: outputs}, nil
 }
 
 // handleCreatePR creates a GitHub pull request via gh CLI.
@@ -172,7 +172,7 @@ func (p *GitHubOperationProvider) handleGetPR(ctx context.Context, inputs map[st
 //   - number: PR number (string)
 //   - url: PR URL
 //   - already_exists: "true" if PR already existed
-func (p *GitHubOperationProvider) handleCreatePR(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleCreatePR(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	// nolint:errcheck // optional inputs default to empty string
 	title, _ := inputs["title"].(string)
 	title = strings.TrimSpace(title)
@@ -229,7 +229,7 @@ func (p *GitHubOperationProvider) handleCreatePR(ctx context.Context, inputs map
 			return p.fetchExistingPR(ctx, head, repo)
 		}
 
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Error:   errMsg,
 			Outputs: map[string]any{
@@ -247,7 +247,7 @@ func (p *GitHubOperationProvider) handleCreatePR(ctx context.Context, inputs map
 		p.logger.Info("PR created", "url", prURL, "number", prNumber)
 	}
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{
 			"number":         prNumber,
@@ -269,7 +269,7 @@ func (p *GitHubOperationProvider) handleCreatePR(ctx context.Context, inputs map
 // Outputs:
 //   - number: issue number (string)
 //   - url: issue URL
-func (p *GitHubOperationProvider) handleCreateIssue(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleCreateIssue(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	title, _ := inputs["title"].(string) // nolint:errcheck // required input validated below
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -305,13 +305,13 @@ func (p *GitHubOperationProvider) handleCreateIssue(ctx context.Context, inputs 
 		if p.logger != nil {
 			p.logger.Warn("github.create_issue failed", "error", err.Error(), "title", title, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.create_issue: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.create_issue: %w", err)
 	}
 
 	issueURL := strings.TrimSpace(string(out))
 	issueNumber := extractPRNumber(issueURL) // Same URL format
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"number": issueNumber, "url": issueURL},
 	}, nil
@@ -326,7 +326,7 @@ func (p *GitHubOperationProvider) handleCreateIssue(ctx context.Context, inputs 
 //
 // Outputs:
 //   - labels: comma-separated list of added labels
-func (p *GitHubOperationProvider) handleAddLabels(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleAddLabels(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	number := formatNumber(inputs["number"])
 	if number == "" {
 		return nil, fmt.Errorf("github.add_labels: number is required")
@@ -351,10 +351,10 @@ func (p *GitHubOperationProvider) handleAddLabels(ctx context.Context, inputs ma
 		if p.logger != nil {
 			p.logger.Warn("github.add_labels failed", "error", err.Error(), "number", number, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.add_labels: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.add_labels: %w", err)
 	}
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"labels": strings.Join(labels, ",")},
 	}, nil
@@ -367,7 +367,7 @@ func (p *GitHubOperationProvider) handleAddLabels(ctx context.Context, inputs ma
 //   - repo: repository in owner/repo format (optional, auto-detected)
 //
 // Outputs: JSON fields from gh CLI (comments array)
-func (p *GitHubOperationProvider) handleListComments(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleListComments(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	number := formatNumber(inputs["number"])
 	if number == "" {
 		return nil, fmt.Errorf("github.list_comments: number is required")
@@ -385,11 +385,11 @@ func (p *GitHubOperationProvider) handleListComments(ctx context.Context, inputs
 		if p.logger != nil {
 			p.logger.Warn("github.list_comments failed", "error", err.Error(), "number", number, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.list_comments: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.list_comments: %w", err)
 	}
 
 	outputs := parseJSONOutputs(out)
-	return &plugin.OperationResult{Success: true, Outputs: outputs}, nil
+	return &pluginmodel.OperationResult{Success: true, Outputs: outputs}, nil
 }
 
 // handleAddComment adds a comment to an issue or PR via gh CLI.
@@ -402,7 +402,7 @@ func (p *GitHubOperationProvider) handleListComments(ctx context.Context, inputs
 // Outputs:
 //   - comment_id: comment ID (empty string, gh CLI doesn't return it)
 //   - url: comment URL
-func (p *GitHubOperationProvider) handleAddComment(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleAddComment(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	number := formatNumber(inputs["number"])
 	if number == "" {
 		return nil, fmt.Errorf("github.add_comment: number is required")
@@ -425,11 +425,11 @@ func (p *GitHubOperationProvider) handleAddComment(ctx context.Context, inputs m
 		if p.logger != nil {
 			p.logger.Warn("github.add_comment failed", "error", err.Error(), "number", number, "repo", repo)
 		}
-		return &plugin.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.add_comment: %w", err)
+		return &pluginmodel.OperationResult{Success: false, Error: err.Error(), Outputs: make(map[string]any)}, fmt.Errorf("github.add_comment: %w", err)
 	}
 
 	commentURL := strings.TrimSpace(string(out))
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"comment_id": "", "url": commentURL},
 	}, nil
@@ -447,7 +447,7 @@ func (p *GitHubOperationProvider) handleAddComment(ctx context.Context, inputs m
 //   - succeeded: count of successful operations
 //   - failed: count of failed operations
 //   - results: array of operation results
-func (p *GitHubOperationProvider) handleBatch(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) handleBatch(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	opsRaw, _ := inputs["operations"].([]map[string]any) //nolint:errcheck // zero-value is acceptable
 	if len(opsRaw) == 0 {
 		// Try []any conversion (YAML/JSON deserializes as []any)
@@ -473,14 +473,14 @@ func (p *GitHubOperationProvider) handleBatch(ctx context.Context, inputs map[st
 		MaxConcurrent: maxConcurrent,
 	})
 	if err != nil {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Error:   err.Error(),
 			Outputs: map[string]any{"total": 0, "succeeded": 0, "failed": 0, "results": []any{}},
 		}, fmt.Errorf("github.batch: %w", err)
 	}
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: batchResult.Failed == 0,
 		Outputs: map[string]any{
 			"total":     batchResult.Total,
@@ -492,7 +492,7 @@ func (p *GitHubOperationProvider) handleBatch(ctx context.Context, inputs map[st
 }
 
 // fetchExistingPR retrieves info for an existing PR on the given head branch.
-func (p *GitHubOperationProvider) fetchExistingPR(ctx context.Context, head, repo string) (*plugin.OperationResult, error) {
+func (p *GitHubOperationProvider) fetchExistingPR(ctx context.Context, head, repo string) (*pluginmodel.OperationResult, error) {
 	args := []string{"pr", "view", head, "--json", "number,url"}
 	if repo != "" {
 		args = append(args, "--repo", repo)
@@ -503,7 +503,7 @@ func (p *GitHubOperationProvider) fetchExistingPR(ctx context.Context, head, rep
 		if p.logger != nil {
 			p.logger.Warn("fetchExistingPR failed", "error", err.Error(), "head", head, "repo", repo)
 		}
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Error:   fmt.Sprintf("fetch existing PR: %s", err),
 			Outputs: map[string]any{
@@ -517,7 +517,7 @@ func (p *GitHubOperationProvider) fetchExistingPR(ctx context.Context, head, rep
 	// Parse JSON: {"number":123,"url":"..."}
 	number, url := parseNumberAndURL(string(out))
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{
 			"number":         number,

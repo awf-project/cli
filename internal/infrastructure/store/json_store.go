@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // JSONStore implements StateStore for JSON file persistence.

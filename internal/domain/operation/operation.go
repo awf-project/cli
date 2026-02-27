@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // Operation defines an executable operation with typed inputs and schema.
@@ -17,10 +17,10 @@ type Operation interface {
 	// Execute runs the operation with provided inputs.
 	// Context is used for cancellation and timeout propagation.
 	// Inputs must be validated against Schema() before calling Execute.
-	Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+	Execute(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 
 	// Schema returns the operation metadata including input/output definitions.
-	Schema() *plugin.OperationSchema
+	Schema() *pluginmodel.OperationSchema
 }
 
 // Sentinel errors for operation lifecycle and execution.

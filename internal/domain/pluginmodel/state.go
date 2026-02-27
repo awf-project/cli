@@ -1,4 +1,4 @@
-package plugin
+package pluginmodel
 
 type PluginState struct {
 	Enabled    bool           `json:"enabled"`

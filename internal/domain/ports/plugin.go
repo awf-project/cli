@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // Plugin defines the contract that all plugins must implement.
@@ -21,7 +21,7 @@ type Plugin interface {
 // PluginManager handles plugin lifecycle operations.
 type PluginManager interface {
 	// Discover finds plugins in the plugins directory.
-	Discover(ctx context.Context) ([]*plugin.PluginInfo, error)
+	Discover(ctx context.Context) ([]*pluginmodel.PluginInfo, error)
 	// Load loads a plugin by name.
 	Load(ctx context.Context, name string) error
 	// Init initializes a loaded plugin.
@@ -31,40 +31,40 @@ type PluginManager interface {
 	// ShutdownAll stops all running plugins.
 	ShutdownAll(ctx context.Context) error
 	// Get returns plugin info by name.
-	Get(name string) (*plugin.PluginInfo, bool)
+	Get(name string) (*pluginmodel.PluginInfo, bool)
 	// List returns all known plugins.
-	List() []*plugin.PluginInfo
+	List() []*pluginmodel.PluginInfo
 }
 
 // OperationProvider supplies plugin-provided operations.
 type OperationProvider interface {
 	// GetOperation returns an operation by name.
-	GetOperation(name string) (*plugin.OperationSchema, bool)
+	GetOperation(name string) (*pluginmodel.OperationSchema, bool)
 	// ListOperations returns all available operations.
-	ListOperations() []*plugin.OperationSchema
+	ListOperations() []*pluginmodel.OperationSchema
 	// Execute runs a plugin operation.
-	Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error)
+	Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error)
 }
 
 // PluginRegistry manages registration of plugin-provided extensions.
 type PluginRegistry interface {
 	// RegisterOperation adds a plugin operation.
-	RegisterOperation(op *plugin.OperationSchema) error
+	RegisterOperation(op *pluginmodel.OperationSchema) error
 	// UnregisterOperation removes a plugin operation.
 	UnregisterOperation(name string) error
 	// Operations returns all registered operations.
-	Operations() []*plugin.OperationSchema
+	Operations() []*pluginmodel.OperationSchema
 }
 
 // PluginLoader discovers and loads plugins from the filesystem.
 type PluginLoader interface {
 	// DiscoverPlugins scans a directory for plugins and returns their info.
 	// Each subdirectory with a plugin.yaml is considered a plugin.
-	DiscoverPlugins(ctx context.Context, pluginsDir string) ([]*plugin.PluginInfo, error)
+	DiscoverPlugins(ctx context.Context, pluginsDir string) ([]*pluginmodel.PluginInfo, error)
 	// LoadPlugin loads a single plugin from a directory path.
-	LoadPlugin(ctx context.Context, pluginDir string) (*plugin.PluginInfo, error)
+	LoadPlugin(ctx context.Context, pluginDir string) (*pluginmodel.PluginInfo, error)
 	// ValidatePlugin checks if a discovered plugin is valid and compatible.
-	ValidatePlugin(info *plugin.PluginInfo) error
+	ValidatePlugin(info *pluginmodel.PluginInfo) error
 }
 
 // PluginStore handles plugin state persistence.
@@ -74,7 +74,7 @@ type PluginStore interface {
 	// Load reads plugin states from storage.
 	Load(ctx context.Context) error
 	// GetState returns the full state for a plugin, or nil if not found.
-	GetState(name string) *plugin.PluginState
+	GetState(name string) *pluginmodel.PluginState
 	// ListDisabled returns names of all explicitly disabled plugins.
 	ListDisabled() []string
 }

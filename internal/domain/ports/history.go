@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // HistoryStore defines the contract for persisting workflow execution history.

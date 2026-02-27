@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // --- Constructor Tests ---
@@ -163,8 +163,8 @@ func TestRPCPluginManager_Load_ValidPlugin(t *testing.T) {
 	if info == nil {
 		t.Fatal("Get() info = nil, want non-nil after Load")
 	}
-	if info.Status != plugin.StatusLoaded {
-		t.Errorf("Status = %q, want %q", info.Status, plugin.StatusLoaded)
+	if info.Status != pluginmodel.StatusLoaded {
+		t.Errorf("Status = %q, want %q", info.Status, pluginmodel.StatusLoaded)
 	}
 }
 
@@ -242,8 +242,8 @@ func TestRPCPluginManager_Load_AlreadyLoaded(t *testing.T) {
 	if !found {
 		t.Error("Get() found = false after second Load")
 	}
-	if info.Status != plugin.StatusLoaded {
-		t.Errorf("Status = %q, want %q after second Load", info.Status, plugin.StatusLoaded)
+	if info.Status != pluginmodel.StatusLoaded {
+		t.Errorf("Status = %q, want %q after second Load", info.Status, pluginmodel.StatusLoaded)
 	}
 }
 
@@ -289,8 +289,8 @@ func TestRPCPluginManager_Init_WithConfig(t *testing.T) {
 	if !found {
 		t.Fatal("Get() found = false after Init")
 	}
-	if info.Status != plugin.StatusRunning {
-		t.Errorf("Status = %q, want %q after Init", info.Status, plugin.StatusRunning)
+	if info.Status != pluginmodel.StatusRunning {
+		t.Errorf("Status = %q, want %q after Init", info.Status, pluginmodel.StatusRunning)
 	}
 }
 
@@ -421,8 +421,8 @@ func TestRPCPluginManager_Shutdown_RunningPlugin(t *testing.T) {
 
 	// Verify plugin is running
 	info, _ := manager.Get("valid-simple")
-	if info.Status != plugin.StatusRunning {
-		t.Fatalf("Plugin status = %q, want %q before shutdown", info.Status, plugin.StatusRunning)
+	if info.Status != pluginmodel.StatusRunning {
+		t.Fatalf("Plugin status = %q, want %q before shutdown", info.Status, pluginmodel.StatusRunning)
 	}
 
 	err := manager.Shutdown(ctx, "valid-simple")
@@ -435,11 +435,11 @@ func TestRPCPluginManager_Shutdown_RunningPlugin(t *testing.T) {
 	if !found {
 		t.Fatal("Plugin not found after Shutdown")
 	}
-	if info.Status == plugin.StatusRunning {
+	if info.Status == pluginmodel.StatusRunning {
 		t.Error("Plugin still running after Shutdown")
 	}
-	if info.Status != plugin.StatusStopped {
-		t.Errorf("Status = %q, want %q after Shutdown", info.Status, plugin.StatusStopped)
+	if info.Status != pluginmodel.StatusStopped {
+		t.Errorf("Status = %q, want %q after Shutdown", info.Status, pluginmodel.StatusStopped)
 	}
 }
 
@@ -553,8 +553,8 @@ func TestRPCPluginManager_ShutdownAll_MultiplePlugins(t *testing.T) {
 	// Verify plugins are running
 	for _, dir := range pluginDirs {
 		info, _ := manager.Get(dir)
-		if info.Status != plugin.StatusRunning {
-			t.Fatalf("Plugin %q status = %q, want %q before ShutdownAll", dir, info.Status, plugin.StatusRunning)
+		if info.Status != pluginmodel.StatusRunning {
+			t.Fatalf("Plugin %q status = %q, want %q before ShutdownAll", dir, info.Status, pluginmodel.StatusRunning)
 		}
 	}
 
@@ -570,11 +570,11 @@ func TestRPCPluginManager_ShutdownAll_MultiplePlugins(t *testing.T) {
 			t.Errorf("Plugin %q not found after ShutdownAll", dir)
 			continue
 		}
-		if info.Status == plugin.StatusRunning {
+		if info.Status == pluginmodel.StatusRunning {
 			t.Errorf("Plugin %q still running after ShutdownAll", dir)
 		}
-		if info.Status != plugin.StatusStopped {
-			t.Errorf("Plugin %q status = %q, want %q after ShutdownAll", dir, info.Status, plugin.StatusStopped)
+		if info.Status != pluginmodel.StatusStopped {
+			t.Errorf("Plugin %q status = %q, want %q after ShutdownAll", dir, info.Status, pluginmodel.StatusStopped)
 		}
 	}
 }
@@ -636,7 +636,7 @@ func TestRPCPluginManager_ShutdownAll_MixedStates(t *testing.T) {
 
 	// Running plugin should be stopped
 	info, _ := manager.Get("valid-simple")
-	if info.Status == plugin.StatusRunning {
+	if info.Status == pluginmodel.StatusRunning {
 		t.Error("Running plugin still running after ShutdownAll")
 	}
 }
@@ -673,12 +673,12 @@ func TestRPCPluginManager_Get_AfterDirectInsert(t *testing.T) {
 	// Test the Get implementation directly by inserting into the map
 	manager := NewRPCPluginManager(nil)
 
-	testInfo := &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{
+	testInfo := &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
 			Name:    "test-plugin",
 			Version: "1.0.0",
 		},
-		Status: plugin.StatusLoaded,
+		Status: pluginmodel.StatusLoaded,
 		Path:   "/plugins/test-plugin",
 	}
 
@@ -718,14 +718,14 @@ func TestRPCPluginManager_List_AfterDirectInsert(t *testing.T) {
 	manager := NewRPCPluginManager(nil)
 
 	// Insert test plugins
-	testPlugins := []*plugin.PluginInfo{
+	testPlugins := []*pluginmodel.PluginInfo{
 		{
-			Manifest: &plugin.Manifest{Name: "plugin-a", Version: "1.0.0"},
-			Status:   plugin.StatusLoaded,
+			Manifest: &pluginmodel.Manifest{Name: "plugin-a", Version: "1.0.0"},
+			Status:   pluginmodel.StatusLoaded,
 		},
 		{
-			Manifest: &plugin.Manifest{Name: "plugin-b", Version: "2.0.0"},
-			Status:   plugin.StatusRunning,
+			Manifest: &pluginmodel.Manifest{Name: "plugin-b", Version: "2.0.0"},
+			Status:   pluginmodel.StatusRunning,
 		},
 	}
 
@@ -756,8 +756,8 @@ func TestRPCPluginManager_List_ReturnsNewSlice(t *testing.T) {
 
 	// Insert a test plugin
 	manager.mu.Lock()
-	manager.plugins["test"] = &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "test"},
+	manager.plugins["test"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{Name: "test"},
 	}
 	manager.mu.Unlock()
 
@@ -780,8 +780,8 @@ func TestRPCPluginManager_ConcurrentGet(t *testing.T) {
 
 	// Insert test plugin
 	manager.mu.Lock()
-	manager.plugins["concurrent-test"] = &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "concurrent-test"},
+	manager.plugins["concurrent-test"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{Name: "concurrent-test"},
 	}
 	manager.mu.Unlock()
 
@@ -804,8 +804,8 @@ func TestRPCPluginManager_ConcurrentList(t *testing.T) {
 	manager.mu.Lock()
 	for i := 0; i < 10; i++ {
 		name := "plugin-" + string(rune('a'+i))
-		manager.plugins[name] = &plugin.PluginInfo{
-			Manifest: &plugin.Manifest{Name: name},
+		manager.plugins[name] = &pluginmodel.PluginInfo{
+			Manifest: &pluginmodel.Manifest{Name: name},
 		}
 	}
 	manager.mu.Unlock()
@@ -827,8 +827,8 @@ func TestRPCPluginManager_ConcurrentGetAndList(t *testing.T) {
 
 	// Insert test plugin
 	manager.mu.Lock()
-	manager.plugins["test"] = &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "test"},
+	manager.plugins["test"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{Name: "test"},
 	}
 	manager.mu.Unlock()
 
@@ -964,13 +964,13 @@ func TestRPCManagerError_ErrorsIs(t *testing.T) {
 func TestRPCPluginManager_ImplementsPluginManager(t *testing.T) {
 	// Compile-time check that RPCPluginManager implements the interface
 	var _ interface {
-		Discover(context.Context) ([]*plugin.PluginInfo, error)
+		Discover(context.Context) ([]*pluginmodel.PluginInfo, error)
 		Load(context.Context, string) error
 		Init(context.Context, string, map[string]any) error
 		Shutdown(context.Context, string) error
 		ShutdownAll(context.Context) error
-		Get(string) (*plugin.PluginInfo, bool)
-		List() []*plugin.PluginInfo
+		Get(string) (*pluginmodel.PluginInfo, bool)
+		List() []*pluginmodel.PluginInfo
 	} = (*RPCPluginManager)(nil)
 }
 
@@ -1006,8 +1006,8 @@ func TestRPCPluginManager_List_Order(t *testing.T) {
 	names := []string{"zebra", "alpha", "middle"}
 	manager.mu.Lock()
 	for _, name := range names {
-		manager.plugins[name] = &plugin.PluginInfo{
-			Manifest: &plugin.Manifest{Name: name},
+		manager.plugins[name] = &pluginmodel.PluginInfo{
+			Manifest: &pluginmodel.Manifest{Name: name},
 		}
 	}
 	manager.mu.Unlock()
@@ -1068,7 +1068,7 @@ func TestRPCPluginManager_LifecycleStates(t *testing.T) {
 	if !found {
 		t.Fatalf("Plugin %q not found after Discover", pluginKey)
 	}
-	if info.Status != plugin.StatusDiscovered && info.Status != plugin.StatusLoaded {
+	if info.Status != pluginmodel.StatusDiscovered && info.Status != pluginmodel.StatusLoaded {
 		t.Errorf("Status after Discover = %q, want Discovered or Loaded", info.Status)
 	}
 
@@ -1077,7 +1077,7 @@ func TestRPCPluginManager_LifecycleStates(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	info, _ = manager.Get(pluginKey)
-	if info.Status != plugin.StatusLoaded {
+	if info.Status != pluginmodel.StatusLoaded {
 		t.Errorf("Status after Load = %q, want Loaded", info.Status)
 	}
 
@@ -1086,7 +1086,7 @@ func TestRPCPluginManager_LifecycleStates(t *testing.T) {
 		t.Fatalf("Init() error = %v", err)
 	}
 	info, _ = manager.Get(pluginKey)
-	if info.Status != plugin.StatusRunning && info.Status != plugin.StatusInitialized {
+	if info.Status != pluginmodel.StatusRunning && info.Status != pluginmodel.StatusInitialized {
 		t.Errorf("Status after Init = %q, want Running or Initialized", info.Status)
 	}
 
@@ -1095,7 +1095,7 @@ func TestRPCPluginManager_LifecycleStates(t *testing.T) {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
 	info, found = manager.Get(pluginKey)
-	if found && info.Status == plugin.StatusRunning {
+	if found && info.Status == pluginmodel.StatusRunning {
 		t.Error("Plugin still running after Shutdown")
 	}
 }

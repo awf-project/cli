@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 func TestGenerator_generateEdges_SingleOnSuccessTransition(t *testing.T) {

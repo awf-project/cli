@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // NotifyOperationProvider implements ports.OperationProvider for notification operations.
@@ -23,7 +23,7 @@ type NotifyOperationProvider struct {
 	defaultBackend string
 
 	// operations holds the registry of notification operation schemas
-	operations map[string]*plugin.OperationSchema
+	operations map[string]*pluginmodel.OperationSchema
 }
 
 // NewNotifyOperationProvider creates a new notification operation provider.
@@ -40,7 +40,7 @@ type NotifyOperationProvider struct {
 func NewNotifyOperationProvider(logger ports.Logger) *NotifyOperationProvider {
 	// Build operation registry from schema definitions
 	ops := AllOperations()
-	registry := make(map[string]*plugin.OperationSchema, len(ops))
+	registry := make(map[string]*pluginmodel.OperationSchema, len(ops))
 	for i := range ops {
 		registry[ops[i].Name] = &ops[i]
 	}
@@ -99,15 +99,15 @@ func (p *NotifyOperationProvider) SetDefaultBackend(name string) {
 
 // GetOperation returns an operation schema by name.
 // Implements ports.OperationProvider.
-func (p *NotifyOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (p *NotifyOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, found := p.operations[name]
 	return op, found
 }
 
 // ListOperations returns all available notification operations.
 // Implements ports.OperationProvider.
-func (p *NotifyOperationProvider) ListOperations() []*plugin.OperationSchema {
-	result := make([]*plugin.OperationSchema, 0, len(p.operations))
+func (p *NotifyOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	result := make([]*pluginmodel.OperationSchema, 0, len(p.operations))
 	for _, op := range p.operations {
 		result = append(result, op)
 	}
@@ -118,7 +118,7 @@ func (p *NotifyOperationProvider) ListOperations() []*plugin.OperationSchema {
 // Dispatches to backend-specific handlers based on the 'backend' input.
 //
 // Implements ports.OperationProvider.
-func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	if p.logger != nil {
 		p.logger.Debug("executing notify operation", "operation", name, "inputs", inputs)
 	}
@@ -126,7 +126,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 	// Validate operation exists
 	opSchema, found := p.operations[name]
 	if !found {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify: operation %q not found", name)
@@ -135,7 +135,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 	// Extract backend input (optional - can fall back to default)
 	backend, err := extractStringInput(inputs, "backend", false)
 	if err != nil {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: %w", err)
@@ -148,7 +148,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 
 	// Validate that a backend is specified (either explicit or default)
 	if backend == "" {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: no backend specified and no default backend configured")
@@ -156,7 +156,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 
 	message, err := extractStringInput(inputs, "message", true)
 	if err != nil {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: %w", err)
@@ -175,7 +175,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 
 	// Validate priority value
 	if priority != "low" && priority != "default" && priority != "high" {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: invalid priority %q (must be: low, default, high)", priority)
@@ -188,7 +188,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 		for k := range p.backends {
 			availableBackends = append(availableBackends, k)
 		}
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: backend %q not available (available: %v)", backend, availableBackends)
@@ -212,7 +212,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 
 	// Validate required inputs for specific backends
 	if validateErr := validateBackendInputs(backend, opSchema, inputs); validateErr != nil {
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: %w", validateErr)
@@ -229,7 +229,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 		if p.logger != nil {
 			p.logger.Error("backend send failed", "backend", backend, "error", err)
 		}
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
 		}, fmt.Errorf("notify.send: backend %q failed: %w", backend, err)
@@ -240,7 +240,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 		p.logger.Info("notification sent", "backend", result.Backend, "status", result.StatusCode)
 	}
 
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{
 			"backend":  result.Backend,
@@ -267,7 +267,7 @@ func extractStringInput(inputs map[string]any, key string, required bool) (strin
 	return strings.TrimSpace(strValue), nil
 }
 
-func validateBackendInputs(backend string, _ *plugin.OperationSchema, inputs map[string]any) error {
+func validateBackendInputs(backend string, _ *pluginmodel.OperationSchema, inputs map[string]any) error {
 	if backend == "webhook" {
 		webhookURL, err := extractStringInput(inputs, "webhook_url", false)
 		if err != nil {

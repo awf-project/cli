@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/pkg/output"
+	"github.com/awf-project/cli/pkg/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

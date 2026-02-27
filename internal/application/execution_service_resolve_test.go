@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/testutil/builders"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/builders"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +29,7 @@ func TestResolveOperationValue(t *testing.T) {
 		expectedResolve    map[string]any
 		wantErr            bool
 		errorContains      string
-		mockOperationLogic func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+		mockOperationLogic func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 	}{
 		{
 			name: "string value with template interpolation",
@@ -43,10 +43,10 @@ func TestResolveOperationValue(t *testing.T) {
 				"message": "Hello World!",
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				// Verify the resolved input
 				assert.Equal(t, "Hello World!", inputs["message"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -74,7 +74,7 @@ func TestResolveOperationValue(t *testing.T) {
 				},
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				config, ok := inputs["config"].(map[string]any)
 				require.True(t, ok, "config should be a map")
 				assert.Equal(t, "value1", config["key1"])
@@ -82,7 +82,7 @@ func TestResolveOperationValue(t *testing.T) {
 				nested, ok := config["key3"].(map[string]any)
 				require.True(t, ok, "nested should be a map")
 				assert.Equal(t, "Nested data", nested["nested"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestResolveOperationValue(t *testing.T) {
 				},
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				items, ok := inputs["items"].([]any)
 				require.True(t, ok, "items should be an array")
 				assert.Len(t, items, 5)
@@ -121,7 +121,7 @@ func TestResolveOperationValue(t *testing.T) {
 				itemMap, ok := items[4].(map[string]any)
 				require.True(t, ok, "items[4] should be a map")
 				assert.Equal(t, "resolved", itemMap["key"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -140,12 +140,12 @@ func TestResolveOperationValue(t *testing.T) {
 				"float":   3.14,
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				assert.Equal(t, 42, inputs["count"])
 				assert.True(t, inputs["enabled"].(bool))
 				assert.Nil(t, inputs["data"])
 				assert.Equal(t, 3.14, inputs["float"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -158,7 +158,7 @@ func TestResolveOperationValue(t *testing.T) {
 			workflowInputs: map[string]any{},
 			wantErr:        true,
 			errorContains:  "input \"config\"",
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				t.Fatal("should not reach operation execution")
 				return nil, nil
 			},
@@ -174,7 +174,7 @@ func TestResolveOperationValue(t *testing.T) {
 			workflowInputs: map[string]any{},
 			wantErr:        true,
 			errorContains:  "input \"items\"",
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				t.Fatal("should not reach operation execution")
 				return nil, nil
 			},
@@ -191,14 +191,14 @@ func TestResolveOperationValue(t *testing.T) {
 				"empty_array": []any{},
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				emptyMap, ok := inputs["empty_map"].(map[string]any)
 				require.True(t, ok, "empty_map should be a map")
 				assert.Empty(t, emptyMap)
 				emptyArray, ok := inputs["empty_array"].([]any)
 				require.True(t, ok, "empty_array should be an array")
 				assert.Empty(t, emptyArray)
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -224,7 +224,7 @@ func TestResolveOperationValue(t *testing.T) {
 				"c": "value-c",
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				deep := inputs["deep"].(map[string]any)
 				level1 := deep["level1"].([]any)
 				level1Map := level1[0].(map[string]any)
@@ -233,7 +233,7 @@ func TestResolveOperationValue(t *testing.T) {
 				assert.Equal(t, "value-b", level2b[0])
 				level2bMap := level2b[1].(map[string]any)
 				assert.Equal(t, "value-c", level2bMap["level3"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 	}
@@ -292,16 +292,16 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 		operationInputs    map[string]any
 		workflowInputs     map[string]any
 		wantErr            bool
-		mockOperationLogic func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+		mockOperationLogic func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 	}{
 		{
 			name:            "nil operation inputs",
 			operationInputs: nil,
 			workflowInputs:  map[string]any{"key": "value"},
 			wantErr:         false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				// Nil inputs should result in empty map or nil
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -313,9 +313,9 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 				"special": "!@#$%^&*()",
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				assert.Equal(t, "Special: !@#$%^&*()", inputs["value"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -328,10 +328,10 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 				"value": "resolved",
 			},
 			wantErr: false,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				assert.Equal(t, "numeric-key", inputs["123"])
 				assert.Equal(t, "resolved", inputs["key-2"])
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			},
 		},
 		{
@@ -341,7 +341,7 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 			},
 			workflowInputs: map[string]any{},
 			wantErr:        true,
-			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			mockOperationLogic: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				t.Fatal("should not reach operation execution")
 				return nil, nil
 			},
@@ -446,7 +446,7 @@ func TestResolveOperationValue_ErrorPropagation(t *testing.T) {
 
 			provider := &MockOperationProvider{}
 			provider.SetOperation("test.error", &MockOperation{
-				ExecuteFunc: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+				ExecuteFunc: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 					t.Fatal("should not reach operation execution on error")
 					return nil, nil
 				},

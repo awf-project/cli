@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

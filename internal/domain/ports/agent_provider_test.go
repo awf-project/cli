@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // Component: agent_provider_port

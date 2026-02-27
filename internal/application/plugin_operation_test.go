@@ -4,35 +4,35 @@ import (
 	"context"
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // mockOperationProvider implements ports.OperationProvider for testing.
 type mockOperationProvider struct {
-	operations map[string]*plugin.OperationSchema
-	results    map[string]*plugin.OperationResult
+	operations map[string]*pluginmodel.OperationSchema
+	results    map[string]*pluginmodel.OperationResult
 	execError  error
 }
 
 func newMockOperationProvider() *mockOperationProvider {
 	return &mockOperationProvider{
-		operations: make(map[string]*plugin.OperationSchema),
-		results:    make(map[string]*plugin.OperationResult),
+		operations: make(map[string]*pluginmodel.OperationSchema),
+		results:    make(map[string]*pluginmodel.OperationResult),
 	}
 }
 
-func (m *mockOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (m *mockOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, ok := m.operations[name]
 	return op, ok
 }
 
-func (m *mockOperationProvider) ListOperations() []*plugin.OperationSchema {
-	ops := make([]*plugin.OperationSchema, 0, len(m.operations))
+func (m *mockOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	ops := make([]*pluginmodel.OperationSchema, 0, len(m.operations))
 	for _, op := range m.operations {
 		ops = append(ops, op)
 	}
@@ -43,23 +43,23 @@ func (m *mockOperationProvider) Execute(
 	ctx context.Context,
 	name string,
 	inputs map[string]any,
-) (*plugin.OperationResult, error) {
+) (*pluginmodel.OperationResult, error) {
 	if m.execError != nil {
 		return nil, m.execError
 	}
 	if result, ok := m.results[name]; ok {
 		return result, nil
 	}
-	return &plugin.OperationResult{Success: true, Outputs: map[string]any{}}, nil
+	return &pluginmodel.OperationResult{Success: true, Outputs: map[string]any{}}, nil
 }
 
 // addOperation registers an operation in the mock provider.
 func (m *mockOperationProvider) addOperation(name, description, pluginName string) {
-	m.operations[name] = &plugin.OperationSchema{
+	m.operations[name] = &pluginmodel.OperationSchema{
 		Name:        name,
 		Description: description,
 		PluginName:  pluginName,
-		Inputs:      map[string]plugin.InputSchema{},
+		Inputs:      map[string]pluginmodel.InputSchema{},
 		Outputs:     []string{},
 	}
 }
@@ -180,7 +180,7 @@ func TestExecutionService_PluginOperation_BasicExecution(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"sent": true},
 	}
@@ -233,7 +233,7 @@ func TestExecutionService_PluginOperation_WithOnFailure(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: false,
 		Error:   "Channel not found",
 	}
@@ -293,7 +293,7 @@ func TestExecutionService_PluginOperation_InMixedWorkflow(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"sent": true},
 	}
@@ -502,7 +502,7 @@ func TestExecutionService_PluginOperation_MultipleOperationTypes(t *testing.T) {
 			provider := newMockOperationProvider()
 			if tt.registered {
 				provider.addOperation(tt.operation, "Test operation", "test-plugin")
-				provider.results[tt.operation] = &plugin.OperationResult{
+				provider.results[tt.operation] = &pluginmodel.OperationResult{
 					Success: true,
 					Outputs: map[string]any{},
 				}
@@ -562,7 +562,7 @@ func TestExecutionService_Resume_WithOperationStep(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"sent": true},
 	}
@@ -614,7 +614,7 @@ func TestExecutionService_PluginOperation_SuccessfulExecution(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{"message_id": "12345"},
 	}
@@ -672,7 +672,7 @@ func TestExecutionService_PluginOperation_OperationFailure(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: false,
 		Error:   "Channel not found",
 	}
@@ -727,7 +727,7 @@ func TestExecutionService_PluginOperation_InputInterpolation(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{},
 	}
@@ -776,7 +776,7 @@ func TestExecutionService_PluginOperation_OutputCapture(t *testing.T) {
 
 	provider := newMockOperationProvider()
 	provider.addOperation("slack.send", "Send Slack message", "slack-plugin")
-	provider.results["slack.send"] = &plugin.OperationResult{
+	provider.results["slack.send"] = &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{
 			"message_id": "12345",

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/internal/infrastructure/xdg"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 )
 
 // OutputMode defines how command output is displayed.

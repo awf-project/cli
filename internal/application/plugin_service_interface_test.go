@@ -7,10 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ import (
 
 func TestPluginService_OptionA_WorksWithCompositeInterface(t *testing.T) {
 	manager := mocks.NewMockPluginManager()
-	manager.AddPlugin("test-plugin", plugin.StatusDiscovered)
+	manager.AddPlugin("test-plugin", pluginmodel.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
@@ -160,7 +160,7 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 	}
 
 	manager := mocks.NewMockPluginManager()
-	manager.AddPlugin("test-plugin", plugin.StatusRunning)
+	manager.AddPlugin("test-plugin", pluginmodel.StatusRunning)
 
 	logger := newMockPluginLogger()
 
@@ -180,8 +180,8 @@ func TestPluginService_OptionB_MethodsDependOnBothInterfaces(t *testing.T) {
 	// - PluginConfig.IsEnabled (to filter)
 	config.SetEnabled(context.Background(), "enabled-plugin", true)
 	config.SetEnabled(context.Background(), "disabled-plugin", false)
-	manager.AddPlugin("enabled-plugin", plugin.StatusDiscovered)
-	manager.AddPlugin("disabled-plugin", plugin.StatusDiscovered)
+	manager.AddPlugin("enabled-plugin", pluginmodel.StatusDiscovered)
+	manager.AddPlugin("disabled-plugin", pluginmodel.StatusDiscovered)
 
 	plugins, err := svc.DiscoverPlugins(context.Background())
 	require.NoError(t, err)
@@ -318,8 +318,8 @@ func TestPluginService_T007_RecommendedOptionA_IntegrationTest(t *testing.T) {
 	// Keep current implementation using PluginStateStore composite interface
 
 	manager := mocks.NewMockPluginManager()
-	manager.AddPlugin("plugin-a", plugin.StatusDiscovered)
-	manager.AddPlugin("plugin-b", plugin.StatusDiscovered)
+	manager.AddPlugin("plugin-a", pluginmodel.StatusDiscovered)
+	manager.AddPlugin("plugin-b", pluginmodel.StatusDiscovered)
 
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()

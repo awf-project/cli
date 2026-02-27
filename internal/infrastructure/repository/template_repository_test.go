@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // Component: cli_executor_port

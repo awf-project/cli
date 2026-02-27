@@ -4,11 +4,11 @@ import (
 	"io"
 	"sync"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/testutil/mocks"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // This file contains fluent builder implementations for constructing test services,

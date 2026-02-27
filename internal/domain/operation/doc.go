@@ -38,7 +38,7 @@
 //
 // ## Reused Domain Types
 //
-// Operation metadata types from internal/domain/plugin:
+// Operation metadata types from internal/domain/pluginmodel:
 //   - OperationSchema: Name, description, inputs, outputs, plugin name
 //   - InputSchema: Type, required flag, default value, description, validation rules
 //   - OperationResult: Success flag, outputs map, error message
@@ -219,8 +219,8 @@
 //
 // # Related Packages
 //
-//   - internal/domain/plugin: OperationSchema, InputSchema, OperationResult types
+//   - internal/domain/pluginmodel: OperationSchema, InputSchema, OperationResult types
 //   - internal/domain/ports: OperationProvider port interface
-//   - internal/infrastructure/plugin: Concrete operation implementations
+//   - internal/infrastructure/pluginmgr: Concrete operation implementations
 //   - internal/application: ExecutionService orchestrating operation execution
 package operation

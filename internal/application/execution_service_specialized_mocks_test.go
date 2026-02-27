@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // Feature: C008 - Test File Restructuring
@@ -130,22 +130,22 @@ func (m *MockOperationProvider) SetOperation(name string, op *MockOperation) {
 	m.operations[name] = op
 }
 
-func (m *MockOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (m *MockOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	_, found := m.operations[name]
 	if !found {
 		return nil, false
 	}
 	// Return a basic schema for the operation
-	return &plugin.OperationSchema{
+	return &pluginmodel.OperationSchema{
 		Name:        name,
 		Description: "Mock operation for testing",
 	}, found
 }
 
-func (m *MockOperationProvider) ListOperations() []*plugin.OperationSchema {
-	schemas := make([]*plugin.OperationSchema, 0, len(m.operations))
+func (m *MockOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	schemas := make([]*pluginmodel.OperationSchema, 0, len(m.operations))
 	for name := range m.operations {
-		schemas = append(schemas, &plugin.OperationSchema{
+		schemas = append(schemas, &pluginmodel.OperationSchema{
 			Name:        name,
 			Description: "Mock operation for testing",
 		})
@@ -153,7 +153,7 @@ func (m *MockOperationProvider) ListOperations() []*plugin.OperationSchema {
 	return schemas
 }
 
-func (m *MockOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *MockOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	m.ExecuteCallCount++
 	m.LastOperation = name
 	m.LastInputs = inputs
@@ -168,15 +168,15 @@ func (m *MockOperationProvider) Execute(ctx context.Context, name string, inputs
 
 // MockOperation implements a mock operation for testing.
 type MockOperation struct {
-	ExecuteFunc func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+	ExecuteFunc func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 }
 
-func (m *MockOperation) Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *MockOperation) Execute(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	if m.ExecuteFunc != nil {
 		return m.ExecuteFunc(ctx, inputs)
 	}
 	// Default success result
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: make(map[string]any),
 	}, nil

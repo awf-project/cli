@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/operation"
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/operation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,8 +33,8 @@ import (
 // Implements operation.Operation interface.
 type mockOperation struct {
 	name    string
-	schema  *plugin.OperationSchema
-	execFn  func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+	schema  *pluginmodel.OperationSchema
+	execFn  func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 	callsMu sync.Mutex
 	calls   int
 }
@@ -45,12 +45,12 @@ func (m *mockOperation) Name() string {
 }
 
 // Schema returns the operation schema. Implements operation.Operation.
-func (m *mockOperation) Schema() *plugin.OperationSchema {
+func (m *mockOperation) Schema() *pluginmodel.OperationSchema {
 	return m.schema
 }
 
 // Execute runs the operation. Implements operation.Operation.
-func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	return m.execute(ctx, inputs)
 }
 
@@ -58,25 +58,25 @@ func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*pl
 func newMockOperation(name, pluginName string) *mockOperation {
 	return &mockOperation{
 		name: name,
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name:        name,
 			Description: "Mock operation for testing",
-			Inputs: map[string]plugin.InputSchema{
-				"message": {Type: plugin.InputTypeString, Required: true},
+			Inputs: map[string]pluginmodel.InputSchema{
+				"message": {Type: pluginmodel.InputTypeString, Required: true},
 			},
 			Outputs:    []string{"result"},
 			PluginName: pluginName,
 		},
-		execFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		execFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			// Default: echo the message back
 			msg, ok := inputs["message"].(string)
 			if !ok {
-				return &plugin.OperationResult{
+				return &pluginmodel.OperationResult{
 					Success: false,
 					Error:   "message must be a string",
 				}, nil
 			}
-			return &plugin.OperationResult{
+			return &pluginmodel.OperationResult{
 				Success: true,
 				Outputs: map[string]any{"result": msg},
 			}, nil
@@ -85,7 +85,7 @@ func newMockOperation(name, pluginName string) *mockOperation {
 }
 
 // execute runs the mock operation and tracks call count.
-func (m *mockOperation) execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *mockOperation) execute(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	m.callsMu.Lock()
 	m.calls++
 	m.callsMu.Unlock()
@@ -159,22 +159,22 @@ func TestOperationRegistry_US2_InputValidation(t *testing.T) {
 
 	op := &mockOperation{
 		name: "validate.test",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name:        "validate.test",
 			Description: "Operation with complex validation",
-			Inputs: map[string]plugin.InputSchema{
+			Inputs: map[string]pluginmodel.InputSchema{
 				"url": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    true,
 					Validation:  "url",
 					Description: "Must be a valid URL",
 				},
 				"count": {
-					Type:     plugin.InputTypeInteger,
+					Type:     pluginmodel.InputTypeInteger,
 					Required: true,
 				},
 				"timeout": {
-					Type:     plugin.InputTypeString,
+					Type:     pluginmodel.InputTypeString,
 					Required: false,
 					Default:  "30s",
 				},
@@ -182,8 +182,8 @@ func TestOperationRegistry_US2_InputValidation(t *testing.T) {
 			Outputs:    []string{"status"},
 			PluginName: "test-plugin",
 		},
-		execFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-			return &plugin.OperationResult{
+		execFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+			return &pluginmodel.OperationResult{
 				Success: true,
 				Outputs: map[string]any{"status": "ok"},
 			}, nil
@@ -396,7 +396,7 @@ func TestOperationRegistry_InvalidOperation(t *testing.T) {
 			name: "empty name",
 			op: &mockOperation{
 				name: "",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name:       "",
 					PluginName: "test-plugin",
 				},
@@ -428,15 +428,15 @@ func TestOperationExecution_ContextCancellation(t *testing.T) {
 	// Given: An operation that respects context cancellation
 	slowOp := &mockOperation{
 		name: "slow.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name:       "slow.operation",
 			PluginName: "test-plugin",
 		},
-		execFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		execFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			// Simulate slow operation that checks context
 			select {
 			case <-time.After(5 * time.Second):
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
@@ -464,14 +464,14 @@ func TestOperationExecution_ContextTimeout(t *testing.T) {
 	// Given: An operation that takes longer than timeout
 	slowOp := &mockOperation{
 		name: "slow.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name:       "slow.operation",
 			PluginName: "test-plugin",
 		},
-		execFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		execFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			select {
 			case <-time.After(200 * time.Millisecond):
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
@@ -608,10 +608,10 @@ func TestOperationRegistry_ConcurrentExecution(t *testing.T) {
 
 	// Given: An operation that can be executed concurrently
 	op := newMockOperation("concurrent.test", "test-plugin")
-	op.execFn = func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+	op.execFn = func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 		// Simulate some work
 		time.Sleep(10 * time.Millisecond)
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: true,
 			Outputs: map[string]any{"result": "done"},
 		}, nil
@@ -787,11 +787,11 @@ func TestMockOperation_CustomExecution(t *testing.T) {
 	op := newMockOperation("custom.op", "test-plugin")
 	customError := errors.New("custom error")
 
-	op.execFn = func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+	op.execFn = func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 		if inputs["trigger_error"] == true {
 			return nil, customError
 		}
-		return &plugin.OperationResult{
+		return &pluginmodel.OperationResult{
 			Success: true,
 			Outputs: map[string]any{"custom": "value"},
 		}, nil

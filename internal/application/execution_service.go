@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/interpolation"
-	"github.com/awf-project/awf/pkg/output"
-	"github.com/awf-project/awf/pkg/retry"
-	"github.com/awf-project/awf/pkg/validation"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/interpolation"
+	"github.com/awf-project/cli/pkg/output"
+	"github.com/awf-project/cli/pkg/retry"
+	"github.com/awf-project/cli/pkg/validation"
 	"github.com/google/uuid"
 )
 

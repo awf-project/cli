@@ -1,11 +1,11 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // CompositeOperationProvider wraps multiple OperationProvider instances into a single provider,
@@ -24,7 +24,7 @@ func NewCompositeOperationProvider(providers ...ports.OperationProvider) *Compos
 }
 
 // GetOperation returns an operation by name from the first provider that has it.
-func (c *CompositeOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (c *CompositeOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	for _, provider := range c.providers {
 		if provider == nil {
 			continue
@@ -37,8 +37,8 @@ func (c *CompositeOperationProvider) GetOperation(name string) (*plugin.Operatio
 }
 
 // ListOperations returns all available operations from all providers.
-func (c *CompositeOperationProvider) ListOperations() []*plugin.OperationSchema {
-	var result []*plugin.OperationSchema
+func (c *CompositeOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	var result []*pluginmodel.OperationSchema
 	for _, provider := range c.providers {
 		if provider == nil {
 			continue
@@ -50,7 +50,7 @@ func (c *CompositeOperationProvider) ListOperations() []*plugin.OperationSchema 
 }
 
 // Execute runs a plugin operation by delegating to the appropriate provider.
-func (c *CompositeOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (c *CompositeOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	// Find the provider that has this operation
 	for _, provider := range c.providers {
 		if provider == nil {

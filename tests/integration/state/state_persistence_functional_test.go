@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

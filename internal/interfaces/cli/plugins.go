@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 )
 
 // PluginSystemResult contains the initialized plugin system components.

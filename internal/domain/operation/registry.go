@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // Compile-time check that OperationRegistry implements ports.OperationProvider.
@@ -83,7 +83,7 @@ func (r *OperationRegistry) List() []Operation {
 	return ops
 }
 
-func (r *OperationRegistry) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (r *OperationRegistry) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, found := r.Get(name)
 	if !found {
 		return nil, false
@@ -91,20 +91,20 @@ func (r *OperationRegistry) GetOperation(name string) (*plugin.OperationSchema, 
 	return op.Schema(), true
 }
 
-func (r *OperationRegistry) ListOperations() []*plugin.OperationSchema {
+func (r *OperationRegistry) ListOperations() []*pluginmodel.OperationSchema {
 	ops := r.List()
 	if len(ops) == 0 {
-		return []*plugin.OperationSchema{}
+		return []*pluginmodel.OperationSchema{}
 	}
 
-	schemas := make([]*plugin.OperationSchema, 0, len(ops))
+	schemas := make([]*pluginmodel.OperationSchema, 0, len(ops))
 	for _, op := range ops {
 		schemas = append(schemas, op.Schema())
 	}
 	return schemas
 }
 
-func (r *OperationRegistry) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (r *OperationRegistry) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	op, found := r.Get(name)
 	if !found {
 		return nil, ErrOperationNotFound

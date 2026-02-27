@@ -10,7 +10,7 @@ The `custom` provider executes LLM invocations via shell commands (`/bin/sh -c`)
 
 ## Decision
 
-Implement `OpenAICompatibleProvider` in `internal/infrastructure/agents/` using `pkg/httputil.Client` (the `HTTPDoer` interface from F058) for HTTP transport. Chat Completions request/response types are unexported and co-located in the provider file. No new packages or public types are introduced.
+Implement `OpenAICompatibleProvider` in `internal/infrastructure/agents/` using `pkg/httpx.Client` (the `HTTPDoer` interface from F058) for HTTP transport. Chat Completions request/response types are unexported and co-located in the provider file. No new packages or public types are introduced.
 
 Alternatives rejected:
 - **New `pkg/openai` package** — YAGNI: no second consumer exists yet; extraction deferred until needed.

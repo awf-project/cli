@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // ExecCLIExecutor implements CLIExecutor using os/exec for direct binary execution.

@@ -3,12 +3,12 @@ package application_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/xdg"
-	"github.com/awf-project/awf/internal/testutil/builders"
-	testmocks "github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/internal/testutil/builders"
+	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 )
 
 // ServiceTestHarness provides a fluent builder API for constructing ExecutionService

@@ -8,7 +8,7 @@ package plugins_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,10 +16,10 @@ import (
 // TestOperationSchemaValidate_ValidMinimal_Integration tests validation of a minimal valid operation schema.
 // Acceptance Criteria: OperationSchema.Validate() returns nil for valid schemas
 func TestOperationSchemaValidate_ValidMinimal_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs:     map[string]plugin.InputSchema{},
+		Inputs:     map[string]pluginmodel.InputSchema{},
 		Outputs:    []string{},
 	}
 
@@ -31,23 +31,23 @@ func TestOperationSchemaValidate_ValidMinimal_Integration(t *testing.T) {
 // TestOperationSchemaValidate_ValidComplete_Integration tests validation of a complete operation schema.
 // Acceptance Criteria: OperationSchema.Validate() validates all fields including nested InputSchemas
 func TestOperationSchemaValidate_ValidComplete_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "slack.send",
 		Description: "Send a message to Slack",
 		PluginName:  "awf-plugin-slack",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"channel": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Slack channel ID",
 			},
 			"message": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Message content",
 			},
 			"webhook_url": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    false,
 				Default:     "https://hooks.slack.com/default",
 				Validation:  "url",
@@ -66,16 +66,16 @@ func TestOperationSchemaValidate_ValidComplete_Integration(t *testing.T) {
 // Acceptance Criteria: InputSchema.Validate() accepts all valid input types
 func TestInputSchemaValidate_AllValidTypes_Integration(t *testing.T) {
 	validTypes := []string{
-		plugin.InputTypeString,
-		plugin.InputTypeInteger,
-		plugin.InputTypeBoolean,
-		plugin.InputTypeArray,
-		plugin.InputTypeObject,
+		pluginmodel.InputTypeString,
+		pluginmodel.InputTypeInteger,
+		pluginmodel.InputTypeBoolean,
+		pluginmodel.InputTypeArray,
+		pluginmodel.InputTypeObject,
 	}
 
 	for _, validType := range validTypes {
 		t.Run(validType, func(t *testing.T) {
-			schema := plugin.InputSchema{
+			schema := pluginmodel.InputSchema{
 				Type:     validType,
 				Required: true,
 			}
@@ -90,14 +90,14 @@ func TestInputSchemaValidate_AllValidTypes_Integration(t *testing.T) {
 // TestGetRequiredInputs_MixedRequiredOptional_Integration tests filtering required inputs.
 // Acceptance Criteria: GetRequiredInputs() returns correct slice of required input names
 func TestGetRequiredInputs_MixedRequiredOptional_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs: map[string]plugin.InputSchema{
-			"required1": {Type: plugin.InputTypeString, Required: true},
-			"optional1": {Type: plugin.InputTypeString, Required: false},
-			"required2": {Type: plugin.InputTypeInteger, Required: true},
-			"optional2": {Type: plugin.InputTypeBoolean, Required: false},
+		Inputs: map[string]pluginmodel.InputSchema{
+			"required1": {Type: pluginmodel.InputTypeString, Required: true},
+			"optional1": {Type: pluginmodel.InputTypeString, Required: false},
+			"required2": {Type: pluginmodel.InputTypeInteger, Required: true},
+			"optional2": {Type: pluginmodel.InputTypeBoolean, Required: false},
 		},
 	}
 
@@ -114,16 +114,16 @@ func TestGetRequiredInputs_MixedRequiredOptional_Integration(t *testing.T) {
 // Acceptance Criteria: IsValidType() returns true for all valid types
 func TestIsValidType_ValidTypes_Integration(t *testing.T) {
 	validTypes := []string{
-		plugin.InputTypeString,
-		plugin.InputTypeInteger,
-		plugin.InputTypeBoolean,
-		plugin.InputTypeArray,
-		plugin.InputTypeObject,
+		pluginmodel.InputTypeString,
+		pluginmodel.InputTypeInteger,
+		pluginmodel.InputTypeBoolean,
+		pluginmodel.InputTypeArray,
+		pluginmodel.InputTypeObject,
 	}
 
 	for _, validType := range validTypes {
 		t.Run(validType, func(t *testing.T) {
-			schema := plugin.InputSchema{Type: validType}
+			schema := pluginmodel.InputSchema{Type: validType}
 
 			result := schema.IsValidType()
 
@@ -135,10 +135,10 @@ func TestIsValidType_ValidTypes_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyInputsMap_Integration tests handling of empty inputs map.
 // Acceptance Criteria: OperationSchema.Validate() handles empty inputs gracefully
 func TestOperationSchemaValidate_EmptyInputsMap_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs:     map[string]plugin.InputSchema{},
+		Inputs:     map[string]pluginmodel.InputSchema{},
 		Outputs:    []string{"result"},
 	}
 
@@ -150,7 +150,7 @@ func TestOperationSchemaValidate_EmptyInputsMap_Integration(t *testing.T) {
 // TestOperationSchemaValidate_NilInputsMap_Integration tests handling of nil inputs map.
 // Acceptance Criteria: OperationSchema.Validate() handles nil inputs gracefully
 func TestOperationSchemaValidate_NilInputsMap_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
 		Inputs:     nil,
@@ -165,10 +165,10 @@ func TestOperationSchemaValidate_NilInputsMap_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyOutputsList_Integration tests handling of empty outputs list.
 // Acceptance Criteria: OperationSchema.Validate() handles empty outputs gracefully
 func TestOperationSchemaValidate_EmptyOutputsList_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs:     map[string]plugin.InputSchema{},
+		Inputs:     map[string]pluginmodel.InputSchema{},
 		Outputs:    []string{},
 	}
 
@@ -180,10 +180,10 @@ func TestOperationSchemaValidate_EmptyOutputsList_Integration(t *testing.T) {
 // TestGetRequiredInputs_EmptyInputs_Integration tests filtering with no inputs.
 // Acceptance Criteria: GetRequiredInputs() returns empty slice for empty inputs
 func TestGetRequiredInputs_EmptyInputs_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs:     map[string]plugin.InputSchema{},
+		Inputs:     map[string]pluginmodel.InputSchema{},
 	}
 
 	required := schema.GetRequiredInputs()
@@ -195,7 +195,7 @@ func TestGetRequiredInputs_EmptyInputs_Integration(t *testing.T) {
 // TestGetRequiredInputs_NilInputs_Integration tests filtering with nil inputs.
 // Acceptance Criteria: GetRequiredInputs() returns empty slice for nil inputs
 func TestGetRequiredInputs_NilInputs_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
 		Inputs:     nil,
@@ -210,8 +210,8 @@ func TestGetRequiredInputs_NilInputs_Integration(t *testing.T) {
 // TestInputSchemaValidate_UnicodeDescriptions_Integration tests handling of unicode in descriptions.
 // Acceptance Criteria: InputSchema.Validate() handles unicode text correctly
 func TestInputSchemaValidate_UnicodeDescriptions_Integration(t *testing.T) {
-	schema := plugin.InputSchema{
-		Type:        plugin.InputTypeString,
+	schema := pluginmodel.InputSchema{
+		Type:        pluginmodel.InputTypeString,
 		Description: "Unicode test: こんにちは 世界 🌍 émojis 中文",
 		Required:    true,
 	}
@@ -226,45 +226,45 @@ func TestInputSchemaValidate_UnicodeDescriptions_Integration(t *testing.T) {
 func TestInputSchemaValidate_DefaultValues_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
-		schema  plugin.InputSchema
+		schema  pluginmodel.InputSchema
 		wantErr bool
 	}{
 		{
 			name: "string default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeString,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeString,
 				Default: "test value",
 			},
 			wantErr: false,
 		},
 		{
 			name: "integer default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeInteger,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeInteger,
 				Default: 42,
 			},
 			wantErr: false,
 		},
 		{
 			name: "boolean default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeBoolean,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeBoolean,
 				Default: true,
 			},
 			wantErr: false,
 		},
 		{
 			name: "array default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeArray,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeArray,
 				Default: []any{"item1", "item2"},
 			},
 			wantErr: false,
 		},
 		{
 			name: "object default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeObject,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeObject,
 				Default: map[string]any{"key": "value"},
 			},
 			wantErr: false,
@@ -287,7 +287,7 @@ func TestInputSchemaValidate_DefaultValues_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyName_Integration tests rejection of empty name.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty Name with descriptive error
 func TestOperationSchemaValidate_EmptyName_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "",
 		PluginName: "test-plugin",
 	}
@@ -301,7 +301,7 @@ func TestOperationSchemaValidate_EmptyName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_WhitespaceName_Integration tests rejection of whitespace-only name.
 // Acceptance Criteria: OperationSchema.Validate() rejects whitespace-only Name
 func TestOperationSchemaValidate_WhitespaceName_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "   \t\n",
 		PluginName: "test-plugin",
 	}
@@ -315,7 +315,7 @@ func TestOperationSchemaValidate_WhitespaceName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyPluginName_Integration tests rejection of empty plugin name.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty PluginName
 func TestOperationSchemaValidate_EmptyPluginName_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "",
 	}
@@ -329,10 +329,10 @@ func TestOperationSchemaValidate_EmptyPluginName_Integration(t *testing.T) {
 // TestOperationSchemaValidate_InvalidInputSchema_Integration tests rejection of invalid input schemas.
 // Acceptance Criteria: OperationSchema.Validate() validates nested InputSchemas
 func TestOperationSchemaValidate_InvalidInputSchema_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"invalid_input": {
 				Type:     "invalid_type",
 				Required: true,
@@ -350,7 +350,7 @@ func TestOperationSchemaValidate_InvalidInputSchema_Integration(t *testing.T) {
 // TestOperationSchemaValidate_DuplicateOutputs_Integration tests rejection of duplicate output names.
 // Acceptance Criteria: OperationSchema.Validate() rejects duplicate output names
 func TestOperationSchemaValidate_DuplicateOutputs_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
 		Outputs:    []string{"result", "status", "result"},
@@ -366,7 +366,7 @@ func TestOperationSchemaValidate_DuplicateOutputs_Integration(t *testing.T) {
 // TestOperationSchemaValidate_EmptyOutputName_Integration tests rejection of empty output names.
 // Acceptance Criteria: OperationSchema.Validate() rejects empty output names
 func TestOperationSchemaValidate_EmptyOutputName_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
 		Outputs:    []string{"result", "", "status"},
@@ -381,7 +381,7 @@ func TestOperationSchemaValidate_EmptyOutputName_Integration(t *testing.T) {
 // TestInputSchemaValidate_EmptyType_Integration tests rejection of empty type.
 // Acceptance Criteria: InputSchema.Validate() rejects empty Type
 func TestInputSchemaValidate_EmptyType_Integration(t *testing.T) {
-	schema := plugin.InputSchema{
+	schema := pluginmodel.InputSchema{
 		Type:     "",
 		Required: true,
 	}
@@ -399,7 +399,7 @@ func TestInputSchemaValidate_InvalidType_Integration(t *testing.T) {
 
 	for _, invalidType := range invalidTypes {
 		t.Run(invalidType, func(t *testing.T) {
-			schema := plugin.InputSchema{
+			schema := pluginmodel.InputSchema{
 				Type:     invalidType,
 				Required: true,
 			}
@@ -416,8 +416,8 @@ func TestInputSchemaValidate_InvalidType_Integration(t *testing.T) {
 // TestInputSchemaValidate_InvalidValidationRule_Integration tests rejection of unknown validation rules.
 // Acceptance Criteria: InputSchema.Validate() rejects unknown validation rules
 func TestInputSchemaValidate_InvalidValidationRule_Integration(t *testing.T) {
-	schema := plugin.InputSchema{
-		Type:       plugin.InputTypeString,
+	schema := pluginmodel.InputSchema{
+		Type:       pluginmodel.InputTypeString,
 		Validation: "unknown_rule",
 	}
 
@@ -435,8 +435,8 @@ func TestInputSchemaValidate_ValidValidationRules_Integration(t *testing.T) {
 
 	for _, rule := range validRules {
 		t.Run(rule, func(t *testing.T) {
-			schema := plugin.InputSchema{
-				Type:       plugin.InputTypeString,
+			schema := pluginmodel.InputSchema{
+				Type:       pluginmodel.InputTypeString,
 				Validation: rule,
 			}
 
@@ -452,45 +452,45 @@ func TestInputSchemaValidate_ValidValidationRules_Integration(t *testing.T) {
 func TestInputSchemaValidate_DefaultTypeMismatch_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
-		schema  plugin.InputSchema
+		schema  pluginmodel.InputSchema
 		wantErr string
 	}{
 		{
 			name: "string type with integer default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeString,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeString,
 				Default: 42,
 			},
 			wantErr: "default value type mismatch",
 		},
 		{
 			name: "integer type with string default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeInteger,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeInteger,
 				Default: "not a number",
 			},
 			wantErr: "default value type mismatch",
 		},
 		{
 			name: "boolean type with string default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeBoolean,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeBoolean,
 				Default: "true",
 			},
 			wantErr: "default value type mismatch",
 		},
 		{
 			name: "array type with non-array default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeArray,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeArray,
 				Default: "not an array",
 			},
 			wantErr: "default value type mismatch",
 		},
 		{
 			name: "object type with non-map default",
-			schema: plugin.InputSchema{
-				Type:    plugin.InputTypeObject,
+			schema: pluginmodel.InputSchema{
+				Type:    pluginmodel.InputTypeObject,
 				Default: "not an object",
 			},
 			wantErr: "default value type mismatch",
@@ -514,7 +514,7 @@ func TestIsValidType_InvalidTypes_Integration(t *testing.T) {
 
 	for _, invalidType := range invalidTypes {
 		t.Run(invalidType, func(t *testing.T) {
-			schema := plugin.InputSchema{Type: invalidType}
+			schema := pluginmodel.InputSchema{Type: invalidType}
 
 			result := schema.IsValidType()
 
@@ -527,35 +527,35 @@ func TestIsValidType_InvalidTypes_Integration(t *testing.T) {
 // Acceptance Criteria: All validation methods work together correctly
 func TestOperationSchemaFullWorkflow_Integration(t *testing.T) {
 	// Create a complete operation schema
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "github.create_issue",
 		Description: "Create a GitHub issue",
 		PluginName:  "awf-plugin-github",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"repository": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Repository name (owner/repo)",
 			},
 			"title": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Issue title",
 			},
 			"body": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    false,
 				Default:     "",
 				Description: "Issue body",
 			},
 			"labels": {
-				Type:        plugin.InputTypeArray,
+				Type:        pluginmodel.InputTypeArray,
 				Required:    false,
 				Default:     []any{},
 				Description: "Issue labels",
 			},
 			"assignees": {
-				Type:        plugin.InputTypeArray,
+				Type:        pluginmodel.InputTypeArray,
 				Required:    false,
 				Description: "Issue assignees",
 			},
@@ -589,13 +589,13 @@ func TestOperationSchemaFullWorkflow_Integration(t *testing.T) {
 // TestOperationSchemaComplexValidation_Integration tests validation with complex nested schemas.
 // Acceptance Criteria: Validation correctly handles complex, deeply nested structures
 func TestOperationSchemaComplexValidation_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "database.query",
 		Description: "Execute a database query",
 		PluginName:  "awf-plugin-database",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"connection": {
-				Type:        plugin.InputTypeObject,
+				Type:        pluginmodel.InputTypeObject,
 				Required:    true,
 				Description: "Database connection details",
 				Default: map[string]any{
@@ -605,24 +605,24 @@ func TestOperationSchemaComplexValidation_Integration(t *testing.T) {
 				},
 			},
 			"query": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "SQL query to execute",
 			},
 			"parameters": {
-				Type:        plugin.InputTypeArray,
+				Type:        pluginmodel.InputTypeArray,
 				Required:    false,
 				Default:     []any{},
 				Description: "Query parameters",
 			},
 			"timeout": {
-				Type:        plugin.InputTypeInteger,
+				Type:        pluginmodel.InputTypeInteger,
 				Required:    false,
 				Default:     30,
 				Description: "Query timeout in seconds",
 			},
 			"fetch_metadata": {
-				Type:        plugin.InputTypeBoolean,
+				Type:        pluginmodel.InputTypeBoolean,
 				Required:    false,
 				Default:     false,
 				Description: "Whether to fetch result metadata",
@@ -645,16 +645,16 @@ func TestOperationSchemaComplexValidation_Integration(t *testing.T) {
 // TestOperationSchemaErrorPropagation_Integration tests error propagation from nested validations.
 // Acceptance Criteria: Errors from nested validations propagate correctly with context
 func TestOperationSchemaErrorPropagation_Integration(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"valid_input": {
-				Type:     plugin.InputTypeString,
+				Type:     pluginmodel.InputTypeString,
 				Required: true,
 			},
 			"invalid_input": {
-				Type:       plugin.InputTypeString,
+				Type:       pluginmodel.InputTypeString,
 				Validation: "invalid_rule",
 			},
 		},

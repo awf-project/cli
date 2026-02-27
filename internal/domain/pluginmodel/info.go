@@ -1,4 +1,4 @@
-package plugin
+package pluginmodel
 
 // PluginStatus represents the lifecycle state of a plugin.
 type PluginStatus string

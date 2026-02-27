@@ -1,4 +1,4 @@
-module github.com/awf-project/awf
+module github.com/awf-project/cli
 
 go 1.25.0
 

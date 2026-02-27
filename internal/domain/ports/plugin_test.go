@@ -8,9 +8,9 @@ import (
 	"go/token"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,44 +41,44 @@ func (m *mockPlugin) Shutdown(_ context.Context) error {
 
 // mockOperationProvider implements ports.OperationProvider interface for testing.
 type mockOperationProvider struct {
-	operations map[string]*plugin.OperationSchema
+	operations map[string]*pluginmodel.OperationSchema
 }
 
 func newMockOperationProvider() *mockOperationProvider {
 	return &mockOperationProvider{
-		operations: make(map[string]*plugin.OperationSchema),
+		operations: make(map[string]*pluginmodel.OperationSchema),
 	}
 }
 
-func (m *mockOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (m *mockOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	op, ok := m.operations[name]
 	return op, ok
 }
 
-func (m *mockOperationProvider) ListOperations() []*plugin.OperationSchema {
-	result := make([]*plugin.OperationSchema, 0, len(m.operations))
+func (m *mockOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	result := make([]*pluginmodel.OperationSchema, 0, len(m.operations))
 	for _, op := range m.operations {
 		result = append(result, op)
 	}
 	return result
 }
 
-func (m *mockOperationProvider) Execute(_ context.Context, _ string, _ map[string]any) (*plugin.OperationResult, error) {
+func (m *mockOperationProvider) Execute(_ context.Context, _ string, _ map[string]any) (*pluginmodel.OperationResult, error) {
 	return nil, errNotImplemented
 }
 
 // mockPluginRegistry implements ports.PluginRegistry interface for testing.
 type mockPluginRegistry struct {
-	operations map[string]*plugin.OperationSchema
+	operations map[string]*pluginmodel.OperationSchema
 }
 
 func newMockPluginRegistry() *mockPluginRegistry {
 	return &mockPluginRegistry{
-		operations: make(map[string]*plugin.OperationSchema),
+		operations: make(map[string]*pluginmodel.OperationSchema),
 	}
 }
 
-func (m *mockPluginRegistry) RegisterOperation(op *plugin.OperationSchema) error {
+func (m *mockPluginRegistry) RegisterOperation(op *pluginmodel.OperationSchema) error {
 	if _, exists := m.operations[op.Name]; exists {
 		return errors.New("operation already registered")
 	}
@@ -94,8 +94,8 @@ func (m *mockPluginRegistry) UnregisterOperation(name string) error {
 	return nil
 }
 
-func (m *mockPluginRegistry) Operations() []*plugin.OperationSchema {
-	result := make([]*plugin.OperationSchema, 0, len(m.operations))
+func (m *mockPluginRegistry) Operations() []*pluginmodel.OperationSchema {
+	result := make([]*pluginmodel.OperationSchema, 0, len(m.operations))
 	for _, op := range m.operations {
 		result = append(result, op)
 	}
@@ -104,12 +104,12 @@ func (m *mockPluginRegistry) Operations() []*plugin.OperationSchema {
 
 // mockPluginStore implements ports.PluginStore interface for testing (ISP refactor - persistence only).
 type mockPluginStore struct {
-	states map[string]*plugin.PluginState
+	states map[string]*pluginmodel.PluginState
 }
 
 func newMockPluginStore() *mockPluginStore {
 	return &mockPluginStore{
-		states: make(map[string]*plugin.PluginState),
+		states: make(map[string]*pluginmodel.PluginState),
 	}
 }
 
@@ -121,7 +121,7 @@ func (m *mockPluginStore) Load(_ context.Context) error {
 	return nil // Mock: always succeeds
 }
 
-func (m *mockPluginStore) GetState(name string) *plugin.PluginState {
+func (m *mockPluginStore) GetState(name string) *pluginmodel.PluginState {
 	state, ok := m.states[name]
 	if !ok {
 		return nil
@@ -141,18 +141,18 @@ func (m *mockPluginStore) ListDisabled() []string {
 
 // mockPluginConfig implements ports.PluginConfig interface for testing (ISP refactor - configuration only).
 type mockPluginConfig struct {
-	states map[string]*plugin.PluginState
+	states map[string]*pluginmodel.PluginState
 }
 
 func newMockPluginConfig() *mockPluginConfig {
 	return &mockPluginConfig{
-		states: make(map[string]*plugin.PluginState),
+		states: make(map[string]*pluginmodel.PluginState),
 	}
 }
 
 func (m *mockPluginConfig) SetEnabled(_ context.Context, name string, enabled bool) error {
 	if _, ok := m.states[name]; !ok {
-		m.states[name] = &plugin.PluginState{
+		m.states[name] = &pluginmodel.PluginState{
 			Enabled: enabled,
 			Config:  make(map[string]any),
 		}
@@ -180,7 +180,7 @@ func (m *mockPluginConfig) GetConfig(name string) map[string]any {
 
 func (m *mockPluginConfig) SetConfig(_ context.Context, name string, config map[string]any) error {
 	if _, ok := m.states[name]; !ok {
-		m.states[name] = &plugin.PluginState{
+		m.states[name] = &pluginmodel.PluginState{
 			Enabled: true, // Default
 			Config:  config,
 		}
@@ -192,12 +192,12 @@ func (m *mockPluginConfig) SetConfig(_ context.Context, name string, config map[
 
 // mockPluginStateStore implements ports.PluginStateStore (combined interface) for testing.
 type mockPluginStateStore struct {
-	states map[string]*plugin.PluginState
+	states map[string]*pluginmodel.PluginState
 }
 
 func newMockPluginStateStore() *mockPluginStateStore {
 	return &mockPluginStateStore{
-		states: make(map[string]*plugin.PluginState),
+		states: make(map[string]*pluginmodel.PluginState),
 	}
 }
 
@@ -210,7 +210,7 @@ func (m *mockPluginStateStore) Load(_ context.Context) error {
 	return nil
 }
 
-func (m *mockPluginStateStore) GetState(name string) *plugin.PluginState {
+func (m *mockPluginStateStore) GetState(name string) *pluginmodel.PluginState {
 	state, ok := m.states[name]
 	if !ok {
 		return nil
@@ -231,7 +231,7 @@ func (m *mockPluginStateStore) ListDisabled() []string {
 // PluginConfig methods
 func (m *mockPluginStateStore) SetEnabled(_ context.Context, name string, enabled bool) error {
 	if _, ok := m.states[name]; !ok {
-		m.states[name] = &plugin.PluginState{
+		m.states[name] = &pluginmodel.PluginState{
 			Enabled: enabled,
 			Config:  make(map[string]any),
 		}
@@ -259,7 +259,7 @@ func (m *mockPluginStateStore) GetConfig(name string) map[string]any {
 
 func (m *mockPluginStateStore) SetConfig(_ context.Context, name string, config map[string]any) error {
 	if _, ok := m.states[name]; !ok {
-		m.states[name] = &plugin.PluginState{
+		m.states[name] = &pluginmodel.PluginState{
 			Enabled: true,
 			Config:  config,
 		}
@@ -736,7 +736,7 @@ func TestMockPluginManager_Init_ReturnsNotFoundError(t *testing.T) {
 
 func TestMockPluginManager_Get(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
-	pm.AddPlugin("test", plugin.StatusRunning)
+	pm.AddPlugin("test", pluginmodel.StatusRunning)
 
 	info, ok := pm.Get("test")
 	assert.True(t, ok)
@@ -748,8 +748,8 @@ func TestMockPluginManager_Get(t *testing.T) {
 
 func TestMockPluginManager_List(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
-	pm.AddPlugin("p1", plugin.StatusRunning)
-	pm.AddPlugin("p2", plugin.StatusRunning)
+	pm.AddPlugin("p1", pluginmodel.StatusRunning)
+	pm.AddPlugin("p2", pluginmodel.StatusRunning)
 
 	list := pm.List()
 	assert.Len(t, list, 2)
@@ -764,7 +764,7 @@ func TestMockPluginManager_List_Empty(t *testing.T) {
 // OperationProvider interface tests
 func TestMockOperationProvider_GetOperation(t *testing.T) {
 	op := newMockOperationProvider()
-	op.operations["slack.send"] = &plugin.OperationSchema{
+	op.operations["slack.send"] = &pluginmodel.OperationSchema{
 		Name:       "slack.send",
 		PluginName: "slack",
 	}
@@ -779,8 +779,8 @@ func TestMockOperationProvider_GetOperation(t *testing.T) {
 
 func TestMockOperationProvider_ListOperations(t *testing.T) {
 	op := newMockOperationProvider()
-	op.operations["op1"] = &plugin.OperationSchema{Name: "op1"}
-	op.operations["op2"] = &plugin.OperationSchema{Name: "op2"}
+	op.operations["op1"] = &pluginmodel.OperationSchema{Name: "op1"}
+	op.operations["op2"] = &pluginmodel.OperationSchema{Name: "op2"}
 
 	list := op.ListOperations()
 	assert.Len(t, list, 2)
@@ -795,7 +795,7 @@ func TestMockOperationProvider_Execute_ReturnsNotImplemented(t *testing.T) {
 // PluginRegistry interface tests
 func TestMockPluginRegistry_RegisterOperation(t *testing.T) {
 	reg := newMockPluginRegistry()
-	op := &plugin.OperationSchema{Name: "test.op"}
+	op := &pluginmodel.OperationSchema{Name: "test.op"}
 
 	err := reg.RegisterOperation(op)
 	assert.NoError(t, err)
@@ -804,7 +804,7 @@ func TestMockPluginRegistry_RegisterOperation(t *testing.T) {
 
 func TestMockPluginRegistry_RegisterOperation_Duplicate(t *testing.T) {
 	reg := newMockPluginRegistry()
-	op := &plugin.OperationSchema{Name: "test.op"}
+	op := &pluginmodel.OperationSchema{Name: "test.op"}
 
 	_ = reg.RegisterOperation(op)
 	err := reg.RegisterOperation(op)
@@ -814,7 +814,7 @@ func TestMockPluginRegistry_RegisterOperation_Duplicate(t *testing.T) {
 
 func TestMockPluginRegistry_UnregisterOperation(t *testing.T) {
 	reg := newMockPluginRegistry()
-	op := &plugin.OperationSchema{Name: "test.op"}
+	op := &pluginmodel.OperationSchema{Name: "test.op"}
 	_ = reg.RegisterOperation(op)
 
 	err := reg.UnregisterOperation("test.op")
@@ -832,8 +832,8 @@ func TestMockPluginRegistry_UnregisterOperation_NotFound(t *testing.T) {
 
 func TestMockPluginRegistry_Operations(t *testing.T) {
 	reg := newMockPluginRegistry()
-	_ = reg.RegisterOperation(&plugin.OperationSchema{Name: "op1"})
-	_ = reg.RegisterOperation(&plugin.OperationSchema{Name: "op2"})
+	_ = reg.RegisterOperation(&pluginmodel.OperationSchema{Name: "op1"})
+	_ = reg.RegisterOperation(&pluginmodel.OperationSchema{Name: "op2"})
 
 	ops := reg.Operations()
 	assert.Len(t, ops, 2)
@@ -855,7 +855,7 @@ func TestPluginStore_HappyPath(t *testing.T) {
 
 func TestPluginStore_GetState_Found(t *testing.T) {
 	store := newMockPluginStore()
-	store.states["plugin-a"] = &plugin.PluginState{
+	store.states["plugin-a"] = &pluginmodel.PluginState{
 		Enabled: true,
 		Config:  map[string]any{"key": "value"},
 	}
@@ -882,13 +882,13 @@ func TestPluginStore_GetState_EmptyName(t *testing.T) {
 
 func TestPluginStore_ListDisabled_MultiplePlugins(t *testing.T) {
 	store := newMockPluginStore()
-	store.states["enabled-plugin"] = &plugin.PluginState{
+	store.states["enabled-plugin"] = &pluginmodel.PluginState{
 		Enabled: true,
 	}
-	store.states["disabled-plugin-1"] = &plugin.PluginState{
+	store.states["disabled-plugin-1"] = &pluginmodel.PluginState{
 		Enabled: false,
 	}
-	store.states["disabled-plugin-2"] = &plugin.PluginState{
+	store.states["disabled-plugin-2"] = &pluginmodel.PluginState{
 		Enabled: false,
 	}
 
@@ -900,7 +900,7 @@ func TestPluginStore_ListDisabled_MultiplePlugins(t *testing.T) {
 
 func TestPluginStore_ListDisabled_AllEnabled(t *testing.T) {
 	store := newMockPluginStore()
-	store.states["plugin-1"] = &plugin.PluginState{
+	store.states["plugin-1"] = &pluginmodel.PluginState{
 		Enabled: true,
 	}
 
@@ -1135,37 +1135,37 @@ func TestPluginStateStore_ListDisabled_IntegrationWithSetEnabled(t *testing.T) {
 
 func TestMockPluginManager_Shutdown_Success(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
-	pm.AddPlugin("test-plugin", plugin.StatusRunning)
+	pm.AddPlugin("test-plugin", pluginmodel.StatusRunning)
 
 	err := pm.Shutdown(context.Background(), "test-plugin")
 	assert.NoError(t, err)
 
 	info, _ := pm.Get("test-plugin")
-	assert.Equal(t, plugin.StatusStopped, info.Status)
+	assert.Equal(t, pluginmodel.StatusStopped, info.Status)
 }
 
 func TestMockPluginManager_ShutdownAll_Success(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
-	pm.AddPlugin("plugin1", plugin.StatusRunning)
-	pm.AddPlugin("plugin2", plugin.StatusRunning)
+	pm.AddPlugin("plugin1", pluginmodel.StatusRunning)
+	pm.AddPlugin("plugin2", pluginmodel.StatusRunning)
 
 	err := pm.ShutdownAll(context.Background())
 	assert.NoError(t, err)
 
 	// Verify all plugins stopped
 	info1, _ := pm.Get("plugin1")
-	assert.Equal(t, plugin.StatusStopped, info1.Status)
+	assert.Equal(t, pluginmodel.StatusStopped, info1.Status)
 	info2, _ := pm.Get("plugin2")
-	assert.Equal(t, plugin.StatusStopped, info2.Status)
+	assert.Equal(t, pluginmodel.StatusStopped, info2.Status)
 }
 
 func TestMockPluginManager_Clear_ResetsState(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
 
 	// Setup: add plugins and configure callbacks
-	pm.AddPlugin("plugin1", plugin.StatusRunning)
-	pm.AddPlugin("plugin2", plugin.StatusLoaded)
-	pm.SetDiscoverFunc(func(ctx context.Context) ([]*plugin.PluginInfo, error) {
+	pm.AddPlugin("plugin1", pluginmodel.StatusRunning)
+	pm.AddPlugin("plugin2", pluginmodel.StatusLoaded)
+	pm.SetDiscoverFunc(func(ctx context.Context) ([]*pluginmodel.PluginInfo, error) {
 		return nil, errors.New("custom discover")
 	})
 	pm.SetLoadFunc(func(ctx context.Context, name string) error {
@@ -1256,35 +1256,35 @@ func TestPluginManager_Get_TableDriven(t *testing.T) {
 		setup      func(*mocks.MockPluginManager)
 		lookupName string
 		wantFound  bool
-		wantStatus plugin.PluginStatus
+		wantStatus pluginmodel.PluginStatus
 	}{
 		{
 			name: "find running plugin",
 			setup: func(pm *mocks.MockPluginManager) {
-				pm.AddPlugin("running", plugin.StatusRunning)
+				pm.AddPlugin("running", pluginmodel.StatusRunning)
 			},
 			lookupName: "running",
 			wantFound:  true,
-			wantStatus: plugin.StatusRunning,
+			wantStatus: pluginmodel.StatusRunning,
 		},
 		{
 			name: "find stopped plugin",
 			setup: func(pm *mocks.MockPluginManager) {
-				pm.AddPlugin("stopped", plugin.StatusStopped)
+				pm.AddPlugin("stopped", pluginmodel.StatusStopped)
 			},
 			lookupName: "stopped",
 			wantFound:  true,
-			wantStatus: plugin.StatusStopped,
+			wantStatus: pluginmodel.StatusStopped,
 		},
 		{
 			name: "find failed plugin",
 			setup: func(pm *mocks.MockPluginManager) {
-				info := pm.AddPlugin("failed", plugin.StatusFailed)
+				info := pm.AddPlugin("failed", pluginmodel.StatusFailed)
 				info.Error = errors.New("init failed")
 			},
 			lookupName: "failed",
 			wantFound:  true,
-			wantStatus: plugin.StatusFailed,
+			wantStatus: pluginmodel.StatusFailed,
 		},
 		{
 			name:       "plugin not found",
@@ -1327,7 +1327,7 @@ func TestOperationProvider_GetOperation_TableDriven(t *testing.T) {
 		{
 			name: "find operation by full name",
 			setup: func(op *mockOperationProvider) {
-				op.operations["slack.send"] = &plugin.OperationSchema{
+				op.operations["slack.send"] = &pluginmodel.OperationSchema{
 					Name:       "slack.send",
 					PluginName: "slack",
 				}
@@ -1339,10 +1339,10 @@ func TestOperationProvider_GetOperation_TableDriven(t *testing.T) {
 		{
 			name: "operation with inputs",
 			setup: func(op *mockOperationProvider) {
-				op.operations["http.request"] = &plugin.OperationSchema{
+				op.operations["http.request"] = &pluginmodel.OperationSchema{
 					Name:       "http.request",
 					PluginName: "http",
-					Inputs: map[string]plugin.InputSchema{
+					Inputs: map[string]pluginmodel.InputSchema{
 						"url":    {Type: "string", Required: true},
 						"method": {Type: "string", Required: false, Default: "GET"},
 					},
@@ -1393,14 +1393,14 @@ func TestPluginRegistry_RegisterOperation_TableDriven(t *testing.T) {
 	tests := []struct {
 		name      string
 		setup     func(*mockPluginRegistry)
-		operation *plugin.OperationSchema
+		operation *pluginmodel.OperationSchema
 		wantErr   bool
 		errMsg    string
 	}{
 		{
 			name:  "register new operation",
 			setup: func(_ *mockPluginRegistry) {},
-			operation: &plugin.OperationSchema{
+			operation: &pluginmodel.OperationSchema{
 				Name:        "new.op",
 				Description: "A new operation",
 				PluginName:  "test",
@@ -1410,9 +1410,9 @@ func TestPluginRegistry_RegisterOperation_TableDriven(t *testing.T) {
 		{
 			name: "register duplicate operation",
 			setup: func(reg *mockPluginRegistry) {
-				reg.operations["existing.op"] = &plugin.OperationSchema{Name: "existing.op"}
+				reg.operations["existing.op"] = &pluginmodel.OperationSchema{Name: "existing.op"}
 			},
-			operation: &plugin.OperationSchema{
+			operation: &pluginmodel.OperationSchema{
 				Name:       "existing.op",
 				PluginName: "different",
 			},
@@ -1422,11 +1422,11 @@ func TestPluginRegistry_RegisterOperation_TableDriven(t *testing.T) {
 		{
 			name:  "register operation with inputs and outputs",
 			setup: func(_ *mockPluginRegistry) {},
-			operation: &plugin.OperationSchema{
+			operation: &pluginmodel.OperationSchema{
 				Name:        "complex.op",
 				Description: "Complex operation",
 				PluginName:  "complex",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"input1": {Type: "string", Required: true},
 					"input2": {Type: "integer", Required: false},
 				},
@@ -1466,7 +1466,7 @@ func TestPluginRegistry_UnregisterOperation_TableDriven(t *testing.T) {
 		{
 			name: "unregister existing operation",
 			setup: func(reg *mockPluginRegistry) {
-				reg.operations["to.remove"] = &plugin.OperationSchema{Name: "to.remove"}
+				reg.operations["to.remove"] = &pluginmodel.OperationSchema{Name: "to.remove"}
 			},
 			operationName: "to.remove",
 			wantErr:       false,
@@ -1563,7 +1563,7 @@ func TestPlugin_Init_WithConfig(t *testing.T) {
 
 func TestPluginManager_Init_WithConfig(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
-	pm.AddPlugin("plugin-name", plugin.StatusLoaded)
+	pm.AddPlugin("plugin-name", pluginmodel.StatusLoaded)
 
 	config := map[string]any{
 		"api_key": "secret-key",
@@ -1575,7 +1575,7 @@ func TestPluginManager_Init_WithConfig(t *testing.T) {
 
 	// Verify status changed to Running
 	info, _ := pm.Get("plugin-name")
-	assert.Equal(t, plugin.StatusRunning, info.Status)
+	assert.Equal(t, pluginmodel.StatusRunning, info.Status)
 }
 
 // Multiple plugins lifecycle tests
@@ -1584,14 +1584,14 @@ func TestPluginManager_List_MultiplePlugins(t *testing.T) {
 	pm := mocks.NewMockPluginManager()
 
 	// Add plugins with different statuses
-	statuses := []plugin.PluginStatus{
-		plugin.StatusDiscovered,
-		plugin.StatusLoaded,
-		plugin.StatusInitialized,
-		plugin.StatusRunning,
-		plugin.StatusStopped,
-		plugin.StatusFailed,
-		plugin.StatusDisabled,
+	statuses := []pluginmodel.PluginStatus{
+		pluginmodel.StatusDiscovered,
+		pluginmodel.StatusLoaded,
+		pluginmodel.StatusInitialized,
+		pluginmodel.StatusRunning,
+		pluginmodel.StatusStopped,
+		pluginmodel.StatusFailed,
+		pluginmodel.StatusDisabled,
 	}
 
 	for i, status := range statuses {
@@ -1619,7 +1619,7 @@ func TestOperationProvider_ListOperations_MultipleOperations(t *testing.T) {
 	}
 
 	for _, opName := range operations {
-		op.operations[opName] = &plugin.OperationSchema{
+		op.operations[opName] = &pluginmodel.OperationSchema{
 			Name:       opName,
 			PluginName: opName[:len(opName)-5], // Extract plugin name
 		}
@@ -1635,7 +1635,7 @@ func TestPluginRegistry_RegisterThenUnregister(t *testing.T) {
 	reg := newMockPluginRegistry()
 
 	// Register
-	op := &plugin.OperationSchema{Name: "temp.op", PluginName: "temp"}
+	op := &pluginmodel.OperationSchema{Name: "temp.op", PluginName: "temp"}
 	err := reg.RegisterOperation(op)
 	assert.NoError(t, err)
 	assert.Len(t, reg.Operations(), 1)
@@ -1655,7 +1655,7 @@ func TestPluginRegistry_UnregisterThenReregister(t *testing.T) {
 	reg := newMockPluginRegistry()
 
 	// Initial registration
-	op1 := &plugin.OperationSchema{Name: "replace.op", PluginName: "v1"}
+	op1 := &pluginmodel.OperationSchema{Name: "replace.op", PluginName: "v1"}
 	err := reg.RegisterOperation(op1)
 	assert.NoError(t, err)
 
@@ -1664,7 +1664,7 @@ func TestPluginRegistry_UnregisterThenReregister(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Re-register with different plugin
-	op2 := &plugin.OperationSchema{Name: "replace.op", PluginName: "v2"}
+	op2 := &pluginmodel.OperationSchema{Name: "replace.op", PluginName: "v2"}
 	err = reg.RegisterOperation(op2)
 	assert.NoError(t, err)
 

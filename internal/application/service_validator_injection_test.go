@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	domainerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 )
 
 // TestNewWorkflowService_ValidatorInjection tests that the constructor

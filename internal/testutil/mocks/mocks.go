@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	domainerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/interpolation"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // This file contains thread-safe mock implementations of domain port interfaces.
@@ -880,12 +880,12 @@ func (m *MockExpressionEvaluator) Clear() {
 // Usage:
 //
 //	mgr := testutil.NewMockPluginManager()
-//	mgr.AddPlugin("test-plugin", plugin.StatusRunning)
+//	mgr.AddPlugin("test-plugin", pluginmodel.StatusRunning)
 //	info, found := mgr.Get("test-plugin")
 type MockPluginManager struct {
 	mu            sync.RWMutex
-	plugins       map[string]*plugin.PluginInfo
-	discoverFunc  func(ctx context.Context) ([]*plugin.PluginInfo, error)
+	plugins       map[string]*pluginmodel.PluginInfo
+	discoverFunc  func(ctx context.Context) ([]*pluginmodel.PluginInfo, error)
 	loadFunc      func(ctx context.Context, name string) error
 	initFunc      func(ctx context.Context, name string, config map[string]any) error
 	shutdownFunc  func(ctx context.Context, name string) error
@@ -895,13 +895,13 @@ type MockPluginManager struct {
 // NewMockPluginManager creates a new thread-safe mock plugin manager.
 func NewMockPluginManager() *MockPluginManager {
 	return &MockPluginManager{
-		plugins: make(map[string]*plugin.PluginInfo),
+		plugins: make(map[string]*pluginmodel.PluginInfo),
 	}
 }
 
 // Discover finds plugins in the plugins directory.
 // Thread-safe for concurrent access.
-func (m *MockPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo, error) {
+func (m *MockPluginManager) Discover(ctx context.Context) ([]*pluginmodel.PluginInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -909,7 +909,7 @@ func (m *MockPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo,
 		return m.discoverFunc(ctx)
 	}
 
-	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
+	result := make([]*pluginmodel.PluginInfo, 0, len(m.plugins))
 	for _, p := range m.plugins {
 		result = append(result, p)
 	}
@@ -929,7 +929,7 @@ func (m *MockPluginManager) Load(ctx context.Context, name string) error {
 	if _, ok := m.plugins[name]; !ok {
 		return errors.New("plugin not found")
 	}
-	m.plugins[name].Status = plugin.StatusLoaded
+	m.plugins[name].Status = pluginmodel.StatusLoaded
 	return nil
 }
 
@@ -946,7 +946,7 @@ func (m *MockPluginManager) Init(ctx context.Context, name string, config map[st
 	if _, ok := m.plugins[name]; !ok {
 		return errors.New("plugin not found")
 	}
-	m.plugins[name].Status = plugin.StatusRunning
+	m.plugins[name].Status = pluginmodel.StatusRunning
 	return nil
 }
 
@@ -961,7 +961,7 @@ func (m *MockPluginManager) Shutdown(ctx context.Context, name string) error {
 	}
 
 	if info, ok := m.plugins[name]; ok {
-		info.Status = plugin.StatusStopped
+		info.Status = pluginmodel.StatusStopped
 	}
 	return nil
 }
@@ -977,8 +977,8 @@ func (m *MockPluginManager) ShutdownAll(ctx context.Context) error {
 	}
 
 	for _, info := range m.plugins {
-		if info.Status == plugin.StatusRunning {
-			info.Status = plugin.StatusStopped
+		if info.Status == pluginmodel.StatusRunning {
+			info.Status = pluginmodel.StatusStopped
 		}
 	}
 	return nil
@@ -986,7 +986,7 @@ func (m *MockPluginManager) ShutdownAll(ctx context.Context) error {
 
 // Get returns plugin info by name.
 // Thread-safe for concurrent access.
-func (m *MockPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
+func (m *MockPluginManager) Get(name string) (*pluginmodel.PluginInfo, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -996,11 +996,11 @@ func (m *MockPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
 
 // List returns all known plugins.
 // Thread-safe for concurrent access.
-func (m *MockPluginManager) List() []*plugin.PluginInfo {
+func (m *MockPluginManager) List() []*pluginmodel.PluginInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
+	result := make([]*pluginmodel.PluginInfo, 0, len(m.plugins))
 	for _, p := range m.plugins {
 		result = append(result, p)
 	}
@@ -1009,12 +1009,12 @@ func (m *MockPluginManager) List() []*plugin.PluginInfo {
 
 // AddPlugin adds or updates a plugin in the manager (test helper).
 // Thread-safe for concurrent access.
-func (m *MockPluginManager) AddPlugin(name string, status plugin.PluginStatus) *plugin.PluginInfo {
+func (m *MockPluginManager) AddPlugin(name string, status pluginmodel.PluginStatus) *pluginmodel.PluginInfo {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	info := &plugin.PluginInfo{
-		Manifest: &plugin.Manifest{
+	info := &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
 			Name:        name,
 			Version:     "1.0.0",
 			AWFVersion:  ">=0.4.0",
@@ -1029,7 +1029,7 @@ func (m *MockPluginManager) AddPlugin(name string, status plugin.PluginStatus) *
 
 // SetDiscoverFunc configures a custom function for Discover calls (test helper).
 // Thread-safe for concurrent access.
-func (m *MockPluginManager) SetDiscoverFunc(fn func(ctx context.Context) ([]*plugin.PluginInfo, error)) {
+func (m *MockPluginManager) SetDiscoverFunc(fn func(ctx context.Context) ([]*pluginmodel.PluginInfo, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.discoverFunc = fn
@@ -1073,7 +1073,7 @@ func (m *MockPluginManager) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.plugins = make(map[string]*plugin.PluginInfo)
+	m.plugins = make(map[string]*pluginmodel.PluginInfo)
 	m.discoverFunc = nil
 	m.loadFunc = nil
 	m.initFunc = nil

@@ -9,10 +9,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	errfmt "github.com/awf-project/awf/internal/infrastructure/errors"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	errfmt "github.com/awf-project/cli/internal/infrastructure/errors"
 )
 
 // Type aliases for error formatting interfaces

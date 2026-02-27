@@ -1,8 +1,8 @@
 package agents
 
 import (
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/httpx"
 )
 
 type ClaudeProviderOption func(*ClaudeProvider)
@@ -39,7 +39,7 @@ func WithOpenCodeExecutor(executor ports.CLIExecutor) OpenCodeProviderOption {
 
 type OpenAICompatibleProviderOption func(*OpenAICompatibleProvider)
 
-func WithHTTPClient(client *httputil.Client) OpenAICompatibleProviderOption {
+func WithHTTPClient(client *httpx.Client) OpenAICompatibleProviderOption {
 	return func(p *OpenAICompatibleProvider) {
 		p.httpClient = client
 	}

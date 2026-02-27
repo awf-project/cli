@@ -400,7 +400,7 @@ Use the `pkg/plugin/sdk` package to create your own plugins.
 package main
 
 import (
-    "github.com/awf-project/awf/pkg/plugin/sdk"
+    "github.com/awf-project/cli/pkg/plugin/sdk"
 )
 
 type MyPlugin struct{}

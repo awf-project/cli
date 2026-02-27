@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // ManifestParseError represents an error during plugin manifest parsing.
@@ -80,7 +80,7 @@ func NewManifestParser() *ManifestParser {
 }
 
 // ParseFile reads and parses a plugin manifest from a file path.
-func (p *ManifestParser) ParseFile(path string) (*plugin.Manifest, error) {
+func (p *ManifestParser) ParseFile(path string) (*pluginmodel.Manifest, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, WrapManifestParseError(path, err)
@@ -96,12 +96,12 @@ func (p *ManifestParser) ParseFile(path string) (*plugin.Manifest, error) {
 }
 
 // Parse reads and parses a plugin manifest from an io.Reader.
-func (p *ManifestParser) Parse(r io.Reader) (*plugin.Manifest, error) {
+func (p *ManifestParser) Parse(r io.Reader) (*pluginmodel.Manifest, error) {
 	return p.parse(r, "<reader>")
 }
 
 // parse is the internal implementation that parses from a reader with a source identifier.
-func (p *ManifestParser) parse(r io.Reader, source string) (*plugin.Manifest, error) {
+func (p *ManifestParser) parse(r io.Reader, source string) (*pluginmodel.Manifest, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, WrapManifestParseError(source, err)
@@ -139,8 +139,8 @@ func validateYAMLManifest(m *yamlManifest, source string) error {
 }
 
 // mapToDomain converts a yamlManifest to a domain Manifest.
-func mapToDomain(m *yamlManifest) *plugin.Manifest {
-	manifest := &plugin.Manifest{
+func mapToDomain(m *yamlManifest) *pluginmodel.Manifest {
+	manifest := &pluginmodel.Manifest{
 		Name:         m.Name,
 		Version:      m.Version,
 		Description:  m.Description,
@@ -152,9 +152,9 @@ func mapToDomain(m *yamlManifest) *plugin.Manifest {
 	}
 
 	if len(m.Config) > 0 {
-		manifest.Config = make(map[string]plugin.ConfigField, len(m.Config))
+		manifest.Config = make(map[string]pluginmodel.ConfigField, len(m.Config))
 		for name, field := range m.Config {
-			manifest.Config[name] = plugin.ConfigField{
+			manifest.Config[name] = pluginmodel.ConfigField{
 				Type:        field.Type,
 				Required:    field.Required,
 				Default:     field.Default,

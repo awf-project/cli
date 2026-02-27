@@ -91,4 +91,4 @@
 //   - Compare: Semver comparison (major.minor.patch)
 //
 // Operators: =, !=, >, >=, <, <=, ~ (tilde range), ^ (caret range)
-package plugin
+package pluginmgr

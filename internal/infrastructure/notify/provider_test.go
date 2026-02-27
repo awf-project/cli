@@ -3,8 +3,8 @@ package notify
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -141,7 +141,7 @@ func TestNotifyOperationProvider_ListOperations_ReturnsAllOperations(t *testing.
 func TestNotifyOperationProvider_ListOperations_NotNilEvenWhenEmpty(t *testing.T) {
 	// Create provider with no operations (hypothetical edge case)
 	provider := &NotifyOperationProvider{
-		operations: make(map[string]*plugin.OperationSchema),
+		operations: make(map[string]*pluginmodel.OperationSchema),
 	}
 
 	operations := provider.ListOperations()

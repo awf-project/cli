@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/testutil/builders"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/builders"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -272,7 +272,7 @@ func TestExecutePluginOperation_ContinueOnError(t *testing.T) {
 			if tt.providerError != nil {
 				provider.execError = tt.providerError
 			} else if tt.operationFail {
-				provider.results["test.operation"] = &plugin.OperationResult{
+				provider.results["test.operation"] = &pluginmodel.OperationResult{
 					Success: false,
 					Error:   "operation execution failed",
 				}
@@ -411,7 +411,7 @@ func TestExecutePluginOperation_OperationFailureWithoutMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
-			provider.results["test.operation"] = &plugin.OperationResult{
+			provider.results["test.operation"] = &pluginmodel.OperationResult{
 				Success: false,
 				Error:   tt.resultError,
 			}
@@ -521,7 +521,7 @@ func setupHookTestProvider(operationFails bool) *mockOperationProvider {
 	provider.addOperation("test.operation", "Test operation", "test-plugin")
 
 	if operationFails {
-		provider.results["test.operation"] = &plugin.OperationResult{
+		provider.results["test.operation"] = &pluginmodel.OperationResult{
 			Success: false,
 			Error:   "operation failed",
 		}
@@ -737,7 +737,7 @@ func TestExecutePluginOperation_OutputSerialization(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := newMockOperationProvider()
 			provider.addOperation("test.operation", "Test operation", "test-plugin")
-			provider.results["test.operation"] = &plugin.OperationResult{
+			provider.results["test.operation"] = &pluginmodel.OperationResult{
 				Success: true,
 				Outputs: tt.outputs,
 			}
@@ -821,12 +821,12 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 			case tt.providerError != nil:
 				provider.execError = tt.providerError
 			case tt.operationFails:
-				provider.results["test.operation"] = &plugin.OperationResult{
+				provider.results["test.operation"] = &pluginmodel.OperationResult{
 					Success: false,
 					Error:   "operation failed",
 				}
 			default:
-				provider.results["test.operation"] = &plugin.OperationResult{
+				provider.results["test.operation"] = &pluginmodel.OperationResult{
 					Success: true,
 					Outputs: tt.resultOutputs,
 				}
@@ -909,7 +909,7 @@ func (m *mockOperationProviderWithDelay) Execute(
 	ctx context.Context,
 	name string,
 	inputs map[string]any,
-) (*plugin.OperationResult, error) {
+) (*pluginmodel.OperationResult, error) {
 	// Simulate delay
 	select {
 	case <-time.After(m.delay):
@@ -936,7 +936,7 @@ func (m *mockOperationProviderWithCapture) Execute(
 	ctx context.Context,
 	name string,
 	inputs map[string]any,
-) (*plugin.OperationResult, error) {
+) (*pluginmodel.OperationResult, error) {
 	// Capture inputs
 	m.capturedInputs[name] = inputs
 	return m.mockOperationProvider.Execute(ctx, name, inputs)

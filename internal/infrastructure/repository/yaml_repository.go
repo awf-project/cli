@@ -10,9 +10,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/expression"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/expression"
 )
 
 // YAMLRepository implements WorkflowRepository for YAML files.

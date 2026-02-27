@@ -1,4 +1,4 @@
-package plugin
+package pluginmodel
 
 import (
 	"errors"

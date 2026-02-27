@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // DryRunFormatter formats dry-run execution plans for display.

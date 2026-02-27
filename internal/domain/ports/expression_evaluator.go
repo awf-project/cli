@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/awf-project/awf/pkg/interpolation"
+import "github.com/awf-project/cli/pkg/interpolation"
 
 // ExpressionEvaluator defines the contract for evaluating runtime expressions.
 // This port abstracts expression evaluation to maintain domain layer purity

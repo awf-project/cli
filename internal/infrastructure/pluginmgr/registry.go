@@ -1,11 +1,11 @@
-package plugin
+package pluginmgr
 
 import (
 	"errors"
 	"sync"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // Registry errors.
@@ -19,8 +19,8 @@ var (
 // Thread-safe for concurrent access.
 type OperationRegistry struct {
 	mu         sync.RWMutex
-	operations map[string]*plugin.OperationSchema // key: operation name
-	sources    map[string]string                  // key: operation name, value: plugin name
+	operations map[string]*pluginmodel.OperationSchema // key: operation name
+	sources    map[string]string                       // key: operation name, value: plugin name
 }
 
 // Compile-time interface check.
@@ -29,7 +29,7 @@ var _ ports.PluginRegistry = (*OperationRegistry)(nil)
 // NewOperationRegistry creates a new empty operation registry.
 func NewOperationRegistry() *OperationRegistry {
 	return &OperationRegistry{
-		operations: make(map[string]*plugin.OperationSchema),
+		operations: make(map[string]*pluginmodel.OperationSchema),
 		sources:    make(map[string]string),
 	}
 }
@@ -37,7 +37,7 @@ func NewOperationRegistry() *OperationRegistry {
 // RegisterOperation adds a plugin operation to the registry.
 // Returns ErrOperationAlreadyRegistered if an operation with the same name exists.
 // Returns ErrInvalidOperation if the operation schema is nil or has no name.
-func (r *OperationRegistry) RegisterOperation(op *plugin.OperationSchema) error {
+func (r *OperationRegistry) RegisterOperation(op *pluginmodel.OperationSchema) error {
 	if op == nil || op.Name == "" {
 		return ErrInvalidOperation
 	}
@@ -73,11 +73,11 @@ func (r *OperationRegistry) UnregisterOperation(name string) error {
 
 // Operations returns all registered operations as a slice.
 // Returns an empty slice if no operations are registered.
-func (r *OperationRegistry) Operations() []*plugin.OperationSchema {
+func (r *OperationRegistry) Operations() []*pluginmodel.OperationSchema {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	result := make([]*plugin.OperationSchema, 0, len(r.operations))
+	result := make([]*pluginmodel.OperationSchema, 0, len(r.operations))
 	for _, op := range r.operations {
 		result = append(result, op)
 	}
@@ -87,7 +87,7 @@ func (r *OperationRegistry) Operations() []*plugin.OperationSchema {
 
 // GetOperation returns an operation by name.
 // Returns nil and false if the operation is not found.
-func (r *OperationRegistry) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (r *OperationRegistry) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -119,11 +119,11 @@ func (r *OperationRegistry) UnregisterPluginOperations(pluginName string) error 
 }
 
 // GetPluginOperations returns all operations registered by a specific plugin.
-func (r *OperationRegistry) GetPluginOperations(pluginName string) []*plugin.OperationSchema {
+func (r *OperationRegistry) GetPluginOperations(pluginName string) []*pluginmodel.OperationSchema {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	result := make([]*plugin.OperationSchema, 0)
+	result := make([]*pluginmodel.OperationSchema, 0)
 	for name, source := range r.sources {
 		if source == pluginName {
 			if op, exists := r.operations[name]; exists {
@@ -158,6 +158,6 @@ func (r *OperationRegistry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.operations = make(map[string]*plugin.OperationSchema)
+	r.operations = make(map[string]*pluginmodel.OperationSchema)
 	r.sources = make(map[string]string)
 }

@@ -5,9 +5,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/awf-project/awf/internal/infrastructure/config"
-	"github.com/awf-project/awf/internal/infrastructure/xdg"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/infrastructure/config"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
 

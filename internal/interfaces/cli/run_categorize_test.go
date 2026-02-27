@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
 )
 

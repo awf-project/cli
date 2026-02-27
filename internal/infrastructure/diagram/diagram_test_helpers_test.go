@@ -4,7 +4,7 @@ package diagram
 // Shared test fixtures and utilities for diagram generation tests
 
 import (
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // Helper function to create a simple test workflow
