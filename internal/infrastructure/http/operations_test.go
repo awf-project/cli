@@ -3,7 +3,7 @@ package http
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,7 +62,7 @@ func TestHTTPRequestOperation_RequiredInputs(t *testing.T) {
 	urlInput, exists := op.Inputs["url"]
 	require.True(t, exists, "url input should exist")
 	assert.True(t, urlInput.Required, "url should be required")
-	assert.Equal(t, plugin.InputTypeString, urlInput.Type, "url should be string type")
+	assert.Equal(t, pluginmodel.InputTypeString, urlInput.Type, "url should be string type")
 	assert.NotEmpty(t, urlInput.Description, "url should have description")
 	assert.Contains(t, urlInput.Description, "http://", "url description should mention http://")
 	assert.Contains(t, urlInput.Description, "https://", "url description should mention https://")
@@ -72,7 +72,7 @@ func TestHTTPRequestOperation_RequiredInputs(t *testing.T) {
 	methodInput, exists := op.Inputs["method"]
 	require.True(t, exists, "method input should exist")
 	assert.True(t, methodInput.Required, "method should be required")
-	assert.Equal(t, plugin.InputTypeString, methodInput.Type, "method should be string type")
+	assert.Equal(t, pluginmodel.InputTypeString, methodInput.Type, "method should be string type")
 	assert.NotEmpty(t, methodInput.Description, "method should have description")
 	assert.Contains(t, methodInput.Description, "GET", "method description should list GET")
 	assert.Contains(t, methodInput.Description, "POST", "method description should list POST")
@@ -95,25 +95,25 @@ func TestHTTPRequestOperation_OptionalInputs(t *testing.T) {
 		{
 			name:        "headers",
 			shouldExist: true,
-			inputType:   plugin.InputTypeObject,
+			inputType:   pluginmodel.InputTypeObject,
 			description: "headers",
 		},
 		{
 			name:        "body",
 			shouldExist: true,
-			inputType:   plugin.InputTypeString,
+			inputType:   pluginmodel.InputTypeString,
 			description: "body",
 		},
 		{
 			name:        "timeout",
 			shouldExist: true,
-			inputType:   plugin.InputTypeInteger,
+			inputType:   pluginmodel.InputTypeInteger,
 			description: "timeout",
 		},
 		{
 			name:        "retryable_status_codes",
 			shouldExist: true,
-			inputType:   plugin.InputTypeArray,
+			inputType:   pluginmodel.InputTypeArray,
 			description: "retryable",
 		},
 	}
@@ -152,7 +152,7 @@ func TestHTTPRequestOperation_HeadersInputType(t *testing.T) {
 
 	// Verify headers is object type (FR-002)
 	headersInput := op.Inputs["headers"]
-	assert.Equal(t, plugin.InputTypeObject, headersInput.Type, "headers should be object type")
+	assert.Equal(t, pluginmodel.InputTypeObject, headersInput.Type, "headers should be object type")
 	assert.Contains(t, headersInput.Description, "key-value", "headers description should mention key-value pairs")
 }
 
@@ -163,7 +163,7 @@ func TestHTTPRequestOperation_BodyInputType(t *testing.T) {
 
 	// Verify body is raw string (FR-002, spec clarification)
 	bodyInput := op.Inputs["body"]
-	assert.Equal(t, plugin.InputTypeString, bodyInput.Type, "body should be string type")
+	assert.Equal(t, pluginmodel.InputTypeString, bodyInput.Type, "body should be string type")
 	assert.Contains(t, bodyInput.Description, "raw string", "body description should mention raw string")
 	assert.Contains(t, bodyInput.Description, "JSON encoding is caller's responsibility", "body description should clarify JSON encoding responsibility")
 }
@@ -175,7 +175,7 @@ func TestHTTPRequestOperation_RetryableStatusCodesInputType(t *testing.T) {
 
 	// Verify retryable_status_codes is array type (FR-002)
 	retryableInput := op.Inputs["retryable_status_codes"]
-	assert.Equal(t, plugin.InputTypeArray, retryableInput.Type, "retryable_status_codes should be array type")
+	assert.Equal(t, pluginmodel.InputTypeArray, retryableInput.Type, "retryable_status_codes should be array type")
 	assert.Contains(t, retryableInput.Description, "retryable failures", "retryable_status_codes description should mention retryable failures")
 	assert.Contains(t, retryableInput.Description, "429", "retryable_status_codes description should provide example 429")
 	assert.Contains(t, retryableInput.Description, "502", "retryable_status_codes description should provide example 502")
@@ -263,11 +263,11 @@ func TestAllOperations_AllInputsHaveValidTypes(t *testing.T) {
 
 	// Then: all inputs have valid types
 	validTypes := map[string]bool{
-		plugin.InputTypeString:  true,
-		plugin.InputTypeInteger: true,
-		plugin.InputTypeBoolean: true,
-		plugin.InputTypeArray:   true,
-		plugin.InputTypeObject:  true,
+		pluginmodel.InputTypeString:  true,
+		pluginmodel.InputTypeInteger: true,
+		pluginmodel.InputTypeBoolean: true,
+		pluginmodel.InputTypeArray:   true,
+		pluginmodel.InputTypeObject:  true,
 	}
 
 	for inputName, inputSchema := range op.Inputs {
@@ -455,7 +455,7 @@ func TestHTTPRequestOperation_SupportsTemplateInterpolation(t *testing.T) {
 	stringInputs := []string{"url", "method", "body"}
 	for _, inputName := range stringInputs {
 		inputSchema := op.Inputs[inputName]
-		assert.Equal(t, plugin.InputTypeString, inputSchema.Type,
+		assert.Equal(t, pluginmodel.InputTypeString, inputSchema.Type,
 			"input %q should be string type to support template interpolation", inputName)
 	}
 }
@@ -527,23 +527,23 @@ func TestHTTPRequestOperation_FR002Compliance(t *testing.T) {
 
 	// Required inputs
 	assert.True(t, op.Inputs["url"].Required, "FR-002: url must be required")
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["url"].Type, "FR-002: url must be string")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["url"].Type, "FR-002: url must be string")
 
 	assert.True(t, op.Inputs["method"].Required, "FR-002: method must be required")
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["method"].Type, "FR-002: method must be string")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["method"].Type, "FR-002: method must be string")
 
 	// Optional inputs
 	assert.False(t, op.Inputs["headers"].Required, "FR-002: headers must be optional")
-	assert.Equal(t, plugin.InputTypeObject, op.Inputs["headers"].Type, "FR-002: headers must be object")
+	assert.Equal(t, pluginmodel.InputTypeObject, op.Inputs["headers"].Type, "FR-002: headers must be object")
 
 	assert.False(t, op.Inputs["body"].Required, "FR-002: body must be optional")
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["body"].Type, "FR-002: body must be string")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["body"].Type, "FR-002: body must be string")
 
 	assert.False(t, op.Inputs["timeout"].Required, "FR-002: timeout must be optional")
-	assert.Equal(t, plugin.InputTypeInteger, op.Inputs["timeout"].Type, "FR-002: timeout must be integer")
+	assert.Equal(t, pluginmodel.InputTypeInteger, op.Inputs["timeout"].Type, "FR-002: timeout must be integer")
 
 	assert.False(t, op.Inputs["retryable_status_codes"].Required, "FR-002: retryable_status_codes must be optional")
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["retryable_status_codes"].Type, "FR-002: retryable_status_codes must be array")
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["retryable_status_codes"].Type, "FR-002: retryable_status_codes must be array")
 }
 
 func TestHTTPRequestOperation_FR003Compliance(t *testing.T) {
@@ -594,9 +594,9 @@ func TestHTTPRequestOperation_FR008Compliance(t *testing.T) {
 	op := ops[0]
 
 	// All string inputs support interpolation (AWF core feature)
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["url"].Type, "FR-008: url must be string for interpolation")
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["method"].Type, "FR-008: method must be string for interpolation")
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["body"].Type, "FR-008: body must be string for interpolation")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["url"].Type, "FR-008: url must be string for interpolation")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["method"].Type, "FR-008: method must be string for interpolation")
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["body"].Type, "FR-008: body must be string for interpolation")
 	// Note: header values are within the object type, interpolation handled by AWF core
 }
 

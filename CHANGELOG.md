@@ -170,14 +170,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integration with existing step-level retry mechanism for transient failures
   - Wired into CLI via `CompositeOperationProvider` alongside GitHub and Notify providers
   - Comprehensive integration tests covering 5 user stories (GET, POST/PUT/DELETE, response capture, timeout, retry)
-  - Shared `pkg/httputil` package with `Client` and `Response` utilities for HTTP operations
+  - Shared `pkg/httpx` package with `Client` and `Response` utilities for HTTP operations
   - Key Components:
     - `internal/infrastructure/http/provider.go` - HTTPOperationProvider implementing `ports.OperationProvider`
     - `internal/infrastructure/http/operations.go` - OperationSchema definition for `http.request`
-    - `pkg/httputil/client.go` - HTTP client with configurable timeout and convenience methods (Get/Post/Put/Delete)
-    - `pkg/httputil/response.go` - Response reading with bounded body support
+    - `pkg/httpx/client.go` - HTTP client with configurable timeout and convenience methods (Get/Post/Put/Delete)
+    - `pkg/httpx/response.go` - Response reading with bounded body support
     - `tests/integration/http_operation_test.go` - 27 integration tests validating all user stories
-  - Refactored notify backends (ntfy, slack, webhook) to use shared `pkg/httputil.Client`, deleted `internal/infrastructure/notify/http.go`
+  - Refactored notify backends (ntfy, slack, webhook) to use shared `pkg/httpx.Client`, deleted `internal/infrastructure/notify/http.go`
   - Documentation:
     - `docs/user-guide/plugins.md` - HTTP Operation plugin section with examples
     - `docs/user-guide/workflow-syntax.md` - HTTP Operations reference section
@@ -846,4 +846,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/awf-project/awf/compare/HEAD
+[Unreleased]: https://github.com/awf-project/cli/compare/HEAD

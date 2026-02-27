@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

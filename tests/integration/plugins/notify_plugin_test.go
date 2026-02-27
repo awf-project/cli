@@ -16,17 +16,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/executor"
-	infraExpr "github.com/awf-project/awf/internal/infrastructure/expression"
-	"github.com/awf-project/awf/internal/infrastructure/github"
-	"github.com/awf-project/awf/internal/infrastructure/notify"
-	"github.com/awf-project/awf/internal/infrastructure/plugin"
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/internal/infrastructure/store"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
+	infraExpr "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/github"
+	"github.com/awf-project/cli/internal/infrastructure/notify"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -574,7 +574,7 @@ func setupNotifyTestWorkflowService(t *testing.T, workflowsDir, statesDir string
 		notifyProvider.SetDefaultBackend(config.DefaultBackend)
 	}
 
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider)
+	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider)
 
 	execSvc.SetOperationProvider(compositeProvider)
 

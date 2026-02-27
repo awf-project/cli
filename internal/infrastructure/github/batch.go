@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // BatchExecutor handles batch execution of GitHub operations with configurable
@@ -46,10 +46,10 @@ type BatchConfig struct {
 
 // BatchResult represents the aggregate result of batch execution.
 type BatchResult struct {
-	Total     int                       // Total operations attempted
-	Succeeded int                       // Successfully completed operations
-	Failed    int                       // Failed operations
-	Results   []*plugin.OperationResult // Individual operation results
+	Total     int                            // Total operations attempted
+	Succeeded int                            // Successfully completed operations
+	Failed    int                            // Failed operations
+	Results   []*pluginmodel.OperationResult // Individual operation results
 }
 
 // Execute runs multiple GitHub operations in batch according to the configured strategy.
@@ -78,7 +78,7 @@ func (e *BatchExecutor) Execute(
 			Total:     len(operations),
 			Succeeded: 0,
 			Failed:    len(operations),
-			Results:   []*plugin.OperationResult{},
+			Results:   []*pluginmodel.OperationResult{},
 		}, fmt.Errorf("batch execution cancelled: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func (e *BatchExecutor) Execute(
 		Total:     len(operations),
 		Succeeded: 0,
 		Failed:    0,
-		Results:   make([]*plugin.OperationResult, 0, len(operations)),
+		Results:   make([]*pluginmodel.OperationResult, 0, len(operations)),
 	}
 
 	// Handle empty operations
@@ -230,7 +230,7 @@ func (e *BatchExecutor) executeAnySucceed(
 					defer func() { <-sem }()
 				case <-ctx.Done():
 					mu.Lock()
-					result.Results = append(result.Results, &plugin.OperationResult{
+					result.Results = append(result.Results, &pluginmodel.OperationResult{
 						Success: false,
 						Error:   ctx.Err().Error(),
 						Outputs: make(map[string]any),
@@ -316,7 +316,7 @@ func (e *BatchExecutor) executeBestEffort(
 					defer func() { <-sem }()
 				case <-ctx.Done():
 					mu.Lock()
-					result.Results = append(result.Results, &plugin.OperationResult{
+					result.Results = append(result.Results, &pluginmodel.OperationResult{
 						Success: false,
 						Error:   ctx.Err().Error(),
 						Outputs: make(map[string]any),
@@ -351,7 +351,7 @@ func (e *BatchExecutor) executeBestEffort(
 func (e *BatchExecutor) executeOperation(
 	ctx context.Context,
 	op map[string]any,
-) (*plugin.OperationResult, error) {
+) (*pluginmodel.OperationResult, error) {
 	// Extract operation name (already validated by validateOperation)
 	name, ok := op["name"].(string)
 	if !ok {

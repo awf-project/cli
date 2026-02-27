@@ -3,7 +3,7 @@ package cli_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/interfaces/cli"
 )
 
 func TestExitCodes(t *testing.T) {

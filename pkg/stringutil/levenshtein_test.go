@@ -3,7 +3,7 @@ package stringutil_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/pkg/stringutil"
+	"github.com/awf-project/cli/pkg/stringutil"
 	"github.com/stretchr/testify/assert"
 )
 

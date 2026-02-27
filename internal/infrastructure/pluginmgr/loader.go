@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // LoaderError represents an error during plugin loading operations.
@@ -77,7 +77,7 @@ func NewFileSystemLoader(parser *ManifestParser) *FileSystemLoader {
 
 // DiscoverPlugins scans a directory for plugins and returns their info.
 // Each subdirectory containing a plugin.yaml is considered a plugin.
-func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir string) ([]*plugin.PluginInfo, error) {
+func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir string) ([]*pluginmodel.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("discover plugins: %w", err)
@@ -99,7 +99,7 @@ func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir strin
 	}
 
 	// Preallocate for expected number of plugins
-	plugins := make([]*plugin.PluginInfo, 0, len(entries))
+	plugins := make([]*pluginmodel.PluginInfo, 0, len(entries))
 
 	for _, entry := range entries {
 		// Check context on each iteration
@@ -135,7 +135,7 @@ func (l *FileSystemLoader) DiscoverPlugins(ctx context.Context, pluginsDir strin
 
 // LoadPlugin loads a single plugin from a directory path.
 // Reads the plugin.yaml manifest and creates PluginInfo with status=StatusLoaded.
-func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*plugin.PluginInfo, error) {
+func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*pluginmodel.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("load plugin: %w", err)
@@ -166,9 +166,9 @@ func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*p
 	}
 
 	// Create PluginInfo
-	pluginInfo := &plugin.PluginInfo{
+	pluginInfo := &pluginmodel.PluginInfo{
 		Manifest: manifest,
-		Status:   plugin.StatusLoaded,
+		Status:   pluginmodel.StatusLoaded,
 		Path:     pluginDir,
 		LoadedAt: time.Now().Unix(),
 	}
@@ -178,7 +178,7 @@ func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*p
 
 // ValidatePlugin checks if a discovered plugin is valid and compatible.
 // Validates manifest fields, capabilities, and AWF version constraint.
-func (l *FileSystemLoader) ValidatePlugin(info *plugin.PluginInfo) error {
+func (l *FileSystemLoader) ValidatePlugin(info *pluginmodel.PluginInfo) error {
 	if info == nil {
 		return NewLoaderError("validate", "", "plugin info is nil")
 	}
@@ -228,7 +228,7 @@ func (l *FileSystemLoader) ValidatePlugin(info *plugin.PluginInfo) error {
 
 // isValidCapability checks if a capability string is valid.
 func isValidCapability(capability string) bool {
-	for _, valid := range plugin.ValidCapabilities {
+	for _, valid := range pluginmodel.ValidCapabilities {
 		if capability == valid {
 			return true
 		}

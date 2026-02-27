@@ -514,7 +514,7 @@ error:
 **Solution**: This was a bug in versions prior to F051 (fixed in v0.1.0+). The implementation incorrectly set prompts to empty strings for subsequent conversation turns.
 
 **Workaround** (if on older version):
-- Upgrade to latest version with `go install github.com/awf-project/awf/cmd/awf@latest`
+- Upgrade to latest version with `go install github.com/awf-project/cli/cmd/awf@latest`
 - Or use single-turn agent steps with explicit state chaining instead
 
 **Fixed in**: F051 (See CHANGELOG.md for details)

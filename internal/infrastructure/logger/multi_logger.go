@@ -1,6 +1,6 @@
 package logger
 
-import "github.com/awf-project/awf/internal/domain/ports"
+import "github.com/awf-project/cli/internal/domain/ports"
 
 // MultiLogger delegates log calls to multiple loggers.
 type MultiLogger struct {

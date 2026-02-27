@@ -1,35 +1,35 @@
 package notify
 
-import "github.com/awf-project/awf/internal/domain/plugin"
+import "github.com/awf-project/cli/internal/domain/pluginmodel"
 
-func AllOperations() []plugin.OperationSchema {
-	return []plugin.OperationSchema{
+func AllOperations() []pluginmodel.OperationSchema {
+	return []pluginmodel.OperationSchema{
 		{
 			Name:        "notify.send",
 			Description: "Send a notification via configured backend (desktop, webhook)",
-			Inputs: map[string]plugin.InputSchema{
+			Inputs: map[string]pluginmodel.InputSchema{
 				"backend": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    true,
 					Description: "Notification backend: desktop, webhook",
 				},
 				"message": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    true,
 					Description: "Notification message body",
 				},
 				"title": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    false,
 					Description: "Notification title (defaults to 'AWF Workflow')",
 				},
 				"priority": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    false,
 					Description: "Priority: low, default, high (defaults to 'default')",
 				},
 				"webhook_url": {
-					Type:        plugin.InputTypeString,
+					Type:        pluginmodel.InputTypeString,
 					Required:    false,
 					Description: "Webhook URL (required for webhook backend)",
 				},

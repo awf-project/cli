@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	testmocks "github.com/awf-project/awf/internal/testutil/mocks"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1982,16 +1982,16 @@ func TestExecutionService_SetConversationManager_Nil(t *testing.T) {
 // simpleOperationProvider implements ports.OperationProvider for testing SetOperationProvider.
 type simpleOperationProvider struct{}
 
-func (s *simpleOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (s *simpleOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	return nil, false
 }
 
-func (s *simpleOperationProvider) ListOperations() []*plugin.OperationSchema {
+func (s *simpleOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
 	return nil
 }
 
-func (s *simpleOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
-	return &plugin.OperationResult{Success: true}, nil
+func (s *simpleOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+	return &pluginmodel.OperationResult{Success: true}, nil
 }
 
 // simpleExpressionEvaluator implements ports.ExpressionEvaluator for testing SetEvaluator.

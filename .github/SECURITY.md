@@ -71,4 +71,4 @@ To minimize risk while using AWF:
 
 Subscribe to security advisories:
 - Watch this repository (Releases only)
-- Check [GitHub Security Advisories](https://github.com/awf-project/awf/security/advisories)
+- Check [GitHub Security Advisories](https://github.com/awf-project/cli/security/advisories)

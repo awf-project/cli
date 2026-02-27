@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/operation"
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/operation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,21 +112,21 @@ func TestSentinelErrors_AreDistinct(t *testing.T) {
 // to verify the contract and test operation behavior.
 type mockOperation struct {
 	name   string
-	schema *plugin.OperationSchema
+	schema *pluginmodel.OperationSchema
 	// executeFn allows customizing the Execute behavior in tests
-	executeFn func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+	executeFn func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 }
 
 func (m *mockOperation) Name() string {
 	return m.name
 }
 
-func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, inputs)
 	}
 	// Default successful execution
-	return &plugin.OperationResult{
+	return &pluginmodel.OperationResult{
 		Success: true,
 		Outputs: map[string]any{
 			"result": "executed",
@@ -135,7 +135,7 @@ func (m *mockOperation) Execute(ctx context.Context, inputs map[string]any) (*pl
 	}, nil
 }
 
-func (m *mockOperation) Schema() *plugin.OperationSchema {
+func (m *mockOperation) Schema() *pluginmodel.OperationSchema {
 	return m.schema
 }
 
@@ -144,12 +144,12 @@ var _ operation.Operation = (*mockOperation)(nil)
 
 func TestOperation_InterfaceContract(t *testing.T) {
 	// Happy path: Verify Operation interface can be implemented
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "test.operation",
 		Description: "Test operation for interface verification",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"input1": {
-				Type:        plugin.InputTypeString,
+				Type:        pluginmodel.InputTypeString,
 				Required:    true,
 				Description: "Test input",
 			},
@@ -230,10 +230,10 @@ func TestOperation_Execute_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := &plugin.OperationSchema{
+			schema := &pluginmodel.OperationSchema{
 				Name:        tt.operationName,
 				Description: "Test operation",
-				Inputs:      map[string]plugin.InputSchema{},
+				Inputs:      map[string]pluginmodel.InputSchema{},
 				Outputs:     []string{"result"},
 				PluginName:  "test",
 			}
@@ -241,8 +241,8 @@ func TestOperation_Execute_HappyPath(t *testing.T) {
 			op := &mockOperation{
 				name:   tt.operationName,
 				schema: schema,
-				executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-					return &plugin.OperationResult{
+				executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+					return &pluginmodel.OperationResult{
 						Success: true,
 						Outputs: tt.expectedOutput,
 						Error:   "",
@@ -264,10 +264,10 @@ func TestOperation_Execute_HappyPath(t *testing.T) {
 
 func TestOperation_Execute_ContextCancellation(t *testing.T) {
 	// Edge case: Execute respects context cancellation
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "test.cancellable",
 		Description: "Operation that respects context cancellation",
-		Inputs:      map[string]plugin.InputSchema{},
+		Inputs:      map[string]pluginmodel.InputSchema{},
 		Outputs:     []string{"result"},
 		PluginName:  "test",
 	}
@@ -275,13 +275,13 @@ func TestOperation_Execute_ContextCancellation(t *testing.T) {
 	op := &mockOperation{
 		name:   "test.cancellable",
 		schema: schema,
-		executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			// Check if context is cancelled
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			}
 		},
 	}
@@ -302,31 +302,31 @@ func TestOperation_Execute_ErrorHandling(t *testing.T) {
 	// Error handling: Execute returns appropriate errors
 	tests := []struct {
 		name          string
-		executeFn     func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error)
+		executeFn     func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error)
 		expectedError error
-		checkResult   func(t *testing.T, result *plugin.OperationResult)
+		checkResult   func(t *testing.T, result *pluginmodel.OperationResult)
 	}{
 		{
 			name: "execution_failure_with_error",
-			executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+			executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 				return nil, errors.New("execution failed")
 			},
 			expectedError: errors.New("execution failed"),
-			checkResult: func(t *testing.T, result *plugin.OperationResult) {
+			checkResult: func(t *testing.T, result *pluginmodel.OperationResult) {
 				assert.Nil(t, result)
 			},
 		},
 		{
 			name: "partial_failure_with_result",
-			executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-				return &plugin.OperationResult{
+			executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+				return &pluginmodel.OperationResult{
 					Success: false,
 					Outputs: map[string]any{},
 					Error:   "operation failed",
 				}, nil
 			},
 			expectedError: nil,
-			checkResult: func(t *testing.T, result *plugin.OperationResult) {
+			checkResult: func(t *testing.T, result *pluginmodel.OperationResult) {
 				require.NotNil(t, result)
 				assert.False(t, result.Success)
 				assert.Equal(t, "operation failed", result.Error)
@@ -336,10 +336,10 @@ func TestOperation_Execute_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := &plugin.OperationSchema{
+			schema := &pluginmodel.OperationSchema{
 				Name:        "test.error",
 				Description: "Error handling test",
-				Inputs:      map[string]plugin.InputSchema{},
+				Inputs:      map[string]pluginmodel.InputSchema{},
 				Outputs:     []string{"result"},
 				PluginName:  "test",
 			}
@@ -369,22 +369,22 @@ func TestOperation_Schema_ReturnsValidSchema(t *testing.T) {
 	// Happy path: Schema() returns valid OperationSchema with all fields
 	tests := []struct {
 		name   string
-		schema *plugin.OperationSchema
+		schema *pluginmodel.OperationSchema
 	}{
 		{
 			name: "complete_schema_with_all_fields",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name:        "http.get",
 				Description: "HTTP GET request",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"url": {
-						Type:        plugin.InputTypeString,
+						Type:        pluginmodel.InputTypeString,
 						Required:    true,
 						Description: "Target URL",
 						Validation:  "url",
 					},
 					"timeout": {
-						Type:        plugin.InputTypeString,
+						Type:        pluginmodel.InputTypeString,
 						Required:    false,
 						Default:     "30s",
 						Description: "Request timeout",
@@ -396,10 +396,10 @@ func TestOperation_Schema_ReturnsValidSchema(t *testing.T) {
 		},
 		{
 			name: "minimal_schema",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name:        "simple.op",
 				Description: "Simple operation",
-				Inputs:      map[string]plugin.InputSchema{},
+				Inputs:      map[string]pluginmodel.InputSchema{},
 				Outputs:     []string{},
 				PluginName:  "simple",
 			},
@@ -463,10 +463,10 @@ func TestOperation_Name_ReturnsUniqueIdentifier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := &plugin.OperationSchema{
+			schema := &pluginmodel.OperationSchema{
 				Name:        tt.operationName,
 				Description: "Test",
-				Inputs:      map[string]plugin.InputSchema{},
+				Inputs:      map[string]pluginmodel.InputSchema{},
 				Outputs:     []string{},
 				PluginName:  "test",
 			}
@@ -509,12 +509,12 @@ func TestPackageDocumentation_Exists(t *testing.T) {
 
 func TestOperation_Execute_WithNilInputs(t *testing.T) {
 	// Edge case: Execute with nil inputs map should work
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "test.nil_inputs",
 		Description: "Handles nil inputs",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"optional": {
-				Type:     plugin.InputTypeString,
+				Type:     pluginmodel.InputTypeString,
 				Required: false,
 				Default:  "default_value",
 			},
@@ -526,9 +526,9 @@ func TestOperation_Execute_WithNilInputs(t *testing.T) {
 	op := &mockOperation{
 		name:   "test.nil_inputs",
 		schema: schema,
-		executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			// Operation should handle nil inputs gracefully
-			return &plugin.OperationResult{
+			return &pluginmodel.OperationResult{
 				Success: true,
 				Outputs: map[string]any{
 					"result": "handled nil inputs",
@@ -563,10 +563,10 @@ func TestOperation_Schema_ConsistencyWithName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := &plugin.OperationSchema{
+			schema := &pluginmodel.OperationSchema{
 				Name:        tt.operationName,
 				Description: "Consistency test",
-				Inputs:      map[string]plugin.InputSchema{},
+				Inputs:      map[string]pluginmodel.InputSchema{},
 				Outputs:     []string{},
 				PluginName:  "test",
 			}

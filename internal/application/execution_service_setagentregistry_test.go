@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -199,14 +199,14 @@ func (y *setterTestAgentRegistryThird) Has(name string) bool {
 // setterTestOperationProvider is a test double for demonstrating the pattern match
 type setterTestOperationProvider struct{}
 
-func (m *setterTestOperationProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (m *setterTestOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	return nil, false
 }
 
-func (m *setterTestOperationProvider) ListOperations() []*plugin.OperationSchema {
-	return []*plugin.OperationSchema{}
+func (m *setterTestOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	return []*pluginmodel.OperationSchema{}
 }
 
-func (m *setterTestOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *setterTestOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	return nil, nil
 }

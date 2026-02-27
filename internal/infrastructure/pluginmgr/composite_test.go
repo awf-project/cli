@@ -1,12 +1,12 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
 	"fmt"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -179,10 +179,10 @@ func TestCompositeOperationProvider_GetOperation_NotFound(t *testing.T) {
 
 func TestCompositeOperationProvider_GetOperation_FirstProviderWins(t *testing.T) {
 	// When multiple providers have the same operation, first provider wins
-	p1 := newMockProviderWithOps([]*plugin.OperationSchema{
+	p1 := newMockProviderWithOps([]*pluginmodel.OperationSchema{
 		{Name: "duplicate.op", Description: "First provider version"},
 	})
-	p2 := newMockProviderWithOps([]*plugin.OperationSchema{
+	p2 := newMockProviderWithOps([]*pluginmodel.OperationSchema{
 		{Name: "duplicate.op", Description: "Second provider version"},
 	})
 
@@ -275,11 +275,11 @@ func TestCompositeOperationProvider_ListOperations_HappyPath(t *testing.T) {
 func TestCompositeOperationProvider_ListOperations_WithDuplicates(t *testing.T) {
 	// When multiple providers have the same operation, all are included
 	// (deduplication is caller's responsibility if needed)
-	p1 := newMockProviderWithOps([]*plugin.OperationSchema{
+	p1 := newMockProviderWithOps([]*pluginmodel.OperationSchema{
 		{Name: "duplicate.op", Description: "First provider version"},
 		{Name: "unique1.op", Description: "Unique to p1"},
 	})
-	p2 := newMockProviderWithOps([]*plugin.OperationSchema{
+	p2 := newMockProviderWithOps([]*pluginmodel.OperationSchema{
 		{Name: "duplicate.op", Description: "Second provider version"},
 		{Name: "unique2.op", Description: "Unique to p2"},
 	})
@@ -324,8 +324,8 @@ func TestCompositeOperationProvider_Execute_HappyPath(t *testing.T) {
 			name: "operation_in_first_provider",
 			providers: []ports.OperationProvider{
 				newMockProviderWithExecutor("p1", []string{"github.get_issue"},
-					func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
-						return &plugin.OperationResult{
+					func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+						return &pluginmodel.OperationResult{
 							Success: true,
 							Outputs: map[string]any{"issue_number": 123},
 						}, nil
@@ -341,8 +341,8 @@ func TestCompositeOperationProvider_Execute_HappyPath(t *testing.T) {
 			providers: []ports.OperationProvider{
 				newMockProvider("p1", []string{"github.get_issue"}),
 				newMockProviderWithExecutor("p2", []string{"notify.send"},
-					func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
-						return &plugin.OperationResult{
+					func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+						return &pluginmodel.OperationResult{
 							Success: true,
 							Outputs: map[string]any{"sent": true},
 						}, nil
@@ -416,7 +416,7 @@ func TestCompositeOperationProvider_Execute_ProviderError(t *testing.T) {
 	// Provider returns an error during execution
 	providerErr := fmt.Errorf("backend connection failed")
 	p1 := newMockProviderWithExecutor("p1", []string{"notify.send"},
-		func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+		func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			return nil, providerErr
 		})
 
@@ -433,8 +433,8 @@ func TestCompositeOperationProvider_Execute_ProviderError(t *testing.T) {
 func TestCompositeOperationProvider_Execute_ProviderReturnsFailure(t *testing.T) {
 	// Provider returns OperationResult with Success=false
 	p1 := newMockProviderWithExecutor("p1", []string{"notify.send"},
-		func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
-			return &plugin.OperationResult{
+		func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+			return &pluginmodel.OperationResult{
 				Success: false,
 				Error:   "desktop notification unavailable",
 			}, nil
@@ -455,9 +455,9 @@ func TestCompositeOperationProvider_Execute_ContextCancellation(t *testing.T) {
 	// Verify context is passed to provider
 	ctxPassed := false
 	p1 := newMockProviderWithExecutor("p1", []string{"notify.send"},
-		func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+		func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			ctxPassed = (ctx != nil)
-			return &plugin.OperationResult{Success: true}, nil
+			return &pluginmodel.OperationResult{Success: true}, nil
 		})
 
 	composite := NewCompositeOperationProvider(p1)
@@ -494,17 +494,17 @@ func TestCompositeOperationProvider_EmptyOperationName(t *testing.T) {
 
 type mockProvider struct {
 	name       string
-	operations []*plugin.OperationSchema
-	executor   func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error)
+	operations []*pluginmodel.OperationSchema
+	executor   func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error)
 }
 
 func newMockProvider(name string, opNames []string) *mockProvider {
-	ops := make([]*plugin.OperationSchema, len(opNames))
+	ops := make([]*pluginmodel.OperationSchema, len(opNames))
 	for i, opName := range opNames {
-		ops[i] = &plugin.OperationSchema{
+		ops[i] = &pluginmodel.OperationSchema{
 			Name:        opName,
 			Description: fmt.Sprintf("Operation: %s", opName),
-			Inputs:      map[string]plugin.InputSchema{},
+			Inputs:      map[string]pluginmodel.InputSchema{},
 			Outputs:     []string{},
 			PluginName:  name,
 		}
@@ -515,21 +515,21 @@ func newMockProvider(name string, opNames []string) *mockProvider {
 	}
 }
 
-func newMockProviderWithOps(ops []*plugin.OperationSchema) *mockProvider {
+func newMockProviderWithOps(ops []*pluginmodel.OperationSchema) *mockProvider {
 	return &mockProvider{
 		operations: ops,
 	}
 }
 
 func newMockProviderWithExecutor(name string, opNames []string,
-	executor func(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error),
+	executor func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error),
 ) *mockProvider {
 	provider := newMockProvider(name, opNames)
 	provider.executor = executor
 	return provider
 }
 
-func (m *mockProvider) GetOperation(name string) (*plugin.OperationSchema, bool) {
+func (m *mockProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
 	if m == nil || m.operations == nil {
 		return nil, false
 	}
@@ -541,14 +541,14 @@ func (m *mockProvider) GetOperation(name string) (*plugin.OperationSchema, bool)
 	return nil, false
 }
 
-func (m *mockProvider) ListOperations() []*plugin.OperationSchema {
+func (m *mockProvider) ListOperations() []*pluginmodel.OperationSchema {
 	if m == nil || m.operations == nil {
 		return nil
 	}
 	return m.operations
 }
 
-func (m *mockProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*plugin.OperationResult, error) {
+func (m *mockProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 	if m == nil {
 		return nil, fmt.Errorf("nil provider")
 	}

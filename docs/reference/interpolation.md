@@ -489,7 +489,7 @@ Available in error hooks:
 User-provided values in commands can be dangerous. AWF provides `ShellEscape()` in `pkg/interpolation` for escaping:
 
 ```go
-import "github.com/awf-project/awf/pkg/interpolation"
+import "github.com/awf-project/cli/pkg/interpolation"
 
 escaped := interpolation.ShellEscape(userInput)
 ```

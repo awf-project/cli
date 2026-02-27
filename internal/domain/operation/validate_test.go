@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/operation"
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/operation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,20 +14,20 @@ import (
 func TestValidateInputs_HappyPath(t *testing.T) {
 	tests := []struct {
 		name   string
-		schema *plugin.OperationSchema
+		schema *pluginmodel.OperationSchema
 		inputs map[string]any
 	}{
 		{
 			name: "all required fields present",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"url": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 					"timeout": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -39,15 +39,15 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 		},
 		{
 			name: "optional fields omitted - defaults applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"url": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 					"timeout": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: false,
 						Default:  30,
 					},
@@ -59,27 +59,27 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 		},
 		{
 			name: "all five types valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"name": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 					"enabled": {
-						Type:     plugin.InputTypeBoolean,
+						Type:     pluginmodel.InputTypeBoolean,
 						Required: true,
 					},
 					"tags": {
-						Type:     plugin.InputTypeArray,
+						Type:     pluginmodel.InputTypeArray,
 						Required: true,
 					},
 					"config": {
-						Type:     plugin.InputTypeObject,
+						Type:     pluginmodel.InputTypeObject,
 						Required: true,
 					},
 				},
@@ -94,16 +94,16 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 		},
 		{
 			name: "empty inputs with all optional fields",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"optional1": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: false,
 						Default:  "default1",
 					},
 					"optional2": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: false,
 						Default:  10,
 					},
@@ -113,11 +113,11 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 		},
 		{
 			name: "validation rule url - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"endpoint": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "url",
 					},
@@ -129,11 +129,11 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 		},
 		{
 			name: "validation rule email - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"recipient": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "email",
 					},
@@ -157,17 +157,17 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 func TestValidateInputs_RequiredFieldsMissing(t *testing.T) {
 	tests := []struct {
 		name          string
-		schema        *plugin.OperationSchema
+		schema        *pluginmodel.OperationSchema
 		inputs        map[string]any
 		expectedError string
 	}{
 		{
 			name: "single required field missing",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"url": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -177,15 +177,15 @@ func TestValidateInputs_RequiredFieldsMissing(t *testing.T) {
 		},
 		{
 			name: "multiple required fields missing",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"url": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 					"method": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -195,11 +195,11 @@ func TestValidateInputs_RequiredFieldsMissing(t *testing.T) {
 		},
 		{
 			name: "required field with nil value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"data": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -211,11 +211,11 @@ func TestValidateInputs_RequiredFieldsMissing(t *testing.T) {
 		},
 		{
 			name: "required field with empty string",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"name": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -241,17 +241,17 @@ func TestValidateInputs_RequiredFieldsMissing(t *testing.T) {
 func TestValidateInputs_TypeMismatch(t *testing.T) {
 	tests := []struct {
 		name          string
-		schema        *plugin.OperationSchema
+		schema        *pluginmodel.OperationSchema
 		inputs        map[string]any
 		expectedError string
 	}{
 		{
 			name: "string type - int value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"name": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -263,11 +263,11 @@ func TestValidateInputs_TypeMismatch(t *testing.T) {
 		},
 		{
 			name: "integer type - string value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -279,11 +279,11 @@ func TestValidateInputs_TypeMismatch(t *testing.T) {
 		},
 		{
 			name: "boolean type - string value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"enabled": {
-						Type:     plugin.InputTypeBoolean,
+						Type:     pluginmodel.InputTypeBoolean,
 						Required: true,
 					},
 				},
@@ -295,11 +295,11 @@ func TestValidateInputs_TypeMismatch(t *testing.T) {
 		},
 		{
 			name: "array type - object value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"items": {
-						Type:     plugin.InputTypeArray,
+						Type:     pluginmodel.InputTypeArray,
 						Required: true,
 					},
 				},
@@ -311,11 +311,11 @@ func TestValidateInputs_TypeMismatch(t *testing.T) {
 		},
 		{
 			name: "object type - array value",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"config": {
-						Type:     plugin.InputTypeObject,
+						Type:     pluginmodel.InputTypeObject,
 						Required: true,
 					},
 				},
@@ -341,17 +341,17 @@ func TestValidateInputs_TypeMismatch(t *testing.T) {
 func TestValidateInputs_Float64ToIntCoercion(t *testing.T) {
 	tests := []struct {
 		name    string
-		schema  *plugin.OperationSchema
+		schema  *pluginmodel.OperationSchema
 		inputs  map[string]any
 		wantErr bool
 	}{
 		{
 			name: "float64 with whole number - should coerce",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -363,11 +363,11 @@ func TestValidateInputs_Float64ToIntCoercion(t *testing.T) {
 		},
 		{
 			name: "float64 with fractional part - should fail",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -379,11 +379,11 @@ func TestValidateInputs_Float64ToIntCoercion(t *testing.T) {
 		},
 		{
 			name: "large integer as float64 - should coerce",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"timestamp": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -395,11 +395,11 @@ func TestValidateInputs_Float64ToIntCoercion(t *testing.T) {
 		},
 		{
 			name: "zero as float64 - should coerce",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -428,17 +428,17 @@ func TestValidateInputs_Float64ToIntCoercion(t *testing.T) {
 func TestValidateInputs_DefaultValues(t *testing.T) {
 	tests := []struct {
 		name           string
-		schema         *plugin.OperationSchema
+		schema         *pluginmodel.OperationSchema
 		inputs         map[string]any
 		expectedInputs map[string]any
 	}{
 		{
 			name: "string default applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"method": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: false,
 						Default:  "GET",
 					},
@@ -451,11 +451,11 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "integer default applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"timeout": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: false,
 						Default:  30,
 					},
@@ -468,11 +468,11 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "boolean default applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"verbose": {
-						Type:     plugin.InputTypeBoolean,
+						Type:     pluginmodel.InputTypeBoolean,
 						Required: false,
 						Default:  false,
 					},
@@ -485,11 +485,11 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "array default applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"headers": {
-						Type:     plugin.InputTypeArray,
+						Type:     pluginmodel.InputTypeArray,
 						Required: false,
 						Default:  []any{"Content-Type: application/json"},
 					},
@@ -502,11 +502,11 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "object default applied",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"options": {
-						Type:     plugin.InputTypeObject,
+						Type:     pluginmodel.InputTypeObject,
 						Required: false,
 						Default:  map[string]any{"retry": 3},
 					},
@@ -519,11 +519,11 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "default not applied when value provided",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"timeout": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: false,
 						Default:  30,
 					},
@@ -538,21 +538,21 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 		},
 		{
 			name: "multiple defaults applied selectively",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"method": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: false,
 						Default:  "GET",
 					},
 					"timeout": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: false,
 						Default:  30,
 					},
 					"verbose": {
-						Type:     plugin.InputTypeBoolean,
+						Type:     pluginmodel.InputTypeBoolean,
 						Required: false,
 						Default:  false,
 					},
@@ -588,17 +588,17 @@ func TestValidateInputs_DefaultValues(t *testing.T) {
 func TestValidateInputs_ValidationRules(t *testing.T) {
 	tests := []struct {
 		name    string
-		schema  *plugin.OperationSchema
+		schema  *pluginmodel.OperationSchema
 		inputs  map[string]any
 		wantErr bool
 	}{
 		{
 			name: "url validation - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"endpoint": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "url",
 					},
@@ -611,11 +611,11 @@ func TestValidateInputs_ValidationRules(t *testing.T) {
 		},
 		{
 			name: "url validation - invalid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"endpoint": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "url",
 					},
@@ -628,11 +628,11 @@ func TestValidateInputs_ValidationRules(t *testing.T) {
 		},
 		{
 			name: "email validation - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"recipient": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "email",
 					},
@@ -645,11 +645,11 @@ func TestValidateInputs_ValidationRules(t *testing.T) {
 		},
 		{
 			name: "email validation - invalid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"recipient": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "email",
 					},
@@ -662,11 +662,11 @@ func TestValidateInputs_ValidationRules(t *testing.T) {
 		},
 		{
 			name: "no validation rule - any string accepted",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"data": {
-						Type:       plugin.InputTypeString,
+						Type:       pluginmodel.InputTypeString,
 						Required:   true,
 						Validation: "",
 					},
@@ -696,7 +696,7 @@ func TestValidateInputs_ValidationRules(t *testing.T) {
 func TestValidateInputs_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name    string
-		schema  *plugin.OperationSchema
+		schema  *pluginmodel.OperationSchema
 		inputs  map[string]any
 		wantErr bool
 	}{
@@ -710,11 +710,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "nil inputs map",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"optional": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: false,
 						Default:  "default",
 					},
@@ -725,9 +725,9 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "empty schema inputs - any inputs accepted",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name:   "test.operation",
-				Inputs: map[string]plugin.InputSchema{},
+				Inputs: map[string]pluginmodel.InputSchema{},
 			},
 			inputs: map[string]any{
 				"anything": "goes",
@@ -736,11 +736,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "extra inputs not in schema - ignored",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"defined": {
-						Type:     plugin.InputTypeString,
+						Type:     pluginmodel.InputTypeString,
 						Required: true,
 					},
 				},
@@ -753,11 +753,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "zero integer value for required field - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"count": {
-						Type:     plugin.InputTypeInteger,
+						Type:     pluginmodel.InputTypeInteger,
 						Required: true,
 					},
 				},
@@ -769,11 +769,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "false boolean value for required field - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"enabled": {
-						Type:     plugin.InputTypeBoolean,
+						Type:     pluginmodel.InputTypeBoolean,
 						Required: true,
 					},
 				},
@@ -785,11 +785,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "empty array for required field - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"tags": {
-						Type:     plugin.InputTypeArray,
+						Type:     pluginmodel.InputTypeArray,
 						Required: true,
 					},
 				},
@@ -801,11 +801,11 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "empty object for required field - valid",
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",
-				Inputs: map[string]plugin.InputSchema{
+				Inputs: map[string]pluginmodel.InputSchema{
 					"config": {
-						Type:     plugin.InputTypeObject,
+						Type:     pluginmodel.InputTypeObject,
 						Required: true,
 					},
 				},
@@ -831,21 +831,21 @@ func TestValidateInputs_EdgeCases(t *testing.T) {
 
 // TestValidateInputs_MultipleErrors tests error aggregation
 func TestValidateInputs_MultipleErrors(t *testing.T) {
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name: "test.operation",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"url": {
-				Type:       plugin.InputTypeString,
+				Type:       pluginmodel.InputTypeString,
 				Required:   true,
 				Validation: "url",
 			},
 			"email": {
-				Type:       plugin.InputTypeString,
+				Type:       pluginmodel.InputTypeString,
 				Required:   true,
 				Validation: "email",
 			},
 			"count": {
-				Type:     plugin.InputTypeInteger,
+				Type:     pluginmodel.InputTypeInteger,
 				Required: true,
 			},
 		},

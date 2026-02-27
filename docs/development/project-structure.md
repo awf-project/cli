@@ -134,7 +134,7 @@ awf/
 package main
 
 import (
-    "github.com/awf-project/awf/internal/interfaces/cli"
+    "github.com/awf-project/cli/internal/interfaces/cli"
 )
 
 func main() {
@@ -202,20 +202,20 @@ See [Package Documentation Guide](../reference/package-documentation.md) for det
 
 ```go
 // Domain (no external imports)
-import "github.com/awf-project/awf/internal/domain/workflow"
-import "github.com/awf-project/awf/internal/domain/ports"
+import "github.com/awf-project/cli/internal/domain/workflow"
+import "github.com/awf-project/cli/internal/domain/ports"
 
 // Application (imports domain only)
-import "github.com/awf-project/awf/internal/application"
+import "github.com/awf-project/cli/internal/application"
 
 // Infrastructure (imports domain ports)
-import "github.com/awf-project/awf/internal/infrastructure/repository"
+import "github.com/awf-project/cli/internal/infrastructure/repository"
 
 // CLI (imports application and infrastructure)
-import "github.com/awf-project/awf/internal/interfaces/cli"
+import "github.com/awf-project/cli/internal/interfaces/cli"
 
 // Public packages (safe for external use)
-import "github.com/awf-project/awf/pkg/interpolation"
+import "github.com/awf-project/cli/pkg/interpolation"
 ```
 
 ## Build Artifacts

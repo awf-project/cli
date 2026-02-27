@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -733,7 +733,7 @@ func TestJSONPluginStateStore_ConcurrentSaveLoad(t *testing.T) {
 // --- Domain entity tests ---
 
 func TestNewPluginState(t *testing.T) {
-	state := plugin.NewPluginState()
+	state := pluginmodel.NewPluginState()
 
 	if state == nil {
 		t.Fatal("NewPluginState() returned nil")
@@ -750,7 +750,7 @@ func TestNewPluginState(t *testing.T) {
 }
 
 func TestPluginState_Fields(t *testing.T) {
-	state := &plugin.PluginState{
+	state := &pluginmodel.PluginState{
 		Enabled:    false,
 		Config:     map[string]any{"key": "value"},
 		DisabledAt: 1234567890,

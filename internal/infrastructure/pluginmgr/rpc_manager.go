@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // ErrRPCNotImplemented indicates a stub method that needs implementation.
@@ -60,15 +60,15 @@ func WrapRPCManagerError(op, pluginName string, cause error) *RPCManagerError {
 // It manages plugin lifecycle: discovery, loading, initialization, and shutdown.
 type RPCPluginManager struct {
 	mu         sync.RWMutex
-	plugins    map[string]*plugin.PluginInfo // plugin name -> info
-	loader     *FileSystemLoader             // for plugin discovery
-	pluginsDir string                        // directory to discover plugins from
+	plugins    map[string]*pluginmodel.PluginInfo // plugin name -> info
+	loader     *FileSystemLoader                  // for plugin discovery
+	pluginsDir string                             // directory to discover plugins from
 }
 
 // NewRPCPluginManager creates a new RPCPluginManager.
 func NewRPCPluginManager(loader *FileSystemLoader) *RPCPluginManager {
 	return &RPCPluginManager{
-		plugins: make(map[string]*plugin.PluginInfo),
+		plugins: make(map[string]*pluginmodel.PluginInfo),
 		loader:  loader,
 	}
 }
@@ -82,7 +82,7 @@ func (m *RPCPluginManager) SetPluginsDir(dir string) {
 
 // Discover finds plugins in the plugins directory.
 // Returns ErrRPCNotImplemented if no loader is configured.
-func (m *RPCPluginManager) Discover(ctx context.Context) ([]*plugin.PluginInfo, error) {
+func (m *RPCPluginManager) Discover(ctx context.Context) ([]*pluginmodel.PluginInfo, error) {
 	// Check context first
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("discover: %w", err)
@@ -148,9 +148,9 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 
 	if found {
 		// Already loaded - check status
-		if existing.Status == plugin.StatusLoaded ||
-			existing.Status == plugin.StatusRunning ||
-			existing.Status == plugin.StatusInitialized {
+		if existing.Status == pluginmodel.StatusLoaded ||
+			existing.Status == pluginmodel.StatusRunning ||
+			existing.Status == pluginmodel.StatusInitialized {
 			// Already in a valid state, just return success
 			return nil
 		}
@@ -210,12 +210,12 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 	}
 
 	// Check if already running
-	if info.Status == plugin.StatusRunning {
+	if info.Status == pluginmodel.StatusRunning {
 		return nil // Already initialized
 	}
 
 	// Check if in valid state for initialization
-	if info.Status != plugin.StatusLoaded && info.Status != plugin.StatusDiscovered {
+	if info.Status != pluginmodel.StatusLoaded && info.Status != pluginmodel.StatusDiscovered {
 		return NewRPCManagerError("init", name, fmt.Sprintf("cannot initialize plugin in state %q", info.Status))
 	}
 
@@ -224,8 +224,8 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 	// In a full implementation, this would:
 	// 1. Start the plugin process
 	// 2. Establish RPC connection
-	// 3. Call plugin.Init(config)
-	info.Status = plugin.StatusRunning
+	// 3. Call pluginmodel.Init(config)
+	info.Status = pluginmodel.StatusRunning
 
 	return nil
 }
@@ -257,17 +257,17 @@ func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
 	}
 
 	// Check if already stopped
-	if info.Status == plugin.StatusStopped || info.Status == plugin.StatusDisabled {
+	if info.Status == pluginmodel.StatusStopped || info.Status == pluginmodel.StatusDisabled {
 		return nil
 	}
 
 	// For now, since we don't have actual RPC plugin processes,
 	// we just transition the state to Stopped.
 	// In a full implementation, this would:
-	// 1. Call plugin.Shutdown()
+	// 1. Call pluginmodel.Shutdown()
 	// 2. Close RPC connection
 	// 3. Kill the plugin process
-	info.Status = plugin.StatusStopped
+	info.Status = pluginmodel.StatusStopped
 
 	return nil
 }
@@ -288,9 +288,9 @@ func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
 	defer m.mu.Unlock()
 
 	for _, info := range m.plugins {
-		if info.Status == plugin.StatusRunning || info.Status == plugin.StatusInitialized {
+		if info.Status == pluginmodel.StatusRunning || info.Status == pluginmodel.StatusInitialized {
 			// For now, just transition the state
-			info.Status = plugin.StatusStopped
+			info.Status = pluginmodel.StatusStopped
 		}
 	}
 
@@ -299,7 +299,7 @@ func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
 
 // Get returns plugin info by name.
 // Returns (nil, false) if plugin not found.
-func (m *RPCPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
+func (m *RPCPluginManager) Get(name string) (*pluginmodel.PluginInfo, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	info, ok := m.plugins[name]
@@ -307,10 +307,10 @@ func (m *RPCPluginManager) Get(name string) (*plugin.PluginInfo, bool) {
 }
 
 // List returns all known plugins.
-func (m *RPCPluginManager) List() []*plugin.PluginInfo {
+func (m *RPCPluginManager) List() []*pluginmodel.PluginInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	result := make([]*plugin.PluginInfo, 0, len(m.plugins))
+	result := make([]*pluginmodel.PluginInfo, 0, len(m.plugins))
 	for _, info := range m.plugins {
 		result = append(result, info)
 	}

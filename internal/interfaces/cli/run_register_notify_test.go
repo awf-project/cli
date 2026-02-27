@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/awf-project/awf/internal/infrastructure/config"
-	"github.com/awf-project/awf/internal/infrastructure/notify"
+	"github.com/awf-project/cli/internal/infrastructure/config"
+	"github.com/awf-project/cli/internal/infrastructure/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

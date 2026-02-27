@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/interfaces/cli"
 )
 
 // setupTestDir creates a temporary directory for test isolation.

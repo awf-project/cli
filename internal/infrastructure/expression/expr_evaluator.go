@@ -5,9 +5,9 @@ import (
 	"math"
 	"regexp"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/expression"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/expression"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/expr-lang/expr"
 )
 

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	workflow "github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/executor"
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/internal/testutil/builders"
-	"github.com/awf-project/awf/internal/testutil/mocks"
-	"github.com/awf-project/awf/tests/integration/testhelpers"
+	workflow "github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/testutil/builders"
+	"github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

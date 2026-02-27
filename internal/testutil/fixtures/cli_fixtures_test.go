@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/awf-project/awf/internal/testutil/fixtures"
+	"github.com/awf-project/cli/internal/testutil/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

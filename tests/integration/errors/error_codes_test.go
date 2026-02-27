@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	domainerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/ports"
-	errfmt "github.com/awf-project/awf/internal/infrastructure/errors"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
+	errfmt "github.com/awf-project/cli/internal/infrastructure/errors"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

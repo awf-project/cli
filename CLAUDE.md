@@ -225,7 +225,7 @@ Domain layer packages must restrict dependencies via go-arch-lint rules; domain/
 
 Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
 
-Use pkg pattern for cross-layer HTTP utilities (pkg/httputil) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
+Use pkg pattern for cross-layer HTTP utilities (pkg/httpx) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
 
 Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
 
@@ -243,7 +243,7 @@ Synthesize inline on_failure objects into anonymous terminal steps at YAML parse
 
 Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
 
-Never duplicate HTTP client logic across notification backends; extract to pkg/httputil with HTTPDoer interface for testability and shared timeout/header handling
+Never duplicate HTTP client logic across notification backends; extract to pkg/httpx with HTTPDoer interface for testability and shared timeout/header handling
 
 Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
 
@@ -277,11 +277,13 @@ Never check if maps are nil before calling len(); Go defines len() as zero for n
 
 Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
 
+Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
 
-Use HTTPDoer interface in pkg/httputil tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
+Use HTTPDoer interface in pkg/httpx tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
 
 Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/awf-project/awf/pkg/plugin/sdk"
+	"github.com/awf-project/cli/pkg/plugin/sdk"
 	"github.com/stretchr/testify/assert"
 )
 

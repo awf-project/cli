@@ -3,7 +3,7 @@ package ui_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 )
 
 func TestColorizer_WithColorDisabled(t *testing.T) {

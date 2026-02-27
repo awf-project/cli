@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/operation"
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/operation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,10 +23,10 @@ func TestOperationRegistry_Register(t *testing.T) {
 			name: "register simple operation",
 			operation: &mockOperation{
 				name: "test.operation",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name:        "test.operation",
 					Description: "Test operation",
-					Inputs:      map[string]plugin.InputSchema{},
+					Inputs:      map[string]pluginmodel.InputSchema{},
 					Outputs:     []string{"result"},
 				},
 			},
@@ -35,17 +35,17 @@ func TestOperationRegistry_Register(t *testing.T) {
 			name: "register operation with complex schema",
 			operation: &mockOperation{
 				name: "http.get",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name:        "http.get",
 					Description: "HTTP GET request",
-					Inputs: map[string]plugin.InputSchema{
+					Inputs: map[string]pluginmodel.InputSchema{
 						"url": {
-							Type:        plugin.InputTypeString,
+							Type:        pluginmodel.InputTypeString,
 							Required:    true,
 							Description: "URL to fetch",
 						},
 						"timeout": {
-							Type:        plugin.InputTypeInteger,
+							Type:        pluginmodel.InputTypeInteger,
 							Required:    false,
 							Default:     30,
 							Description: "Timeout in seconds",
@@ -88,7 +88,7 @@ func TestOperationRegistry_Register_Errors(t *testing.T) {
 			name: "empty name",
 			operation: &mockOperation{
 				name: "",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name: "",
 				},
 			},
@@ -112,7 +112,7 @@ func TestOperationRegistry_Register_Duplicate(t *testing.T) {
 
 	op1 := &mockOperation{
 		name: "test.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: "test.operation",
 		},
 	}
@@ -124,7 +124,7 @@ func TestOperationRegistry_Register_Duplicate(t *testing.T) {
 	// Second registration with same name should fail
 	op2 := &mockOperation{
 		name: "test.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: "test.operation",
 		},
 	}
@@ -144,7 +144,7 @@ func TestOperationRegistry_Unregister(t *testing.T) {
 
 	op := &mockOperation{
 		name: "test.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: "test.operation",
 		},
 	}
@@ -184,7 +184,7 @@ func TestOperationRegistry_Get(t *testing.T) {
 			registerOps: []operation.Operation{
 				&mockOperation{
 					name: "test.operation",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "test.operation",
 					},
 				},
@@ -198,7 +198,7 @@ func TestOperationRegistry_Get(t *testing.T) {
 			registerOps: []operation.Operation{
 				&mockOperation{
 					name: "test.operation",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "test.operation",
 					},
 				},
@@ -256,7 +256,7 @@ func TestOperationRegistry_List(t *testing.T) {
 			registerOps: []operation.Operation{
 				&mockOperation{
 					name: "test.operation",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "test.operation",
 					},
 				},
@@ -268,19 +268,19 @@ func TestOperationRegistry_List(t *testing.T) {
 			registerOps: []operation.Operation{
 				&mockOperation{
 					name: "http.get",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "http.get",
 					},
 				},
 				&mockOperation{
 					name: "file.read",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "file.read",
 					},
 				},
 				&mockOperation{
 					name: "transform.jq",
-					schema: &plugin.OperationSchema{
+					schema: &pluginmodel.OperationSchema{
 						Name: "transform.jq",
 					},
 				},
@@ -324,12 +324,12 @@ func TestOperationRegistry_List(t *testing.T) {
 func TestOperationRegistry_GetOperation(t *testing.T) {
 	registry := operation.NewOperationRegistry()
 
-	schema := &plugin.OperationSchema{
+	schema := &pluginmodel.OperationSchema{
 		Name:        "test.operation",
 		Description: "Test operation",
-		Inputs: map[string]plugin.InputSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
 			"url": {
-				Type:     plugin.InputTypeString,
+				Type:     pluginmodel.InputTypeString,
 				Required: true,
 			},
 		},
@@ -359,17 +359,17 @@ func TestOperationRegistry_GetOperation(t *testing.T) {
 func TestOperationRegistry_ListOperations(t *testing.T) {
 	registry := operation.NewOperationRegistry()
 
-	schemas := []*plugin.OperationSchema{
+	schemas := []*pluginmodel.OperationSchema{
 		{
 			Name:        "http.get",
 			Description: "HTTP GET request",
-			Inputs:      map[string]plugin.InputSchema{},
+			Inputs:      map[string]pluginmodel.InputSchema{},
 			Outputs:     []string{"status_code"},
 		},
 		{
 			Name:        "file.read",
 			Description: "Read file",
-			Inputs:      map[string]plugin.InputSchema{},
+			Inputs:      map[string]pluginmodel.InputSchema{},
 			Outputs:     []string{"content"},
 		},
 	}
@@ -417,18 +417,18 @@ func TestOperationRegistry_Execute(t *testing.T) {
 			name: "execute registered operation",
 			operation: &mockOperation{
 				name: "test.operation",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name: "test.operation",
-					Inputs: map[string]plugin.InputSchema{
+					Inputs: map[string]pluginmodel.InputSchema{
 						"url": {
-							Type:     plugin.InputTypeString,
+							Type:     pluginmodel.InputTypeString,
 							Required: true,
 						},
 					},
 					Outputs: []string{"result"},
 				},
-				executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-					return &plugin.OperationResult{
+				executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+					return &pluginmodel.OperationResult{
 						Success: true,
 						Outputs: map[string]any{
 							"result": "success",
@@ -450,7 +450,7 @@ func TestOperationRegistry_Execute(t *testing.T) {
 			name: "execute non-existent operation",
 			operation: &mockOperation{
 				name: "test.operation",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name: "test.operation",
 				},
 			},
@@ -463,11 +463,11 @@ func TestOperationRegistry_Execute(t *testing.T) {
 			name: "execute with validation failure - missing required field",
 			operation: &mockOperation{
 				name: "test.operation",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name: "test.operation",
-					Inputs: map[string]plugin.InputSchema{
+					Inputs: map[string]pluginmodel.InputSchema{
 						"url": {
-							Type:     plugin.InputTypeString,
+							Type:     pluginmodel.InputTypeString,
 							Required: true,
 						},
 					},
@@ -482,11 +482,11 @@ func TestOperationRegistry_Execute(t *testing.T) {
 			name: "execute with validation failure - type mismatch",
 			operation: &mockOperation{
 				name: "test.operation",
-				schema: &plugin.OperationSchema{
+				schema: &pluginmodel.OperationSchema{
 					Name: "test.operation",
-					Inputs: map[string]plugin.InputSchema{
+					Inputs: map[string]pluginmodel.InputSchema{
 						"count": {
-							Type:     plugin.InputTypeInteger,
+							Type:     pluginmodel.InputTypeInteger,
 							Required: true,
 						},
 					},
@@ -536,17 +536,17 @@ func TestOperationRegistry_Execute_ContextCancellation(t *testing.T) {
 
 	op := &mockOperation{
 		name: "test.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name:   "test.operation",
-			Inputs: map[string]plugin.InputSchema{},
+			Inputs: map[string]pluginmodel.InputSchema{},
 		},
-		executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			// Check if context is cancelled
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				return &plugin.OperationResult{Success: true}, nil
+				return &pluginmodel.OperationResult{Success: true}, nil
 			}
 		},
 	}
@@ -572,23 +572,23 @@ func TestOperationRegistry_Execute_AppliesDefaults(t *testing.T) {
 
 	op := &mockOperation{
 		name: "test.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: "test.operation",
-			Inputs: map[string]plugin.InputSchema{
+			Inputs: map[string]pluginmodel.InputSchema{
 				"url": {
-					Type:     plugin.InputTypeString,
+					Type:     pluginmodel.InputTypeString,
 					Required: true,
 				},
 				"timeout": {
-					Type:     plugin.InputTypeInteger,
+					Type:     pluginmodel.InputTypeInteger,
 					Required: false,
 					Default:  30,
 				},
 			},
 		},
-		executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
+		executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
 			receivedInputs = inputs
-			return &plugin.OperationResult{Success: true}, nil
+			return &pluginmodel.OperationResult{Success: true}, nil
 		},
 	}
 
@@ -641,7 +641,7 @@ func registerInitialOps(t *testing.T, registry *operation.OperationRegistry) {
 	for i := 0; i < 5; i++ {
 		op := &mockOperation{
 			name: "initial.op" + string(rune('0'+i)),
-			schema: &plugin.OperationSchema{
+			schema: &pluginmodel.OperationSchema{
 				Name: "initial.op" + string(rune('0'+i)),
 			},
 		}
@@ -706,7 +706,7 @@ func performWrites(id, j int, registry *operation.OperationRegistry, errors chan
 	opName := "concurrent.op" + string(rune('0'+id)) + string(rune('0'+j))
 	op := &mockOperation{
 		name: opName,
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: opName,
 		},
 	}
@@ -746,17 +746,17 @@ func TestOperationRegistry_Lifecycle(t *testing.T) {
 
 	op := &mockOperation{
 		name: "lifecycle.operation",
-		schema: &plugin.OperationSchema{
+		schema: &pluginmodel.OperationSchema{
 			Name: "lifecycle.operation",
-			Inputs: map[string]plugin.InputSchema{
+			Inputs: map[string]pluginmodel.InputSchema{
 				"value": {
-					Type:     plugin.InputTypeString,
+					Type:     pluginmodel.InputTypeString,
 					Required: true,
 				},
 			},
 		},
-		executeFn: func(ctx context.Context, inputs map[string]any) (*plugin.OperationResult, error) {
-			return &plugin.OperationResult{
+		executeFn: func(ctx context.Context, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+			return &pluginmodel.OperationResult{
 				Success: true,
 				Outputs: map[string]any{
 					"result": inputs["value"],

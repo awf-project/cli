@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/plugin"
-	infrastructurePlugin "github.com/awf-project/awf/internal/infrastructure/plugin"
-	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,8 +27,8 @@ import (
 func TestPluginDiscovery_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -44,8 +44,8 @@ func TestPluginDiscovery_Integration(t *testing.T) {
 		if p.Manifest != nil && p.Manifest.Name == "awf-plugin-simple" {
 			foundSimple = true
 			assert.Equal(t, "1.0.0", p.Manifest.Version)
-			assert.Contains(t, p.Manifest.Capabilities, plugin.CapabilityOperations)
-			assert.Equal(t, plugin.StatusLoaded, p.Status)
+			assert.Contains(t, p.Manifest.Capabilities, pluginmodel.CapabilityOperations)
+			assert.Equal(t, pluginmodel.StatusLoaded, p.Status)
 			break
 		}
 	}
@@ -57,8 +57,8 @@ func TestPluginDiscovery_Integration(t *testing.T) {
 func TestPluginLoadPlugin_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -74,7 +74,7 @@ func TestPluginLoadPlugin_Integration(t *testing.T) {
 	assert.Equal(t, "awf-plugin-simple", pluginInfo.Manifest.Name)
 	assert.Equal(t, "1.0.0", pluginInfo.Manifest.Version)
 	assert.Equal(t, ">=0.4.0", pluginInfo.Manifest.AWFVersion)
-	assert.Equal(t, plugin.StatusLoaded, pluginInfo.Status)
+	assert.Equal(t, pluginmodel.StatusLoaded, pluginInfo.Status)
 	assert.Greater(t, pluginInfo.LoadedAt, int64(0))
 }
 
@@ -83,8 +83,8 @@ func TestPluginLoadPlugin_Integration(t *testing.T) {
 func TestPluginManifestFullFields_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -110,33 +110,33 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 	assert.Equal(t, "https://github.com/example/awf-plugin-slack", m.Homepage)
 
 	// Capabilities
-	assert.Contains(t, m.Capabilities, plugin.CapabilityOperations)
-	assert.Contains(t, m.Capabilities, plugin.CapabilityCommands)
-	assert.True(t, m.HasCapability(plugin.CapabilityOperations))
-	assert.True(t, m.HasCapability(plugin.CapabilityCommands))
-	assert.False(t, m.HasCapability(plugin.CapabilityValidators))
+	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityOperations)
+	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityCommands)
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityOperations))
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityCommands))
+	assert.False(t, m.HasCapability(pluginmodel.CapabilityValidators))
 
 	// Config schema
 	require.NotNil(t, m.Config)
 	require.Contains(t, m.Config, "webhook_url")
 	webhookCfg := m.Config["webhook_url"]
-	assert.Equal(t, plugin.ConfigTypeString, webhookCfg.Type)
+	assert.Equal(t, pluginmodel.ConfigTypeString, webhookCfg.Type)
 	assert.True(t, webhookCfg.Required)
 
 	require.Contains(t, m.Config, "channel")
 	channelCfg := m.Config["channel"]
-	assert.Equal(t, plugin.ConfigTypeString, channelCfg.Type)
+	assert.Equal(t, pluginmodel.ConfigTypeString, channelCfg.Type)
 	assert.False(t, channelCfg.Required)
 	assert.Equal(t, "#general", channelCfg.Default)
 
 	require.Contains(t, m.Config, "retry_count")
 	retryCfg := m.Config["retry_count"]
-	assert.Equal(t, plugin.ConfigTypeInteger, retryCfg.Type)
+	assert.Equal(t, pluginmodel.ConfigTypeInteger, retryCfg.Type)
 	assert.Equal(t, 3, retryCfg.Default)
 
 	require.Contains(t, m.Config, "notify_on_failure")
 	notifyCfg := m.Config["notify_on_failure"]
-	assert.Equal(t, plugin.ConfigTypeBoolean, notifyCfg.Type)
+	assert.Equal(t, pluginmodel.ConfigTypeBoolean, notifyCfg.Type)
 	assert.True(t, notifyCfg.Default.(bool))
 
 	require.Contains(t, m.Config, "log_level")
@@ -149,9 +149,9 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 func TestPluginManager_Lifecycle_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
+	manager := pluginmgr.NewRPCPluginManager(loader)
 	manager.SetPluginsDir(fixturesPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -165,19 +165,19 @@ func TestPluginManager_Lifecycle_Integration(t *testing.T) {
 	// 2. Get by name
 	info, found := manager.Get("awf-plugin-simple")
 	require.True(t, found)
-	assert.Equal(t, plugin.StatusLoaded, info.Status)
+	assert.Equal(t, pluginmodel.StatusLoaded, info.Status)
 
 	// 3. Init
 	err = manager.Init(ctx, "awf-plugin-simple", nil)
 	require.NoError(t, err)
 	info, _ = manager.Get("awf-plugin-simple")
-	assert.Equal(t, plugin.StatusRunning, info.Status)
+	assert.Equal(t, pluginmodel.StatusRunning, info.Status)
 
 	// 4. Shutdown
 	err = manager.Shutdown(ctx, "awf-plugin-simple")
 	require.NoError(t, err)
 	info, _ = manager.Get("awf-plugin-simple")
-	assert.Equal(t, plugin.StatusStopped, info.Status)
+	assert.Equal(t, pluginmodel.StatusStopped, info.Status)
 }
 
 // TestPluginService_EnableDisable_Integration tests enabling and disabling plugins.
@@ -187,11 +187,11 @@ func TestPluginService_EnableDisable_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
 	// Setup infrastructure
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
+	manager := pluginmgr.NewRPCPluginManager(loader)
 	manager.SetPluginsDir(fixturesPath)
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	service := application.NewPluginService(manager, stateStore, nil)
 
@@ -220,7 +220,7 @@ func TestPluginService_EnableDisable_Integration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create new service and load state
-	stateStore2 := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore2 := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	err = stateStore2.Load(ctx)
 	require.NoError(t, err)
 
@@ -237,7 +237,7 @@ func TestPluginService_EnableDisable_Integration(t *testing.T) {
 func TestPluginService_ConfigStorage_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	service := application.NewPluginService(nil, stateStore, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -262,7 +262,7 @@ func TestPluginService_ConfigStorage_Integration(t *testing.T) {
 	err = service.SaveState(ctx)
 	require.NoError(t, err)
 
-	stateStore2 := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore2 := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	err = stateStore2.Load(ctx)
 	require.NoError(t, err)
 
@@ -274,15 +274,15 @@ func TestPluginService_ConfigStorage_Integration(t *testing.T) {
 // TestOperationRegistry_Integration tests operation registration and lookup.
 // Acceptance Criteria: Plugins can register custom operations
 func TestOperationRegistry_Integration(t *testing.T) {
-	registry := infrastructurePlugin.NewOperationRegistry()
+	registry := pluginmgr.NewOperationRegistry()
 
 	// Register an operation
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:        "slack.send",
 		Description: "Send a Slack message",
-		Inputs: map[string]plugin.InputSchema{
-			"message": {Type: plugin.InputTypeString, Required: true},
-			"channel": {Type: plugin.InputTypeString, Required: false, Default: "#general"},
+		Inputs: map[string]pluginmodel.InputSchema{
+			"message": {Type: pluginmodel.InputTypeString, Required: true},
+			"channel": {Type: pluginmodel.InputTypeString, Required: false, Default: "#general"},
 		},
 		Outputs:    []string{"message_id", "timestamp"},
 		PluginName: "awf-plugin-slack",
@@ -416,8 +416,8 @@ func TestCLI_Plugin_Help_Integration(t *testing.T) {
 func TestPluginDiscovery_EmptyDirectory_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -433,8 +433,8 @@ func TestPluginDiscovery_MixedValidity_Integration(t *testing.T) {
 	// Use fixtures which contain both valid and invalid plugins
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -463,8 +463,8 @@ func TestPluginDiscovery_MixedValidity_Integration(t *testing.T) {
 // TestPluginLoader_Validation_Integration tests manifest validation.
 // Acceptance Criteria: Plugin versioning and compatibility
 func TestPluginLoader_Validation_Integration(t *testing.T) {
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -535,7 +535,7 @@ func TestPluginLoader_Validation_Integration(t *testing.T) {
 // TestPluginStateStore_Concurrent_Integration tests concurrent access to state store.
 func TestPluginStateStore_Concurrent_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -565,13 +565,13 @@ func TestPluginStateStore_Concurrent_Integration(t *testing.T) {
 
 // TestOperationRegistry_Concurrent_Integration tests concurrent registry access.
 func TestOperationRegistry_Concurrent_Integration(t *testing.T) {
-	registry := infrastructurePlugin.NewOperationRegistry()
+	registry := pluginmgr.NewOperationRegistry()
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			opName := "op-" + string(rune('a'+id))
-			op := &plugin.OperationSchema{
+			op := &pluginmodel.OperationSchema{
 				Name:       opName,
 				PluginName: "test-plugin",
 			}
@@ -597,8 +597,8 @@ func TestOperationRegistry_Concurrent_Integration(t *testing.T) {
 
 // TestPluginLoad_InvalidPath_Integration tests loading from non-existent path.
 func TestPluginLoad_InvalidPath_Integration(t *testing.T) {
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -615,8 +615,8 @@ func TestPluginLoad_NotDirectory_Integration(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "not-a-dir")
 	os.WriteFile(filePath, []byte("content"), 0o644)
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -631,8 +631,8 @@ func TestPluginLoad_NotDirectory_Integration(t *testing.T) {
 func TestPluginLoad_NoManifest_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -645,8 +645,8 @@ func TestPluginLoad_NoManifest_Integration(t *testing.T) {
 
 // TestPluginLoad_InvalidYAML_Integration tests loading plugin with invalid YAML.
 func TestPluginLoad_InvalidYAML_Integration(t *testing.T) {
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -660,9 +660,9 @@ func TestPluginLoad_InvalidYAML_Integration(t *testing.T) {
 func TestPluginManager_LoadUnknown_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
+	manager := pluginmgr.NewRPCPluginManager(loader)
 	manager.SetPluginsDir(fixturesPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -678,11 +678,11 @@ func TestPluginService_LoadDisabled_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
+	manager := pluginmgr.NewRPCPluginManager(loader)
 	manager.SetPluginsDir(fixturesPath)
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	service := application.NewPluginService(manager, stateStore, nil)
 
@@ -706,9 +706,9 @@ func TestPluginService_LoadDisabled_Integration(t *testing.T) {
 
 // TestOperationRegistry_DuplicateRegistration_Integration tests duplicate operation registration.
 func TestOperationRegistry_DuplicateRegistration_Integration(t *testing.T) {
-	registry := infrastructurePlugin.NewOperationRegistry()
+	registry := pluginmgr.NewOperationRegistry()
 
-	op := &plugin.OperationSchema{
+	op := &pluginmodel.OperationSchema{
 		Name:       "test.operation",
 		PluginName: "test-plugin",
 	}
@@ -720,16 +720,16 @@ func TestOperationRegistry_DuplicateRegistration_Integration(t *testing.T) {
 	err = registry.RegisterOperation(op)
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, infrastructurePlugin.ErrOperationAlreadyRegistered)
+	assert.ErrorIs(t, err, pluginmgr.ErrOperationAlreadyRegistered)
 }
 
 // TestOperationRegistry_InvalidOperation_Integration tests registering invalid operations.
 func TestOperationRegistry_InvalidOperation_Integration(t *testing.T) {
-	registry := infrastructurePlugin.NewOperationRegistry()
+	registry := pluginmgr.NewOperationRegistry()
 
 	tests := []struct {
 		name string
-		op   *plugin.OperationSchema
+		op   *pluginmodel.OperationSchema
 	}{
 		{
 			name: "nil operation",
@@ -737,7 +737,7 @@ func TestOperationRegistry_InvalidOperation_Integration(t *testing.T) {
 		},
 		{
 			name: "empty name",
-			op:   &plugin.OperationSchema{Name: ""},
+			op:   &pluginmodel.OperationSchema{Name: ""},
 		},
 	}
 
@@ -745,19 +745,19 @@ func TestOperationRegistry_InvalidOperation_Integration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := registry.RegisterOperation(tt.op)
 			assert.Error(t, err)
-			assert.ErrorIs(t, err, infrastructurePlugin.ErrInvalidOperation)
+			assert.ErrorIs(t, err, pluginmgr.ErrInvalidOperation)
 		})
 	}
 }
 
 // TestOperationRegistry_UnregisterNotFound_Integration tests unregistering non-existent operation.
 func TestOperationRegistry_UnregisterNotFound_Integration(t *testing.T) {
-	registry := infrastructurePlugin.NewOperationRegistry()
+	registry := pluginmgr.NewOperationRegistry()
 
 	err := registry.UnregisterOperation("non-existent")
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, infrastructurePlugin.ErrOperationNotFound)
+	assert.ErrorIs(t, err, pluginmgr.ErrOperationNotFound)
 }
 
 // TestCLI_Plugin_Enable_NoArgs_Integration tests enable command without arguments.
@@ -790,8 +790,8 @@ func TestCLI_Plugin_Disable_NoArgs_Integration(t *testing.T) {
 func TestPluginDiscovery_ContextCancellation_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -806,8 +806,8 @@ func TestPluginDiscovery_ContextCancellation_Integration(t *testing.T) {
 func TestPluginLoad_ContextCancellation_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins/valid-simple"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -823,11 +823,11 @@ func TestPluginService_ContextCancellation_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	fixturesPath := "../../fixtures/plugins"
 
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
+	parser := pluginmgr.NewManifestParser()
+	loader := pluginmgr.NewFileSystemLoader(parser)
+	manager := pluginmgr.NewRPCPluginManager(loader)
 	manager.SetPluginsDir(fixturesPath)
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(tmpDir)
+	stateStore := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	service := application.NewPluginService(manager, stateStore, nil)
 
@@ -842,22 +842,22 @@ func TestPluginService_ContextCancellation_Integration(t *testing.T) {
 // TestPluginInfo_StatusMethods_Integration tests PluginInfo helper methods.
 func TestPluginInfo_StatusMethods_Integration(t *testing.T) {
 	tests := []struct {
-		status   plugin.PluginStatus
+		status   pluginmodel.PluginStatus
 		isActive bool
 		canLoad  bool
 	}{
-		{plugin.StatusDiscovered, false, true},
-		{plugin.StatusLoaded, false, false},
-		{plugin.StatusInitialized, false, false},
-		{plugin.StatusRunning, true, false},
-		{plugin.StatusStopped, false, true},
-		{plugin.StatusFailed, false, true},
-		{plugin.StatusDisabled, false, false},
+		{pluginmodel.StatusDiscovered, false, true},
+		{pluginmodel.StatusLoaded, false, false},
+		{pluginmodel.StatusInitialized, false, false},
+		{pluginmodel.StatusRunning, true, false},
+		{pluginmodel.StatusStopped, false, true},
+		{pluginmodel.StatusFailed, false, true},
+		{pluginmodel.StatusDisabled, false, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(string(tt.status), func(t *testing.T) {
-			info := &plugin.PluginInfo{Status: tt.status}
+			info := &pluginmodel.PluginInfo{Status: tt.status}
 			assert.Equal(t, tt.isActive, info.IsActive())
 			assert.Equal(t, tt.canLoad, info.CanLoad())
 		})
@@ -867,7 +867,7 @@ func TestPluginInfo_StatusMethods_Integration(t *testing.T) {
 // TestOperationResult_Helpers_Integration tests OperationResult helper methods.
 func TestOperationResult_Helpers_Integration(t *testing.T) {
 	t.Run("success result", func(t *testing.T) {
-		result := &plugin.OperationResult{
+		result := &pluginmodel.OperationResult{
 			Success: true,
 			Outputs: map[string]any{
 				"message_id": "12345",
@@ -887,7 +887,7 @@ func TestOperationResult_Helpers_Integration(t *testing.T) {
 	})
 
 	t.Run("error result", func(t *testing.T) {
-		result := &plugin.OperationResult{
+		result := &pluginmodel.OperationResult{
 			Success: false,
 			Error:   "connection refused",
 		}
@@ -897,7 +897,7 @@ func TestOperationResult_Helpers_Integration(t *testing.T) {
 	})
 
 	t.Run("nil outputs", func(t *testing.T) {
-		result := &plugin.OperationResult{
+		result := &pluginmodel.OperationResult{
 			Success: true,
 		}
 
@@ -908,13 +908,13 @@ func TestOperationResult_Helpers_Integration(t *testing.T) {
 
 // TestManifest_HasCapability_Integration tests capability checking.
 func TestManifest_HasCapability_Integration(t *testing.T) {
-	m := &plugin.Manifest{
-		Capabilities: []string{plugin.CapabilityOperations, plugin.CapabilityCommands},
+	m := &pluginmodel.Manifest{
+		Capabilities: []string{pluginmodel.CapabilityOperations, pluginmodel.CapabilityCommands},
 	}
 
-	assert.True(t, m.HasCapability(plugin.CapabilityOperations))
-	assert.True(t, m.HasCapability(plugin.CapabilityCommands))
-	assert.False(t, m.HasCapability(plugin.CapabilityValidators))
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityOperations))
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityCommands))
+	assert.False(t, m.HasCapability(pluginmodel.CapabilityValidators))
 	assert.False(t, m.HasCapability("unknown"))
 }
 
@@ -942,7 +942,7 @@ func TestCLI_Plugin_List_EmptyDir_Integration(t *testing.T) {
 
 // TestPluginState_NewPluginState_Integration tests default plugin state creation.
 func TestPluginState_NewPluginState_Integration(t *testing.T) {
-	state := plugin.NewPluginState()
+	state := pluginmodel.NewPluginState()
 
 	assert.True(t, state.Enabled, "plugins should be enabled by default")
 	assert.NotNil(t, state.Config, "config map should be initialized")

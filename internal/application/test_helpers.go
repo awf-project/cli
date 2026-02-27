@@ -1,6 +1,6 @@
 package application
 
-import "github.com/awf-project/awf/internal/domain/ports"
+import "github.com/awf-project/cli/internal/domain/ports"
 
 // mockLogger implements ports.Logger for testing.
 // This is a shared test helper for application package tests.

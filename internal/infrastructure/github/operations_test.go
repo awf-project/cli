@@ -3,7 +3,7 @@ package github
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,13 +66,13 @@ func TestGetIssueOperation_Schema(t *testing.T) {
 	op := findOperation(t, ops, "github.get_issue")
 
 	assert.True(t, op.Inputs["number"].Required)
-	assert.Equal(t, plugin.InputTypeInteger, op.Inputs["number"].Type)
+	assert.Equal(t, pluginmodel.InputTypeInteger, op.Inputs["number"].Type)
 
 	assert.False(t, op.Inputs["repo"].Required)
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["repo"].Type)
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["repo"].Type)
 
 	assert.False(t, op.Inputs["fields"].Required)
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["fields"].Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["fields"].Type)
 
 	expectedOutputs := []string{"number", "title", "body", "state", "labels"}
 	assert.ElementsMatch(t, expectedOutputs, op.Outputs)
@@ -83,7 +83,7 @@ func TestGetPROperation_Schema(t *testing.T) {
 	op := findOperation(t, ops, "github.get_pr")
 
 	assert.True(t, op.Inputs["number"].Required)
-	assert.Equal(t, plugin.InputTypeInteger, op.Inputs["number"].Type)
+	assert.Equal(t, pluginmodel.InputTypeInteger, op.Inputs["number"].Type)
 
 	assert.False(t, op.Inputs["repo"].Required)
 	assert.False(t, op.Inputs["fields"].Required)
@@ -106,7 +106,7 @@ func TestCreatePROperation_Schema(t *testing.T) {
 	assert.False(t, op.Inputs["repo"].Required)
 	assert.False(t, op.Inputs["draft"].Required)
 
-	assert.Equal(t, plugin.InputTypeBoolean, op.Inputs["draft"].Type)
+	assert.Equal(t, pluginmodel.InputTypeBoolean, op.Inputs["draft"].Type)
 
 	assert.Contains(t, op.Outputs, "already_exists")
 	assert.Contains(t, op.Outputs, "number")
@@ -123,8 +123,8 @@ func TestCreateIssueOperation_Schema(t *testing.T) {
 	assert.False(t, op.Inputs["labels"].Required)
 	assert.False(t, op.Inputs["assignees"].Required)
 
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["labels"].Type)
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["assignees"].Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["labels"].Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["assignees"].Type)
 
 	expectedOutputs := []string{"number", "url"}
 	assert.ElementsMatch(t, expectedOutputs, op.Outputs)
@@ -136,7 +136,7 @@ func TestAddLabelsOperation_Schema(t *testing.T) {
 
 	assert.True(t, op.Inputs["number"].Required)
 	assert.True(t, op.Inputs["labels"].Required)
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["labels"].Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["labels"].Type)
 
 	assert.False(t, op.Inputs["repo"].Required)
 
@@ -151,7 +151,7 @@ func TestListCommentsOperation_Schema(t *testing.T) {
 
 	assert.False(t, op.Inputs["repo"].Required)
 	assert.False(t, op.Inputs["limit"].Required)
-	assert.Equal(t, plugin.InputTypeInteger, op.Inputs["limit"].Type)
+	assert.Equal(t, pluginmodel.InputTypeInteger, op.Inputs["limit"].Type)
 
 	expectedOutputs := []string{"comments", "total"}
 	assert.ElementsMatch(t, expectedOutputs, op.Outputs)
@@ -175,13 +175,13 @@ func TestBatchOperation_Schema(t *testing.T) {
 	op := findOperation(t, ops, "github.batch")
 
 	assert.True(t, op.Inputs["operations"].Required)
-	assert.Equal(t, plugin.InputTypeArray, op.Inputs["operations"].Type)
+	assert.Equal(t, pluginmodel.InputTypeArray, op.Inputs["operations"].Type)
 
 	assert.False(t, op.Inputs["strategy"].Required)
 	assert.False(t, op.Inputs["concurrency"].Required)
 
-	assert.Equal(t, plugin.InputTypeString, op.Inputs["strategy"].Type)
-	assert.Equal(t, plugin.InputTypeInteger, op.Inputs["concurrency"].Type)
+	assert.Equal(t, pluginmodel.InputTypeString, op.Inputs["strategy"].Type)
+	assert.Equal(t, pluginmodel.InputTypeInteger, op.Inputs["concurrency"].Type)
 
 	expectedOutputs := []string{"total", "succeeded", "failed", "results"}
 	assert.ElementsMatch(t, expectedOutputs, op.Outputs)
@@ -224,10 +224,10 @@ func TestAllOperations_AllInputsHaveValidTypes(t *testing.T) {
 	ops := AllOperations()
 
 	validTypes := map[string]bool{
-		plugin.InputTypeString:  true,
-		plugin.InputTypeInteger: true,
-		plugin.InputTypeBoolean: true,
-		plugin.InputTypeArray:   true,
+		pluginmodel.InputTypeString:  true,
+		pluginmodel.InputTypeInteger: true,
+		pluginmodel.InputTypeBoolean: true,
+		pluginmodel.InputTypeArray:   true,
 	}
 
 	for _, op := range ops {
@@ -246,7 +246,7 @@ func TestAllOperations_RepoInputIsConsistent(t *testing.T) {
 		if repoInput, hasRepo := op.Inputs["repo"]; hasRepo {
 			assert.False(t, repoInput.Required,
 				"operation %q should have optional repo input", op.Name)
-			assert.Equal(t, plugin.InputTypeString, repoInput.Type,
+			assert.Equal(t, pluginmodel.InputTypeString, repoInput.Type,
 				"operation %q repo input should be string type", op.Name)
 			assert.Contains(t, repoInput.Description, "auto-detected",
 				"operation %q repo description should mention auto-detection", op.Name)
@@ -271,7 +271,7 @@ func TestAllOperations_NumberInputIsConsistent(t *testing.T) {
 		numberInput, hasNumber := op.Inputs["number"]
 		require.True(t, hasNumber, "operation %q should have a number input", opName)
 		assert.True(t, numberInput.Required, "operation %q number should be required", opName)
-		assert.Equal(t, plugin.InputTypeInteger, numberInput.Type,
+		assert.Equal(t, pluginmodel.InputTypeInteger, numberInput.Type,
 			"operation %q number should be integer type", opName)
 	}
 }
@@ -362,7 +362,7 @@ func TestAllOperations_ValidInputCombinations(t *testing.T) {
 }
 
 // findOperation finds an operation by name in the slice
-func findOperation(t *testing.T, ops []plugin.OperationSchema, name string) plugin.OperationSchema {
+func findOperation(t *testing.T, ops []pluginmodel.OperationSchema, name string) pluginmodel.OperationSchema {
 	t.Helper()
 	for _, op := range ops {
 		if op.Name == name {
@@ -370,5 +370,5 @@ func findOperation(t *testing.T, ops []plugin.OperationSchema, name string) plug
 		}
 	}
 	require.Fail(t, "operation not found", "operation %q not found in slice", name)
-	return plugin.OperationSchema{}
+	return pluginmodel.OperationSchema{}
 }

@@ -25,19 +25,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/internal/infrastructure/executor"
-	infraExpr "github.com/awf-project/awf/internal/infrastructure/expression"
-	"github.com/awf-project/awf/internal/infrastructure/github"
-	infraHTTP "github.com/awf-project/awf/internal/infrastructure/http"
-	"github.com/awf-project/awf/internal/infrastructure/notify"
-	"github.com/awf-project/awf/internal/infrastructure/plugin"
-	"github.com/awf-project/awf/internal/infrastructure/repository"
-	"github.com/awf-project/awf/internal/infrastructure/store"
-	"github.com/awf-project/awf/pkg/httputil"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
+	infraExpr "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/github"
+	infraHTTP "github.com/awf-project/cli/internal/infrastructure/http"
+	"github.com/awf-project/cli/internal/infrastructure/notify"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/pkg/httpx"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1316,11 +1316,11 @@ func setupHTTPTestWorkflowServiceWithDir(t *testing.T, workflowsDir, statesDir, 
 	notifyProvider := notify.NewNotifyOperationProvider(logger)
 	_ = notifyProvider.RegisterBackend("webhook", notify.NewWebhookBackend())
 
-	// Create HTTP operation provider with httputil.Client
-	httpClient := httputil.NewClient(httputil.WithTimeout(30 * time.Second))
+	// Create HTTP operation provider with httpx.Client
+	httpClient := httpx.NewClient(httpx.WithTimeout(30 * time.Second))
 	httpProvider := infraHTTP.NewHTTPOperationProvider(httpClient, logger)
 
-	compositeProvider := plugin.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
+	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 
 	execSvc.SetOperationProvider(compositeProvider)
 

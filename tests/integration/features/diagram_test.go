@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -1,5 +1,5 @@
 // Package plugin provides domain entities for the plugin system.
-package plugin
+package pluginmodel
 
 import (
 	"errors"

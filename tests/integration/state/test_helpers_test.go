@@ -5,7 +5,7 @@ package state_test
 import (
 	"context"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // historyMockStateStore for history integration tests

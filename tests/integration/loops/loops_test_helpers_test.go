@@ -6,8 +6,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // mockLogger provides a simple logger implementation for testing.

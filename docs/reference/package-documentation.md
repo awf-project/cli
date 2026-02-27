@@ -18,7 +18,7 @@ go doc ./internal/application
 
 # View infrastructure adapters
 go doc ./internal/infrastructure/agents
-go doc ./internal/infrastructure/plugin
+go doc ./internal/infrastructure/pluginmgr
 go doc ./internal/infrastructure/executor
 go doc ./internal/infrastructure/repository
 go doc ./internal/infrastructure/logger
@@ -56,7 +56,7 @@ Generate interactive HTML documentation:
 # Start local Go documentation server
 godoc -http=:6060
 
-# Then visit http://localhost:6060/pkg/github.com/awf-project/awf/internal/domain/workflow/
+# Then visit http://localhost:6060/pkg/github.com/awf-project/cli/internal/domain/workflow/
 ```
 
 ## Documentation Structure
@@ -278,7 +278,7 @@ All key packages now have documentation:
 - `internal/infrastructure/executor` - Shell command execution
 - `internal/infrastructure/expression` - Expression evaluation
 - `internal/infrastructure/logger` - Logging adapters
-- `internal/infrastructure/plugin` - Plugin system
+- `internal/infrastructure/pluginmgr` - Plugin system
 - `internal/infrastructure/repository` - Workflow loading
 - `internal/infrastructure/store` - State and history persistence
 - `internal/infrastructure/config` - Configuration management

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1172,8 +1172,8 @@ func (m *mockHTTPDoer) Do(_ *http.Request) (*http.Response, error) {
 
 // newMockHTTPClient creates a mock HTTP client that returns a specific status code and optional Retry-After header.
 // Used for testing error handling without real network calls.
-func newMockHTTPClient(statusCode int, retryAfter, body string) *httputil.Client {
-	return httputil.NewClient(httputil.WithDoer(&mockHTTPDoer{
+func newMockHTTPClient(statusCode int, retryAfter, body string) *httpx.Client {
+	return httpx.NewClient(httpx.WithDoer(&mockHTTPDoer{
 		statusCode: statusCode,
 		retryAfter: retryAfter,
 		body:       body,

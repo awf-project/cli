@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/testutil/mocks"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // Component: T001

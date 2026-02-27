@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 // ValidateInputs validates runtime inputs against an operation schema.
@@ -21,7 +21,7 @@ import (
 // The inputs map is modified in-place to apply default values for missing optional parameters.
 //
 // Returns ErrInvalidInputs if validation fails, with details in the error message.
-func ValidateInputs(schema *plugin.OperationSchema, inputs map[string]any) error {
+func ValidateInputs(schema *pluginmodel.OperationSchema, inputs map[string]any) error {
 	if schema == nil {
 		return fmt.Errorf("%w: schema cannot be nil", ErrInvalidInputs)
 	}
@@ -50,7 +50,7 @@ func ValidateInputs(schema *plugin.OperationSchema, inputs map[string]any) error
 }
 
 // getSortedInputNames returns a sorted list of input names for deterministic iteration
-func getSortedInputNames(inputs map[string]plugin.InputSchema) []string {
+func getSortedInputNames(inputs map[string]pluginmodel.InputSchema) []string {
 	names := make([]string, 0, len(inputs))
 	for name := range inputs {
 		names = append(names, name)
@@ -60,12 +60,12 @@ func getSortedInputNames(inputs map[string]plugin.InputSchema) []string {
 }
 
 // validateInput validates a single input field and returns any errors
-func validateInput(name string, schema plugin.InputSchema, value any, exists bool, inputs map[string]any) []string {
+func validateInput(name string, schema pluginmodel.InputSchema, value any, exists bool, inputs map[string]any) []string {
 	var errors []string
 
 	// Check required fields
 	if schema.Required {
-		if !exists || value == nil || (value == "" && schema.Type == plugin.InputTypeString) {
+		if !exists || value == nil || (value == "" && schema.Type == pluginmodel.InputTypeString) {
 			return []string{fmt.Sprintf("required field %q is missing or empty", name)}
 		}
 	}
@@ -120,12 +120,12 @@ func formatValidationErrors(errors []string) error {
 // validateType checks if the value matches the expected type, handling JSON float64-to-int coercion
 func validateType(name string, value any, expectedType string) error {
 	switch expectedType {
-	case plugin.InputTypeString:
+	case pluginmodel.InputTypeString:
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("field %q: expected string, got %T", name, value)
 		}
 
-	case plugin.InputTypeInteger:
+	case pluginmodel.InputTypeInteger:
 		switch v := value.(type) {
 		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 			// Valid integer types
@@ -139,12 +139,12 @@ func validateType(name string, value any, expectedType string) error {
 			return fmt.Errorf("field %q: expected integer, got %T", name, value)
 		}
 
-	case plugin.InputTypeBoolean:
+	case pluginmodel.InputTypeBoolean:
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("field %q: expected boolean, got %T", name, value)
 		}
 
-	case plugin.InputTypeArray:
+	case pluginmodel.InputTypeArray:
 		// Check if value is a slice type
 		switch value.(type) {
 		case []any, []string, []int, []bool:
@@ -153,7 +153,7 @@ func validateType(name string, value any, expectedType string) error {
 			return fmt.Errorf("field %q: expected array, got %T", name, value)
 		}
 
-	case plugin.InputTypeObject:
+	case pluginmodel.InputTypeObject:
 		// Check if value is a map type
 		switch value.(type) {
 		case map[string]any, map[string]string:

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/infrastructure/github"
+	"github.com/awf-project/cli/internal/infrastructure/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

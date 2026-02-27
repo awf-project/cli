@@ -3,7 +3,6 @@
 package agents
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/httpx"
 )
 
 // TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath verifies the full
@@ -48,8 +47,8 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -108,8 +107,8 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnWithOptions(t *testing.T)
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -171,8 +170,8 @@ func TestOpenAICompatibleProvider_IntegrationConversation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -246,8 +245,8 @@ func TestOpenAICompatibleProvider_IntegrationHTTP401Unauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -283,8 +282,8 @@ func TestOpenAICompatibleProvider_IntegrationHTTP429RateLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -316,8 +315,8 @@ func TestOpenAICompatibleProvider_IntegrationHTTP500ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -371,8 +370,8 @@ func TestOpenAICompatibleProvider_IntegrationRequestBodyValidation(t *testing.T)
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -432,8 +431,8 @@ func TestOpenAICompatibleProvider_IntegrationJSONOutput(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -492,8 +491,8 @@ func TestOpenAICompatibleProvider_IntegrationBaseURLNormalization(t *testing.T) 
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(
@@ -547,8 +546,8 @@ func TestOpenAICompatibleProvider_IntegrationConversationWithSystemPrompt(t *tes
 	}))
 	defer server.Close()
 
-	httpClient := httputil.NewClient(
-		httputil.WithTimeout(10 * time.Second),
+	httpClient := httpx.NewClient(
+		httpx.WithTimeout(10 * time.Second),
 	)
 
 	provider := NewOpenAICompatibleProvider(

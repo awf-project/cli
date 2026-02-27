@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 func estimateTokens(output string) int {

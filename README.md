@@ -1,4 +1,4 @@
-# AWF - AI Workflow CLI
+# AI Workflow Framework - CLI
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
@@ -35,14 +35,14 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 ## Installation
 
 ```bash
-go install github.com/awf-project/awf/cmd/awf@latest
+go install github.com/awf-project/cli/cmd/awf@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/awf-project/awf.git
-cd awf && make build && make install
+git clone https://github.com/awf-project/cli.git
+cd cli && make build && make install
 ```
 
 See [Installation Guide](docs/getting-started/installation.md) for details.

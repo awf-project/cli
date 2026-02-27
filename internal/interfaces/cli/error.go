@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/infrastructure/logger"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
 
 // ShellExecutor executes shell commands via /bin/sh -c.

@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 const fixturesPath = "../../../tests/fixtures/plugins"
@@ -46,7 +46,7 @@ func TestManifestParser_ParseFile_ValidSimple(t *testing.T) {
 	if len(manifest.Capabilities) != 1 {
 		t.Errorf("Capabilities count = %d, want 1", len(manifest.Capabilities))
 	}
-	if !manifest.HasCapability(plugin.CapabilityOperations) {
+	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
 
@@ -110,10 +110,10 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if len(manifest.Capabilities) != 2 {
 		t.Errorf("Capabilities count = %d, want 2", len(manifest.Capabilities))
 	}
-	if !manifest.HasCapability(plugin.CapabilityOperations) {
+	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
-	if !manifest.HasCapability(plugin.CapabilityCommands) {
+	if !manifest.HasCapability(pluginmodel.CapabilityCommands) {
 		t.Error("expected commands capability")
 	}
 
@@ -130,8 +130,8 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if !ok {
 		t.Fatal("webhook_url config field not found")
 	}
-	if webhookURL.Type != plugin.ConfigTypeString {
-		t.Errorf("webhook_url.Type = %q, want %q", webhookURL.Type, plugin.ConfigTypeString)
+	if webhookURL.Type != pluginmodel.ConfigTypeString {
+		t.Errorf("webhook_url.Type = %q, want %q", webhookURL.Type, pluginmodel.ConfigTypeString)
 	}
 	if !webhookURL.Required {
 		t.Error("webhook_url.Required = false, want true")
@@ -145,8 +145,8 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if !ok {
 		t.Fatal("channel config field not found")
 	}
-	if channel.Type != plugin.ConfigTypeString {
-		t.Errorf("channel.Type = %q, want %q", channel.Type, plugin.ConfigTypeString)
+	if channel.Type != pluginmodel.ConfigTypeString {
+		t.Errorf("channel.Type = %q, want %q", channel.Type, pluginmodel.ConfigTypeString)
 	}
 	if channel.Required {
 		t.Error("channel.Required = true, want false")
@@ -160,8 +160,8 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if !ok {
 		t.Fatal("notify_on_failure config field not found")
 	}
-	if notifyOnFailure.Type != plugin.ConfigTypeBoolean {
-		t.Errorf("notify_on_failure.Type = %q, want %q", notifyOnFailure.Type, plugin.ConfigTypeBoolean)
+	if notifyOnFailure.Type != pluginmodel.ConfigTypeBoolean {
+		t.Errorf("notify_on_failure.Type = %q, want %q", notifyOnFailure.Type, pluginmodel.ConfigTypeBoolean)
 	}
 	if notifyOnFailure.Default != true {
 		t.Errorf("notify_on_failure.Default = %v, want true", notifyOnFailure.Default)
@@ -172,8 +172,8 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if !ok {
 		t.Fatal("retry_count config field not found")
 	}
-	if retryCount.Type != plugin.ConfigTypeInteger {
-		t.Errorf("retry_count.Type = %q, want %q", retryCount.Type, plugin.ConfigTypeInteger)
+	if retryCount.Type != pluginmodel.ConfigTypeInteger {
+		t.Errorf("retry_count.Type = %q, want %q", retryCount.Type, pluginmodel.ConfigTypeInteger)
 	}
 	// YAML parses integers as int, but Default is any
 	switch v := retryCount.Default.(type) {
@@ -333,7 +333,7 @@ capabilities:
 	if manifest.Version != "2.0.0" {
 		t.Errorf("Version = %q, want %q", manifest.Version, "2.0.0")
 	}
-	if !manifest.HasCapability(plugin.CapabilityValidators) {
+	if !manifest.HasCapability(pluginmodel.CapabilityValidators) {
 		t.Error("expected validators capability")
 	}
 }
@@ -392,13 +392,13 @@ capabilities:
 	if len(manifest.Capabilities) != 3 {
 		t.Errorf("Capabilities count = %d, want 3", len(manifest.Capabilities))
 	}
-	if !manifest.HasCapability(plugin.CapabilityOperations) {
+	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
-	if !manifest.HasCapability(plugin.CapabilityCommands) {
+	if !manifest.HasCapability(pluginmodel.CapabilityCommands) {
 		t.Error("expected commands capability")
 	}
-	if !manifest.HasCapability(plugin.CapabilityValidators) {
+	if !manifest.HasCapability(pluginmodel.CapabilityValidators) {
 		t.Error("expected validators capability")
 	}
 }
@@ -443,8 +443,8 @@ config:
 	if !ok {
 		t.Fatal("string_field not found")
 	}
-	if stringField.Type != plugin.ConfigTypeString {
-		t.Errorf("string_field.Type = %q, want %q", stringField.Type, plugin.ConfigTypeString)
+	if stringField.Type != pluginmodel.ConfigTypeString {
+		t.Errorf("string_field.Type = %q, want %q", stringField.Type, pluginmodel.ConfigTypeString)
 	}
 	if !stringField.Required {
 		t.Error("string_field.Required = false, want true")
@@ -455,8 +455,8 @@ config:
 	if !ok {
 		t.Fatal("integer_field not found")
 	}
-	if intField.Type != plugin.ConfigTypeInteger {
-		t.Errorf("integer_field.Type = %q, want %q", intField.Type, plugin.ConfigTypeInteger)
+	if intField.Type != pluginmodel.ConfigTypeInteger {
+		t.Errorf("integer_field.Type = %q, want %q", intField.Type, pluginmodel.ConfigTypeInteger)
 	}
 
 	// Check boolean field
@@ -464,8 +464,8 @@ config:
 	if !ok {
 		t.Fatal("boolean_field not found")
 	}
-	if boolField.Type != plugin.ConfigTypeBoolean {
-		t.Errorf("boolean_field.Type = %q, want %q", boolField.Type, plugin.ConfigTypeBoolean)
+	if boolField.Type != pluginmodel.ConfigTypeBoolean {
+		t.Errorf("boolean_field.Type = %q, want %q", boolField.Type, pluginmodel.ConfigTypeBoolean)
 	}
 }
 

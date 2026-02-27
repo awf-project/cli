@@ -3,8 +3,8 @@ package application
 import (
 	"context"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 func loadScriptFile(

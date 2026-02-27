@@ -69,7 +69,7 @@ func TestExecutionService_ArchitectureCompliance(t *testing.T) {
 		cleanImp := strings.Trim(imp, `"`)
 
 		// Skip standard library and external packages
-		if !strings.Contains(cleanImp, "github.com/awf-project/awf") {
+		if !strings.Contains(cleanImp, "github.com/awf-project/cli") {
 			continue
 		}
 
@@ -240,7 +240,7 @@ func TestExecutionService_ImportOrder(t *testing.T) {
 
 		if strings.Contains(cleanImp, ".") {
 			// External package
-			if strings.Contains(cleanImp, "github.com/awf-project/awf") {
+			if strings.Contains(cleanImp, "github.com/awf-project/cli") {
 				internalImports = append(internalImports, cleanImp)
 			} else {
 				externalImports = append(externalImports, cleanImp)

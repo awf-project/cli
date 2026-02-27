@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/awf-project/awf/internal/interfaces/cli"
-	"github.com/awf-project/awf/internal/testutil/fixtures"
+	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/testutil/fixtures"
 	"github.com/stretchr/testify/require"
 )
 

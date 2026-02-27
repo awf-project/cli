@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/awf-project/awf/pkg/interpolation"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/expr-lang/expr"
 )
 

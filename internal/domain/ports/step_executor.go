@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // StepExecutor defines the contract for executing a single workflow step.

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // ErrPluginDisabled indicates the plugin is disabled and cannot be loaded.
@@ -39,7 +39,7 @@ func NewPluginService(
 
 // DiscoverPlugins scans the plugins directory and returns discovered plugins.
 // It filters out disabled plugins based on the state store.
-func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*plugin.PluginInfo, error) {
+func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*pluginmodel.PluginInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
@@ -58,7 +58,7 @@ func (s *PluginService) DiscoverPlugins(ctx context.Context) ([]*plugin.PluginIn
 		return discovered, nil
 	}
 
-	enabled := make([]*plugin.PluginInfo, 0, len(discovered))
+	enabled := make([]*pluginmodel.PluginInfo, 0, len(discovered))
 	for _, p := range discovered {
 		if p.Manifest != nil && s.stateStore.IsEnabled(p.Manifest.Name) {
 			enabled = append(enabled, p)
@@ -188,7 +188,7 @@ func (s *PluginService) DisablePlugin(ctx context.Context, name string) error {
 	// Shutdown the plugin if it's running
 	if s.manager != nil {
 		if info, found := s.manager.Get(name); found {
-			if info.Status == plugin.StatusRunning || info.Status == plugin.StatusInitialized {
+			if info.Status == pluginmodel.StatusRunning || info.Status == pluginmodel.StatusInitialized {
 				if err := s.manager.Shutdown(ctx, name); err != nil {
 					return fmt.Errorf("shutdown plugin %s: %w", name, err)
 				}
@@ -233,7 +233,7 @@ func (s *PluginService) GetPluginConfig(name string) map[string]any {
 
 // GetPlugin returns plugin info by name.
 // Returns (nil, false) if plugin not found.
-func (s *PluginService) GetPlugin(name string) (*plugin.PluginInfo, bool) {
+func (s *PluginService) GetPlugin(name string) (*pluginmodel.PluginInfo, bool) {
 	if s.manager == nil {
 		return nil, false
 	}
@@ -241,7 +241,7 @@ func (s *PluginService) GetPlugin(name string) (*plugin.PluginInfo, bool) {
 }
 
 // ListPlugins returns all known plugins.
-func (s *PluginService) ListPlugins() []*plugin.PluginInfo {
+func (s *PluginService) ListPlugins() []*pluginmodel.PluginInfo {
 	if s.manager == nil {
 		return nil
 	}
@@ -249,7 +249,7 @@ func (s *PluginService) ListPlugins() []*plugin.PluginInfo {
 }
 
 // ListEnabledPlugins returns only enabled plugins.
-func (s *PluginService) ListEnabledPlugins() []*plugin.PluginInfo {
+func (s *PluginService) ListEnabledPlugins() []*pluginmodel.PluginInfo {
 	if s.manager == nil {
 		return nil
 	}
@@ -259,7 +259,7 @@ func (s *PluginService) ListEnabledPlugins() []*plugin.PluginInfo {
 		return all
 	}
 
-	enabled := make([]*plugin.PluginInfo, 0, len(all))
+	enabled := make([]*pluginmodel.PluginInfo, 0, len(all))
 	for _, p := range all {
 		if p.Manifest != nil && s.stateStore.IsEnabled(p.Manifest.Name) {
 			enabled = append(enabled, p)

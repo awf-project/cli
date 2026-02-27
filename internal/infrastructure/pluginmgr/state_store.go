@@ -1,4 +1,4 @@
-package plugin
+package pluginmgr
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
 const pluginsFileName = "plugins.json"
@@ -19,15 +19,15 @@ const pluginsFileName = "plugins.json"
 // Implements ports.PluginStateStore interface.
 type JSONPluginStateStore struct {
 	mu       sync.RWMutex
-	basePath string                         // Directory containing plugins.json
-	states   map[string]*plugin.PluginState // plugin name -> state
+	basePath string                              // Directory containing plugins.json
+	states   map[string]*pluginmodel.PluginState // plugin name -> state
 }
 
 // NewJSONPluginStateStore creates a new JSONPluginStateStore.
 func NewJSONPluginStateStore(basePath string) *JSONPluginStateStore {
 	return &JSONPluginStateStore{
 		basePath: basePath,
-		states:   make(map[string]*plugin.PluginState),
+		states:   make(map[string]*pluginmodel.PluginState),
 	}
 }
 
@@ -38,7 +38,7 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 	}
 
 	s.mu.RLock()
-	statesToSave := make(map[string]*plugin.PluginState, len(s.states))
+	statesToSave := make(map[string]*pluginmodel.PluginState, len(s.states))
 	for k, v := range s.states {
 		statesToSave[k] = v
 	}
@@ -103,7 +103,7 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 		if os.IsNotExist(err) {
 			// No file = no persisted state, start fresh
 			s.mu.Lock()
-			s.states = make(map[string]*plugin.PluginState)
+			s.states = make(map[string]*pluginmodel.PluginState)
 			s.mu.Unlock()
 			return nil
 		}
@@ -113,12 +113,12 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 	// Handle empty file
 	if len(data) == 0 {
 		s.mu.Lock()
-		s.states = make(map[string]*plugin.PluginState)
+		s.states = make(map[string]*pluginmodel.PluginState)
 		s.mu.Unlock()
 		return nil
 	}
 
-	var loadedStates map[string]*plugin.PluginState
+	var loadedStates map[string]*pluginmodel.PluginState
 	if err := json.Unmarshal(data, &loadedStates); err != nil {
 		return fmt.Errorf("unmarshal state: %w", err)
 	}
@@ -126,7 +126,7 @@ func (s *JSONPluginStateStore) Load(ctx context.Context) error {
 	s.mu.Lock()
 	s.states = loadedStates
 	if s.states == nil {
-		s.states = make(map[string]*plugin.PluginState)
+		s.states = make(map[string]*pluginmodel.PluginState)
 	}
 	s.mu.Unlock()
 
@@ -144,7 +144,7 @@ func (s *JSONPluginStateStore) SetEnabled(ctx context.Context, name string, enab
 
 	state, exists := s.states[name]
 	if !exists {
-		state = plugin.NewPluginState()
+		state = pluginmodel.NewPluginState()
 		s.states[name] = state
 	}
 
@@ -196,7 +196,7 @@ func (s *JSONPluginStateStore) SetConfig(ctx context.Context, name string, confi
 
 	state, exists := s.states[name]
 	if !exists {
-		state = plugin.NewPluginState()
+		state = pluginmodel.NewPluginState()
 		s.states[name] = state
 	}
 
@@ -206,7 +206,7 @@ func (s *JSONPluginStateStore) SetConfig(ctx context.Context, name string, confi
 }
 
 // GetState returns the full state for a plugin, or nil if not found.
-func (s *JSONPluginStateStore) GetState(name string) *plugin.PluginState {
+func (s *JSONPluginStateStore) GetState(name string) *pluginmodel.PluginState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.states[name]

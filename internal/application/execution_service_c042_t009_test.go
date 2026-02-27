@@ -3,9 +3,9 @@ package application_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/application"
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/testutil/mocks"
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

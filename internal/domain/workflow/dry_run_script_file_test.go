@@ -3,7 +3,7 @@ package workflow_test
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 func TestDryRunStep_ScriptFileField(t *testing.T) {

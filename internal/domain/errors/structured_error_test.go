@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	domainerrors "github.com/awf-project/awf/internal/domain/errors"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

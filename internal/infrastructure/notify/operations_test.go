@@ -3,7 +3,7 @@ package notify
 import (
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +51,7 @@ func TestNotifySendOperation_RequiredInputs(t *testing.T) {
 	backendInput, exists := op.Inputs["backend"]
 	require.True(t, exists, "backend input should exist")
 	assert.True(t, backendInput.Required, "backend should be required")
-	assert.Equal(t, plugin.InputTypeString, backendInput.Type, "backend should be string type")
+	assert.Equal(t, pluginmodel.InputTypeString, backendInput.Type, "backend should be string type")
 	assert.NotEmpty(t, backendInput.Description, "backend should have description")
 	assert.Contains(t, backendInput.Description, "desktop", "backend description should list desktop")
 	assert.Contains(t, backendInput.Description, "webhook", "backend description should list webhook")
@@ -60,7 +60,7 @@ func TestNotifySendOperation_RequiredInputs(t *testing.T) {
 	messageInput, exists := op.Inputs["message"]
 	require.True(t, exists, "message input should exist")
 	assert.True(t, messageInput.Required, "message should be required")
-	assert.Equal(t, plugin.InputTypeString, messageInput.Type, "message should be string type")
+	assert.Equal(t, pluginmodel.InputTypeString, messageInput.Type, "message should be string type")
 	assert.NotEmpty(t, messageInput.Description, "message should have description")
 }
 
@@ -79,19 +79,19 @@ func TestNotifySendOperation_OptionalInputs(t *testing.T) {
 		{
 			name:        "title",
 			shouldExist: true,
-			inputType:   plugin.InputTypeString,
+			inputType:   pluginmodel.InputTypeString,
 			description: "title",
 		},
 		{
 			name:        "priority",
 			shouldExist: true,
-			inputType:   plugin.InputTypeString,
+			inputType:   pluginmodel.InputTypeString,
 			description: "low",
 		},
 		{
 			name:        "webhook_url",
 			shouldExist: true,
-			inputType:   plugin.InputTypeString,
+			inputType:   pluginmodel.InputTypeString,
 			description: "webhook",
 		},
 	}
@@ -219,11 +219,11 @@ func TestAllOperations_AllInputsHaveValidTypes(t *testing.T) {
 	op := ops[0]
 
 	validTypes := map[string]bool{
-		plugin.InputTypeString:  true,
-		plugin.InputTypeInteger: true,
-		plugin.InputTypeBoolean: true,
-		plugin.InputTypeArray:   true,
-		plugin.InputTypeObject:  true,
+		pluginmodel.InputTypeString:  true,
+		pluginmodel.InputTypeInteger: true,
+		pluginmodel.InputTypeBoolean: true,
+		pluginmodel.InputTypeArray:   true,
+		pluginmodel.InputTypeObject:  true,
 	}
 
 	for inputName, inputSchema := range op.Inputs {
@@ -238,7 +238,7 @@ func TestAllOperations_AllInputsAreStringType(t *testing.T) {
 	op := ops[0]
 
 	for inputName, inputSchema := range op.Inputs {
-		assert.Equal(t, plugin.InputTypeString, inputSchema.Type,
+		assert.Equal(t, pluginmodel.InputTypeString, inputSchema.Type,
 			"input %q should be string type", inputName)
 	}
 }
@@ -392,10 +392,10 @@ func TestNotifySendOperation_SupportsTemplateInterpolation(t *testing.T) {
 	// All string inputs should support template interpolation (FR-005)
 	// This is implicit in AWF but we verify inputs are string type
 	for inputName, inputSchema := range op.Inputs {
-		if inputSchema.Type == plugin.InputTypeString {
+		if inputSchema.Type == pluginmodel.InputTypeString {
 			// String inputs support {{workflow.name}}, {{workflow.duration}}, etc.
 			// No special validation needed - this is handled by AWF core
-			assert.Equal(t, plugin.InputTypeString, inputSchema.Type,
+			assert.Equal(t, pluginmodel.InputTypeString, inputSchema.Type,
 				"input %q should be string type to support template interpolation", inputName)
 		}
 	}
@@ -499,7 +499,7 @@ func TestNotifySendOperation_FR005Compliance(t *testing.T) {
 	// All string inputs support interpolation (this is AWF core feature)
 	// Verify all inputs are string type
 	for inputName, inputSchema := range op.Inputs {
-		assert.Equal(t, plugin.InputTypeString, inputSchema.Type,
+		assert.Equal(t, pluginmodel.InputTypeString, inputSchema.Type,
 			"FR-005: input %q must be string type to support template interpolation", inputName)
 	}
 }

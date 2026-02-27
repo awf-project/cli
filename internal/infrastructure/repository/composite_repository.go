@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	domerrors "github.com/awf-project/awf/internal/domain/errors"
-	"github.com/awf-project/awf/internal/domain/workflow"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // SourcedPath represents a workflow directory with its source

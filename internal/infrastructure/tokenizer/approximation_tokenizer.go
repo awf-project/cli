@@ -3,7 +3,7 @@ package tokenizer
 import (
 	"fmt"
 
-	"github.com/awf-project/awf/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // ApproximationTokenizer implements ports.Tokenizer using character-based estimation.

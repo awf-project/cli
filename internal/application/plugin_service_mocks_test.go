@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +35,7 @@ func TestMockPluginStore_Load_HappyPath(t *testing.T) {
 
 func TestMockPluginStore_GetState_HappyPath(t *testing.T) {
 	store := newMockPluginStore()
-	expectedState := plugin.NewPluginState()
+	expectedState := pluginmodel.NewPluginState()
 	expectedState.Enabled = true
 	store.states["test-plugin"] = expectedState
 
@@ -49,16 +49,16 @@ func TestMockPluginStore_ListDisabled_HappyPath(t *testing.T) {
 	store := newMockPluginStore()
 
 	// Add disabled plugins
-	disabledState1 := plugin.NewPluginState()
+	disabledState1 := pluginmodel.NewPluginState()
 	disabledState1.Enabled = false
 	store.states["disabled-1"] = disabledState1
 
-	disabledState2 := plugin.NewPluginState()
+	disabledState2 := pluginmodel.NewPluginState()
 	disabledState2.Enabled = false
 	store.states["disabled-2"] = disabledState2
 
 	// Add enabled plugin
-	enabledState := plugin.NewPluginState()
+	enabledState := pluginmodel.NewPluginState()
 	enabledState.Enabled = true
 	store.states["enabled"] = enabledState
 
@@ -90,7 +90,7 @@ func TestMockPluginStore_ListDisabled_Empty(t *testing.T) {
 
 func TestMockPluginStore_ListDisabled_AllEnabled(t *testing.T) {
 	store := newMockPluginStore()
-	enabledState := plugin.NewPluginState()
+	enabledState := pluginmodel.NewPluginState()
 	enabledState.Enabled = true
 	store.states["plugin-1"] = enabledState
 	store.states["plugin-2"] = enabledState
@@ -174,7 +174,7 @@ func TestMockPluginConfig_IsEnabled_DefaultTrue(t *testing.T) {
 func TestMockPluginConfig_GetConfig_HappyPath(t *testing.T) {
 	config := newMockPluginConfig()
 	expectedConfig := map[string]any{"key": "value"}
-	state := plugin.NewPluginState()
+	state := pluginmodel.NewPluginState()
 	state.Config = expectedConfig
 	config.states["test-plugin"] = state
 
@@ -332,7 +332,7 @@ func TestMockPluginStore_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			state := plugin.NewPluginState()
+			state := pluginmodel.NewPluginState()
 			state.Enabled = id%2 == 0
 			store.mu.Lock()
 			store.states[string(rune('a'+id))] = state

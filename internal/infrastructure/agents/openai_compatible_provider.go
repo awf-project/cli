@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/ports"
-	"github.com/awf-project/awf/internal/domain/workflow"
-	"github.com/awf-project/awf/pkg/httputil"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/httpx"
 )
 
 var _ ports.AgentProvider = (*OpenAICompatibleProvider)(nil)
@@ -20,7 +20,7 @@ var _ ports.AgentProvider = (*OpenAICompatibleProvider)(nil)
 // OpenAICompatibleProvider implements AgentProvider via the Chat Completions HTTP API.
 // Compatible with OpenAI, Ollama, vLLM, Groq, and any OpenAI-compatible backend.
 type OpenAICompatibleProvider struct {
-	httpClient *httputil.Client
+	httpClient *httpx.Client
 }
 
 // maxResponseBodyBytes limits response reading to prevent memory exhaustion.
@@ -67,7 +67,7 @@ type parsedOptions struct {
 
 func NewOpenAICompatibleProvider(opts ...OpenAICompatibleProviderOption) *OpenAICompatibleProvider {
 	p := &OpenAICompatibleProvider{
-		httpClient: httputil.NewClient(),
+		httpClient: httpx.NewClient(),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -360,7 +360,7 @@ func (p *OpenAICompatibleProvider) callChatCompletions(ctx context.Context, opts
 	return &resp, nil
 }
 
-func mapHTTPError(resp *httputil.Response) error {
+func mapHTTPError(resp *httpx.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}

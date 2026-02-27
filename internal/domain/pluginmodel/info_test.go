@@ -1,26 +1,26 @@
-package plugin_test
+package pluginmodel_test
 
 import (
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/awf-project/awf/internal/domain/plugin"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPluginStatus_Values(t *testing.T) {
 	tests := []struct {
-		status plugin.PluginStatus
+		status pluginmodel.PluginStatus
 		want   string
 	}{
-		{plugin.StatusDiscovered, "discovered"},
-		{plugin.StatusLoaded, "loaded"},
-		{plugin.StatusInitialized, "initialized"},
-		{plugin.StatusRunning, "running"},
-		{plugin.StatusStopped, "stopped"},
-		{plugin.StatusFailed, "failed"},
-		{plugin.StatusDisabled, "disabled"},
+		{pluginmodel.StatusDiscovered, "discovered"},
+		{pluginmodel.StatusLoaded, "loaded"},
+		{pluginmodel.StatusInitialized, "initialized"},
+		{pluginmodel.StatusRunning, "running"},
+		{pluginmodel.StatusStopped, "stopped"},
+		{pluginmodel.StatusFailed, "failed"},
+		{pluginmodel.StatusDisabled, "disabled"},
 	}
 
 	for _, tt := range tests {
@@ -31,22 +31,22 @@ func TestPluginStatus_Values(t *testing.T) {
 }
 
 func TestPluginInfo_Creation(t *testing.T) {
-	manifest := &plugin.Manifest{
+	manifest := &pluginmodel.Manifest{
 		Name:    "test-plugin",
 		Version: "1.0.0",
 	}
 	now := time.Now().Unix()
 
-	info := plugin.PluginInfo{
+	info := pluginmodel.PluginInfo{
 		Manifest:      manifest,
-		Status:        plugin.StatusLoaded,
+		Status:        pluginmodel.StatusLoaded,
 		Path:          "/plugins/test-plugin",
 		LoadedAt:      now,
 		InitializedAt: 0,
 	}
 
 	assert.Equal(t, manifest, info.Manifest)
-	assert.Equal(t, plugin.StatusLoaded, info.Status)
+	assert.Equal(t, pluginmodel.StatusLoaded, info.Status)
 	assert.Equal(t, "/plugins/test-plugin", info.Path)
 	assert.Equal(t, now, info.LoadedAt)
 	assert.Zero(t, info.InitializedAt)
@@ -55,33 +55,33 @@ func TestPluginInfo_Creation(t *testing.T) {
 
 func TestPluginInfo_WithError(t *testing.T) {
 	testErr := errors.New("initialization failed")
-	info := plugin.PluginInfo{
-		Status: plugin.StatusFailed,
+	info := pluginmodel.PluginInfo{
+		Status: pluginmodel.StatusFailed,
 		Error:  testErr,
 	}
 
-	assert.Equal(t, plugin.StatusFailed, info.Status)
+	assert.Equal(t, pluginmodel.StatusFailed, info.Status)
 	assert.Equal(t, testErr, info.Error)
 }
 
 func TestPluginInfo_IsActive(t *testing.T) {
 	tests := []struct {
 		name   string
-		status plugin.PluginStatus
+		status pluginmodel.PluginStatus
 		want   bool
 	}{
-		{"discovered is not active", plugin.StatusDiscovered, false},
-		{"loaded is not active", plugin.StatusLoaded, false},
-		{"initialized is not active", plugin.StatusInitialized, false},
-		{"running is active", plugin.StatusRunning, true},
-		{"stopped is not active", plugin.StatusStopped, false},
-		{"failed is not active", plugin.StatusFailed, false},
-		{"disabled is not active", plugin.StatusDisabled, false},
+		{"discovered is not active", pluginmodel.StatusDiscovered, false},
+		{"loaded is not active", pluginmodel.StatusLoaded, false},
+		{"initialized is not active", pluginmodel.StatusInitialized, false},
+		{"running is active", pluginmodel.StatusRunning, true},
+		{"stopped is not active", pluginmodel.StatusStopped, false},
+		{"failed is not active", pluginmodel.StatusFailed, false},
+		{"disabled is not active", pluginmodel.StatusDisabled, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := plugin.PluginInfo{Status: tt.status}
+			info := pluginmodel.PluginInfo{Status: tt.status}
 			assert.Equal(t, tt.want, info.IsActive())
 		})
 	}
@@ -90,21 +90,21 @@ func TestPluginInfo_IsActive(t *testing.T) {
 func TestPluginInfo_CanLoad(t *testing.T) {
 	tests := []struct {
 		name   string
-		status plugin.PluginStatus
+		status pluginmodel.PluginStatus
 		want   bool
 	}{
-		{"discovered can load", plugin.StatusDiscovered, true},
-		{"loaded cannot load", plugin.StatusLoaded, false},
-		{"initialized cannot load", plugin.StatusInitialized, false},
-		{"running cannot load", plugin.StatusRunning, false},
-		{"stopped can load", plugin.StatusStopped, true},
-		{"failed can load", plugin.StatusFailed, true},
-		{"disabled cannot load", plugin.StatusDisabled, false},
+		{"discovered can load", pluginmodel.StatusDiscovered, true},
+		{"loaded cannot load", pluginmodel.StatusLoaded, false},
+		{"initialized cannot load", pluginmodel.StatusInitialized, false},
+		{"running cannot load", pluginmodel.StatusRunning, false},
+		{"stopped can load", pluginmodel.StatusStopped, true},
+		{"failed can load", pluginmodel.StatusFailed, true},
+		{"disabled cannot load", pluginmodel.StatusDisabled, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := plugin.PluginInfo{Status: tt.status}
+			info := pluginmodel.PluginInfo{Status: tt.status}
 			assert.Equal(t, tt.want, info.CanLoad())
 		})
 	}
@@ -114,7 +114,7 @@ func TestPluginInfo_Timestamps(t *testing.T) {
 	now := time.Now().Unix()
 	laterTime := now + 5
 
-	info := plugin.PluginInfo{
+	info := pluginmodel.PluginInfo{
 		LoadedAt:      now,
 		InitializedAt: laterTime,
 	}
@@ -124,7 +124,7 @@ func TestPluginInfo_Timestamps(t *testing.T) {
 }
 
 func TestPluginInfo_ZeroValue(t *testing.T) {
-	var info plugin.PluginInfo
+	var info pluginmodel.PluginInfo
 
 	assert.Nil(t, info.Manifest)
 	assert.Empty(t, info.Status)
@@ -137,8 +137,8 @@ func TestPluginInfo_ZeroValue(t *testing.T) {
 }
 
 func TestPluginInfo_NilManifest(t *testing.T) {
-	info := plugin.PluginInfo{
-		Status: plugin.StatusDiscovered,
+	info := pluginmodel.PluginInfo{
+		Status: pluginmodel.StatusDiscovered,
 		Path:   "/plugins/orphan",
 	}
 
@@ -148,9 +148,9 @@ func TestPluginInfo_NilManifest(t *testing.T) {
 
 func TestPluginInfo_StatusTransitions(t *testing.T) {
 	// Test typical lifecycle: Discovered -> Loaded -> Initialized -> Running -> Stopped
-	info := plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "test"},
-		Status:   plugin.StatusDiscovered,
+	info := pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{Name: "test"},
+		Status:   pluginmodel.StatusDiscovered,
 		Path:     "/plugins/test",
 	}
 
@@ -158,32 +158,32 @@ func TestPluginInfo_StatusTransitions(t *testing.T) {
 	assert.False(t, info.IsActive())
 
 	// Simulate load
-	info.Status = plugin.StatusLoaded
+	info.Status = pluginmodel.StatusLoaded
 	info.LoadedAt = time.Now().Unix()
 	assert.False(t, info.CanLoad())
 	assert.False(t, info.IsActive())
 
 	// Simulate init
-	info.Status = plugin.StatusInitialized
+	info.Status = pluginmodel.StatusInitialized
 	info.InitializedAt = time.Now().Unix()
 	assert.False(t, info.CanLoad())
 	assert.False(t, info.IsActive())
 
 	// Simulate run
-	info.Status = plugin.StatusRunning
+	info.Status = pluginmodel.StatusRunning
 	assert.False(t, info.CanLoad())
 	assert.True(t, info.IsActive())
 
 	// Simulate stop
-	info.Status = plugin.StatusStopped
+	info.Status = pluginmodel.StatusStopped
 	assert.True(t, info.CanLoad()) // can reload after stop
 	assert.False(t, info.IsActive())
 }
 
 func TestPluginInfo_ErrorRecovery(t *testing.T) {
-	info := plugin.PluginInfo{
-		Manifest: &plugin.Manifest{Name: "test"},
-		Status:   plugin.StatusFailed,
+	info := pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{Name: "test"},
+		Status:   pluginmodel.StatusFailed,
 		Error:    errors.New("connection refused"),
 	}
 
@@ -191,7 +191,7 @@ func TestPluginInfo_ErrorRecovery(t *testing.T) {
 	assert.False(t, info.IsActive())
 
 	// Simulate recovery
-	info.Status = plugin.StatusRunning
+	info.Status = pluginmodel.StatusRunning
 	info.Error = nil
 	assert.True(t, info.IsActive())
 	assert.Nil(t, info.Error)
@@ -199,8 +199,8 @@ func TestPluginInfo_ErrorRecovery(t *testing.T) {
 
 func TestPluginStatus_UnknownValue(t *testing.T) {
 	// Test behavior with an unrecognized status value
-	unknownStatus := plugin.PluginStatus("unknown")
-	info := plugin.PluginInfo{Status: unknownStatus}
+	unknownStatus := pluginmodel.PluginStatus("unknown")
+	info := pluginmodel.PluginInfo{Status: unknownStatus}
 
 	assert.False(t, info.IsActive())
 	assert.False(t, info.CanLoad())
