@@ -27,6 +27,22 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 The fastest way to install AWF:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/install.sh | sh
+```
+
+To install a specific version:
+
+```bash
+AWF_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/install.sh | sh
+```
+
+The script detects your OS and architecture, downloads the appropriate binary, verifies its SHA256 checksum, and installs it to `/usr/local/bin`.
+
+## Via Go
+
+If you have Go installed:
+
+```bash
 go install github.com/awf-project/cli/cmd/awf@latest
 ```
 

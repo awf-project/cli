@@ -1,0 +1,50 @@
+version: 2
+
+builds:
+  - id: awf
+    binary: awf
+    main: ./cmd/awf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/awf-project/cli/internal/interfaces/cli.Version={{.Version}}
+      - -X github.com/awf-project/cli/internal/interfaces/cli.Commit={{.ShortCommit}}
+      - -X github.com/awf-project/cli/internal/interfaces/cli.BuildDate={{.Date}}
+
+archives:
+  - id: awf
+    ids:
+      - awf
+    name_template: "awf_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: darwin
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: awf-project
+    name: cli
+  draft: false
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^style:"
+      - "^test:"
