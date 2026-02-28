@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.8
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - name: Run tests with race detector
+        run: go test -race ./...
+
+  release:
+    needs: [lint, test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dev-release:
+    needs: [lint, test]
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - name: Generate dev tag
+        id: dev-tag
+        run: echo "tag=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build snapshot
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create dev pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ steps.dev-tag.outputs.tag }}
+        run: |
+          gh release create "$DEV_TAG" dist/*.tar.gz dist/*.zip dist/checksums.txt \
+            --title "$DEV_TAG" \
+            --prerelease \
+            --notes "Development build from main ($(git rev-parse --short HEAD))"
+
+      - name: Cleanup old dev releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --json tagName,isPrerelease \
+            --jq '[.[] | select(.isPrerelease and (.tagName | startswith("dev-")))] | sort_by(.tagName) | reverse | .[3:][] | .tagName' \
+          | while read -r tag; do
+            gh release delete "$tag" --yes --cleanup-tag
+          done
