@@ -15,7 +15,7 @@ import (
 )
 
 // ExecCLIExecutor implements CLIExecutor using os/exec for direct binary execution.
-// Unlike shell execution via /bin/sh -c, this executes binaries directly without
+// Unlike shell execution via detected shell ($SHELL), this executes binaries directly without
 // shell interpretation, making it suitable for invoking external CLI tools like
 // claude, gemini, codex, etc.
 type ExecCLIExecutor struct{}

@@ -3,7 +3,7 @@ package ports
 import "context"
 
 // CLIExecutor defines the contract for executing external CLI binaries.
-// Unlike CommandExecutor (shell execution via /bin/sh -c), this executes
+// Unlike CommandExecutor (shell execution via detected shell), this executes
 // binaries directly without shell interpretation.
 //
 // This interface is designed for testing agent providers that invoke external

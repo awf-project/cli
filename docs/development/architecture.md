@@ -227,7 +227,7 @@ func (s *JSONStateStore) Save(ctx *ExecutionContext) error {
 type ShellExecutor struct{}
 
 func (e *ShellExecutor) Execute(ctx context.Context, cmd Command) (Result, error) {
-    // Execute via /bin/sh -c
+    // Execute via detected shell ($SHELL or /bin/sh fallback)
 }
 
 // RPC Plugin Manager

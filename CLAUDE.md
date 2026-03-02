@@ -181,7 +181,7 @@ Uses `golang.org/x/sync/errgroup` with semaphore for controlled concurrency.
 Context propagation for graceful cancellation. Process groups for clean termination.
 
 ### Security
-- Shell commands use `/bin/sh -c` by design (supports pipes, redirects)
+- Shell commands use the user's detected shell (`$SHELL`, fallback `/bin/sh`) with `-c` (supports pipes, redirects)
 - `ShellEscape()` in `pkg/interpolation` for user-provided values
 - Secret masking in logs (vars starting with `SECRET_`, `API_KEY`, `PASSWORD`)
 - Atomic file writes prevent corruption (unique temp files with PID+timestamp)
@@ -279,6 +279,8 @@ Combine consecutive function parameters of the same type into single type declar
 
 Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
 
+Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
+
 ## Test Conventions
 
 Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -294,6 +296,8 @@ Never use switch statements to populate table-driven test variables; declare all
 Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 
 Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
+
+Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 
 ## Review Standards
 

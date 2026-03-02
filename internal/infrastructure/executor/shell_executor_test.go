@@ -3,6 +3,8 @@ package executor
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -342,10 +344,10 @@ func TestShellExecutor_MaskSecrets_HappyPath(t *testing.T) {
 		},
 		{
 			name:    "preserve non-secret values",
-			command: "echo $PUBLIC_VAR $USERNAME",
+			command: "echo $PUBLIC_VAR $CUSTOM_NAME",
 			env: map[string]string{
-				"PUBLIC_VAR": "visible",
-				"USERNAME":   "john",
+				"PUBLIC_VAR":  "visible",
+				"CUSTOM_NAME": "john",
 			},
 			wantStdout: "visible john\n",
 			wantStderr: "",
@@ -615,9 +617,9 @@ func TestShellExecutor_MaskSecrets_RealWorldScenarios(t *testing.T) {
 		},
 		{
 			name:    "mixed secrets and public data",
-			command: "echo user=$USERNAME token=$SECRET_TOKEN status=$STATUS",
+			command: "echo user=$TEST_USER token=$SECRET_TOKEN status=$STATUS",
 			env: map[string]string{
-				"USERNAME":     "alice",
+				"TEST_USER":    "alice",
 				"SECRET_TOKEN": "abc123",
 				"STATUS":       "active",
 			},
@@ -639,6 +641,104 @@ func TestShellExecutor_MaskSecrets_RealWorldScenarios(t *testing.T) {
 			assert.Equal(t, tt.wantStdout, result.Stdout)
 		})
 	}
+}
+
+func TestDetectShell_Scenarios(t *testing.T) {
+	validShellDir := t.TempDir()
+	validShellPath := validShellDir + "/mysh"
+	require.NoError(t, os.WriteFile(validShellPath, []byte("#!/bin/sh\nexec sh \"$@\""), 0o755))
+
+	tests := []struct {
+		name      string
+		shellEnv  string
+		wantShell string
+	}{
+		{
+			name:      "SHELL unset falls back to /bin/sh",
+			shellEnv:  "",
+			wantShell: "/bin/sh",
+		},
+		{
+			name:      "SHELL=/bin/sh returns /bin/sh",
+			shellEnv:  "/bin/sh",
+			wantShell: "/bin/sh",
+		},
+		{
+			name:      "relative SHELL path falls back to /bin/sh",
+			shellEnv:  "bash",
+			wantShell: "/bin/sh",
+		},
+		{
+			name:      "absolute but missing SHELL path falls back to /bin/sh",
+			shellEnv:  "/nonexistent/shell/binary",
+			wantShell: "/bin/sh",
+		},
+		{
+			name:      "valid absolute SHELL path is used",
+			shellEnv:  validShellPath,
+			wantShell: validShellPath,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shellEnv)
+			got := detectShell()
+			assert.Equal(t, tt.wantShell, got)
+		})
+	}
+}
+
+func TestWithShell_OverridesDetection(t *testing.T) {
+	tests := []struct {
+		name          string
+		shellEnv      string
+		opts          []ShellExecutorOption
+		wantShellPath string
+	}{
+		{
+			name:          "WithShell sets path when SHELL is empty",
+			shellEnv:      "",
+			opts:          []ShellExecutorOption{WithShell("/bin/sh")},
+			wantShellPath: "/bin/sh",
+		},
+		{
+			name:          "WithShell overrides detected SHELL",
+			shellEnv:      "/bin/sh",
+			opts:          []ShellExecutorOption{WithShell("/custom/shell")},
+			wantShellPath: "/custom/shell",
+		},
+		{
+			name:          "no opts with empty SHELL falls back to /bin/sh",
+			shellEnv:      "",
+			opts:          nil,
+			wantShellPath: "/bin/sh",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shellEnv)
+			e := NewShellExecutor(tt.opts...)
+			assert.Equal(t, tt.wantShellPath, e.shellPath)
+		})
+	}
+}
+
+func TestShellExecutor_Execute_BashSyntax(t *testing.T) {
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not found in PATH, skipping bash-specific syntax test")
+	}
+
+	e := NewShellExecutor(WithShell(bashPath))
+	cmd := ports.Command{Program: "arr=(one two three); echo ${arr[1]}"}
+
+	result, execErr := e.Execute(context.Background(), &cmd)
+
+	require.NoError(t, execErr)
+	assert.Equal(t, 0, result.ExitCode)
+	assert.Equal(t, "two\n", result.Stdout)
 }
 
 // TestShellExecutor_MaskSecrets_WithStreaming tests masking works with streaming output

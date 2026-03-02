@@ -40,7 +40,7 @@ AWF is a powerful orchestration tool that combines AI agents and shell execution
 
 ### ⚠️ Operational Risks
 
-- **Arbitrary Code Execution:** AWF is designed to execute shell commands (`/bin/sh -c`) defined in YAML workflows. It runs with the same permissions as the user executing the CLI.
+- **Arbitrary Code Execution:** AWF is designed to execute shell commands defined in YAML workflows using the user's preferred shell (detected via `$SHELL`, falling back to `/bin/sh`). It runs with the same permissions as the user executing the CLI.
 - **AI Non-Determinism (Hallucinations):** AI agents (LLMs) are probabilistic models. They can produce unexpected, incorrect, or destructive output ("hallucinations"). A prompt that seems safe can generate a harmful command in certain contexts.
 - **Untrusted Workflows:** Treat workflow files (`.yaml`) and prompt files (`.md`) as executable scripts. Never run a workflow from an untrusted source without a thorough manual audit.
 

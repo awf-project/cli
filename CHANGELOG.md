@@ -96,6 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
+  - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
+  - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
+  - Bash-dependent workflow commands (arrays, `[[`, process substitution, brace expansion) now work automatically for users with bash
+  - `WithShell(path)` functional option allows explicit shell override for testing and special cases
+  - See [ADR-0012](docs/ADR/0012-runtime-shell-detection.md) for decision rationale and trade-offs
 - **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
   - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
   - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
@@ -262,6 +268,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
 
 ### Fixed
+- **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
+  - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
+  - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
+  - Bash-dependent workflow commands (arrays, `[[`, process substitution, brace expansion) now work automatically for users with bash
+  - `WithShell(path)` functional option allows explicit shell override for testing and special cases
+  - See [ADR-0012](docs/ADR/0012-runtime-shell-detection.md) for decision rationale and trade-offs
 - **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
   - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
   - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
@@ -645,6 +657,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
+- **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
+  - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
+  - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
+  - Bash-dependent workflow commands (arrays, `[[`, process substitution, brace expansion) now work automatically for users with bash
+  - `WithShell(path)` functional option allows explicit shell override for testing and special cases
+  - See [ADR-0012](docs/ADR/0012-runtime-shell-detection.md) for decision rationale and trade-offs
 - **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
   - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
   - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
@@ -811,6 +829,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML parsing reports all errors instead of silently skipping malformed steps
 
 ### Fixed
+- **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
+  - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
+  - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
+  - Bash-dependent workflow commands (arrays, `[[`, process substitution, brace expansion) now work automatically for users with bash
+  - `WithShell(path)` functional option allows explicit shell override for testing and special cases
+  - See [ADR-0012](docs/ADR/0012-runtime-shell-detection.md) for decision rationale and trade-offs
 - **B005**: Local scripts and prompts now override global XDG paths when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}`
   - `loadExternalFile()` now checks `<workflow_dir>/scripts/` (or `prompts/`) before falling back to the global XDG directory
   - New `resolveLocalOverGlobal()` helper detects XDG-prefixed paths and substitutes local equivalents when they exist
