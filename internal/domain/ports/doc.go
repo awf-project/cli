@@ -38,7 +38,7 @@
 // ## Execution Ports
 //
 // Command and step execution contracts:
-//   - CommandExecutor: Execute shell commands via /bin/sh -c with streaming support
+//   - CommandExecutor: Execute shell commands via detected shell ($SHELL, fallback /bin/sh) with streaming support
 //   - CLIExecutor: Execute external binaries directly without shell interpretation
 //   - StepExecutor: Execute a single workflow step (used by parallel execution)
 //   - ParallelExecutor: Execute multiple branches concurrently with strategy support

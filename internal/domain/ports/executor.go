@@ -5,9 +5,9 @@ import (
 	"io"
 )
 
-// Note: Program is passed to /bin/sh -c as a shell command string,
-// allowing shell features like pipes and redirects. Use ShellEscape()
-// from pkg/interpolation for user-provided values.
+// Note: Program is passed to the user's detected shell (via $SHELL, fallback
+// /bin/sh) as a shell command string, allowing shell features like pipes and
+// redirects. Use ShellEscape() from pkg/interpolation for user-provided values.
 type Command struct {
 	Program string
 	Dir     string

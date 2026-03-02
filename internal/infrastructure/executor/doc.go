@@ -2,7 +2,7 @@
 //
 // This package implements the CommandExecutor port from the domain layer,
 // providing shell command execution with process management:
-//   - ShellExecutor: Executes commands via /bin/sh -c with timeout and cancellation
+//   - ShellExecutor: Executes commands via detected shell ($SHELL, fallback /bin/sh) with timeout and cancellation
 //
 // Architecture:
 //   - Domain defines: CommandExecutor port interface, Command and CommandResult types
@@ -20,7 +20,7 @@
 //	// Use result.Stdout, result.Stderr, result.ExitCode
 //
 // Security:
-//   - Commands run via /bin/sh -c (supports pipes, redirects)
+//   - Commands run via detected shell (supports pipes, redirects)
 //   - Secret masking for environment variables (SECRET_*, API_KEY*, PASSWORD*)
 //   - Process group management for clean termination
 //   - Context cancellation propagates to running processes

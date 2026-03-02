@@ -99,6 +99,47 @@ my_step:
 | `retry` | object | - | Retry configuration |
 | `transitions` | array | - | Conditional transitions |
 
+### Shell Execution
+
+Commands are executed using the user's preferred shell, determined at runtime as follows:
+
+1. **Preferred Shell Detection** — AWF reads the `$SHELL` environment variable to detect the user's configured shell (e.g., `/bin/bash`, `/bin/zsh`)
+2. **Fallback** — If `$SHELL` is unset, relative, or points to a non-existent binary, AWF falls back to `/bin/sh`
+3. **Command Invocation** — The selected shell is invoked with the `-c` flag to execute the workflow command
+
+This ensures that bash-dependent syntax (arrays, `[[`, process substitution, `{a..z}` brace expansion, etc.) works on all systems, including Debian/Ubuntu where `/bin/sh` is `dash`.
+
+**Example Behavior:**
+
+- **On macOS/Arch Linux** (where `/bin/sh` is bash-like):
+  ```bash
+  $ echo $SHELL
+  /bin/bash
+  $ awf run my-workflow
+  # Uses /bin/bash → bash-specific syntax works
+  ```
+
+- **On Debian/Ubuntu** (where `/bin/sh` is dash):
+  ```bash
+  $ echo $SHELL
+  /bin/bash  # User has bash installed
+  $ awf run my-workflow
+  # Uses /bin/bash (detected from $SHELL) → bash-specific syntax works
+  ```
+
+**Compatibility Notes:**
+
+- **POSIX-only commands** — Work in any shell and are the most portable (recommended for external scripts)
+- **Bash-specific syntax** — Requires `/bin/bash` or compatible shell; check your `$SHELL` setting
+- **Shell-specific features** — `[[`, arrays, process substitution, ANSI-C quoting (`$'...'`) — require bash or zsh
+
+To verify which shell AWF will use:
+
+```bash
+echo $SHELL  # Shows the detected shell
+awf run my-workflow --dry-run  # Displays execution plan without running
+```
+
 ### External Script Files
 
 Instead of inlining shell commands in YAML, you can load commands from external script files using the `script_file` field:

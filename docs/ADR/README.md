@@ -35,6 +35,7 @@ Numbers are never reused. If a decision is reversed, the original ADR is marked 
 | [0005](0005-atomic-file-writes.md) | Atomic File Writes for State Persistence | Accepted |
 | [0006](0006-xdg-path-resolution.md) | XDG-Compliant Path Resolution | Accepted |
 | [0007](0007-agent-prompt-xor-constraint.md) | Agent Prompt XOR Constraint | Accepted |
+| [0012](0012-runtime-shell-detection.md) | Runtime Shell Detection with $SHELL Environment Variable | Accepted |
 
 ## Creating a New ADR
 

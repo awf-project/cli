@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,29 +16,55 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
 
-// ShellExecutor executes shell commands via /bin/sh -c.
+// ShellExecutorOption configures a ShellExecutor.
+type ShellExecutorOption func(*ShellExecutor)
+
+// WithShell overrides the detected shell path.
+func WithShell(path string) ShellExecutorOption {
+	return func(e *ShellExecutor) {
+		e.shellPath = path
+	}
+}
+
 type ShellExecutor struct {
-	masker *logger.SecretMasker
+	masker    *logger.SecretMasker
+	shellPath string
 }
 
 // NewShellExecutor creates a new ShellExecutor.
-func NewShellExecutor() *ShellExecutor {
-	return &ShellExecutor{
-		masker: logger.NewSecretMasker(),
+func NewShellExecutor(opts ...ShellExecutorOption) *ShellExecutor {
+	e := &ShellExecutor{
+		masker:    logger.NewSecretMasker(),
+		shellPath: detectShell(),
 	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
+}
+
+// detectShell returns the user's preferred shell from $SHELL,
+// falling back to /bin/sh if $SHELL is unset, relative, or invalid.
+func detectShell() string {
+	shell := os.Getenv("SHELL")
+	if shell == "" || !filepath.IsAbs(shell) {
+		return "/bin/sh"
+	}
+	if _, err := os.Stat(shell); err != nil {
+		return "/bin/sh"
+	}
+	return shell
 }
 
 // Execute runs a command and returns the result.
 func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
-	// apply command-level timeout if specified
 	if cmd.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(cmd.Timeout)*time.Second)
 		defer cancel()
 	}
 
-	// build command with shell
-	execCmd := exec.CommandContext(ctx, "/bin/sh", "-c", cmd.Program)
+	execCmd := exec.CommandContext(ctx, e.shellPath, "-c", cmd.Program) //nolint:gosec // G204: intentional dynamic shell
 
 	// process group for clean termination
 	execCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -48,12 +75,10 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 	}
 	execCmd.WaitDelay = 100 * time.Millisecond
 
-	// working directory
 	if cmd.Dir != "" {
 		execCmd.Dir = cmd.Dir
 	}
 
-	// environment variables
 	if len(cmd.Env) > 0 {
 		execCmd.Env = os.Environ()
 		for k, v := range cmd.Env {
@@ -61,7 +86,6 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 		}
 	}
 
-	// capture output (always needed for result)
 	var stdout, stderr bytes.Buffer
 
 	// setup stdout writer with optional streaming
@@ -78,7 +102,6 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 		execCmd.Stderr = &stderr
 	}
 
-	// execute
 	err := execCmd.Run()
 
 	// mask secrets in output
