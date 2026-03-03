@@ -301,6 +301,67 @@ Always provide inputs explicitly in CI/CD:
   run: awf run deploy --input environment=prod --input version=${{ github.ref_name }}
 ```
 
+## Configuration File Integration
+
+Interactive input collection automatically merges values from `.awf/config.yaml`, reducing re-prompting for pre-configured inputs.
+
+### How Config Values are Used
+
+When running a workflow with interactive input collection:
+
+1. **Config values are loaded** from `.awf/config.yaml` under the `inputs:` key
+2. **Config values are pre-filled** for required inputs that are defined there
+3. **Only missing inputs are prompted** — inputs already in config or CLI flags are skipped
+4. **CLI flags take priority** over config values (if provided, CLI wins)
+
+### Example with Config
+
+**Workflow definition:**
+```yaml
+name: deploy
+inputs:
+  - name: api_key
+    type: string
+    required: true
+    description: API key for authentication
+  - name: environment
+    type: string
+    required: true
+    description: Target environment
+```
+
+**Config file (`.awf/config.yaml`):**
+```yaml
+inputs:
+  api_key: "sk-test-123"  # Pre-configured
+```
+
+**Interactive execution:**
+```bash
+$ awf run deploy
+
+# api_key is NOT prompted (already in config)
+# Only environment is prompted
+Enter value for 'environment' (string, required)
+Description: Target environment
+> prod
+✓ Accepted
+
+Deploying...
+✓ Workflow completed successfully
+```
+
+**CLI override:**
+```bash
+$ awf run deploy --input api_key=sk-cli-456
+
+# api_key from CLI flag (overrides config)
+# Only environment is prompted
+Enter value for 'environment' (string, required)
+> prod
+✓ Accepted
+```
+
 ## Mixed Inputs
 
 ### Combining Flags and Prompts
@@ -561,5 +622,6 @@ description: |
 ## See Also
 
 - [Commands Reference](commands.md) - All AWF CLI commands
+- [Project Configuration](configuration.md) - Config file setup and input pre-population
 - [Workflow Syntax](workflow-syntax.md) - Input definitions and validation
 - [Input Validation Reference](../reference/validation.md) - Validation rules reference

@@ -1,0 +1,33 @@
+name: config-interactive-test
+description: Test workflow for config.yaml input pre-filling with interactive and dry-run modes
+
+inputs:
+  - name: api_key
+    type: string
+    required: true
+    description: API key required for the workflow
+
+  - name: model
+    type: string
+    required: true
+    description: Model name required for the workflow
+
+states:
+  initial: echo_inputs
+
+  echo_inputs:
+    type: step
+    description: Echo both required inputs
+    command: echo "api_key={{.inputs.api_key}} model={{.inputs.model}}"
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+    message: "Workflow completed"
+
+  error:
+    type: terminal
+    status: failure
+    message: "Workflow failed"

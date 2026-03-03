@@ -444,6 +444,15 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	resolver := interpolation.NewTemplateResolver()
 	exprEvaluator := infraexpression.NewExprEvaluator()
 
+	// Load project config from .awf/config.yaml
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	// Merge config inputs with CLI inputs (CLI wins)
+	inputs = mergeInputs(projectCfg.Inputs, inputs)
+
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
@@ -513,6 +522,15 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	}
 	resolver := interpolation.NewTemplateResolver()
 	exprEvaluator := infraexpression.NewExprEvaluator()
+
+	// Load project config from .awf/config.yaml
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	// Merge config inputs with CLI inputs (CLI wins)
+	inputs = mergeInputs(projectCfg.Inputs, inputs)
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -1027,38 +1045,17 @@ func ParseMockFlags(flags []string) (map[string]string, error) {
 }
 
 // loadProjectConfig loads the project configuration from .awf/config.yaml.
-// Returns empty config if file doesn't exist (not an error).
-// Returns error for invalid YAML or file read errors.
-//
-// The logger is used to emit warnings for unknown config keys.
-func loadProjectConfig(logger ports.Logger) (*config.ProjectConfig, error) {
-	_ = logger // Reserved for future warning logging (unknown keys)
-
+// Returns empty config if the file doesn't exist.
+func loadProjectConfig(_ ports.Logger) (*config.ProjectConfig, error) {
 	configPath := xdg.LocalConfigPath()
-	loader := config.NewYAMLConfigLoader(configPath)
-
-	return loader.Load()
+	return config.NewYAMLConfigLoader(configPath).Load()
 }
 
-// hasMissingRequiredInputs checks if workflow has any required inputs that are not
-// present in the provided inputs map.
-//
-// This helper is used to determine if interactive input collection is needed.
-//
-// Parameters:
-//   - wf: Workflow definition
-//   - inputs: Input values already provided
-//
-// Returns:
-//   - true if any required input is missing
-//   - false if all required inputs are present
+// hasMissingRequiredInputs reports whether any required workflow input is absent from inputs.
 func hasMissingRequiredInputs(wf *workflow.Workflow, inputs map[string]any) bool {
-	// Handle nil workflow or inputs
-	if wf == nil || wf.Inputs == nil {
+	if wf == nil {
 		return false
 	}
-
-	// Check each required input
 	for _, input := range wf.Inputs {
 		if input.Required {
 			if _, exists := inputs[input.Name]; !exists {
@@ -1066,26 +1063,14 @@ func hasMissingRequiredInputs(wf *workflow.Workflow, inputs map[string]any) bool
 			}
 		}
 	}
-
 	return false
 }
 
-// mergeInputs merges config file inputs with CLI flag inputs.
-// CLI inputs take precedence over config inputs (CLI always wins).
-// Returns a new map containing all merged inputs.
-//
-// Merge priority (highest wins):
-//
-//	CLI flags (--input key=value) > Config file (.awf/config.yaml)
+// mergeInputs returns configInputs merged with cliInputs. CLI wins on conflict.
 func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
 	result := make(map[string]any)
-
-	// Copy config inputs first (lower priority)
 	maps.Copy(result, configInputs)
-
-	// Apply CLI inputs (higher priority, overwrites config)
 	maps.Copy(result, cliInputs)
-
 	return result
 }
 
