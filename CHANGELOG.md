@@ -96,6 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B007**: Interactive and dry-run modes now respect `.awf/config.yaml` input defaults
+  - `runInteractive()` and `runDryRun()` now load project config and merge inputs (same pattern as `runWorkflow()`)
+  - Config values are pre-filled, reducing re-prompting for already-configured inputs
+  - CLI flags still override config values (CLI wins)
+  - Fixes regression where interactive input collection always prompted for all required inputs, ignoring config.yaml
+  - Affects: interactive mode (`awf run --interactive`), dry-run mode (`awf run --dry-run`), and config-based input defaults
+
 - **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
   - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
   - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
@@ -268,6 +275,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
 
 ### Fixed
+- **B007**: Interactive input prompt and dry-run mode now respect `.awf/config.yaml` input defaults
+  - `runInteractive()` and `runDryRun()` now load project config and merge inputs (same pattern as `runWorkflow()`)
+  - Config values are pre-filled, reducing re-prompting for already-configured inputs
+  - CLI flags still override config values (CLI wins)
+  - Fixes regression where interactive input collection always prompted for all required inputs, ignoring config.yaml
+  - Affects: interactive mode (`awf run --interactive`), dry-run mode (`awf run --dry-run`), and config-based input defaults
 - **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
   - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
   - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary

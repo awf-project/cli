@@ -221,83 +221,49 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 
 ## Architecture Rules
 
-Domain layer packages must restrict dependencies via go-arch-lint rules; domain/operation imports only domain/plugin, domain/ports, and stdlib
-
-Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
-
-Use pkg pattern for cross-layer HTTP utilities (pkg/httpx) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
-
-Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
-
-Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
-
-Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
-
-Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
-
-Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
-
-Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
+- Domain layer packages must restrict dependencies via go-arch-lint rules; domain/operation imports only domain/plugin, domain/ports, and stdlib
+- Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
+- Use pkg pattern for cross-layer HTTP utilities (pkg/httpx) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
+- Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
+- Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
+- Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
+- Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
+- Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
+- Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
 
 ## Common Pitfalls
 
-Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
-
-Never duplicate HTTP client logic across notification backends; extract to pkg/httpx with HTTPDoer interface for testability and shared timeout/header handling
-
-Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
-
-Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; enables consistent behavior regardless of CLI invocation location
-
-Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent accidental memory issues and provide fast failure feedback for misconfigured paths
-
-Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
-
-Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
-
-Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; ensures consistent behavior regardless of CLI invocation location
-
-Enforce 1MB size limit on loaded prompt files via io.LimitReader; prevents accidental memory issues and provides fast failure feedback for misconfigured paths
-
-Always resolve script_file and prompt_file paths against workflow.SourceDir first, then check for local XDG overrides via resolveLocalOverGlobal() before falling back to global XDG paths
-
-Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
-
-Never initialize interpolation context with nil AWF map in loadExternalFile() and related functions; always pass initialized empty map to prevent nil dereference in resolveLocalOverGlobal() and path resolution helpers
-
-Always use interpolateTerminalMessage() in application layer to evaluate template variables in Step.Message at runtime; store message verbatim during parsing to preserve {{var}} syntax until execution time
-
-Extract validation functions with cognitive complexity > 30 into smaller helper functions to maintain readability
-
-Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
-
-Pass structs larger than 128 bytes by pointer in function parameters and method receivers to avoid expensive value copying
-
-Never check if maps are nil before calling len(); Go defines len() as zero for nil maps
-
-Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
-
-Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
-
-Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
+- Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
+- Never duplicate HTTP client logic across notification backends; extract to pkg/httpx with HTTPDoer interface for testability and shared timeout/header handling
+- Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
+- Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; enables consistent behavior regardless of CLI invocation location
+- Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent accidental memory issues and provide fast failure feedback for misconfigured paths
+- Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
+- Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
+- Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; ensures consistent behavior regardless of CLI invocation location
+- Enforce 1MB size limit on loaded prompt files via io.LimitReader; prevents accidental memory issues and provides fast failure feedback for misconfigured paths
+- Always resolve script_file and prompt_file paths against workflow.SourceDir first, then check for local XDG overrides via resolveLocalOverGlobal() before falling back to global XDG paths
+- Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
+- Never initialize interpolation context with nil AWF map in loadExternalFile() and related functions; always pass initialized empty map to prevent nil dereference in resolveLocalOverGlobal() and path resolution helpers
+- Always use interpolateTerminalMessage() in application layer to evaluate template variables in Step.Message at runtime; store message verbatim during parsing to preserve {{var}} syntax until execution time
+- Extract validation functions with cognitive complexity > 30 into smaller helper functions to maintain readability
+- Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
+- Pass structs larger than 128 bytes by pointer in function parameters and method receivers to avoid expensive value copying
+- Never check if maps are nil before calling len(); Go defines len() as zero for nil maps
+- Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
+- Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
+- Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
 
 ## Test Conventions
 
-Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
-
-Use HTTPDoer interface in pkg/httpx tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
-
-Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
-
-Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
-
-Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
-
-Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
-
-Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
-
-Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
+- Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
+- Use HTTPDoer interface in pkg/httpx tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
+- Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
+- Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
+- Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
+- Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
+- Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
+- Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 
 ## Review Standards
 

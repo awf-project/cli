@@ -82,7 +82,7 @@ inputs:
 
 ## Input Pre-population
 
-When you run a workflow, AWF automatically merges inputs from the config file with any CLI-provided inputs.
+When you run a workflow, AWF automatically merges inputs from the config file with any CLI-provided inputs. This applies to all execution modes: standard `awf run`, `--interactive`, and `--dry-run`.
 
 ### Priority Order
 
@@ -95,7 +95,7 @@ Config File < CLI Flags
 1. **Config file** (`.awf/config.yaml`): Base defaults
 2. **CLI flags** (`--input`): Override config values
 
-### Example
+### Standard Execution
 
 Given this configuration:
 
@@ -114,6 +114,45 @@ awf run deploy --input env=production
 The workflow receives:
 - `env` = `production` (CLI override wins)
 - `project` = `my-app` (from config)
+
+### Interactive Mode
+
+In interactive mode (`awf run --interactive`), config values reduce prompting:
+
+```bash
+$ awf run deploy --interactive --input env=production
+
+# env is NOT prompted (provided via CLI)
+# project is NOT prompted (in config.yaml)
+# Only missing required inputs are prompted
+```
+
+If the workflow had a third required input not in config or CLI:
+
+```bash
+$ awf run deploy --interactive
+
+# env = "staging" (from config, not prompted)
+# project = "my-app" (from config, not prompted)
+# Only other_required_input is prompted interactively
+
+Enter value for 'other_required_input' (string, required)
+> value
+```
+
+### Dry-Run Mode
+
+In dry-run mode (`awf run --dry-run`), config values are included in the execution plan:
+
+```bash
+$ awf run deploy --dry-run
+
+# Execution plan shows:
+# - env = "staging" (from config)
+# - project = "my-app" (from config)
+```
+
+This allows you to verify that config values are correctly applied without actually executing the workflow.
 
 ---
 
@@ -486,6 +525,7 @@ awf run my-workflow
 ## See Also
 
 - [Commands](commands.md) - CLI command reference
+- [Interactive Input Collection](interactive-inputs.md) - Automatic prompting for missing inputs with config pre-population
 - [Workflow Syntax](workflow-syntax.md) - Workflow YAML syntax
 - [Plugins](plugins.md) - Plugin system and configuration
 - [Audit Trail](audit-trail.md) - Structured audit logging for workflow executions
