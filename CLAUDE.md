@@ -235,6 +235,8 @@ Use boolean struct fields on domain entities to signal optional infrastructure b
 
 All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
 
+When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
