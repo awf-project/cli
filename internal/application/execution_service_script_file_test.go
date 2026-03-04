@@ -182,3 +182,63 @@ func TestResolveStepCommand_ScriptFile_Error_SizeExceeded(t *testing.T) {
 	assert.Nil(t, cmd)
 	assert.Contains(t, err.Error(), "exceeds 1MB limit", "error should indicate size limit exceeded")
 }
+
+// TestResolveStepCommand_ScriptFile_SetsIsScriptFile asserts that when a step
+// has a non-empty ScriptFile field, the returned Command has IsScriptFile=true.
+// This lets ShellExecutor choose direct execution over $SHELL -c.
+func TestResolveStepCommand_ScriptFile_SetsIsScriptFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "run.sh")
+	require.NoError(t, os.WriteFile(scriptPath, []byte("#!/bin/bash\necho hello"), 0o755))
+
+	step := &workflow.Step{
+		Name:       "run",
+		Type:       workflow.StepTypeCommand,
+		ScriptFile: "run.sh",
+	}
+
+	intCtx := &interpolation.Context{
+		Inputs: map[string]any{},
+	}
+
+	wf := &workflow.Workflow{SourceDir: tmpDir}
+
+	svc := &ExecutionService{
+		outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+		resolver:      newRealResolver(),
+	}
+
+	cmd, err := svc.resolveStepCommand(context.Background(), wf, step, intCtx)
+
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
+	assert.True(t, cmd.IsScriptFile, "IsScriptFile must be true when step.ScriptFile is non-empty")
+}
+
+// TestResolveStepCommand_InlineCommand_IsScriptFileFalse asserts that when a
+// step has no ScriptFile (inline command), the returned Command has IsScriptFile=false,
+// preserving the existing $SHELL -c execution path.
+func TestResolveStepCommand_InlineCommand_IsScriptFileFalse(t *testing.T) {
+	step := &workflow.Step{
+		Name:    "build",
+		Type:    workflow.StepTypeCommand,
+		Command: "make build",
+	}
+
+	intCtx := &interpolation.Context{
+		Inputs: map[string]any{},
+	}
+
+	wf := &workflow.Workflow{}
+
+	svc := &ExecutionService{
+		outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+		resolver:      newRealResolver(),
+	}
+
+	cmd, err := svc.resolveStepCommand(context.Background(), wf, step, intCtx)
+
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
+	assert.False(t, cmd.IsScriptFile, "IsScriptFile must be false when step uses an inline command")
+}

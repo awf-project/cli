@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,7 +65,18 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 		defer cancel()
 	}
 
-	execCmd := exec.CommandContext(ctx, e.shellPath, "-c", cmd.Program) //nolint:gosec // G204: intentional dynamic shell
+	var execCmd *exec.Cmd
+	var cleanup func()
+	if cmd.IsScriptFile && hasShebang(cmd.Program) {
+		var err error
+		execCmd, cleanup, err = e.executeScriptFile(ctx, cmd.Program)
+		if err != nil {
+			return nil, err
+		}
+		defer cleanup()
+	} else {
+		execCmd = exec.CommandContext(ctx, e.shellPath, "-c", cmd.Program) //nolint:gosec // G204: intentional dynamic shell
+	}
 
 	// process group for clean termination
 	execCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -132,4 +144,34 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 
 	result.ExitCode = 0
 	return result, nil
+}
+
+func hasShebang(content string) bool {
+	return strings.HasPrefix(content, "#!")
+}
+
+func (e *ShellExecutor) executeScriptFile(ctx context.Context, content string) (*exec.Cmd, func(), error) {
+	f, err := os.CreateTemp("", "awf-script-*")
+	if err != nil {
+		return nil, nil, fmt.Errorf("create temp script file: %w", err)
+	}
+	path := f.Name()
+
+	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return nil, nil, fmt.Errorf("write temp script file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return nil, nil, fmt.Errorf("close temp script file: %w", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil { //nolint:gosec // G302: intentional 0o700 for executable script
+		_ = os.Remove(path)
+		return nil, nil, fmt.Errorf("chmod temp script file: %w", err)
+	}
+
+	execCmd := exec.CommandContext(ctx, path) //nolint:gosec // G204: intentional direct script execution
+	cleanup := func() { _ = os.Remove(path) }
+	return execCmd, cleanup, nil
 }

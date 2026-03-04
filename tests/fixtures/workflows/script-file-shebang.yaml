@@ -1,0 +1,19 @@
+name: script-file-shebang
+version: "1.0.0"
+
+states:
+  initial: python_step
+  python_step:
+    type: step
+    script_file: scripts/shebang_python.py
+    on_success: bash_step
+  bash_step:
+    type: step
+    script_file: scripts/shebang_bash.sh
+    on_success: no_shebang_step
+  no_shebang_step:
+    type: step
+    script_file: scripts/no_shebang.sh
+    on_success: done
+  done:
+    type: terminal
