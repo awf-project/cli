@@ -174,8 +174,9 @@ linters:
         linters:
           - gocognit
 
-      # Test helper functions in CLI tests use simple error propagation
-      - path: internal/interfaces/cli/.*_test\.go
+      # Test helper functions and mocks use simple error propagation
+      # (mock implementations are not production boundaries)
+      - path: _test\.go
         linters:
           - wrapcheck
 

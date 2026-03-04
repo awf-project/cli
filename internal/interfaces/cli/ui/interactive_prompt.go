@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -73,9 +74,11 @@ func (p *CLIPrompt) ShowStepDetails(info *workflow.InteractiveStepInfo) {
 }
 
 // PromptAction prompts the user for an action and returns their choice.
-func (p *CLIPrompt) PromptAction(hasRetry bool) (workflow.InteractiveAction, error) {
+func (p *CLIPrompt) PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
 	for {
-		// Build prompt based on available options
+		if err := ctx.Err(); err != nil {
+			return workflow.ActionAbort, err
+		}
 		prompt := "[c]ontinue [s]kip [a]bort [i]nspect [e]dit"
 		if hasRetry {
 			prompt += " [r]etry"
@@ -83,13 +86,11 @@ func (p *CLIPrompt) PromptAction(hasRetry bool) (workflow.InteractiveAction, err
 		prompt += " > "
 		_, _ = fmt.Fprint(p.writer, prompt)
 
-		// Read input
-		line, err := p.reader.ReadString('\n')
+		line, err := readLineWithContext(ctx, p.reader)
 		if err != nil {
 			return workflow.ActionAbort, fmt.Errorf("read input: %w", err)
 		}
 
-		// Parse action
 		action, err := parseAction(line, hasRetry)
 		if err != nil {
 			_, _ = fmt.Fprintf(p.writer, "Error: %s\n", err.Error())
@@ -173,11 +174,14 @@ func (p *CLIPrompt) ShowContext(ctx *workflow.RuntimeContext) {
 }
 
 // EditInput prompts the user to edit an input value.
-func (p *CLIPrompt) EditInput(name string, current any) (any, error) {
+func (p *CLIPrompt) EditInput(ctx context.Context, name string, current any) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	_, _ = fmt.Fprintf(p.writer, "Edit input '%s' (current: %v)\n", name, current)
 	_, _ = fmt.Fprint(p.writer, "New value: ")
 
-	line, err := p.reader.ReadString('\n')
+	line, err := readLineWithContext(ctx, p.reader)
 	if err != nil {
 		return current, fmt.Errorf("read input: %w", err)
 	}

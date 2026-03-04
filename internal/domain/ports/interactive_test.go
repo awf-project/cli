@@ -1,6 +1,7 @@
 package ports_test
 
 import (
+	"context"
 	"errors"
 	"go/ast"
 	"go/parser"
@@ -14,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Component: T001
-// Feature: C049
+// Component: T002
+// Feature: B008
 
 // mockStepPresenter is a test implementation of StepPresenter interface
 type mockStepPresenter struct {
@@ -124,14 +125,22 @@ func newMockUserInteraction() *mockUserInteraction {
 	}
 }
 
-func (m *mockUserInteraction) PromptAction(hasRetry bool) (workflow.InteractiveAction, error) {
+func (m *mockUserInteraction) PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
+	if err := ctx.Err(); err != nil {
+		return workflow.ActionAbort, err
+	}
+
 	m.promptActionCalled = true
 	m.lastHasRetry = hasRetry
 	m.callCount++
 	return m.returnAction, m.returnActionError
 }
 
-func (m *mockUserInteraction) EditInput(name string, current any) (any, error) {
+func (m *mockUserInteraction) EditInput(ctx context.Context, name string, current any) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	m.editInputCalled = true
 	m.lastInputName = name
 	m.lastCurrentValue = current
@@ -490,7 +499,7 @@ func TestUserInteraction_PromptAction_HappyPath(t *testing.T) {
 			interaction := newMockUserInteraction()
 			interaction.returnAction = tt.returnAction
 
-			action, err := interaction.PromptAction(tt.hasRetry)
+			action, err := interaction.PromptAction(context.Background(), tt.hasRetry)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -526,7 +535,7 @@ func TestUserInteraction_EditInput_HappyPath(t *testing.T) {
 			interaction := newMockUserInteraction()
 			interaction.returnInputValue = tt.returnValue
 
-			newValue, err := interaction.EditInput(tt.inputName, tt.currentValue)
+			newValue, err := interaction.EditInput(context.Background(), tt.inputName, tt.currentValue)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -598,10 +607,10 @@ func TestUserInteraction_InteractiveLoopPattern(t *testing.T) {
 	// Test typical interactive loop: prompt → action → possibly edit → possibly inspect
 	interaction := newMockUserInteraction()
 
-	_, _ = interaction.PromptAction(true)
-	_, _ = interaction.EditInput("name", "old")
+	_, _ = interaction.PromptAction(context.Background(), true)
+	_, _ = interaction.EditInput(context.Background(), "name", "old")
 	interaction.ShowContext(&workflow.RuntimeContext{})
-	_, _ = interaction.PromptAction(false)
+	_, _ = interaction.PromptAction(context.Background(), false)
 
 	if interaction.callCount != 4 {
 		t.Errorf("expected 4 calls in interactive loop, got %d", interaction.callCount)
@@ -617,7 +626,7 @@ func TestInteractivePrompt_CompositeEmbedding_HappyPath(t *testing.T) {
 
 	prompt.ShowHeader("test-workflow")
 	prompt.ShowAborted()
-	_, _ = prompt.PromptAction(false)
+	_, _ = prompt.PromptAction(context.Background(), false)
 
 	if !prompt.showHeaderCalled {
 		t.Error("StepPresenter methods should be accessible")
@@ -644,8 +653,8 @@ func TestInteractivePrompt_AllMethodsAccessible(t *testing.T) {
 	prompt.ShowSkipped("step", "next")
 	prompt.ShowCompleted(workflow.StatusCompleted)
 	prompt.ShowError(nil)
-	_, _ = prompt.PromptAction(false)
-	_, _ = prompt.EditInput("name", "value")
+	_, _ = prompt.PromptAction(context.Background(), false)
+	_, _ = prompt.EditInput(context.Background(), "name", "value")
 	prompt.ShowContext(ctx)
 
 	if prompt.mockStepPresenter.callCount != 4 {
@@ -702,7 +711,7 @@ func TestUserInteraction_NilCurrentValue(t *testing.T) {
 	interaction := newMockUserInteraction()
 	interaction.returnInputValue = "new-value"
 
-	newValue, err := interaction.EditInput("name", nil)
+	newValue, err := interaction.EditInput(context.Background(), "name", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -719,7 +728,7 @@ func TestUserInteraction_LargeInputNames(t *testing.T) {
 	interaction := newMockUserInteraction()
 	longName := "this_is_a_very_long_input_name_that_might_appear_in_complex_workflows_with_detailed_configuration"
 
-	_, _ = interaction.EditInput(longName, "value")
+	_, _ = interaction.EditInput(context.Background(), longName, "value")
 
 	if interaction.lastInputName != longName {
 		t.Error("should handle long input names correctly")
@@ -757,7 +766,7 @@ func TestUserInteraction_PromptAction_Error(t *testing.T) {
 	expectedErr := errors.New("user cancelled")
 	interaction.returnActionError = expectedErr
 
-	action, err := interaction.PromptAction(false)
+	action, err := interaction.PromptAction(context.Background(), false)
 
 	if err == nil {
 		t.Error("expected error from PromptAction")
@@ -775,7 +784,7 @@ func TestUserInteraction_EditInput_Error(t *testing.T) {
 	expectedErr := errors.New("invalid input")
 	interaction.returnInputError = expectedErr
 
-	value, err := interaction.EditInput("name", "current")
+	value, err := interaction.EditInput(context.Background(), "name", "current")
 
 	if err == nil {
 		t.Error("expected error from EditInput")
@@ -793,7 +802,7 @@ func TestUserInteraction_PromptAction_InvalidAction(t *testing.T) {
 	interaction := newMockUserInteraction()
 	interaction.returnAction = workflow.InteractiveAction("invalid") // invalid action
 
-	action, err := interaction.PromptAction(false)
+	action, err := interaction.PromptAction(context.Background(), false)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -807,7 +816,7 @@ func TestUserInteraction_EditInput_TypeMismatch(t *testing.T) {
 	interaction := newMockUserInteraction()
 	interaction.returnInputValue = "string-value"
 
-	newValue, err := interaction.EditInput("count", 42) // current is int, return is string
+	newValue, err := interaction.EditInput(context.Background(), "count", 42) // current is int, return is string
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -854,8 +863,8 @@ func TestInterfaceSegregation_MethodCounts(t *testing.T) {
 				}
 			case "UserInteraction":
 				p := newMockUserInteraction()
-				_, _ = p.PromptAction(false)
-				_, _ = p.EditInput("", nil)
+				_, _ = p.PromptAction(context.Background(), false)
+				_, _ = p.EditInput(context.Background(), "", nil)
 				p.ShowContext(nil)
 				if p.callCount != 3 {
 					t.Errorf("UserInteraction should have ≤4 methods, mock implements %d", p.callCount)
@@ -892,9 +901,9 @@ func TestInterfaceSegregation_CompositePreservesBackwardCompatibility(t *testing
 	methodCount++
 
 	// UserInteraction methods (3)
-	_, _ = prompt.PromptAction(false)
+	_, _ = prompt.PromptAction(context.Background(), false)
 	methodCount++
-	_, _ = prompt.EditInput("", nil)
+	_, _ = prompt.EditInput(context.Background(), "", nil)
 	methodCount++
 	prompt.ShowContext(nil)
 	methodCount++
@@ -912,7 +921,7 @@ func TestInterfaceSegregation_FocusedInterfacesIndependent(t *testing.T) {
 
 	stepPresenter.ShowHeader("test")
 	statusPresenter.ShowAborted()
-	_, _ = userInteraction.PromptAction(false)
+	_, _ = userInteraction.PromptAction(context.Background(), false)
 
 	if !stepPresenter.showHeaderCalled {
 		t.Error("StepPresenter should work independently")
@@ -922,6 +931,44 @@ func TestInterfaceSegregation_FocusedInterfacesIndependent(t *testing.T) {
 	}
 	if !userInteraction.promptActionCalled {
 		t.Error("UserInteraction should work independently")
+	}
+}
+
+// TestUserInteraction_PromptAction_CanceledContext verifies that a pre-cancelled context
+// causes PromptAction to return context.Canceled (B008 acceptance criterion).
+func TestUserInteraction_PromptAction_CanceledContext(t *testing.T) {
+	// B008: US2 - Ctrl+C during PromptAction must return context.Canceled
+	interaction := newMockUserInteraction()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel to simulate Ctrl+C
+
+	_, err := interaction.PromptAction(ctx, false)
+	if err == nil {
+		t.Fatal("expected error when context is cancelled, got nil")
+	}
+	// Real implementation must wrap context.Canceled; mock returns nil → test fails RED ✓
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+// TestUserInteraction_EditInput_CanceledContext verifies that a pre-cancelled context
+// causes EditInput to return context.Canceled (B008 acceptance criterion).
+func TestUserInteraction_EditInput_CanceledContext(t *testing.T) {
+	// B008: US2 - Ctrl+C during EditInput must return context.Canceled
+	interaction := newMockUserInteraction()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel to simulate Ctrl+C
+
+	_, err := interaction.EditInput(ctx, "name", "current")
+	if err == nil {
+		t.Fatal("expected error when context is cancelled, got nil")
+	}
+	// Real implementation must wrap context.Canceled; mock returns nil → test fails RED ✓
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
 

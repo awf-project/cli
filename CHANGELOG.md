@@ -101,6 +101,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
   - Temp files use `0o700` permissions and are cleaned up on success, failure, and cancellation
   - Inline `command` field behavior is unchanged
+- **B008**: Ctrl+C no longer hangs during interactive input prompts
+  - `PromptForInput()` and `PromptAction()` now use context-aware readline that respects cancellation
+  - Pressing Ctrl+C during any input prompt terminates the process immediately instead of hanging indefinitely
+  - No goroutine leaks: blocked reads are cleaned up at process exit
+  - EOF handling (Ctrl+D) continues to work as before
 - **B007**: Interactive and dry-run modes now respect `.awf/config.yaml` input defaults
   - `runInteractive()` and `runDryRun()` now load project config and merge inputs (same pattern as `runWorkflow()`)
   - Config values are pre-filled, reducing re-prompting for already-configured inputs

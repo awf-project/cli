@@ -2,6 +2,8 @@ package ui
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -54,15 +56,17 @@ func NewCLIInputCollector(reader io.Reader, writer io.Writer, colorizer *Coloriz
 //   - Detect EOF (Ctrl+D) and return cancellation error
 //
 //nolint:gocognit // Complexity 36: input prompt handles all input types (string, int, bool, choice, file) with validation. Type-specific prompting requires this.
-func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
+func (c *CLIInputCollector) PromptForInput(ctx context.Context, input *workflow.Input) (any, error) {
 	for {
-		// Display prompt
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		c.displayPrompt(input)
 
-		// Read line from stdin
-		line, err := c.reader.ReadString('\n')
+		line, err := readLineWithContext(ctx, c.reader)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil, fmt.Errorf("input cancelled")
 			}
 			return nil, fmt.Errorf("reading input: %w", err)
@@ -70,13 +74,11 @@ func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 
 		value := strings.TrimSpace(line)
 
-		// Handle empty input
 		if value == "" {
 			if input.Required {
 				c.displayError("Error: this field is required")
 				continue
 			}
-			// Optional input
 			if input.Default != nil {
 				return input.Default, nil
 			}
@@ -100,7 +102,6 @@ func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 			}
 		}
 
-		// Type coercion
 		typed, coerceErr := c.coerceType(value, input.Type)
 		if coerceErr != nil {
 			c.displayError(fmt.Sprintf("Error: %v", coerceErr))
@@ -121,27 +122,22 @@ func (c *CLIInputCollector) PromptForInput(input *workflow.Input) (any, error) {
 
 // displayPrompt shows the input prompt with metadata.
 func (c *CLIInputCollector) displayPrompt(input *workflow.Input) {
-	// Name and type
 	fmt.Fprintf(c.writer, "%s (%s)", input.Name, input.Type)
 
-	// Required/optional indicator
 	if input.Required {
 		fmt.Fprintf(c.writer, " [required]")
 	} else {
 		fmt.Fprintf(c.writer, " [optional]")
 	}
 
-	// Description
 	if input.Description != "" {
 		fmt.Fprintf(c.writer, "\n  %s", input.Description)
 	}
 
-	// Default value
 	if input.Default != nil {
 		fmt.Fprintf(c.writer, " (default: %v)", input.Default)
 	}
 
-	// Enum options
 	if input.Validation != nil && len(input.Validation.Enum) > 0 {
 		if len(input.Validation.Enum) <= 9 {
 			// Numbered list for small enums

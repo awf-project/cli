@@ -334,7 +334,7 @@ func (e *InteractiveExecutor) handleInteractivePrompt(
 	hasRetry bool,
 ) (workflow.InteractiveAction, error) {
 	for {
-		action, err := e.prompt.PromptAction(hasRetry)
+		action, err := e.prompt.PromptAction(ctx, hasRetry)
 		if err != nil {
 			return workflow.ActionAbort, err
 		}
@@ -345,7 +345,7 @@ func (e *InteractiveExecutor) handleInteractivePrompt(
 			continue
 
 		case workflow.ActionEdit:
-			if err := e.handleEditInput(execCtx, interpCtx); err != nil {
+			if err := e.handleEditInput(ctx, execCtx, interpCtx); err != nil {
 				e.prompt.ShowError(err)
 			}
 			continue
@@ -358,6 +358,7 @@ func (e *InteractiveExecutor) handleInteractivePrompt(
 
 // handleEditInput prompts for input name and edits it.
 func (e *InteractiveExecutor) handleEditInput(
+	ctx context.Context,
 	execCtx *workflow.ExecutionContext,
 	interpCtx *interpolation.Context,
 ) error {
@@ -368,7 +369,7 @@ func (e *InteractiveExecutor) handleEditInput(
 
 	// Get the first input key (in real implementation, would prompt for which input)
 	for name, current := range execCtx.Inputs {
-		newValue, err := e.prompt.EditInput(name, current)
+		newValue, err := e.prompt.EditInput(ctx, name, current)
 		if err != nil {
 			return fmt.Errorf("edit input %s: %w", name, err)
 		}

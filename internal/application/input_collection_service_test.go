@@ -1,6 +1,7 @@
 package application_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -32,7 +33,10 @@ func newMockInputCollector() *mockInputCollector {
 	}
 }
 
-func (m *mockInputCollector) PromptForInput(input *workflow.Input) (any, error) {
+func (m *mockInputCollector) PromptForInput(ctx context.Context, input *workflow.Input) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	m.callCount++
 	m.callHistory = append(m.callHistory, input.Name)
 
@@ -126,7 +130,7 @@ func TestInputCollectionService_CollectMissingInputs_AllInputsProvided(t *testin
 		"count": 42,
 	}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, collector.callCount, "should not prompt when all inputs provided")
@@ -154,7 +158,7 @@ func TestInputCollectionService_CollectMissingInputs_OnlyRequiredMissing(t *test
 		"optional": "provided-optional",
 	}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, collector.callCount, "should prompt for missing required input")
@@ -185,7 +189,7 @@ func TestInputCollectionService_CollectMissingInputs_AllRequiredMissing(t *testi
 
 	providedInputs := map[string]any{}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, 3, collector.callCount, "should prompt for all 3 missing inputs")
@@ -215,7 +219,7 @@ func TestInputCollectionService_CollectMissingInputs_OptionalWithDefault(t *test
 
 	providedInputs := map[string]any{}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, "test", result["required"])
@@ -249,7 +253,7 @@ func TestInputCollectionService_CollectMissingInputs_OptionalWithoutDefault(t *t
 
 	providedInputs := map[string]any{}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", result["required"])
@@ -283,7 +287,7 @@ func TestInputCollectionService_CollectMissingInputs_MixedRequiredAndOptional(t 
 		"count": 100,
 	}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.True(t, collector.wasPromptedFor("name"), "should prompt for missing required")
@@ -317,7 +321,7 @@ func TestInputCollectionService_CollectMissingInputs_EnumInput(t *testing.T) {
 
 	providedInputs := map[string]any{}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, "staging", result["environment"])
@@ -331,7 +335,7 @@ func TestInputCollectionService_CollectMissingInputs_NilWorkflow(t *testing.T) {
 	logger := &mockLogger{}
 	svc := application.NewInputCollectionService(collector, logger)
 
-	result, err := svc.CollectMissingInputs(nil, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), nil, map[string]any{})
 
 	// Either returns error or empty map - both are acceptable
 	if err == nil {
@@ -355,7 +359,7 @@ func TestInputCollectionService_CollectMissingInputs_NoInputsDefined(t *testing.
 		"extra": "value",
 	}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, collector.callCount, "should not prompt when no inputs defined")
@@ -375,7 +379,7 @@ func TestInputCollectionService_CollectMissingInputs_NilProvidedInputs(t *testin
 		{Name: "name", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, nil)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, nil)
 
 	require.NoError(t, err)
 	assert.True(t, collector.wasPromptedFor("name"), "should prompt for required input")
@@ -397,7 +401,7 @@ func TestInputCollectionService_CollectMissingInputs_EmptyProvidedInputs(t *test
 		{Name: "field2", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, collector.callCount, "should collect both inputs")
@@ -418,7 +422,7 @@ func TestInputCollectionService_CollectMissingInputs_OnlyOptionalInputs(t *testi
 		{Name: "opt2", Type: "integer", Required: false, Default: 42},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	// May or may not prompt for optional inputs - implementation dependent
@@ -448,7 +452,7 @@ func TestInputCollectionService_CollectMissingInputs_LargeNumberOfInputs(t *test
 
 	wf := newWorkflowWithInputs(inputs)
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 10, collector.callCount, "should prompt for all 10 inputs")
@@ -470,7 +474,7 @@ func TestInputCollectionService_CollectMissingInputs_CollectorError(t *testing.T
 		{Name: "name", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 	// Stub returns nil error, but real implementation should propagate collector error
 	// For now, just verify the call was made (stub behavior)
 	if err != nil {
@@ -495,7 +499,7 @@ func TestInputCollectionService_CollectMissingInputs_CollectorErrorOnSecondInput
 		{Name: "second", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 	// Stub returns nil error, but real implementation should propagate error
 	if err != nil {
 		assert.Contains(t, err.Error(), "failed", "error should mention failure")
@@ -517,7 +521,7 @@ func TestInputCollectionService_CollectMissingInputs_CollectorReturnsNil(t *test
 		{Name: "name", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	// Implementation may accept nil or return error
 	// Both behaviors are acceptable for required input
@@ -542,7 +546,7 @@ func TestInputCollectionService_CollectMissingInputs_StringType(t *testing.T) {
 		{Name: "message", Type: "string", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, "hello world", result["message"])
@@ -560,7 +564,7 @@ func TestInputCollectionService_CollectMissingInputs_IntegerType(t *testing.T) {
 		{Name: "count", Type: "integer", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 123, result["count"])
@@ -578,7 +582,7 @@ func TestInputCollectionService_CollectMissingInputs_BooleanType(t *testing.T) {
 		{Name: "enabled", Type: "boolean", Required: true},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.True(t, result["enabled"].(bool))
@@ -606,7 +610,7 @@ func TestInputCollectionService_CollectMissingInputs_WithPatternValidation(t *te
 		},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, "ABC123", result["code"])
@@ -634,7 +638,7 @@ func TestInputCollectionService_CollectMissingInputs_WithMinMaxValidation(t *tes
 		},
 	})
 
-	result, err := svc.CollectMissingInputs(wf, map[string]any{})
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 8080, result["port"])
@@ -660,7 +664,7 @@ func TestInputCollectionService_CollectMissingInputs_PreservesProvidedInputs(t *
 		"provided": "original-value",
 	}
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Equal(t, "original-value", result["provided"], "should preserve provided value")
@@ -689,7 +693,7 @@ func TestInputCollectionService_CollectMissingInputs_DoesNotModifyOriginalMap(t 
 
 	originalLen := len(providedInputs)
 
-	result, err := svc.CollectMissingInputs(wf, providedInputs)
+	result, err := svc.CollectMissingInputs(context.Background(), wf, providedInputs)
 
 	require.NoError(t, err)
 	assert.Len(t, providedInputs, originalLen, "original map should not be modified")
@@ -698,4 +702,184 @@ func TestInputCollectionService_CollectMissingInputs_DoesNotModifyOriginalMap(t 
 
 func ptrInt(i int) *int {
 	return &i
+}
+
+// Component: T004
+// Feature: B008 — Thread ctx through InputCollectionService.CollectMissingInputs
+//
+// These tests verify context cancellation propagates through the service.
+// RED phase analysis:
+//
+//   - TestCollectMissingInputs_ContextCancelled (RED): the service does not
+//     guard with ctx.Err() before the iteration loop; it relies entirely on the
+//     collector to propagate cancellation. The existing mockInputCollector ignores
+//     ctx (`_ context.Context`, line 36), so PromptForInput returns a value even
+//     when ctx is pre-cancelled → service returns (map, nil) → require.Error FAILS.
+//
+//   - TestCollectMissingInputs_ContextCancelledDuringCollection (RED): same root
+//     cause — the second call receives a cancelled ctx but the existing mock
+//     ignores it and returns a value → service accumulates both results → returns
+//     no error → require.Error FAILS.
+//
+// GREEN path: Add `if err := ctx.Err(); err != nil { return nil, err }` at the
+// top of mockInputCollector.PromptForInput (and change `_ context.Context` to
+// `ctx context.Context`). The service already passes ctx through; once the mock
+// respects it, both tests pass.
+
+// TestCollectMissingInputs_ContextCancelled verifies that a pre-cancelled context
+// causes CollectMissingInputs to return an error wrapping context.Canceled.
+//
+// RED: existing mock ignores ctx → returns a value → service returns (map, nil)
+// → require.Error fails.
+func TestCollectMissingInputs_ContextCancelled(t *testing.T) {
+	// B008: Ctrl+C before the first prompt must abort collection immediately.
+	collector := newMockInputCollector()
+	collector.setResponse("name", "should-not-be-collected")
+	logger := &mockLogger{}
+	svc := application.NewInputCollectionService(collector, logger)
+
+	wf := newWorkflowWithInputs([]workflow.Input{
+		{Name: "name", Type: "string", Required: true},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel to simulate Ctrl+C arriving before collection
+
+	result, err := svc.CollectMissingInputs(ctx, wf, map[string]any{})
+
+	require.Error(t, err, "pre-cancelled context must produce an error")
+	assert.ErrorIs(t, err, context.Canceled, "error must wrap context.Canceled")
+	assert.Nil(t, result, "result must be nil on cancellation")
+}
+
+// TestCollectMissingInputs_ContextCancelledDuringCollection verifies that
+// cancellation arriving between two prompts aborts collection and returns
+// context.Canceled.
+//
+// RED: existing mock ignores ctx → second call returns a value → service
+// accumulates both results → returns (map, nil) → require.Error fails.
+func TestCollectMissingInputs_ContextCancelledDuringCollection(t *testing.T) {
+	// B008: Ctrl+C between the first and second prompt must abort cleanly.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// midCollectionCollector cancels the context on the second call and then
+	// returns context.Canceled — simulating Ctrl+C arriving mid-collection.
+	inner := newMockInputCollector()
+	inner.setResponse("first", "first-value")
+	collector := &midCollectionCancelCollector{
+		inner:      inner,
+		cancelFunc: cancel,
+		cancelOnN:  2,
+	}
+
+	logger := &mockLogger{}
+	svc := application.NewInputCollectionService(collector, logger)
+
+	wf := newWorkflowWithInputs([]workflow.Input{
+		{Name: "first", Type: "string", Required: true},
+		{Name: "second", Type: "string", Required: true},
+	})
+
+	result, err := svc.CollectMissingInputs(ctx, wf, map[string]any{})
+
+	require.Error(t, err, "cancellation during collection must produce an error")
+	assert.ErrorIs(t, err, context.Canceled, "error must wrap context.Canceled")
+	assert.Nil(t, result, "result must be nil when collection is aborted mid-way")
+}
+
+// midCollectionCancelCollector cancels its context on call N and returns
+// context.Canceled, simulating Ctrl+C arriving between prompts.
+type midCollectionCancelCollector struct {
+	inner      *mockInputCollector
+	cancelFunc context.CancelFunc
+	cancelOnN  int
+	callNum    int
+}
+
+func (c *midCollectionCancelCollector) PromptForInput(ctx context.Context, input *workflow.Input) (any, error) {
+	c.callNum++
+	if c.callNum >= c.cancelOnN {
+		c.cancelFunc()
+		return nil, context.Canceled
+	}
+	return c.inner.PromptForInput(ctx, input)
+}
+
+// TestCollectMissingInputs_HappyPath_CtxValid verifies that a valid context
+// allows normal collection to complete without error.
+//
+// Must PASS in both RED and GREEN phases — regression guard.
+func TestCollectMissingInputs_HappyPath_CtxValid(t *testing.T) {
+	// B008: ctx threading must not break the non-cancelled flow.
+	collector := newMockInputCollector()
+	collector.setResponse("username", "alice")
+	collector.setResponse("region", "us-east-1")
+	logger := &mockLogger{}
+	svc := application.NewInputCollectionService(collector, logger)
+
+	wf := newWorkflowWithInputs([]workflow.Input{
+		{Name: "username", Type: "string", Required: true},
+		{Name: "region", Type: "string", Required: true},
+	})
+
+	result, err := svc.CollectMissingInputs(context.Background(), wf, map[string]any{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "alice", result["username"])
+	assert.Equal(t, "us-east-1", result["region"])
+}
+
+// TestCollectMissingInputs_CollectsInputs_CtxPropagated verifies that the
+// service forwards the original ctx to each PromptForInput call — not a fresh
+// context.Background() — so parent cancellation reaches the collector.
+//
+// This test PASSES in RED (implementation already wires ctx through).
+// It is a stability check ensuring no regression strips the ctx forwarding.
+func TestCollectMissingInputs_CollectsInputs_CtxPropagated(t *testing.T) {
+	// B008: service must pass the caller's ctx, not a detached background ctx.
+	recording := &recordingCollector{
+		responses: map[string]any{
+			"a": "val-a",
+			"b": "val-b",
+		},
+	}
+	logger := &mockLogger{}
+	svc := application.NewInputCollectionService(recording, logger)
+
+	wf := newWorkflowWithInputs([]workflow.Input{
+		{Name: "a", Type: "string", Required: true},
+		{Name: "b", Type: "string", Required: true},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result, err := svc.CollectMissingInputs(ctx, wf, map[string]any{})
+
+	require.NoError(t, err)
+	require.Len(t, recording.receivedCtxs, 2, "ctx must be forwarded to every PromptForInput call")
+
+	// Verify the forwarded contexts are children of (or equal to) the caller's ctx:
+	// cancelling the parent must cancel all forwarded contexts too.
+	cancel()
+	for i, received := range recording.receivedCtxs {
+		assert.ErrorIs(t, received.Err(), context.Canceled,
+			"forwarded ctx at call %d must be cancelled when parent is cancelled", i)
+	}
+	assert.Equal(t, "val-a", result["a"])
+	assert.Equal(t, "val-b", result["b"])
+}
+
+// recordingCollector captures each context.Context it receives.
+type recordingCollector struct {
+	responses    map[string]any
+	receivedCtxs []context.Context
+}
+
+func (r *recordingCollector) PromptForInput(ctx context.Context, input *workflow.Input) (any, error) {
+	r.receivedCtxs = append(r.receivedCtxs, ctx)
+	if val, ok := r.responses[input.Name]; ok {
+		return val, nil
+	}
+	return "", nil
 }

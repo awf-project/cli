@@ -2,10 +2,12 @@ package ui_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -30,7 +32,7 @@ func TestCLIInputCollector_PromptForInput_RequiredString(t *testing.T) {
 		Required:    true,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", value, "should return the provided string value")
@@ -55,7 +57,7 @@ func TestCLIInputCollector_PromptForInput_RequiredInteger(t *testing.T) {
 		Required:    true,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, 42, value, "should coerce string '42' to integer 42")
@@ -90,7 +92,7 @@ func TestCLIInputCollector_PromptForInput_RequiredBoolean(t *testing.T) {
 				Required: true,
 			}
 
-			value, err := collector.PromptForInput(input)
+			value, err := collector.PromptForInput(context.Background(), input)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, value, "should coerce string to boolean")
@@ -118,7 +120,7 @@ func TestCLIInputCollector_PromptForInput_EnumSmall(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "staging", value, "should return 'staging' for selection 2")
@@ -149,7 +151,7 @@ func TestCLIInputCollector_PromptForInput_EnumLarge(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "option5", value, "should validate freetext against enum")
@@ -175,7 +177,7 @@ func TestCLIInputCollector_PromptForInput_EnumInvalidThenValid(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "staging", value, "should accept valid selection after error")
@@ -201,7 +203,7 @@ func TestCLIInputCollector_PromptForInput_OptionalWithDefault(t *testing.T) {
 		Default:     30,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, 30, value, "should return default value when input is empty")
@@ -225,7 +227,7 @@ func TestCLIInputCollector_PromptForInput_OptionalWithoutDefault(t *testing.T) {
 		Required:    false,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Nil(t, value, "should return nil when optional input is empty and no default")
@@ -248,7 +250,7 @@ func TestCLIInputCollector_PromptForInput_RequiredEmptyThenValid(t *testing.T) {
 		Required: true,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "valid-value", value, "should accept valid value after error")
@@ -275,7 +277,7 @@ func TestCLIInputCollector_PromptForInput_ValidationPattern(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "ABCDEF", value, "should accept value matching pattern")
@@ -306,7 +308,7 @@ func TestCLIInputCollector_PromptForInput_ValidationMinMax(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, 50, value, "should accept value within range")
@@ -332,7 +334,7 @@ func TestCLIInputCollector_PromptForInput_EOF(t *testing.T) {
 		Required: true,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.Error(t, err)
 	assert.Nil(t, value, "should return nil value on EOF")
@@ -369,7 +371,7 @@ func TestCLIInputCollector_PromptForInput_TypeCoercionInteger(t *testing.T) {
 				Required: true,
 			}
 
-			value, err := collector.PromptForInput(input)
+			value, err := collector.PromptForInput(context.Background(), input)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -407,7 +409,7 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExists(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, tmpFile, value, "should accept existing file")
@@ -434,7 +436,7 @@ func TestCLIInputCollector_PromptForInput_ValidationFileExtension(t *testing.T) 
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "config.yaml", value, "should accept file with valid extension")
@@ -459,7 +461,7 @@ func TestCLIInputCollector_PromptForInput_DisplayFormatting(t *testing.T) {
 		Required:    true,
 	}
 
-	_, err := collector.PromptForInput(input)
+	_, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	output := stdout.String()
@@ -489,7 +491,7 @@ func TestCLIInputCollector_NewCLIInputCollector(t *testing.T) {
 	}
 	stdin = strings.NewReader("\n")
 	collector = ui.NewCLIInputCollector(stdin, stdout, colorizer)
-	_, err := collector.PromptForInput(input)
+	_, err := collector.PromptForInput(context.Background(), input)
 	assert.NoError(t, err, "should implement InputCollector interface")
 }
 
@@ -509,7 +511,7 @@ func TestCLIInputCollector_PromptForInput_EOFWithoutNewline(t *testing.T) {
 		Required: true,
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.Error(t, err)
 	assert.Nil(t, value, "should return nil on EOF")
@@ -544,7 +546,7 @@ func TestCLIInputCollector_PromptForInput_EnumEdgeCaseExactly9Options(t *testing
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "opt9", value, "should return last option for selection 9")
@@ -570,9 +572,95 @@ func TestCLIInputCollector_PromptForInput_EnumEdgeCase10Options(t *testing.T) {
 		},
 	}
 
-	value, err := collector.PromptForInput(input)
+	value, err := collector.PromptForInput(context.Background(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "opt5", value, "should validate freetext against enum")
 	assert.NotContains(t, stdout.String(), "5. opt5", "should NOT display numbered list for 10+ options")
+}
+
+// TestCLIInputCollector_PromptForInput_HappyPathContextActive verifies that PromptForInput returns
+// user input correctly when the context is active (not cancelled).
+// Component: T003
+// Bug: B008
+func TestCLIInputCollector_PromptForInput_HappyPathContextActive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stdin := strings.NewReader("my-value\n")
+	stdout := new(bytes.Buffer)
+	colorizer := ui.NewColorizer(false)
+	collector := ui.NewCLIInputCollector(stdin, stdout, colorizer)
+
+	input := &workflow.Input{
+		Name:     "project_name",
+		Type:     "string",
+		Required: true,
+	}
+
+	value, err := collector.PromptForInput(ctx, input)
+
+	require.NoError(t, err, "active context must not produce an error")
+	assert.Equal(t, "my-value", value, "should return the typed value when context is active")
+}
+
+// TestCLIInputCollector_PromptForInput_PreCancelledContextReturnsError verifies that PromptForInput
+// returns a context.Canceled error immediately when the context is already cancelled before the call.
+// Component: T003
+// Bug: B008
+func TestCLIInputCollector_PromptForInput_PreCancelledContextReturnsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before calling PromptForInput
+
+	// Use a blocking pipe so the test does not succeed by reading a value.
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	defer pr.Close()
+
+	stdout := new(bytes.Buffer)
+	colorizer := ui.NewColorizer(false)
+	collector := ui.NewCLIInputCollector(pr, stdout, colorizer)
+
+	input := &workflow.Input{
+		Name:     "project_name",
+		Type:     "string",
+		Required: true,
+	}
+
+	value, err := collector.PromptForInput(ctx, input)
+
+	require.Error(t, err, "pre-cancelled context must produce an error")
+	assert.Nil(t, value, "cancelled context must return nil value")
+	assert.ErrorIs(t, err, context.Canceled, "error must wrap context.Canceled for callers to detect via errors.Is")
+}
+
+// TestCLIInputCollector_PromptForInput_MidReadCancelReturnsError verifies that PromptForInput
+// returns a context.DeadlineExceeded error when the context is cancelled while waiting for input.
+// Component: T003
+// Bug: B008
+func TestCLIInputCollector_PromptForInput_MidReadCancelReturnsError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	// Use a blocking pipe that never produces data, forcing the read to block
+	// until the context deadline fires.
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	defer pr.Close()
+
+	stdout := new(bytes.Buffer)
+	colorizer := ui.NewColorizer(false)
+	collector := ui.NewCLIInputCollector(pr, stdout, colorizer)
+
+	input := &workflow.Input{
+		Name:     "project_name",
+		Type:     "string",
+		Required: true,
+	}
+
+	value, err := collector.PromptForInput(ctx, input)
+
+	require.Error(t, err, "timed-out context must produce an error")
+	assert.Nil(t, value, "cancelled context must return nil value")
+	assert.ErrorIs(t, err, context.DeadlineExceeded, "error must wrap context.DeadlineExceeded for callers to detect via errors.Is")
 }

@@ -1,6 +1,10 @@
 package ports
 
-import "github.com/awf-project/cli/internal/domain/workflow"
+import (
+	"context"
+
+	"github.com/awf-project/cli/internal/domain/workflow"
+)
 
 // StepPresenter defines the contract for displaying step lifecycle information.
 // Implementations handle rendering of step execution progress and outcomes.
@@ -39,11 +43,11 @@ type StatusPresenter interface {
 type UserInteraction interface {
 	// PromptAction prompts the user for an action and returns their choice.
 	// hasRetry indicates whether the [r]etry option should be available.
-	PromptAction(hasRetry bool) (workflow.InteractiveAction, error)
+	PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error)
 
 	// EditInput prompts the user to edit an input value.
 	// Returns the new value and any error from parsing.
-	EditInput(name string, current any) (any, error)
+	EditInput(ctx context.Context, name string, current any) (any, error)
 
 	// ShowContext displays the current runtime context (inputs, states).
 	ShowContext(ctx *workflow.RuntimeContext)
