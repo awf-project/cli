@@ -225,7 +225,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Collect missing inputs interactively if needed (F046)
-	inputs, err = collectMissingInputsIfNeeded(cmd, wf, inputs, cfg, logger)
+	inputs, err = collectMissingInputsIfNeeded(ctx, cmd, wf, inputs, cfg, logger)
 	if err != nil {
 		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
@@ -1081,6 +1081,7 @@ func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
 //   - Updated inputs map with collected values
 //   - Error if stdin is not a terminal and inputs are missing
 func collectMissingInputsIfNeeded(
+	ctx context.Context,
 	cmd *cobra.Command,
 	wf *workflow.Workflow,
 	inputs map[string]any,
@@ -1121,7 +1122,7 @@ func collectMissingInputsIfNeeded(
 	service := application.NewInputCollectionService(collector, logger)
 
 	// Collect missing inputs
-	return service.CollectMissingInputs(wf, inputs)
+	return service.CollectMissingInputs(ctx, wf, inputs)
 }
 
 // isTerminal checks if the given reader is connected to a terminal.

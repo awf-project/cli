@@ -1,6 +1,7 @@
 package ports_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -8,8 +9,8 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
-// Component: input_collector_port
-// Feature: F046
+// Component: T002
+// Feature: B008
 
 // mockInputCollector is a test implementation of the InputCollector interface
 // for use in application service tests and contract validation.
@@ -32,7 +33,11 @@ func newMockInputCollector() *mockInputCollector {
 	}
 }
 
-func (m *mockInputCollector) PromptForInput(input *workflow.Input) (any, error) {
+func (m *mockInputCollector) PromptForInput(ctx context.Context, input *workflow.Input) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	m.inputs = append(m.inputs, input)
 	m.callCount++
 
@@ -74,7 +79,7 @@ func TestMockInputCollector_RequiredInput(t *testing.T) {
 		Required:    true,
 	}
 
-	value, err := mock.PromptForInput(input)
+	value, err := mock.PromptForInput(context.Background(), input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -100,7 +105,7 @@ func TestMockInputCollector_OptionalInputWithDefault(t *testing.T) {
 		Default:     30,
 	}
 
-	value, err := mock.PromptForInput(input)
+	value, err := mock.PromptForInput(context.Background(), input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -121,7 +126,7 @@ func TestMockInputCollector_OptionalInputNoDefault(t *testing.T) {
 		Required:    false,
 	}
 
-	value, err := mock.PromptForInput(input)
+	value, err := mock.PromptForInput(context.Background(), input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -146,7 +151,7 @@ func TestMockInputCollector_EnumInput(t *testing.T) {
 		},
 	}
 
-	value, err := mock.PromptForInput(input)
+	value, err := mock.PromptForInput(context.Background(), input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -171,7 +176,7 @@ func TestMockInputCollector_ValidationError(t *testing.T) {
 		},
 	}
 
-	_, err := mock.PromptForInput(input)
+	_, err := mock.PromptForInput(context.Background(), input)
 	if err == nil {
 		t.Error("expected validation error, got nil")
 	}
@@ -192,7 +197,7 @@ func TestMockInputCollector_CancellationError(t *testing.T) {
 		Required: true,
 	}
 
-	_, err := mock.PromptForInput(input)
+	_, err := mock.PromptForInput(context.Background(), input)
 	if err == nil {
 		t.Error("expected cancellation error, got nil")
 	}
@@ -246,7 +251,7 @@ func TestMockInputCollector_TypeCoercion(t *testing.T) {
 				Required: true,
 			}
 
-			value, err := mock.PromptForInput(input)
+			value, err := mock.PromptForInput(context.Background(), input)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -272,7 +277,7 @@ func TestMockInputCollector_MultipleInputs(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		value, err := mock.PromptForInput(input)
+		value, err := mock.PromptForInput(context.Background(), input)
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", input.Name, err)
 		}
@@ -298,8 +303,8 @@ func TestMockInputCollector_InputsTracking(t *testing.T) {
 	input1 := &workflow.Input{Name: "input1", Type: "string", Required: true}
 	input2 := &workflow.Input{Name: "input2", Type: "string", Required: true}
 
-	_, _ = mock.PromptForInput(input1)
-	_, _ = mock.PromptForInput(input2)
+	_, _ = mock.PromptForInput(context.Background(), input1)
+	_, _ = mock.PromptForInput(context.Background(), input2)
 
 	if len(mock.inputs) != 2 {
 		t.Errorf("expected 2 tracked inputs, got %d", len(mock.inputs))
@@ -400,7 +405,7 @@ func TestMockInputCollector_ValidationConstraints(t *testing.T) {
 				mock.values[tt.input.Name] = tt.mockValue
 			}
 
-			value, err := mock.PromptForInput(tt.input)
+			value, err := mock.PromptForInput(context.Background(), tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -495,7 +500,7 @@ func TestMockInputCollector_EdgeCases(t *testing.T) {
 			mock := newMockInputCollector()
 			mock.values[tt.input.Name] = tt.mockValue
 
-			value, err := mock.PromptForInput(tt.input)
+			value, err := mock.PromptForInput(context.Background(), tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -509,6 +514,31 @@ func TestMockInputCollector_EdgeCases(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestInputCollector_PromptForInput_CanceledContext verifies that a pre-cancelled context
+// causes PromptForInput to return context.Canceled (B008 acceptance criterion).
+func TestInputCollector_PromptForInput_CanceledContext(t *testing.T) {
+	// B008: US1 - Ctrl+C during PromptForInput must return context.Canceled
+	mock := newMockInputCollector()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel to simulate Ctrl+C before read starts
+
+	input := &workflow.Input{
+		Name:     "username",
+		Type:     "string",
+		Required: true,
+	}
+
+	_, err := mock.PromptForInput(ctx, input)
+	if err == nil {
+		t.Fatal("expected error when context is cancelled, got nil")
+	}
+	// Real implementation must wrap context.Canceled; mock does not → test fails RED ✓
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
 

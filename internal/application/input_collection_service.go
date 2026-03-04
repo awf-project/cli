@@ -1,6 +1,8 @@
 package application
 
 import (
+	"context"
+
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
@@ -47,6 +49,7 @@ func NewInputCollectionService(
 //   - Returns merged map containing both provided and collected inputs
 //
 // Parameters:
+//   - ctx: Context for cancellation (e.g., Ctrl+C via signal)
 //   - wf: Workflow definition containing input specifications
 //   - providedInputs: Input values already provided via command-line flags
 //
@@ -54,10 +57,10 @@ func NewInputCollectionService(
 //   - Complete input map (provided + collected)
 //   - Error if collection fails or user cancels
 func (s *InputCollectionService) CollectMissingInputs(
+	ctx context.Context,
 	wf *workflow.Workflow,
 	providedInputs map[string]any,
 ) (map[string]any, error) {
-	// Handle nil workflow
 	if wf == nil {
 		return make(map[string]any), nil
 	}
@@ -71,22 +74,19 @@ func (s *InputCollectionService) CollectMissingInputs(
 		result[k] = v
 	}
 
-	// Iterate workflow inputs
 	for i := range wf.Inputs {
 		input := &wf.Inputs[i]
 
-		// Skip if already provided
 		if _, exists := result[input.Name]; exists {
 			continue
 		}
 
 		// Prompt for missing input (both required and optional)
-		value, err := s.collector.PromptForInput(input)
+		value, err := s.collector.PromptForInput(ctx, input)
 		if err != nil {
 			return nil, err
 		}
 
-		// Add collected value to result
 		result[input.Name] = value
 	}
 

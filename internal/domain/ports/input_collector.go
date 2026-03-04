@@ -1,6 +1,10 @@
 package ports
 
-import "github.com/awf-project/cli/internal/domain/workflow"
+import (
+	"context"
+
+	"github.com/awf-project/cli/internal/domain/workflow"
+)
 
 // InputCollector defines the contract for collecting missing workflow inputs interactively.
 // This port is used for pre-execution input collection when required inputs are missing
@@ -54,5 +58,5 @@ type InputCollector interface {
 	//   - Check stdin is terminal before calling (fail if non-interactive)
 	//   - Handle io.EOF as cancellation, not panic
 	//   - Display validation errors with constraint details
-	PromptForInput(input *workflow.Input) (any, error)
+	PromptForInput(ctx context.Context, input *workflow.Input) (any, error)
 }

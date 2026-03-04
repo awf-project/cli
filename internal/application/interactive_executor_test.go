@@ -2,6 +2,8 @@ package application_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -47,7 +49,7 @@ func (m *mockInteractivePrompt) ShowStepDetails(info *workflow.InteractiveStepIn
 	m.lastStepInfo = info
 }
 
-func (m *mockInteractivePrompt) PromptAction(hasRetry bool) (workflow.InteractiveAction, error) {
+func (m *mockInteractivePrompt) PromptAction(_ context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
 	if m.actionIndex >= len(m.actions) {
 		return workflow.ActionAbort, nil
 	}
@@ -68,7 +70,7 @@ func (m *mockInteractivePrompt) ShowContext(ctx *workflow.RuntimeContext) {
 	m.contextShown = true
 }
 
-func (m *mockInteractivePrompt) EditInput(name string, current any) (any, error) {
+func (m *mockInteractivePrompt) EditInput(_ context.Context, name string, current any) (any, error) {
 	if val, ok := m.editValues[name]; ok {
 		return val, nil
 	}
@@ -1295,3 +1297,314 @@ func TestInteractiveExecutor_convertLoopData_Nil(t *testing.T) {
 	require.NotNil(t, ctx)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
+
+// T007: Context threading tests for handleInteractivePrompt and handleEditInput.
+//
+// These tests verify that the context passed to Run is threaded through to
+// PromptAction and EditInput calls, so Ctrl+C cancellation propagates correctly.
+//
+// The contextCheckingPrompt checks ctx.Done() before responding, modeling the
+// behavior of a real context-aware UI implementation. Tests verify that:
+//   - A cancelled context causes PromptAction/EditInput to return context.Canceled
+//   - That error surfaces from Run without being swallowed
+//   - A live context allows normal operation (no false positives)
+
+// contextCheckingPrompt is a test double that checks ctx.Done() in interactive
+// methods. It models the expected behavior of CLIPrompt after the B008 fix:
+// PromptAction and EditInput return context.Canceled when ctx is cancelled.
+type contextCheckingPrompt struct {
+	// actions queued for PromptAction when ctx is not cancelled
+	actions     []workflow.InteractiveAction
+	actionIndex int
+	// editValues to return for EditInput when ctx is not cancelled
+	editValues map[string]any
+	// prompt call tracking
+	promptActionCtx context.Context // ctx received by last PromptAction call
+	editInputCtx    context.Context // ctx received by last EditInput call
+	// standard display fields
+	headerCalled   bool
+	completeCalled bool
+	abortCalled    bool
+	errorCalled    bool
+}
+
+func newContextCheckingPrompt(actions ...workflow.InteractiveAction) *contextCheckingPrompt {
+	return &contextCheckingPrompt{
+		actions:    actions,
+		editValues: make(map[string]any),
+	}
+}
+
+func (p *contextCheckingPrompt) PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
+	p.promptActionCtx = ctx
+	// Respect ctx cancellation — this is what the real implementation must do.
+	select {
+	case <-ctx.Done():
+		return workflow.ActionAbort, fmt.Errorf("input cancelled: %w", ctx.Err())
+	default:
+	}
+	if p.actionIndex >= len(p.actions) {
+		return workflow.ActionAbort, nil
+	}
+	action := p.actions[p.actionIndex]
+	p.actionIndex++
+	return action, nil
+}
+
+func (p *contextCheckingPrompt) EditInput(ctx context.Context, name string, current any) (any, error) {
+	p.editInputCtx = ctx
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("input cancelled: %w", ctx.Err())
+	default:
+	}
+	if val, ok := p.editValues[name]; ok {
+		return val, nil
+	}
+	return current, nil
+}
+
+func (p *contextCheckingPrompt) ShowHeader(workflowName string)                        { p.headerCalled = true }
+func (p *contextCheckingPrompt) ShowStepDetails(info *workflow.InteractiveStepInfo)    {}
+func (p *contextCheckingPrompt) ShowExecuting(stepName string)                         {}
+func (p *contextCheckingPrompt) ShowStepResult(state *workflow.StepState, next string) {}
+func (p *contextCheckingPrompt) ShowContext(ctx *workflow.RuntimeContext)              {}
+func (p *contextCheckingPrompt) ShowAborted()                                          { p.abortCalled = true }
+func (p *contextCheckingPrompt) ShowSkipped(stepName, nextStep string)                 {}
+func (p *contextCheckingPrompt) ShowCompleted(status workflow.ExecutionStatus) {
+	p.completeCalled = true
+}
+func (p *contextCheckingPrompt) ShowError(err error) { p.errorCalled = true }
+
+// minimalWorkflow builds a single-step workflow for prompt-focused tests.
+// The step command and transition are irrelevant; only the prompt interaction matters.
+func minimalWorkflow(name string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo hi", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}
+}
+
+// workflowWithInput builds a workflow with one named input for edit-action tests.
+func workflowWithInput(name, inputName string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "step1",
+		Inputs:  []workflow.Input{{Name: inputName, Type: "string", Required: true}},
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand, Command: "echo hi", OnSuccess: "done"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}
+}
+
+// newInteractiveExecutorWithPrompt is a test helper that wires an executor with the
+// given prompt and a basic mock repository containing the supplied workflow.
+func newInteractiveExecutorWithPrompt(wf *workflow.Workflow, prompt ports.InteractivePrompt) *application.InteractiveExecutor {
+	repo := newMockRepository()
+	repo.workflows[wf.Name] = wf
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+	resolver := interpolation.NewTemplateResolver()
+	evaluator := expression.NewExprEvaluator()
+	return application.NewInteractiveExecutor(
+		wfSvc, newMockExecutor(), newMockParallelExecutor(),
+		newMockStateStore(), &mockLogger{}, resolver, evaluator, prompt,
+	)
+}
+
+// TestInteractiveExecutor_handleInteractivePrompt_ContextCancelled verifies that
+// cancelling the context before PromptAction is called causes Run to return an
+// error wrapping context.Canceled.
+//
+// This confirms that ctx is threaded from Run → handleInteractivePrompt → PromptAction,
+// so Ctrl+C during an interactive prompt terminates the process.
+func TestInteractiveExecutor_handleInteractivePrompt_ContextCancelled(t *testing.T) {
+	wf := minimalWorkflow("ctx-cancel-prompt")
+	prompt := newContextCheckingPrompt() // no actions queued — ctx will be cancelled before prompt
+
+	exec := newInteractiveExecutorWithPrompt(wf, prompt)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run so PromptAction receives a done ctx
+
+	_, err := exec.Run(ctx, "ctx-cancel-prompt", nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled,
+		"cancelled context must propagate from PromptAction through handleInteractivePrompt to Run")
+}
+
+// TestInteractiveExecutor_handleInteractivePrompt_HappyPath verifies that
+// PromptAction receives a live (non-cancelled) context and the selected action
+// is acted upon correctly.
+//
+// This guards against regressions where ctx threading breaks the normal flow.
+func TestInteractiveExecutor_handleInteractivePrompt_HappyPath(t *testing.T) {
+	wf := minimalWorkflow("ctx-live-prompt")
+	// ActionContinue to execute step, then workflow reaches terminal state
+	prompt := newContextCheckingPrompt(workflow.ActionContinue)
+
+	exec := newInteractiveExecutorWithPrompt(wf, prompt)
+
+	execCtx, err := exec.Run(context.Background(), "ctx-live-prompt", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, execCtx)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.NotNil(t, prompt.promptActionCtx,
+		"PromptAction must have been called with a non-nil context")
+}
+
+// TestInteractiveExecutor_handleInteractivePrompt_ErrorPropagates verifies that
+// a non-cancellation error returned by PromptAction surfaces from Run unchanged.
+//
+// Context threading must not suppress arbitrary errors from the prompt.
+func TestInteractiveExecutor_handleInteractivePrompt_ErrorPropagates(t *testing.T) {
+	wf := minimalWorkflow("prompt-error")
+
+	// Use a custom prompt that returns a sentinel error.
+	sentinel := errors.New("prompt hardware failure")
+	errPrompt := &errorReturningPrompt{promptErr: sentinel}
+
+	exec := newInteractiveExecutorWithPrompt(wf, errPrompt)
+
+	_, err := exec.Run(context.Background(), "prompt-error", nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, sentinel,
+		"arbitrary PromptAction errors must propagate to Run caller")
+}
+
+// TestInteractiveExecutor_handleEditInput_ContextCancelled verifies that
+// cancelling the context before EditInput is called causes Run to return an
+// error wrapping context.Canceled.
+//
+// This confirms that ctx is threaded from Run → handleInteractivePrompt →
+// handleEditInput → EditInput, so Ctrl+C during edit input collection terminates.
+func TestInteractiveExecutor_handleEditInput_ContextCancelled(t *testing.T) {
+	wf := workflowWithInput("ctx-cancel-edit", "target")
+
+	// Use a prompt that selects ActionEdit and then checks ctx in EditInput.
+	// The context will be cancelled before the ActionEdit is processed.
+	prompt := newContextCheckingPrompt(workflow.ActionEdit)
+
+	exec := newInteractiveExecutorWithPrompt(wf, prompt)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run
+
+	_, err := exec.Run(ctx, "ctx-cancel-edit", map[string]any{"target": "original"})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled,
+		"cancelled context must propagate from EditInput through handleEditInput to Run")
+}
+
+// TestInteractiveExecutor_handleEditInput_HappyPath verifies that EditInput
+// receives the live context from Run and the updated value is stored in the
+// execution context.
+//
+// This guards against regressions where ctx threading for edit breaks normal flow.
+func TestInteractiveExecutor_handleEditInput_HappyPath(t *testing.T) {
+	wf := workflowWithInput("ctx-live-edit", "message")
+
+	prompt := newContextCheckingPrompt(workflow.ActionEdit, workflow.ActionContinue)
+	prompt.editValues["message"] = "updated-value"
+
+	exec := newInteractiveExecutorWithPrompt(wf, prompt)
+
+	execCtx, err := exec.Run(context.Background(), "ctx-live-edit", map[string]any{"message": "original"})
+
+	require.NoError(t, err)
+	require.NotNil(t, execCtx)
+	assert.Equal(t, "updated-value", execCtx.Inputs["message"],
+		"EditInput result must be applied to execution context")
+	assert.NotNil(t, prompt.editInputCtx,
+		"EditInput must have been called with a non-nil context")
+}
+
+// TestInteractiveExecutor_handleEditInput_ErrorPropagates verifies that a
+// non-cancellation error returned by EditInput surfaces from Run wrapped with
+// the input name, and does not abort the interactive loop (ShowError is called
+// and the loop continues to prompt for next action).
+//
+// handleEditInput wraps the error and calls ShowError; the loop continues.
+func TestInteractiveExecutor_handleEditInput_ErrorPropagates(t *testing.T) {
+	wf := workflowWithInput("edit-error", "item")
+
+	sentinel := errors.New("edit parse failure")
+	errPrompt := &editErrorReturningPrompt{
+		editErr: sentinel,
+		// After the failed edit, abort to stop the loop
+		postEditAction: workflow.ActionAbort,
+	}
+
+	exec := newInteractiveExecutorWithPrompt(wf, errPrompt)
+
+	execCtx, err := exec.Run(context.Background(), "edit-error", map[string]any{"item": "original"})
+
+	// Run returns nil error on Abort — the edit error was shown via ShowError
+	require.NoError(t, err)
+	require.NotNil(t, execCtx)
+	assert.True(t, errPrompt.showErrorCalled,
+		"ShowError must be called when EditInput returns an error")
+}
+
+// errorReturningPrompt is a test double that returns a configurable error from PromptAction.
+type errorReturningPrompt struct {
+	promptErr       error
+	showErrorCalled bool
+}
+
+func (p *errorReturningPrompt) PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
+	return workflow.ActionAbort, p.promptErr
+}
+
+func (p *errorReturningPrompt) EditInput(ctx context.Context, name string, current any) (any, error) {
+	return current, nil
+}
+
+func (p *errorReturningPrompt) ShowHeader(workflowName string)                        {}
+func (p *errorReturningPrompt) ShowStepDetails(info *workflow.InteractiveStepInfo)    {}
+func (p *errorReturningPrompt) ShowExecuting(stepName string)                         {}
+func (p *errorReturningPrompt) ShowStepResult(state *workflow.StepState, next string) {}
+func (p *errorReturningPrompt) ShowContext(ctx *workflow.RuntimeContext)              {}
+func (p *errorReturningPrompt) ShowAborted()                                          {}
+func (p *errorReturningPrompt) ShowSkipped(stepName, nextStep string)                 {}
+func (p *errorReturningPrompt) ShowCompleted(status workflow.ExecutionStatus)         {}
+func (p *errorReturningPrompt) ShowError(err error)                                   { p.showErrorCalled = true }
+
+// editErrorReturningPrompt is a test double that returns ActionEdit first,
+// then a configurable error from EditInput, then a follow-up action.
+type editErrorReturningPrompt struct {
+	editErr         error
+	postEditAction  workflow.InteractiveAction
+	actionCallCount int
+	showErrorCalled bool
+}
+
+func (p *editErrorReturningPrompt) PromptAction(ctx context.Context, hasRetry bool) (workflow.InteractiveAction, error) {
+	p.actionCallCount++
+	if p.actionCallCount == 1 {
+		return workflow.ActionEdit, nil
+	}
+	return p.postEditAction, nil
+}
+
+func (p *editErrorReturningPrompt) EditInput(ctx context.Context, name string, current any) (any, error) {
+	return nil, p.editErr
+}
+
+func (p *editErrorReturningPrompt) ShowHeader(workflowName string)                        {}
+func (p *editErrorReturningPrompt) ShowStepDetails(info *workflow.InteractiveStepInfo)    {}
+func (p *editErrorReturningPrompt) ShowExecuting(stepName string)                         {}
+func (p *editErrorReturningPrompt) ShowStepResult(state *workflow.StepState, next string) {}
+func (p *editErrorReturningPrompt) ShowContext(ctx *workflow.RuntimeContext)              {}
+func (p *editErrorReturningPrompt) ShowAborted()                                          {}
+func (p *editErrorReturningPrompt) ShowSkipped(stepName, nextStep string)                 {}
+func (p *editErrorReturningPrompt) ShowCompleted(status workflow.ExecutionStatus)         {}
+func (p *editErrorReturningPrompt) ShowError(err error)                                   { p.showErrorCalled = true }

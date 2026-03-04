@@ -233,6 +233,8 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 
 Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
 
+All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -258,6 +260,10 @@ Use boolean struct fields on domain entities to signal optional infrastructure b
 - Always provide fallback execution paths for optional infrastructure features; when flags are false or conditions unmet, fall back to standard behavior
 - For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
 
+Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
+
+Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
+
 ## Test Conventions
 
 - Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -268,6 +274,8 @@ Use boolean struct fields on domain entities to signal optional infrastructure b
 - Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 - Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
+
+Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
 
 ## Review Standards
 

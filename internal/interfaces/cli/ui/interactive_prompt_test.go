@@ -2,8 +2,12 @@ package ui_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -58,7 +62,7 @@ func TestCLIPrompt_PromptAction_Continue(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionContinue, action)
@@ -69,7 +73,7 @@ func TestCLIPrompt_PromptAction_Skip(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionSkip, action)
@@ -80,7 +84,7 @@ func TestCLIPrompt_PromptAction_Abort(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionAbort, action)
@@ -91,7 +95,7 @@ func TestCLIPrompt_PromptAction_Inspect(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionInspect, action)
@@ -102,7 +106,7 @@ func TestCLIPrompt_PromptAction_Edit(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionEdit, action)
@@ -113,7 +117,7 @@ func TestCLIPrompt_PromptAction_Retry_WhenAvailable(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(true) // retry available
+	action, err := prompt.PromptAction(context.Background(), true) // retry available
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionRetry, action)
@@ -125,7 +129,7 @@ func TestCLIPrompt_PromptAction_Retry_WhenNotAvailable(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false) // retry not available
+	action, err := prompt.PromptAction(context.Background(), false) // retry not available
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionContinue, action)
@@ -138,7 +142,7 @@ func TestCLIPrompt_PromptAction_InvalidInput(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	action, err := prompt.PromptAction(false)
+	action, err := prompt.PromptAction(context.Background(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.ActionContinue, action)
@@ -229,7 +233,7 @@ func TestCLIPrompt_EditInput(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-	newValue, err := prompt.EditInput("file", "old-value")
+	newValue, err := prompt.EditInput(context.Background(), "file", "old-value")
 
 	require.NoError(t, err)
 	assert.Equal(t, "new-value", newValue)
@@ -280,6 +284,115 @@ func TestCLIPrompt_ShowError(t *testing.T) {
 
 	output := stdout.String()
 	assert.Contains(t, output, "assert.AnError", "should show error message")
+}
+
+// TestCLIPrompt_PromptAction_ContextCancellation verifies that a pre-cancelled context
+// causes PromptAction to return context.Canceled without blocking (B008 acceptance criterion).
+func TestCLIPrompt_PromptAction_ContextCancellation(t *testing.T) {
+	tests := []struct {
+		name     string
+		hasRetry bool
+	}{
+		{"cancelled context without retry", false},
+		{"cancelled context with retry", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a pipe so the read would block forever if context is not respected
+			pr, pw := io.Pipe()
+			defer pw.Close()
+			defer pr.Close()
+
+			stdout := new(bytes.Buffer)
+			prompt := ui.NewCLIPrompt(pr, stdout, false)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // pre-cancel to simulate Ctrl+C signal
+
+			action, err := prompt.PromptAction(ctx, tt.hasRetry)
+
+			require.Error(t, err, "pre-cancelled context must return an error")
+			assert.ErrorIs(t, err, context.Canceled, "error must wrap context.Canceled")
+			assert.Equal(t, workflow.ActionAbort, action, "cancelled context must return ActionAbort")
+		})
+	}
+}
+
+// TestCLIPrompt_EditInput_ContextCancellation verifies that a pre-cancelled context
+// causes EditInput to return context.Canceled without blocking (B008 acceptance criterion).
+func TestCLIPrompt_EditInput_ContextCancellation(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputName    string
+		currentValue any
+	}{
+		{"cancelled context with string value", "file", "old-value"},
+		{"cancelled context with nil value", "optional", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a pipe so the read would block forever if context is not respected
+			pr, pw := io.Pipe()
+			defer pw.Close()
+			defer pr.Close()
+
+			stdout := new(bytes.Buffer)
+			prompt := ui.NewCLIPrompt(pr, stdout, false)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // pre-cancel to simulate Ctrl+C signal
+
+			result, err := prompt.EditInput(ctx, tt.inputName, tt.currentValue)
+
+			require.Error(t, err, "pre-cancelled context must return an error")
+			assert.ErrorIs(t, err, context.Canceled, "error must wrap context.Canceled")
+			assert.Nil(t, result, "cancelled EditInput must return nil result")
+		})
+	}
+}
+
+// TestCLIPrompt_PromptAction_MidReadCancellation verifies that cancelling the context
+// while PromptAction blocks on I/O causes it to return without hanging (B008 acceptance criterion).
+func TestCLIPrompt_PromptAction_MidReadCancellation(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	stdout := new(bytes.Buffer)
+	prompt := ui.NewCLIPrompt(pr, stdout, false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	action, err := prompt.PromptAction(ctx, false)
+
+	require.Error(t, err, "timeout during blocked read must return an error")
+	assert.ErrorIs(t, err, context.DeadlineExceeded, "error must wrap context.DeadlineExceeded")
+	assert.Equal(t, workflow.ActionAbort, action, "timed-out read must return ActionAbort")
+}
+
+// TestCLIPrompt_EditInput_MidReadCancellation verifies that cancelling the context
+// while EditInput blocks on I/O causes it to return without hanging (B008 acceptance criterion).
+func TestCLIPrompt_EditInput_MidReadCancellation(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	stdout := new(bytes.Buffer)
+	prompt := ui.NewCLIPrompt(pr, stdout, false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	result, err := prompt.EditInput(ctx, "file", "current")
+
+	require.Error(t, err, "timeout during blocked read must return an error")
+	// EditInput returns current on read error, but cancellation before the read returns nil
+	assert.True(t,
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled),
+		"error must be a context error, got: %v", err,
+	)
+	_ = result // result may be current or nil depending on when cancellation fires
 }
 
 // These tests verify compile-time interface satisfaction checks for the
@@ -437,7 +550,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		action, err := prompt.PromptAction(false)
+		action, err := prompt.PromptAction(context.Background(), false)
 		require.NoError(t, err)
 		assert.Equal(t, workflow.ActionContinue, action, "PromptAction must work")
 	})
@@ -447,7 +560,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		newValue, err := prompt.EditInput("test-input", "old-value")
+		newValue, err := prompt.EditInput(context.Background(), "test-input", "old-value")
 
 		require.NoError(t, err)
 		assert.Equal(t, "new-value", newValue, "EditInput must work")
@@ -470,7 +583,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		newValue, err := prompt.EditInput("test", "current-value")
+		newValue, err := prompt.EditInput(context.Background(), "test", "current-value")
 
 		require.NoError(t, err)
 		assert.Equal(t, "current-value", newValue, "empty input should preserve current value")
@@ -481,7 +594,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		action, err := prompt.PromptAction(true) // retry IS available
+		action, err := prompt.PromptAction(context.Background(), true) // retry IS available
 
 		require.NoError(t, err)
 		assert.Equal(t, workflow.ActionRetry, action, "retry should work when available")
@@ -492,7 +605,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		action, err := prompt.PromptAction(false) // retry NOT available
+		action, err := prompt.PromptAction(context.Background(), false) // retry NOT available
 
 		require.NoError(t, err)
 		assert.Equal(t, workflow.ActionContinue, action, "should eventually accept valid action")
@@ -518,7 +631,7 @@ func TestC049_CLIPrompt_ImplementsUserInteraction(t *testing.T) {
 		stdout := new(bytes.Buffer)
 		prompt := ui.NewCLIPrompt(stdin, stdout, false)
 
-		action, err := prompt.PromptAction(false)
+		action, err := prompt.PromptAction(context.Background(), false)
 
 		require.NoError(t, err)
 		assert.Equal(t, workflow.ActionContinue, action)
@@ -548,7 +661,7 @@ func TestC049_CLIPrompt_ImplementsCompositeInterface(t *testing.T) {
 		prompt.ShowError(assert.AnError)
 
 		// UserInteraction methods (3)
-		_, err := prompt.PromptAction(false)
+		_, err := prompt.PromptAction(context.Background(), false)
 		require.NoError(t, err)
 
 		// Note: We can't test EditInput and ShowContext in this single test
@@ -568,8 +681,8 @@ func TestC049_CLIPrompt_ImplementsCompositeInterface(t *testing.T) {
 		stdout2 := new(bytes.Buffer)
 		prompt2 := ui.NewCLIPrompt(stdin2, stdout2, false)
 
-		action1, err1 := prompt1.PromptAction(false)
-		action2, err2 := prompt2.PromptAction(false)
+		action1, err1 := prompt1.PromptAction(context.Background(), false)
+		action2, err2 := prompt2.PromptAction(context.Background(), false)
 
 		require.NoError(t, err1)
 		require.NoError(t, err2)

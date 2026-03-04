@@ -238,14 +238,24 @@ Enter value for 'version' (string, required)
 
 ### Ctrl+C
 
-Press `Ctrl+C` at any time to cancel input collection:
+Press `Ctrl+C` at any time to cancel input collection or interactive mode prompts:
 
+**During input collection:**
 ```bash
 Enter value for 'environment' (string, required)
 > ^C
 Error: input collection cancelled by user
 exit code 1
 ```
+
+**During interactive mode (`--interactive`):**
+```bash
+Step: deploy [run/skip/edit/quit]? ^C
+# Process terminates immediately
+exit code 1
+```
+
+Ctrl+C is context-aware: the signal cancels the underlying read operation and terminates the process cleanly, without requiring `kill -9`.
 
 ### Ctrl+D (EOF)
 
