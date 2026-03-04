@@ -99,14 +99,132 @@ func ExtractReferences(template string) ([]Reference, error) {
 			continue
 		}
 
-		ref := ParseReference(content)
-		ref.Raw = remaining[startIdx : endIdx+2]
-		refs = append(refs, ref)
+		rawStr := remaining[startIdx : endIdx+2]
+		paths := extractRefPaths(content)
+		for _, path := range paths {
+			ref := ParseReference(path)
+			ref.Raw = rawStr
+			refs = append(refs, ref)
+		}
 
 		remaining = remaining[endIdx+2:]
 	}
 
 	return refs, nil
+}
+
+// templateKeywords are Go template keywords that never represent references.
+var templateKeywords = map[string]bool{
+	"end": true, "else": true, "nil": true,
+	"define": true, "template": true, "block": true,
+}
+
+// controlFlowPrefixes are Go template keywords that precede a reference expression.
+var controlFlowPrefixes = []string{"else if ", "if ", "range ", "with "}
+
+// templateFuncNames are registered AWF template functions that precede a reference argument.
+var templateFuncNames = map[string]bool{
+	"escape": true, "json": true, "split": true,
+	"join": true, "readFile": true, "trimSpace": true,
+}
+
+// ExtractRefPaths extracts dot-path references from template content between {{ }},
+// stripping Go template keywords, function names, and pipeline syntax.
+func ExtractRefPaths(content string) []string {
+	return extractRefPaths(content)
+}
+
+func extractRefPaths(content string) []string {
+	// Skip bare keywords
+	if templateKeywords[content] {
+		return nil
+	}
+
+	// Strip control-flow prefix (if/range/with/else if)
+	for _, prefix := range controlFlowPrefixes {
+		if strings.HasPrefix(content, prefix) {
+			content = strings.TrimPrefix(content, prefix)
+			break
+		}
+	}
+
+	// Handle pipelines: split on |, process each segment
+	var results []string
+	segments := strings.Split(content, "|")
+	for _, seg := range segments {
+		seg = strings.TrimSpace(seg)
+		if seg == "" {
+			continue
+		}
+
+		// Skip bare keywords in pipeline segments
+		if templateKeywords[seg] {
+			continue
+		}
+
+		// Strip leading function name
+		ref := stripFuncName(seg)
+		if ref == "" {
+			continue
+		}
+
+		// Skip bare dot (range loop variable)
+		if ref == "." {
+			continue
+		}
+
+		results = append(results, ref)
+	}
+	return results
+}
+
+// stripFuncName removes a leading template function name from a segment,
+// returning the remaining dot-path reference. Returns empty if the segment
+// is a bare function name with no argument.
+func stripFuncName(seg string) string {
+	// Check if segment starts with a known function name
+	spaceIdx := strings.IndexByte(seg, ' ')
+	if spaceIdx > 0 {
+		word := seg[:spaceIdx]
+		if templateFuncNames[word] {
+			rest := strings.TrimSpace(seg[spaceIdx+1:])
+			// Strip parentheses from nested calls like (trimSpace .x)
+			rest = strings.TrimPrefix(rest, "(")
+			rest = strings.TrimSuffix(rest, ")")
+			// Take first space-delimited token, skip string literals
+			return firstDotPath(rest)
+		}
+	}
+
+	// No function prefix — take first dot-path token
+	return firstDotPath(seg)
+}
+
+// firstDotPath returns the first space-delimited token that looks like a
+// dot-path reference (starts with dot or a known namespace). Skips quoted strings.
+func firstDotPath(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	// Skip quoted string literals
+	if s[0] == '"' || s[0] == '\'' || s[0] == '`' {
+		return ""
+	}
+
+	// Take first space-delimited token
+	token := s
+	if idx := strings.IndexByte(s, ' '); idx > 0 {
+		token = s[:idx]
+	}
+
+	// Skip bare function names (no dot-path follows)
+	if templateFuncNames[token] {
+		return ""
+	}
+
+	return token
 }
 
 // ParseReference parses a single reference path (without braces) into a Reference struct.

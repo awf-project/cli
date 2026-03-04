@@ -2,7 +2,7 @@ package workflow_test
 
 // C013: Domain test file splitting
 // Source: internal/domain/workflow/template_validation_test.go
-// Test count: 22 tests
+// Test count: 17 tests
 // Focus: states.* namespace - State reference validation and execution order tests
 
 import (
@@ -66,7 +66,7 @@ func TestTemplateValidator_ValidStateReferenceAllProperties(t *testing.T) {
 			"step2": {
 				Name:      "step2",
 				Type:      workflow.StepTypeCommand,
-				Command:   "echo {{states.step1.Output}} {{states.step1.Stderr}} {{states.step1.ExitCode}} {{states.step1.Status}}",
+				Command:   "echo {{states.step1.Output}} {{states.step1.Stderr}} {{states.step1.ExitCode}} {{states.step1.Status}} {{states.step1.JSON.field}}",
 				OnSuccess: "done",
 				OnFailure: "error",
 			},

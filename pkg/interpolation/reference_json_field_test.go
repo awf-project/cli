@@ -286,7 +286,7 @@ func TestExtractReferences_RealWorldJSONUsage(t *testing.T) {
 		{
 			name:     "conditional based on JSON field",
 			template: `{{if .states.agent_step.JSON.enabled}}ENABLED=1{{else}}ENABLED=0{{end}}`,
-			wantLen:  3, // "if", "else", "end" are each parsed as separate references
+			wantLen:  1, // only the if-condition reference; else and end are keywords
 		},
 		{
 			name:     "combining JSON and Response fields",

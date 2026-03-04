@@ -96,6 +96,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B010**: `awf validate` no longer rejects `{{.states.<step>.JSON.<field>}}` references as invalid
+  - Added `JSON` entry to domain-layer `ValidStateProperties` map (was present only in runtime `pkg/interpolation`)
+  - Added `json` → `JSON` casing normalization for actionable error hints
+  - Root cause: F065 (JSON output format) added the entry to `pkg/interpolation` but missed the duplicate map in `internal/domain/workflow`
 - **B009**: `script_file` now honors shebang lines for interpreter dispatch
   - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
   - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
@@ -285,6 +289,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
 
 ### Fixed
+- **B010**: `awf validate` no longer rejects `{{.states.<step>.JSON.<field>}}` references as invalid
+  - Added `JSON` entry to domain-layer `ValidStateProperties` map (was present only in runtime `pkg/interpolation`)
+  - Added `json` → `JSON` casing normalization for actionable error hints
+  - Root cause: F065 (JSON output format) added the entry to `pkg/interpolation` but missed the duplicate map in `internal/domain/workflow`
 - **B009**: `script_file` now honors shebang lines for interpreter dispatch
   - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
   - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
@@ -685,6 +693,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
+- **B010**: `awf validate` no longer rejects `{{.states.<step>.JSON.<field>}}` references as invalid
+  - Added `JSON` entry to domain-layer `ValidStateProperties` map (was present only in runtime `pkg/interpolation`)
+  - Added `json` → `JSON` casing normalization for actionable error hints
+  - Root cause: F065 (JSON output format) added the entry to `pkg/interpolation` but missed the duplicate map in `internal/domain/workflow`
 - **B009**: `script_file` now honors shebang lines for interpreter dispatch
   - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
   - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
@@ -862,6 +874,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML parsing reports all errors instead of silently skipping malformed steps
 
 ### Fixed
+- **B010**: `awf validate` no longer rejects `{{.states.<step>.JSON.<field>}}` references as invalid
+  - Added `JSON` entry to domain-layer `ValidStateProperties` map (was present only in runtime `pkg/interpolation`)
+  - Added `json` → `JSON` casing normalization for actionable error hints
+  - Root cause: F065 (JSON output format) added the entry to `pkg/interpolation` but missed the duplicate map in `internal/domain/workflow`
 - **B009**: `script_file` now honors shebang lines for interpreter dispatch
   - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
   - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)

@@ -80,6 +80,20 @@ func TestValidateStateRef_LowercaseCasingErrors(t *testing.T) {
 			wantErrorContains: "",
 		},
 		{
+			name:              "lowercase json should error with JSON suggestion",
+			property:          "json",
+			wantError:         true,
+			wantSuggestion:    "JSON",
+			wantErrorContains: "use 'JSON' instead",
+		},
+		{
+			name:              "uppercase JSON should pass",
+			property:          "JSON",
+			wantError:         false,
+			wantSuggestion:    "",
+			wantErrorContains: "",
+		},
+		{
 			name:              "invalid property 'stdout' should error without suggestion",
 			property:          "stdout",
 			wantError:         true,
@@ -98,7 +112,7 @@ func TestValidateStateRef_LowercaseCasingErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := &workflow.Workflow{
-				Name:    "casing-casing-test",
+				Name:    "casing-test",
 				Initial: "step1",
 				Steps: map[string]*workflow.Step{
 					"step1": {

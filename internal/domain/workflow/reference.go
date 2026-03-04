@@ -41,6 +41,7 @@ var ValidWorkflowProperties = map[string]bool{
 }
 
 // ValidStateProperties lists known step state properties that can be referenced.
+// NOTE: This map is duplicated in pkg/interpolation/reference.go — keep both in sync until dedup cleanup.
 var ValidStateProperties = map[string]bool{
 	"Output":     true,
 	"Stderr":     true,
@@ -48,10 +49,12 @@ var ValidStateProperties = map[string]bool{
 	"Status":     true,
 	"Response":   true,
 	"TokensUsed": true,
+	"JSON":       true,
 }
 
 // lowercaseToUppercase maps lowercase property names to their correct uppercase equivalents.
 // Used to provide actionable error messages when users use incorrect casing.
+// "tokens" and "tokensused" both map to "TokensUsed" as canonical aliases.
 var lowercaseToUppercase = map[string]string{
 	"output":     "Output",
 	"stderr":     "Stderr",
@@ -60,6 +63,7 @@ var lowercaseToUppercase = map[string]string{
 	"response":   "Response",
 	"tokens":     "TokensUsed",
 	"tokensused": "TokensUsed",
+	"json":       "JSON",
 }
 
 // lowercaseToUppercaseError maps lowercase error property names to their correct uppercase equivalents.

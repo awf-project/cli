@@ -438,6 +438,160 @@ func TestValidationMaps(t *testing.T) {
 	}
 }
 
+func TestExtractReferences_FunctionCalls(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		wantLen  int
+		wantType interpolation.ReferenceType
+		wantPath string
+		wantProp string
+	}{
+		{
+			name:     "trimSpace with states reference",
+			template: "{{trimSpace .states.step.Output}}",
+			wantLen:  1,
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+			wantProp: "Output",
+		},
+		{
+			name:     "pipeline syntax",
+			template: "{{.states.step.Output | trimSpace}}",
+			wantLen:  1,
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+			wantProp: "Output",
+		},
+		{
+			name:     "if keyword with reference",
+			template: "{{if .inputs.debug}}echo debug{{end}}",
+			wantLen:  1,
+			wantType: interpolation.TypeInputs,
+			wantPath: "debug",
+		},
+		{
+			name:     "range keyword with reference",
+			template: "{{range .inputs.items}}{{.}}{{end}}",
+			wantLen:  1,
+			wantType: interpolation.TypeInputs,
+			wantPath: "items",
+		},
+		{
+			name:     "bare end keyword",
+			template: "{{end}}",
+			wantLen:  0,
+		},
+		{
+			name:     "bare else keyword",
+			template: "{{else}}",
+			wantLen:  0,
+		},
+		{
+			name:     "bare dot",
+			template: "{{.}}",
+			wantLen:  0,
+		},
+		{
+			name:     "escape function with inputs",
+			template: "{{escape .inputs.user_input}}",
+			wantLen:  1,
+			wantType: interpolation.TypeInputs,
+			wantPath: "user_input",
+		},
+		{
+			name:     "trimSpace without leading dot",
+			template: "{{trimSpace inputs.name}}",
+			wantLen:  1,
+			wantType: interpolation.TypeInputs,
+			wantPath: "name",
+		},
+		{
+			name:     "json function with states",
+			template: "{{json .states.step.Output}}",
+			wantLen:  1,
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+			wantProp: "Output",
+		},
+		{
+			name:     "with keyword",
+			template: "{{with .states.step.Output}}result: {{.}}{{end}}",
+			wantLen:  1,
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+			wantProp: "Output",
+		},
+		{
+			name:     "else if keyword",
+			template: "{{else if .inputs.fallback}}fallback{{end}}",
+			wantLen:  1,
+			wantType: interpolation.TypeInputs,
+			wantPath: "fallback",
+		},
+		{
+			name:     "pipeline with multiple functions",
+			template: "{{.states.step.Output | trimSpace | json}}",
+			wantLen:  1,
+			wantType: interpolation.TypeStates,
+			wantPath: "step",
+			wantProp: "Output",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs, err := interpolation.ExtractReferences(tt.template)
+			require.NoError(t, err)
+
+			if tt.wantLen == 0 {
+				assert.Empty(t, refs)
+				return
+			}
+
+			require.Len(t, refs, tt.wantLen)
+			assert.Equal(t, tt.wantType, refs[0].Type)
+			if tt.wantPath != "" {
+				assert.Equal(t, tt.wantPath, refs[0].Path)
+			}
+			if tt.wantProp != "" {
+				assert.Equal(t, tt.wantProp, refs[0].Property)
+			}
+		})
+	}
+}
+
+func TestExtractRefPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{"bare reference", "inputs.name", []string{"inputs.name"}},
+		{"leading dot reference", ".states.step.Output", []string{".states.step.Output"}},
+		{"function prefix", "trimSpace .states.step.Output", []string{".states.step.Output"}},
+		{"pipeline", ".states.step.Output | trimSpace", []string{".states.step.Output"}},
+		{"keyword end", "end", nil},
+		{"keyword else", "else", nil},
+		{"keyword nil", "nil", nil},
+		{"if prefix", "if .inputs.debug", []string{".inputs.debug"}},
+		{"range prefix", "range .inputs.items", []string{".inputs.items"}},
+		{"with prefix", "with .states.step.Output", []string{".states.step.Output"}},
+		{"else if prefix", "else if .inputs.fallback", []string{".inputs.fallback"}},
+		{"bare dot", ".", nil},
+		{"bare function name", "trimSpace", nil},
+		{"function with no-dot arg", "trimSpace inputs.name", []string{"inputs.name"}},
+		{"multi-pipe functions only", ".x | trimSpace | json", []string{".x"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := interpolation.ExtractRefPaths(tt.content)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestExtractReferences_RealWorld(t *testing.T) {
 	tests := []struct {
 		name     string
