@@ -12,7 +12,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
 - **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support
-- **External Script Files** - Load shell commands from `.sh` files with template interpolation, path resolution, and local override support
+- **External Script Files** - Load commands from external script files with shebang-based interpreter dispatch, template interpolation, path resolution, and local override support
 - **Conversation Mode** - Multi-turn conversations with automatic context window management and token counting
 - **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies

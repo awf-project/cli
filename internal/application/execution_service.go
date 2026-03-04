@@ -1150,12 +1150,13 @@ func (s *ExecutionService) resolveStepCommand(
 	}
 
 	cmd := &ports.Command{
-		Program: resolvedCmd,
-		Dir:     resolvedDir,
-		Env:     env,
-		Timeout: step.Timeout,
-		Stdout:  s.stdoutWriter,
-		Stderr:  s.stderrWriter,
+		Program:      resolvedCmd,
+		Dir:          resolvedDir,
+		Env:          env,
+		Timeout:      step.Timeout,
+		IsScriptFile: step.ScriptFile != "",
+		Stdout:       s.stdoutWriter,
+		Stderr:       s.stderrWriter,
 	}
 
 	return cmd, nil

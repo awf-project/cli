@@ -261,6 +261,72 @@ awf run deploy --dry-run
 # Shows resolved script path and interpolated content
 ```
 
+#### Shebang Support
+
+Script files with a shebang line (`#!...`) are executed directly via the kernel's interpreter dispatch, rather than through `$SHELL -c`. This allows you to use non-shell scripts (Python, Ruby, Perl, etc.) and shell scripts in different variants (bash, zsh, etc.) within the same workflow.
+
+**How it works:**
+- If a script file starts with `#!`, AWF writes it to a temporary file and executes it directly
+- The kernel reads the shebang and launches the appropriate interpreter
+- Scripts without a shebang fall back to the user's shell (`$SHELL -c`) for backward compatibility
+
+**Shebang Examples:**
+
+```python
+#!/usr/bin/env python3
+# scripts/analyze.py
+import sys
+data = "{{.inputs.data}}"
+print(f"Analyzing: {data}")
+```
+
+**Workflow:**
+```yaml
+analyze:
+  type: step
+  script_file: scripts/analyze.py
+  timeout: 30
+  on_success: done
+```
+
+AWF detects the `#!/usr/bin/env python3` shebang and executes the script via Python, not the shell.
+
+**Bash-specific script:**
+```bash
+#!/bin/bash
+# scripts/deploy.sh
+set -euo pipefail
+echo "Deploying to {{.inputs.env}}"
+[[ -f config.yaml ]] && echo "Config found"
+kubectl apply -f manifests/
+```
+
+Even if your `$SHELL` is zsh, this bash script executes via bash (not zsh) because of the shebang.
+
+**Shell script without shebang (legacy):**
+```sh
+# scripts/legacy.sh
+# No shebang line
+echo "Running in {{inputs.shell}}"
+```
+
+This script executes via `$SHELL -c` (backward-compatible behavior).
+
+**Supported Shebang Formats:**
+
+All standard shebang formats are supported:
+
+```bash
+#!/bin/sh                           # Absolute path
+#!/usr/bin/env python3              # env with single argument
+#!/usr/bin/env -S python3 -u        # env with multiple arguments (POSIX)
+#!/usr/bin/python3                  # Direct interpreter path
+```
+
+**Temporary File Cleanup:**
+
+Temporary files are automatically cleaned up after execution, even if the script fails or execution is cancelled.
+
 #### Error Handling
 
 | Error | Cause | Exit Code |
@@ -268,6 +334,7 @@ awf run deploy --dry-run
 | File not found | Script file path does not exist | 1 |
 | Permission denied | Script file is not readable | 1 |
 | File too large | Script file exceeds 1MB size limit | 1 |
+| Interpreter not found | Shebang specifies non-existent interpreter | 127 |
 
 Error messages include the resolved file path for easy debugging.
 

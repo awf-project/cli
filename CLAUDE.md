@@ -231,6 +231,8 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
 - Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
 
+Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -253,6 +255,8 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
 - Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
 - Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
+- Always provide fallback execution paths for optional infrastructure features; when flags are false or conditions unmet, fall back to standard behavior
+- For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
 
 ## Test Conventions
 

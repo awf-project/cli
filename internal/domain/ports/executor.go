@@ -5,16 +5,26 @@ import (
 	"io"
 )
 
-// Note: Program is passed to the user's detected shell (via $SHELL, fallback
-// /bin/sh) as a shell command string, allowing shell features like pipes and
-// redirects. Use ShellEscape() from pkg/interpolation for user-provided values.
+// Command represents a command to execute.
+//
+// When IsScriptFile is false (default), Program is passed to the user's detected
+// shell (via $SHELL, fallback /bin/sh) as a shell command string, allowing shell
+// features like pipes and redirects.
+//
+// When IsScriptFile is true and Program starts with a shebang (#!), the content
+// is written to a temporary file, made executable, and executed directly — letting
+// the kernel dispatch the correct interpreter. If no shebang is present, execution
+// falls back to $SHELL -c for backward compatibility.
+//
+// Use ShellEscape() from pkg/interpolation for user-provided values.
 type Command struct {
-	Program string
-	Dir     string
-	Env     map[string]string
-	Timeout int
-	Stdout  io.Writer
-	Stderr  io.Writer
+	Program      string
+	Dir          string
+	Env          map[string]string
+	Timeout      int
+	IsScriptFile bool
+	Stdout       io.Writer
+	Stderr       io.Writer
 }
 
 type CommandResult struct {

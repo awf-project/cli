@@ -96,6 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B009**: `script_file` now honors shebang lines for interpreter dispatch
+  - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
+  - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
+  - Temp files use `0o700` permissions and are cleaned up on success, failure, and cancellation
+  - Inline `command` field behavior is unchanged
 - **B007**: Interactive and dry-run modes now respect `.awf/config.yaml` input defaults
   - `runInteractive()` and `runDryRun()` now load project config and merge inputs (same pattern as `runWorkflow()`)
   - Config values are pre-filled, reducing re-prompting for already-configured inputs
@@ -275,6 +280,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Enables programmatic error handling in CI/CD pipelines, searchable error documentation, and consistent error messages across output formats
 
 ### Fixed
+- **B009**: `script_file` now honors shebang lines for interpreter dispatch
+  - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
+  - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
+  - Temp files use `0o700` permissions and are cleaned up on success, failure, and cancellation
+  - Inline `command` field behavior is unchanged
 - **B007**: Interactive input prompt and dry-run mode now respect `.awf/config.yaml` input defaults
   - `runInteractive()` and `runDryRun()` now load project config and merge inputs (same pattern as `runWorkflow()`)
   - Config values are pre-filled, reducing re-prompting for already-configured inputs
@@ -670,6 +680,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced `validateRules` complexity 31→20 via type-checked validator wrappers
 
 ### Fixed
+- **B009**: `script_file` now honors shebang lines for interpreter dispatch
+  - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
+  - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
+  - Temp files use `0o700` permissions and are cleaned up on success, failure, and cancellation
+  - Inline `command` field behavior is unchanged
 - **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
   - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
   - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
@@ -842,6 +857,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML parsing reports all errors instead of silently skipping malformed steps
 
 ### Fixed
+- **B009**: `script_file` now honors shebang lines for interpreter dispatch
+  - Scripts with a shebang (`#!/usr/bin/env python3`, `#!/bin/bash`, etc.) are written to a temp file and executed directly, letting the kernel dispatch the correct interpreter
+  - Scripts without a shebang fall back to `$SHELL -c` (backward compatible)
+  - Temp files use `0o700` permissions and are cleaned up on success, failure, and cancellation
+  - Inline `command` field behavior is unchanged
 - **B006**: Shell commands no longer fail on Debian/Ubuntu where `/bin/sh` is `dash`
   - `ShellExecutor` now detects the user's preferred shell via `$SHELL` environment variable at construction time
   - Falls back to `/bin/sh` if `$SHELL` is unset, relative, or points to a non-existent binary
