@@ -14,10 +14,12 @@ const (
 	awfDir            = ".awf"
 	workflowsDir      = "workflows"
 	promptsDir        = "prompts"
+	scriptsDir        = "scripts"
 	configFileName    = ".awf.yaml"
 	projectConfigFile = "config.yaml"
 	exampleFile       = "example.yaml"
 	examplePromptFile = "example.md"
+	exampleScriptFile = "example.sh"
 )
 
 func newInitCommand(cfg *Config) *cobra.Command {
@@ -36,6 +38,8 @@ This creates:
   .awf/workflows/example.yaml  Example workflow file
   .awf/prompts/                Prompt templates directory
   .awf/prompts/example.md      Example prompt file
+  .awf/scripts/                Shell scripts directory
+  .awf/scripts/example.sh      Example script with shebang
 
 State persistence uses XDG directories ($XDG_DATA_HOME/awf/ or ~/.local/share/awf/).
 
@@ -55,7 +59,7 @@ Examples:
 	}
 
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing configuration")
-	cmd.Flags().BoolVar(&global, "global", false, "Initialize global prompts directory")
+	cmd.Flags().BoolVar(&global, "global", false, "Initialize global prompts and scripts directories")
 
 	return cmd
 }
@@ -83,6 +87,7 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	dirs := []string{
 		filepath.Join(awfPath, workflowsDir),
 		filepath.Join(awfPath, promptsDir),
+		filepath.Join(awfPath, scriptsDir),
 	}
 
 	for _, dir := range dirs {
@@ -120,6 +125,13 @@ func runInit(cmd *cobra.Command, cfg *Config, force bool) error {
 	}
 	formatter.Success(fmt.Sprintf("Created %s", promptPath))
 
+	// Create example script
+	scriptPath := filepath.Join(awfPath, scriptsDir, exampleScriptFile)
+	if err := createExampleScript(scriptPath, force); err != nil {
+		return err
+	}
+	formatter.Success(fmt.Sprintf("Created %s", scriptPath))
+
 	// Next steps
 	formatter.Info("\nNext steps:")
 	formatter.Info("  awf list          - List available workflows")
@@ -137,40 +149,59 @@ func runInitGlobal(cmd *cobra.Command, cfg *Config, force bool) error {
 	})
 
 	globalPromptsDir := xdg.AWFPromptsDir()
+	globalScriptsDir := xdg.AWFScriptsDir()
 
-	// Check if already initialized
-	if !force {
-		if _, err := os.Stat(globalPromptsDir); err == nil {
-			formatter.Info(fmt.Sprintf("Global prompts already initialized in '%s'", globalPromptsDir))
-			formatter.Info("Use --force to reinitialize")
-			return nil
+	_, err := os.Stat(globalPromptsDir)
+	if !force && err == nil {
+		formatter.Info(fmt.Sprintf("Global prompts already initialized in '%s'", globalPromptsDir))
+		formatter.Info("Use --force to reinitialize")
+	} else {
+		// Create global prompts directory
+		if err := os.MkdirAll(globalPromptsDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", globalPromptsDir, err)
 		}
+		formatter.Success(fmt.Sprintf("Created %s", globalPromptsDir))
+
+		// Create example prompt
+		promptPath := filepath.Join(globalPromptsDir, examplePromptFile)
+		if err := createExamplePrompt(promptPath, force); err != nil {
+			return err
+		}
+		formatter.Success(fmt.Sprintf("Created %s", promptPath))
 	}
 
-	// Create global prompts directory
-	if err := os.MkdirAll(globalPromptsDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", globalPromptsDir, err)
+	// Create global scripts directory (independent of prompts state)
+	if err := os.MkdirAll(globalScriptsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", globalScriptsDir, err)
 	}
-	formatter.Success(fmt.Sprintf("Created %s", globalPromptsDir))
+	formatter.Success(fmt.Sprintf("Created %s", globalScriptsDir))
 
-	// Create example prompt
-	promptPath := filepath.Join(globalPromptsDir, examplePromptFile)
-	if err := createExamplePrompt(promptPath, force); err != nil {
+	// Create example script
+	scriptPath := filepath.Join(globalScriptsDir, exampleScriptFile)
+	if err := createExampleScript(scriptPath, force); err != nil {
 		return err
 	}
-	formatter.Success(fmt.Sprintf("Created %s", promptPath))
+	formatter.Success(fmt.Sprintf("Created %s", scriptPath))
 
 	return nil
 }
 
-func createConfigFile(path string, force bool) error {
+// writeFileUnlessExists writes content to path with the given permissions.
+// If force is false and the file already exists, it skips silently.
+func writeFileUnlessExists(path string, force bool, content string, perm os.FileMode) error {
 	if !force {
 		if _, err := os.Stat(path); err == nil {
-			return nil // File exists, skip
+			return nil
 		}
 	}
+	if err := os.WriteFile(path, []byte(content), perm); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
+}
 
-	content := `# AWF Configuration
+func createConfigFile(path string, force bool) error {
+	return writeFileUnlessExists(path, force, `# AWF Configuration
 # https://github.com/awf-project/cli
 
 version: "1"
@@ -180,21 +211,11 @@ log_level: info
 
 # Output format: text, json, table, quiet
 output_format: text
-`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-	return nil
+`, 0o644)
 }
 
 func createExampleWorkflow(path string, force bool) error {
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return nil // File exists, skip
-		}
-	}
-
-	content := `name: example
+	return writeFileUnlessExists(path, force, `name: example
 version: "1.0.0"
 description: Example workflow created by awf init
 
@@ -208,24 +229,11 @@ states:
 
   done:
     type: terminal
-`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-	return nil
+`, 0o644)
 }
 
-// createProjectConfigFile creates the project configuration file at .awf/config.yaml
-// with a commented inputs: section as a template.
-// This file is used to pre-populate workflow inputs (FR-006).
 func createProjectConfigFile(path string, force bool) error {
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return nil // File exists, skip
-		}
-	}
-
-	content := `# AWF Project Configuration
+	return writeFileUnlessExists(path, force, `# AWF Project Configuration
 # https://github.com/awf-project/cli
 #
 # This file provides default values for workflow inputs.
@@ -239,21 +247,27 @@ inputs:
   # project: my-project
   # environment: staging
   # debug: false
-`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-	return nil
+`, 0o644)
+}
+
+func createExampleScript(path string, force bool) error {
+	return writeFileUnlessExists(path, force, `#!/usr/bin/env bash
+# Example script created by awf init
+# This script demonstrates the script_file feature (B009).
+# Reference it in a workflow step:
+#
+#   states:
+#     run_script:
+#       type: step
+#       script_file: "{{.awf.scripts_dir}}/example.sh"
+#       on_success: done
+
+echo "Hello from AWF script!"
+`, 0o755)
 }
 
 func createExamplePrompt(path string, force bool) error {
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return nil // File exists, skip
-		}
-	}
-
-	content := `# Example Prompt
+	return writeFileUnlessExists(path, force, `# Example Prompt
 
 This is an example prompt file created by AWF.
 
@@ -261,24 +275,20 @@ This is an example prompt file created by AWF.
 
 Reference this prompt in workflow inputs using the @prompts/ prefix:
 
-` + "```" + `bash
+`+"```"+`bash
 awf run my-workflow --input prompt=@prompts/example.md
-` + "```" + `
+`+"```"+`
 
 ## Template Variables
 
 You can use template variables in your workflow commands:
 
-- ` + "`{{inputs.prompt}}`" + ` - The content of this file
+- `+"`{{inputs.prompt}}`"+` - The content of this file
 
 ## Tips
 
 - Store reusable AI prompts here (system prompts, task templates)
 - Use .md for markdown or .txt for plain text
 - Organize complex prompts in subdirectories (e.g., ai/agents/)
-`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-	return nil
+`, 0o644)
 }

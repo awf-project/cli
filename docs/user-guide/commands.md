@@ -5,7 +5,7 @@
 | Command | Description |
 |---------|-------------|
 | `awf init` | Initialize AWF in current directory |
-| `awf init --global` | Initialize global prompts directory |
+| `awf init --global` | Initialize global prompts and scripts directories |
 | `awf run <workflow>` | Execute a workflow |
 | `awf resume [workflow-id]` | Resume an interrupted workflow |
 | `awf list` | List available workflows |
@@ -60,7 +60,7 @@ awf status $WORKFLOW_ID -f quiet
 
 ## awf init
 
-Initialize AWF in the current directory or global prompts directory.
+Initialize AWF in the current directory or global prompts and scripts directories.
 
 ```bash
 awf init [flags]
@@ -71,7 +71,7 @@ awf init [flags]
 | Flag | Description |
 |------|-------------|
 | `--force` | Overwrite existing configuration files |
-| `--global` | Initialize global prompts directory at `$XDG_CONFIG_HOME/awf/prompts/` |
+| `--global` | Initialize global prompts and scripts directories at `$XDG_CONFIG_HOME/awf/` |
 
 ### Examples
 
@@ -96,6 +96,8 @@ awf init --global
 │   └── example.yaml   # Sample workflow
 ├── prompts/
 │   └── example.md     # Example prompt file
+├── scripts/
+│   └── example.sh     # Example script file (executable)
 ├── templates/         # Reusable workflow templates
 └── storage/
     ├── states/        # State persistence
@@ -108,8 +110,10 @@ See [Project Configuration](configuration.md) for details on `.awf/config.yaml`.
 
 ```
 $XDG_CONFIG_HOME/awf/
-└── prompts/
-    └── example.md     # Example prompt file
+├── prompts/
+│   └── example.md     # Example prompt file
+└── scripts/
+    └── example.sh     # Example script file (executable)
 ```
 
 ---
