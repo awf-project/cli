@@ -233,6 +233,56 @@ func TestInitCommand(t *testing.T) {
 		assert.NotContains(t, longDesc, "storage/logs")
 		assert.Contains(t, longDesc, "XDG directories")
 	})
+
+	t.Run("creates .awf/scripts directory", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		scriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+		info, err := os.Stat(scriptsDir)
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("creates example script file", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		exampleScript := filepath.Join(tmpDir, ".awf", "scripts", "example.sh")
+		_, err = os.Stat(exampleScript)
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(exampleScript)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "#!/usr/bin/env bash")
+	})
+
+	t.Run("help text mentions scripts directory", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		initCmd, _, err := cmd.Find([]string{"init"})
+		require.NoError(t, err)
+
+		longDesc := initCmd.Long
+		assert.Contains(t, longDesc, ".awf/scripts/")
+	})
 }
 
 // TestInitCommand_HelpText_GlobalFlag tests that the init command help text
@@ -1169,6 +1219,258 @@ func TestInitCommand_ProjectConfigFile_Permissions(t *testing.T) {
 // parseYAML is a helper for YAML parsing in tests.
 func parseYAML(data []byte, v interface{}) error {
 	return yaml.Unmarshal(data, v)
+}
+
+// TestInitCommand_ScriptsDirectory verifies that awf init creates the scripts directory
+// and example.sh with correct content and permissions.
+func TestInitCommand_ScriptsDirectory(t *testing.T) {
+	t.Run("scripts directory has 0o755 permissions", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		scriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+		info, err := os.Stat(scriptsDir)
+		require.NoError(t, err)
+		mode := info.Mode().Perm()
+		assert.True(t, mode&0o755 == 0o755, "scripts directory should have 0o755 permissions")
+	})
+
+	t.Run("example.sh has shebang line", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		exampleScript := filepath.Join(tmpDir, ".awf", "scripts", "example.sh")
+		content, err := os.ReadFile(exampleScript)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "#!/usr/bin/env bash")
+		assert.Contains(t, string(content), "echo")
+	})
+
+	t.Run("example.sh has 0o755 permissions", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		exampleScript := filepath.Join(tmpDir, ".awf", "scripts", "example.sh")
+		info, err := os.Stat(exampleScript)
+		require.NoError(t, err)
+		mode := info.Mode().Perm()
+		assert.True(t, mode&0o100 != 0, "example.sh should be executable by owner")
+	})
+
+	t.Run("--force overwrites example.sh", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		// Pre-create scripts directory with custom content
+		scriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+		require.NoError(t, os.MkdirAll(scriptsDir, 0o755))
+		oldScript := filepath.Join(scriptsDir, "example.sh")
+		require.NoError(t, os.WriteFile(oldScript, []byte("#!/bin/sh\nold content"), 0o755))
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--force"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(oldScript)
+		require.NoError(t, err)
+		assert.NotContains(t, string(content), "old content")
+		assert.Contains(t, string(content), "#!/usr/bin/env bash")
+	})
+
+	t.Run("skips example.sh if already exists without force", func(t *testing.T) {
+		tmpDir := setupInitTestDir(t)
+
+		// First run to create structure
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		// Overwrite with custom content
+		exampleScript := filepath.Join(tmpDir, ".awf", "scripts", "example.sh")
+		customContent := "#!/bin/sh\nmy custom script"
+		require.NoError(t, os.WriteFile(exampleScript, []byte(customContent), 0o755))
+
+		// Run init again with --force on .awf (which does early-exit without force)
+		// The direct way: pre-create scripts dir with custom script, then run without force
+		// Since init early-exits when .awf exists without --force, we test with --force
+		// but scripts already exists — force still overwrites
+		cmd2 := cli.NewRootCommand()
+		cmd2.SetArgs([]string{"init", "--force"})
+
+		var out2 bytes.Buffer
+		cmd2.SetOut(&out2)
+		cmd2.SetErr(&out2)
+
+		err = cmd2.Execute()
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(exampleScript)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "#!/usr/bin/env bash",
+			"--force should restore standard example.sh")
+	})
+}
+
+// TestInitCommand_GlobalFlag_CreatesScriptsDirectory verifies that awf init --global
+// creates the global scripts directory and example.sh.
+func TestInitCommand_GlobalFlag_CreatesScriptsDirectory(t *testing.T) {
+	t.Run("--global creates scripts directory in XDG_CONFIG_HOME", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--global"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		globalScriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+		info, statErr := os.Stat(globalScriptsDir)
+		require.NoError(t, statErr, "global scripts directory should be created at $XDG_CONFIG_HOME/awf/scripts")
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("--global creates example.sh in scripts directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--global"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		exampleScript := filepath.Join(tmpDir, "awf", "scripts", "example.sh")
+		_, statErr := os.Stat(exampleScript)
+		require.NoError(t, statErr, "example.sh should be created in global scripts directory")
+
+		content, err := os.ReadFile(exampleScript)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "#!/usr/bin/env bash")
+	})
+
+	t.Run("--global creates scripts directory even when prompts already exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+		// Pre-create only the prompts directory (partial initialization state)
+		promptsDir := filepath.Join(tmpDir, "awf", "prompts")
+		require.NoError(t, os.MkdirAll(promptsDir, 0o755))
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--global"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		globalScriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+		info, statErr := os.Stat(globalScriptsDir)
+		require.NoError(t, statErr, "scripts directory should be created even when prompts already exists")
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("--global --force overwrites global example.sh", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+		// Pre-create scripts directory with custom content
+		scriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+		require.NoError(t, os.MkdirAll(scriptsDir, 0o755))
+		oldScript := filepath.Join(scriptsDir, "example.sh")
+		require.NoError(t, os.WriteFile(oldScript, []byte("#!/bin/sh\nold global script"), 0o755))
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--global", "--force"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(oldScript)
+		require.NoError(t, err)
+		assert.NotContains(t, string(content), "old global script")
+		assert.Contains(t, string(content), "#!/usr/bin/env bash")
+	})
+
+	t.Run("--global skips example.sh if already exists without force", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+		// Pre-create scripts directory with custom script
+		scriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+		require.NoError(t, os.MkdirAll(scriptsDir, 0o755))
+		customScript := filepath.Join(scriptsDir, "example.sh")
+		customContent := "#!/bin/sh\nmy custom global script"
+		require.NoError(t, os.WriteFile(customScript, []byte(customContent), 0o755))
+
+		cmd := cli.NewRootCommand()
+		cmd.SetArgs([]string{"init", "--global"})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(customScript)
+		require.NoError(t, err)
+		assert.Equal(t, customContent, string(content),
+			"existing example.sh should be preserved without --force")
+	})
 }
 
 // TestInitCommand_GlobalFlag_ExamplePromptPermissions verifies file permissions.

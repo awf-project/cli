@@ -237,6 +237,8 @@ All port interface methods performing blocking operations must accept context.Co
 
 When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
 
+In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -265,6 +267,12 @@ When documenting code duplication across layers in comments, include explicit fi
 Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
 
 Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
+
+Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
+
+Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
+
+When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
 
 ## Test Conventions
 

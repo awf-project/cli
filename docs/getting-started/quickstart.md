@@ -18,8 +18,10 @@ This creates the following structure:
 ├── config.yaml        # Project configuration with input templates
 ├── workflows/
 │   └── example.yaml   # Sample workflow
-└── prompts/
-    └── example.md     # Sample prompt template
+├── prompts/
+│   └── example.md     # Sample prompt template
+└── scripts/
+    └── example.sh     # Sample script file
 ```
 
 ## 2. Run the Example Workflow

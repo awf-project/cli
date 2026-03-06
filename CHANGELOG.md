@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **C060**: `awf init` now creates `.awf/scripts/` directory with `example.sh`
+  - Local init creates `.awf/scripts/` with `0o755` permissions and an executable `example.sh` demonstrating shebang-based execution
+  - Global init (`--global`) creates `$XDG_CONFIG_HOME/awf/scripts/` alongside the existing prompts directory
+  - `--force` flag overwrites existing example script
+  - Handles partial initialization: creates scripts directory even if prompts already exists
+  - Completes AWF directory convention symmetry with `.awf/workflows/`, `.awf/prompts/`, and `.awf/scripts/`
+
 ### Breaking Changes
 
 - **F070**: Replaced `custom` agent provider with `openai_compatible` provider
