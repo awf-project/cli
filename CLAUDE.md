@@ -230,14 +230,11 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
 - Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
 - Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
-
-Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
-
-All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
-
-When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
-
-In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
+- Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
+- All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
+- When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
+- In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
+- Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
 
 ## Common Pitfalls
 
@@ -263,16 +260,12 @@ In global init, create each directory resource independently; never early-exit w
 - Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
 - Always provide fallback execution paths for optional infrastructure features; when flags are false or conditions unmet, fall back to standard behavior
 - For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
-
-Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
-
-Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
-
-Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
-
-Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
-
-When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
+- Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
+- Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
+- Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
+- Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
+- When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
+- Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
 
 ## Test Conventions
 
@@ -284,8 +277,8 @@ When adding new scaffolded directories to init, replicate existing implementatio
 - Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 - Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
-
-Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
+- Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
+- Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
 
 ## Review Standards
 

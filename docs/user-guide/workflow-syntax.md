@@ -89,9 +89,9 @@ my_step:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `command` | string | - | Shell command to execute (mutually exclusive with `script_file`) |
-| `script_file` | string | - | Path to external shell script file (mutually exclusive with `command`) |
-| `dir` | string | cwd | Working directory (supports interpolation) |
+| `command` | string | - | Shell command to execute (mutually exclusive with `script_file`); supports [local-before-global resolution](#local-before-global-resolution) for AWF path variables |
+| `script_file` | string | - | Path to external shell script file (mutually exclusive with `command`); supports [local-before-global resolution](#local-before-global-resolution) |
+| `dir` | string | cwd | Working directory (supports interpolation and [local-before-global resolution](#local-before-global-resolution)) |
 | `timeout` | int | 0 | Execution timeout in seconds (0 = no timeout) |
 | `on_success` | string | - | Next state on success (exit code 0) |
 | `on_failure` | string or object | - | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
@@ -212,7 +212,7 @@ Script file paths are resolved in this order:
 
 ##### Local-Before-Global Resolution
 
-When using `{{.awf.scripts_dir}}` in `script_file`, AWF prioritizes local project files over global ones:
+When using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}` in `script_file`, `command`, or `dir` fields, AWF prioritizes local project files over global ones:
 
 - **If local file exists** at `<workflow_dir>/scripts/<suffix>` → use it
 - **If local file missing** → fall back to global `~/.config/awf/scripts/<suffix>`
@@ -231,6 +231,26 @@ steps:
 Resolution order:
 1. Check `~/myproject/.awf/workflows/scripts/deploy.sh` (local override)
 2. Check `~/.config/awf/scripts/deploy.sh` (global shared)
+
+##### Using AWF Paths in Commands
+
+The same local-before-global resolution applies when using `{{.awf.scripts_dir}}` or `{{.awf.prompts_dir}}` inside `command:` fields. This enables reusing shared helper scripts or templates from both command invocations and script files:
+
+```yaml
+# Both of these use the same local-before-global resolution:
+
+deploy_via_script:
+  type: step
+  script_file: "{{.awf.scripts_dir}}/deploy.sh"
+  on_success: done
+
+deploy_via_command:
+  type: step
+  command: "source {{.awf.scripts_dir}}/deploy.sh && run_deploy"
+  on_success: done
+```
+
+Both resolve to the local `scripts/deploy.sh` if it exists, otherwise fall back to the global `~/.config/awf/scripts/deploy.sh`.
 
 #### Template Interpolation
 
@@ -1220,8 +1240,9 @@ states:
     on_success: analyze
     on_failure: error
   analyze:
-    type: step
-    command: claude -c "Analyze: {{.states.read.Output}}"
+    type: agent
+    provider: claude
+    prompt: "Analyze: {{.states.read.Output}}"
     timeout: 120
     on_success: done
     on_failure: error

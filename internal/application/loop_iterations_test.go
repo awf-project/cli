@@ -68,6 +68,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticAddition(t *testing.T) {
 
 	// Expression resolves to "2 + 3"
 	resolver.results["{{inputs.a + inputs.b}}"] = "2 + 3"
+	evaluator.intResults["2 + 3"] = 5
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -88,6 +89,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticMultiplication(t *testing.T
 
 	// Expression: pages * retries_per_page
 	resolver.results["{{inputs.pages * inputs.retries_per_page}}"] = "3 * 2"
+	evaluator.intResults["3 * 2"] = 6
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -108,6 +110,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticSubtraction(t *testing.T) {
 
 	// Expression resolves to "10 - 3"
 	resolver.results["{{inputs.total - inputs.offset}}"] = "10 - 3"
+	evaluator.intResults["10 - 3"] = 7
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -128,6 +131,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticDivision(t *testing.T) {
 
 	// Expression resolves to "20 / 4" (exact integer division)
 	resolver.results["{{inputs.total / inputs.batch_size}}"] = "20 / 4"
+	evaluator.intResults["20 / 4"] = 5
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -175,6 +179,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticComplexExpression(t *testin
 
 	// Expression resolves to "(2 + 3) * 4"
 	resolver.results["{{(inputs.a + inputs.b) * inputs.c}}"] = "(2 + 3) * 4"
+	evaluator.intResults["(2 + 3) * 4"] = 20
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -218,6 +223,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticNonWholeNumber(t *testing.T
 	// Expression resolves to "7 / 2" = 3.5 (non-whole number)
 	// C042: Infrastructure evaluator converts float to int (3.5 → 3)
 	resolver.results["{{inputs.a / inputs.b}}"] = "7 / 2"
+	evaluator.intResults["7 / 2"] = 3
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -239,6 +245,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticInvalidSyntax(t *testing.T)
 
 	// Expression resolves to truly invalid syntax (unclosed parenthesis)
 	resolver.results["{{inputs.expr}}"] = "2 + (3 * 4"
+	evaluator.err = errors.New("unclosed parenthesis")
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 
@@ -279,6 +286,7 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticExceedsMax(t *testing.T) {
 
 	// Expression resolves to "5000 * 3" = 15000 (exceeds max 10000)
 	resolver.results["{{inputs.a * inputs.b}}"] = "5000 * 3"
+	evaluator.intResults["5000 * 3"] = 15000
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
 

@@ -67,14 +67,20 @@ cat > .awf/workflows/hello.yaml << 'EOF'
 name: hello
 version: "1.0.0"
 
+inputs:
+  - name: name
+    type: string
+    default: World
+
 states:
   initial: greet
   greet:
     type: step
-    command: echo "Hello, {{inputs.name}}!"
+    command: echo "Hello, {{.inputs.name}}!"
     on_success: done
   done:
     type: terminal
+    status: success
 EOF
 
 # Run with input
@@ -135,22 +141,34 @@ inputs:
 
 states:
   initial: read
+
   read:
     type: step
-    command: cat "{{inputs.file}}"
+    command: cat "{{.inputs.file}}"
     on_success: analyze
-    on_failure: error
+    on_failure: {message: "File not found: {{.inputs.file}}", status: 1}
+
   analyze:
-    type: step
-    command: claude -c "Review: {{states.read.Output}}"
+    type: agent
+    provider: claude
+    prompt: |
+      Review this code for bugs, security issues, and improvements:
+      {{.states.read.Output}}
+    output_format: json
+    options:
+      model: claude-sonnet-4-20250514
     timeout: 120
+    on_success: report
+    on_failure: {message: "Analysis failed: {{.states.analyze.Output}}"}
+
+  report:
+    type: step
+    command: echo "Severity: {{.states.analyze.JSON.severity}} — {{.states.analyze.JSON.summary}}"
     on_success: done
-    on_failure: error
+
   done:
     type: terminal
-  error:
-    type: terminal
-    status: failure
+    status: success
 ```
 
 ```bash

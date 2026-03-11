@@ -307,6 +307,7 @@ func (h *ServiceTestHarness) Build() (*application.ExecutionService, *TestMocks)
 		"data_dir":      xdg.AWFDataDir(),
 		"workflows_dir": xdg.AWFWorkflowsDir(),
 		"plugins_dir":   xdg.AWFPluginsDir(),
+		"scripts_dir":   xdg.AWFScriptsDir(),
 	})
 	service.SetAuditTrailWriter(h.auditTrail)
 

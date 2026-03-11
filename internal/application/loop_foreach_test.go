@@ -719,6 +719,7 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_Arithmetic(t *testing.
 
 	resolver.results[`["a", "b", "c", "d", "e"]`] = `["a", "b", "c", "d", "e"]`
 	resolver.results["{{inputs.a + inputs.b}}"] = "2 + 3" // Resolves to arithmetic
+	evaluator.intResults["2 + 3"] = 5                     // Arithmetic evaluates to 5
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 

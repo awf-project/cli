@@ -184,7 +184,7 @@ func (e *DryRunExecutor) buildStepPlan(ctx context.Context, step *workflow.Step,
 	}
 
 	if commandToResolve != "" {
-		dryRunStep.Command = e.resolveCommand(commandToResolve, interpCtx)
+		dryRunStep.Command = e.resolveCommand(commandToResolve, interpCtx, wf.SourceDir)
 	}
 
 	dryRunStep.Hooks = e.buildHooks(step.Hooks, interpCtx)
@@ -326,10 +326,10 @@ func (e *DryRunExecutor) buildHooks(hooks workflow.StepHooks, interpCtx *interpo
 		hook := workflow.DryRunHook{}
 		if action.Log != "" {
 			hook.Type = "log"
-			hook.Content = e.resolveCommand(action.Log, interpCtx)
+			hook.Content = e.resolveCommand(action.Log, interpCtx, "")
 		} else if action.Command != "" {
 			hook.Type = "command"
-			hook.Content = e.resolveCommand(action.Command, interpCtx)
+			hook.Content = e.resolveCommand(action.Command, interpCtx, "")
 		}
 		result.Pre = append(result.Pre, hook)
 	}
@@ -338,10 +338,10 @@ func (e *DryRunExecutor) buildHooks(hooks workflow.StepHooks, interpCtx *interpo
 		hook := workflow.DryRunHook{}
 		if action.Log != "" {
 			hook.Type = "log"
-			hook.Content = e.resolveCommand(action.Log, interpCtx)
+			hook.Content = e.resolveCommand(action.Log, interpCtx, "")
 		} else if action.Command != "" {
 			hook.Type = "command"
-			hook.Content = e.resolveCommand(action.Command, interpCtx)
+			hook.Content = e.resolveCommand(action.Command, interpCtx, "")
 		}
 		result.Post = append(result.Post, hook)
 	}
@@ -349,8 +349,10 @@ func (e *DryRunExecutor) buildHooks(hooks workflow.StepHooks, interpCtx *interpo
 	return result
 }
 
+// resolveCommand resolves template variables in a command string with optional AWF path resolution.
+// If sourceDir is provided, applies local-over-global resolution for AWF path variables.
 // NOTE: For dry-run, we attempt to resolve inputs but leave states.* as placeholders if unresolvable.
-func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Context) string {
+func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Context, sourceDir string) string {
 	if e.resolver == nil {
 		return cmd
 	}
@@ -359,6 +361,12 @@ func (e *DryRunExecutor) resolveCommand(cmd string, interpCtx *interpolation.Con
 	if err != nil {
 		return cmd
 	}
+
+	// Apply local-over-global resolution for AWF path variables (B011 FR-001/FR-002)
+	if sourceDir != "" && len(e.awfPaths) > 0 {
+		resolved = resolveCommandAWFPaths(resolved, sourceDir, e.awfPaths)
+	}
+
 	return resolved
 }
 
@@ -379,7 +387,7 @@ func (e *DryRunExecutor) buildAgentConfig(ctx context.Context, agent *workflow.A
 		promptToResolve = loadedPrompt
 	}
 	if promptToResolve != "" {
-		dryRunAgent.ResolvedPrompt = e.resolveCommand(promptToResolve, interpCtx)
+		dryRunAgent.ResolvedPrompt = e.resolveCommand(promptToResolve, interpCtx, "")
 	}
 
 	for key, value := range agent.Options {

@@ -401,3 +401,127 @@ states:
 	assert.Contains(t, output, "LOCAL SCRIPT", "local script should take precedence over global XDG script")
 	assert.NotContains(t, output, "GLOBAL SCRIPT", "global script should not be used when local exists")
 }
+
+// TestRunCommand_Command_LocalOverridesGlobalAWFScriptsDir verifies command field local-over-global AWF path resolution
+// AC: When both local and global scripts exist, command: "... {{.awf.scripts_dir}}/file" resolves to the local workflow-relative script
+// FR-001: Scripts directory local-over-global resolution in command steps
+// Regression guard for B011
+func TestRunCommand_Command_LocalOverridesGlobalAWFScriptsDir(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalScriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+
+	globalScriptContent := `#!/bin/sh
+echo "GLOBAL COMMAND SCRIPT"
+`
+	globalScriptPath := filepath.Join(globalScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(globalScriptPath, []byte(globalScriptContent), 0o755))
+
+	localScriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+	require.NoError(t, os.MkdirAll(localScriptsDir, 0o755))
+
+	localScriptContent := `#!/bin/sh
+echo "LOCAL COMMAND SCRIPT"
+`
+	localScriptPath := filepath.Join(localScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(localScriptPath, []byte(localScriptContent), 0o755))
+
+	workflowContent := `name: command-local-override
+version: "1.0.0"
+states:
+  initial: deploy
+  deploy:
+    type: step
+    command: "source {{.awf.scripts_dir}}/deploy.sh"
+    on_success: done
+  done:
+    type: terminal
+`
+	createTestWorkflow(t, tmpDir, "command-local-override.yaml", workflowContent)
+
+	output, err := runCLI(t, "run", "command-local-override", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, output, localScriptPath, "command should resolve to local script path when it exists")
+	assert.NotContains(t, output, globalScriptPath, "command should not resolve to global script path when local exists")
+}
+
+// TestRunCommand_Command_GlobalFallbackWhenNoLocal verifies command field falls back to global when no local script exists
+// AC: When only global script exists, command: "... {{.awf.scripts_dir}}/file" resolves to the global XDG path
+// FR-003: Fallback to global when no local file exists
+// Regression guard for B011
+func TestRunCommand_Command_GlobalFallbackWhenNoLocal(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalScriptsDir := filepath.Join(tmpDir, "awf", "scripts")
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+
+	globalScriptContent := `#!/bin/sh
+echo "ONLY GLOBAL SCRIPT"
+`
+	globalScriptPath := filepath.Join(globalScriptsDir, "helper.sh")
+	require.NoError(t, os.WriteFile(globalScriptPath, []byte(globalScriptContent), 0o755))
+
+	workflowContent := `name: command-global-fallback
+version: "1.0.0"
+states:
+  initial: execute
+  execute:
+    type: step
+    command: "source {{.awf.scripts_dir}}/helper.sh"
+    on_success: done
+  done:
+    type: terminal
+`
+	createTestWorkflow(t, tmpDir, "command-global-fallback.yaml", workflowContent)
+
+	output, err := runCLI(t, "run", "command-global-fallback", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, output, globalScriptPath, "command should fall back to global script path when no local file exists")
+}
+
+// TestRunCommand_Command_LocalOverridesGlobalAWFPromptsDir verifies command field local-over-global AWF prompts directory resolution
+// AC: When both local and global prompts exist, command: "... {{.awf.prompts_dir}}/file" resolves to the local workflow-relative prompt
+// FR-002: Prompts directory local-over-global resolution in command steps
+// Regression guard for B011
+func TestRunCommand_Command_LocalOverridesGlobalAWFPromptsDir(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalPromptsDir := filepath.Join(tmpDir, "awf", "prompts")
+	require.NoError(t, os.MkdirAll(globalPromptsDir, 0o755))
+
+	globalPromptContent := `You are a global assistant.`
+	globalPromptPath := filepath.Join(globalPromptsDir, "system.md")
+	require.NoError(t, os.WriteFile(globalPromptPath, []byte(globalPromptContent), 0o644))
+
+	localPromptsDir := filepath.Join(tmpDir, ".awf", "prompts")
+	require.NoError(t, os.MkdirAll(localPromptsDir, 0o755))
+
+	localPromptContent := `You are a local assistant.`
+	localPromptPath := filepath.Join(localPromptsDir, "system.md")
+	require.NoError(t, os.WriteFile(localPromptPath, []byte(localPromptContent), 0o644))
+
+	workflowContent := `name: command-prompts-local-override
+version: "1.0.0"
+states:
+  initial: execute
+  execute:
+    type: step
+    command: "cat {{.awf.prompts_dir}}/system.md"
+    on_success: done
+  done:
+    type: terminal
+`
+	createTestWorkflow(t, tmpDir, "command-prompts-local-override.yaml", workflowContent)
+
+	output, err := runCLI(t, "run", "command-prompts-local-override", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, output, localPromptPath, "command should resolve to local prompts dir path when it exists")
+	assert.NotContains(t, output, globalPromptPath, "command should not resolve to global prompts dir path when local exists")
+}

@@ -554,6 +554,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
 	templateSvc := application.NewTemplateService(templateRepo, logger)
 	interactiveExec.SetTemplateService(templateSvc)
+	interactiveExec.SetAWFPaths(buildAWFPaths())
 
 	// Set breakpoints if specified
 	if len(breakpoints) > 0 {
