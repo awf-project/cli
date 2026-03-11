@@ -104,6 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B011**: `{{.awf.scripts_dir}}` and `{{.awf.prompts_dir}}` in `command:` and `dir:` fields now resolve with local-before-global resolution
+    - Previously, these template variables always resolved to global XDG paths, bypassing the local override that `script_file:` and `prompt_file:` fields already provided
+    - Fix applied to all three executors: standard, single-step, and interactive mode
+    - `InteractiveExecutor` now populates AWF map in interpolation context (was missing entirely)
+    - `SingleStepExecutor` now populates AWF map in interpolation context (was missing entirely)
+    - No change to existing behavior when no local file exists — falls back to global path
 - **B010**: `awf validate` no longer rejects `{{.states.<step>.JSON.<field>}}` references as invalid
   - Added `JSON` entry to domain-layer `ValidStateProperties` map (was present only in runtime `pkg/interpolation`)
   - Added `json` → `JSON` casing normalization for actionable error hints

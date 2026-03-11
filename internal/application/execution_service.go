@@ -91,7 +91,7 @@ func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 }
 
 // SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
-// Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir.
+// Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir, scripts_dir.
 func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
 	s.awfPaths = paths
 }
@@ -1130,6 +1130,8 @@ func (s *ExecutionService) resolveStepCommand(
 	if err != nil {
 		return nil, fmt.Errorf("interpolate command: %w", err)
 	}
+	// FR-001: Apply local-over-global resolution to command field after interpolation
+	resolvedCmd = resolveCommandAWFPaths(resolvedCmd, wf.SourceDir, s.awfPaths)
 
 	// resolve dir if specified
 	resolvedDir := ""
@@ -1138,6 +1140,8 @@ func (s *ExecutionService) resolveStepCommand(
 		if err != nil {
 			return nil, fmt.Errorf("interpolate dir: %w", err)
 		}
+		// FR-002: Apply local-over-global resolution to dir field after interpolation
+		resolvedDir = resolveCommandAWFPaths(resolvedDir, wf.SourceDir, s.awfPaths)
 	}
 
 	// build command with env for secret masking

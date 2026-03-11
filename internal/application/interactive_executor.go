@@ -32,6 +32,7 @@ type InteractiveExecutor struct {
 	breakpoints      map[string]bool // steps to pause at (nil = pause at all steps)
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
+	awfPaths         map[string]string
 }
 
 // NewInteractiveExecutor creates a new interactive executor.
@@ -62,6 +63,12 @@ func NewInteractiveExecutor(
 // SetTemplateService configures the template service for workflow expansion.
 func (e *InteractiveExecutor) SetTemplateService(svc *TemplateService) {
 	e.templateSvc = svc
+}
+
+// SetAWFPaths configures the AWF XDG directory paths for template interpolation.
+// Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir, scripts_dir.
+func (e *InteractiveExecutor) SetAWFPaths(paths map[string]string) {
+	e.awfPaths = paths
 }
 
 // SetBreakpoints sets specific steps to pause at.
@@ -434,6 +441,11 @@ func (e *InteractiveExecutor) buildInterpolationContext(
 		env[k] = v
 	}
 
+	awfContext := e.awfPaths
+	if awfContext == nil {
+		awfContext = map[string]string{}
+	}
+
 	intCtx := &interpolation.Context{
 		Inputs: execCtx.Inputs,
 		States: states,
@@ -449,6 +461,7 @@ func (e *InteractiveExecutor) buildInterpolationContext(
 			User:       os.Getenv("USER"),
 			Hostname:   hostname,
 		},
+		AWF: awfContext,
 	}
 
 	// Include loop context if we're inside a loop
@@ -487,6 +500,7 @@ func (e *InteractiveExecutor) executeStep(
 	if err != nil {
 		return "", fmt.Errorf("interpolate command: %w", err)
 	}
+	resolvedCmd = resolveCommandAWFPaths(resolvedCmd, wf.SourceDir, e.awfPaths)
 
 	// Resolve dir if specified
 	resolvedDir := ""
@@ -495,6 +509,7 @@ func (e *InteractiveExecutor) executeStep(
 		if err != nil {
 			return "", fmt.Errorf("interpolate dir: %w", err)
 		}
+		resolvedDir = resolveCommandAWFPaths(resolvedDir, wf.SourceDir, e.awfPaths)
 	}
 
 	// Build command

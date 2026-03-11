@@ -518,6 +518,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_Arithmetic(t *testing.T)
 
 	// Expression resolves to "2 * 3" = 6
 	resolver.results["{{inputs.retries * inputs.multiplier}}"] = "2 * 3"
+	evaluator.intResults["2 * 3"] = 6
 
 	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
 

@@ -54,9 +54,9 @@ The standard output (stdout) from the executed step:
 
 ```yaml
 analyze:
-  type: step
-  command: |
-    claude -c "Analyze: {{.states.read_file.Output}}"
+  type: agent
+  provider: claude
+  prompt: "Analyze: {{.states.read_file.Output}}"
 ```
 
 #### ExitCode
@@ -100,8 +100,9 @@ Tokens consumed by agent steps (Claude, Gemini, Codex). Available for all agent 
 
 ```yaml
 run_agent:
-  type: step
-  command: claude -c "Process this"
+  type: agent
+  provider: claude
+  prompt: "Process this"
   on_success: log_tokens
 
 log_tokens:
@@ -285,15 +286,22 @@ deploy:
 
 #### Local-Before-Global Resolution
 
-When using `{{.awf.prompts_dir}}` or `{{.awf.scripts_dir}}`, AWF implements **local-before-global resolution**. This enables per-project overrides of shared global files:
+When using `{{.awf.prompts_dir}}` or `{{.awf.scripts_dir}}`, AWF implements **local-before-global resolution**. This enables per-project overrides of shared global files. The resolution applies to all uses of these variables:
+
+- **In `script_file` fields** — `script_file: "{{.awf.scripts_dir}}/deploy.sh"`
+- **In `prompt_file` fields** — `prompt_file: "{{.awf.prompts_dir}}/code_review.md"`
+- **In `command` fields** — `command: "source {{.awf.scripts_dir}}/helpers.sh && deploy"`
+- **In `dir` fields** — `dir: "{{.awf.scripts_dir}}"`
+
+Resolution process:
 
 1. **Local override preferred** — If a file exists in the workflow's local directory (`<workflow_dir>/prompts/` or `<workflow_dir>/scripts/`), it is used
 2. **Global fallback** — If no local file exists, the global XDG directory is used
-3. **Example**: `script_file: "{{.awf.scripts_dir}}/deploy.sh"` checks for:
+3. **Example**: Any reference to `{{.awf.scripts_dir}}/deploy.sh` checks for:
    - `<workflow_dir>/scripts/deploy.sh` (local override)
    - Then `~/.config/awf/scripts/deploy.sh` (global fallback)
 
-This allows teams to maintain shared scripts globally while letting projects override them locally:
+This allows teams to maintain shared scripts and templates globally while letting projects override them locally:
 
 ```yaml
 # Project structure
@@ -306,6 +314,16 @@ my-project/
 └── ...
 
 # ~/.config/awf/scripts/deploy.sh exists globally but is superseded
+
+# Example workflow that demonstrates the resolution
+states:
+  deploy:
+    type: step
+    # Both approaches use the same resolution:
+    script_file: "{{.awf.scripts_dir}}/deploy.sh"    # Uses local scripts/deploy.sh if present
+    # OR
+    command: "source {{.awf.scripts_dir}}/deploy.sh" # Same resolution as above
+    on_success: done
 ```
 
 The same behavior applies to `prompt_file` with `{{.awf.prompts_dir}}`.

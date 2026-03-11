@@ -90,6 +90,9 @@ func (s *ExecutionService) ExecuteSingleStep(
 		return result, fmt.Errorf("interpolate command: %w", err)
 	}
 
+	// Apply local-over-global resolution to AWF path variables (B011: FR-001, FR-002)
+	resolvedCmd = resolveCommandAWFPaths(resolvedCmd, wf.SourceDir, intCtx.AWF)
+
 	// Resolve dir if specified
 	resolvedDir := ""
 	if step.Dir != "" {
@@ -100,6 +103,9 @@ func (s *ExecutionService) ExecuteSingleStep(
 			result.Error = fmt.Sprintf("interpolate dir: %s", err)
 			return result, fmt.Errorf("interpolate dir: %w", err)
 		}
+
+		// Apply local-over-global resolution to AWF path variables (B011: FR-001, FR-002)
+		resolvedDir = resolveCommandAWFPaths(resolvedDir, wf.SourceDir, intCtx.AWF)
 	}
 
 	// Build and execute command
@@ -194,6 +200,11 @@ func (s *ExecutionService) buildSingleStepInterpolationContext(
 		}
 	}
 
+	awfPaths := s.awfPaths
+	if awfPaths == nil {
+		awfPaths = map[string]string{}
+	}
+
 	return &interpolation.Context{
 		Inputs: inputs,
 		States: states,
@@ -208,5 +219,6 @@ func (s *ExecutionService) buildSingleStepInterpolationContext(
 			User:       os.Getenv("USER"),
 			Hostname:   hostname,
 		},
+		AWF: awfPaths,
 	}
 }

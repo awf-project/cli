@@ -39,15 +39,16 @@ func TestTemplateResolver_AWF(t *testing.T) {
 		},
 		{
 			name:     "all standard AWF directories",
-			template: "{{.awf.prompts_dir}},{{.awf.config_dir}},{{.awf.workflows_dir}},{{.awf.data_dir}},{{.awf.plugins_dir}}",
+			template: "{{.awf.prompts_dir}},{{.awf.config_dir}},{{.awf.workflows_dir}},{{.awf.data_dir}},{{.awf.plugins_dir}},{{.awf.scripts_dir}}",
 			awf: map[string]string{
 				"prompts_dir":   "/home/user/.config/awf/prompts",
 				"config_dir":    "/home/user/.config/awf",
 				"workflows_dir": "/home/user/.config/awf/workflows",
 				"data_dir":      "/home/user/.local/share/awf",
 				"plugins_dir":   "/home/user/.local/share/awf/plugins",
+				"scripts_dir":   "/home/user/.config/awf/scripts",
 			},
-			want: "/home/user/.config/awf/prompts,/home/user/.config/awf,/home/user/.config/awf/workflows,/home/user/.local/share/awf,/home/user/.local/share/awf/plugins",
+			want: "/home/user/.config/awf/prompts,/home/user/.config/awf,/home/user/.config/awf/workflows,/home/user/.local/share/awf,/home/user/.local/share/awf/plugins,/home/user/.config/awf/scripts",
 		},
 		{
 			name:     "empty AWF map",

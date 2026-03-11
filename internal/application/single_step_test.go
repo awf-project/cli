@@ -3,6 +3,8 @@ package application_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -632,4 +634,197 @@ func (m *mockTemplateRepository) ListTemplates(ctx context.Context) ([]string, e
 
 func (m *mockTemplateRepository) Exists(ctx context.Context, name string) bool {
 	return false
+}
+
+// TestExecuteSingleStep_LocalOverGlobal_CommandResolution tests that {{.awf.scripts_dir}} in command
+// field resolves to local .awf/scripts/ when file exists locally (B011: FR-001, FR-002).
+func TestExecuteSingleStep_LocalOverGlobal_CommandResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localScriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+	globalScriptsDir := filepath.Join(tmpDir, "global-scripts")
+	require.NoError(t, os.MkdirAll(localScriptsDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+
+	localScriptPath := filepath.Join(localScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(localScriptPath, []byte("#!/bin/bash\necho local"), 0o755))
+
+	globalScriptPath := filepath.Join(globalScriptsDir, "deploy.sh")
+	require.NoError(t, os.WriteFile(globalScriptPath, []byte("#!/bin/bash\necho global"), 0o755))
+
+	repo := newMockRepository()
+	repo.workflows["local-override-test"] = &workflow.Workflow{
+		Name:      "local-override-test",
+		SourceDir: filepath.Join(tmpDir, ".awf", "workflows"),
+		Initial:   "deploy",
+		Steps: map[string]*workflow.Step{
+			"deploy": {
+				Name:      "deploy",
+				Type:      workflow.StepTypeCommand,
+				Command:   "source {{.awf.scripts_dir}}/deploy.sh",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	executor := &commandCapturingExecutor{
+		capturedCmd: "",
+		result:      &ports.CommandResult{Stdout: "executed", ExitCode: 0},
+	}
+
+	resolver := newRealResolver()
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
+
+	execSvc.SetAWFPaths(map[string]string{
+		"scripts_dir": globalScriptsDir,
+	})
+
+	result, err := execSvc.ExecuteSingleStep(context.Background(), "local-override-test", "deploy", nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.Contains(t, executor.capturedCmd, localScriptsDir, "command should resolve to local .awf/scripts directory")
+	assert.NotContains(t, executor.capturedCmd, globalScriptsDir, "command should not contain global directory path")
+}
+
+// TestExecuteSingleStep_LocalOverGlobal_DirResolution tests that {{.awf.prompts_dir}} in dir field
+// resolves to local .awf/prompts/ when directory exists locally.
+func TestExecuteSingleStep_LocalOverGlobal_DirResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localPromptsDir := filepath.Join(tmpDir, ".awf", "prompts")
+	globalPromptsDir := filepath.Join(tmpDir, "global-prompts")
+	require.NoError(t, os.MkdirAll(localPromptsDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalPromptsDir, 0o755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(localPromptsDir, "template.md"), []byte("local template"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalPromptsDir, "template.md"), []byte("global template"), 0o644))
+
+	repo := newMockRepository()
+	repo.workflows["dir-override-test"] = &workflow.Workflow{
+		Name:      "dir-override-test",
+		SourceDir: filepath.Join(tmpDir, ".awf", "workflows"),
+		Initial:   "process",
+		Steps: map[string]*workflow.Step{
+			"process": {
+				Name:      "process",
+				Type:      workflow.StepTypeCommand,
+				Command:   "ls -la",
+				Dir:       "{{.awf.prompts_dir}}",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	executor := &dirCapturingExecutor{
+		capturedDir: "",
+		result:      &ports.CommandResult{Stdout: "ok", ExitCode: 0},
+	}
+
+	resolver := newRealResolver()
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
+
+	execSvc.SetAWFPaths(map[string]string{
+		"prompts_dir": globalPromptsDir,
+	})
+
+	result, err := execSvc.ExecuteSingleStep(context.Background(), "dir-override-test", "process", nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.Equal(t, localPromptsDir, executor.capturedDir, "dir field should resolve to local .awf/prompts directory")
+}
+
+// TestExecuteSingleStep_LocalOverGlobal_GlobalFallback tests that {{.awf.scripts_dir}} falls back
+// to global path when no local file exists.
+func TestExecuteSingleStep_LocalOverGlobal_GlobalFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localScriptsDir := filepath.Join(tmpDir, ".awf", "scripts")
+	globalScriptsDir := filepath.Join(tmpDir, "global-scripts")
+	require.NoError(t, os.MkdirAll(localScriptsDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalScriptsDir, 0o755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(globalScriptsDir, "missing.sh"), []byte("global only"), 0o755))
+
+	repo := newMockRepository()
+	repo.workflows["fallback-test"] = &workflow.Workflow{
+		Name:      "fallback-test",
+		SourceDir: filepath.Join(tmpDir, ".awf", "workflows"),
+		Initial:   "run",
+		Steps: map[string]*workflow.Step{
+			"run": {
+				Name:      "run",
+				Type:      workflow.StepTypeCommand,
+				Command:   "bash {{.awf.scripts_dir}}/missing.sh",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	executor := &commandCapturingExecutor{
+		capturedCmd: "",
+		result:      &ports.CommandResult{Stdout: "completed", ExitCode: 0},
+	}
+
+	resolver := newRealResolver()
+
+	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), executor, &mockLogger{}, nil)
+	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, resolver, nil)
+
+	execSvc.SetAWFPaths(map[string]string{
+		"scripts_dir": globalScriptsDir,
+	})
+
+	result, err := execSvc.ExecuteSingleStep(context.Background(), "fallback-test", "run", nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.Contains(t, executor.capturedCmd, globalScriptsDir, "should fall back to global directory when local file doesn't exist")
+}
+
+// commandCapturingExecutor captures the Program field from Command to verify command interpolation
+type commandCapturingExecutor struct {
+	capturedCmd string
+	result      *ports.CommandResult
+}
+
+func (c *commandCapturingExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	c.capturedCmd = cmd.Program
+	return c.result, nil
+}
+
+// newRealResolver creates a real interpolation resolver for testing AWF path resolution
+func newRealResolver() *realResolverAdapter {
+	return &realResolverAdapter{
+		resolver: interpolation.NewTemplateResolver(),
+	}
+}
+
+// realResolverAdapter wraps the real template resolver for testing
+type realResolverAdapter struct {
+	resolver interpolation.Resolver
+}
+
+func (r *realResolverAdapter) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	return r.resolver.Resolve(template, ctx)
 }
