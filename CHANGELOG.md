@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F072**: Hugo documentation site with Doks theme
+  - Full documentation site served from existing `docs/` via Hugo module mounts (zero file duplication)
+  - Landing page with project positioning, feature highlights, install snippet, and CTAs
+  - Blog section with placeholder post structure
+  - GitHub Actions workflow for automated build and deploy to GitHub Pages
+  - FlexSearch full-text documentation search via Doks built-in integration
+  - Dark/light mode toggle via Doks theme
+  - `make docs`, `make docs-serve`, `make docs-clean` targets for local development
 - **C060**: `awf init` now creates `.awf/scripts/` directory with `example.sh`
   - Local init creates `.awf/scripts/` with `0o755` permissions and an executable `example.sh` demonstrating shebang-based execution
   - Global init (`--global`) creates `$XDG_CONFIG_HOME/awf/scripts/` alongside the existing prompts directory

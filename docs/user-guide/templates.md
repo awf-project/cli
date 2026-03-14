@@ -1,4 +1,6 @@
-# Workflow Templates
+---
+title: "Workflow Templates"
+---
 
 Templates allow defining reusable step patterns with parameters. Define once, use in multiple workflows.
 

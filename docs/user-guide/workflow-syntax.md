@@ -1,4 +1,6 @@
-# Workflow Syntax Reference
+---
+title: "Workflow Syntax Reference"
+---
 
 Complete reference for AWF workflow YAML syntax.
 

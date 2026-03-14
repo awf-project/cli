@@ -1,0 +1,109 @@
+[      29ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[      32ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[      32ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[      33ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   22690ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   22690ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   22716ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   22717ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   27805ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   27807ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   27810ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   27811ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   33422ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   33430ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   33435ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   33435ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   38568ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   38570ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   38572ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   38573ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   44040ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   44045ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   44043ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   44045ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   49988ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   49990ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   49994ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   49995ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   55832ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   55834ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   55835ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   55837ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   61712ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   61714ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   61717ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   61718ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   67721ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   67722ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   67764ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   67766ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   73493ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   73494ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   73497ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   73497ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   79535ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   79536ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   79538ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   79538ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[   85228ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[   85229ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[   85231ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[   85231ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  103788ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  103803ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  103807ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  103809ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  109331ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  109332ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  109334ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  109334ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  114911ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  114912ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  114938ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  114939ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  120426ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  120427ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  120429ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  120429ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  126070ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  126071ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  126072ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  126074ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  132049ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  132050ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  132052ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  132053ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  138095ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  138097ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  138100ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  138101ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  140780ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  140781ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  140782ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  140784ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  142640ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  142642ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  142644ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  142645ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/:0
+[  143133ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  143155ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  143196ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  143277ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  143439ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  143760ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  144401ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  145682ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  148243ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  153365ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  163606ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  184087ms] [ERROR] WebSocket connection to 'ws://localhost:1316/cli/livereload' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:1316/cli/livereload.js?mindelay=10&v=2&port=1316&path=cli/livereload:1
+[  228599ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon.ico:0
+[  228662ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  228664ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  228665ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  228666ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/getting-started/installation/:0
+[  232657ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/search-index.json:0
+[  232659ms] Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[  232661ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:1316/favicon-192x192.png:0
+[  232662ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:1316/favicon-192x192.png (Download error or resource isn't a valid image) @ http://localhost:1316/cli/docs/getting-started/installation/:0

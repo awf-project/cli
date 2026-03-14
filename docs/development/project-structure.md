@@ -1,4 +1,6 @@
-# Project Structure
+---
+title: "Project Structure"
+---
 
 AWF follows a standard Go project layout aligned with hexagonal architecture.
 
@@ -9,6 +11,7 @@ awf/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yaml              # Build, lint, test pipeline
+│       ├── hugo.yml             # Documentation site build & deploy
 │       └── quality.yml          # Architecture lint enforcement
 │
 ├── cmd/
@@ -102,10 +105,17 @@ awf/
 │       ├── features/            # Feature specifications
 │       └── implementation/      # Implementation plans
 │
+├── site/                        # Hugo documentation site (Doks theme)
+│   ├── config/                  # Hugo configuration (split files)
+│   ├── content/                 # Site content (landing page, blog)
+│   ├── layouts/                 # Custom layout overrides
+│   └── package.json             # Node.js dependencies (build-time only)
+│
 ├── .awf/                        # AWF configuration (example)
 │   ├── workflows/               # Workflow definitions
 │   ├── templates/               # Workflow templates
-│   └── prompts/                 # Prompt templates
+│   ├── prompts/                 # Prompt templates
+│   └── scripts/                 # Script files
 │
 ├── bin/                         # Built binaries (gitignored)
 │

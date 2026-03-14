@@ -1,6 +1,6 @@
 # Contributing to AWF
 
-Thank you for considering contributing to AWF (AI Workflow CLI). This document explains how to contribute.
+Thank you for considering contributing to AWF (AI Workflow Framework CLI). This document explains how to contribute.
 
 ## Code of Conduct
 

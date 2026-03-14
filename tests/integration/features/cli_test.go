@@ -123,7 +123,7 @@ func TestCLI_Help_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "AI Workflow CLI")
+	assert.Contains(t, output, "AI Workflow Framework CLI")
 	assert.Contains(t, output, "run")
 	assert.Contains(t, output, "list")
 	assert.Contains(t, output, "status")

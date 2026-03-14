@@ -1,4 +1,4 @@
-# golangci-lint v2 configuration for AWF (AI Workflow CLI)
+# golangci-lint v2 configuration for AWF (AI Workflow Framework CLI)
 # Hexagonal architecture with Cobra CLI
 
 version: "2"

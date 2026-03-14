@@ -36,8 +36,8 @@ func NewRootCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "awf",
-		Short: "AI Workflow CLI - Orchestrate AI agents through YAML workflows",
-		Long: `AWF (AI Workflow CLI) is a command-line tool for orchestrating AI agents
+		Short: "AI Workflow Framework CLI - Orchestrate AI agents through YAML workflows",
+		Long: `AWF (AI Workflow Framework CLI) is a command-line tool for orchestrating AI agents
 through configurable YAML workflows with state machine execution.
 
 Examples:

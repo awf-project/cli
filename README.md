@@ -179,6 +179,10 @@ See [Examples](docs/user-guide/examples.md) for more workflows.
 
 ## Documentation
 
+📖 **[Browse the documentation site](https://awf-project.github.io/cli/)** — searchable, with dark mode.
+
+Or read locally:
+
 | Section | Description |
 |---------|-------------|
 | [Getting Started](docs/getting-started/) | Installation and first steps |
@@ -207,6 +211,9 @@ make lint           # Run linter
 make lint-arch      # Check architecture constraints
 make test-coverage  # Generate coverage report
 make quality        # Run all quality checks
+make docs           # Build documentation site
+make docs-serve     # Serve documentation site locally
+make docs-clean     # Clean documentation build artifacts
 ```
 
 See [Testing Guide](docs/development/testing.md) for conventions.

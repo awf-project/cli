@@ -1,0 +1,58 @@
+{{ define "main" }}
+<section class="section container-fluid mt-n3 pb-3">
+  <div class="row justify-content-center">
+    <div class="col-lg-12 text-center">
+      <h1>{{ .Title }}</h1>
+    </div>
+    <div class="col-lg-9 col-xl-8 text-center">
+      <p class="lead">{{ .Params.lead | safeHTML }}</p>
+      <a class="btn btn-primary btn-cta rounded-pill btn-lg my-3" href="/docs/" role="button">Get Started</a>
+      <a class="btn btn-outline-primary rounded-pill btn-lg my-3" href="https://github.com/awf-project/cli" role="button">GitHub</a>
+      {{ .Content }}
+    </div>
+  </div>
+</section>
+{{ end }}
+
+{{ define "sidebar-prefooter" }}
+  {{ if site.Params.doks.backgroundDots -}}
+  <div class="d-flex justify-content-start">
+    <div class="bg-dots"></div>
+  </div>
+  {{ end -}}
+  <section class="section section-md section-features">
+    <div class="container">
+      <div class="row justify-content-center text-center">
+        <div class="col-lg-5">
+          <h2 class="h4">Multi-Agent Orchestration</h2>
+          <p>Run Claude, Gemini, Codex, and OpenAI-compatible providers in coordinated workflows with parallel execution strategies.</p>
+        </div>
+        <div class="col-lg-5">
+          <h2 class="h4">Declarative YAML Workflows</h2>
+          <p>Define workflows as state machines with typed inputs, transitions, and error handling — no imperative code required.</p>
+        </div>
+        <div class="col-lg-5">
+          <h2 class="h4">Built-in Operations</h2>
+          <p>GitHub integration, HTTP requests, notifications, and a plugin system for custom operations.</p>
+        </div>
+        <div class="col-lg-5">
+          <h2 class="h4">Audit Trail</h2>
+          <p>Structured JSONL logging of every execution with secret masking and atomic writes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+{{ end }}
+
+{{ define "sidebar-footer" }}
+{{ if site.Params.doks.sectionFooter -}}
+<section class="section section-md container-fluid bg-light">
+  <div class="row justify-content-center text-center">
+    <div class="col-lg-7">
+      <h2 class="mt-2">Start building with AWF today</h2>
+      <a class="btn btn-primary rounded-pill px-4 my-2" href="/docs/" role="button">Get Started</a>
+    </div>
+  </div>
+</section>
+{{ end -}}
+{{ end }}

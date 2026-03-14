@@ -1,6 +1,8 @@
 # AWF Documentation
 
-Welcome to the AWF (AI Workflow CLI) documentation.
+Welcome to the AWF (AI Workflow Framework CLI) documentation.
+
+> **📖 Online documentation:** These docs are also available at **[awf-project.github.io/cli](https://awf-project.github.io/cli/)** with full-text search and dark mode support.
 
 > **⚠️ Security Warning:** AWF executes shell commands and interacts with AI agents. Agents can "hallucinate" and produce destructive commands. Never run untrusted workflows and always review them using `--dry-run` or `--interactive` mode. See [Security Policy](../.github/SECURITY.md) for more.
 
@@ -63,6 +65,20 @@ For contributors and developers:
 - [Project Structure](development/project-structure.md) - Codebase organization
 - [Code Quality](development/code-quality.md) - Linters, formatters, and quality tooling
 - [Testing](development/testing.md) - Testing conventions and commands
+
+## Building Documentation Locally
+
+To build and serve the documentation site locally:
+
+```bash
+make docs        # Build the site with minification
+make docs-serve  # Serve at http://localhost:1313 with live reload
+make docs-clean  # Clean build artifacts
+```
+
+The documentation site is built with [Hugo](https://gohugo.io) and the [Doks](https://getdoks.org) theme. Documentation source files in this directory are mounted directly into the site via Hugo module configuration — changes are reflected immediately on rebuild without requiring file copies.
+
+**Requirements:** Hugo 0.147+ with extended edition (includes CSS/JS transpiling)
 
 ## Additional Resources
 

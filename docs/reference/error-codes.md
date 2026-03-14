@@ -1,4 +1,6 @@
-# Error Codes Reference
+---
+title: "Error Codes Reference"
+---
 
 AWF uses a hierarchical error code taxonomy to provide granular, machine-readable error identification. Each error code follows the format `CATEGORY.SUBCATEGORY.SPECIFIC` and maps to one of the four standard exit codes.
 

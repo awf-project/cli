@@ -1,4 +1,6 @@
-# Testing
+---
+title: "Testing"
+---
 
 AWF follows Go testing conventions with table-driven tests and clear separation between unit and integration tests.
 

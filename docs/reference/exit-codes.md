@@ -1,4 +1,6 @@
-# Exit Codes
+---
+title: "Exit Codes"
+---
 
 AWF uses standardized exit codes to indicate the type of error that occurred.
 

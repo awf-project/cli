@@ -1,4 +1,6 @@
-# Loop Reference
+---
+title: "Loop Reference"
+---
 
 This document describes loop control flow in AWF workflows, including while loops, for-each loops, and transition behavior within loop bodies.
 

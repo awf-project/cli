@@ -1,4 +1,6 @@
-# Variable Interpolation
+---
+title: "Variable Interpolation"
+---
 
 AWF uses Go template syntax (`{{.var}}`) for variable interpolation in workflow definitions.
 

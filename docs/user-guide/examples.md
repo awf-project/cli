@@ -1,4 +1,6 @@
-# Workflow Examples
+---
+title: "Workflow Examples"
+---
 
 Real-world workflow examples demonstrating AWF capabilities.
 

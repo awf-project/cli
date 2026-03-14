@@ -1,4 +1,6 @@
-# CLI Commands
+---
+title: "CLI Commands"
+---
 
 ## Overview
 

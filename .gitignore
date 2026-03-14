@@ -20,7 +20,7 @@ coverage.html
 Thumbs.db
 
 # Dependencies (if vendored)
-# vendor/
+.grepai/
 
 # Environment
 .env
@@ -35,7 +35,13 @@ storage/history.db
 # Workflow files
 /audit
 
+# Hugo / Doks (site/)
+site/public/
+site/resources/
+site/.hugo_build.lock
+site/node_modules/
+.playwright-mcp/
+
 # Temporary files
 *.tmp
 *.bak
-.grepai/

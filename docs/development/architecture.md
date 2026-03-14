@@ -1,4 +1,6 @@
-# Architecture
+---
+title: "Architecture"
+---
 
 AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict dependency inversion.
 

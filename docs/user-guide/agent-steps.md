@@ -1,4 +1,6 @@
-# Agent Steps Guide
+---
+title: "Agent Steps Guide"
+---
 
 Invoke AI agents (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
 

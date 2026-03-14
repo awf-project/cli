@@ -1,4 +1,6 @@
-# Plugins
+---
+title: "Plugins"
+---
 
 AWF supports plugins to extend functionality with custom operations. AWF ships with **built-in plugins** for HTTP requests, GitHub operations, and notifications, and supports **external RPC plugins** for additional integrations.
 
