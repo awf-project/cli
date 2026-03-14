@@ -21,27 +21,27 @@ Each ADR follows this structure:
 
 ## Numbering Convention
 
-ADRs are numbered sequentially: `0001`, `0002`, etc.
+ADRs are numbered sequentially: `001`, `002`, etc.
 Numbers are never reused. If a decision is reversed, the original ADR is marked "Superseded" and a new ADR is created with a reference.
 
 ## Index
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [0001](0001-hexagonal-architecture.md) | Hexagonal Architecture | Accepted |
-| [0002](0002-error-taxonomy-exit-codes.md) | Error Taxonomy with Exit Codes | Accepted |
-| [0003](0003-yaml-state-machine-workflows.md) | YAML State Machine for Workflow Definition | Accepted |
-| [0004](0004-domain-operation-registry.md) | Domain Operation Registry with Infrastructure Coexistence | Accepted |
-| [0005](0005-atomic-file-writes.md) | Atomic File Writes for State Persistence | Accepted |
-| [0006](0006-xdg-path-resolution.md) | XDG-Compliant Path Resolution | Accepted |
-| [0007](0007-agent-prompt-xor-constraint.md) | Agent Prompt XOR Constraint | Accepted |
-| [0008](0008-openai-compatible-provider-http-adapter.md) | OpenAI-Compatible Provider: HTTP Adapter Integration | Accepted |
-| [0009](0009-breaking-removal-custom-provider-v0.4.0.md) | Breaking: Removal of Custom Provider in v0.4.0 | Accepted |
-| [0010](0010-paired-jsonl-audit-trail-with-atomic-append.md) | Paired JSONL Audit Trail with Atomic Append | Accepted |
-| [0011](0011-application-layer-secret-masking-for-audit-events.md) | Application-Layer Secret Masking for Audit Events | Accepted |
-| [0012](0012-runtime-shell-detection.md) | Runtime Shell Detection with $SHELL Environment Variable | Accepted |
-| [0013](0013-context-aware-input-ports.md) | Context-Aware Input Ports | Accepted |
-| [0014](0014-shebang-execution-for-script-files.md) | Shebang Execution for Script Files | Accepted |
+| [001](001-hexagonal-architecture.md) | Hexagonal Architecture | Accepted |
+| [002](002-error-taxonomy-exit-codes.md) | Error Taxonomy with Exit Codes | Accepted |
+| [003](003-yaml-state-machine-workflows.md) | YAML State Machine for Workflow Definition | Accepted |
+| [004](004-domain-operation-registry.md) | Domain Operation Registry with Infrastructure Coexistence | Accepted |
+| [005](005-atomic-file-writes.md) | Atomic File Writes for State Persistence | Accepted |
+| [006](006-xdg-path-resolution.md) | XDG-Compliant Path Resolution | Accepted |
+| [007](007-agent-prompt-xor-constraint.md) | Agent Prompt XOR Constraint | Accepted |
+| [008](008-openai-compatible-provider-http-adapter.md) | OpenAI-Compatible Provider: HTTP Adapter Integration | Accepted |
+| [009](009-breaking-removal-custom-provider-v0.4.0.md) | Breaking: Removal of Custom Provider in v0.4.0 | Accepted |
+| [010](010-paired-jsonl-audit-trail-with-atomic-append.md) | Paired JSONL Audit Trail with Atomic Append | Accepted |
+| [011](011-application-layer-secret-masking-for-audit-events.md) | Application-Layer Secret Masking for Audit Events | Accepted |
+| [012](012-runtime-shell-detection.md) | Runtime Shell Detection with $SHELL Environment Variable | Accepted |
+| [013](013-context-aware-input-ports.md) | Context-Aware Input Ports | Accepted |
+| [014](014-shebang-execution-for-script-files.md) | Shebang Execution for Script Files | Accepted |
 
 ## Creating a New ADR
 

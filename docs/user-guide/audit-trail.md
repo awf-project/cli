@@ -1,4 +1,6 @@
-# Audit Trail
+---
+title: "Audit Trail"
+---
 
 AWF records a structured audit log for every workflow execution. Each execution produces two JSONL entries — one at start, one at completion — enabling post-hoc tracing of who ran what, when, and what happened.
 
@@ -95,5 +97,5 @@ Audit trail failures never block workflow execution:
 ## See Also
 
 - [Audit Trail Schema](../reference/audit-trail-schema.md) — Full field reference and constraints
-- [ADR-0010](../ADR/0010-paired-jsonl-audit-trail-with-atomic-append.md) — Design decision: paired JSONL with atomic append
-- [ADR-0011](../ADR/0011-application-layer-secret-masking-for-audit-events.md) — Design decision: application-layer secret masking
+- [ADR-0010](../ADR/010-paired-jsonl-audit-trail-with-atomic-append.md) — Design decision: paired JSONL with atomic append
+- [ADR-0011](../ADR/011-application-layer-secret-masking-for-audit-events.md) — Design decision: application-layer secret masking

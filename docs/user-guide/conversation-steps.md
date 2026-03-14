@@ -1,4 +1,6 @@
-# Agent Conversation Mode
+---
+title: "Agent Conversation Mode"
+---
 
 Enable multi-turn conversations with AI agents, featuring automatic context window management, token counting, and stop conditions.
 

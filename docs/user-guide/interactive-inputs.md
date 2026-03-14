@@ -1,4 +1,6 @@
-# Interactive Input Collection
+---
+title: "Interactive Input Collection"
+---
 
 AWF automatically prompts for missing required workflow inputs when running in a terminal environment, eliminating the need to remember all parameters upfront.
 

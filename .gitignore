@@ -35,6 +35,12 @@ storage/history.db
 # Workflow files
 /audit
 
+# Hugo / Doks (site/)
+site/public/
+site/resources/
+site/.hugo_build.lock
+site/node_modules/
+
 # Temporary files
 *.tmp
 *.bak

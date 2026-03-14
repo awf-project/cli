@@ -1,4 +1,6 @@
-# Package Documentation Guide
+---
+title: "Package Documentation Guide"
+---
 
 AWF provides package-level documentation via `doc.go` files, enabling developers to discover implementation details, architecture patterns, and usage examples without reading raw source code.
 

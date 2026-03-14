@@ -1,4 +1,6 @@
-# Input Validation
+---
+title: "Input Validation"
+---
 
 AWF validates workflow inputs at runtime against defined rules.
 

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {{ $target := .GetPage .Params.redirect_to }}
+  {{ with $target }}
+  <meta http-equiv="refresh" content="0; url={{ .RelPermalink }}">
+  <link rel="canonical" href="{{ .Permalink }}">
+  {{ end }}
+  <title>Redirecting&hellip;</title>
+</head>
+<body>
+  {{ with $target }}
+  <p>Redirecting to <a href="{{ .RelPermalink }}">{{ .Title }}</a>&hellip;</p>
+  {{ end }}
+</body>
+</html>

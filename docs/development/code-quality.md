@@ -1,4 +1,6 @@
-# Code Quality Tools
+---
+title: "Code Quality Tools"
+---
 
 This document explains AWF's code quality tooling strategy, covering all 17 linters, the formatter, and how to use them effectively.
 

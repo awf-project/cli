@@ -1,4 +1,6 @@
-# Project Configuration
+---
+title: "Project Configuration"
+---
 
 AWF supports project-level configuration through a YAML file that pre-populates workflow inputs, reducing repetitive command-line arguments.
 

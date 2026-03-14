@@ -1,4 +1,6 @@
-# Audit Trail Schema
+---
+title: "Audit Trail Schema"
+---
 
 Reference documentation for audit trail JSONL entries. Each line in the audit trail is a complete JSON object.
 
@@ -304,5 +306,5 @@ jq -s '
 ## See Also
 
 - [Audit Trail Guide](../user-guide/audit-trail.md) - Configuration and usage guide
-- [ADR-010: Paired JSONL Audit Trail with Atomic Append](../ADR/0010-paired-jsonl-audit-trail-with-atomic-append.md)
-- [ADR-011: Application-Layer Secret Masking for Audit Events](../ADR/0011-application-layer-secret-masking-for-audit-events.md)
+- [ADR-010: Paired JSONL Audit Trail with Atomic Append](../ADR/010-paired-jsonl-audit-trail-with-atomic-append.md)
+- [ADR-011: Application-Layer Secret Masking for Audit Events](../ADR/011-application-layer-secret-masking-for-audit-events.md)
