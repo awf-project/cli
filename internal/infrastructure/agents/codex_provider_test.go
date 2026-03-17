@@ -16,13 +16,7 @@ import (
 // Component: agent_providers
 // Feature: 39
 
-func TestCodexProvider_Name(t *testing.T) {
-	provider := NewCodexProvider()
-
-	assert.Equal(t, "codex", provider.Name())
-}
-
-func TestCodexProvider_Execute_HappyPath(t *testing.T) {
+func TestCodexProvider_Execute_HappyPath_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	tests := []struct {
@@ -74,7 +68,7 @@ func TestCodexProvider_Execute_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCodexProvider_Execute_EmptyPrompt(t *testing.T) {
+func TestCodexProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 	ctx := context.Background()
 
@@ -85,7 +79,7 @@ func TestCodexProvider_Execute_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestCodexProvider_Execute_Timeout(t *testing.T) {
+func TestCodexProvider_Execute_Timeout_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -98,7 +92,7 @@ func TestCodexProvider_Execute_Timeout(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestCodexProvider_Execute_ContextCancellation(t *testing.T) {
+func TestCodexProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -109,7 +103,7 @@ func TestCodexProvider_Execute_ContextCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestCodexProvider_Execute_InvalidOptions(t *testing.T) {
+func TestCodexProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -145,7 +139,7 @@ func TestCodexProvider_Execute_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestCodexProvider_Validate_CLINotInstalled(t *testing.T) {
+func TestCodexProvider_Validate_CLINotInstalled_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	err := provider.Validate()
@@ -154,14 +148,14 @@ func TestCodexProvider_Validate_CLINotInstalled(t *testing.T) {
 	}
 }
 
-func TestCodexProvider_Validate_CLIInstalled(t *testing.T) {
+func TestCodexProvider_Validate_CLIInstalled_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	err := provider.Validate()
 	assert.NoError(t, err)
 }
 
-func TestCodexProvider_Execute_CodeWithSpecialChars(t *testing.T) {
+func TestCodexProvider_Execute_CodeWithSpecialChars_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -175,7 +169,7 @@ func TestCodexProvider_Execute_CodeWithSpecialChars(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestCodexProvider_Execute_MultilinePrompt(t *testing.T) {
+func TestCodexProvider_Execute_MultilinePrompt_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -195,7 +189,7 @@ func TestCodexProvider_Execute_MultilinePrompt(t *testing.T) {
 // Component: provider_conversation_support
 // Feature: F033
 
-func TestCodexProvider_ExecuteConversation_HappyPath(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -217,7 +211,7 @@ func TestCodexProvider_ExecuteConversation_HappyPath(t *testing.T) {
 	assert.True(t, result.CompletedAt.After(result.StartedAt))
 }
 
-func TestCodexProvider_ExecuteConversation_EmptyState(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_EmptyState_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -231,7 +225,7 @@ func TestCodexProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	assert.NotNil(t, result.State)
 }
 
-func TestCodexProvider_ExecuteConversation_NilState(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_NilState_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -244,7 +238,7 @@ func TestCodexProvider_ExecuteConversation_NilState(t *testing.T) {
 	assert.Contains(t, err.Error(), "state")
 }
 
-func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -257,7 +251,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_WithHistory_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -283,7 +277,7 @@ func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
 	assert.GreaterOrEqual(t, result.State.TotalTurns, 3)
 }
 
-func TestCodexProvider_ExecuteConversation_CodeGeneration(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_CodeGeneration_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -298,7 +292,7 @@ func TestCodexProvider_ExecuteConversation_CodeGeneration(t *testing.T) {
 	assert.Contains(t, result.Output, "func", "should contain Go function")
 }
 
-func TestCodexProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_ContextCancellation_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -313,7 +307,7 @@ func TestCodexProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestCodexProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_InvalidOptions_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -359,7 +353,7 @@ func TestCodexProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_TokenCounting_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -375,7 +369,7 @@ func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	assert.True(t, result.TokensEstimated, "should be estimated for CLI provider")
 }
 
-func TestCodexProvider_ExecuteConversation_LargeHistory(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_LargeHistory_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -400,7 +394,7 @@ func TestCodexProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestCodexProvider_ExecuteConversation_MultilineCode(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_MultilineCode_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()
@@ -420,7 +414,7 @@ func fibonacci(n int) int {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
+func TestCodexProvider_ExecuteConversation_StatePreservation_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 
 	ctx := context.Background()

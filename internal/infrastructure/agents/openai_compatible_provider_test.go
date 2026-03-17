@@ -18,10 +18,10 @@ import (
 	"github.com/awf-project/cli/pkg/httpx"
 )
 
-// TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath verifies the full
+// TestOpenAICompatibleProvider_SingleTurnHappyPath_Integration verifies the full
 // single-turn lifecycle (US1): configure provider, execute with prompt against
 // httptest.Server, verify AgentResult fields populated correctly.
-func TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath(t *testing.T) {
+func TestOpenAICompatibleProvider_SingleTurnHappyPath_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]any{
@@ -74,9 +74,9 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnHappyPath(t *testing.T) {
 	assert.NotZero(t, result.CompletedAt)
 }
 
-// TestOpenAICompatibleProvider_IntegrationSingleTurnWithOptions verifies options
+// TestOpenAICompatibleProvider_SingleTurnWithOptions_Integration verifies options
 // (temperature, max_tokens) are passed correctly to the API.
-func TestOpenAICompatibleProvider_IntegrationSingleTurnWithOptions(t *testing.T) {
+func TestOpenAICompatibleProvider_SingleTurnWithOptions_Integration(t *testing.T) {
 	var capturedReq chatCompletionsRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,10 +136,10 @@ func TestOpenAICompatibleProvider_IntegrationSingleTurnWithOptions(t *testing.T)
 	assert.Equal(t, *capturedReq.MaxTokens, 100)
 }
 
-// TestOpenAICompatibleProvider_IntegrationConversation verifies multi-turn
+// TestOpenAICompatibleProvider_Conversation_Integration verifies multi-turn
 // conversation (US2): execute with 2 prior turns in ConversationState,
 // verify full message history is sent, response updates state correctly.
-func TestOpenAICompatibleProvider_IntegrationConversation(t *testing.T) {
+func TestOpenAICompatibleProvider_Conversation_Integration(t *testing.T) {
 	var capturedReq chatCompletionsRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -233,9 +233,9 @@ func TestOpenAICompatibleProvider_IntegrationConversation(t *testing.T) {
 	assert.Equal(t, capturedReq.Messages[4].Content, "What about the third question?")
 }
 
-// TestOpenAICompatibleProvider_IntegrationHTTP401Unauthorized verifies (US3)
+// TestOpenAICompatibleProvider_HTTP401Unauthorized_Integration verifies (US3)
 // HTTP 401 produces clear authentication error without leaking API key.
-func TestOpenAICompatibleProvider_IntegrationHTTP401Unauthorized(t *testing.T) {
+func TestOpenAICompatibleProvider_HTTP401Unauthorized_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Header().Set("Content-Type", "application/json")
@@ -269,9 +269,9 @@ func TestOpenAICompatibleProvider_IntegrationHTTP401Unauthorized(t *testing.T) {
 	assert.NotContains(t, err.Error(), "API key")
 }
 
-// TestOpenAICompatibleProvider_IntegrationHTTP429RateLimit verifies (US3)
+// TestOpenAICompatibleProvider_HTTP429RateLimit_Integration verifies (US3)
 // HTTP 429 produces rate-limit error with Retry-After info.
-func TestOpenAICompatibleProvider_IntegrationHTTP429RateLimit(t *testing.T) {
+func TestOpenAICompatibleProvider_HTTP429RateLimit_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "60")
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -303,9 +303,9 @@ func TestOpenAICompatibleProvider_IntegrationHTTP429RateLimit(t *testing.T) {
 	assert.Contains(t, err.Error(), "60")
 }
 
-// TestOpenAICompatibleProvider_IntegrationHTTP500ServerError verifies (US3)
+// TestOpenAICompatibleProvider_HTTP500ServerError_Integration verifies (US3)
 // HTTP 5xx produces server error message.
-func TestOpenAICompatibleProvider_IntegrationHTTP500ServerError(t *testing.T) {
+func TestOpenAICompatibleProvider_HTTP500ServerError_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-Type", "application/json")
@@ -336,10 +336,10 @@ func TestOpenAICompatibleProvider_IntegrationHTTP500ServerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
-// TestOpenAICompatibleProvider_IntegrationRequestBodyValidation verifies
+// TestOpenAICompatibleProvider_RequestBodyValidation_Integration verifies
 // the request body contains expected structure: model, messages array,
 // optional fields (temperature, max_tokens, top_p).
-func TestOpenAICompatibleProvider_IntegrationRequestBodyValidation(t *testing.T) {
+func TestOpenAICompatibleProvider_RequestBodyValidation_Integration(t *testing.T) {
 	var capturedReq chatCompletionsRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -403,9 +403,9 @@ func TestOpenAICompatibleProvider_IntegrationRequestBodyValidation(t *testing.T)
 	assert.Equal(t, 0.9, *capturedReq.TopP)
 }
 
-// TestOpenAICompatibleProvider_IntegrationJSONOutput verifies output_format: json
+// TestOpenAICompatibleProvider_JSONOutput_Integration verifies output_format: json
 // parsing works correctly from the API response.
-func TestOpenAICompatibleProvider_IntegrationJSONOutput(t *testing.T) {
+func TestOpenAICompatibleProvider_JSONOutput_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]any{
@@ -458,9 +458,9 @@ func TestOpenAICompatibleProvider_IntegrationJSONOutput(t *testing.T) {
 	assert.Equal(t, "New York", result.Response["city"])
 }
 
-// TestOpenAICompatibleProvider_IntegrationBaseURLNormalization verifies
+// TestOpenAICompatibleProvider_BaseURLNormalization_Integration verifies
 // trailing slash is handled correctly in base_url.
-func TestOpenAICompatibleProvider_IntegrationBaseURLNormalization(t *testing.T) {
+func TestOpenAICompatibleProvider_BaseURLNormalization_Integration(t *testing.T) {
 	handlerCalled := false
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -513,9 +513,9 @@ func TestOpenAICompatibleProvider_IntegrationBaseURLNormalization(t *testing.T) 
 	assert.True(t, handlerCalled, "handler should be called with normalized URL")
 }
 
-// TestOpenAICompatibleProvider_IntegrationConversationWithSystemPrompt verifies
+// TestOpenAICompatibleProvider_ConversationWithSystemPrompt_Integration verifies
 // system_prompt is included as first message in conversation requests.
-func TestOpenAICompatibleProvider_IntegrationConversationWithSystemPrompt(t *testing.T) {
+func TestOpenAICompatibleProvider_ConversationWithSystemPrompt_Integration(t *testing.T) {
 	var capturedReq chatCompletionsRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

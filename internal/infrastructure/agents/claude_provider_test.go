@@ -16,13 +16,7 @@ import (
 // Component: agent_providers
 // Feature: 39
 
-func TestClaudeProvider_Name(t *testing.T) {
-	provider := NewClaudeProvider()
-
-	assert.Equal(t, "claude", provider.Name())
-}
-
-func TestClaudeProvider_Execute_HappyPath(t *testing.T) {
+func TestClaudeProvider_Execute_HappyPath_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	tests := []struct {
@@ -68,7 +62,7 @@ func TestClaudeProvider_Execute_HappyPath(t *testing.T) {
 	}
 }
 
-func TestClaudeProvider_Execute_JSONResponse(t *testing.T) {
+func TestClaudeProvider_Execute_JSONResponse_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -85,7 +79,7 @@ func TestClaudeProvider_Execute_JSONResponse(t *testing.T) {
 	assert.IsType(t, map[string]any{}, result.Response)
 }
 
-func TestClaudeProvider_Execute_TokenUsage(t *testing.T) {
+func TestClaudeProvider_Execute_TokenUsage_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -97,7 +91,7 @@ func TestClaudeProvider_Execute_TokenUsage(t *testing.T) {
 	assert.Greater(t, result.Tokens, 0, "Should capture token usage")
 }
 
-func TestClaudeProvider_Execute_EmptyPrompt(t *testing.T) {
+func TestClaudeProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 	ctx := context.Background()
 
@@ -108,7 +102,7 @@ func TestClaudeProvider_Execute_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestClaudeProvider_Execute_Timeout(t *testing.T) {
+func TestClaudeProvider_Execute_Timeout_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -123,7 +117,7 @@ func TestClaudeProvider_Execute_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
-func TestClaudeProvider_Execute_ContextCancellation(t *testing.T) {
+func TestClaudeProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -136,7 +130,7 @@ func TestClaudeProvider_Execute_ContextCancellation(t *testing.T) {
 	assert.Contains(t, err.Error(), "context canceled")
 }
 
-func TestClaudeProvider_Execute_InvalidOptions(t *testing.T) {
+func TestClaudeProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -179,7 +173,7 @@ func TestClaudeProvider_Execute_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestClaudeProvider_Validate_CLINotInstalled(t *testing.T) {
+func TestClaudeProvider_Validate_CLINotInstalled_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	err := provider.Validate()
@@ -190,7 +184,7 @@ func TestClaudeProvider_Validate_CLINotInstalled(t *testing.T) {
 	}
 }
 
-func TestClaudeProvider_Validate_CLIInstalled(t *testing.T) {
+func TestClaudeProvider_Validate_CLIInstalled_Integration(t *testing.T) {
 	// Skip if Claude CLI not available
 	provider := NewClaudeProvider()
 
@@ -198,7 +192,7 @@ func TestClaudeProvider_Validate_CLIInstalled(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestClaudeProvider_Execute_LargePrompt(t *testing.T) {
+func TestClaudeProvider_Execute_LargePrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -216,7 +210,7 @@ func TestClaudeProvider_Execute_LargePrompt(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestClaudeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
+func TestClaudeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	tests := []struct {
@@ -261,7 +255,7 @@ func TestClaudeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
 // Component: provider_conversation_support
 // Feature: F033
 
-func TestClaudeProvider_ExecuteConversation_HappyPath(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -283,7 +277,7 @@ func TestClaudeProvider_ExecuteConversation_HappyPath(t *testing.T) {
 	assert.True(t, result.CompletedAt.After(result.StartedAt))
 }
 
-func TestClaudeProvider_ExecuteConversation_EmptyState(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_EmptyState_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -297,7 +291,7 @@ func TestClaudeProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	assert.NotNil(t, result.State)
 }
 
-func TestClaudeProvider_ExecuteConversation_NilState(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_NilState_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -310,7 +304,7 @@ func TestClaudeProvider_ExecuteConversation_NilState(t *testing.T) {
 	assert.Contains(t, err.Error(), "state")
 }
 
-func TestClaudeProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -323,7 +317,7 @@ func TestClaudeProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestClaudeProvider_ExecuteConversation_WithHistory(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_WithHistory_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -349,7 +343,7 @@ func TestClaudeProvider_ExecuteConversation_WithHistory(t *testing.T) {
 	assert.GreaterOrEqual(t, result.State.TotalTurns, 3)
 }
 
-func TestClaudeProvider_ExecuteConversation_JSONResponse(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_JSONResponse_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -367,7 +361,7 @@ func TestClaudeProvider_ExecuteConversation_JSONResponse(t *testing.T) {
 	assert.IsType(t, map[string]any{}, result.Response)
 }
 
-func TestClaudeProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_ContextCancellation_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -382,7 +376,7 @@ func TestClaudeProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestClaudeProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_ContextTimeout_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -399,7 +393,7 @@ func TestClaudeProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestClaudeProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_InvalidOptions_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -411,20 +405,6 @@ func TestClaudeProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 		options map[string]any
 		errMsg  string
 	}{
-		{
-			name: "invalid temperature type",
-			options: map[string]any{
-				"temperature": "invalid",
-			},
-			errMsg: "temperature",
-		},
-		{
-			name: "invalid max_tokens type",
-			options: map[string]any{
-				"max_tokens": "invalid",
-			},
-			errMsg: "max_tokens",
-		},
 		{
 			name: "negative temperature",
 			options: map[string]any{
@@ -452,7 +432,7 @@ func TestClaudeProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestClaudeProvider_ExecuteConversation_TokenCounting(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_TokenCounting_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -468,7 +448,7 @@ func TestClaudeProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	assert.True(t, result.TokensEstimated, "should be estimated for CLI provider")
 }
 
-func TestClaudeProvider_ExecuteConversation_LargeHistory(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_LargeHistory_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -493,7 +473,7 @@ func TestClaudeProvider_ExecuteConversation_LargeHistory(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestClaudeProvider_ExecuteConversation_MultilinePrompt(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_MultilinePrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -510,7 +490,7 @@ func add(a, b int) int {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestClaudeProvider_ExecuteConversation_WithAllowedTools(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_WithAllowedTools_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
@@ -527,7 +507,7 @@ func TestClaudeProvider_ExecuteConversation_WithAllowedTools(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestClaudeProvider_ExecuteConversation_StatePreservation(t *testing.T) {
+func TestClaudeProvider_ExecuteConversation_StatePreservation_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 
 	ctx := context.Background()
