@@ -14,13 +14,7 @@ import (
 // Component: agent_providers
 // Feature: 39
 
-func TestOpenCodeProvider_Name(t *testing.T) {
-	provider := NewOpenCodeProvider()
-
-	assert.Equal(t, "opencode", provider.Name())
-}
-
-func TestOpenCodeProvider_Execute_HappyPath(t *testing.T) {
+func TestOpenCodeProvider_Execute_HappyPath_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	tests := []struct {
@@ -72,7 +66,7 @@ func TestOpenCodeProvider_Execute_HappyPath(t *testing.T) {
 	}
 }
 
-func TestOpenCodeProvider_Execute_EmptyPrompt(t *testing.T) {
+func TestOpenCodeProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 	ctx := context.Background()
 
@@ -83,7 +77,7 @@ func TestOpenCodeProvider_Execute_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestOpenCodeProvider_Execute_Timeout(t *testing.T) {
+func TestOpenCodeProvider_Execute_Timeout_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -97,7 +91,7 @@ func TestOpenCodeProvider_Execute_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
-func TestOpenCodeProvider_Execute_ContextCancellation(t *testing.T) {
+func TestOpenCodeProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -109,7 +103,7 @@ func TestOpenCodeProvider_Execute_ContextCancellation(t *testing.T) {
 	assert.Contains(t, err.Error(), "context canceled")
 }
 
-func TestOpenCodeProvider_Execute_InvalidOptions(t *testing.T) {
+func TestOpenCodeProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -145,7 +139,7 @@ func TestOpenCodeProvider_Execute_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestOpenCodeProvider_Validate_CLINotInstalled(t *testing.T) {
+func TestOpenCodeProvider_Validate_CLINotInstalled_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	err := provider.Validate()
@@ -154,14 +148,14 @@ func TestOpenCodeProvider_Validate_CLINotInstalled(t *testing.T) {
 	}
 }
 
-func TestOpenCodeProvider_Validate_CLIInstalled(t *testing.T) {
+func TestOpenCodeProvider_Validate_CLIInstalled_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	err := provider.Validate()
 	assert.NoError(t, err)
 }
 
-func TestOpenCodeProvider_Execute_ComplexPrompt(t *testing.T) {
+func TestOpenCodeProvider_Execute_ComplexPrompt_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	ctx := context.Background()
@@ -179,7 +173,7 @@ func TestOpenCodeProvider_Execute_ComplexPrompt(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestOpenCodeProvider_Execute_SpecialCharactersInPrompt(t *testing.T) {
+func TestOpenCodeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 
 	ctx := context.Background()

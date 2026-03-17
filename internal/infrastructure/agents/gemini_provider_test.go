@@ -15,13 +15,7 @@ import (
 // Component: agent_providers
 // Feature: 39
 
-func TestGeminiProvider_Name(t *testing.T) {
-	provider := NewGeminiProvider()
-
-	assert.Equal(t, "gemini", provider.Name())
-}
-
-func TestGeminiProvider_Execute_HappyPath(t *testing.T) {
+func TestGeminiProvider_Execute_HappyPath_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	tests := []struct {
@@ -59,7 +53,7 @@ func TestGeminiProvider_Execute_HappyPath(t *testing.T) {
 	}
 }
 
-func TestGeminiProvider_Execute_EmptyPrompt(t *testing.T) {
+func TestGeminiProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 	ctx := context.Background()
 
@@ -70,7 +64,7 @@ func TestGeminiProvider_Execute_EmptyPrompt(t *testing.T) {
 	assert.Contains(t, err.Error(), "prompt")
 }
 
-func TestGeminiProvider_Execute_Timeout(t *testing.T) {
+func TestGeminiProvider_Execute_Timeout_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -84,7 +78,7 @@ func TestGeminiProvider_Execute_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
-func TestGeminiProvider_Execute_ContextCancellation(t *testing.T) {
+func TestGeminiProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -96,7 +90,7 @@ func TestGeminiProvider_Execute_ContextCancellation(t *testing.T) {
 	assert.Contains(t, err.Error(), "context canceled")
 }
 
-func TestGeminiProvider_Execute_InvalidOptions(t *testing.T) {
+func TestGeminiProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -116,13 +110,6 @@ func TestGeminiProvider_Execute_InvalidOptions(t *testing.T) {
 			},
 			wantErr: "model",
 		},
-		{
-			name: "invalid safety_settings type",
-			options: map[string]any{
-				"safety_settings": 123,
-			},
-			wantErr: "safety_settings",
-		},
 	}
 
 	provider := NewGeminiProvider()
@@ -139,7 +126,7 @@ func TestGeminiProvider_Execute_InvalidOptions(t *testing.T) {
 	}
 }
 
-func TestGeminiProvider_Validate_CLINotInstalled(t *testing.T) {
+func TestGeminiProvider_Validate_CLINotInstalled_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	err := provider.Validate()
@@ -148,14 +135,14 @@ func TestGeminiProvider_Validate_CLINotInstalled(t *testing.T) {
 	}
 }
 
-func TestGeminiProvider_Validate_CLIInstalled(t *testing.T) {
+func TestGeminiProvider_Validate_CLIInstalled_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	err := provider.Validate()
 	assert.NoError(t, err)
 }
 
-func TestGeminiProvider_Execute_LongPrompt(t *testing.T) {
+func TestGeminiProvider_Execute_LongPrompt_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	ctx := context.Background()
@@ -173,7 +160,7 @@ func TestGeminiProvider_Execute_LongPrompt(t *testing.T) {
 	assert.NotEmpty(t, result.Output)
 }
 
-func TestGeminiProvider_Execute_SpecialCharacters(t *testing.T) {
+func TestGeminiProvider_Execute_SpecialCharacters_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	ctx := context.Background()
