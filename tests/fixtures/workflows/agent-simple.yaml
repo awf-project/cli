@@ -4,7 +4,7 @@ name: agent-simple
 version: "1.0.0"
 
 inputs:
-  task:
+  - name: task
     type: string
     required: true
     description: "Task description for the agent"

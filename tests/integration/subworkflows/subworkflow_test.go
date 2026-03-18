@@ -347,8 +347,10 @@ states:
 
 	execCtx, err := execSvc.Run(ctx, "error-parent", nil)
 
-	// Should complete (error was handled via on_failure path)
-	require.NoError(t, err, "error should be handled via on_failure path")
+	// Error was handled via on_failure path, but terminal has status:failure so Run() returns error
+	require.Error(t, err, "terminal failure state should return error")
+	assert.Contains(t, err.Error(), "terminal failure state")
+	assert.Equal(t, workflow.StatusFailed, execCtx.Status, "workflow should have failed status")
 	assert.Equal(t, "error_handled", execCtx.CurrentStep, "should reach error handler")
 
 	// Verify call_failing step failed

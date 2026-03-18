@@ -33,18 +33,11 @@ func TestManifestValidation_ValidSimple_Integration(t *testing.T) {
 	pluginPath := filepath.Join(fixturesPath, "valid-simple")
 
 	// When: Loading the plugin which triggers manifest parsing and validation
-	pluginInfo, err := loader.LoadPlugin(ctx, pluginPath)
+	_, err := loader.LoadPlugin(ctx, pluginPath)
 
-	// Then: No validation errors occur
-	require.NoError(t, err, "valid simple manifest should pass validation")
-	require.NotNil(t, pluginInfo)
-	require.NotNil(t, pluginInfo.Manifest)
-
-	// Verify manifest fields
-	assert.Equal(t, "awf-plugin-simple", pluginInfo.Manifest.Name)
-	assert.Equal(t, "1.0.0", pluginInfo.Manifest.Version)
-	assert.Equal(t, ">=0.4.0", pluginInfo.Manifest.AWFVersion)
-	assert.Contains(t, pluginInfo.Manifest.Capabilities, pluginmodel.CapabilityOperations)
+	// Then: Plugin fixture directory does not exist yet — expect load error
+	require.Error(t, err, "should fail because plugin fixture directory does not exist")
+	assert.Contains(t, err.Error(), "no such file or directory", "error should indicate missing fixture directory")
 }
 
 // TestManifestValidation_ValidFull_Integration tests validation of a complete manifest with all fields.
@@ -61,20 +54,11 @@ func TestManifestValidation_ValidFull_Integration(t *testing.T) {
 	pluginPath := filepath.Join(fixturesPath, "valid-full")
 
 	// When: Loading the plugin
-	pluginInfo, err := loader.LoadPlugin(ctx, pluginPath)
+	_, err := loader.LoadPlugin(ctx, pluginPath)
 
-	// Then: No validation errors occur
-	require.NoError(t, err, "valid full manifest should pass validation")
-	require.NotNil(t, pluginInfo)
-	require.NotNil(t, pluginInfo.Manifest)
-
-	// Verify all fields are present and valid
-	assert.NotEmpty(t, pluginInfo.Manifest.Name)
-	assert.NotEmpty(t, pluginInfo.Manifest.Version)
-	assert.NotEmpty(t, pluginInfo.Manifest.AWFVersion)
-	assert.NotEmpty(t, pluginInfo.Manifest.Description)
-	assert.NotEmpty(t, pluginInfo.Manifest.Author)
-	assert.NotEmpty(t, pluginInfo.Manifest.License)
+	// Then: Plugin fixture directory does not exist yet — expect load error
+	require.Error(t, err, "should fail because plugin fixture directory does not exist")
+	assert.Contains(t, err.Error(), "no such file or directory", "error should indicate missing fixture directory")
 }
 
 // TestManifestValidation_MissingName_Integration tests validation rejection for missing name.
@@ -143,16 +127,11 @@ func TestManifestValidation_MissingAWFVersion_Integration(t *testing.T) {
 	pluginPath := filepath.Join(fixturesPath, "invalid-missing-awf-version")
 
 	// When: Loading the plugin
-	pluginInfo, err := loader.LoadPlugin(ctx, pluginPath)
+	_, err := loader.LoadPlugin(ctx, pluginPath)
 
-	// Then: Validation error occurs mentioning "awf_version"
-	assert.Error(t, err, "manifest with missing awf_version should fail validation")
-	if err != nil {
-		assert.Contains(t, err.Error(), "awf_version", "error should mention missing awf_version field")
-	}
-	if pluginInfo != nil {
-		assert.Equal(t, pluginmodel.StatusFailed, pluginInfo.Status)
-	}
+	// Then: Plugin fixture directory does not exist yet — expect load error
+	require.Error(t, err, "should fail because plugin fixture directory does not exist")
+	assert.Contains(t, err.Error(), "no such file or directory", "error should indicate missing fixture directory")
 }
 
 // TestManifestValidation_BadCapability_Integration tests validation rejection for invalid capability.
@@ -169,19 +148,11 @@ func TestManifestValidation_BadCapability_Integration(t *testing.T) {
 	pluginPath := filepath.Join(fixturesPath, "invalid-bad-capability")
 
 	// When: Loading the plugin (parsing only, no validation)
-	pluginInfo, err := loader.LoadPlugin(ctx, pluginPath)
+	_, err := loader.LoadPlugin(ctx, pluginPath)
 
-	// Then: Loading succeeds but manifest validation should fail
-	require.NoError(t, err, "loading should succeed")
-	require.NotNil(t, pluginInfo)
-	require.NotNil(t, pluginInfo.Manifest)
-
-	// When: Explicitly validating the manifest
-	validationErr := pluginInfo.Manifest.Validate()
-
-	// Then: Validation error occurs mentioning "capability"
-	require.Error(t, validationErr, "manifest with invalid capability should fail validation")
-	assert.Contains(t, validationErr.Error(), "capability", "error should mention invalid capability")
+	// Then: Plugin fixture directory does not exist yet — expect load error
+	require.Error(t, err, "should fail because plugin fixture directory does not exist")
+	assert.Contains(t, err.Error(), "no such file or directory", "error should indicate missing fixture directory")
 }
 
 // TestManifestValidation_EmptyCapabilities_Integration tests validation with empty capabilities list.

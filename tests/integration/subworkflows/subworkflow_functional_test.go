@@ -337,13 +337,15 @@ states:
 
 	execCtx, err := execSvc.Run(ctx, "missing-input-parent", nil)
 
-	// Should either fail with error or go to on_failure path
+	// Should fail: either with a missing-input error or by reaching the error terminal
+	// (which returns a terminal failure state error after C1 fix)
 	if err != nil {
 		assert.True(t,
 			strings.Contains(err.Error(), "required") ||
 				strings.Contains(err.Error(), "input") ||
-				strings.Contains(err.Error(), "required_param"),
-			"error should mention missing required input: %v", err)
+				strings.Contains(err.Error(), "required_param") ||
+				strings.Contains(err.Error(), "terminal failure state"),
+			"error should mention missing required input or terminal failure: %v", err)
 	} else {
 		// If it didn't error, it should have gone to error terminal
 		assert.Equal(t, "error", execCtx.CurrentStep, "should reach error terminal via on_failure")

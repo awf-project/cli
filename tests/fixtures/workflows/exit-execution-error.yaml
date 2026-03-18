@@ -6,12 +6,6 @@ name: exit-execution-error
 description: Workflow to test CLI exit code 3 for execution failures
 version: "1.0.0"
 
-inputs:
-  - name: timeout
-    type: string
-    required: false
-    default: "10s"
-
 states:
   initial: failing_command
 
@@ -20,7 +14,7 @@ states:
     command: |
       echo "This command will fail"
       exit 42
-    timeout: "{{inputs.timeout}}"
+    timeout: "10s"
     on_success: done
     on_failure: error
 
@@ -29,3 +23,5 @@ states:
 
   error:
     type: terminal
+    status: failure
+    message: "command execution failed"

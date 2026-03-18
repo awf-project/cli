@@ -359,7 +359,7 @@ func (w *OutputWriter) WriteError(err error, code int) error {
 
 	// Fallback: legacy error handling for plain errors
 	if w.format == FormatJSON {
-		return w.writeJSON(ErrorResponse{
+		return w.writeJSONError(ErrorResponse{
 			Error: err.Error(),
 			Code:  code,
 		})
@@ -374,7 +374,7 @@ func (w *OutputWriter) WriteError(err error, code int) error {
 // Uses HumanErrorFormatter for text output and JSON for machine-readable output.
 func (w *OutputWriter) writeStructuredError(err *domerrors.StructuredError, code int) error {
 	if w.format == FormatJSON {
-		return w.writeJSON(ErrorResponse{
+		return w.writeJSONError(ErrorResponse{
 			Error:     err.Error(),
 			Code:      code,
 			ErrorCode: string(err.Code),
@@ -595,7 +595,16 @@ func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
 }
 
 func (w *OutputWriter) writeJSON(v any) error {
-	enc := json.NewEncoder(w.out)
+	return w.encodeJSON(w.out, v)
+}
+
+// writeJSONError writes JSON to stderr; error responses must go to stderr even in JSON format.
+func (w *OutputWriter) writeJSONError(v any) error {
+	return w.encodeJSON(w.errOut, v)
+}
+
+func (w *OutputWriter) encodeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
 		return fmt.Errorf("encoding JSON: %w", err)

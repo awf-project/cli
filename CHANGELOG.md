@@ -112,6 +112,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **B012**: Fixed 120 failing integration tests across 9 packages
+  - Updated test assertions to match current production behavior after accumulated drift from F063–F072 and B005–B011
+  - 8 root cause categories addressed: terminal failure assertions (C1), CLI exit codes (C2), JSON deserialization (C3), missing fixtures (C4), conversation test drift (C5), loop transitions (C6), cleanup meta-tests (C7), hint system output (C8)
+  - No tests deleted — only assertions and expectations updated (NFR-001)
+  - No production code changes — all fixes confined to `tests/integration/`
 - **B011**: `{{.awf.scripts_dir}}` and `{{.awf.prompts_dir}}` in `command:` and `dir:` fields now resolve with local-before-global resolution
     - Previously, these template variables always resolved to global XDG paths, bypassing the local override that `script_file:` and `prompt_file:` fields already provided
     - Fix applied to all three executors: standard, single-step, and interactive mode

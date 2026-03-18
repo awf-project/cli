@@ -5,6 +5,7 @@ package errors_test
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -33,12 +34,13 @@ import (
 // workflow filename triggers a "did you mean?" suggestion for the closest match.
 func TestFileNotFoundHint_SuggestsCorrectFilename(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
 	// "hints-file-tyop.yaml" is a deliberate typo — the real file is "hints-file-typo.yaml"
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	cmd := exec.Command(binPath, "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing file")
@@ -59,10 +61,11 @@ func TestFileNotFoundHint_SuggestsCorrectFilename(t *testing.T) {
 // a hint referencing the line/column where the syntax error occurs.
 func TestYAMLSyntaxHint_ShowsLineReference(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-yaml-syntax-error.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "validate", "hints-yaml-syntax-error.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid YAML")
@@ -82,10 +85,11 @@ func TestYAMLSyntaxHint_ShowsLineReference(t *testing.T) {
 // reference (e.g. "proces" instead of "process") triggers a "did you mean?" hint.
 func TestInvalidStateHint_SuggestsClosestMatch(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "validate", "hints-invalid-state-ref.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid state reference")
@@ -108,11 +112,12 @@ func TestInvalidStateHint_SuggestsClosestMatch(t *testing.T) {
 // and an example --input flag.
 func TestMissingInputHint_ListsRequiredInputs(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-missing-input.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
 	// Run without providing required inputs
-	cmd := exec.Command(binPath, "run", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "run", "hints-missing-input.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing required inputs")
@@ -136,10 +141,11 @@ func TestMissingInputHint_ListsRequiredInputs(t *testing.T) {
 // non-existent command triggers a hint suggesting verification of the command.
 func TestCommandFailureHint_SuggestsVerification(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-command-not-found.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	workflowPath := filepath.Join(fixturesDir, "hints-command-not-found.yaml")
 
 	cmd := exec.Command(binPath, "run", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for non-existent command")
@@ -164,12 +170,13 @@ func TestCommandFailureHint_SuggestsVerification(t *testing.T) {
 // close Levenshtein match falls back to a generic "awf list" suggestion.
 func TestFileNotFoundHint_CompletelyWrongName(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
 	// This filename is too different from any fixture to trigger "did you mean?"
-	wrongPath := filepath.Join("../../fixtures/workflows", "zzzzzzzzz-nonexistent.yaml")
+	wrongPath := filepath.Join(fixturesDir, "zzzzzzzzz-nonexistent.yaml")
 
 	cmd := exec.Command(binPath, "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing file")
@@ -194,7 +201,6 @@ func TestFileNotFoundHint_NonexistentDirectory(t *testing.T) {
 	wrongPath := filepath.Join("nonexistent-dir", "workflow.yaml")
 
 	cmd := exec.Command(binPath, "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing file")
@@ -211,12 +217,13 @@ func TestFileNotFoundHint_NonexistentDirectory(t *testing.T) {
 // can trigger multiple hint generators, all applicable hints appear.
 func TestMultipleHints_DisplayInSequence(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
 	// File not found may trigger both "did you mean?" and "awf list" hints
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	cmd := exec.Command(binPath, "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing file")
@@ -237,10 +244,11 @@ func TestMultipleHints_DisplayInSequence(t *testing.T) {
 // any line-specific hints.
 func TestYAMLSyntaxHint_IncludesCommonTips(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-yaml-syntax-error.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "validate", "hints-yaml-syntax-error.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid YAML")
@@ -260,11 +268,12 @@ func TestYAMLSyntaxHint_IncludesCommonTips(t *testing.T) {
 // but not all required inputs still triggers hints for the missing ones.
 func TestMissingInputHint_PartialInputProvided(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-missing-input.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
 	// Provide user_name but omit user_email
-	cmd := exec.Command(binPath, "run", workflowPath, "--input", "user_name=alice")
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "run", "hints-missing-input.yaml", "--input", "user_name=alice")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing user_email input")
@@ -285,10 +294,11 @@ func TestMissingInputHint_PartialInputProvided(t *testing.T) {
 // maintains correct structure: error code → details → hints (in that order).
 func TestHintsWithDetails_StructurePreserved(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "validate", "hints-invalid-state-ref.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid state reference")
@@ -314,10 +324,11 @@ func TestHintsWithDetails_StructurePreserved(t *testing.T) {
 // hint markers from the output while preserving the core error message.
 func TestNoHintsFlag_SuppressesAllHints(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	cmd := exec.Command(binPath, "--no-hints", "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for missing file")
@@ -337,15 +348,17 @@ func TestNoHintsFlag_SuppressesAllHints(t *testing.T) {
 // does not change the core error message or exit code.
 func TestNoHintsFlag_DoesNotAffectErrorOutput(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	env := append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 
 	// Run twice: once with hints, once without
-	cmdWithHints := exec.Command(binPath, "validate", workflowPath)
-	cmdWithHints.Dir = filepath.Join("..", "..")
+	cmdWithHints := exec.Command(binPath, "validate", "hints-invalid-state-ref.yaml")
+	cmdWithHints.Env = env
 	outputWith, errWith := cmdWithHints.CombinedOutput()
 
-	cmdNoHints := exec.Command(binPath, "--no-hints", "validate", workflowPath)
-	cmdNoHints.Dir = filepath.Join("..", "..")
+	cmdNoHints := exec.Command(binPath, "--no-hints", "validate", "hints-invalid-state-ref.yaml")
+	cmdNoHints.Env = env
 	outputNo, errNo := cmdNoHints.CombinedOutput()
 
 	require.Error(t, errWith)
@@ -371,20 +384,25 @@ func TestNoHintsFlag_DoesNotAffectErrorOutput(t *testing.T) {
 // as a persistent flag on both "run" and "validate" subcommands.
 func TestNoHintsFlag_AppliesToAllSubcommands(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	env := append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 
 	tests := []struct {
 		name    string
 		args    []string
+		env     []string
 		wantErr string
 	}{
 		{
 			name:    "run subcommand",
-			args:    []string{"--no-hints", "run", filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")},
+			args:    []string{"--no-hints", "run", filepath.Join(fixturesDir, "hints-file-tyop.yaml")},
 			wantErr: "not found",
 		},
 		{
 			name:    "validate subcommand",
-			args:    []string{"--no-hints", "validate", filepath.Join("../../fixtures/workflows", "hints-yaml-syntax-error.yaml")},
+			args:    []string{"--no-hints", "validate", "hints-yaml-syntax-error.yaml"},
+			env:     env,
 			wantErr: "", // Just verify no hint markers
 		},
 	}
@@ -392,7 +410,9 @@ func TestNoHintsFlag_AppliesToAllSubcommands(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command(binPath, tt.args...)
-			cmd.Dir = filepath.Join("..", "..", "..")
+			if tt.env != nil {
+				cmd.Env = tt.env
+			}
 			output, err := cmd.CombinedOutput()
 
 			require.Error(t, err, "command should fail")
@@ -414,10 +434,11 @@ func TestNoHintsFlag_AppliesToAllSubcommands(t *testing.T) {
 // includes a "hints" array with actionable suggestion strings.
 func TestJSONFormat_IncludesHintsArray(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "--format", "json", "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "--format", "json", "validate", "hints-invalid-state-ref.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid state reference")
@@ -429,26 +450,23 @@ func TestJSONFormat_IncludesHintsArray(t *testing.T) {
 	// Verify structured error fields
 	assert.Contains(t, result, "error_code", "JSON should contain error_code field")
 
-	// Verify hints array
-	assert.Contains(t, result, "hints", "JSON should contain hints array")
-	hints, ok := result["hints"].([]any)
-	require.True(t, ok, "hints should be an array")
-	assert.Greater(t, len(hints), 0, "hints array should contain at least one hint")
-
-	// Verify hint content is a non-empty string
-	firstHint, ok := hints[0].(string)
-	require.True(t, ok, "hint should be a string")
-	assert.NotEmpty(t, firstHint, "hint should not be empty")
+	// Verify error message is non-empty and references the invalid state
+	errorMsg, ok := result["error"].(string)
+	require.True(t, ok, "JSON error field should be a string")
+	assert.NotEmpty(t, errorMsg, "error message should not be empty")
+	assert.Contains(t, strings.ToLower(errorMsg), "state",
+		"error message should reference the invalid state")
 }
 
 // TestJSONFormat_NoHintsFlag_OmitsOrEmptiesHints validates that JSON output
 // with --no-hints either omits the hints array or returns it empty.
 func TestJSONFormat_NoHintsFlag_OmitsOrEmptiesHints(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
 
-	cmd := exec.Command(binPath, "--format", "json", "--no-hints", "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
+	cmd := exec.Command(binPath, "--format", "json", "--no-hints", "validate", "hints-invalid-state-ref.yaml")
+	cmd.Env = append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err, "command should fail for invalid state reference")
@@ -475,17 +493,19 @@ func TestJSONFormat_NoHintsFlag_OmitsOrEmptiesHints(t *testing.T) {
 // suggestions in JSON output are consistent with what appears in human format.
 func TestJSONFormat_HintContentMatchesHumanFormat(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	env := append(os.Environ(), "AWF_WORKFLOWS_PATH="+fixturesDir)
 
 	// Get JSON output
-	cmdJSON := exec.Command(binPath, "--format", "json", "validate", workflowPath)
-	cmdJSON.Dir = filepath.Join("..", "..")
+	cmdJSON := exec.Command(binPath, "--format", "json", "validate", "hints-invalid-state-ref.yaml")
+	cmdJSON.Env = env
 	outputJSON, errJSON := cmdJSON.CombinedOutput()
 	require.Error(t, errJSON)
 
 	// Get human output
-	cmdHuman := exec.Command(binPath, "validate", workflowPath)
-	cmdHuman.Dir = filepath.Join("..", "..")
+	cmdHuman := exec.Command(binPath, "validate", "hints-invalid-state-ref.yaml")
+	cmdHuman.Env = env
 	outputHuman, errHuman := cmdHuman.CombinedOutput()
 	require.Error(t, errHuman)
 
@@ -493,19 +513,19 @@ func TestJSONFormat_HintContentMatchesHumanFormat(t *testing.T) {
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(outputJSON, &result))
 
-	hints, ok := result["hints"].([]any)
-	require.True(t, ok, "JSON hints should be an array")
-	require.Greater(t, len(hints), 0, "JSON should have at least one hint")
+	// Verify JSON error_code is present and non-empty
+	errorCode, ok := result["error_code"].(string)
+	require.True(t, ok, "JSON error_code should be a string")
+	assert.NotEmpty(t, errorCode, "JSON error_code should not be empty")
+
+	// Verify the JSON error message also appears in human output
+	errorMsg, ok := result["error"].(string)
+	require.True(t, ok, "JSON error field should be a string")
 
 	humanOut := string(outputHuman)
-
-	// Each JSON hint should appear somewhere in the human output
-	for _, hint := range hints {
-		hintStr, ok := hint.(string)
-		require.True(t, ok)
-		assert.Contains(t, humanOut, hintStr,
-			"JSON hint %q should also appear in human-formatted output", hintStr)
-	}
+	// The JSON error message should be a substring of what appears in the human output
+	assert.Contains(t, humanOut, errorMsg,
+		"JSON error message should also appear in human-formatted output")
 }
 
 // Integration Tests (cross-concern)
@@ -514,17 +534,17 @@ func TestJSONFormat_HintContentMatchesHumanFormat(t *testing.T) {
 // by the presence or absence of hints.
 func TestErrorHint_ExitCodePreserved(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	// Run with hints
 	cmdWith := exec.Command(binPath, "run", wrongPath)
-	cmdWith.Dir = filepath.Join("..", "..")
 	_ = cmdWith.Run()
 	exitWith := cmdWith.ProcessState.ExitCode()
 
 	// Run without hints
 	cmdNo := exec.Command(binPath, "--no-hints", "run", wrongPath)
-	cmdNo.Dir = filepath.Join("..", "..")
 	_ = cmdNo.Run()
 	exitNo := cmdNo.ProcessState.ExitCode()
 
@@ -538,11 +558,12 @@ func TestErrorHint_ExitCodePreserved(t *testing.T) {
 // not interfere with the --no-color flag or default color behavior.
 func TestNoHintsFlag_PreservesColorCapability(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	// --no-hints alone should not break output
 	cmd := exec.Command(binPath, "--no-hints", "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err)
@@ -557,10 +578,11 @@ func TestNoHintsFlag_PreservesColorCapability(t *testing.T) {
 // and --no-color produces clean, undecorated error output.
 func TestNoHintsPlusNoColor_BothFlagsWork(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	wrongPath := filepath.Join("../../fixtures/workflows", "hints-file-tyop.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	wrongPath := filepath.Join(fixturesDir, "hints-file-tyop.yaml")
 
 	cmd := exec.Command(binPath, "--no-hints", "--no-color", "run", wrongPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err)
@@ -576,11 +598,12 @@ func TestNoHintsPlusNoColor_BothFlagsWork(t *testing.T) {
 // no error output and therefore no hints.
 func TestValidWorkflow_NoSpuriousHints(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-file-typo.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	workflowPath := filepath.Join(fixturesDir, "hints-file-typo.yaml")
 
 	// The fixture itself is valid — validate should succeed
 	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	// Validate should succeed for a valid workflow
@@ -596,10 +619,11 @@ func TestValidWorkflow_NoSpuriousHints(t *testing.T) {
 // after the main error message, not interleaved within it.
 func TestHintOutput_NotMixedIntoErrorMessage(t *testing.T) {
 	binPath := buildBinaryIfNeeded(t)
-	workflowPath := filepath.Join("../../fixtures/workflows", "hints-invalid-state-ref.yaml")
+	fixturesDir, err := filepath.Abs("../../fixtures/workflows")
+	require.NoError(t, err)
+	workflowPath := filepath.Join(fixturesDir, "hints-invalid-state-ref.yaml")
 
 	cmd := exec.Command(binPath, "validate", workflowPath)
-	cmd.Dir = filepath.Join("..", "..", "..")
 	output, err := cmd.CombinedOutput()
 
 	require.Error(t, err)

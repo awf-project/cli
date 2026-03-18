@@ -67,11 +67,6 @@ func (m *mockExecutionLogger) WithContext(ctx map[string]any) ports.Logger {
 // recordStepResult, handleSuccess helpers
 
 func TestExecuteStep_SuccessfulLinearWorkflow_Integration(t *testing.T) {
-	// Given: A simple linear workflow with multiple steps
-	// When: The workflow is executed
-	// Then: All helpers (prepareStepExecution, resolveStepCommand,
-	//       executeStepCommand, recordStepResult, handleSuccess) execute correctly
-
 	tempDir := t.TempDir()
 	workflowPath := filepath.Join(tempDir, "linear-success.yaml")
 
@@ -101,7 +96,6 @@ states:
 `
 	require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-	// Setup services
 	log := &mockExecutionLogger{}
 	repo := repository.NewYAMLRepository(tempDir)
 	store := newMockStateStore()
@@ -121,7 +115,6 @@ states:
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 	assert.Equal(t, "done", execCtx.CurrentStep)
 
-	// Verify all steps executed through refactored helpers
 	step1State, ok := execCtx.GetStepState("step1")
 	require.True(t, ok, "step1 state should exist")
 	assert.Equal(t, workflow.StatusCompleted, step1State.Status)
@@ -135,7 +128,6 @@ states:
 	require.True(t, ok, "step3 state should exist")
 	assert.Equal(t, workflow.StatusCompleted, step3State.Status)
 
-	// Verify no errors logged
 	log.mu.Lock()
 	errorCount := len(log.errors)
 	log.mu.Unlock()
@@ -143,10 +135,6 @@ states:
 }
 
 func TestExecuteStep_WithRetry_SuccessOnSecondAttempt_Integration(t *testing.T) {
-	// Given: A step configured with retry that fails once then succeeds
-	// When: The step is executed
-	// Then: executeStepCommand retry logic works correctly
-
 	tempDir := t.TempDir()
 	workflowPath := filepath.Join(tempDir, "retry-workflow.yaml")
 
@@ -177,7 +165,6 @@ states:
 `, counterFile, counterFile)
 	require.NoError(t, os.WriteFile(workflowPath, []byte(workflowYAML), 0o644))
 
-	// Setup
 	log := &mockExecutionLogger{}
 	repo := repository.NewYAMLRepository(tempDir)
 	store := newMockStateStore()
@@ -205,10 +192,6 @@ states:
 // Tests handleExecutionError and handleNonZeroExit helpers
 
 func TestExecuteStep_NonZeroExit_WithOnFailure_Integration(t *testing.T) {
-	// Given: A step that fails with non-zero exit and has on_failure configured
-	// When: The step is executed
-	// Then: handleNonZeroExit transitions correctly to on_failure state
-
 	tempDir := t.TempDir()
 	workflowPath := filepath.Join(tempDir, "failure-workflow.yaml")
 
@@ -767,8 +750,9 @@ states:
 	execCtx, err := execSvc.Run(ctx, "retry-exhaustion", nil)
 	duration := time.Since(startTime)
 
-	require.NoError(t, err)
-	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "terminal failure state")
+	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
 	assert.Equal(t, "error", execCtx.CurrentStep)
 
 	// Verify step failed with correct exit code

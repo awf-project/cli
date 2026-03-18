@@ -112,9 +112,9 @@ states:
   error:
     type: terminal
     status: failure`,
-			expectedStatus: workflow.StatusCompleted,
+			expectedStatus: workflow.StatusFailed,
 			expectedStep:   "error",
-			wantErr:        false,
+			wantErr:        true,
 		},
 		{
 			name: "all branches fail",
@@ -152,9 +152,9 @@ states:
   error:
     type: terminal
     status: failure`,
-			expectedStatus: workflow.StatusCompleted,
+			expectedStatus: workflow.StatusFailed,
 			expectedStep:   "error",
-			wantErr:        false,
+			wantErr:        true,
 		},
 	}
 
@@ -184,9 +184,9 @@ states:
 
 			if tt.wantErr {
 				require.Error(t, err)
-				return
+			} else {
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			require.NotNil(t, execCtx)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
@@ -333,9 +333,9 @@ states:
   error:
     type: terminal
     status: failure`,
-			expectedStatus: workflow.StatusCompleted,
+			expectedStatus: workflow.StatusFailed,
 			expectedStep:   "error",
-			wantErr:        false,
+			wantErr:        true,
 		},
 	}
 
@@ -365,9 +365,9 @@ states:
 
 			if tt.wantErr {
 				require.Error(t, err)
-				return
+			} else {
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			require.NotNil(t, execCtx)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
@@ -546,9 +546,9 @@ states:
 
 			if tt.wantErr {
 				require.Error(t, err)
-				return
+			} else {
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			require.NotNil(t, execCtx)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
@@ -759,10 +759,10 @@ states:
     type: terminal
     status: failure`,
 			failedBranch:   "branch_failure",
-			expectedStatus: workflow.StatusCompleted,
+			expectedStatus: workflow.StatusFailed,
 			expectedStep:   "error",
 			expectedCode:   42,
-			wantErr:        false,
+			wantErr:        true,
 		},
 		{
 			name: "on_failure transition respected in parallel context",
@@ -833,10 +833,10 @@ states:
     type: terminal
     status: failure`,
 			failedBranch:   "branch_detailed",
-			expectedStatus: workflow.StatusCompleted,
+			expectedStatus: workflow.StatusFailed,
 			expectedStep:   "error",
 			expectedCode:   99,
-			wantErr:        false,
+			wantErr:        true,
 		},
 	}
 
@@ -866,9 +866,9 @@ states:
 
 			if tt.wantErr {
 				require.Error(t, err)
-				return
+			} else {
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			require.NotNil(t, execCtx)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
