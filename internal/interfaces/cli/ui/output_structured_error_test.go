@@ -373,18 +373,18 @@ func TestOutputWriter_WriteError_MixedErrorTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	var structured ui.ErrorResponse
-	err = json.Unmarshal(buf.Bytes(), &structured)
+	err = json.Unmarshal(errBuf.Bytes(), &structured)
 	require.NoError(t, err)
 	assert.Equal(t, "USER.INPUT.MISSING_FILE", structured.ErrorCode)
 
 	// Second: plain error (reset buffer for new output)
-	buf.Reset()
+	errBuf.Reset()
 	plainErr := errors.New("plain error")
 	err = w.WriteError(plainErr, 1)
 	require.NoError(t, err)
 
 	var plain ui.ErrorResponse
-	err = json.Unmarshal(buf.Bytes(), &plain)
+	err = json.Unmarshal(errBuf.Bytes(), &plain)
 	require.NoError(t, err)
 	assert.Empty(t, plain.ErrorCode)
 	assert.Equal(t, "plain error", plain.Error)
@@ -421,11 +421,8 @@ func TestOutputWriter_WriteError_StructuredError_AllFormats(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify output was produced (format-specific assertions handled above)
-			if tt.format == ui.FormatJSON {
-				assert.NotEmpty(t, buf.String(), "JSON output should be in stdout")
-			} else {
-				assert.NotEmpty(t, errBuf.String(), "text output should be in stderr")
-			}
+			// Error output always goes to stderr, regardless of format
+			assert.NotEmpty(t, errBuf.String(), "error output should be in stderr")
 		})
 	}
 }

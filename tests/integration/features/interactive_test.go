@@ -947,7 +947,7 @@ func TestInteractive_DoesNotModifyWorkflowPath_Integration(t *testing.T) {
 
 	// Verify environment was not modified
 	currentPath := os.Getenv("AWF_WORKFLOWS_PATH")
-	assert.Equal(t, "../fixtures/workflows", currentPath)
+	assert.Equal(t, "../../fixtures/workflows", currentPath)
 
 	// Cleanup
 	if originalPath == "" {

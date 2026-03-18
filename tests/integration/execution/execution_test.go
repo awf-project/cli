@@ -518,7 +518,7 @@ states:
 
 func TestValidFixtures_Integration(t *testing.T) {
 	// test that all valid fixtures can be loaded and validated
-	fixturesPath := "../fixtures/workflows"
+	fixturesPath := "../../fixtures/workflows"
 
 	repo := repository.NewYAMLRepository(fixturesPath)
 	store := newMockStateStore()

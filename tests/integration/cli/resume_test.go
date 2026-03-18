@@ -862,6 +862,7 @@ func TestResumeCommand_ConfigError_Propagates(t *testing.T) {
 
 		// Create invalid config file
 		configDir := filepath.Join(tmpDir, ".awf")
+		require.NoError(t, os.MkdirAll(configDir, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(configDir, "config.yaml"),
 			[]byte("invalid: yaml: content: [unclosed"),

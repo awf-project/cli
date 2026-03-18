@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/awf-project/cli/tests/integration/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ import (
 // TestDeadCode_Removal_Integration verifies that all dead test code identified
 // in C053 has been removed. Scans source files for patterns that should no longer exist.
 func TestDeadCode_Removal_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("no commented-out t.Skip in T009 tests", func(t *testing.T) {
 		// AC1: Zero commented-out t.Skip() lines remain in execution_service_t009_test.go
@@ -58,19 +59,10 @@ func TestDeadCode_Removal_Integration(t *testing.T) {
 	t.Run("no dead conditional skips for existing directories", func(t *testing.T) {
 		// AC3: Zero conditional skips for existing directories/fixtures remain
 
-		// Migration tests: removed os.Stat + t.Skip blocks that checked directory existence
-		// from within that same directory (condition always passed, skip never triggered).
-		// Note: a helper function uses os.Stat + os.IsNotExist legitimately (returns 0, not skip).
-		migrationPath := filepath.Join(repoRoot, "tests/integration/cli/migration_test.go")
-		migrationContent := readFileContent(t, migrationPath)
-
-		// The dead pattern was: os.Stat check followed by t.Skip within the same block
-		deadSkipCount := countPatternOccurrences(migrationContent, `os\.IsNotExist.*\n.*t\.Skip`)
-		assert.Equal(t, 0, deadSkipCount,
-			"migration_test.go should not contain os.Stat + t.Skip directory existence guards")
+		// Migration tests were removed entirely during refactoring — no stale skips possible.
 
 		// Loop tests: existence checks for fixtures that exist
-		loopPath := filepath.Join(repoRoot, "tests/integration/loop_test.go")
+		loopPath := filepath.Join(repoRoot, "tests/integration/loops/loop_test.go")
 		loopContent := readFileContent(t, loopPath)
 
 		loopFixtureSkipPattern := regexp.MustCompile(`os\.Stat\([^)]*loop-(foreach|while)\.yaml`)
@@ -102,13 +94,7 @@ func TestDeadCode_Removal_Integration(t *testing.T) {
 		assert.NotContains(t, signalContent, "CallbackPanics",
 			"crash test stub should be removed from signal handler tests")
 
-		// T004e/f: testutil stubs removed
-		testutilPath := filepath.Join(repoRoot, "internal/testutil/cli_fixtures_test.go")
-		testutilContent := readFileContent(t, testutilPath)
-		assert.NotContains(t, testutilContent, "NonExistentBaseDir",
-			"non-existent base dir stub should be removed")
-		assert.NotContains(t, testutilContent, "NilMap",
-			"nil-map stub should be removed")
+		// T004e/f: testutil stubs removed — cli_fixtures_test.go was deleted entirely during refactoring
 	})
 
 	t.Run("no feature placeholder tests remain", func(t *testing.T) {
@@ -125,7 +111,7 @@ func TestDeadCode_Removal_Integration(t *testing.T) {
 			"error catalog placeholder should be removed")
 
 		// Conversation deferred tests
-		conversationPath := filepath.Join(repoRoot, "tests/integration/conversation_test.go")
+		conversationPath := filepath.Join(repoRoot, "tests/integration/features/conversation_test.go")
 		conversationContent := readFileContent(t, conversationPath)
 		assert.NotContains(t, conversationContent, "MaxTurnsZero",
 			"max turns zero placeholder should be removed")
@@ -133,7 +119,7 @@ func TestDeadCode_Removal_Integration(t *testing.T) {
 			"high max turns placeholder should be removed")
 
 		// Memory management deferred test
-		memoryPath := filepath.Join(repoRoot, "tests/integration/memory_management_functional_test.go")
+		memoryPath := filepath.Join(repoRoot, "tests/integration/execution/memory_management_functional_test.go")
 		memoryContent := readFileContent(t, memoryPath)
 		assert.NotContains(t, memoryContent, "ResumeWithPruning",
 			"resume with pruning placeholder should be removed")
@@ -151,7 +137,7 @@ func TestDeadCode_Removal_Integration(t *testing.T) {
 // TestShortModeSkip_Pattern_Integration verifies the retry test uses
 // the proper testing.Short() conditional skip pattern instead of unconditional skip.
 func TestShortModeSkip_Pattern_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("retry test uses testing.Short pattern", func(t *testing.T) {
 		// AC7: Slow retry test uses testing.Short() pattern
@@ -176,7 +162,7 @@ func TestShortModeSkip_Pattern_Integration(t *testing.T) {
 // TestCleanup_LegitimateSkips_Preserved_Integration verifies that legitimate
 // conditional skips (testing.Short, root, CI, platform, CLI tools) are untouched.
 func TestCleanup_LegitimateSkips_Preserved_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("testing.Short skips preserved in codebase", func(t *testing.T) {
 		// Legitimate testing.Short() skips should still exist across the codebase
@@ -211,7 +197,7 @@ func TestCleanup_LegitimateSkips_Preserved_Integration(t *testing.T) {
 // TestCleanup_FileIntegrity_Integration verifies that modified files still contain
 // expected structure after cleanup.
 func TestCleanup_FileIntegrity_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("graphviz test file has test functions", func(t *testing.T) {
 		// After removing 19 recover blocks, tests should still exist
@@ -252,7 +238,7 @@ func TestCleanup_FileIntegrity_Integration(t *testing.T) {
 // TestNilGuard_ErrorMessages_Integration verifies that nil-guard error messages
 // are descriptive and actionable for debugging.
 func TestNilGuard_ErrorMessages_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("error messages include method name for traceability", func(t *testing.T) {
 		// Verify the nil-guard implementation includes method names in errors
@@ -315,7 +301,7 @@ func TestNilGuard_ErrorMessages_Integration(t *testing.T) {
 
 // TestCleanup_Metrics_Integration validates the overall cleanup metrics match expectations.
 func TestCleanup_Metrics_Integration(t *testing.T) {
-	repoRoot := getRepoRoot(t)
+	repoRoot := testhelpers.GetRepoRoot(t)
 
 	t.Run("graphviz test file reduced after recover block removal", func(t *testing.T) {
 		// After removing 19 recover blocks (~171 lines), the file should be smaller
@@ -348,11 +334,9 @@ func TestCleanup_Metrics_Integration(t *testing.T) {
 			"internal/infrastructure/diagram/graphviz_test.go",
 			"internal/infrastructure/errors/json_formatter_test.go",
 			"internal/interfaces/cli/signal_handler_test.go",
-			"internal/testutil/cli_fixtures_test.go",
-			"tests/integration/cli/migration_test.go",
-			"tests/integration/conversation_test.go",
-			"tests/integration/loop_test.go",
-			"tests/integration/memory_management_functional_test.go",
+			"tests/integration/features/conversation_test.go",
+			"tests/integration/loops/loop_test.go",
+			"tests/integration/execution/memory_management_functional_test.go",
 		}
 
 		for _, relPath := range affectedFiles {
@@ -370,25 +354,6 @@ func TestCleanup_Metrics_Integration(t *testing.T) {
 	})
 }
 
-// getRepoRoot returns the repository root directory by walking up from cwd.
-func getRepoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	require.NoError(t, err, "should get current directory")
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find repository root (no go.mod found)")
-		}
-		dir = parent
-	}
-}
 
 // readFileContent reads a file and returns its content as a string.
 func readFileContent(t *testing.T, path string) string {
@@ -491,8 +456,3 @@ func countPatternInDir(t *testing.T, repoRoot, relDir, pattern string) int {
 	return count
 }
 
-// countPatternOccurrences counts multiline regex pattern matches in content.
-func countPatternOccurrences(content, pattern string) int {
-	re := regexp.MustCompile(`(?s)` + pattern)
-	return len(re.FindAllString(content, -1))
-}

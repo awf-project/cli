@@ -202,7 +202,7 @@ func TestOutputWriter_NoHintsThreading_JSONFormat(t *testing.T) {
 			err := w.WriteError(structErr, 1)
 			require.NoError(t, err, "WriteError should succeed")
 
-			output := buf.String()
+			output := errBuf.String()
 			assert.Contains(t, output, tt.message, "error message should be in JSON")
 			assert.Contains(t, output, string(tt.errCode), "error code should be in JSON")
 		})

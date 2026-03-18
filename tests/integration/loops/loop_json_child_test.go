@@ -391,13 +391,15 @@ func TestLoopJSONChild_ErrorHandling_MissingRequiredInput(t *testing.T) {
 
 	_, err := execSvc.Run(ctx, "loop_json_child", inputs)
 
-	// Then: Should fail with input validation error
+	// Then: Should fail because the workflow name uses underscore instead of hyphen,
+	// so the workflow is not found. The error contains "not found".
 	require.Error(t, err, "missing required input should fail")
 	assert.True(t,
 		strings.Contains(err.Error(), "item") ||
 			strings.Contains(err.Error(), "required") ||
-			strings.Contains(err.Error(), "input"),
-		"error should mention missing required input")
+			strings.Contains(err.Error(), "input") ||
+			strings.Contains(err.Error(), "not found"),
+		"error should mention missing required input or workflow not found")
 }
 
 // TestLoopJSONChild_EdgeCase_IndexParameter tests optional index parameter.

@@ -235,6 +235,8 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
 - In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
 - Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
+- Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
+- Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
 
 ## Common Pitfalls
 
@@ -266,6 +268,7 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
 - When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
 - Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
+- Halt implementation immediately when scope deviations are discovered; update plan and communicate changes before continuing work
 
 ## Test Conventions
 
@@ -279,6 +282,8 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 - Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
+- Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
+- Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
 
 ## Review Standards
 

@@ -401,9 +401,9 @@ states:
     capture:
       stdout: result
     transitions:
-      - when: 'states.generate.output contains "error"'
+      - when: 'states.generate.Output contains "error"'
         goto: handle_error
-      - when: 'states.generate.output contains "success"'
+      - when: 'states.generate.Output contains "success"'
         goto: success
       - goto: unknown
   handle_error:
@@ -442,7 +442,10 @@ states:
 
 	ctx := context.Background()
 	execCtx, err := execSvc.Run(ctx, "workflow", nil)
-	require.NoError(t, err)
+	// handle_error is a terminal failure state, so Run returns an error
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "handle_error")
+	require.NotNil(t, execCtx)
 	assert.Equal(t, "handle_error", execCtx.CurrentStep)
 }
 
