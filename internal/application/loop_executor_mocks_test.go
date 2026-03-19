@@ -115,6 +115,7 @@ func (r *stepExecutorRecorder) execute(ctx context.Context, stepName string, int
 			First:  intCtx.Loop.First,
 			Last:   intCtx.Loop.Last,
 			Length: intCtx.Loop.Length,
+			Parent: intCtx.Loop.Parent,
 		}
 	}
 	r.executions = append(r.executions, exec)

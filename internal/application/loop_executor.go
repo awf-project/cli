@@ -155,13 +155,22 @@ func (e *LoopExecutor) ExecuteForEach(
 		e.PushLoopContext(execCtx, item, i, i == 0, i == len(items)-1, len(items))
 
 		// Set loop context for this iteration (for callbacks)
+		// The buildContext callback may not populate Loop (depends on implementation),
+		// so we explicitly set it here with the correct Parent chain (C063 Finding 6).
 		intCtx = buildContext(execCtx)
+		parentLoop := intCtx.Loop // preserve Parent chain from buildContext if present
 		intCtx.Loop = &interpolation.LoopData{
 			Item:   item,
 			Index:  i,
 			First:  i == 0,
 			Last:   i == len(items)-1,
 			Length: len(items),
+		}
+		if parentLoop != nil {
+			intCtx.Loop.Parent = parentLoop.Parent
+		} else if execCtx.CurrentLoop != nil && execCtx.CurrentLoop.Parent != nil {
+			// Fallback: build parent chain from domain context (C063 Finding 6)
+			intCtx.Loop.Parent = buildLoopDataChain(execCtx.CurrentLoop.Parent)
 		}
 
 		// Execute body steps
@@ -491,7 +500,7 @@ func (e *LoopExecutor) parseMaxIterationsValue(resolved string) (int, error) {
 	}
 
 	// Check for arithmetic operators - if present, evaluate as expression
-	if strings.ContainsAny(resolved, "+-*/") {
+	if strings.ContainsAny(resolved, "+-*/%") {
 		return e.evaluateArithmeticExpression(resolved)
 	}
 

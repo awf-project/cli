@@ -174,16 +174,28 @@ func (r *TemplateResolver) makeLoopAccessor(ctx *Context) func() (map[string]any
 		if ctx.Loop == nil {
 			return nil, &UndefinedVariableError{Variable: "loop"}
 		}
-
-		serialized := r.serializeLoopData(ctx.Loop)
-		return map[string]any{
-			"index":  ctx.Loop.Index,
-			"first":  ctx.Loop.First,
-			"last":   ctx.Loop.Last,
-			"length": ctx.Loop.Length,
-			"item":   serialized.Item,
-		}, nil
+		return r.loopToMap(ctx.Loop), nil
 	}
+}
+
+// loopToMap converts LoopData into a template-accessible map with index1 (1-based) and
+// parent (recursive map or nil). Using nil for absent parent ensures {{if (loop).parent}}
+// evaluates as false in templates.
+func (r *TemplateResolver) loopToMap(loop *LoopData) map[string]any {
+	serialized := r.serializeLoopData(loop)
+	result := map[string]any{
+		"index":  loop.Index,
+		"index1": loop.Index + 1,
+		"first":  loop.First,
+		"last":   loop.Last,
+		"length": loop.Length,
+		"item":   serialized.Item,
+		"parent": nil,
+	}
+	if loop.Parent != nil {
+		result["parent"] = r.loopToMap(loop.Parent)
+	}
+	return result
 }
 
 // makeContextAccessor returns a function that provides a map with lowercase property names

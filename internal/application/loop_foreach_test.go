@@ -984,3 +984,266 @@ func TestLoopExecutor_ExecuteForEach_DynamicMaxIterations_ExactMatch(t *testing.
 	require.NotNil(t, result)
 	assert.Equal(t, 3, result.TotalCount)
 }
+
+func TestLoopExecutor_ExecuteForEach_BuildContextEquivalence(t *testing.T) {
+	// T003 Pre-deletion verification: Verify buildContext output matches the manual override
+	// before removing lines 159-165 from ExecuteForEach.
+	// This test ensures buildContext(execCtx).Loop produces Item/Index values equivalent
+	// to what would be manually constructed.
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-build-context-equivalence",
+		Steps: map[string]*workflow.Step{
+			"inner_process": {
+				Name:    "inner_process",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{loop.Item}}",
+			},
+		},
+	}
+
+	step := &workflow.Step{
+		Name: "outer_loop",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["x", "y"]`,
+			Body:          []string{"inner_process"},
+			MaxIterations: 10,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-build-context-equivalence")
+
+	var capturedContexts []*interpolation.Context
+	recorder := newStepExecutorRecorder()
+	originalExecutor := recorder.execute
+
+	// Wrap recorder to capture the full interpolation context
+	wrappedExecutor := func(ctx context.Context, stepName string, intCtx *interpolation.Context) (string, error) {
+		if intCtx != nil {
+			capturedContexts = append(capturedContexts, intCtx)
+		}
+		return originalExecutor(ctx, stepName, intCtx)
+	}
+
+	// Helper to recursively build loop data (mirrors buildLoopDataChain logic)
+	var buildLoopData func(*workflow.LoopContext) *interpolation.LoopData
+	buildLoopData = func(domainLoop *workflow.LoopContext) *interpolation.LoopData {
+		if domainLoop == nil {
+			return nil
+		}
+		return &interpolation.LoopData{
+			Item:   domainLoop.Item,
+			Index:  domainLoop.Index,
+			First:  domainLoop.First,
+			Last:   domainLoop.Last,
+			Length: domainLoop.Length,
+			Parent: buildLoopData(domainLoop.Parent),
+		}
+	}
+
+	contextBuilder := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		ctx := interpolation.NewContext()
+		ctx.Loop = buildLoopData(ec.CurrentLoop)
+		return ctx
+	}
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		step,
+		execCtx,
+		wrappedExecutor,
+		contextBuilder,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 2, result.TotalCount)
+	require.Len(t, capturedContexts, 2)
+
+	// Verify that buildContext produced correct loop data for each iteration
+	assert.Equal(t, "x", capturedContexts[0].Loop.Item)
+	assert.Equal(t, 0, capturedContexts[0].Loop.Index)
+	assert.True(t, capturedContexts[0].Loop.First)
+	assert.False(t, capturedContexts[0].Loop.Last)
+	assert.Equal(t, 2, capturedContexts[0].Loop.Length)
+
+	assert.Equal(t, "y", capturedContexts[1].Loop.Item)
+	assert.Equal(t, 1, capturedContexts[1].Loop.Index)
+	assert.False(t, capturedContexts[1].Loop.First)
+	assert.True(t, capturedContexts[1].Loop.Last)
+	assert.Equal(t, 2, capturedContexts[1].Loop.Length)
+}
+
+func TestLoopExecutor_ExecuteForEach_ParentChainPreserved(t *testing.T) {
+	// T003: Verify parent chain is preserved in nested loop contexts.
+	// When executing a for_each loop inside another for_each loop,
+	// the inner loop's intCtx.Loop.Parent should reference the outer loop's data.
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-parent-chain",
+		Steps: map[string]*workflow.Step{
+			"inner_step": {
+				Name:    "inner_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{loop.Item}}",
+			},
+		},
+	}
+
+	// Create an execution context with a nested loop structure
+	outerStep := &workflow.Step{
+		Name: "outer_loop",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["a", "b"]`,
+			Body:          []string{"inner_step"},
+			MaxIterations: 10,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-parent-chain")
+	recorder := newStepExecutorRecorder()
+
+	// Helper to recursively build loop data (mirrors buildLoopDataChain logic)
+	var buildLoopData func(*workflow.LoopContext) *interpolation.LoopData
+	buildLoopData = func(domainLoop *workflow.LoopContext) *interpolation.LoopData {
+		if domainLoop == nil {
+			return nil
+		}
+		return &interpolation.LoopData{
+			Item:   domainLoop.Item,
+			Index:  domainLoop.Index,
+			First:  domainLoop.First,
+			Last:   domainLoop.Last,
+			Length: domainLoop.Length,
+			Parent: buildLoopData(domainLoop.Parent),
+		}
+	}
+
+	contextBuilder := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		ctx := interpolation.NewContext()
+		ctx.Loop = buildLoopData(ec.CurrentLoop)
+		return ctx
+	}
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		outerStep,
+		execCtx,
+		recorder.execute,
+		contextBuilder,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 2, result.TotalCount)
+	require.Len(t, recorder.executions, 2)
+
+	// For a single-level loop, Parent should be nil
+	assert.Nil(t, recorder.executions[0].loopData.Parent)
+	assert.Nil(t, recorder.executions[1].loopData.Parent)
+}
+
+func TestLoopExecutor_ExecuteForEach_NestedBreakWhen_ParentRef(t *testing.T) {
+	// T003: Verify loop context with parent support.
+	// This test verifies that after removing the redundant LoopData override,
+	// the loop context properly captures all fields including those needed for nested loops.
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	loopExec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	wf := &workflow.Workflow{
+		Name: "test-nested-break-parent-ref",
+		Steps: map[string]*workflow.Step{
+			"inner_step": {
+				Name:    "inner_step",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{loop.Item}}",
+			},
+		},
+	}
+
+	outerStep := &workflow.Step{
+		Name: "outer_loop",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:          workflow.LoopTypeForEach,
+			Items:         `["x", "y", "z"]`,
+			Body:          []string{"inner_step"},
+			MaxIterations: 10,
+		},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-nested-break-parent-ref")
+	recorder := newStepExecutorRecorder()
+
+	// Helper to recursively build loop data (mirrors buildLoopDataChain logic)
+	var buildLoopData func(*workflow.LoopContext) *interpolation.LoopData
+	buildLoopData = func(domainLoop *workflow.LoopContext) *interpolation.LoopData {
+		if domainLoop == nil {
+			return nil
+		}
+		return &interpolation.LoopData{
+			Item:   domainLoop.Item,
+			Index:  domainLoop.Index,
+			First:  domainLoop.First,
+			Last:   domainLoop.Last,
+			Length: domainLoop.Length,
+			Parent: buildLoopData(domainLoop.Parent),
+		}
+	}
+
+	contextBuilder := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		ctx := interpolation.NewContext()
+		ctx.Loop = buildLoopData(ec.CurrentLoop)
+		return ctx
+	}
+
+	result, err := loopExec.ExecuteForEach(
+		context.Background(),
+		wf,
+		outerStep,
+		execCtx,
+		recorder.execute,
+		contextBuilder,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 3, result.TotalCount)
+	require.Len(t, recorder.executions, 3)
+
+	// Verify loop variables are correctly set through all iterations
+	assert.Equal(t, "x", recorder.executions[0].loopData.Item)
+	assert.Equal(t, 0, recorder.executions[0].loopData.Index)
+	assert.True(t, recorder.executions[0].loopData.First)
+	assert.False(t, recorder.executions[0].loopData.Last)
+	assert.Equal(t, 3, recorder.executions[0].loopData.Length)
+
+	assert.Equal(t, "y", recorder.executions[1].loopData.Item)
+	assert.Equal(t, 1, recorder.executions[1].loopData.Index)
+	assert.False(t, recorder.executions[1].loopData.First)
+	assert.False(t, recorder.executions[1].loopData.Last)
+
+	assert.Equal(t, "z", recorder.executions[2].loopData.Item)
+	assert.Equal(t, 2, recorder.executions[2].loopData.Index)
+	assert.False(t, recorder.executions[2].loopData.First)
+	assert.True(t, recorder.executions[2].loopData.Last)
+}

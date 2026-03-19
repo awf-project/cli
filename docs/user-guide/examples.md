@@ -178,8 +178,8 @@ states:
   process_single:
     type: step
     command: |
-      echo "Processing {{.loop.item}} ({{.loop.index1}}/{{.loop.length}})"
-      wc -l "{{.loop.item}}"
+      echo "Processing {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})"
+      wc -l "{{.loop.Item}}"
     on_success: process_loop
     on_failure: error
 
@@ -391,7 +391,7 @@ states:
   process:
     type: step
     command: |
-      echo "outer={{.loop.parent.item}} inner={{.loop.item}}"
+      echo "outer={{.loop.Parent.Item}} inner={{.loop.Item}}"
     on_success: inner_loop
 
   done:

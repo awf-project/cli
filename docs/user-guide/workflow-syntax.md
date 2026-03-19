@@ -1064,7 +1064,7 @@ process_files:
 process_single:
   type: step
   command: |
-    echo "Processing {{.loop.item}} ({{.loop.index1}}/{{.loop.length}})"
+    echo "Processing {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})"
   on_success: process_files
 ```
 
@@ -1074,21 +1074,21 @@ process_single:
 |--------|------|---------|-------------|
 | `items` | string | - | Template expression or literal JSON array |
 | `body` | array | - | List of step names to execute each iteration |
-| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports interpolation. |
-| `break_when` | string | - | Expression to exit loop early |
+| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports template interpolation and arithmetic expressions (`+`, `-`, `*`, `/`, `%`). |
+| `break_when` | string | - | Expression evaluated at runtime; loop exits when condition is true |
 | `on_complete` | string | - | Next state after loop completes |
 
 ### Loop Context Variables
 
 | Variable | Description |
 |----------|-------------|
-| `{{.loop.item}}` | Current item value |
-| `{{.loop.index}}` | 0-based iteration index |
-| `{{.loop.index1}}` | 1-based iteration index |
-| `{{.loop.first}}` | True on first iteration |
-| `{{.loop.last}}` | True on last iteration |
-| `{{.loop.length}}` | Total items count |
-| `{{.loop.parent}}` | Parent loop context (nested loops) |
+| `{{.loop.Item}}` | Current item value |
+| `{{.loop.Index}}` | 0-based iteration index |
+| `{{.loop.Index1}}` | 1-based iteration index |
+| `{{.loop.First}}` | True on first iteration |
+| `{{.loop.Last}}` | True on last iteration |
+| `{{.loop.Length}}` | Total items count |
+| `{{.loop.Parent}}` | Parent loop context (nested loops) |
 
 ### Dynamic Items
 
@@ -1109,8 +1109,8 @@ max_iterations: "{{.inputs.retry_count}}"
 # From environment variable
 max_iterations: "{{.env.MAX_RETRIES}}"
 
-# Arithmetic expression
-max_iterations: "{{.inputs.pages * .inputs.retries_per_page}}"
+# Pre-computed value from input
+max_iterations: "{{.inputs.total_retries}}"
 ```
 
 Supported arithmetic operators: `+`, `-`, `*`, `/`, `%`
@@ -1152,25 +1152,29 @@ wait:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `while` | string | - | Condition expression (loop while true). Supports interpolation. |
+| `while` | string | - | Condition expression evaluated at each iteration; loop continues while true. Supports template interpolation and boolean expressions. |
 | `body` | array | - | List of step names to execute each iteration |
-| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports interpolation. |
-| `break_when` | string | - | Expression to exit loop early |
+| `max_iterations` | int/string | 100 | Safety limit (max: 10000). Supports template interpolation and arithmetic expressions (`+`, `-`, `*`, `/`, `%`). |
+| `break_when` | string | - | Expression evaluated at runtime; loop exits when condition is true |
 | `on_complete` | string | - | Next state after loop completes |
 
 ### While Loop Context
 
 | Variable | Description |
 |----------|-------------|
-| `{{.loop.index}}` | 0-based iteration index |
-| `{{.loop.first}}` | True on first iteration |
-| `{{.loop.length}}` | Always -1 (unknown for while loops) |
+| `{{.loop.Index}}` | 0-based iteration index |
+| `{{.loop.Index1}}` | 1-based iteration index |
+| `{{.loop.First}}` | True on first iteration |
+| `{{.loop.Last}}` | Always false (unknown for while loops) |
+| `{{.loop.Length}}` | Always -1 (unknown for while loops) |
+| `{{.loop.Item}}` | Always nil for while loops |
+| `{{.loop.Parent}}` | Parent loop context (nested loops only) |
 
 ---
 
 ## Nested Loops
 
-Loops can contain other loops. Inner loops access outer loop context via `{{.loop.parent.*}}`:
+Loops can contain other loops. Inner loops access outer loop context via `{{.loop.Parent.*}}`:
 
 ```yaml
 outer_loop:
@@ -1189,11 +1193,11 @@ inner_loop:
 
 process:
   type: step
-  command: 'echo "outer={{.loop.parent.item}} inner={{.loop.item}}"'
+  command: 'echo "outer={{.loop.Parent.Item}} inner={{.loop.Item}}"'
   on_success: inner_loop
 ```
 
-Parent chains support arbitrary depth: `{{.loop.parent.parent.item}}` for 3-level nesting.
+Parent chains support arbitrary depth: `{{.loop.Parent.Parent.Item}}` for 3-level nesting.
 
 ---
 
@@ -1330,8 +1334,8 @@ analyze_file:
   call_workflow:
     workflow: analyze-source-file
     inputs:
-      # {{.loop.item}} is automatically JSON-serialized for complex types
-      file_info: "{{.loop.item}}"
+      # {{.loop.Item}} is automatically JSON-serialized for complex types
+      file_info: "{{.loop.Item}}"
     outputs:
       analysis: file_analysis
   on_success: next

@@ -146,17 +146,16 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticDivision(t *testing.T) {
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticModulo(t *testing.T) {
-	// NOTE: FR-006 only requires +, -, *, / operators.
-	// Modulo (%) is NOT in the spec, but expr-lang supports it.
-	// The implementation currently doesn't recognize % as an arithmetic operator
-	// because it's not in strings.ContainsAny("+-*/").
-	// This test verifies that % expressions are NOT currently supported.
-	// If modulo support is added later, update this test.
+	// FR-003: Modulo (%) operator is now supported in max_iterations expressions.
+	// Expression resolves to "17 % 5" and is evaluated via the ExpressionEvaluator port.
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()
 	resolver := newConfigurableMockResolver()
 
-	// Expression resolves to "17 % 5" - but % is not recognized as operator
+	// Set up evaluator to return correct modulo result
+	evaluator.intResults["17 % 5"] = 2 // 17 % 5 = 2
+
+	// Expression resolves to "17 % 5"
 	resolver.results["{{inputs.total % inputs.divisor}}"] = "17 % 5"
 
 	exec := application.NewLoopExecutor(logger, evaluator, resolver)
@@ -165,11 +164,11 @@ func TestLoopExecutor_ResolveMaxIterations_ArithmeticModulo(t *testing.T) {
 	ctx.Inputs["total"] = "17"
 	ctx.Inputs["divisor"] = "5"
 
-	_, err := exec.ResolveMaxIterations("{{inputs.total % inputs.divisor}}", ctx)
+	result, err := exec.ResolveMaxIterations("{{inputs.total % inputs.divisor}}", ctx)
 
-	// Modulo is not supported per FR-006, should error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid")
+	// Modulo is now supported per FR-003, should succeed
+	require.NoError(t, err)
+	assert.Equal(t, 2, result)
 }
 
 func TestLoopExecutor_ResolveMaxIterations_ArithmeticComplexExpression(t *testing.T) {
