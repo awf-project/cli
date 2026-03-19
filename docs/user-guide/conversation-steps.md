@@ -116,7 +116,7 @@ Prevents exceeding model token limits. When exceeded, old turns are dropped usin
 
 Context window strategy when token limit is reached:
 
-- **`sliding_window`** (default) - Drop oldest turns, preserving system prompt and most recent context
+- **`sliding_window`** - Drop oldest turns, preserving system prompt and most recent context. If omitted, no context management is applied.
 
 ```yaml
 strategy: sliding_window
@@ -124,7 +124,7 @@ strategy: sliding_window
 # Drop: Turn 1, Keep: System prompt, Turn 2, Turn 3, Turn 4, Turn 5
 ```
 
-Future strategies: `summarize` (compress old turns), `truncate_middle` (keep first and last turns).
+Future strategies: `summarize` (compress old turns), `truncate_middle` (keep first and last turns). These strategies are validated but not yet implemented — using them will produce a validation error suggesting `sliding_window` instead.
 
 #### stop_condition
 
@@ -240,9 +240,11 @@ stop_condition: "response contains 'sufficient sources' || turn_count >= 10"
 stop_condition: "response contains 'Summary:' || tokens_used > 90000"
 ```
 
-## Injecting Context Mid-Conversation
+## Injecting Context Mid-Conversation (Planned)
 
-Continue a conversation from a previous step:
+> **Not yet implemented** — `continue_from` and `inject_context` are parsed but rejected at validation. See [Limitations](#limitations) for details.
+
+The following example shows the planned behavior for resuming a conversation from a previous step:
 
 ```yaml
 states:
@@ -260,12 +262,12 @@ states:
       max_turns: 5
     on_success: add_requirements
 
-  # Continue previous conversation
+  # Planned: continue previous conversation
   add_requirements:
     type: agent
     provider: claude
     mode: conversation
-    continue_from: refine_code
+    continue_from: refine_code  # Not yet implemented — will error at validation
     prompt: |
       Also consider these requirements:
       {{.inputs.additional_requirements}}
@@ -277,7 +279,7 @@ states:
     type: terminal
 ```
 
-The `continue_from` field loads the conversation history from the previous step and continues with the new prompt.
+When implemented, the `continue_from` field will load the conversation history from the previous step and continue with the new prompt.
 
 ## Examples
 
@@ -521,20 +523,42 @@ error:
 
 **Fixed in**: F051 (See CHANGELOG.md for details)
 
-### Provider Not Supporting Conversation
+### CLI Providers Execute Turns Independently
 
-**Problem**: Agent doesn't maintain history across turns
+**Problem**: Agent doesn't maintain history across turns with CLI providers
 
-**Note**: Conversation mode serializes history in prompts for all providers, but not all CLIs may handle multi-turn naturally. If experiencing issues:
-- Check provider CLI documentation
-- Test with a single-turn agent step as fallback
-- File an issue with provider details
+**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF serializes conversation history into the prompt, but the CLI does not retain session state between turns. This means:
+- Each turn starts a fresh CLI process
+- Context is passed via prompt serialization, not native session continuity
+- Token usage may be higher due to repeated context in each prompt
+
+**Solution**: For workflows requiring full multi-turn conversation with native history continuity, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
+
+```yaml
+refine:
+  type: agent
+  provider: openai_compatible
+  mode: conversation
+  options:
+    base_url: https://api.openai.com/v1
+    model: gpt-4
+  initial_prompt: "Review this code"
+  conversation:
+    max_turns: 10
+    strategy: sliding_window
+  on_success: done
+```
 
 ## Limitations
 
+### Provider Compatibility
+
+Conversation mode with full history continuity is only functional with `openai_compatible`. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each turn as an independent process — conversation context is serialized into the prompt but the provider does not maintain native session state. This is a known architectural limitation; implementing `--resume` style session continuation for each CLI provider is tracked as a separate feature.
+
 ### Current Implementation
 
-- Only `sliding_window` strategy implemented (dropping oldest turns)
+- Only `sliding_window` strategy implemented (dropping oldest turns); `summarize` and `truncate_middle` are rejected at validation
+- `continue_from` and `inject_context` fields are parsed but not yet implemented; using them produces a validation error
 - Stop conditions limited to string/token/turn expressions
 - No branching conversations (single linear path)
 
@@ -542,8 +566,10 @@ error:
 
 - `summarize` strategy (LLM-based compression of old turns)
 - `truncate_middle` strategy (keep first and last turns)
+- `continue_from` for resuming conversations across steps
+- `inject_context` for adding context mid-conversation
+- CLI provider session continuation via `--resume` flags
 - Conversation branching (explore multiple paths)
-- Pause/resume conversations across workflow runs
 
 ## See Also
 

@@ -88,6 +88,13 @@ type ConversationConfig struct {
 // Validate checks if the conversation configuration is valid.
 // The validator parameter is used to check stop condition expression syntax.
 func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
+	if c.ContinueFrom != "" {
+		return errors.New("continue_from is not yet implemented")
+	}
+	if c.InjectContext != "" {
+		return errors.New("inject_context is not yet implemented")
+	}
+
 	// Validate MaxTurns (0 is allowed and means use default)
 	if c.MaxTurns < 0 {
 		return errors.New("max_turns must be non-negative")
@@ -104,8 +111,10 @@ func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
 	// Validate Strategy if set
 	if c.Strategy != "" {
 		switch c.Strategy {
-		case StrategySlidingWindow, StrategySummarize, StrategyTruncateMiddle:
+		case StrategySlidingWindow:
 			// Valid strategies
+		case StrategySummarize, StrategyTruncateMiddle:
+			return fmt.Errorf("strategy %q is not yet implemented; use sliding_window", c.Strategy)
 		default:
 			return errors.New("invalid context window strategy")
 		}

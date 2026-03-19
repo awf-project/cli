@@ -440,18 +440,22 @@ refine_code:
 |--------|------|---------|-------------|
 | `max_turns` | int | 10 | Maximum conversation turns |
 | `max_context_tokens` | int | model limit | Token budget for conversation |
-| `strategy` | string | `sliding_window` | Context window strategy |
+| `strategy` | string | `-` | Context window strategy: `sliding_window`, `summarize` (not yet implemented), `truncate_middle` (not yet implemented). Omitting means no context management is applied |
 | `stop_condition` | string | - | Expression to exit early |
+| `continue_from` | string | - | Step name to continue conversation from (not yet implemented) |
+| `inject_context` | string | - | Additional context to inject mid-conversation (not yet implemented) |
 
 ### Available Providers
 
-| Provider | Binary/Endpoint | Description |
-|----------|--------|-------------|
-| `claude` | `claude` CLI | Anthropic Claude CLI |
-| `codex` | `codex` CLI | OpenAI Codex CLI |
-| `gemini` | `gemini` CLI | Google Gemini CLI |
-| `opencode` | `opencode` CLI | OpenCode CLI |
-| `openai_compatible` | HTTP API | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
+| Provider | Binary/Endpoint | Conversation Support | Description |
+|----------|--------|----------------------|-------------|
+| `claude` | `claude` CLI | Single-turn only | Anthropic Claude CLI |
+| `codex` | `codex` CLI | Single-turn only | OpenAI Codex CLI |
+| `gemini` | `gemini` CLI | Single-turn only | Google Gemini CLI |
+| `opencode` | `opencode` CLI | Single-turn only | OpenCode CLI |
+| `openai_compatible` | HTTP API | Full multi-turn | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
+
+> **Conversation mode and providers:** Only `openai_compatible` maintains full conversation history across turns via the Chat Completions API. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each turn as an independent invocation — previous conversation context is serialized into the prompt but the CLI process does not retain session state. For workflows requiring true multi-turn continuity, use `openai_compatible`.
 
 ### Agent Output
 

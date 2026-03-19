@@ -601,7 +601,6 @@ func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	})
 
 	err := cmd.Execute()
-
 	// Then: Agent step fails because no agent registry is configured in CLI test setup
 	// The stateless agent workflow requires a registered provider (claude/gemini/etc.)
 	// which is not available in integration tests without live API access.

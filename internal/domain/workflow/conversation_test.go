@@ -214,7 +214,8 @@ func TestConversationConfig_Validate(t *testing.T) {
 				MaxTurns:     5,
 				ContinueFrom: "previous_conversation",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "continue_from is not yet implemented",
 		},
 		{
 			name: "valid with inject_context",
@@ -222,7 +223,8 @@ func TestConversationConfig_Validate(t *testing.T) {
 				MaxTurns:      5,
 				InjectContext: "Additional context here",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "inject_context is not yet implemented",
 		},
 		{
 			name: "zero max_turns (uses default)",
@@ -287,14 +289,15 @@ func TestConversationConfig_Validate_Strategies(t *testing.T) {
 		name     string
 		strategy ContextWindowStrategy
 		wantErr  bool
+		errMsg   string
 	}{
-		{"none (default)", StrategyNone, false},
-		{"sliding_window", StrategySlidingWindow, false},
-		{"summarize", StrategySummarize, false},
-		{"truncate_middle", StrategyTruncateMiddle, false},
-		{"empty string", ContextWindowStrategy(""), false},
-		{"invalid", ContextWindowStrategy("invalid"), true},
-		{"typo", ContextWindowStrategy("sliding_windows"), true},
+		{"none (default)", StrategyNone, false, ""},
+		{"sliding_window", StrategySlidingWindow, false, ""},
+		{"summarize", StrategySummarize, true, "not yet implemented"},
+		{"truncate_middle", StrategyTruncateMiddle, true, "not yet implemented"},
+		{"empty string", ContextWindowStrategy(""), false, ""},
+		{"invalid", ContextWindowStrategy("invalid"), true, "invalid"},
+		{"typo", ContextWindowStrategy("sliding_windows"), true, "invalid"},
 	}
 
 	for _, tt := range tests {
@@ -306,6 +309,9 @@ func TestConversationConfig_Validate_Strategies(t *testing.T) {
 			err := config.Validate(nil)
 			if tt.wantErr {
 				require.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
 			} else {
 				require.NoError(t, err)
 			}
