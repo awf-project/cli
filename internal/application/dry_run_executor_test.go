@@ -427,6 +427,105 @@ func TestDryRunExecutor_Execute_RetryConfig(t *testing.T) {
 	assert.Equal(t, "exponential", flakyStep.Retry.Backoff)
 }
 
+func TestDryRunExecutor_Execute_RetryConfig_JitterAndExitCodes(t *testing.T) {
+	tests := []struct {
+		name               string
+		retry              workflow.RetryConfig
+		wantJitter         float64
+		wantExitCodes      []int
+		wantExitCodesIsNil bool
+	}{
+		{
+			name: "jitter mapped with nil exit codes",
+			retry: workflow.RetryConfig{
+				MaxAttempts: 3, InitialDelayMs: 100, MaxDelayMs: 1000,
+				Backoff: "exponential", Multiplier: 2.0, Jitter: 0.5,
+			},
+			wantJitter:         0.5,
+			wantExitCodesIsNil: true,
+		},
+		{
+			name: "exit codes mapped with jitter",
+			retry: workflow.RetryConfig{
+				MaxAttempts: 3, InitialDelayMs: 100, MaxDelayMs: 1000,
+				Backoff: "linear", Multiplier: 1.5, Jitter: 0.2,
+				RetryableExitCodes: []int{1, 2, 3},
+			},
+			wantJitter:    0.2,
+			wantExitCodes: []int{1, 2, 3},
+		},
+		{
+			name: "zero jitter preserved",
+			retry: workflow.RetryConfig{
+				MaxAttempts: 2, InitialDelayMs: 50, MaxDelayMs: 500,
+				Backoff: "constant", Jitter: 0.0,
+			},
+			wantJitter:         0.0,
+			wantExitCodesIsNil: true,
+		},
+		{
+			name: "empty exit codes preserved",
+			retry: workflow.RetryConfig{
+				MaxAttempts: 2, InitialDelayMs: 100, MaxDelayMs: 500,
+				Backoff: "exponential", Multiplier: 2.0, Jitter: 0.3,
+				RetryableExitCodes: []int{},
+			},
+			wantJitter:    0.3,
+			wantExitCodes: []int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wfName := "retry-" + tt.name
+			repo := newMockRepository()
+			repo.workflows[wfName] = &workflow.Workflow{
+				Name:    wfName,
+				Initial: "flaky",
+				Steps: map[string]*workflow.Step{
+					"flaky": {
+						Name: "flaky", Type: workflow.StepTypeCommand, Command: "flaky-command",
+						Retry: &tt.retry, OnSuccess: "done", OnFailure: "error",
+					},
+					"done":  {Name: "done", Type: workflow.StepTypeTerminal},
+					"error": {Name: "error", Type: workflow.StepTypeTerminal},
+				},
+			}
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+			resolver := interpolation.NewTemplateResolver()
+			evaluator := mocks.NewMockExpressionEvaluator()
+			exec := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
+
+			plan, err := exec.Execute(context.Background(), wfName, nil)
+			require.NoError(t, err)
+
+			var flakyStep *workflow.DryRunStep
+			for i := range plan.Steps {
+				if plan.Steps[i].Name == "flaky" {
+					flakyStep = &plan.Steps[i]
+					break
+				}
+			}
+			require.NotNil(t, flakyStep)
+			require.NotNil(t, flakyStep.Retry)
+
+			assert.Equal(t, tt.retry.MaxAttempts, flakyStep.Retry.MaxAttempts)
+			assert.Equal(t, tt.retry.InitialDelayMs, flakyStep.Retry.InitialDelayMs)
+			assert.Equal(t, tt.retry.MaxDelayMs, flakyStep.Retry.MaxDelayMs)
+			assert.Equal(t, tt.retry.Backoff, flakyStep.Retry.Backoff)
+			assert.Equal(t, tt.retry.Multiplier, flakyStep.Retry.Multiplier)
+			assert.Equal(t, tt.wantJitter, flakyStep.Retry.Jitter)
+
+			if tt.wantExitCodesIsNil {
+				assert.Nil(t, flakyStep.Retry.RetryableExitCodes)
+			} else {
+				assert.Equal(t, tt.wantExitCodes, flakyStep.Retry.RetryableExitCodes)
+			}
+		})
+	}
+}
+
 func TestDryRunExecutor_Execute_CaptureConfig(t *testing.T) {
 	// Test that capture configuration is captured
 	repo := newMockRepository()
@@ -974,16 +1073,6 @@ func TestDryRunExecutor_Execute_AllStepTypes(t *testing.T) {
 		})
 	}
 }
-
-// Component T003 implements comprehensive tests for DryRunExecutor setter methods.
-// Tests follow TDD patterns (RED/GREEN/REFACTOR) and cover happy path, edge cases,
-// and error conditions for SetTemplateService method.
-//
-// Strategy:
-// - Happy path: Valid template service is set and used during Execute
-// - Edge case: Nil template service is accepted (template expansion is optional)
-// - Replacement: Existing template service can be replaced with new one
-// - Integration: Template service affects workflow execution behavior
 
 // TestDryRunExecutor_SetTemplateService_Valid verifies that SetTemplateService
 // correctly sets a valid template service and that it's used during Execute.

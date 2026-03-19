@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **C064**: Retry configuration audit — 7 documentation-vs-implementation gap fixes
+  - **Finding 1 (Critical)**: Guard `CalculateDelay` against `maxDelay=0` silently nullifying all retry delays — omitting `max_delay` no longer caps delays to zero
+  - **Finding 2 (High)**: Default `multiplier` to 2.0 when omitted in YAML (was 0.0, degrading exponential backoff to constant delays)
+  - **Finding 3 (Medium)**: Replaced deprecated `initial_delay_ms` with `initial_delay` duration strings in 3 doc files (`workflow-syntax.md`, `examples.md`, `plugins.md`)
+  - **Finding 4 (Medium)**: Fixed `conversation-error.yaml` fixture using non-existent `delay:` field (renamed to `initial_delay:`)
+  - **Finding 5 (Low)**: Surface duration parse errors in `mapRetry()` instead of silently defaulting to 0ms — invalid `initial_delay` / `max_delay` values now produce parse errors
+  - **Finding 6 (Low)**: Added `RetryConfig.Validate()` covering `max_attempts >= 1`, valid backoff strategy, `jitter ∈ [0.0, 1.0]`, `multiplier >= 0`; wired into `Step.Validate()`
+  - **Finding 7 (Info)**: Added missing `Jitter` and `RetryableExitCodes` fields to `DryRunRetry` struct and mapping in `dry_run_executor.go`
+  - New unit and integration tests for maxDelay guard, multiplier default, duration error propagation, retry validation, and dry-run field mapping
 - **C063**: Loop options audit — 6 documentation-vs-implementation discrepancies
   - **Finding 1**: Replaced ~56 lowercase loop variable references (`loop.item`, `loop.index`) with PascalCase (`loop.Item`, `loop.Index`) across 4 doc files (`workflow-syntax.md`, `loop.md`, `interpolation.md`, `examples.md`)
   - **Finding 1 — Code**: Added missing `index1` and `parent` keys to `makeLoopAccessor` function-call map in `template_resolver.go`; `parent` uses recursive `serializeLoopData` with nil guard

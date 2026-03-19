@@ -192,11 +192,13 @@ func (e *DryRunExecutor) buildStepPlan(ctx context.Context, step *workflow.Step,
 
 	if step.Retry != nil {
 		dryRunStep.Retry = &workflow.DryRunRetry{
-			MaxAttempts:    step.Retry.MaxAttempts,
-			InitialDelayMs: step.Retry.InitialDelayMs,
-			MaxDelayMs:     step.Retry.MaxDelayMs,
-			Backoff:        step.Retry.Backoff,
-			Multiplier:     step.Retry.Multiplier,
+			MaxAttempts:        step.Retry.MaxAttempts,
+			InitialDelayMs:     step.Retry.InitialDelayMs,
+			MaxDelayMs:         step.Retry.MaxDelayMs,
+			Backoff:            step.Retry.Backoff,
+			Multiplier:         step.Retry.Multiplier,
+			Jitter:             step.Retry.Jitter,
+			RetryableExitCodes: step.Retry.RetryableExitCodes,
 		}
 	}
 

@@ -835,7 +835,7 @@ create_resource:
   retry:
     max_attempts: 3
     backoff: exponential
-    initial_delay_ms: 2000
+    initial_delay: 2s
   on_success: done
   on_failure: error
 ```
@@ -1394,13 +1394,15 @@ flaky_api_call:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_attempts` | int | 1 | Maximum attempts (1 = no retry) |
+| `max_attempts` | int | 1 | Maximum attempts (must be >= 1) |
 | `initial_delay` | duration | 0 | Delay before first retry |
-| `max_delay` | duration | - | Maximum delay cap |
+| `max_delay` | duration | - | Maximum delay cap (omit for uncapped delays) |
 | `backoff` | string | `constant` | Strategy: `constant`, `linear`, `exponential` |
-| `multiplier` | float | 2 | Multiplier for exponential backoff |
-| `jitter` | float | 0 | Random jitter factor 0.0-1.0 |
+| `multiplier` | float | 2 | Multiplier for exponential backoff (must be >= 0) |
+| `jitter` | float | 0 | Random jitter factor (must be between 0.0 and 1.0) |
 | `retryable_exit_codes` | array | all | Exit codes to retry (empty = all non-zero) |
+
+Duration values accept Go duration strings (`100ms`, `1s`, `2m30s`) or plain integers (milliseconds). Invalid duration values produce a parse error at workflow load time.
 
 ### Backoff Strategies
 

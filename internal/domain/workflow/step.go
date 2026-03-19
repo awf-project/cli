@@ -3,6 +3,8 @@ package workflow
 import (
 	"errors"
 	"fmt"
+
+	"github.com/awf-project/cli/pkg/retry"
 )
 
 // StepType defines the type of workflow step.
@@ -54,6 +56,27 @@ type RetryConfig struct {
 	Multiplier         float64 // for exponential backoff
 	Jitter             float64 // ± randomization (0.0-1.0)
 	RetryableExitCodes []int   // exit codes to retry on
+}
+
+// Validate checks if the retry configuration values are within valid ranges.
+func (r *RetryConfig) Validate() error {
+	if r.MaxAttempts < 1 {
+		return errors.New("max_attempts must be >= 1")
+	}
+
+	if r.Backoff != "" && !retry.Strategy(r.Backoff).Valid() {
+		return errors.New("invalid backoff strategy")
+	}
+
+	if r.Jitter < 0.0 || r.Jitter > 1.0 {
+		return errors.New("jitter must be between 0.0 and 1.0")
+	}
+
+	if r.Multiplier < 0 {
+		return errors.New("multiplier must be >= 0")
+	}
+
+	return nil
 }
 
 // CaptureConfig defines output capture behavior.
@@ -169,6 +192,13 @@ func (s *Step) Validate(validator ExpressionCompiler) error {
 		}
 	default:
 		return errors.New("unknown step type")
+	}
+
+	// Validate retry configuration if present
+	if s.Retry != nil {
+		if err := s.Retry.Validate(); err != nil {
+			return fmt.Errorf("retry config: %w", err)
+		}
 	}
 
 	// Validate transition expressions (only if validator is provided)

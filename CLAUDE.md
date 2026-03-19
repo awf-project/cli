@@ -242,6 +242,8 @@ Own timeout responsibility in application layer via context.WithTimeout; infrast
 
 Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
 
+Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -279,6 +281,8 @@ Apply identical error handling patterns across similar functions; handleNonZeroE
 When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
 
 Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
+
+Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
 
 ## Test Conventions
 

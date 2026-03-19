@@ -48,7 +48,7 @@ func CalculateDelay(strategy Strategy, attempt int, initialDelay, maxDelay time.
 		delay = initialDelay
 	}
 
-	if delay > maxDelay {
+	if maxDelay > 0 && delay > maxDelay {
 		delay = maxDelay
 	}
 

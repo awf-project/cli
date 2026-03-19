@@ -130,7 +130,6 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		Transitions:     mapTransitions(y.Transitions),
 		DependsOn:       y.DependsOn,
 		ContinueOnError: y.ContinueOnError,
-		Retry:           mapRetry(y.Retry),
 		Capture:         mapCapture(y.Capture),
 		Hooks:           mapStepHooks(y.Hooks),
 		Status:          workflow.TerminalStatus(y.Status),
@@ -141,6 +140,13 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		CallWorkflow:    mapCallWorkflowFlat(y),
 		Agent:           mapAgentConfigFlat(y),
 	}
+
+	// Parse retry
+	retry, err := mapRetry(y.Retry)
+	if err != nil {
+		return nil, NewParseError(filePath, "states."+name+".retry", err.Error())
+	}
+	step.Retry = retry
 
 	// Parse timeout
 	if y.Timeout != "" {
@@ -179,23 +185,33 @@ func parseStepType(s string) (workflow.StepType, error) {
 }
 
 // mapRetry converts yamlRetry to domain RetryConfig.
-func mapRetry(y *yamlRetry) *workflow.RetryConfig {
+func mapRetry(y *yamlRetry) (*workflow.RetryConfig, error) {
 	if y == nil {
-		return nil
+		return nil, nil
 	}
 
 	initialDelayMs := 0
 	if y.InitialDelay != "" {
-		if d, err := parseDuration(y.InitialDelay); err == nil {
-			initialDelayMs = int(d.Milliseconds())
+		d, err := parseDuration(y.InitialDelay)
+		if err != nil {
+			return nil, fmt.Errorf("initial_delay: %w", err)
 		}
+		initialDelayMs = int(d.Milliseconds())
 	}
 
 	maxDelayMs := 0
 	if y.MaxDelay != "" {
-		if d, err := parseDuration(y.MaxDelay); err == nil {
-			maxDelayMs = int(d.Milliseconds())
+		d, err := parseDuration(y.MaxDelay)
+		if err != nil {
+			return nil, fmt.Errorf("max_delay: %w", err)
 		}
+		maxDelayMs = int(d.Milliseconds())
+	}
+
+	// Default multiplier to 2.0 when omitted (nil pointer means field was not set).
+	multiplier := 2.0
+	if y.Multiplier != nil {
+		multiplier = *y.Multiplier
 	}
 
 	return &workflow.RetryConfig{
@@ -203,10 +219,10 @@ func mapRetry(y *yamlRetry) *workflow.RetryConfig {
 		InitialDelayMs:     initialDelayMs,
 		MaxDelayMs:         maxDelayMs,
 		Backoff:            y.Backoff,
-		Multiplier:         y.Multiplier,
+		Multiplier:         multiplier,
 		Jitter:             y.Jitter,
 		RetryableExitCodes: y.RetryableExitCodes,
-	}
+	}, nil
 }
 
 // mapCapture converts yamlCapture to domain CaptureConfig.

@@ -29,7 +29,7 @@ states:
     timeout: 45
     retry:
       max_attempts: 3
-      delay: 2s
+      initial_delay: 2s
       backoff: exponential
     hooks:
       pre:
