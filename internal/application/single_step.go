@@ -112,7 +112,6 @@ func (s *ExecutionService) ExecuteSingleStep(
 	cmd := &ports.Command{
 		Program: resolvedCmd,
 		Dir:     resolvedDir,
-		Timeout: step.Timeout,
 		Stdout:  s.stdoutWriter,
 		Stderr:  s.stderrWriter,
 	}

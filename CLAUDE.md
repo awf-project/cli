@@ -238,6 +238,10 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
 - Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
 
+Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
+
+Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -269,6 +273,10 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
 - Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
 - Halt implementation immediately when scope deviations are discovered; update plan and communicate changes before continuing work
+
+Apply identical error handling patterns across similar functions; handleNonZeroExit and handleExecutionError must both evaluate transitions before fallbacks
+
+When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
 
 ## Test Conventions
 

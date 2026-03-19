@@ -326,6 +326,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 	}
 
 	// execution loop
+	// Note: loop body duplicated in executeFromStep (same file). Keep both in sync.
 	var execErr error
 	currentStep := wf.Initial
 	for {
@@ -579,71 +580,11 @@ func buildLoopDataChain(domainLoop *workflow.LoopContext) *interpolation.LoopDat
 }
 
 // buildInterpolationContext converts ExecutionContext to interpolation.Context.
+// Delegates to the package-level helper; see interpolation_helpers.go.
 func (s *ExecutionService) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	// Convert step states - use thread-safe method
-	allStates := execCtx.GetAllStepStates()
-	states := make(map[string]interpolation.StepStateData, len(allStates))
-	// Use explicit index iteration to avoid copying 184-byte StepState
-	for name := range allStates {
-		state := allStates[name]
-		states[name] = interpolation.StepStateData{
-			Output:     state.Output,
-			Stderr:     state.Stderr,
-			ExitCode:   state.ExitCode,
-			Status:     state.Status.String(),
-			Response:   state.Response,
-			TokensUsed: state.TokensUsed,
-			JSON:       state.JSON,
-		}
-	}
-
-	// Get runtime context
-	wd, _ := os.Getwd()
-	hostname, _ := os.Hostname()
-
-	// Build environment map (merge execCtx.Env with os env)
-	env := make(map[string]string)
-	for _, e := range os.Environ() {
-		if parts := strings.SplitN(e, "=", 2); len(parts) == 2 {
-			env[parts[0]] = parts[1]
-		}
-	}
-	for k, v := range execCtx.Env {
-		env[k] = v // Override with workflow-specific env
-	}
-
-	// Populate AWF context with XDG directory paths (F063/T012)
-	// Paths are injected via SetAWFPaths() to avoid infrastructure import in application layer
-	awfContext := s.awfPaths
-	if awfContext == nil {
-		awfContext = map[string]string{}
-	}
-
-	intCtx := &interpolation.Context{
-		Inputs: execCtx.Inputs,
-		States: states,
-		Workflow: interpolation.WorkflowData{
-			ID:           execCtx.WorkflowID,
-			Name:         execCtx.WorkflowName,
-			CurrentState: execCtx.CurrentStep,
-			StartedAt:    execCtx.StartedAt,
-		},
-		Env: env,
-		Context: interpolation.ContextData{
-			WorkingDir: wd,
-			User:       os.Getenv("USER"),
-			Hostname:   hostname,
-		},
-		Error: nil, // Set in error hooks (F008)
-		AWF:   awfContext,
-	}
-
-	// Include loop context if we're inside a loop (with parent chain for nested loops)
-	intCtx.Loop = buildLoopDataChain(execCtx.CurrentLoop)
-
-	return intCtx
+	return buildInterpolationContext(execCtx, s.awfPaths)
 }
 
 // executeWithRetry executes a command with retry logic.
@@ -1157,7 +1098,6 @@ func (s *ExecutionService) resolveStepCommand(
 		Program:      resolvedCmd,
 		Dir:          resolvedDir,
 		Env:          env,
-		Timeout:      step.Timeout,
 		IsScriptFile: step.ScriptFile != "",
 		Stdout:       s.stdoutWriter,
 		Stderr:       s.stderrWriter,
@@ -1257,9 +1197,14 @@ func (s *ExecutionService) handleExecutionError(
 		s.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
-	// If continue_on_error is true, follow on_success path
-	if step.ContinueOnError {
-		return step.OnSuccess, nil
+	// Transitions take priority over ContinueOnError/OnFailure (ADR-001).
+	// Pass ContinueOnError as success so the legacy fallback selects OnSuccess vs OnFailure correctly.
+	nextStep, err := s.resolveNextStep(step, intCtx, step.ContinueOnError)
+	if err != nil {
+		return "", err
+	}
+	if nextStep != "" || step.ContinueOnError {
+		return nextStep, nil
 	}
 
 	if step.OnFailure != "" {
@@ -1330,7 +1275,6 @@ func (s *ExecutionService) handleSuccess(
 	return s.resolveNextStep(step, intCtx, true)
 }
 
-// stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
 // IsProblematicMaxIterationPattern checks if a loop hit max iterations with problematic patterns.
 // Returns true if the loop completed by hitting max iterations AND has step failures or complex nesting.
 func (s *ExecutionService) IsProblematicMaxIterationPattern(
@@ -1395,6 +1339,7 @@ func (s *ExecutionService) HandleMaxIterationFailure(
 	return "", fmt.Errorf("while loop %s: %s", step.Name, errMsg)
 }
 
+// stepExecutorAdapter adapts ExecutionService to the ports.StepExecutor interface.
 type stepExecutorAdapter struct {
 	execSvc *ExecutionService
 }
@@ -1560,6 +1505,7 @@ func (s *ExecutionService) ListResumable(ctx context.Context) ([]*workflow.Execu
 
 // executeFromStep continues workflow execution from the specified starting step.
 // It handles the execution loop, hooks, and state transitions.
+// Note: main execution loop body duplicated in runWithCallStackAndWorkflow (same file). Keep both in sync.
 //
 //nolint:gocognit // Complexity 31: main execution loop orchestrates step dispatch, hooks, cancellation, and error handling as a cohesive unit.
 func (s *ExecutionService) executeFromStep(
@@ -2228,14 +2174,7 @@ func (s *ExecutionService) applyOutputFormat(step *workflow.Step, state *workflo
 
 // interpolateTerminalMessage interpolates a terminal step message template using the current execution context.
 // Returns the interpolated message, falling back to the raw template on interpolation error.
+// Delegates to the package-level helper; see interpolation_helpers.go.
 func (s *ExecutionService) interpolateTerminalMessage(message string, intCtx *interpolation.Context) string {
-	if message == "" {
-		return ""
-	}
-	interpolated, err := s.resolver.Resolve(message, intCtx)
-	if err != nil {
-		s.logger.Warn("terminal message interpolation failed", "error", err, "message", message)
-		return message
-	}
-	return interpolated
+	return interpolateTerminalMessage(s.resolver, s.logger, message, intCtx)
 }

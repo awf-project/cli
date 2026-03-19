@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -1016,4 +1017,78 @@ func TestHandleNonZeroExit_ExitCode0IsSuccess_NotCaughtByFailurePath(t *testing.
 
 	require.NoError(t, err)
 	assert.Equal(t, "success_via_transition", ctx.CurrentStep, "exit code 0 should follow success path (handleSuccess, not handleNonZeroExit)")
+}
+
+func TestHandleExecutionError_ContinueOnError_TransitionTakesPriority(t *testing.T) {
+	wf := &workflow.Workflow{
+		Name:    "test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": builders.NewStepBuilder("step1").
+				WithType(workflow.StepTypeCommand).
+				WithCommand("will-fail").
+				WithContinueOnError(true).
+				WithTransitions(workflow.Transitions{
+					{When: "true", Goto: "transition_target"},
+				}).
+				WithOnSuccess("legacy_success").
+				Build(),
+			"transition_target": {
+				Name: "transition_target",
+				Type: workflow.StepTypeTerminal,
+			},
+			"legacy_success": {
+				Name: "legacy_success",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarnessWithEvaluator(t, infraexpr.NewExprEvaluator()).
+		WithWorkflow("test", wf).
+		WithExecutor(&errorMockExecutor{err: fmt.Errorf("command not found")}).
+		Build()
+
+	ctx, err := execSvc.Run(context.Background(), "test", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "transition_target", ctx.CurrentStep,
+		"transition should take priority over ContinueOnError on execution error")
+}
+
+func TestHandleExecutionError_ContinueOnError_WithoutTransition_FollowsOnSuccess(t *testing.T) {
+	wf := &workflow.Workflow{
+		Name:    "test",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": builders.NewStepBuilder("step1").
+				WithType(workflow.StepTypeCommand).
+				WithCommand("will-fail").
+				WithContinueOnError(true).
+				WithTransitions(workflow.Transitions{
+					{When: "false", Goto: "never_reached"},
+				}).
+				WithOnSuccess("continued").
+				Build(),
+			"never_reached": {
+				Name: "never_reached",
+				Type: workflow.StepTypeTerminal,
+			},
+			"continued": {
+				Name: "continued",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarnessWithEvaluator(t, infraexpr.NewExprEvaluator()).
+		WithWorkflow("test", wf).
+		WithExecutor(&errorMockExecutor{err: fmt.Errorf("command not found")}).
+		Build()
+
+	ctx, err := execSvc.Run(context.Background(), "test", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "continued", ctx.CurrentStep,
+		"with ContinueOnError=true and no matching transition, should follow OnSuccess")
 }

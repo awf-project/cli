@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -397,77 +395,17 @@ func (e *InteractiveExecutor) checkpoint(ctx context.Context, execCtx *workflow.
 
 // interpolateTerminalMessage interpolates a terminal step message template.
 // Falls back to the raw message on interpolation error so the message is never silently lost.
+// Delegates to the package-level helper; see interpolation_helpers.go.
 func (e *InteractiveExecutor) interpolateTerminalMessage(message string, intCtx *interpolation.Context) string {
-	if message == "" {
-		return ""
-	}
-	interpolated, err := e.resolver.Resolve(message, intCtx)
-	if err != nil {
-		e.logger.Warn("terminal message interpolation failed", "error", err, "message", message)
-		return message
-	}
-	return interpolated
+	return interpolateTerminalMessage(e.resolver, e.logger, message, intCtx)
 }
 
 // buildInterpolationContext converts ExecutionContext to interpolation.Context.
+// Delegates to the package-level helper; see interpolation_helpers.go.
 func (e *InteractiveExecutor) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	// Convert step states - use thread-safe method
-	allStates := execCtx.GetAllStepStates()
-	states := make(map[string]interpolation.StepStateData, len(allStates))
-	for name := range allStates {
-		state := allStates[name]
-		states[name] = interpolation.StepStateData{
-			Output:   state.Output,
-			Stderr:   state.Stderr,
-			ExitCode: state.ExitCode,
-			Status:   state.Status.String(),
-		}
-	}
-
-	// Get runtime context
-	wd, _ := os.Getwd()
-	hostname, _ := os.Hostname()
-
-	// Build environment map
-	env := make(map[string]string)
-	for _, envStr := range os.Environ() {
-		if parts := strings.SplitN(envStr, "=", 2); len(parts) == 2 {
-			env[parts[0]] = parts[1]
-		}
-	}
-	for k, v := range execCtx.Env {
-		env[k] = v
-	}
-
-	awfContext := e.awfPaths
-	if awfContext == nil {
-		awfContext = map[string]string{}
-	}
-
-	intCtx := &interpolation.Context{
-		Inputs: execCtx.Inputs,
-		States: states,
-		Workflow: interpolation.WorkflowData{
-			ID:           execCtx.WorkflowID,
-			Name:         execCtx.WorkflowName,
-			CurrentState: execCtx.CurrentStep,
-			StartedAt:    execCtx.StartedAt,
-		},
-		Env: env,
-		Context: interpolation.ContextData{
-			WorkingDir: wd,
-			User:       os.Getenv("USER"),
-			Hostname:   hostname,
-		},
-		AWF: awfContext,
-	}
-
-	// Include loop context if we're inside a loop
-	intCtx.Loop = buildLoopDataChain(execCtx.CurrentLoop)
-
-	return intCtx
+	return buildInterpolationContext(execCtx, e.awfPaths)
 }
 
 // executeStep executes a single command step.
@@ -516,7 +454,6 @@ func (e *InteractiveExecutor) executeStep(
 	cmd := &ports.Command{
 		Program: resolvedCmd,
 		Dir:     resolvedDir,
-		Timeout: step.Timeout,
 		Stdout:  e.stdoutWriter,
 		Stderr:  e.stderrWriter,
 	}
@@ -593,10 +530,16 @@ func (e *InteractiveExecutor) HandleExecutionError(
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
 	}
 
-	// Determine next step based on error handling configuration
-	if step.ContinueOnError {
-		return step.OnSuccess, nil
+	// Transitions take priority over ContinueOnError/OnFailure (ADR-001).
+	// Pass ContinueOnError as success so the legacy fallback selects OnSuccess vs OnFailure correctly.
+	nextStep, err := e.resolveNextStep(step, intCtx, step.ContinueOnError)
+	if err != nil {
+		return "", err
 	}
+	if nextStep != "" || step.ContinueOnError {
+		return nextStep, nil
+	}
+
 	if step.OnFailure != "" {
 		return step.OnFailure, nil
 	}

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **C061**: Step options audit — 3 documentation/implementation gaps
+  - `timeout` field documentation now reflects both integer seconds and Go duration string syntax (`"1m30s"`, `"500ms"`) across step and agent option tables
+  - Removed redundant `context.WithTimeout` from `ShellExecutor.Execute` — application layer is now the single timeout owner via `prepareStepExecution`
+  - `handleExecutionError` now evaluates transitions before `ContinueOnError` fallback, matching `handleNonZeroExit` behavior (ADR-001 transition priority contract)
+  - Removed dead `Timeout` field from `ports.Command` struct and all assignment sites
+  - New unit and integration tests covering transition priority on execution errors
+
 ### Added
 - **F072**: Hugo documentation site with Doks theme
   - Full documentation site served from existing `docs/` via Hugo module mounts (zero file duplication)
@@ -112,6 +120,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Risk**: Unreplaced references silently evaluate to `0` (expr-lang zero-value semantics)
 
 ### Fixed
+- **C061**: Fixed timeout documentation, removed redundant timeout handling, and aligned error transition priority
+  - **Documentation**: `timeout` field on step states now documents both integer seconds and Go duration string syntax with examples (`"1m30s"`, `"500ms"`)
+  - **Timeout Refactor**: Removed redundant `context.WithTimeout` that was applied in both application layer (`prepareStepExecution`) and infrastructure layer (`ShellExecutor.Execute`)
+    - Timeout responsibility now owned solely by `ExecutionService.executeStep` via context-based cancellation
+    - Removed `Timeout` field from `ports.Command` struct (was dead code, only set by infrastructure, never used)
+    - Removed timeout parameter passing from `shell_executor.go`, `interactive_executor.go`, and `single_step.go`
+    - Updated executor package documentation to clarify timeout ownership model
+  - **Transition Priority Fix**: `handleExecutionError()` now evaluates transitions before `continue_on_error` fallback (matching `handleNonZeroExit()` behavior)
+    - Execution errors (timeouts, command-not-found) now route through transition conditions first
+    - `continue_on_error` only applies when no matching transition is found
+    - Aligns with documented transition priority contract (ADR-001)
+  - Added functional test in `tests/integration/execution/error_transition_priority_test.go` validating transition priority with execution errors and timeouts
 - **B012**: Fixed 120 failing integration tests across 9 packages
   - Updated test assertions to match current production behavior after accumulated drift from F063–F072 and B005–B011
   - 8 root cause categories addressed: terminal failure assertions (C1), CLI exit codes (C2), JSON deserialization (C3), missing fixtures (C4), conversation test drift (C5), loop transitions (C6), cleanup meta-tests (C7), hint system output (C8)

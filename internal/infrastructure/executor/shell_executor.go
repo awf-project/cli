@@ -59,12 +59,6 @@ func detectShell() string {
 
 // Execute runs a command and returns the result.
 func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
-	if cmd.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(cmd.Timeout)*time.Second)
-		defer cancel()
-	}
-
 	var execCmd *exec.Cmd
 	var cleanup func()
 	if cmd.IsScriptFile && hasShebang(cmd.Program) {
@@ -83,6 +77,9 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports
 
 	// kill entire process group on context cancellation (Go 1.20+)
 	execCmd.Cancel = func() error {
+		if execCmd.Process == nil {
+			return nil
+		}
 		return syscall.Kill(-execCmd.Process.Pid, syscall.SIGKILL)
 	}
 	execCmd.WaitDelay = 100 * time.Millisecond

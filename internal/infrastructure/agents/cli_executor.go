@@ -34,6 +34,9 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	// Kill entire process group on context cancellation (Go 1.20+)
 	// Using negative PID sends SIGKILL to the entire process group
 	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	cmd.WaitDelay = 100 * time.Millisecond
