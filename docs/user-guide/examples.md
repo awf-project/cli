@@ -347,7 +347,7 @@ states:
     retry:
       max_attempts: 3
       backoff: exponential
-      initial_delay_ms: 1000
+      initial_delay: 1s
     on_success: done
     on_failure: error
 

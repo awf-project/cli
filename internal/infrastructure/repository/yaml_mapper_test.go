@@ -464,8 +464,8 @@ func TestMapStep_AgentStep(t *testing.T) {
 					MaxAttempts:  3,
 					InitialDelay: "1s",
 					MaxDelay:     "10s",
-					Backoff:      "2.0",
-					Multiplier:   2.0,
+					Backoff:      "exponential",
+					Multiplier:   func() *float64 { v := 2.0; return &v }(),
 				},
 			},
 			wantStep: func(t *testing.T, step *workflow.Step) {
@@ -1392,4 +1392,330 @@ func TestMapConversationConfig_StrategyMapping(t *testing.T) {
 			assert.Equal(t, tt.domainStrategy, got.Strategy)
 		})
 	}
+}
+
+// mapRetry Tests
+
+func TestMapRetry_NilInput(t *testing.T) {
+	got, err := mapRetry(nil)
+
+	assert.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+func TestMapRetry_HappyPath(t *testing.T) {
+	tests := []struct {
+		name string
+		y    *yamlRetry
+		want *workflow.RetryConfig
+	}{
+		{
+			name: "all fields specified with multiplier",
+			y: &yamlRetry{
+				MaxAttempts:        3,
+				InitialDelay:       "100ms",
+				MaxDelay:           "5s",
+				Backoff:            "exponential",
+				Multiplier:         ptr(2.5),
+				Jitter:             0.1,
+				RetryableExitCodes: []int{1, 2},
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:        3,
+				InitialDelayMs:     100,
+				MaxDelayMs:         5000,
+				Backoff:            "exponential",
+				Multiplier:         2.5,
+				Jitter:             0.1,
+				RetryableExitCodes: []int{1, 2},
+			},
+		},
+		{
+			name: "multiplier omitted defaults to 2.0",
+			y: &yamlRetry{
+				MaxAttempts:  2,
+				InitialDelay: "50ms",
+				MaxDelay:     "2s",
+				Backoff:      "linear",
+				Multiplier:   nil,
+				Jitter:       0.05,
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    2,
+				InitialDelayMs: 50,
+				MaxDelayMs:     2000,
+				Backoff:        "linear",
+				Multiplier:     2.0,
+				Jitter:         0.05,
+			},
+		},
+		{
+			name: "durations in go format",
+			y: &yamlRetry{
+				MaxAttempts:  2,
+				InitialDelay: "1s",
+				MaxDelay:     "10s",
+				Backoff:      "constant",
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    2,
+				InitialDelayMs: 1000,
+				MaxDelayMs:     10000,
+				Backoff:        "constant",
+				Multiplier:     2.0,
+			},
+		},
+		{
+			name: "durations as integer seconds",
+			y: &yamlRetry{
+				MaxAttempts:  3,
+				InitialDelay: "30",
+				MaxDelay:     "120",
+				Backoff:      "exponential",
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    3,
+				InitialDelayMs: 30000,
+				MaxDelayMs:     120000,
+				Backoff:        "exponential",
+				Multiplier:     2.0,
+			},
+		},
+		{
+			name: "empty delays default to 0ms",
+			y: &yamlRetry{
+				MaxAttempts:        1,
+				InitialDelay:       "",
+				MaxDelay:           "",
+				Backoff:            "constant",
+				RetryableExitCodes: nil,
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:        1,
+				InitialDelayMs:     0,
+				MaxDelayMs:         0,
+				Backoff:            "constant",
+				Multiplier:         2.0,
+				RetryableExitCodes: nil,
+			},
+		},
+		{
+			name: "multiplier explicit zero is preserved",
+			y: &yamlRetry{
+				MaxAttempts:  1,
+				InitialDelay: "100ms",
+				Multiplier:   ptr(0.0),
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    1,
+				InitialDelayMs: 100,
+				Multiplier:     0.0,
+			},
+		},
+		{
+			name: "millisecond durations",
+			y: &yamlRetry{
+				MaxAttempts:  2,
+				InitialDelay: "500ms",
+				MaxDelay:     "30s",
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    2,
+				InitialDelayMs: 500,
+				MaxDelayMs:     30000,
+				Multiplier:     2.0,
+			},
+		},
+		{
+			name: "minute durations",
+			y: &yamlRetry{
+				MaxAttempts:  2,
+				InitialDelay: "1m",
+				MaxDelay:     "5m",
+			},
+			want: &workflow.RetryConfig{
+				MaxAttempts:    2,
+				InitialDelayMs: 60000,
+				MaxDelayMs:     300000,
+				Multiplier:     2.0,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := mapRetry(tt.y)
+
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, tt.want.MaxAttempts, got.MaxAttempts)
+			assert.Equal(t, tt.want.InitialDelayMs, got.InitialDelayMs)
+			assert.Equal(t, tt.want.MaxDelayMs, got.MaxDelayMs)
+			assert.Equal(t, tt.want.Backoff, got.Backoff)
+			assert.Equal(t, tt.want.Multiplier, got.Multiplier)
+			assert.Equal(t, tt.want.Jitter, got.Jitter)
+			assert.Equal(t, tt.want.RetryableExitCodes, got.RetryableExitCodes)
+		})
+	}
+}
+
+func TestMapRetry_ErrorPaths(t *testing.T) {
+	tests := []struct {
+		name        string
+		y           *yamlRetry
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "invalid initial_delay format",
+			y: &yamlRetry{
+				InitialDelay: "not-a-duration",
+				MaxAttempts:  1,
+			},
+			wantErr:     true,
+			errContains: "initial_delay",
+		},
+		{
+			name: "invalid max_delay format",
+			y: &yamlRetry{
+				InitialDelay: "100ms",
+				MaxDelay:     "invalid",
+				MaxAttempts:  1,
+			},
+			wantErr:     true,
+			errContains: "max_delay",
+		},
+		{
+			name: "initial_delay with invalid characters",
+			y: &yamlRetry{
+				InitialDelay: "100xs",
+				MaxAttempts:  1,
+			},
+			wantErr:     true,
+			errContains: "initial_delay",
+		},
+		{
+			name: "max_delay with invalid characters",
+			y: &yamlRetry{
+				MaxDelay:    "5z",
+				MaxAttempts: 1,
+			},
+			wantErr:     true,
+			errContains: "max_delay",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := mapRetry(tt.y)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				assert.Nil(t, got)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotNil(t, got)
+		})
+	}
+}
+
+// parseDuration Tests
+
+func TestParseDuration_HappyPath(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want int64
+	}{
+		{
+			name: "milliseconds format",
+			s:    "100ms",
+			want: 100000000,
+		},
+		{
+			name: "seconds format",
+			s:    "30s",
+			want: 30000000000,
+		},
+		{
+			name: "minutes format",
+			s:    "2m",
+			want: 120000000000,
+		},
+		{
+			name: "hours format",
+			s:    "1h",
+			want: 3600000000000,
+		},
+		{
+			name: "combined format",
+			s:    "1m30s",
+			want: 90000000000,
+		},
+		{
+			name: "integer as seconds",
+			s:    "60",
+			want: 60000000000,
+		},
+		{
+			name: "single digit integer",
+			s:    "5",
+			want: 5000000000,
+		},
+		{
+			name: "zero",
+			s:    "0",
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDuration(tt.s)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.Nanoseconds())
+		})
+	}
+}
+
+func TestParseDuration_ErrorPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+	}{
+		{
+			name: "invalid format",
+			s:    "not-a-duration",
+		},
+		{
+			name: "invalid unit",
+			s:    "100xs",
+		},
+		{
+			name: "invalid characters",
+			s:    "abc",
+		},
+		{
+			name: "float seconds without unit",
+			s:    "1.5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDuration(tt.s)
+
+			require.Error(t, err)
+			assert.Equal(t, int64(0), got.Nanoseconds())
+		})
+	}
+}
+
+// Helper function to create a pointer to float64
+func ptr(f float64) *float64 {
+	return &f
 }

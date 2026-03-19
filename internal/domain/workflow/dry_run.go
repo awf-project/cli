@@ -52,11 +52,13 @@ type DryRunTransition struct {
 }
 
 type DryRunRetry struct {
-	MaxAttempts    int
-	InitialDelayMs int
-	MaxDelayMs     int
-	Backoff        string
-	Multiplier     float64
+	MaxAttempts        int
+	InitialDelayMs     int
+	MaxDelayMs         int
+	Backoff            string
+	Multiplier         float64
+	Jitter             float64
+	RetryableExitCodes []int
 }
 
 type DryRunCapture struct {

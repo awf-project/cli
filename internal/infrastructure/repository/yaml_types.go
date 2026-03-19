@@ -107,13 +107,13 @@ type yamlInputValidation struct {
 
 // yamlRetry is the YAML representation of retry configuration.
 type yamlRetry struct {
-	MaxAttempts        int     `yaml:"max_attempts"`
-	InitialDelay       string  `yaml:"initial_delay"`
-	MaxDelay           string  `yaml:"max_delay"`
-	Backoff            string  `yaml:"backoff"`
-	Multiplier         float64 `yaml:"multiplier"`
-	Jitter             float64 `yaml:"jitter"`
-	RetryableExitCodes []int   `yaml:"retryable_exit_codes"`
+	MaxAttempts        int      `yaml:"max_attempts"`
+	InitialDelay       string   `yaml:"initial_delay"`
+	MaxDelay           string   `yaml:"max_delay"`
+	Backoff            string   `yaml:"backoff"`
+	Multiplier         *float64 `yaml:"multiplier"`
+	Jitter             float64  `yaml:"jitter"`
+	RetryableExitCodes []int    `yaml:"retryable_exit_codes"`
 }
 
 // yamlCapture is the YAML representation of capture configuration.

@@ -40,6 +40,7 @@ Learn how to use AWF effectively:
   - [GitHub Operations](user-guide/workflow-syntax.md#github-operations) - Built-in GitHub plugin with declarative operations
   - [HTTP Operations](user-guide/workflow-syntax.md#http-operations) - Built-in HTTP operation for REST API calls
   - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop and webhook backends
+- [Retry Configuration](user-guide/retry.md) - Automatic retry with backoff strategies, delay capping, and exit code filtering
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output

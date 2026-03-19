@@ -504,6 +504,74 @@ states:
 	assert.Less(t, elapsed, 2*time.Second, "delays should be capped at max_delay")
 }
 
+func TestRetry_NoMaxDelay_Integration(t *testing.T) {
+	tmpDir := t.TempDir()
+	counterFile := filepath.Join(tmpDir, "counter")
+
+	// Workflow with exponential backoff but NO max_delay — omitting max_delay
+	// previously mapped to maxDelay=0, which silently capped all delays to zero.
+	// With the guard fix (maxDelay > 0), delays should be uncapped and meaningful.
+	wfYAML := `name: retry-no-max-delay
+version: "1.0.0"
+states:
+  initial: exp_no_cap
+  exp_no_cap:
+    type: step
+    command: |
+      COUNT=$(cat "` + counterFile + `" 2>/dev/null || echo "0")
+      COUNT=$((COUNT + 1))
+      echo $COUNT > "` + counterFile + `"
+      if [ $COUNT -lt 3 ]; then
+        exit 1
+      fi
+      exit 0
+    retry:
+      max_attempts: 5
+      initial_delay: 50ms
+      backoff: exponential
+      multiplier: 2
+    on_success: done
+    on_failure: error
+  done:
+    type: terminal
+  error:
+    type: terminal
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "retry-no-max-delay.yaml"), []byte(wfYAML), 0o644)
+	require.NoError(t, err)
+
+	repo := repository.NewYAMLRepository(tmpDir)
+	store := newRetryMockStateStore()
+	exec := executor.NewShellExecutor()
+	logger := &retryMockLogger{}
+	resolver := interpolation.NewTemplateResolver()
+
+	wfSvc := application.NewWorkflowService(repo, store, exec, logger, infraExpr.NewExprValidator())
+	parallelExec := application.NewParallelExecutor(logger)
+	execSvc := application.NewExecutionService(wfSvc, exec, parallelExec, store, logger, resolver, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	execCtx, err := execSvc.Run(ctx, "retry-no-max-delay", nil)
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", execCtx.CurrentStep, "should succeed after retries")
+
+	// With exponential backoff (no max_delay cap) requiring 3 attempts:
+	// - Attempt 2: after ~50ms (initial_delay * multiplier^0)
+	// - Attempt 3: after ~100ms (initial_delay * multiplier^1)
+	// Total minimum: ~150ms — assert 100ms to give CI headroom.
+	// Before the fix, maxDelay=0 capped all delays to 0ms and retries happened instantly.
+	assert.GreaterOrEqual(t, elapsed, 100*time.Millisecond, "delays should not be capped to zero when max_delay is omitted")
+
+	counterData, err := os.ReadFile(counterFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(counterData), "3", "should have made 3 attempts")
+}
+
 func TestRetry_NoRetryOnSuccess_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	counterFile := filepath.Join(tmpDir, "counter")

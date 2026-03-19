@@ -51,7 +51,7 @@ func TestCalculateDelay(t *testing.T) {
 		{name: "constant zero initial delay", strategy: StrategyConstant, attempt: 5, initialDelay: 0, maxDelay: 30 * time.Second, multiplier: 2.0, want: 0},
 		{name: "linear zero initial delay", strategy: StrategyLinear, attempt: 5, initialDelay: 0, maxDelay: 30 * time.Second, multiplier: 2.0, want: 0},
 		{name: "exponential zero initial delay", strategy: StrategyExponential, attempt: 5, initialDelay: 0, maxDelay: 30 * time.Second, multiplier: 2.0, want: 0},
-		{name: "exponential max delay zero", strategy: StrategyExponential, attempt: 5, initialDelay: 1 * time.Second, maxDelay: 0, multiplier: 2.0, want: 0},
+		{name: "exponential max delay zero", strategy: StrategyExponential, attempt: 5, initialDelay: 1 * time.Second, maxDelay: 0, multiplier: 2.0, want: 16 * time.Second},
 		{name: "constant attempt 1", strategy: StrategyConstant, attempt: 1, initialDelay: 1 * time.Second, maxDelay: 30 * time.Second, multiplier: 2.0, want: 1 * time.Second},
 	}
 
@@ -125,6 +125,86 @@ func TestApplyJitter(t *testing.T) {
 
 		assert.Equal(t, got1, got2)
 	})
+}
+
+// TestCalculateDelay_MaxDelayGuard verifies the maxDelay > 0 guard prevents
+// silently capping delays to zero when maxDelay is omitted (found = 0).
+func TestCalculateDelay_MaxDelayGuard(t *testing.T) {
+	tests := []struct {
+		name         string
+		strategy     Strategy
+		attempt      int
+		initialDelay time.Duration
+		maxDelay     time.Duration
+		multiplier   float64
+		want         time.Duration
+	}{
+		// When maxDelay=0, delay should NOT be capped to zero.
+		// This tests the guard: if maxDelay > 0 && delay > maxDelay
+		{
+			name:         "exponential with zero max_delay should return computed delay",
+			strategy:     StrategyExponential,
+			attempt:      3,
+			initialDelay: 1 * time.Second,
+			maxDelay:     0, // No cap
+			multiplier:   2.0,
+			want:         4 * time.Second, // 1s * 2^(3-1) = 4s, NOT capped to 0
+		},
+		{
+			name:         "linear with zero max_delay should return computed delay",
+			strategy:     StrategyLinear,
+			attempt:      5,
+			initialDelay: 1 * time.Second,
+			maxDelay:     0, // No cap
+			multiplier:   2.0,
+			want:         5 * time.Second, // 1s * 5 = 5s, NOT capped to 0
+		},
+		{
+			name:         "constant with zero max_delay returns initial delay",
+			strategy:     StrategyConstant,
+			attempt:      10,
+			initialDelay: 2 * time.Second,
+			maxDelay:     0, // No cap
+			multiplier:   1.0,
+			want:         2 * time.Second, // constant = initial, NOT capped to 0
+		},
+		// When maxDelay > 0, delays SHOULD still be capped normally.
+		{
+			name:         "exponential capped when max_delay is set and delay exceeds it",
+			strategy:     StrategyExponential,
+			attempt:      6,
+			initialDelay: 1 * time.Second,
+			maxDelay:     30 * time.Second,
+			multiplier:   2.0,
+			want:         30 * time.Second, // 1s * 2^5 = 32s → capped to 30s
+		},
+		{
+			name:         "linear capped when max_delay is set",
+			strategy:     StrategyLinear,
+			attempt:      100,
+			initialDelay: 1 * time.Second,
+			maxDelay:     60 * time.Second,
+			multiplier:   1.0,
+			want:         60 * time.Second, // 1s * 100 = 100s → capped to 60s
+		},
+		// Edge case: very small but positive maxDelay still caps.
+		{
+			name:         "exponential capped to 1ms when max_delay=1ms",
+			strategy:     StrategyExponential,
+			attempt:      5,
+			initialDelay: 100 * time.Millisecond,
+			maxDelay:     1 * time.Millisecond,
+			multiplier:   2.0,
+			want:         1 * time.Millisecond, // computed 6.4s → capped to 1ms
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculateDelay(tt.strategy, tt.attempt, tt.initialDelay, tt.maxDelay, tt.multiplier)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestShouldRetry(t *testing.T) {

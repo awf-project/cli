@@ -7,6 +7,7 @@ package workflow_test
 //        retry config, capture config, dir field, new fields, and terminal status
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -188,6 +189,72 @@ func TestRetryConfig(t *testing.T) {
 			t.Errorf("expected 3 retryable codes, got %d", len(retry.RetryableExitCodes))
 		}
 	})
+}
+
+func TestRetryConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  workflow.RetryConfig
+		wantErr string
+	}{
+		{
+			name:    "valid config",
+			config:  workflow.RetryConfig{MaxAttempts: 3, Backoff: "exponential", Multiplier: 2.0, Jitter: 0.5},
+			wantErr: "",
+		},
+		{
+			name:    "valid empty backoff",
+			config:  workflow.RetryConfig{MaxAttempts: 1},
+			wantErr: "",
+		},
+		{
+			name:    "max_attempts zero",
+			config:  workflow.RetryConfig{MaxAttempts: 0},
+			wantErr: "max_attempts must be >= 1",
+		},
+		{
+			name:    "max_attempts negative",
+			config:  workflow.RetryConfig{MaxAttempts: -1},
+			wantErr: "max_attempts must be >= 1",
+		},
+		{
+			name:    "invalid strategy",
+			config:  workflow.RetryConfig{MaxAttempts: 3, Backoff: "random"},
+			wantErr: "invalid backoff strategy",
+		},
+		{
+			name:    "jitter too high",
+			config:  workflow.RetryConfig{MaxAttempts: 3, Jitter: 1.5},
+			wantErr: "jitter must be between 0.0 and 1.0",
+		},
+		{
+			name:    "jitter negative",
+			config:  workflow.RetryConfig{MaxAttempts: 3, Jitter: -0.1},
+			wantErr: "jitter must be between 0.0 and 1.0",
+		},
+		{
+			name:    "multiplier negative",
+			config:  workflow.RetryConfig{MaxAttempts: 3, Multiplier: -1.0},
+			wantErr: "multiplier must be >= 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("expected error containing %q, got %v", tt.wantErr, err)
+				}
+			}
+		})
+	}
 }
 
 func TestCaptureConfig(t *testing.T) {

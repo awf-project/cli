@@ -1,0 +1,28 @@
+name: retry-audit
+description: Retry configuration fixture with all fields for C064 audit testing
+version: "1.0.0"
+
+states:
+  initial: run
+
+  run:
+    type: step
+    command: echo "ok"
+    retry:
+      max_attempts: 3
+      initial_delay: 200ms
+      max_delay: 2s
+      backoff: exponential
+      multiplier: 2.0
+      jitter: 0.3
+      retryable_exit_codes: [1, 2]
+    on_success: done
+    on_failure: error
+
+  done:
+    type: terminal
+    status: success
+
+  error:
+    type: terminal
+    status: failure
