@@ -1153,7 +1153,7 @@ func TestMockCommandExecutor_CallRecording(t *testing.T) {
 	commands := []*ports.Command{
 		{Program: "cmd1", Dir: "/dir1"},
 		{Program: "cmd2", Dir: "/dir2", Env: map[string]string{"KEY": "val"}},
-		{Program: "cmd3", Timeout: 30},
+		{Program: "cmd3"},
 	}
 
 	// Act - execute multiple commands

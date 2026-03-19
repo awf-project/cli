@@ -2,7 +2,12 @@
 //
 // This package implements the CommandExecutor port from the domain layer,
 // providing shell command execution with process management:
-//   - ShellExecutor: Executes commands via detected shell ($SHELL, fallback /bin/sh) with timeout and cancellation
+//   - ShellExecutor: Executes commands via detected shell ($SHELL, fallback /bin/sh) with context cancellation
+//
+// Timeout Ownership:
+//   - Timeout responsibility owned by application layer (ExecutionService.executeStep)
+//   - ShellExecutor respects context cancellation; timeout enforcement is caller's responsibility
+//   - Timeout pre-enforcement prevents duplicate timeout stacks (previous bug: timeout applied in both ExecutionService and ShellExecutor)
 //
 // Architecture:
 //   - Domain defines: CommandExecutor port interface, Command and CommandResult types
@@ -12,7 +17,7 @@
 // Example usage:
 //
 //	executor := executor.NewShellExecutor()
-//	cmd := &ports.Command{Program: "echo hello", Timeout: 30}
+//	cmd := &ports.Command{Program: "echo hello"}
 //	result, err := executor.Execute(ctx, cmd)
 //	if err != nil {
 //	    // Handle execution error

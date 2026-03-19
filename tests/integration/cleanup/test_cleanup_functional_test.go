@@ -354,7 +354,6 @@ func TestCleanup_Metrics_Integration(t *testing.T) {
 	})
 }
 
-
 // readFileContent reads a file and returns its content as a string.
 func readFileContent(t *testing.T, path string) string {
 	t.Helper()
@@ -455,4 +454,3 @@ func countPatternInDir(t *testing.T, repoRoot, relDir, pattern string) int {
 	require.NoError(t, err, "should walk directory: %s", relDir)
 	return count
 }
-

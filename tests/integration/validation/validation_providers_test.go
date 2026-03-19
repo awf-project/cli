@@ -555,7 +555,6 @@ func TestIntegration_JSONParsing_SharedHelper(t *testing.T) {
 			}
 
 			result, err := tt.provider.Execute(ctx, tt.prompt, options)
-
 			// Provider CLI may fail at runtime (e.g., deprecated models, auth issues,
 			// non-JSON output). The test verifies parsing works when execution succeeds.
 			if err != nil {
@@ -629,7 +628,6 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 		// Valid Gemini model — CLI may fail at runtime (deprecated model names, auth).
 		result, err := provider.ExecuteConversation(ctx, state, "Test",
 			map[string]any{"model": "gemini-pro"})
-
 		if err != nil {
 			t.Logf("Gemini CLI execution failed (expected in CI): %v", err)
 			return

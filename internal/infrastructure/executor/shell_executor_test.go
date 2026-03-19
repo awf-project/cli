@@ -113,26 +113,6 @@ func TestShellExecutor_Execute_NonZeroExitCode(t *testing.T) {
 	}
 }
 
-func TestShellExecutor_Execute_Timeout(t *testing.T) {
-	executor := NewShellExecutor()
-	cmd := ports.Command{
-		Program: "sleep 10",
-		Timeout: 1, // 1 second timeout
-	}
-
-	start := time.Now()
-	result, err := executor.Execute(context.Background(), &cmd)
-	elapsed := time.Since(start)
-
-	// should complete within ~2 seconds (1s timeout + overhead)
-	assert.Less(t, elapsed, 3*time.Second)
-	// timeout should return context error
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	// result should still be returned (partial)
-	assert.NotNil(t, result)
-	assert.Equal(t, -1, result.ExitCode)
-}
-
 func TestShellExecutor_Execute_ContextTimeout(t *testing.T) {
 	executor := NewShellExecutor()
 	cmd := ports.Command{Program: "sleep 10"}

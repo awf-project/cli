@@ -94,12 +94,16 @@ my_step:
 | `command` | string | - | Shell command to execute (mutually exclusive with `script_file`); supports [local-before-global resolution](#local-before-global-resolution) for AWF path variables |
 | `script_file` | string | - | Path to external shell script file (mutually exclusive with `command`); supports [local-before-global resolution](#local-before-global-resolution) |
 | `dir` | string | cwd | Working directory (supports interpolation and [local-before-global resolution](#local-before-global-resolution)) |
-| `timeout` | int | 0 | Execution timeout in seconds (0 = no timeout) |
+| `timeout` | int or string | 0 | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
 | `on_success` | string | - | Next state on success (exit code 0) |
 | `on_failure` | string or object | - | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `continue_on_error` | bool | false | Always follow `on_success` regardless of exit code |
 | `retry` | object | - | Retry configuration |
 | `transitions` | array | - | Conditional transitions |
+
+> **Timeout syntax:** The `timeout` field accepts either an integer (seconds) or a Go duration string.
+> Examples: `30` (30 seconds), `"1m30s"` (90 seconds), `"500ms"` (half second), `"2h"` (2 hours).
+> Duration strings support: `ns`, `us`/`µs`, `ms`, `s`, `m`, `h`.
 
 ### Shell Execution
 
@@ -423,7 +427,7 @@ refine_code:
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Conversation configuration (required if mode=conversation) |
 | `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
-| `timeout` | int | No | Execution timeout in seconds (0 = no timeout) |
+| `timeout` | int or string | No | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
 | `on_success` | string | No | Next state on success |
 | `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `retry` | object | No | Retry configuration (same as step retry) |

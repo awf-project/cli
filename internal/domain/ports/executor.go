@@ -21,7 +21,6 @@ type Command struct {
 	Program      string
 	Dir          string
 	Env          map[string]string
-	Timeout      int
 	IsScriptFile bool
 	Stdout       io.Writer
 	Stderr       io.Writer
