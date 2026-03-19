@@ -40,7 +40,7 @@ states:
     conversation:
       max_turns: 5
       max_context_tokens: 50000
-      strategy: summarize
+      strategy: sliding_window
     timeout: 60
     on_success: truncate_middle_test
     on_failure: error
@@ -54,7 +54,7 @@ states:
     conversation:
       max_turns: 10
       max_context_tokens: 20000
-      strategy: truncate_middle
+      strategy: sliding_window
     timeout: 60
     on_success: done
     on_failure: error

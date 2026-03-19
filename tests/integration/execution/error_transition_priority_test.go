@@ -168,4 +168,3 @@ states:
 	require.True(t, ok)
 	assert.Contains(t, stepState.Output, "timed out")
 }
-

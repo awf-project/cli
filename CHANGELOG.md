@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **C062**: Agent state options audit — 7 documentation and validation gaps
+  - **Finding 1–2**: Documented `continue_from` and `inject_context` fields in Conversation Configuration table (`workflow-syntax.md`)
+  - **Finding 3**: Fixed `strategy` default value from `sliding_window` to `-` (no context management when omitted)
+  - **Finding 4**: Enumerated all valid strategy values (`sliding_window`, `summarize`, `truncate_middle`) in documentation
+  - **Finding 5**: Documented conversation mode limitation — full history continuity only with `openai_compatible`; CLI providers execute turns independently
+  - **Finding 6**: `ConversationConfig.Validate()` now rejects `continue_from` and `inject_context` with "not yet implemented" errors (previously silently ignored)
+  - **Finding 7**: `ConversationConfig.Validate()` now rejects `summarize` and `truncate_middle` strategies with "not yet implemented; use sliding_window" error
+  - Updated `conversation-multiturn.yaml` and `conversation-window.yaml` fixtures for new validation rules
 - **C061**: Step options audit — 3 documentation/implementation gaps
   - `timeout` field documentation now reflects both integer seconds and Go duration string syntax (`"1m30s"`, `"500ms"`) across step and agent option tables
   - Removed redundant `context.WithTimeout` from `ShellExecutor.Execute` — application layer is now the single timeout owner via `prepareStepExecution`

@@ -35,7 +35,6 @@ states:
     type: agent
     provider: claude
     mode: conversation
-    continue_from: first_turn
     prompt: |
       Can you elaborate on that response?
     conversation:
