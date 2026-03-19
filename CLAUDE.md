@@ -278,6 +278,8 @@ Apply identical error handling patterns across similar functions; handleNonZeroE
 
 When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
 
+Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
+
 ## Test Conventions
 
 - Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time

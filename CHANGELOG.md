@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **C063**: Loop options audit — 6 documentation-vs-implementation discrepancies
+  - **Finding 1**: Replaced ~56 lowercase loop variable references (`loop.item`, `loop.index`) with PascalCase (`loop.Item`, `loop.Index`) across 4 doc files (`workflow-syntax.md`, `loop.md`, `interpolation.md`, `examples.md`)
+  - **Finding 1 — Code**: Added missing `index1` and `parent` keys to `makeLoopAccessor` function-call map in `template_resolver.go`; `parent` uses recursive `serializeLoopData` with nil guard
+  - **Finding 2**: Replaced invalid arithmetic `max_iterations` example with working single-variable template resolution pattern
+  - **Finding 3**: Added `%` (modulo) to operator detection in `parseMaxIterationsValue()` — was silently treating modulo expressions as literal strings
+  - **Finding 4**: Updated while loop context table in `workflow-syntax.md` to include `Index1` and notes for `Item` (nil), `Last` (false), `Parent` (nested only)
+  - **Finding 5**: Replaced misleading "Supports interpolation" with accurate expression syntax description for `while` and `break_when` fields
+  - **Finding 6**: Removed redundant `LoopData` manual override in `ExecuteForEach` that dropped `Parent` chain — `buildContext(execCtx)` already produces correct context via `buildLoopDataChain`
+  - New tests for `index1`/`parent` interpolation, modulo operator routing, and nested `for_each` parent chain preservation
 - **C062**: Agent state options audit — 7 documentation and validation gaps
   - **Finding 1–2**: Documented `continue_from` and `inject_context` fields in Conversation Configuration table (`workflow-syntax.md`)
   - **Finding 3**: Fixed `strategy` default value from `sliding_window` to `-` (no context management when omitted)

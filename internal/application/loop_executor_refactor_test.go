@@ -462,6 +462,13 @@ func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) 
 			expectedResult: 5,
 		},
 		{
+			name:           "arithmetic - modulo",
+			expression:     "{{a % b}}",
+			resolvedValue:  "17 % 5",
+			evaluatorInt:   2,
+			expectedResult: 2,
+		},
+		{
 			name:           "whitespace handling",
 			expression:     "{{output}}",
 			resolvedValue:  "  42  \n",
@@ -553,4 +560,116 @@ func TestLoopExecutor_ResolveMaxIterations_Refactored_TableDriven(t *testing.T) 
 			}
 		})
 	}
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ArithmeticWithModulo(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	evaluator.SetIntResult(2, nil)
+	resolver.results["{{inputs.value % inputs.divisor}}"] = "17 % 5"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+
+	ctx := interpolation.NewContext()
+
+	result, err := exec.ResolveMaxIterations("{{inputs.value % inputs.divisor}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ModuloOperatorDetection(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	// Verify modulo operator is detected and passed to evaluator
+	called := false
+	evaluator.SetEvaluateIntFunc(func(expr string, ctx *interpolation.Context) (int, error) {
+		called = true
+		assert.Equal(t, "100 % 7", expr)
+		return 2, nil
+	})
+
+	resolver.results["{{inputs.expr}}"] = "100 % 7"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+	ctx := interpolation.NewContext()
+
+	result, err := exec.ResolveMaxIterations("{{inputs.expr}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result)
+	assert.True(t, called, "modulo expression should be passed to evaluator")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ModuloWithSmallResult(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	evaluator.SetIntResult(1, nil)
+	resolver.results["{{inputs.a % inputs.b}}"] = "21 % 10"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+	ctx := interpolation.NewContext()
+
+	result, err := exec.ResolveMaxIterations("{{inputs.a % inputs.b}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ModuloWithLargeOperands(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	evaluator.SetIntResult(3, nil)
+	resolver.results["{{inputs.large % inputs.divisor}}"] = "9999 % 1000"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+	ctx := interpolation.NewContext()
+
+	result, err := exec.ResolveMaxIterations("{{inputs.large % inputs.divisor}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, result)
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ModuloEvaluatorError(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	evaluator.SetIntResult(0, errors.New("invalid modulo operation"))
+	resolver.results["{{inputs.a % inputs.b}}"] = "5 % 0"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+	ctx := interpolation.NewContext()
+
+	_, err := exec.ResolveMaxIterations("{{inputs.a % inputs.b}}", ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "evaluation failed")
+	assert.Contains(t, err.Error(), "invalid modulo operation")
+}
+
+func TestLoopExecutor_ResolveMaxIterations_ModuloInComplexExpression(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := mocks.NewMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+
+	evaluator.SetIntResult(7, nil)
+	resolver.results["{{inputs.a * inputs.b % inputs.c}}"] = "3 * 5 % 8"
+
+	exec := application.NewLoopExecutor(logger, evaluator, resolver)
+	ctx := interpolation.NewContext()
+
+	result, err := exec.ResolveMaxIterations("{{inputs.a * inputs.b % inputs.c}}", ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, result)
 }

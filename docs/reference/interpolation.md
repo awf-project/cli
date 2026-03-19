@@ -411,13 +411,13 @@ Skills: {{join .states.available_skills.Output ", "}}
 Available inside `for_each` and `while` loops:
 
 ```yaml
-{{.loop.item}}      # Current item value (for_each only)
-{{.loop.index}}     # 0-based iteration index
-{{.loop.index1}}    # 1-based iteration index
-{{.loop.first}}     # True on first iteration
-{{.loop.last}}      # True on last iteration (for_each only)
-{{.loop.length}}    # Total items (-1 for while loops)
-{{.loop.parent}}    # Parent loop context (nested loops)
+{{.loop.Item}}      # Current item value (for_each only)
+{{.loop.Index}}     # 0-based iteration index
+{{.loop.Index1}}    # 1-based iteration index
+{{.loop.First}}     # True on first iteration
+{{.loop.Last}}      # True on last iteration (for_each only)
+{{.loop.Length}}    # Total items (-1 for while loops)
+{{.loop.Parent}}    # Parent loop context (nested loops)
 ```
 
 Example:
@@ -432,13 +432,13 @@ process_files:
 process_single:
   type: step
   command: |
-    echo "Processing {{.loop.item}} ({{.loop.index1}}/{{.loop.length}})"
-    echo "First: {{.loop.first}}, Last: {{.loop.last}}"
+    echo "Processing {{.loop.Item}} ({{.loop.Index1}}/{{.loop.Length}})"
+    echo "First: {{.loop.First}}, Last: {{.loop.Last}}"
 ```
 
 #### Loop Item JSON Serialization
 
-When `{{.loop.item}}` contains complex types (objects, arrays), it is automatically serialized to JSON:
+When `{{.loop.Item}}` contains complex types (objects, arrays), it is automatically serialized to JSON:
 
 - **Objects** → JSON object: `{"name":"value","nested":{"key":"data"}}`
 - **Arrays** → JSON array: `[1,2,3]` or `["a","b","c"]`
@@ -468,7 +468,7 @@ call_child_workflow:
   type: call_workflow
   workflow: review-file
   inputs:
-    review: "{{.loop.item}}"  # Passed as valid JSON object to child
+    review: "{{.loop.Item}}"  # Passed as valid JSON object to child
 
 # Child workflow receives properly formatted JSON
 # {{.inputs.review}} = {"file":"main.go","type":"fix"}
@@ -478,19 +478,19 @@ call_child_workflow:
 
 ### Nested Loop Parent Access
 
-For nested loops, access outer loop context via `{{.loop.parent}}`:
+For nested loops, access outer loop context via `{{.loop.Parent}}`:
 
 ```yaml
 process:
   type: step
   command: |
-    echo "outer={{.loop.parent.item}} inner={{.loop.item}}"
-    echo "outer_index={{.loop.parent.index}} inner_index={{.loop.index}}"
+    echo "outer={{.loop.Parent.Item}} inner={{.loop.Item}}"
+    echo "outer_index={{.loop.Parent.Index}} inner_index={{.loop.Index}}"
 ```
 
 Chain for deeper nesting:
 ```yaml
-command: echo "level1={{.loop.parent.parent.item}} level2={{.loop.parent.item}} level3={{.loop.item}}"
+command: echo "level1={{.loop.Parent.Parent.Item}} level2={{.loop.Parent.Item}} level3={{.loop.Item}}"
 ```
 
 ### Error Variables (in hooks)

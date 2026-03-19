@@ -115,14 +115,14 @@ process_files:
 
 ### Item Access
 
-Within loop body steps, access the current item using `{{.loop.item}}`:
+Within loop body steps, access the current item using `{{.loop.Item}}`:
 
 ```yaml
 process_file:
   type: step
   command: |
-    echo "Processing {{.loop.item}}"
-    cat "{{.loop.item}}" | process.sh
+    echo "Processing {{.loop.Item}}"
+    cat "{{.loop.Item}}" | process.sh
   on_success: process_files
 ```
 
@@ -141,21 +141,21 @@ deploy_all:
 validate_env:
   type: step
   command: |
-    echo "Validating {{.loop.item}} environment"
-    ./validate.sh --env={{.loop.item}}
+    echo "Validating {{.loop.Item}} environment"
+    ./validate.sh --env={{.loop.Item}}
   on_success: deploy_all
 
 deploy_to_env:
   type: step
   command: |
-    echo "Deploying to {{.loop.item}}"
-    ./deploy.sh --env={{.loop.item}}
+    echo "Deploying to {{.loop.Item}}"
+    ./deploy.sh --env={{.loop.Item}}
   on_success: deploy_all
 
 verify_env:
   type: step
   command: |
-    curl -f https://{{.loop.item}}.example.com/health
+    curl -f https://{{.loop.Item}}.example.com/health
   on_success: deploy_all
 ```
 
@@ -280,9 +280,9 @@ The following variables are available within loop bodies:
 
 | Variable | Type | Availability | Description |
 |----------|------|--------------|-------------|
-| `{{.loop.index}}` | integer | All loops | Current iteration index (0-based) |
-| `{{.loop.item}}` | any | `for_each` only | Current item value |
-| `{{.loop.parent.*}}` | any | Nested loops | Parent loop context (see [Nested Loops](#nested-loops)) |
+| `{{.loop.Index}}` | integer | All loops | Current iteration index (0-based) |
+| `{{.loop.Item}}` | any | `for_each` only | Current item value |
+| `{{.loop.Parent.*}}` | any | Nested loops | Parent loop context (see [Nested Loops](#nested-loops)) |
 
 ### Example: Using Loop Index
 
@@ -301,7 +301,7 @@ wait_backoff:
   type: step
   command: |
     # Exponential backoff: 2^index seconds
-    sleep $((2 ** {{.loop.index}}))
+    sleep $((2 ** {{.loop.Index}}))
   on_success: retry_with_backoff
 ```
 
@@ -336,26 +336,26 @@ inner_loop:
 test:
   type: step
   command: |
-    echo "Testing {{.loop.parent.item}}"
-    ./test.sh --module={{.loop.parent.item}}
+    echo "Testing {{.loop.Parent.Item}}"
+    ./test.sh --module={{.loop.Parent.Item}}
   transitions:
     - when: 'states.test.ExitCode == 0'
       goto: outer  # Early exit from inner loop
 ```
 
 In this example:
-- Inner loop uses `{{.loop.parent.item}}` to access the outer loop's current item
+- Inner loop uses `{{.loop.Parent.Item}}` to access the outer loop's current item
 - Transition to `outer` exits the inner `while` loop but doesn't skip steps in the outer `for_each` body
 - After inner loop completes, execution continues to `teardown_module` in the outer loop
 
 ### Parent Context Access
 
-Access parent loop variables using the `{{.loop.parent.*}}` prefix:
+Access parent loop variables using the `{{.loop.Parent.*}}` prefix:
 
 | Variable | Description |
 |----------|-------------|
-| `{{.loop.parent.index}}` | Parent loop iteration index |
-| `{{.loop.parent.item}}` | Parent loop current item (for_each only) |
+| `{{.loop.Parent.Index}}` | Parent loop iteration index |
+| `{{.loop.Parent.Item}}` | Parent loop current item (for_each only) |
 
 ## Error Handling in Loops
 
@@ -541,7 +541,7 @@ states:
   check_service:
     type: step
     command: |
-      systemctl is-active "{{.loop.item}}"
+      systemctl is-active "{{.loop.Item}}"
     transitions:
       - when: 'states.check_service.ExitCode != 0'
         goto: critical_error  # Exit loop immediately
@@ -550,13 +550,13 @@ states:
   validate_config:
     type: step
     command: |
-      validate-config --service={{.loop.item}}
+      validate-config --service={{.loop.Item}}
     on_success: validate_loop
 
   test_connectivity:
     type: step
     command: |
-      curl -f "http://localhost:{{.loop.item}}-port/health"
+      curl -f "http://localhost:{{.loop.Item}}-port/health"
     on_success: validate_loop
 
   critical_error:
@@ -595,8 +595,8 @@ states:
   setup_env:
     type: step
     command: |
-      echo "Setting up {{.loop.item}} environment"
-      ./setup.sh --env={{.loop.item}}
+      echo "Setting up {{.loop.Item}} environment"
+      ./setup.sh --env={{.loop.Item}}
     on_success: env_loop
 
   browser_loop:
@@ -609,8 +609,8 @@ states:
   run_browser_tests:
     type: step
     command: |
-      echo "Testing {{.loop.parent.item}} with {{.loop.item}}"
-      ./test.sh --env={{.loop.parent.item}} --browser={{.loop.item}}
+      echo "Testing {{.loop.Parent.Item}} with {{.loop.Item}}"
+      ./test.sh --env={{.loop.Parent.Item}} --browser={{.loop.Item}}
     transitions:
       - when: 'states.run_browser_tests.ExitCode != 0'
         goto: test_failed
@@ -619,7 +619,7 @@ states:
   teardown_env:
     type: step
     command: |
-      ./teardown.sh --env={{.loop.item}}
+      ./teardown.sh --env={{.loop.Item}}
     on_success: env_loop
 
   test_failed:
@@ -633,7 +633,7 @@ states:
     message: "All environment and browser tests passed"
 ```
 
-The inner `browser_loop` accesses the outer loop's environment using `{{.loop.parent.item}}`, creating a test matrix that validates each browser against each environment.
+The inner `browser_loop` accesses the outer loop's environment using `{{.loop.Parent.Item}}`, creating a test matrix that validates each browser against each environment.
 
 ## Known Limitations
 
