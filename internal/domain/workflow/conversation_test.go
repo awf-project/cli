@@ -215,8 +215,7 @@ func TestConversationConfig_Validate(t *testing.T) {
 				MaxTurns:     5,
 				ContinueFrom: "previous_conversation",
 			},
-			wantErr: true,
-			errMsg:  "continue_from is not yet implemented",
+			wantErr: false,
 		},
 		{
 			name: "valid with inject_context",

@@ -242,13 +242,9 @@ stop_condition: "response contains 'sufficient sources' || turn_count >= 10"
 stop_condition: "response contains 'Summary:' || tokens_used > 90000"
 ```
 
-## Injecting Context Mid-Conversation (Planned)
+## Continuing a Conversation from a Previous Step
 
-> **Not yet implemented** — `continue_from` and `inject_context` are parsed but rejected at validation. See [Limitations](#limitations) for details.
->
-> **Dependencies:** `continue_from` requires session resume support (F073) to function — it hands off the session ID between steps rather than re-serializing history. `inject_context` is a separate concept (context enrichment mid-conversation) with its own design requirements.
-
-The following example shows the planned behavior for resuming a conversation from a previous step:
+The `continue_from` field resumes a prior step's conversation session. For CLI providers (Claude, Gemini, Codex, OpenCode), this hands off the session ID — the provider resumes the existing session natively. For `openai_compatible`, it loads the full conversation turn history as message context.
 
 ```yaml
 states:
@@ -266,24 +262,27 @@ states:
       max_turns: 5
     on_success: add_requirements
 
-  # Planned: continue previous conversation
   add_requirements:
     type: agent
     provider: claude
     mode: conversation
-    continue_from: refine_code  # Not yet implemented — will error at validation
     prompt: |
       Also consider these requirements:
       {{.inputs.additional_requirements}}
     conversation:
       max_turns: 3
+      continue_from: refine_code
     on_success: done
 
   done:
     type: terminal
 ```
 
-When implemented, the `continue_from` field will resume the previous step's session using the stored `SessionID`, enabling native context continuity without history re-serialization.
+**How it works:**
+- Step `add_requirements` resumes the session from `refine_code` using the stored `SessionID`
+- The provider receives the resume flag (e.g., `-r` for Claude) and continues the existing conversation
+- Each step stores its own `SessionID` — chains of 3+ steps work (B from A, C from B)
+- Provider mismatch between source and target is allowed but may produce errors if incompatible
 
 ## Examples
 
@@ -565,7 +564,7 @@ All providers support conversation mode with context continuity:
 ### Current Implementation
 
 - Only `sliding_window` strategy implemented (dropping oldest turns); `summarize` and `truncate_middle` are rejected at validation
-- `continue_from` and `inject_context` fields are parsed but not yet implemented; using them produces a validation error
+- `inject_context` field is parsed but not yet implemented; using it produces a validation error
 - Stop conditions limited to string/token/turn expressions
 - No branching conversations (single linear path)
 
@@ -573,7 +572,6 @@ All providers support conversation mode with context continuity:
 
 - `summarize` strategy (LLM-based compression of old turns)
 - `truncate_middle` strategy (keep first and last turns)
-- `continue_from` for resuming conversations across steps (unblocked by F073 session resume)
 - `inject_context` for adding context mid-conversation
 - Conversation branching (explore multiple paths)
 

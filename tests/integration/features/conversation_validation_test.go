@@ -1,6 +1,6 @@
 //go:build integration
 
-// Feature: C062
+// Feature: C062, F074
 
 package features_test
 
@@ -22,11 +22,6 @@ func TestConversationValidation_RejectsUnimplementedFeatures(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "continue_from_rejected",
-			workflowName: "conversation-invalid-continue-from",
-			wantErr:      "continue_from is not yet implemented",
-		},
-		{
 			name:         "inject_context_rejected",
 			workflowName: "conversation-invalid-inject-context",
 			wantErr:      "inject_context is not yet implemented",
@@ -40,6 +35,11 @@ func TestConversationValidation_RejectsUnimplementedFeatures(t *testing.T) {
 			name:         "truncate_middle_strategy_rejected",
 			workflowName: "conversation-invalid-truncate-middle",
 			wantErr:      "not yet implemented",
+		},
+		{
+			name:         "continue_from_invalid_step_reference",
+			workflowName: "conversation-invalid-continue-from",
+			wantErr:      "continue_from references unknown step",
 		},
 	}
 
@@ -77,8 +77,12 @@ func TestConversationValidation_AcceptsValidConfigs(t *testing.T) {
 			workflowName: "conversation-simple",
 		},
 		{
-			name:         "multiturn_without_continue_from",
+			name:         "multiturn_with_continue_from",
 			workflowName: "conversation-multiturn",
+		},
+		{
+			name:         "continue_from_valid_step_reference",
+			workflowName: "conversation-continue-from",
 		},
 	}
 

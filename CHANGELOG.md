@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **F074**: `continue_from` field in conversation steps now resumes a prior step's session — CLI providers hand off session ID, `openai_compatible` loads turn history
 
 ### Fixed
 - **F073**: Documentation corrections for conversation mode
