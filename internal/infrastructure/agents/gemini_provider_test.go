@@ -97,13 +97,6 @@ func TestGeminiProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "invalid temperature range",
-			options: map[string]any{
-				"temperature": -0.5,
-			},
-			wantErr: "temperature",
-		},
-		{
 			name: "invalid model name",
 			options: map[string]any{
 				"model": "nonexistent-model",

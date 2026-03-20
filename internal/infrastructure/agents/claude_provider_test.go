@@ -137,20 +137,6 @@ func TestClaudeProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "negative max_tokens",
-			options: map[string]any{
-				"max_tokens": -1,
-			},
-			wantErr: "max_tokens",
-		},
-		{
-			name: "invalid temperature",
-			options: map[string]any{
-				"temperature": 2.5, // Should be 0-1
-			},
-			wantErr: "temperature",
-		},
-		{
 			name: "unknown model",
 			options: map[string]any{
 				"model": "invalid-model",
@@ -391,45 +377,6 @@ func TestClaudeProvider_ExecuteConversation_ContextTimeout_Integration(t *testin
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-}
-
-func TestClaudeProvider_ExecuteConversation_InvalidOptions_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
-
-	ctx := context.Background()
-	state := workflow.NewConversationState("System prompt")
-	prompt := "Hello"
-
-	tests := []struct {
-		name    string
-		options map[string]any
-		errMsg  string
-	}{
-		{
-			name: "negative temperature",
-			options: map[string]any{
-				"temperature": -0.5,
-			},
-			errMsg: "temperature",
-		},
-		{
-			name: "temperature too high",
-			options: map[string]any{
-				"temperature": 2.5,
-			},
-			errMsg: "temperature",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
-
-			assert.Error(t, err)
-			assert.Nil(t, result)
-			assert.Contains(t, err.Error(), tt.errMsg)
-		})
-	}
 }
 
 func TestClaudeProvider_ExecuteConversation_TokenCounting_Integration(t *testing.T) {

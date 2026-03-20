@@ -44,13 +44,6 @@ func TestGeminiProvider_Execute_Success(t *testing.T) {
 			wantOutput: `{"colors":["red","blue","green"]}`,
 		},
 		{
-			name:       "prompt with temperature option",
-			prompt:     "test",
-			options:    map[string]any{"temperature": 0.7},
-			mockStdout: []byte("ok"),
-			wantOutput: "ok",
-		},
-		{
 			name:       "large output",
 			prompt:     "generate",
 			mockStdout: []byte("This is a very long output " + string(make([]byte, 1000))),
@@ -150,18 +143,6 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 			name:    "whitespace-only prompt",
 			prompt:  "   \t\n  ",
 			wantErr: "prompt cannot be empty",
-		},
-		{
-			name:    "negative temperature",
-			prompt:  "test",
-			options: map[string]any{"temperature": -0.5},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
-			name:    "temperature too high",
-			prompt:  "test",
-			options: map[string]any{"temperature": 1.5},
-			wantErr: "temperature must be between 0 and 1",
 		},
 		{
 			name:    "invalid model name",
@@ -514,20 +495,6 @@ func TestGeminiProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			wantErr: "prompt cannot be empty",
 		},
 		{
-			name:    "negative temperature",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"temperature": -0.5},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
-			name:    "temperature too high",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"temperature": 2.0},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
 			name:    "invalid model",
 			state:   workflow.NewConversationState("system"),
 			prompt:  "test",
@@ -777,7 +744,6 @@ func TestGeminiProvider_Execute_MultipleOptions(t *testing.T) {
 
 	options := map[string]any{
 		"model":         "gemini-pro",
-		"temperature":   0.7,
 		"output_format": "text",
 	}
 

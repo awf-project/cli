@@ -91,7 +91,6 @@ states:
     output_format: json
     options:
       model: claude-sonnet-4-20250514
-      max_tokens: 4096
     timeout: 120
     on_success: done
     on_failure: error
@@ -439,7 +438,6 @@ states:
       {{.states.read_file.Output}}
     options:
       model: claude-sonnet-4-20250514
-      max_tokens: 2048
     timeout: 120
     on_success: done
     on_failure: error

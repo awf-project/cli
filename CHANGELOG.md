@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added dependency notes for `continue_from` and `inject_context` features
   - Updated `continue_from` design from history loading to session ID handoff
   - Updated provider compatibility in `workflow-syntax.md` to reflect session resume support
+- **C065**: Agent provider options audit — 7 documentation-vs-code misalignment fixes
+  - **Finding 7 (High)**: OpenAI Compatible provider sends deprecated `max_tokens` JSON field instead of `max_completion_tokens` — migrated struct and parsing to `max_completion_tokens` with backward-compatible `max_tokens` legacy fallback
+  - **Finding 1+2 (Medium)**: Claude provider validated `temperature` and `max_tokens` options that cannot be passed to CLI — removed dead validation from `validateOptions()`
+  - **Finding 3 (Medium)**: Codex provider passed unsupported `--max-tokens` and `--temperature` flags to CLI binary — removed from `Execute()` and `ExecuteConversation()`
+  - **Finding 4 (Medium)**: Codex `Execute()` did not pass `--model` flag despite `ExecuteConversation()` supporting it — added `--model` to `Execute()` for parity
+  - **Finding 5 (Medium)**: Gemini provider validated `temperature` option that cannot be passed to CLI — removed dead validation from `validateGeminiOptions()`
+  - **Finding 6 (Low)**: Codex `language`, `quiet`, and `model` options undocumented in `agent-steps.md` — added Provider-Specific Options section
+  - **Cross-cutting (Low)**: Documentation (`agent-steps.md`, `conversation-steps.md`, `workflow-syntax.md`, `examples.md`) and ~13 YAML fixtures aligned with actual provider capabilities
 - **C064**: Retry configuration audit — 7 documentation-vs-implementation gap fixes
   - **Finding 1 (Critical)**: Guard `CalculateDelay` against `maxDelay=0` silently nullifying all retry delays — omitting `max_delay` no longer caps delays to zero
   - **Finding 2 (High)**: Default `multiplier` to 2.0 when omitted in YAML (was 0.0, degrading exponential backoff to constant delays)
@@ -47,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `handleExecutionError` now evaluates transitions before `ContinueOnError` fallback, matching `handleNonZeroExit` behavior (ADR-001 transition priority contract)
   - Removed dead `Timeout` field from `ports.Command` struct and all assignment sites
   - New unit and integration tests covering transition priority on execution errors
+
+### Changed
+- **C065**: OpenAI Compatible provider now accepts `max_completion_tokens` (preferred) with `max_tokens` as deprecated fallback — existing workflows using `max_tokens` continue to work without modification
 
 ### Added
 - **F075**: `inject_context` field in conversation steps appends interpolated context to user prompts on turns 2+

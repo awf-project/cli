@@ -58,8 +58,8 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	if language, ok := getStringOption(options, "language"); ok {
 		args = append(args, "--language", language)
 	}
-	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
-		args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
 	}
 	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
 		args = append(args, "--quiet")
@@ -143,12 +143,6 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	if language, ok := getStringOption(options, "language"); ok {
 		args = append(args, "--language", language)
 	}
-	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
-		args = append(args, "--max-tokens", fmt.Sprintf("%d", maxTokens))
-	}
-	if temperature, ok := getFloatOption(options, "temperature"); ok {
-		args = append(args, "--temperature", fmt.Sprintf("%.2f", temperature))
-	}
 	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
 		args = append(args, "--quiet")
 	}
@@ -212,44 +206,10 @@ func (p *CodexProvider) Validate() error {
 	return nil
 }
 
-// validateCodexOptions validates provider-specific options.
-func validateCodexOptions(options map[string]any) error {
-	if options == nil {
-		return nil
-	}
-
-	// Validate max_tokens
-	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
-		if maxTokens < 0 {
-			return errors.New("max_tokens must be non-negative")
-		}
-	}
-
+func validateCodexOptions(_ map[string]any) error {
 	return nil
 }
 
-// extractSessionID parses a session identifier from Codex CLI output.
-// Looks for a "Session: <id>" line and returns the trimmed ID.
-// Returns empty string and error if not found (caller falls back to stateless).
-// validateCodexConversationOptions validates conversation-specific options.
-func validateCodexConversationOptions(options map[string]any) error {
-	if options == nil {
-		return nil
-	}
-
-	// Validate temperature
-	if temp, ok := getFloatOption(options, "temperature"); ok {
-		if temp < 0 || temp > 2 {
-			return errors.New("temperature must be between 0 and 2")
-		}
-	}
-
-	// Validate max_tokens
-	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
-		if maxTokens < 0 {
-			return errors.New("max_tokens must be non-negative")
-		}
-	}
-
+func validateCodexConversationOptions(_ map[string]any) error {
 	return nil
 }

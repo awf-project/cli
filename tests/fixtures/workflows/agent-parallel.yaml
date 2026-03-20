@@ -23,7 +23,6 @@ states:
             prompt: "Analyze: {{inputs.question}}"
             options:
               model: claude-haiku-4-5
-              max_tokens: 500
             timeout: 30
             on_success: done
 

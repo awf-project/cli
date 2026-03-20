@@ -248,6 +248,8 @@ Implement private per-provider extraction methods (no shared interface) when out
 
 Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
 
+Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -294,6 +296,10 @@ When enabling session persistence in CLI providers, force JSON output format for
 
 Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
 
+When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
+
+Leverage Go's map[string]any behavior to silently ignore unsupported provider options; avoids validation errors while maintaining clear intent
+
 ## Test Conventions
 
 - Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -312,6 +318,8 @@ Always provide graceful fallback to stateless mode when optional session ID extr
 Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
 
 Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
+
+Update all YAML fixtures when removing option support from code; synchronize fixtures with validation rule changes to prevent accidental bypass of removed validations
 
 ## Review Standards
 

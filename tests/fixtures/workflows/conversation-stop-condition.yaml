@@ -21,7 +21,6 @@ states:
     initial_prompt: "Execute: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-      max_tokens: 1500
     conversation:
       max_turns: 10
       strategy: sliding_window

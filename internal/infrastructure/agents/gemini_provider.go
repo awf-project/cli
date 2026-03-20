@@ -61,7 +61,6 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	if outputFormat, ok := getStringOption(options, "output_format"); ok {
 		args = append([]string{"--output-format", outputFormat}, args...)
 	}
-	// Note: temperature and safety_settings are validated but not passed to CLI
 
 	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
 	completedAt := time.Now()
@@ -209,12 +208,6 @@ func (p *GeminiProvider) Validate() error {
 func validateGeminiOptions(options map[string]any) error {
 	if options == nil {
 		return nil
-	}
-
-	if temp, ok := getFloatOption(options, "temperature"); ok {
-		if temp < 0 || temp > 1 {
-			return errors.New("temperature must be between 0 and 1")
-		}
 	}
 
 	if model, ok := getStringOption(options, "model"); ok {
