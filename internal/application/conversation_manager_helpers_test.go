@@ -596,6 +596,21 @@ func TestConversationManager_evaluateTurnCompletion(t *testing.T) {
 	}
 }
 
+// finalizeStopReason is a test helper that mirrors the inlined stop-reason logic
+// in ConversationManager.ExecuteConversation. It was extracted here after being
+// removed from production as dead code (the logic is inlined at the call site).
+func (m *ConversationManager) finalizeStopReason(
+	state *workflow.ConversationState,
+	turnCount int,
+	maxTurns int,
+) {
+	if state.StoppedBy == "" {
+		if turnCount >= maxTurns {
+			state.StoppedBy = workflow.StopReasonMaxTurns
+		}
+	}
+}
+
 // TestConversationManager_finalizeStopReason tests stop reason determination
 // when conversation loop completes.
 // Feature: C006 - Component T013

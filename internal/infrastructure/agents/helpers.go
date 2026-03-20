@@ -26,6 +26,7 @@ func cloneState(state *workflow.ConversationState) *workflow.ConversationState {
 		TotalTurns:  state.TotalTurns,
 		TotalTokens: state.TotalTokens,
 		StoppedBy:   state.StoppedBy,
+		SessionID:   state.SessionID,
 	}
 }
 
@@ -111,14 +112,6 @@ func estimateInputTokens(turns []workflow.Turn, excludeLastN int) int {
 	return inputTokens
 }
 
-func parseJSONResponse(output []byte) (map[string]any, error) {
-	var jsonResp map[string]any
-	if err := json.Unmarshal(output, &jsonResp); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON output: %w", err)
-	}
-	return jsonResp, nil
-}
-
 func tryParseJSONResponse(output string) map[string]any {
 	trimmed := strings.TrimSpace(output)
 	if !strings.HasPrefix(trimmed, "{") {
@@ -129,4 +122,18 @@ func tryParseJSONResponse(output string) map[string]any {
 		return nil
 	}
 	return jsonResp
+}
+
+// extractSessionIDFromLines scans output line-by-line for a "Session: <id>" line.
+// Returns empty string and error if not found (caller falls back to stateless).
+func extractSessionIDFromLines(output string) (string, error) {
+	for line := range strings.SplitSeq(output, "\n") {
+		if id, ok := strings.CutPrefix(line, "Session: "); ok {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("session_id not found in output")
 }

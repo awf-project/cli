@@ -760,6 +760,74 @@ func TestClaudeProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 	}
 }
 
+func TestClaudeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
+	tests := []struct {
+		name        string
+		mockStdout  []byte
+		options     map[string]any
+		wantErr     bool
+		wantOutput  string
+		wantEmptyID bool
+	}{
+		{
+			name:        "non-json output (plain text)",
+			mockStdout:  []byte("This is plain text response"),
+			options:     map[string]any{},
+			wantErr:     false,
+			wantOutput:  "This is plain text response",
+			wantEmptyID: true,
+		},
+		{
+			name:        "malformed json with no user option",
+			mockStdout:  []byte(`{"result":"incomplete`),
+			options:     map[string]any{},
+			wantErr:     false,
+			wantOutput:  `{"result":"incomplete`,
+			wantEmptyID: true,
+		},
+		{
+			name:        "json missing result field",
+			mockStdout:  []byte(`{"session_id":"12345","other":"data"}`),
+			options:     map[string]any{},
+			wantErr:     false,
+			wantOutput:  `{"session_id":"12345","other":"data"}`,
+			wantEmptyID: false,
+		},
+		{
+			name:        "empty output",
+			mockStdout:  []byte(""),
+			options:     map[string]any{},
+			wantErr:     false,
+			wantOutput:  "",
+			wantEmptyID: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockStdout, nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			state := workflow.NewConversationState("system")
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, tt.wantOutput, result.Output)
+
+				if tt.wantEmptyID {
+					assert.Empty(t, result.State.SessionID)
+				}
+			}
+		})
+	}
+}
+
 func TestClaudeProvider_Name(t *testing.T) {
 	provider := NewClaudeProvider()
 	assert.Equal(t, "claude", provider.Name())

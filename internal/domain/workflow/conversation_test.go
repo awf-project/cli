@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -1140,4 +1141,96 @@ func TestConversationResult_EstimatedTokens(t *testing.T) {
 
 	assert.Equal(t, 800, result.TokensTotal)
 	assert.True(t, result.TokensEstimated)
+}
+
+// F073: SessionID field tests
+
+// TestConversationState_SessionID_Assignment verifies SessionID can be set and retrieved
+func TestConversationState_SessionID_Assignment(t *testing.T) {
+	tests := []struct {
+		name      string
+		sessionID string
+	}{
+		{
+			name:      "empty session id",
+			sessionID: "",
+		},
+		{
+			name:      "uuid format session id",
+			sessionID: "550e8400-e29b-41d4-a716-446655440000",
+		},
+		{
+			name:      "numeric session id",
+			sessionID: "12345",
+		},
+		{
+			name:      "alphanumeric session id",
+			sessionID: "sess_abc123xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := NewConversationState("")
+			state.SessionID = tt.sessionID
+			assert.Equal(t, tt.sessionID, state.SessionID)
+		})
+	}
+}
+
+// TestConversationState_SessionID_JSONRoundTrip verifies SessionID survives JSON marshal/unmarshal
+// with PascalCase naming (matching existing ConversationState fields)
+func TestConversationState_SessionID_JSONRoundTrip(t *testing.T) {
+	originalState := NewConversationState("")
+	originalState.SessionID = "sess_12345"
+
+	// Add a turn to verify SessionID survives alongside other state
+	turn := NewTurn(TurnRoleUser, "test prompt")
+	turn.Tokens = 10
+	require.NoError(t, originalState.AddTurn(turn))
+
+	// Marshal to JSON
+	data, err := json.Marshal(originalState)
+	require.NoError(t, err)
+
+	// Verify JSON uses PascalCase field names (not snake_case)
+	var jsonObj map[string]interface{}
+	err = json.Unmarshal(data, &jsonObj)
+	require.NoError(t, err)
+
+	// Check that SessionID is present with PascalCase name
+	assert.Contains(t, jsonObj, "SessionID", "JSON should use PascalCase SessionID field name")
+	assert.NotContains(t, jsonObj, "session_id", "JSON should not use snake_case")
+
+	// Unmarshal back to ConversationState
+	var restoredState ConversationState
+	err = json.Unmarshal(data, &restoredState)
+	require.NoError(t, err)
+
+	// Verify SessionID survived round-trip
+	assert.Equal(t, originalState.SessionID, restoredState.SessionID)
+
+	// Verify other fields survived too
+	assert.Equal(t, originalState.TotalTurns, restoredState.TotalTurns)
+	assert.Equal(t, originalState.TotalTokens, restoredState.TotalTokens)
+}
+
+// TestConversationState_SessionID_InitialValue verifies SessionID starts empty
+func TestConversationState_SessionID_InitialValue(t *testing.T) {
+	state := NewConversationState("")
+	assert.Equal(t, "", state.SessionID, "SessionID should be empty when state is created")
+}
+
+// TestConversationState_SessionID_JSONSerializationFormat verifies the exact JSON field name
+func TestConversationState_SessionID_JSONSerializationFormat(t *testing.T) {
+	state := NewConversationState("")
+	state.SessionID = "test-session-id"
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	// Verify JSON contains the exact string for SessionID field
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, "\"SessionID\"", "JSON must contain quoted SessionID field name")
+	assert.Contains(t, jsonStr, "test-session-id", "JSON must contain the SessionID value")
 }

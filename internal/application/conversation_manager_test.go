@@ -547,6 +547,186 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 	require.NotNil(t, result)
 }
 
+// T003: Pass system_prompt through options map in conversation_manager.go
+
+func TestConversationManager_PassesSystemPromptInOptions(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedOptions map[string]any
+	mockProvider := mocks.NewMockAgentProvider("claude")
+
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		capturedOptions = options
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(assistantTurn)
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "response"
+		return result, nil
+	})
+
+	_ = registry.Register(mockProvider)
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider:     "claude",
+			Prompt:       "Hello world",
+			SystemPrompt: "You are a helpful assistant",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         1,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, capturedOptions, "options map should be captured in provider call")
+	assert.Equal(t, "You are a helpful assistant", capturedOptions["system_prompt"])
+}
+
+func TestConversationManager_OmitsSystemPromptWhenEmpty(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedOptions map[string]any
+	mockProvider := mocks.NewMockAgentProvider("claude")
+
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		capturedOptions = options
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(assistantTurn)
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "response"
+		return result, nil
+	})
+
+	_ = registry.Register(mockProvider)
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider:     "claude",
+			Prompt:       "Hello world",
+			SystemPrompt: "", // empty system prompt
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         1,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, capturedOptions, "options map should exist")
+	_, exists := capturedOptions["system_prompt"]
+	assert.False(t, exists, "system_prompt should not be in options when empty")
+}
+
+func TestConversationManager_PreservesExistingOptions(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedOptions map[string]any
+	mockProvider := mocks.NewMockAgentProvider("claude")
+
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		capturedOptions = options
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(assistantTurn)
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "response"
+		return result, nil
+	})
+
+	_ = registry.Register(mockProvider)
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider:     "claude",
+			Prompt:       "Hello world",
+			SystemPrompt: "You are helpful",
+			Options: map[string]any{
+				"temperature": 0.7,
+				"max_tokens":  100,
+			},
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:         1,
+		MaxContextTokens: 1000,
+		Strategy:         workflow.StrategySlidingWindow,
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, capturedOptions, "options map should be captured")
+	assert.Equal(t, "You are helpful", capturedOptions["system_prompt"])
+	assert.Equal(t, 0.7, capturedOptions["temperature"])
+	assert.Equal(t, 100, capturedOptions["max_tokens"])
+}
+
 func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 	logger := &mockLogger{}
 	evaluator := newMockExpressionEvaluator()

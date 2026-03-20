@@ -244,6 +244,10 @@ Evaluate step transitions before fallback behaviors; transitions take priority o
 
 Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
 
+Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
+
+Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
+
 ## Common Pitfalls
 
 - Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
@@ -284,6 +288,12 @@ Always apply code deletions before writing tests that validate the deletion effe
 
 Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
 
+Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
+
+When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
+
+Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
+
 ## Test Conventions
 
 - Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
@@ -298,6 +308,10 @@ Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error 
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
 - Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
 - Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
+
+Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
+
+Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
 
 ## Review Standards
 

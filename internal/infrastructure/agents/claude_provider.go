@@ -148,9 +148,23 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
-	if outputFormat, ok := getStringOption(options, "output_format"); ok && outputFormat == "json" {
-		args = append(args, "--output-format", "json")
+
+	// Force JSON output for session ID extraction on all conversation turns
+	args = append(args, "--output-format", "json")
+
+	// Resume from previous session if available
+	if workingState.SessionID != "" {
+		args = append(args, "-r", workingState.SessionID)
+	} else {
+		// First turn only: pass system prompt if provided
+		// Note: system_prompt is always present in options (set by ConversationManager)
+		// but only consumed here on turn 1 when SessionID is empty.
+		// On turns 2+, the provider retains the system prompt from the resumed session.
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			args = append(args, "--system-prompt", sysPrompt)
+		}
 	}
+
 	if allowedTools, ok := getStringOption(options, "allowedTools"); ok && allowedTools != "" {
 		args = append(args, "--allowedTools", allowedTools)
 	}
@@ -172,7 +186,17 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
-	outputStr := string(output)
+
+	// Extract text content from JSON wrapper
+	// Claude's --output-format json wraps response in JSON: {"session_id":"...", "result":"actual text", ...}
+	// We need the clean text for the assistant turn, not the raw JSON.
+	// On extraction failure, gracefully fall back to raw output string.
+	rawOutputStr := string(output)
+	outputStr := p.extractTextFromJSON(rawOutputStr)
+	if outputStr == "" {
+		// Extraction failed (either non-JSON or missing result field) — use raw output
+		outputStr = strings.TrimSpace(rawOutputStr)
+	}
 
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
@@ -180,13 +204,14 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
 
-	inputTokens := 0
-	for i := 0; i < len(workingState.Turns)-1; i++ {
-		if workingState.Turns[i].Tokens == 0 {
-			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
-		}
-		inputTokens += workingState.Turns[i].Tokens
+	// Extract session ID for future turns (uses raw output, not extracted text)
+	if sessionID, err := p.extractSessionID(rawOutputStr); err != nil {
+		p.logger.Debug("session ID extraction failed, continuing stateless", "error", err)
+	} else if sessionID != "" {
+		workingState.SessionID = sessionID
 	}
+
+	inputTokens := estimateInputTokens(workingState.Turns, 1)
 
 	result := &workflow.ConversationResult{
 		Provider:        "claude",
@@ -200,14 +225,20 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		CompletedAt:     completedAt,
 	}
 
-	if options != nil {
-		if format, ok := options["output_format"].(string); ok && format == "json" {
-			var jsonResp map[string]any
-			if err := json.Unmarshal(output, &jsonResp); err != nil {
-				return nil, fmt.Errorf("failed to parse JSON output: %w", err)
-			}
-			result.Response = jsonResp
+	// Populate result.Response only when user explicitly requested output_format: json.
+	// When --output-format json is forced internally for session resume, the full JSON wrapper
+	// (containing session_id, cost_usd, etc.) must NOT leak into workflow state.
+	userRequestedJSON := false
+	if userFormat, ok := getStringOption(options, "output_format"); ok && userFormat == "json" {
+		userRequestedJSON = true
+	}
+
+	if userRequestedJSON {
+		var jsonResp map[string]any
+		if err := json.Unmarshal(output, &jsonResp); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON output: %w", err)
 		}
+		result.Response = jsonResp
 	}
 
 	return result, nil
@@ -254,4 +285,70 @@ func validateOptions(options map[string]any) error {
 func isValidClaudeModel(model string) bool {
 	aliases := []string{"sonnet", "opus", "haiku"}
 	return slices.Contains(aliases, model) || strings.HasPrefix(model, "claude-")
+}
+
+func (p *ClaudeProvider) extractSessionID(output string) (string, error) {
+	if output == "" {
+		return "", errors.New("empty output")
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(output), &data); err != nil {
+		return "", fmt.Errorf("output is not valid JSON: %w", err)
+	}
+
+	sessionIDVal, ok := data["session_id"]
+	if !ok {
+		return "", errors.New("session_id field not found")
+	}
+
+	// Handle null value
+	if sessionIDVal == nil {
+		return "", errors.New("session_id is null")
+	}
+
+	// Extract string value
+	if str, ok := sessionIDVal.(string); ok {
+		return str, nil
+	}
+
+	return "", errors.New("session_id is not a string")
+}
+
+func (p *ClaudeProvider) extractTextFromJSON(output string) string {
+	if output == "" {
+		return ""
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(output), &data); err != nil {
+		return ""
+	}
+
+	result, ok := data["result"]
+	if !ok {
+		return ""
+	}
+
+	// Handle null value
+	if result == nil {
+		return ""
+	}
+
+	// Handle string values
+	if str, ok := result.(string); ok {
+		return str
+	}
+
+	// Handle numeric values - convert to string
+	if num, ok := result.(float64); ok {
+		// Check if it's an integer
+		if num == float64(int64(num)) {
+			return fmt.Sprintf("%.0f", num)
+		}
+		return fmt.Sprint(num)
+	}
+
+	// Unexpected types (boolean, array, object, etc.) - return empty string
+	return ""
 }

@@ -134,19 +134,6 @@ func (m *ConversationManager) evaluateTurnCompletion(
 	return false
 }
 
-// finalizeStopReason sets stop reason if not already set.
-func (m *ConversationManager) finalizeStopReason(
-	state *workflow.ConversationState,
-	turnCount int,
-	maxTurns int,
-) {
-	if state.StoppedBy == "" {
-		if turnCount >= maxTurns {
-			state.StoppedBy = workflow.StopReasonMaxTurns
-		}
-	}
-}
-
 // ExecuteConversation orchestrates a multi-turn conversation according to the
 // configuration in the agent step's conversation settings.
 //
@@ -196,6 +183,9 @@ func (m *ConversationManager) ExecuteConversation(
 	options := step.Agent.Options
 	if options == nil {
 		options = make(map[string]any)
+	}
+	if step.Agent.SystemPrompt != "" {
+		options["system_prompt"] = step.Agent.SystemPrompt
 	}
 
 	maxTurns := config.MaxTurns

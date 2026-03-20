@@ -29,6 +29,12 @@ func WithCodexExecutor(executor ports.CLIExecutor) CodexProviderOption {
 	}
 }
 
+func WithCodexLogger(l ports.Logger) CodexProviderOption {
+	return func(p *CodexProvider) {
+		p.logger = l
+	}
+}
+
 type OpenCodeProviderOption func(*OpenCodeProvider)
 
 func WithOpenCodeExecutor(executor ports.CLIExecutor) OpenCodeProviderOption {

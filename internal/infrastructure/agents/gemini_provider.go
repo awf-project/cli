@@ -39,22 +39,18 @@ func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider 
 func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateGeminiOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
 
-	// Build command arguments
 	// Note: -p/--prompt is deprecated, use positional argument instead
 	args := []string{prompt}
 
@@ -67,7 +63,6 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	}
 	// Note: temperature and safety_settings are validated but not passed to CLI
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
 	completedAt := time.Now()
 
@@ -99,39 +94,40 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
-	// Validate state
 	if state == nil {
 		return nil, errors.New("conversation state cannot be nil")
 	}
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateGeminiOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
 
-	// Clone state to avoid modifying original
 	workingState := cloneState(state)
 
-	// Add user turn to conversation history
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
 	if err := workingState.AddTurn(userTurn); err != nil {
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	// Build command arguments
-	args := []string{prompt}
+	var args []string
+	if workingState.SessionID != "" {
+		args = []string{"--resume", workingState.SessionID, prompt}
+	} else {
+		args = []string{prompt}
+		// First turn only: pass system prompt if provided
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			args = append([]string{"--system-prompt", sysPrompt}, args...)
+		}
+	}
 
-	// Apply options (only those supported by Gemini CLI)
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)
 	}
@@ -139,7 +135,6 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		args = append([]string{"--output-format", outputFormat}, args...)
 	}
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
 	completedAt := time.Now()
 
@@ -147,29 +142,29 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		return nil, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
 	output := make([]byte, 0, len(stdout)+len(stderr))
 	output = append(output, stdout...)
 	output = append(output, stderr...)
 	outputStr := string(output)
+	if outputStr == "" {
+		outputStr = " "
+	}
 
-	// Add assistant turn to conversation history
+	// Extract session ID for future resume turns; continue stateless on failure.
+	if sessionID, extractErr := extractSessionIDFromLines(outputStr); extractErr == nil {
+		workingState.SessionID = sessionID
+	} else {
+		workingState.SessionID = ""
+	}
+
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
 	if err := workingState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
 
-	// Estimate input tokens (all previous turns)
-	inputTokens := 0
-	for i := 0; i < len(workingState.Turns)-1; i++ {
-		if workingState.Turns[i].Tokens == 0 {
-			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
-		}
-		inputTokens += workingState.Turns[i].Tokens
-	}
+	inputTokens := estimateInputTokens(workingState.Turns, 1)
 
-	// Create result
 	result := &workflow.ConversationResult{
 		Provider:        "gemini",
 		State:           workingState,
@@ -182,7 +177,6 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		CompletedAt:     completedAt,
 	}
 
-	// Parse JSON response if output format is JSON
 	if options != nil {
 		if format, ok := options["output_format"].(string); ok && format == "json" {
 			var jsonResp map[string]any
@@ -196,6 +190,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	return result, nil
 }
 
+// extractSessionID parses a session identifier from Gemini CLI output.
+// Looks for a "Session: <id>" line and returns the trimmed ID.
+// Returns empty string and error if not found (caller falls back to stateless).
 func (p *GeminiProvider) Name() string {
 	return "gemini"
 }
@@ -214,14 +211,12 @@ func validateGeminiOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate temperature
 	if temp, ok := getFloatOption(options, "temperature"); ok {
 		if temp < 0 || temp > 1 {
 			return errors.New("temperature must be between 0 and 1")
 		}
 	}
 
-	// Validate model
 	if model, ok := getStringOption(options, "model"); ok {
 		validModels := []string{"gemini-pro", "gemini-pro-vision", "gemini-ultra"}
 		if !slices.Contains(validModels, model) {

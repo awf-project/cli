@@ -128,13 +128,13 @@ func TestRetry_ValidationRejectsInvalidConfig_Integration(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "invalid backoff strategy",
-			wfYAML: "name: retry-invalid-backoff\nversion: \"1.0.0\"\nstates:\n  initial: run\n  run:\n    type: step\n    command: echo \"never runs\"\n    retry:\n      max_attempts: 3\n      backoff: random\n    on_success: done\n    on_failure: error\n  done:\n    type: terminal\n  error:\n    type: terminal\n",
+			name:    "invalid backoff strategy",
+			wfYAML:  "name: retry-invalid-backoff\nversion: \"1.0.0\"\nstates:\n  initial: run\n  run:\n    type: step\n    command: echo \"never runs\"\n    retry:\n      max_attempts: 3\n      backoff: random\n    on_success: done\n    on_failure: error\n  done:\n    type: terminal\n  error:\n    type: terminal\n",
 			wantErr: "backoff",
 		},
 		{
-			name: "jitter out of range",
-			wfYAML: "name: retry-invalid-jitter\nversion: \"1.0.0\"\nstates:\n  initial: run\n  run:\n    type: step\n    command: echo \"never runs\"\n    retry:\n      max_attempts: 3\n      jitter: 2.0\n    on_success: done\n    on_failure: error\n  done:\n    type: terminal\n  error:\n    type: terminal\n",
+			name:    "jitter out of range",
+			wfYAML:  "name: retry-invalid-jitter\nversion: \"1.0.0\"\nstates:\n  initial: run\n  run:\n    type: step\n    command: echo \"never runs\"\n    retry:\n      max_attempts: 3\n      jitter: 2.0\n    on_success: done\n    on_failure: error\n  done:\n    type: terminal\n  error:\n    type: terminal\n",
 			wantErr: "jitter",
 		},
 	}

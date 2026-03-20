@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -463,18 +462,6 @@ func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestOpenCodeProvider_ExecuteConversation_NotImplemented(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
-	state := workflow.NewConversationState("")
-
-	result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "not implemented")
 }
 
 func TestOpenCodeProvider_Name(t *testing.T) {
