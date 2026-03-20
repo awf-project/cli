@@ -1441,3 +1441,419 @@ func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
+
+// T003: Continue From Tests — Load prior conversation state from predecessor step
+
+func TestConversationManager_ContinueFrom_SessionID(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedInitialSessionID string
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		// Capture initial SessionID before provider modifies it
+		capturedInitialSessionID = state.SessionID
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		result.State.SessionID = "new-session-456" // Provider issues new session for this step (FR-006)
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "response"))
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "response"
+		return result, nil
+	})
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "step2",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Continue the work",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "step1",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.SetStepState("step1", workflow.StepState{
+		Name:   "step1",
+		Status: workflow.StatusCompleted,
+		Conversation: &workflow.ConversationState{
+			SessionID:   "session-abc-123",
+			Turns:       []workflow.Turn{{Role: workflow.TurnRoleUser, Content: "hello"}},
+			TotalTurns:  1,
+			TotalTokens: 50,
+		},
+	})
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Verify predecessor's SessionID was passed to the provider
+	assert.Equal(t, "session-abc-123", capturedInitialSessionID)
+	// Verify result has new SessionID assigned by provider (FR-006)
+	assert.Equal(t, "new-session-456", result.State.SessionID)
+}
+
+func TestConversationManager_ContinueFrom_Turns(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedInitialTurnCount int
+	mockProvider := mocks.NewMockAgentProvider("openai_compatible")
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		// Capture initial turn count before provider adds new turns
+		capturedInitialTurnCount = len(state.Turns)
+		result := workflow.NewConversationResult("openai_compatible")
+		result.State = state
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "refined response"))
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "refined response"
+		return result, nil
+	})
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "refine",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "openai_compatible",
+			Prompt:   "Refine the analysis",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "analyze",
+	}
+
+	priorTurns := []workflow.Turn{
+		{Role: workflow.TurnRoleUser, Content: "Analyze this data"},
+		{Role: workflow.TurnRoleAssistant, Content: "Analysis complete"},
+		{Role: workflow.TurnRoleUser, Content: "More detail"},
+		{Role: workflow.TurnRoleAssistant, Content: "Detailed analysis"},
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.SetStepState("analyze", workflow.StepState{
+		Name:   "analyze",
+		Status: workflow.StatusCompleted,
+		Conversation: &workflow.ConversationState{
+			Turns:       priorTurns,
+			TotalTurns:  4,
+			TotalTokens: 200,
+		},
+	})
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Verify predecessor's turns were passed to the provider
+	assert.Equal(t, 4, capturedInitialTurnCount)
+	// Verify result has original turns plus new turns added by provider
+	assert.Equal(t, 6, len(result.State.Turns))
+	assert.Equal(t, "Analyze this data", result.State.Turns[0].Content)
+}
+
+func TestConversationManager_ContinueFrom_StepNotFound(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "step2",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Continue",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "nonexistent",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nonexistent")
+	assert.Nil(t, result)
+}
+
+func TestConversationManager_ContinueFrom_NilConversationState(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "step2",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Continue",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "step1",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.SetStepState("step1", workflow.StepState{
+		Name:         "step1",
+		Status:       workflow.StatusCompleted,
+		Conversation: nil,
+	})
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no conversation state")
+	assert.Nil(t, result)
+}
+
+func TestConversationManager_ContinueFrom_EmptySessionAndTurns(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "step2",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Continue",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "step1",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.SetStepState("step1", workflow.StepState{
+		Name:   "step1",
+		Status: workflow.StatusCompleted,
+		Conversation: &workflow.ConversationState{
+			SessionID: "",
+			Turns:     []workflow.Turn{},
+		},
+	})
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no session")
+	assert.Nil(t, result)
+}
+
+func TestConversationManager_ContinueFrom_TurnsRequired_HTTPProvider(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	mockProvider := mocks.NewMockAgentProvider("openai_compatible")
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "refine",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "openai_compatible",
+			Prompt:   "Refine the analysis",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "analyze",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.SetStepState("analyze", workflow.StepState{
+		Name:   "analyze",
+		Status: workflow.StatusCompleted,
+		Conversation: &workflow.ConversationState{
+			SessionID:   "session-from-cli-provider",
+			Turns:       []workflow.Turn{},
+			TotalTurns:  3,
+			TotalTokens: 150,
+		},
+	})
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no conversation turns")
+	assert.Nil(t, result)
+}
+
+func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newMockResolver()
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var step2InitialTurnCount int
+	var step3InitialTurnCount int
+
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		// Capture initial turn count before provider adds new turns
+		switch prompt {
+		case "step2-prompt":
+			step2InitialTurnCount = len(state.Turns)
+		case "step3-prompt":
+			step3InitialTurnCount = len(state.Turns)
+		}
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "response"))
+		result.State.StoppedBy = workflow.StopReasonMaxTurns
+		result.Output = "response"
+		return result, nil
+	})
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	// Step 1: Initial conversation
+	step1 := &workflow.Step{
+		Name: "step1",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "step1-prompt",
+		},
+	}
+	config1 := &workflow.ConversationConfig{MaxTurns: 1}
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+	result1, err := manager.ExecuteConversation(context.Background(), step1, config1, execCtx, buildContext)
+	require.NoError(t, err)
+	require.NotNil(t, result1)
+	execCtx.SetStepState("step1", workflow.StepState{
+		Name:         "step1",
+		Status:       workflow.StatusCompleted,
+		Conversation: result1.State,
+	})
+
+	// Step 2: Continue from step1
+	step2 := &workflow.Step{
+		Name: "step2",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "step2-prompt",
+		},
+	}
+	config2 := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "step1",
+	}
+	result2, err := manager.ExecuteConversation(context.Background(), step2, config2, execCtx, buildContext)
+	require.NoError(t, err)
+	require.NotNil(t, result2)
+	// Step2 should receive step1's 2 turns (user + assistant)
+	assert.Equal(t, 2, step2InitialTurnCount)
+	execCtx.SetStepState("step2", workflow.StepState{
+		Name:         "step2",
+		Status:       workflow.StatusCompleted,
+		Conversation: result2.State,
+	})
+
+	// Step 3: Continue from step2 (not step1) — NFR-003 O(1) behavior
+	step3 := &workflow.Step{
+		Name: "step3",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "step3-prompt",
+		},
+	}
+	config3 := &workflow.ConversationConfig{
+		MaxTurns:     1,
+		ContinueFrom: "step2",
+	}
+	result3, err := manager.ExecuteConversation(context.Background(), step3, config3, execCtx, buildContext)
+	require.NoError(t, err)
+	require.NotNil(t, result3)
+
+	// Verify step3 loaded step2's state which has 4 turns (2 from step1 + 2 from step2)
+	// This proves O(1) per-hop: step3 doesn't recursively load step1
+	assert.Equal(t, 4, step3InitialTurnCount)
+}

@@ -442,7 +442,7 @@ refine_code:
 | `max_context_tokens` | int | model limit | Token budget for conversation |
 | `strategy` | string | `-` | Context window strategy: `sliding_window`, `summarize` (not yet implemented), `truncate_middle` (not yet implemented). Omitting means no context management is applied |
 | `stop_condition` | string | - | Expression to exit early |
-| `continue_from` | string | - | Step name to continue conversation from (not yet implemented) |
+| `continue_from` | string | - | Step name to continue conversation from — resumes prior step's session |
 | `inject_context` | string | - | Additional context to inject mid-conversation (not yet implemented) |
 
 ### Available Providers

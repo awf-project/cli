@@ -229,6 +229,13 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 				}
 			}
 		}
+
+		// Validate continue_from references an existing step
+		if step.Agent != nil && step.Agent.Conversation != nil && step.Agent.Conversation.ContinueFrom != "" {
+			if _, ok := w.Steps[step.Agent.Conversation.ContinueFrom]; !ok {
+				return fmt.Errorf("step '%s': continue_from references unknown step '%s'", name, step.Agent.Conversation.ContinueFrom)
+			}
+		}
 	}
 
 	return nil

@@ -88,9 +88,6 @@ type ConversationConfig struct {
 // Validate checks if the conversation configuration is valid.
 // The validator parameter is used to check stop condition expression syntax.
 func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
-	if c.ContinueFrom != "" {
-		return errors.New("continue_from is not yet implemented")
-	}
 	if c.InjectContext != "" {
 		return errors.New("inject_context is not yet implemented")
 	}

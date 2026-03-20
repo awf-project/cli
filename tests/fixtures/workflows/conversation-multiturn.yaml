@@ -40,6 +40,7 @@ states:
     conversation:
       max_turns: 2
       stop_condition: "turn_count >= 5"
+      continue_from: first_turn
     timeout: 60
     on_success: done
     on_failure: error

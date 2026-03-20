@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -56,14 +57,43 @@ func (m *ConversationManager) validateConversationInputs(
 }
 
 // initializeConversationState initializes conversation state with system prompt
-// and resolves initial prompt with interpolation.
+// and resolves initial prompt with interpolation. When config.ContinueFrom is set,
+// loads prior conversation state from the referenced predecessor step.
 func (m *ConversationManager) initializeConversationState(
 	step *workflow.Step,
+	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
 ) (*workflow.ConversationState, string, error) {
-	systemPrompt := step.Agent.SystemPrompt
-	state := workflow.NewConversationState(systemPrompt)
+	var state *workflow.ConversationState
+	if config.ContinueFrom != "" {
+		priorStepState, ok := execCtx.GetStepState(config.ContinueFrom)
+		if !ok {
+			return nil, "", fmt.Errorf("continue_from: step %q not found in execution context", config.ContinueFrom)
+		}
+		if priorStepState.Conversation == nil {
+			return nil, "", fmt.Errorf("continue_from: step %q has no conversation state", config.ContinueFrom)
+		}
+		prior := priorStepState.Conversation
+		if prior.SessionID == "" && len(prior.Turns) == 0 {
+			return nil, "", fmt.Errorf("continue_from: step %q has no session ID or conversation history to resume", config.ContinueFrom)
+		}
+		// openai_compatible uses Turns for session resume, not SessionID
+		if step.Agent.Provider == "openai_compatible" && len(prior.Turns) == 0 {
+			return nil, "", fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", config.ContinueFrom, step.Agent.Provider)
+		}
+		// Clone prior state for the new step
+		state = &workflow.ConversationState{
+			SessionID:   prior.SessionID,
+			Turns:       make([]workflow.Turn, len(prior.Turns)),
+			TotalTurns:  prior.TotalTurns,
+			TotalTokens: prior.TotalTokens,
+		}
+		copy(state.Turns, prior.Turns)
+	} else {
+		systemPrompt := step.Agent.SystemPrompt
+		state = workflow.NewConversationState(systemPrompt)
+	}
 
 	initialPrompt := step.Agent.Prompt
 	if step.Agent.InitialPrompt != "" {
@@ -175,7 +205,7 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, err
 	}
 
-	state, resolvedPrompt, err := m.initializeConversationState(step, execCtx, buildContext)
+	state, resolvedPrompt, err := m.initializeConversationState(step, config, execCtx, buildContext)
 	if err != nil {
 		return nil, err
 	}

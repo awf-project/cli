@@ -368,6 +368,111 @@ func TestWorkflowValidation(t *testing.T) {
 	}
 }
 
+func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
+	tests := []struct {
+		name    string
+		wf      *workflow.Workflow
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid continue_from reference",
+			wf: &workflow.Workflow{
+				Name:    "test",
+				Initial: "step1",
+				Steps: map[string]*workflow.Step{
+					"step1": {
+						Name: "step1", Type: workflow.StepTypeAgent,
+						Agent: &workflow.AgentConfig{
+							Provider: "claude", Prompt: "test",
+							Conversation: &workflow.ConversationConfig{MaxTurns: 5},
+						},
+						OnSuccess: "step2",
+					},
+					"step2": {
+						Name: "step2", Type: workflow.StepTypeAgent,
+						Agent: &workflow.AgentConfig{
+							Provider: "claude", Prompt: "test",
+							Conversation: &workflow.ConversationConfig{
+								MaxTurns:     3,
+								ContinueFrom: "step1",
+							},
+						},
+						OnSuccess: "done",
+					},
+					"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: "success"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "continue_from references nonexistent step",
+			wf: &workflow.Workflow{
+				Name:    "test",
+				Initial: "step1",
+				Steps: map[string]*workflow.Step{
+					"step1": {
+						Name: "step1", Type: workflow.StepTypeAgent,
+						Agent: &workflow.AgentConfig{
+							Provider: "claude", Prompt: "test",
+							Conversation: &workflow.ConversationConfig{
+								MaxTurns:     3,
+								ContinueFrom: "nonexistent",
+							},
+						},
+						OnSuccess: "done",
+					},
+					"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: "success"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "continue_from references unknown step",
+		},
+		{
+			name: "continue_from empty is valid",
+			wf: &workflow.Workflow{
+				Name:    "test",
+				Initial: "step1",
+				Steps: map[string]*workflow.Step{
+					"step1": {
+						Name: "step1", Type: workflow.StepTypeAgent,
+						Agent: &workflow.AgentConfig{
+							Provider: "claude", Prompt: "test",
+							Conversation: &workflow.ConversationConfig{MaxTurns: 5},
+						},
+						OnSuccess: "done",
+					},
+					"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: "success"},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.wf.Validate(nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Workflow.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if err.Error() != tt.errMsg && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.errMsg, err.Error())
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i < len(s)-len(substr)+1; i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestInputStruct(t *testing.T) {
 	input := workflow.Input{
 		Name:        "file_path",
