@@ -10,22 +10,26 @@ import (
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
 
 // CodexProvider implements AgentProvider for Codex CLI.
 // Invokes: codex --prompt "prompt" --quiet
 type CodexProvider struct {
+	logger   ports.Logger
 	executor ports.CLIExecutor
 }
 
 func NewCodexProvider() *CodexProvider {
 	return &CodexProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 }
 
 func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
 	p := &CodexProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 	for _, opt := range opts {
@@ -109,7 +113,29 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	args := []string{"--prompt", prompt}
+	// Only session IDs with the "codex-" prefix (issued by the Codex CLI) use the
+	// resume subcommand. Unknown-format IDs skip resume but still suppress system
+	// prompt (the session is ongoing, even if not resumable by subcommand).
+	isResume := strings.HasPrefix(workingState.SessionID, "codex-")
+	if !isResume && workingState.SessionID != "" {
+		// NFR-002: log only a prefix of the session ID to avoid leaking full value.
+		prefixLen := min(10, len(workingState.SessionID))
+		p.logger.Debug("session ID does not have codex- prefix, skipping resume",
+			"session_id_prefix", workingState.SessionID[:prefixLen])
+	}
+
+	var args []string
+	if isResume {
+		args = []string{"resume", workingState.SessionID, "--prompt", prompt}
+	} else {
+		args = []string{"--prompt", prompt}
+		// First turn only (no session yet): pass system prompt if provided
+		if workingState.SessionID == "" {
+			if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+				args = append(args, "--system-prompt", sysPrompt)
+			}
+		}
+	}
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
@@ -138,6 +164,16 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	output = append(output, stdout...)
 	output = append(output, stderr...)
 	outputStr := string(output)
+	if outputStr == "" {
+		outputStr = " "
+	}
+
+	// Extract session ID for future resume turns; log and continue if not found.
+	if sessionID, extractErr := extractSessionIDFromLines(outputStr); extractErr == nil {
+		workingState.SessionID = sessionID
+	} else {
+		workingState.SessionID = ""
+	}
 
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 	assistantTurn.Tokens = estimateTokens(outputStr)
@@ -145,13 +181,7 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
 	}
 
-	inputTokens := 0
-	for i := 0; i < len(workingState.Turns)-1; i++ {
-		if workingState.Turns[i].Tokens == 0 {
-			workingState.Turns[i].Tokens = estimateTokens(workingState.Turns[i].Content)
-		}
-		inputTokens += workingState.Turns[i].Tokens
-	}
+	inputTokens := estimateInputTokens(workingState.Turns, 1)
 
 	result := &workflow.ConversationResult{
 		Provider:        "codex",
@@ -198,6 +228,9 @@ func validateCodexOptions(options map[string]any) error {
 	return nil
 }
 
+// extractSessionID parses a session identifier from Codex CLI output.
+// Looks for a "Session: <id>" line and returns the trimmed ID.
+// Returns empty string and error if not found (caller falls back to stateless).
 // validateCodexConversationOptions validates conversation-specific options.
 func validateCodexConversationOptions(options map[string]any) error {
 	if options == nil {

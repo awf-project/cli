@@ -42,25 +42,20 @@ func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodePro
 func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
-	// Validate prompt
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	// Validate options
 	if err := validateOpenCodeOptions(options); err != nil {
 		return nil, err
 	}
 
-	// Check context before execution
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("opencode provider: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"run", prompt}
 
-	// Apply options
 	if options != nil {
 		if framework, ok := options["framework"].(string); ok {
 			args = append(args, "--framework", framework)
@@ -73,7 +68,6 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		}
 	}
 
-	// Execute command
 	stdout, stderr, err := p.executor.Run(ctx, "opencode", args...)
 	completedAt := time.Now()
 
@@ -91,7 +85,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		Output:      outputStr,
 		StartedAt:   startedAt,
 		CompletedAt: completedAt,
-		Tokens:      estimateOpenCodeTokens(outputStr),
+		Tokens:      estimateTokens(outputStr),
 	}
 
 	// Try to parse JSON response if output looks like JSON
@@ -108,7 +102,99 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 
 // ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
 func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
-	return nil, errors.New("not implemented")
+	startedAt := time.Now()
+
+	if state == nil {
+		return nil, errors.New("conversation state cannot be nil")
+	}
+
+	if strings.TrimSpace(prompt) == "" {
+		return nil, errors.New("prompt cannot be empty")
+	}
+
+	if err := validateOpenCodeOptions(options); err != nil {
+		return nil, err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("opencode provider: %w", err)
+	}
+
+	workingState := cloneState(state)
+
+	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
+	if err := workingState.AddTurn(userTurn); err != nil {
+		return nil, fmt.Errorf("failed to add user turn: %w", err)
+	}
+
+	args := []string{"run", prompt}
+
+	// Resume from previous session if available
+	if workingState.SessionID != "" {
+		args = append(args, "-s", workingState.SessionID)
+	} else {
+		// First turn only: pass system prompt if provided
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			args = append(args, "--system-prompt", sysPrompt)
+		}
+	}
+
+	if options != nil {
+		if framework, ok := options["framework"].(string); ok {
+			args = append(args, "--framework", framework)
+		}
+		if verbose, ok := options["verbose"].(bool); ok && verbose {
+			args = append(args, "--verbose")
+		}
+		if outputDir, ok := options["output_dir"].(string); ok {
+			args = append(args, "--output", outputDir)
+		}
+	}
+
+	stdout, stderr, err := p.executor.Run(ctx, "opencode", args...)
+	completedAt := time.Now()
+
+	if err != nil {
+		return nil, fmt.Errorf("opencode execution failed: %w", err)
+	}
+
+	output := make([]byte, 0, len(stdout)+len(stderr))
+	output = append(output, stdout...)
+	output = append(output, stderr...)
+	outputStr := strings.TrimSpace(string(output))
+	if outputStr == "" {
+		outputStr = " "
+	}
+
+	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
+	assistantTurn.Tokens = estimateTokens(outputStr)
+	if err := workingState.AddTurn(assistantTurn); err != nil {
+		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
+	}
+
+	// Extract session ID for future turns - gracefully fall back to empty SessionID on error
+	if sessionID, err := extractSessionIDFromLines(outputStr); err == nil && sessionID != "" {
+		workingState.SessionID = sessionID
+	} else {
+		// If extraction fails, clear SessionID for stateless fallback
+		workingState.SessionID = ""
+	}
+
+	inputTokens := estimateInputTokens(workingState.Turns, 1)
+
+	result := &workflow.ConversationResult{
+		Provider:        "opencode",
+		State:           workingState,
+		Output:          outputStr,
+		TokensInput:     inputTokens,
+		TokensOutput:    assistantTurn.Tokens,
+		TokensTotal:     inputTokens + assistantTurn.Tokens,
+		TokensEstimated: true,
+		StartedAt:       startedAt,
+		CompletedAt:     completedAt,
+	}
+
+	return result, nil
 }
 
 // Name returns the provider identifier.
@@ -131,14 +217,12 @@ func validateOpenCodeOptions(options map[string]any) error {
 		return nil
 	}
 
-	// Validate output_dir type
 	if outputDir, exists := options["output_dir"]; exists {
 		if _, ok := outputDir.(string); !ok {
 			return errors.New("output_dir must be a string")
 		}
 	}
 
-	// Validate verbose type
 	if verbose, exists := options["verbose"]; exists {
 		if _, ok := verbose.(bool); !ok {
 			return errors.New("verbose must be a boolean")
@@ -146,10 +230,4 @@ func validateOpenCodeOptions(options map[string]any) error {
 	}
 
 	return nil
-}
-
-// estimateOpenCodeTokens provides a rough token count estimation.
-func estimateOpenCodeTokens(output string) int {
-	// Rough estimation: ~4 characters per token
-	return len(output) / 4
 }

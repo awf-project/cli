@@ -449,13 +449,13 @@ refine_code:
 
 | Provider | Binary/Endpoint | Conversation Support | Description |
 |----------|--------|----------------------|-------------|
-| `claude` | `claude` CLI | Single-turn only | Anthropic Claude CLI |
-| `codex` | `codex` CLI | Single-turn only | OpenAI Codex CLI |
-| `gemini` | `gemini` CLI | Single-turn only | Google Gemini CLI |
-| `opencode` | `opencode` CLI | Single-turn only | OpenCode CLI |
-| `openai_compatible` | HTTP API | Full multi-turn | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
+| `claude` | `claude` CLI | Multi-turn (session resume via `-r`) | Anthropic Claude CLI |
+| `codex` | `codex` CLI | Multi-turn (session resume via `resume`) | OpenAI Codex CLI |
+| `gemini` | `gemini` CLI | Multi-turn (session resume via `--resume`) | Google Gemini CLI |
+| `opencode` | `opencode` CLI | Multi-turn (session resume via `-s`) | OpenCode CLI |
+| `openai_compatible` | HTTP API | Full multi-turn (messages array) | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
 
-> **Conversation mode and providers:** Only `openai_compatible` maintains full conversation history across turns via the Chat Completions API. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each turn as an independent invocation — previous conversation context is serialized into the prompt but the CLI process does not retain session state. For workflows requiring true multi-turn continuity, use `openai_compatible`.
+> **Conversation mode and providers:** All providers support multi-turn conversations. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags to maintain context across turns — session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully. `openai_compatible` maintains full conversation history via the Chat Completions API messages array.
 
 ### Agent Output
 

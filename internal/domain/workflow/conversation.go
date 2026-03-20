@@ -150,6 +150,7 @@ const (
 
 // ConversationState represents the state of an ongoing or completed conversation.
 type ConversationState struct {
+	SessionID   string     // provider-assigned session identifier for resume capability
 	Turns       []Turn     // ordered array of conversation turns
 	TotalTurns  int        // total number of turns executed
 	TotalTokens int        // cumulative token count across all turns

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
 ### Fixed
+- **F073**: Documentation corrections for conversation mode
+  - Corrected false claim about history serialization in CLI providers (`conversation-steps.md`)
+  - Clarified that conversation state roles are read-only execution metadata
+  - Updated system prompt behavior description for CLI providers
+  - Added dependency notes for `continue_from` and `inject_context` features
+  - Updated `continue_from` design from history loading to session ID handoff
+  - Updated provider compatibility in `workflow-syntax.md` to reflect session resume support
 - **C064**: Retry configuration audit — 7 documentation-vs-implementation gap fixes
   - **Finding 1 (Critical)**: Guard `CalculateDelay` against `maxDelay=0` silently nullifying all retry delays — omitting `max_delay` no longer caps delays to zero
   - **Finding 2 (High)**: Default `multiplier` to 2.0 when omitted in YAML (was 0.0, degrading exponential backoff to constant delays)
@@ -42,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New unit and integration tests covering transition priority on execution errors
 
 ### Added
+- **F073**: Session resume for CLI providers
+    - Multi-turn conversations with CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) now maintain context across turns via native session resume flags (`-r`, `resume`, `--resume`, `-s`). Previously, each turn was stateless.
+    - `SessionID` field on `ConversationState` domain entity for session persistence
+    - System prompt passing via `--system-prompt` flag on first conversation turn
+    - Graceful fallback to stateless mode when session ID extraction fails
+- **F073**: Conversation mode forces JSON output for Claude provider — `--output-format json` is now always used in `ExecuteConversation` for session ID extraction. User-specified `output_format` option is overridden in conversation mode only. Single-step `Execute` is unaffected.
 - **F072**: Hugo documentation site with Doks theme
   - Full documentation site served from existing `docs/` via Hugo module mounts (zero file duplication)
   - Landing page with project positioning, feature highlights, install snippet, and CTAs

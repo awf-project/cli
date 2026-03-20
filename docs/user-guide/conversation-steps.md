@@ -164,6 +164,8 @@ review_conversation:
 
 ### Conversation State Structure
 
+> **Note:** The `role` field is read-only execution metadata assigned by AWF during execution. `system_prompt` maps to `system`, `initial_prompt`/`prompt` to `user`, and CLI responses to `assistant`. You do not write roles in workflow YAML — they appear only in the runtime state output.
+
 ```yaml
 states:
   analyze_conversation:
@@ -243,6 +245,8 @@ stop_condition: "response contains 'Summary:' || tokens_used > 90000"
 ## Injecting Context Mid-Conversation (Planned)
 
 > **Not yet implemented** — `continue_from` and `inject_context` are parsed but rejected at validation. See [Limitations](#limitations) for details.
+>
+> **Dependencies:** `continue_from` requires session resume support (F073) to function — it hands off the session ID between steps rather than re-serializing history. `inject_context` is a separate concept (context enrichment mid-conversation) with its own design requirements.
 
 The following example shows the planned behavior for resuming a conversation from a previous step:
 
@@ -279,7 +283,7 @@ states:
     type: terminal
 ```
 
-When implemented, the `continue_from` field will load the conversation history from the previous step and continue with the new prompt.
+When implemented, the `continue_from` field will resume the previous step's session using the stored `SessionID`, enabling native context continuity without history re-serialization.
 
 ## Examples
 
@@ -452,7 +456,7 @@ log_tokens:
 
 ### 4. Use System Prompt Effectively
 
-System prompt guides the agent's behavior across all turns:
+System prompt guides the agent's behavior across all turns. For CLI providers, the `--system-prompt` flag is passed on the first conversation turn. On resumed turns (2+), the provider retains the system prompt from the session.
 
 ```yaml
 system_prompt: |
@@ -527,12 +531,12 @@ error:
 
 **Problem**: Agent doesn't maintain history across turns with CLI providers
 
-**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF serializes conversation history into the prompt, but the CLI does not retain session state between turns. This means:
+**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF passes only the current turn's prompt via `-p` (not serialized history). With session resume support (F073), providers use native `--resume` flags to maintain context across turns. Without session resume, each turn starts fresh with no context from previous turns. This means:
 - Each turn starts a fresh CLI process
-- Context is passed via prompt serialization, not native session continuity
-- Token usage may be higher due to repeated context in each prompt
+- Context continuity relies on native session resume via provider-specific flags (`-r`, `resume`, `--resume`, `-s`)
+- If session ID extraction fails, the provider falls back to stateless mode (each turn independent)
 
-**Solution**: For workflows requiring full multi-turn conversation with native history continuity, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
+**Solution**: CLI providers now support session resume natively. If you need HTTP-based multi-turn conversation with full message history, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
 
 ```yaml
 refine:
@@ -553,7 +557,10 @@ refine:
 
 ### Provider Compatibility
 
-Conversation mode with full history continuity is only functional with `openai_compatible`. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each turn as an independent process — conversation context is serialized into the prompt but the provider does not maintain native session state. This is a known architectural limitation; implementing `--resume` style session continuation for each CLI provider is tracked as a separate feature.
+All providers support conversation mode with context continuity:
+
+- **`openai_compatible`** maintains full conversation history via the Chat Completions API (messages array).
+- **CLI providers** (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags (`-r`, `resume`, `--resume`, `-s`) to maintain context across turns. Session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully.
 
 ### Current Implementation
 
@@ -566,9 +573,8 @@ Conversation mode with full history continuity is only functional with `openai_c
 
 - `summarize` strategy (LLM-based compression of old turns)
 - `truncate_middle` strategy (keep first and last turns)
-- `continue_from` for resuming conversations across steps
+- `continue_from` for resuming conversations across steps (unblocked by F073 session resume)
 - `inject_context` for adding context mid-conversation
-- CLI provider session continuation via `--resume` flags
 - Conversation branching (explore multiple paths)
 
 ## See Also

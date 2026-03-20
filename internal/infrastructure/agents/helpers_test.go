@@ -72,6 +72,13 @@ func TestCloneState(t *testing.T) {
 				StoppedBy:   "user",
 			},
 		},
+		{
+			name: "state_with_session_id",
+			state: &workflow.ConversationState{
+				Turns:     []workflow.Turn{},
+				SessionID: "session-abc123",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -89,6 +96,7 @@ func TestCloneState(t *testing.T) {
 			assert.Equal(t, tt.state.TotalTurns, cloned.TotalTurns)
 			assert.Equal(t, tt.state.TotalTokens, cloned.TotalTokens)
 			assert.Equal(t, tt.state.StoppedBy, cloned.StoppedBy)
+			assert.Equal(t, tt.state.SessionID, cloned.SessionID, "SessionID must be propagated")
 
 			// Verify slice is copied, not shared
 			if len(tt.state.Turns) > 0 {
@@ -535,50 +543,6 @@ func TestEstimateInputTokens(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := estimateInputTokens(tt.turns, tt.excludeLastN)
 			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestParseJSONResponse(t *testing.T) {
-	tests := []struct {
-		name    string
-		output  []byte
-		wantErr bool
-		wantNil bool
-	}{
-		{
-			name:    "valid_json",
-			output:  []byte(`{"status": "ok", "count": 5}`),
-			wantErr: false,
-			wantNil: false,
-		},
-		{
-			name:    "invalid_json",
-			output:  []byte(`not json`),
-			wantErr: true,
-			wantNil: true,
-		},
-		{
-			name:    "empty_json_object",
-			output:  []byte(`{}`),
-			wantErr: false,
-			wantNil: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseJSONResponse(tt.output)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-			if tt.wantNil {
-				assert.Nil(t, result)
-			} else {
-				assert.NotNil(t, result)
-			}
 		})
 	}
 }
