@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -241,6 +242,16 @@ func (m *ConversationManager) ExecuteConversation(
 		resolvedPrompt, err = m.resolver.Resolve(step.Agent.Prompt, intCtx)
 		if err != nil {
 			return nil, err
+		}
+
+		if config.InjectContext != "" {
+			resolvedInjectContext, injectErr := m.resolver.Resolve(config.InjectContext, intCtx)
+			if injectErr != nil {
+				return nil, fmt.Errorf("inject_context: %w", injectErr)
+			}
+			if trimmed := strings.TrimSpace(resolvedInjectContext); trimmed != "" {
+				resolvedPrompt = resolvedPrompt + "\n\n" + trimmed
+			}
 		}
 	}
 

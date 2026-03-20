@@ -60,15 +60,17 @@ func (m *mockExpressionEvaluator) EvaluateInt(expr string, ctx *interpolation.Co
 
 // configurableMockResolver implements interpolation.Resolver with configurable results
 type configurableMockResolver struct {
-	results map[string]string
-	calls   []string
-	err     error
+	results        map[string]string
+	calls          []string
+	err            error
+	templateErrors map[string]error // per-template error injection
 }
 
 func newConfigurableMockResolver() *configurableMockResolver {
 	return &configurableMockResolver{
-		results: make(map[string]string),
-		calls:   make([]string, 0),
+		results:        make(map[string]string),
+		calls:          make([]string, 0),
+		templateErrors: make(map[string]error),
 	}
 }
 
@@ -76,6 +78,9 @@ func (m *configurableMockResolver) Resolve(template string, ctx *interpolation.C
 	m.calls = append(m.calls, template)
 	if m.err != nil {
 		return "", m.err
+	}
+	if err, ok := m.templateErrors[template]; ok {
+		return "", err
 	}
 	if result, ok := m.results[template]; ok {
 		return result, nil

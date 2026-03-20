@@ -443,7 +443,7 @@ refine_code:
 | `strategy` | string | `-` | Context window strategy: `sliding_window`, `summarize` (not yet implemented), `truncate_middle` (not yet implemented). Omitting means no context management is applied |
 | `stop_condition` | string | - | Expression to exit early |
 | `continue_from` | string | - | Step name to continue conversation from — resumes prior step's session |
-| `inject_context` | string | - | Additional context to inject mid-conversation (not yet implemented) |
+| `inject_context` | string | - | Additional context to inject into user prompts on turns 2+. Supports template variables (`{{.states.*}}`, `{{.inputs.*}}`, etc.). Re-interpolated per turn. |
 
 ### Available Providers
 

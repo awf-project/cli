@@ -22,11 +22,6 @@ func TestConversationValidation_RejectsUnimplementedFeatures(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "inject_context_rejected",
-			workflowName: "conversation-invalid-inject-context",
-			wantErr:      "inject_context is not yet implemented",
-		},
-		{
 			name:         "summarize_strategy_rejected",
 			workflowName: "conversation-invalid-summarize",
 			wantErr:      "not yet implemented",
@@ -83,6 +78,10 @@ func TestConversationValidation_AcceptsValidConfigs(t *testing.T) {
 		{
 			name:         "continue_from_valid_step_reference",
 			workflowName: "conversation-continue-from",
+		},
+		{
+			name:         "inject_context_valid",
+			workflowName: "conversation-inject-context",
 		},
 	}
 

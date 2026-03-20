@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **F074**: `continue_from` field in conversation steps now resumes a prior step's session — CLI providers hand off session ID, `openai_compatible` loads turn history
-
 ### Fixed
 - **F073**: Documentation corrections for conversation mode
   - Corrected false claim about history serialization in CLI providers (`conversation-steps.md`)
@@ -52,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New unit and integration tests covering transition priority on execution errors
 
 ### Added
+- **F075**: `inject_context` field in conversation steps appends interpolated context to user prompts on turns 2+
+    - Template variables (`{{.states.*}}`, `{{.inputs.*}}`, `{{.env.*}}`, `{{.workflow.*}}`) re-interpolated per turn to capture latest state
+    - First-turn exclusion: `inject_context` is excluded from turn 1, keeping `initial_prompt` clean
+    - Empty or whitespace-only values treated as no injection (no-op)
+    - Errors wrapped with field-specific context (`inject_context: <error>`) for debugging
+    - Removed C062 validation guard (`"inject_context is not yet implemented"`)
+    - Added FR-002 mode validation: `inject_context` rejected when `mode` is not `conversation`
+    - Documentation in `conversation-steps.md` and `workflow-syntax.md` updated
+- **F074**: `continue_from` field in conversation steps now resumes a prior step's session — CLI providers hand off session ID, `openai_compatible` loads turn history
 - **F073**: Session resume for CLI providers
     - Multi-turn conversations with CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) now maintain context across turns via native session resume flags (`-r`, `resume`, `--resume`, `-s`). Previously, each turn was stateless.
     - `SessionID` field on `ConversationState` domain entity for session persistence
@@ -238,6 +244,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zero breaking changes: all existing consumers compile unchanged
 
 ### Added
+- **F075**: Inject Context — Mid-Conversation Context Enrichment
 - **F071**: Structured Audit Trail for Workflow Executions
 - **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure
@@ -477,6 +484,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects: Template interpolation, workflow validation, all state references
 
 ### Added
+- **F075**: Inject Context — Mid-Conversation Context Enrichment
 - **F071**: Structured Audit Trail for Workflow Executions
 - **F070**: Replace Custom Agent Provider with OpenAI-Compatible Provider
 - **F066**: Inline Error Terminal Shorthand for on_failure

@@ -1857,3 +1857,315 @@ func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
 	// This proves O(1) per-hop: step3 doesn't recursively load step1
 	assert.Equal(t, 4, step3InitialTurnCount)
 }
+
+// T004: Implement inject_context appending on turn 2+
+
+func TestConversationManager_InjectContext_AppendedOnSecondTurn(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+	resolver.results["What is AI?"] = "What is AI?"
+	resolver.results["Additional context from step1"] = "Additional context from step1"
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedPrompts []string
+	mockProvider := mocks.NewMockAgentProvider("claude")
+
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		capturedPrompts = append(capturedPrompts, prompt)
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(assistantTurn)
+		result.Output = "response"
+		return result, nil
+	})
+
+	_ = registry.Register(mockProvider)
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "What is AI?",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:      3,
+		InjectContext: "Additional context from step1",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, capturedPrompts, 3, "should have 3 turn prompts")
+
+	// Turn 1: no inject_context
+	assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should not contain inject_context")
+
+	// Turn 2+: inject_context appended with \n\n separator
+	expectedPrompt2 := "What is AI?\n\nAdditional context from step1"
+	assert.Equal(t, expectedPrompt2, capturedPrompts[1], "turn 2 should have inject_context appended with \\n\\n separator")
+
+	expectedPrompt3 := "What is AI?\n\nAdditional context from step1"
+	assert.Equal(t, expectedPrompt3, capturedPrompts[2], "turn 3 should have inject_context appended with \\n\\n separator")
+}
+
+func TestConversationManager_InjectContext_ExcludedFromFirstTurn(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+	resolver.results["What is AI?"] = "What is AI?"
+	resolver.results["Additional context from step1"] = "Additional context from step1"
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var capturedPrompts []string
+	mockProvider := mocks.NewMockAgentProvider("claude")
+
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		capturedPrompts = append(capturedPrompts, prompt)
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		_ = result.State.AddTurn(assistantTurn)
+		result.Output = "response"
+		return result, nil
+	})
+
+	_ = registry.Register(mockProvider)
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "What is AI?",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:      1,
+		InjectContext: "Additional context from step1",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, capturedPrompts, 1, "should have 1 turn prompt")
+
+	assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should not contain inject_context")
+}
+
+// T006: empty/whitespace inject_context must be a no-op (FR-005)
+
+func TestConversationManager_InjectContext_EmptyIsNoOp(t *testing.T) {
+	tests := []struct {
+		name          string
+		injectContext string
+	}{
+		{"empty string", ""},
+		{"whitespace only", "   \t\n  "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			evaluator := newMockExpressionEvaluator()
+			resolver := newConfigurableMockResolver()
+			resolver.results["What is AI?"] = "What is AI?"
+			tokenizer := newMockTokenizer()
+			registry := mocks.NewMockAgentRegistry()
+
+			var capturedPrompts []string
+			mockProvider := mocks.NewMockAgentProvider("claude")
+
+			mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				capturedPrompts = append(capturedPrompts, prompt)
+				result := workflow.NewConversationResult("claude")
+				result.State = state
+				assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+				assistantTurn.Tokens = 10
+				_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+				_ = result.State.AddTurn(assistantTurn)
+				result.Output = "response"
+				return result, nil
+			})
+
+			_ = registry.Register(mockProvider)
+			manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+			step := &workflow.Step{
+				Name: "chat",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "What is AI?",
+				},
+			}
+
+			config := &workflow.ConversationConfig{
+				MaxTurns:      2,
+				InjectContext: tt.injectContext,
+			}
+
+			execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+			execCtx.States = make(map[string]workflow.StepState)
+
+			buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+				return interpolation.NewContext()
+			}
+
+			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Len(t, capturedPrompts, 2, "should have 2 turn prompts")
+
+			assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should be unchanged")
+			assert.Equal(t, "What is AI?", capturedPrompts[1], "turn 2 should not have empty inject_context appended")
+		})
+	}
+}
+
+func TestConversationManager_InjectContext_InterpolationError(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+	resolver.results["Continue the work"] = "Continue the work"
+	resolver.templateErrors["{{.states.bad_template"] = errors.New("template parse error: unexpected end of input")
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(assistantTurn)
+		result.Output = "response"
+		return result, nil
+	})
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Continue the work",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:      3,
+		InjectContext: "{{.states.bad_template",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = make(map[string]workflow.StepState)
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		return interpolation.NewContext()
+	}
+
+	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	// First turn succeeds (no injection). Second turn fails on inject_context interpolation.
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "inject_context:", "Error should be wrapped with field name (FR-006)")
+	assert.Contains(t, err.Error(), "template parse error")
+}
+
+// F075: InjectContext per-turn template interpolation — verify states.* and inputs.* namespaces
+func TestConversationManager_InjectContext_TemplateInterpolation(t *testing.T) {
+	logger := &mockLogger{}
+	evaluator := newMockExpressionEvaluator()
+	resolver := newConfigurableMockResolver()
+	resolver.results["Analyze this"] = "Analyze this"
+	resolver.results["Results: {{.states.run_tests.output}}, task: {{.inputs.task}}"] = "Results: all tests passed, task: review"
+	tokenizer := newMockTokenizer()
+	registry := mocks.NewMockAgentRegistry()
+
+	var secondTurnPrompt string
+	callCount := 0
+	mockProvider := mocks.NewMockAgentProvider("claude")
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		callCount++
+		if callCount == 2 {
+			secondTurnPrompt = prompt
+		}
+		result := workflow.NewConversationResult("claude")
+		result.State = state
+		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
+		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
+		assistantTurn.Tokens = 10
+		_ = result.State.AddTurn(assistantTurn)
+		result.Output = "response"
+		return result, nil
+	})
+	_ = registry.Register(mockProvider)
+
+	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+
+	step := &workflow.Step{
+		Name: "chat",
+		Type: workflow.StepTypeAgent,
+		Agent: &workflow.AgentConfig{
+			Provider: "claude",
+			Prompt:   "Analyze this",
+		},
+	}
+
+	config := &workflow.ConversationConfig{
+		MaxTurns:      3,
+		InjectContext: "Results: {{.states.run_tests.output}}, task: {{.inputs.task}}",
+	}
+
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+
+	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+		ctx := interpolation.NewContext()
+		ctx.States["run_tests"] = interpolation.StepStateData{
+			Output: "all tests passed",
+		}
+		ctx.Inputs["task"] = "review"
+		return ctx
+	}
+
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Contains(t, secondTurnPrompt, "Results: all tests passed, task: review",
+		"inject_context should interpolate both states.* and inputs.* namespaces (FR-007)")
+}
