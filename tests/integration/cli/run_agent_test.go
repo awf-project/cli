@@ -317,9 +317,6 @@ states:
     type: agent
     provider: claude
     prompt: "Generate a haiku"
-    options:
-      temperature: 0.7
-      max_tokens: 100
     on_success: done
   done:
     type: terminal

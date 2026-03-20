@@ -19,7 +19,6 @@ states:
       {{inputs.task}}
     options:
       model: claude-haiku-4-5
-      max_tokens: 100
     timeout: 5  # Short timeout for testing
     on_success: done
     on_failure: error

@@ -24,7 +24,6 @@ states:
       {{inputs.task}}
     options:
       model: claude-haiku-4-5
-      max_tokens: 2000
     conversation:
       max_turns: 5
       max_context_tokens: 50000

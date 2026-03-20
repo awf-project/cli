@@ -53,11 +53,6 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 			options: map[string]any{"output_format": "json"},
 		},
 		{
-			name:    "int_option_max_tokens",
-			prompt:  "Brief answer",
-			options: map[string]any{"max_tokens": 500},
-		},
-		{
 			name:    "bool_option_dangerous_skip",
 			prompt:  "Test prompt",
 			options: map[string]any{"dangerouslySkipPermissions": true},
@@ -66,8 +61,7 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 			name:   "multiple_options",
 			prompt: "Explain briefly",
 			options: map[string]any{
-				"model":      "haiku",
-				"max_tokens": 1000,
+				"model": "haiku",
 			},
 		},
 	}

@@ -32,11 +32,11 @@ type chatMessage struct {
 }
 
 type chatCompletionsRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	Temperature *float64      `json:"temperature,omitempty"`
-	MaxTokens   *int          `json:"max_tokens,omitempty"`
-	TopP        *float64      `json:"top_p,omitempty"`
+	Model               string        `json:"model"`
+	Messages            []chatMessage `json:"messages"`
+	Temperature         *float64      `json:"temperature,omitempty"`
+	MaxCompletionTokens *int          `json:"max_completion_tokens,omitempty"`
+	TopP                *float64      `json:"top_p,omitempty"`
 }
 
 type chatChoice struct {
@@ -56,13 +56,13 @@ type chatCompletionsResponse struct {
 }
 
 type parsedOptions struct {
-	baseURL      string
-	model        string
-	apiKey       string
-	systemPrompt string
-	temperature  *float64
-	maxTokens    *int
-	topP         *float64
+	baseURL             string
+	model               string
+	apiKey              string
+	systemPrompt        string
+	temperature         *float64
+	maxCompletionTokens *int
+	topP                *float64
 }
 
 func NewOpenAICompatibleProvider(opts ...OpenAICompatibleProviderOption) *OpenAICompatibleProvider {
@@ -235,11 +235,11 @@ func (p *OpenAICompatibleProvider) parseAndValidateOptions(options map[string]an
 	}
 	opts.temperature = temp
 
-	maxTok, err := parseMaxTokensOption(options)
+	maxTok, err := parseMaxCompletionTokensOption(options)
 	if err != nil {
 		return opts, err
 	}
-	opts.maxTokens = maxTok
+	opts.maxCompletionTokens = maxTok
 
 	topP, err := parseTopPOption(options)
 	if err != nil {
@@ -270,21 +270,26 @@ func parseTemperatureOption(options map[string]any) (*float64, error) {
 	return &v, nil
 }
 
-func parseMaxTokensOption(options map[string]any) (*int, error) {
-	raw, ok := options["max_tokens"]
+func parseMaxCompletionTokensOption(options map[string]any) (*int, error) {
+	// Prefer max_completion_tokens, fall back to max_tokens for legacy support.
+	raw, ok := options["max_completion_tokens"]
 	if !ok {
-		return nil, nil
+		raw, ok = options["max_tokens"]
+		if !ok {
+			return nil, nil
+		}
 	}
+
 	switch v := raw.(type) {
 	case int:
 		if v < 0 {
-			return nil, fmt.Errorf("openai_compatible: max_tokens must be non-negative, got %d", v)
+			return nil, fmt.Errorf("openai_compatible: max_completion_tokens must be non-negative, got %d", v)
 		}
 		return &v, nil
 	case float64:
 		iv := int(v)
 		if iv < 0 {
-			return nil, fmt.Errorf("openai_compatible: max_tokens must be non-negative, got %d", iv)
+			return nil, fmt.Errorf("openai_compatible: max_completion_tokens must be non-negative, got %d", iv)
 		}
 		return &iv, nil
 	}
@@ -319,11 +324,11 @@ func (p *OpenAICompatibleProvider) callChatCompletions(ctx context.Context, opts
 	endpoint := opts.baseURL + "/chat/completions"
 
 	reqBody := chatCompletionsRequest{
-		Model:       opts.model,
-		Messages:    messages,
-		Temperature: opts.temperature,
-		MaxTokens:   opts.maxTokens,
-		TopP:        opts.topP,
+		Model:               opts.model,
+		Messages:            messages,
+		Temperature:         opts.temperature,
+		MaxCompletionTokens: opts.maxCompletionTokens,
+		TopP:                opts.topP,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

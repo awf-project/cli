@@ -79,8 +79,6 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 			"workflow", getWorkflowID(options),
 			"step", getStepName(options))
 	}
-	// Note: temperature and max_tokens are validated but not passed to CLI
-
 	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
 
@@ -259,18 +257,6 @@ func (p *ClaudeProvider) Validate() error {
 func validateOptions(options map[string]any) error {
 	if options == nil {
 		return nil
-	}
-
-	if maxTokens, ok := getIntOption(options, "max_tokens"); ok {
-		if maxTokens < 0 {
-			return errors.New("max_tokens must be non-negative")
-		}
-	}
-
-	if temp, ok := getFloatOption(options, "temperature"); ok {
-		if temp < 0 || temp > 1 {
-			return errors.New("temperature must be between 0 and 1")
-		}
 	}
 
 	if model, ok := getStringOption(options, "model"); ok {

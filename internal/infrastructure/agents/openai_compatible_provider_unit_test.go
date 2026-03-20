@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -184,7 +185,7 @@ func TestOpenAICompatibleProvider_Validate(t *testing.T) {
 				"model":      "llama",
 				"max_tokens": -1,
 			},
-			wantErr: "max_tokens must be non-negative",
+			wantErr: "max_completion_tokens must be non-negative",
 		},
 		{
 			name: "invalid top_p high",
@@ -448,7 +449,7 @@ func TestOpenAICompatibleProvider_ValidationErrors(t *testing.T) {
 				"model":      "llama",
 				"max_tokens": -1,
 			},
-			wantErr: "max_tokens",
+			wantErr: "max_completion_tokens must be non-negative",
 		},
 		{
 			name: "temperature int too high",
@@ -502,6 +503,165 @@ func TestOpenAICompatibleProvider_ValidationErrors(t *testing.T) {
 			assert.Nil(t, result)
 		})
 	}
+}
+
+func TestOpenAICompatibleProvider_MaxCompletionTokensMigration(t *testing.T) {
+	tests := []struct {
+		name       string
+		options    map[string]any
+		wantErr    bool
+		wantErrMsg string
+		setupHTTP  bool
+	}{
+		{
+			name: "max_completion_tokens is accepted",
+			options: map[string]any{
+				"base_url":              "http://localhost:11434/v1",
+				"model":                 "llama",
+				"max_completion_tokens": 1024,
+			},
+			wantErr: false,
+		},
+		{
+			name: "legacy max_tokens still works (fallback)",
+			options: map[string]any{
+				"base_url":   "http://localhost:11434/v1",
+				"model":      "llama",
+				"max_tokens": 2048,
+			},
+			wantErr: false,
+		},
+		{
+			name: "max_completion_tokens takes priority over max_tokens",
+			options: map[string]any{
+				"base_url":              "http://localhost:11434/v1",
+				"model":                 "llama",
+				"max_completion_tokens": 512,
+				"max_tokens":            2048,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative max_completion_tokens rejected",
+			options: map[string]any{
+				"base_url":              "http://localhost:11434/v1",
+				"model":                 "llama",
+				"max_completion_tokens": -1,
+			},
+			wantErr:    true,
+			wantErrMsg: "max_completion_tokens must be non-negative",
+		},
+		{
+			name: "negative max_tokens (legacy) rejected",
+			options: map[string]any{
+				"base_url":   "http://localhost:11434/v1",
+				"model":      "llama",
+				"max_tokens": -10,
+			},
+			wantErr:    true,
+			wantErrMsg: "max_completion_tokens must be non-negative",
+		},
+		{
+			name: "max_completion_tokens as float converted to int",
+			options: map[string]any{
+				"base_url":              "http://localhost:11434/v1",
+				"model":                 "llama",
+				"max_completion_tokens": 256.0,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("OPENAI_BASE_URL", "")
+			t.Setenv("OPENAI_MODEL", "")
+
+			provider := NewOpenAICompatibleProvider()
+			_, err := provider.Execute(context.Background(), "test prompt", tt.options)
+
+			if tt.wantErr {
+				require.Error(t, err, "expected error for %s", tt.name)
+				assert.Contains(t, err.Error(), tt.wantErrMsg)
+			} else {
+				// Expect HTTP error since we're not mocking HTTP, but validation should pass
+				if err != nil {
+					assert.NotContains(t, err.Error(), "max_completion_tokens")
+					assert.NotContains(t, err.Error(), "max_tokens")
+				}
+			}
+		})
+	}
+}
+
+func TestOpenAICompatibleProvider_MaxCompletionTokensStructField(t *testing.T) {
+	t.Run("chatCompletionsRequest uses MaxCompletionTokens field", func(t *testing.T) {
+		req := chatCompletionsRequest{
+			Model:               "llama",
+			MaxCompletionTokens: ptrInt(1024),
+		}
+		body, err := json.Marshal(req)
+		require.NoError(t, err)
+		assert.Contains(t, string(body), "\"max_completion_tokens\"")
+		assert.NotContains(t, string(body), "\"max_tokens\"")
+	})
+}
+
+func TestOpenAICompatibleProvider_MaxCompletionTokensParsingLogic(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+		want    *int
+		wantErr bool
+	}{
+		{
+			name:    "prefers max_completion_tokens over max_tokens",
+			options: map[string]any{"max_completion_tokens": 512, "max_tokens": 2048},
+			want:    ptrInt(512),
+		},
+		{
+			name:    "falls back to max_tokens when max_completion_tokens absent",
+			options: map[string]any{"max_tokens": 256},
+			want:    ptrInt(256),
+		},
+		{
+			name:    "handles float64 conversion",
+			options: map[string]any{"max_completion_tokens": 512.0},
+			want:    ptrInt(512),
+		},
+		{
+			name:    "rejects negative max_completion_tokens",
+			options: map[string]any{"max_completion_tokens": -1},
+			wantErr: true,
+		},
+		{
+			name:    "rejects negative max_tokens legacy",
+			options: map[string]any{"max_tokens": -100},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseMaxCompletionTokensOption(tt.options)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "max_completion_tokens must be non-negative")
+			} else {
+				require.NoError(t, err)
+				if tt.want == nil {
+					assert.Nil(t, result)
+				} else {
+					assert.NotNil(t, result)
+					assert.Equal(t, *tt.want, *result)
+				}
+			}
+		})
+	}
+}
+
+func ptrInt(v int) *int {
+	return &v
 }
 
 func TestOpenAICompatibleProvider_Execute_TokenTracking(t *testing.T) {
@@ -1091,7 +1251,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_ErrorPropagation(t *testin
 				"model":      "llama",
 				"max_tokens": -100,
 			},
-			wantErr: "max_tokens",
+			wantErr: "max_completion_tokens must be non-negative",
 		},
 		{
 			name:   "invalid temperature (negative)",

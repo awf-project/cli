@@ -37,13 +37,6 @@ func TestCodexProvider_Execute_Success(t *testing.T) {
 			wantOutput: "class MyClass:\n    pass",
 		},
 		{
-			name:       "prompt with max_tokens option",
-			prompt:     "short code",
-			options:    map[string]any{"max_tokens": 100},
-			mockStdout: []byte("x = 1"),
-			wantOutput: "x = 1",
-		},
-		{
 			name:       "prompt with quiet option",
 			prompt:     "test",
 			options:    map[string]any{"quiet": true},
@@ -95,18 +88,18 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 		wantCLIArgs []string
 	}{
 		{
+			name:        "model option",
+			prompt:      "test",
+			options:     map[string]any{"model": "gpt-4o"},
+			mockStdout:  []byte("code"),
+			wantCLIArgs: []string{"--prompt", "test", "--model", "gpt-4o"},
+		},
+		{
 			name:        "language option",
 			prompt:      "test",
 			options:     map[string]any{"language": "python"},
 			mockStdout:  []byte("code"),
 			wantCLIArgs: []string{"--prompt", "test", "--language", "python"},
-		},
-		{
-			name:        "max_tokens option",
-			prompt:      "test",
-			options:     map[string]any{"max_tokens": 200},
-			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test", "--max-tokens", "200"},
 		},
 		{
 			name:        "quiet option true",
@@ -125,9 +118,9 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 		{
 			name:        "multiple options",
 			prompt:      "complex task",
-			options:     map[string]any{"language": "go", "max_tokens": 500, "quiet": true},
+			options:     map[string]any{"language": "go", "quiet": true},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "complex task", "--language", "go", "--max-tokens", "500", "--quiet"},
+			wantCLIArgs: []string{"--prompt", "complex task", "--language", "go", "--quiet"},
 		},
 		{
 			name:        "no options",
@@ -204,22 +197,22 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "negative max_tokens",
+			name:    "max_tokens is silently ignored (no validation error)",
 			prompt:  "test",
 			options: map[string]any{"max_tokens": -100},
-			wantErr: "max_tokens must be non-negative",
+			wantErr: "",
 		},
 		{
-			name:    "zero max_tokens is valid",
+			name:    "temperature is silently ignored (no validation error)",
 			prompt:  "test",
-			options: map[string]any{"max_tokens": 0},
-			wantErr: "", // Should not error
+			options: map[string]any{"temperature": 2.5},
+			wantErr: "",
 		},
 		{
-			name:    "very large max_tokens",
+			name:    "unknown options are silently ignored",
 			prompt:  "test",
-			options: map[string]any{"max_tokens": 999999},
-			wantErr: "", // Should not error
+			options: map[string]any{"unknown_option": "value"},
+			wantErr: "",
 		},
 	}
 
@@ -491,14 +484,6 @@ func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
 			mockStdout: []byte("def func(): pass"),
 			wantOutput: "def func(): pass",
 		},
-		{
-			name:       "conversation with temperature",
-			state:      workflow.NewConversationState(""),
-			prompt:     "test",
-			options:    map[string]any{"temperature": 0.7},
-			mockStdout: []byte("creative output"),
-			wantOutput: "creative output",
-		},
 	}
 
 	for _, tt := range tests {
@@ -640,29 +625,19 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "negative temperature",
-			options: map[string]any{"temperature": -0.5},
-			wantErr: "temperature must be between 0 and 2",
-		},
-		{
-			name:    "temperature too high",
+			name:    "temperature is silently ignored (no validation error)",
 			options: map[string]any{"temperature": 2.5},
-			wantErr: "temperature must be between 0 and 2",
+			wantErr: "",
 		},
 		{
-			name:    "negative max_tokens",
+			name:    "max_tokens is silently ignored (no validation error)",
 			options: map[string]any{"max_tokens": -100},
-			wantErr: "max_tokens must be non-negative",
+			wantErr: "",
 		},
 		{
-			name:    "valid temperature boundary 0",
-			options: map[string]any{"temperature": 0.0},
-			wantErr: "", // Should not error
-		},
-		{
-			name:    "valid temperature boundary 2",
-			options: map[string]any{"temperature": 2.0},
-			wantErr: "", // Should not error
+			name:    "unknown options are silently ignored",
+			options: map[string]any{"unknown_option": "value"},
+			wantErr: "",
 		},
 	}
 
@@ -782,24 +757,14 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 			wantCLIArgs: []string{"--prompt", "test", "--language", "python"},
 		},
 		{
-			name:        "max_tokens option",
-			options:     map[string]any{"max_tokens": 300},
-			wantCLIArgs: []string{"--prompt", "test", "--max-tokens", "300"},
-		},
-		{
-			name:        "temperature option",
-			options:     map[string]any{"temperature": 0.8},
-			wantCLIArgs: []string{"--prompt", "test", "--temperature", "0.80"},
-		},
-		{
 			name:        "quiet option",
 			options:     map[string]any{"quiet": true},
 			wantCLIArgs: []string{"--prompt", "test", "--quiet"},
 		},
 		{
 			name:        "multiple options",
-			options:     map[string]any{"model": "codex-002", "language": "go", "temperature": 0.5, "quiet": true},
-			wantCLIArgs: []string{"--prompt", "test", "--model", "codex-002", "--language", "go", "--temperature", "0.50", "--quiet"},
+			options:     map[string]any{"model": "codex-002", "language": "go", "quiet": true},
+			wantCLIArgs: []string{"--prompt", "test", "--model", "codex-002", "--language", "go", "--quiet"},
 		},
 	}
 

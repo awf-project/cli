@@ -174,30 +174,6 @@ func TestClaudeProvider_Execute_ValidationErrors(t *testing.T) {
 			wantErr: "prompt cannot be empty",
 		},
 		{
-			name:    "negative max_tokens",
-			prompt:  "test",
-			options: map[string]any{"max_tokens": -1},
-			wantErr: "max_tokens must be non-negative",
-		},
-		{
-			name:    "zero max_tokens",
-			prompt:  "test",
-			options: map[string]any{"max_tokens": 0},
-			wantErr: "", // 0 is valid (no limit)
-		},
-		{
-			name:    "negative temperature",
-			prompt:  "test",
-			options: map[string]any{"temperature": -0.5},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
-			name:    "temperature too high",
-			prompt:  "test",
-			options: map[string]any{"temperature": 1.5},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
 			name:    "invalid model format",
 			prompt:  "test",
 			options: map[string]any{"model": "invalid-model"},
@@ -547,27 +523,6 @@ func TestClaudeProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			prompt:  "   \t\n  ",
 			wantErr: "prompt cannot be empty",
 		},
-		{
-			name:    "negative temperature",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"temperature": -0.5},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
-			name:    "temperature too high",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"temperature": 2.0},
-			wantErr: "temperature must be between 0 and 1",
-		},
-		{
-			name:    "negative max_tokens",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"max_tokens": -1},
-			wantErr: "max_tokens must be non-negative",
-		},
 	}
 
 	for _, tt := range tests {
@@ -865,8 +820,6 @@ func TestClaudeProvider_Execute_MultipleOptions(t *testing.T) {
 
 	options := map[string]any{
 		"model":         "sonnet",
-		"temperature":   0.7,
-		"max_tokens":    100,
 		"output_format": "text",
 		"allowedTools":  "bash",
 		"workflowID":    "test-workflow",

@@ -30,7 +30,6 @@ states:
     initial_prompt: "Research: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-      max_tokens: 2000
     conversation:
       max_turns: 5
       max_context_tokens: 60000
@@ -83,7 +82,6 @@ states:
       Codex findings: {{states.codex_convo.output}}
     options:
       model: claude-haiku-4-5
-      max_tokens: 3000
     conversation:
       max_turns: 3
       strategy: sliding_window

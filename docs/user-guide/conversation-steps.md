@@ -51,7 +51,6 @@ states:
       {{.inputs.code}}
     options:
       model: claude-sonnet-4-20250514
-      max_tokens: 4096
     conversation:
       max_turns: 10
       max_context_tokens: 100000
@@ -75,7 +74,7 @@ states:
 | `system_prompt` | string | No | — | System message for the entire conversation (preserved during truncation) |
 | `initial_prompt` | string | Yes | — | Initial user message to start the conversation |
 | `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context-mid-conversation)) |
-| `options` | object | No | — | Provider-specific options (model, max_tokens, temperature, etc.) |
+| `options` | object | No | — | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
 | `timeout` | duration | No | `300s` | Timeout for each turn |
 | `on_success` | string | Yes | — | Next state on successful completion |
 | `on_failure` | string | No | — | Next state on error |
@@ -320,7 +319,6 @@ states:
       {{.inputs.requirements}}
     options:
       model: claude-sonnet-4-20250514
-      max_tokens: 2048
     conversation:
       max_turns: 10
       max_context_tokens: 100000

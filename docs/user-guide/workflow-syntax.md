@@ -381,7 +381,6 @@ analyze:
     {{.inputs.code}}
   options:
     model: claude-sonnet-4-20250514
-    max_tokens: 2048
   timeout: 120
   on_success: review
   on_failure: error
@@ -404,7 +403,6 @@ refine_code:
     {{.inputs.code}}
   options:
     model: claude-sonnet-4-20250514
-    max_tokens: 4096
   conversation:
     max_turns: 10
     max_context_tokens: 100000
@@ -426,7 +424,7 @@ refine_code:
 | `initial_prompt` | string | No* | First user message (for conversation mode) |
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Conversation configuration (required if mode=conversation) |
-| `options` | map | No | Provider-specific options (model, temperature, max_tokens, etc.) |
+| `options` | map | No | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
 | `timeout` | int or string | No | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
 | `on_success` | string | No | Next state on success |
 | `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
@@ -528,7 +526,7 @@ analyze:
   on_success: next
 ```
 
-Required options: `base_url` (root API URL, `/chat/completions` appended automatically) and `model`. Optional: `api_key` (falls back to `OPENAI_API_KEY` env var), `temperature` (0-2), `max_tokens`, `top_p`, `system_prompt`.
+Required options: `base_url` (root API URL, `/chat/completions` appended automatically) and `model`. Optional: `api_key` (falls back to `OPENAI_API_KEY` env var), `temperature` (0-2), `max_completion_tokens` (preferred; `max_tokens` accepted as deprecated fallback), `top_p`, `system_prompt`.
 
 **See Also:** [Agent Steps Guide](agent-steps.md#openai-compatible-provider) for detailed examples and backend configurations.
 

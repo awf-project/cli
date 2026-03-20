@@ -47,16 +47,12 @@ analyze:
   prompt: "Code review: {{.inputs.file_content}}"
   options:
     model: claude-sonnet-4-20250514
-    max_tokens: 4096
-    temperature: 0.7
   timeout: 120
   on_success: next
 ```
 
 **Provider-Specific Options:**
-- `model`: Claude model identifier
-- `max_tokens`: Maximum response tokens
-- `temperature`: Creativity level (0-1)
+- `model`: Claude model identifier (alias like `sonnet` or full name like `claude-sonnet-4-20250514`)
 
 ### Codex (OpenAI)
 
@@ -67,12 +63,14 @@ generate:
   type: agent
   provider: codex
   prompt: "Generate a function to: {{.inputs.requirement}}"
-  options:
-    max_tokens: 2048
-    temperature: 0.8
   timeout: 60
   on_success: next
 ```
+
+**Provider-Specific Options:**
+- `model`: Codex model identifier
+- `language`: Target programming language
+- `quiet`: Suppress progress output (boolean)
 
 ### Gemini (Google)
 
@@ -126,7 +124,8 @@ analyze:
 **Optional Options:**
 - `api_key`: API key for authentication. Falls back to `OPENAI_API_KEY` environment variable if not set. Omit for local endpoints that don't require auth (e.g., Ollama).
 - `temperature`: Creativity level (0-2)
-- `max_tokens`: Maximum response tokens
+- `max_completion_tokens`: Maximum response tokens (preferred)
+- `max_tokens`: Maximum response tokens (deprecated, use `max_completion_tokens`)
 - `top_p`: Nucleus sampling threshold
 - `system_prompt`: System message prepended to conversation (used in `mode: conversation`)
 
