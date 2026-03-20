@@ -1,5 +1,5 @@
-# Feature: C062 — reject inject_context (not yet implemented)
-name: conversation-invalid-inject-context
+# Feature: F075 — inject_context field in conversation mode
+name: conversation-inject-context
 version: "1.0.0"
 
 inputs:
@@ -17,7 +17,7 @@ states:
     initial_prompt: "{{inputs.task}}"
     conversation:
       max_turns: 5
-      inject_context: "extra context for mid-conversation injection"
+      inject_context: "Additional context for the conversation"
     on_success: done
     on_failure: error
 

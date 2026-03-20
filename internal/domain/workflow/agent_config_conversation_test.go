@@ -550,3 +550,66 @@ func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 		})
 	}
 }
+
+// TestAgentConfig_InjectContextModeValidation validates that inject_context is rejected outside conversation mode
+func TestAgentConfig_InjectContextModeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  workflow.AgentConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "conversation mode with inject_context is valid",
+			config: workflow.AgentConfig{
+				Provider:      "claude",
+				Mode:          "conversation",
+				InitialPrompt: "Start",
+				Conversation: &workflow.ConversationConfig{
+					MaxTurns:      5,
+					InjectContext: "Additional context",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single mode with inject_context is rejected",
+			config: workflow.AgentConfig{
+				Provider: "claude",
+				Mode:     "single",
+				Prompt:   "Test",
+				Conversation: &workflow.ConversationConfig{
+					InjectContext: "Additional context",
+				},
+			},
+			wantErr: true,
+			errMsg:  "inject_context requires conversation mode",
+		},
+		{
+			name: "empty mode (defaults to single) with inject_context is rejected",
+			config: workflow.AgentConfig{
+				Provider: "claude",
+				Prompt:   "Test",
+				Conversation: &workflow.ConversationConfig{
+					InjectContext: "Additional context",
+				},
+			},
+			wantErr: true,
+			errMsg:  "inject_context requires conversation mode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate(nil)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

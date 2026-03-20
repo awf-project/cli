@@ -223,8 +223,7 @@ func TestConversationConfig_Validate(t *testing.T) {
 				MaxTurns:      5,
 				InjectContext: "Additional context here",
 			},
-			wantErr: true,
-			errMsg:  "inject_context is not yet implemented",
+			wantErr: false,
 		},
 		{
 			name: "zero max_turns (uses default)",

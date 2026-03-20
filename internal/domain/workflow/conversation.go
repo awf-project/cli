@@ -88,10 +88,6 @@ type ConversationConfig struct {
 // Validate checks if the conversation configuration is valid.
 // The validator parameter is used to check stop condition expression syntax.
 func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
-	if c.InjectContext != "" {
-		return errors.New("inject_context is not yet implemented")
-	}
-
 	// Validate MaxTurns (0 is allowed and means use default)
 	if c.MaxTurns < 0 {
 		return errors.New("max_turns must be non-negative")

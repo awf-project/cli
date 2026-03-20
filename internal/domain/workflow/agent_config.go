@@ -63,6 +63,11 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 		return errors.New("mode must be 'single' or 'conversation'")
 	}
 
+	// Reject inject_context outside conversation mode
+	if c.Mode != "conversation" && c.Conversation != nil && strings.TrimSpace(c.Conversation.InjectContext) != "" {
+		return errors.New("inject_context requires conversation mode")
+	}
+
 	// Normalize and validate output_format
 	c.OutputFormat = OutputFormat(strings.TrimSpace(strings.ToLower(string(c.OutputFormat))))
 	if !validOutputFormats[c.OutputFormat] {

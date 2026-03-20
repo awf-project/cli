@@ -74,7 +74,7 @@ states:
 | `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
 | `system_prompt` | string | No | — | System message for the entire conversation (preserved during truncation) |
 | `initial_prompt` | string | Yes | — | Initial user message to start the conversation |
-| `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context)) |
+| `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context-mid-conversation)) |
 | `options` | object | No | — | Provider-specific options (model, max_tokens, temperature, etc.) |
 | `timeout` | duration | No | `300s` | Timeout for each turn |
 | `on_success` | string | Yes | — | Next state on successful completion |
@@ -552,6 +552,49 @@ refine:
   on_success: done
 ```
 
+## Injecting Context Mid-Conversation
+
+The `inject_context` field enriches ongoing conversations with additional context after the first turn. This is useful for passing results from other steps or static reference material without cluttering `initial_prompt`.
+
+### How It Works
+
+- **Turn 1**: Only `initial_prompt` (or `prompt`) is sent — `inject_context` is excluded
+- **Turn 2+**: The interpolated `inject_context` content is appended to the user prompt, separated by two newlines
+- **Per-turn interpolation**: Template variables are re-evaluated each turn, so `{{.states.*}}` references reflect the latest available state
+
+### Example: Injecting Step Results
+
+```yaml
+states:
+  initial: run_tests
+
+  run_tests:
+    type: step
+    command: "make test"
+    on_success: review
+
+  review:
+    type: agent
+    provider: claude
+    mode: conversation
+    initial_prompt: "Review the codebase for quality issues"
+    conversation:
+      max_turns: 5
+      inject_context: |
+        Test results from the previous step:
+        {{.states.run_tests.output}}
+      stop_condition: "response contains 'APPROVED'"
+    on_success: done
+```
+
+In this example, the agent receives only the review prompt on turn 1. On turns 2 through 5, each user prompt also includes the interpolated test results.
+
+### Edge Cases
+
+- **Empty or whitespace-only**: Treated as no injection — nothing appended
+- **Missing state references**: Template resolves to empty string (no error)
+- **With `continue_from`**: Both work together — `continue_from` resumes the session, `inject_context` enriches subsequent turns
+
 ## Limitations
 
 ### Provider Compatibility
@@ -564,7 +607,6 @@ All providers support conversation mode with context continuity:
 ### Current Implementation
 
 - Only `sliding_window` strategy implemented (dropping oldest turns); `summarize` and `truncate_middle` are rejected at validation
-- `inject_context` field is parsed but not yet implemented; using it produces a validation error
 - Stop conditions limited to string/token/turn expressions
 - No branching conversations (single linear path)
 
@@ -572,7 +614,6 @@ All providers support conversation mode with context continuity:
 
 - `summarize` strategy (LLM-based compression of old turns)
 - `truncate_middle` strategy (keep first and last turns)
-- `inject_context` for adding context mid-conversation
 - Conversation branching (explore multiple paths)
 
 ## See Also
