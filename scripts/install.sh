@@ -44,21 +44,43 @@ detect_ext() {
 
 latest_version() {
   need curl
-  curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+
+  # Try stable release first (/releases/latest excludes pre-releases)
+  _lv_tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
     | grep '"tag_name"' \
-    | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+    | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+
+  # Fall back to most recent release (including pre-releases)
+  if [ -z "$_lv_tag" ]; then
+    _lv_tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=1" \
+      | grep '"tag_name"' \
+      | head -1 \
+      | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+  fi
+
+  [ -z "$_lv_tag" ] && err "could not determine latest version (no releases found)"
+
+  echo "$_lv_tag"
 }
 
 # --- Verify checksum --------------------------------------------------------
+
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    err "'sha256sum' or 'shasum' is required but not found"
+  fi
+}
 
 verify_checksum() {
   _vc_archive="$1"
   _vc_checksums="$2"
 
-  need sha256sum
-
   _vc_expected=$(grep "$(basename "$_vc_archive")" "$_vc_checksums" | awk '{print $1}')
-  _vc_actual=$(sha256sum "$_vc_archive" | awk '{print $1}')
+  _vc_actual=$(sha256 "$_vc_archive")
 
   if [ "$_vc_expected" != "$_vc_actual" ]; then
     err "checksum mismatch for $(basename "$_vc_archive"): expected $_vc_expected, got $_vc_actual"
