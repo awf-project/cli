@@ -26,11 +26,11 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Interactive Input Collection** - Automatically prompt for missing required inputs in terminal sessions
 - **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
+- **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
+- **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
-- **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
-- **Plugin System** - Extend AWF with custom operations via RPC-based plugins
 
 ## Installation
 
@@ -270,6 +270,6 @@ Companies seeking exemption from copyleft obligations can obtain a commercial li
 **Free commercial license for:**
 - [Project sponsors](https://github.com/sponsors/pocky)
 - Active contributors
-- Clients of [Vanoix](https://vanoix.com) (author's company)
+- Clients of [Vanoix](https://vanoix.com), [akawaka](https://akawaka.fr), [d11n Studio](https://d11n.studio) (author's company)
 
-**Contact:** alexandre@vanoix.com
+**Contact:** awf@alexandre.vanoix.com

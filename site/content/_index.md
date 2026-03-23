@@ -9,6 +9,12 @@ draft: false
 ## Install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/install.sh | sh
+```
+
+Or via Go:
+
+```bash
 go install github.com/awf-project/cli/cmd/awf@latest
 ```
 
