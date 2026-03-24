@@ -275,7 +275,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Setup operation providers gated by plugin enable/disable state
-	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger)
+	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)
 	if err != nil {
 		return fmt.Errorf("failed to build operation providers: %w", err)
 	}
@@ -945,7 +945,7 @@ func runSingleStep(
 	execSvc.SetAWFPaths(buildAWFPaths())
 
 	// Setup operation providers gated by plugin enable/disable state
-	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger)
+	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)
 	if err != nil {
 		return fmt.Errorf("failed to build operation providers: %w", err)
 	}
@@ -1197,7 +1197,9 @@ func buildAuditWriter(logger ports.Logger) (ports.AuditTrailWriter, func(), erro
 
 // buildBuiltinProviders constructs a CompositeOperationProvider from the three built-in providers,
 // gating each behind an IsPluginEnabled() check so disabled providers are excluded from execution.
-func buildBuiltinProviders(pluginSvc *application.PluginService, projectCfg *config.ProjectConfig, logger ports.Logger) (*pluginmgr.CompositeOperationProvider, error) {
+// If manager is non-nil (external plugins available), it is appended last so plugin operations
+// are dispatched after built-in providers.
+func buildBuiltinProviders(pluginSvc *application.PluginService, projectCfg *config.ProjectConfig, logger ports.Logger, manager ports.OperationProvider) (*pluginmgr.CompositeOperationProvider, error) {
 	// pluginSvc nil check is a defensive guard — both call-sites pass non-nil service,
 	// but we fall back to enabling all providers if called without a service.
 	var providers []ports.OperationProvider
@@ -1222,6 +1224,10 @@ func buildBuiltinProviders(pluginSvc *application.PluginService, projectCfg *con
 	if pluginSvc == nil || pluginSvc.IsPluginEnabled("http") {
 		httpClient := httpx.NewClient()
 		providers = append(providers, http.NewHTTPOperationProvider(httpClient, logger))
+	}
+
+	if manager != nil {
+		providers = append(providers, manager)
 	}
 
 	return pluginmgr.NewCompositeOperationProvider(providers...), nil

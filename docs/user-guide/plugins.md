@@ -431,6 +431,80 @@ http.request          http
 notify.send           notify
 ```
 
+## Writing External Plugins
+
+External plugins are Go binaries that call `sdk.Serve()` from `main()`. AWF discovers them via their `plugin.yaml` manifest and communicates over gRPC using HashiCorp go-plugin.
+
+### Minimal Plugin
+
+```go
+package main
+
+import (
+    "context"
+
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type MyPlugin struct {
+    sdk.BasePlugin
+}
+
+func (p *MyPlugin) Operations() []string {
+    return []string{"my_op"}
+}
+
+func (p *MyPlugin) HandleOperation(_ context.Context, name string, inputs map[string]any) (*sdk.OperationResult, error) {
+    text := sdk.GetStringDefault(inputs, "text", "")
+    return sdk.NewSuccessResult(text, nil), nil
+}
+
+func main() {
+    sdk.Serve(&MyPlugin{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "awf-plugin-myplugin",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+### SDK Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `sdk.BasePlugin` | Embed to satisfy `sdk.Plugin` interface with no-op defaults |
+| `sdk.Serve(p)` | Start the plugin process; blocks until host disconnects |
+| `sdk.NewSuccessResult(output, data)` | Build a success result |
+| `sdk.NewErrorResult(msg)` | Build an error result |
+| `sdk.GetStringDefault(inputs, key, default)` | Extract string input with fallback |
+| `sdk.GetIntDefault(inputs, key, default)` | Extract integer input with fallback |
+| `sdk.GetBoolDefault(inputs, key, default)` | Extract boolean input with fallback |
+
+### Echo Plugin Example
+
+The `examples/plugins/awf-plugin-echo/` directory contains a complete working plugin that echoes its input text. Use it as a starting point:
+
+```bash
+cd examples/plugins/awf-plugin-echo
+make install          # Build and install to ~/.local/share/awf/plugins/
+awf plugin enable awf-plugin-echo
+```
+
+Use it in a workflow:
+
+```yaml
+echo_step:
+  type: operation
+  operation: awf-plugin-echo.echo
+  inputs:
+    text: "Hello from plugin!"
+    prefix: ">>>"
+  on_success: done
+```
+
+---
+
 ## Troubleshooting
 
 ### Plugin Not Found

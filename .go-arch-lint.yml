@@ -108,6 +108,24 @@ vendors:
     in:
       - github.com/pkoukk/tiktoken-go
 
+  go-hclog:
+    in:
+      - github.com/hashicorp/go-hclog
+  go-plugin:
+    in:
+      - github.com/hashicorp/go-plugin
+      - github.com/hashicorp/go-plugin/**
+
+  go-grpc:
+    in:
+      - google.golang.org/grpc
+      - google.golang.org/grpc/**
+
+  go-protobuf:
+    in:
+      - google.golang.org/protobuf
+      - google.golang.org/protobuf/**
+
   go-term:
     in:
       - golang.org/x/term
@@ -157,6 +175,10 @@ components:
 
   pkg-validation:
     in: ../pkg/validation
+
+  # PROTOBUF
+  proto-plugin:
+    in: ../proto/plugin/v1
 
   # APPLICATION LAYER
   application:
@@ -257,6 +279,12 @@ deps:
       - domain-ports
     canUse:
       - go-stdlib
+
+  # PROTOBUF
+  proto-plugin:
+    canUse:
+      - go-stdlib
+      - go-protobuf
 
   # APPLICATION — domain only (NO infrastructure)
   application:
@@ -390,9 +418,14 @@ deps:
       - domain-operation
       - domain-ports
       - domain-errors
+      - proto-plugin
     canUse:
       - go-stdlib
       - yaml
+      - go-hclog
+      - go-plugin
+      - go-grpc
+      - go-protobuf
 
   infra-repository:
     mayDependOn:

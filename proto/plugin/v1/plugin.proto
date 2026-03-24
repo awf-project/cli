@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package plugin.v1;
+
+option go_package = "github.com/awf-project/cli/proto/plugin/v1;pluginv1";
+
+service PluginService {
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  rpc Init(InitRequest) returns (InitResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+service OperationService {
+  rpc ListOperations(ListOperationsRequest) returns (ListOperationsResponse);
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string name = 1;
+  string version = 2;
+  string description = 3;
+  repeated string capabilities = 4;
+}
+
+message InitRequest {
+  map<string, bytes> config = 1;
+}
+
+message InitResponse {}
+
+message ShutdownRequest {}
+
+message ShutdownResponse {}
+
+message ListOperationsRequest {}
+
+message ListOperationsResponse {
+  repeated OperationSchema operations = 1;
+}
+
+message GetOperationRequest {
+  string name = 1;
+}
+
+message GetOperationResponse {
+  OperationSchema operation = 1;
+}
+
+message ExecuteRequest {
+  string operation = 1;
+  map<string, bytes> inputs = 2;
+}
+
+message ExecuteResponse {
+  bool success = 1;
+  string output = 2;
+  map<string, bytes> data = 3;
+  string error = 4;
+}
+
+message OperationSchema {
+  string name = 1;
+  string description = 2;
+  repeated InputSchema inputs = 3;
+  repeated OutputSchema outputs = 4;
+}
+
+message InputSchema {
+  string name = 1;
+  string type = 2;
+  bool required = 3;
+  string default = 4;
+  string description = 5;
+  string validation = 6;
+}
+
+message OutputSchema {
+  string name = 1;
+  string type = 2;
+  string description = 3;
+}

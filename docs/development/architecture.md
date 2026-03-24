@@ -232,15 +232,130 @@ func (e *ShellExecutor) Execute(ctx context.Context, cmd Command) (Result, error
     // Execute via detected shell ($SHELL or /bin/sh fallback)
 }
 
-// RPC Plugin Manager
+// RPC Plugin Manager (gRPC transport via HashiCorp go-plugin, C067)
 type RPCPluginManager struct {
-    pluginsDir string
-    clients    map[string]*plugin.Client
+    pluginsDir  string
+    plugins     map[string]*PluginInfo
+    connections map[string]*pluginConnection  // gRPC connections protected by mu RWMutex
+    mu          sync.RWMutex
 }
 
-func (m *RPCPluginManager) Load(name string) error {
-    // Start plugin process via HashiCorp go-plugin
+func (m *RPCPluginManager) Init(ctx context.Context, name string) error {
+    // 1. Discover binary at ~/.local/share/awf/plugins/<name>/awf-plugin-<name>
+    // 2. Verify version compatibility from plugin.yaml
+    // 3. Start plugin process via HashiCorp go-plugin
+    // 4. Establish gRPC connection with 5s timeout (NFR-002)
+    // 5. Call PluginService.Init RPC
 }
+
+func (m *RPCPluginManager) Execute(ctx context.Context, op string, inputs map[string]any) (*OperationResult, error) {
+    // 1. Route operation to correct plugin based on op name
+    // 2. Call OperationService.Execute via gRPC
+    // 3. Convert proto OperationResult to domain type
+    // 4. Inject PluginName from connection context
+}
+
+func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
+    // 1. Call PluginService.Shutdown RPC
+    // 2. Kill process via go-plugin
+    // 3. Clean up connection from map
+}
+
+func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
+    // 1. For each running plugin, set 5s deadline
+    // 2. Call Shutdown on each
+    // 3. Kill all processes unconditionally
+    // 4. Accumulate errors with errors.Join()
+}
+```
+
+**Plugin System Architecture:**
+
+AWF uses HashiCorp go-plugin with gRPC for external plugin transport (ADR 015). Plugins are separate processes that communicate with the host via typed gRPC services:
+
+```go
+// PluginService: plugin lifecycle management
+service PluginService {
+    rpc GetInfo(GetInfoRequest) returns (PluginInfo) {}
+    rpc Init(InitRequest) returns (InitResponse) {}
+    rpc Shutdown(ShutdownRequest) returns (ShutdownResponse) {}
+}
+
+// OperationService: operation dispatch
+service OperationService {
+    rpc ListOperations(ListRequest) returns (ListResponse) {}
+    rpc GetOperation(GetRequest) returns (OperationSchema) {}
+    rpc Execute(ExecuteRequest) returns (ExecuteResponse) {}
+}
+```
+
+**Key Features:**
+- **Process Isolation** — Plugin crashes don't affect host workflow execution
+- **Version Compatibility** — Manifest version checked before Init; incompatible plugins fail with exit code 1
+- **Thread-Safe** — connections map protected by RWMutex; concurrent Execute calls validated with `-race`
+- **Timeout Protection** — Plugin startup enforced with 5s deadline via goroutine+select pattern
+- **Error Handling** — Binary not found (exit 4), version mismatch (exit 1), plugin crash (exit 3)
+
+**Plugin Discovery:**
+
+Plugins are discovered from `$XDG_DATA_HOME/awf/plugins/` (default: `~/.local/share/awf/plugins/`). Each plugin requires:
+- Directory named `awf-plugin-<name>`
+- Executable binary `awf-plugin-<name>` in that directory
+- Manifest `plugin.yaml` with version and capability declarations
+
+**SDK for Plugin Authors:**
+
+Plugin authors implement the SDK interface and call `sdk.Serve()` from main:
+
+```go
+type MyPlugin struct {
+    sdk.BasePlugin
+}
+
+func (p *MyPlugin) Operations() []string {
+    return []string{"my_op"}
+}
+
+func (p *MyPlugin) HandleOperation(ctx context.Context, name string, inputs map[string]any) (*sdk.OperationResult, error) {
+    return sdk.NewSuccessResult(output, data), nil
+}
+
+func main() {
+    sdk.Serve(&MyPlugin{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "awf-plugin-myplugin",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+The SDK handles:
+- go-plugin handshake and lifecycle
+- gRPC server setup and method delegation
+- JSON serialization for `map[string]any` fields
+- Input validation helpers (GetStringDefault, GetIntDefault, etc.)
+- Result construction (NewSuccessResult, NewErrorResult)
+
+**Built-in Providers:**
+
+AWF ships with 3 built-in operation providers:
+- `github.*` — Issue/PR operations (in-process, zero IPC overhead)
+- `http.request` — REST API calls (in-process)
+- `notify.send` — Workflow completion alerts (in-process)
+
+Built-in providers are synthesized as PluginInfo entries and appear in `awf plugin list` with type `builtin`. They can be disabled/enabled like external plugins.
+
+**Error Handling:**
+
+Plugin errors map to domain error codes:
+- Binary not found → SYSTEM.IO (exit 4)
+- Version incompatible → USER.VALIDATION (exit 1)
+- Plugin crash during Execute → EXECUTION.PLUGIN (exit 3)
+- Connection timeout → EXECUTION.TIMEOUT (exit 3)
+
+See [ADR-015](../ADR/015-grpc-go-plugin-transport-for-external-plugins.md) for design rationale and trade-offs.
+
 ```
 
 ### Interfaces Layer

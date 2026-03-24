@@ -20,7 +20,7 @@ func TestBuildBuiltinProviders_HappyPath(t *testing.T) {
 	projectCfg := &config.ProjectConfig{}
 	logger := &mockLogger{}
 
-	provider, err := buildBuiltinProviders(pluginSvc, projectCfg, logger)
+	provider, err := buildBuiltinProviders(pluginSvc, projectCfg, logger, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, provider)
@@ -34,7 +34,7 @@ func TestBuildBuiltinProviders_WithNilProjectConfig(t *testing.T) {
 	)
 	logger := &mockLogger{}
 
-	provider, err := buildBuiltinProviders(pluginSvc, nil, logger)
+	provider, err := buildBuiltinProviders(pluginSvc, nil, logger, nil)
 
 	// Should handle nil config gracefully (use empty config defaults)
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestBuildBuiltinProviders_WithProjectConfigInputs(t *testing.T) {
 	}
 	logger := &mockLogger{}
 
-	provider, err := buildBuiltinProviders(pluginSvc, projectCfg, logger)
+	provider, err := buildBuiltinProviders(pluginSvc, projectCfg, logger, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, provider)

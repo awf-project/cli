@@ -2,16 +2,28 @@ package pluginmgr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
+	"time"
+
+	"github.com/hashicorp/go-hclog"
+	goplugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/plugin/sdk"
+	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
 )
 
-// ErrRPCNotImplemented indicates a stub method that needs implementation.
-var ErrRPCNotImplemented = errors.New("rpc_manager: not implemented")
+// ErrNoPluginsConfigured indicates no plugin loader or directory is configured.
+var ErrNoPluginsConfigured = errors.New("rpc_manager: no plugins configured")
 
 // Default plugins directory relative to config.
 const DefaultPluginsDir = "plugins"
@@ -56,20 +68,117 @@ func WrapRPCManagerError(op, pluginName string, cause error) *RPCManagerError {
 	}
 }
 
+// pluginConnection holds an active go-plugin connection to a running plugin process.
+type pluginConnection struct {
+	client        *goplugin.Client
+	plugin        pluginv1.PluginServiceClient
+	operation     pluginv1.OperationServiceClient
+	processCancel context.CancelFunc // cancels the long-lived process context on Shutdown
+}
+
+// clientPlugin implements goplugin.GRPCPlugin for the host side.
+// GRPCClient() is called by go-plugin when the host calls Dispense(); it creates the gRPC stubs.
+// GRPCServer() is never called on the host (only on the plugin binary side).
+type clientPlugin struct {
+	goplugin.NetRPCUnsupportedPlugin
+}
+
+// grpcClientBundle holds the gRPC service clients dispensed on the host side.
+type grpcClientBundle struct {
+	plugin    pluginv1.PluginServiceClient
+	operation pluginv1.OperationServiceClient
+}
+
+// GRPCClient creates gRPC service clients from the connection established by go-plugin.
+// Called by go-plugin on the host side when Dispense("awf-plugin") is invoked.
+func (p *clientPlugin) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, conn *grpc.ClientConn) (interface{}, error) {
+	return &grpcClientBundle{
+		plugin:    pluginv1.NewPluginServiceClient(conn),
+		operation: pluginv1.NewOperationServiceClient(conn),
+	}, nil
+}
+
+// GRPCServer is never called on the host side; provided for interface completeness.
+func (p *clientPlugin) GRPCServer(_ *goplugin.GRPCBroker, _ *grpc.Server) error {
+	return fmt.Errorf("GRPCServer called on host side — this is a bug")
+}
+
+var (
+	_ goplugin.Plugin     = (*clientPlugin)(nil)
+	_ goplugin.GRPCPlugin = (*clientPlugin)(nil)
+)
+
 // RPCPluginManager implements PluginManager using HashiCorp go-plugin for RPC.
 // It manages plugin lifecycle: discovery, loading, initialization, and shutdown.
 type RPCPluginManager struct {
-	mu         sync.RWMutex
-	plugins    map[string]*pluginmodel.PluginInfo // plugin name -> info
-	loader     *FileSystemLoader                  // for plugin discovery
-	pluginsDir string                             // directory to discover plugins from
+	mu          sync.RWMutex
+	plugins     map[string]*pluginmodel.PluginInfo // plugin name -> info
+	connections map[string]*pluginConnection       // active connections, protected by mu (NFR-004)
+	loader      *FileSystemLoader                  // for plugin discovery
+	pluginsDir  string                             // directory to discover plugins from
+	hostVersion string                             // current AWF version for plugin compatibility checks
 }
 
 // NewRPCPluginManager creates a new RPCPluginManager.
 func NewRPCPluginManager(loader *FileSystemLoader) *RPCPluginManager {
 	return &RPCPluginManager{
-		plugins: make(map[string]*pluginmodel.PluginInfo),
-		loader:  loader,
+		plugins:     make(map[string]*pluginmodel.PluginInfo),
+		connections: make(map[string]*pluginConnection),
+		loader:      loader,
+		hostVersion: "0.5.0",
+	}
+}
+
+// connectWithTimeout establishes a gRPC connection to a plugin process with a 5s hard timeout (NFR-002).
+// go-plugin's client.Client() is blocking and not context-aware; this wrapper enforces the deadline.
+// Uses goroutine+buffered channel+select pattern for timeout enforcement (consistent with B008).
+// ctx cancellation kills the client immediately (used when Init ctx times out).
+func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplugin.Client) (*pluginConnection, error) {
+	if client == nil {
+		return nil, nil
+	}
+
+	// Buffered channel for result (capacity 1 so goroutine can send without blocking)
+	resultChan := make(chan interface{}, 1)
+
+	go func() {
+		// client.Client() returns the ClientProtocol; Dispense("awf-plugin") then calls GRPCClient()
+		// and returns the *grpcClientBundle with the gRPC service clients.
+		rpc, err := client.Client()
+		if err != nil {
+			resultChan <- err
+			return
+		}
+		dispensed, err := rpc.Dispense("awf-plugin")
+		if err != nil {
+			resultChan <- err
+			return
+		}
+		resultChan <- dispensed
+	}()
+
+	select {
+	case result := <-resultChan:
+		if err, ok := result.(error); ok {
+			return nil, err
+		}
+
+		// result is *grpcClientBundle returned by clientPlugin.GRPCClient().
+		conn := &pluginConnection{
+			client: client,
+		}
+		if bundle, ok := result.(*grpcClientBundle); ok {
+			conn.plugin = bundle.plugin
+			conn.operation = bundle.operation
+		}
+
+		return conn, nil
+	case <-ctx.Done():
+		client.Kill()
+		return nil, fmt.Errorf("plugin connection canceled: %w", ctx.Err())
+	case <-time.After(5 * time.Second):
+		client.Kill()
+		return nil, fmt.Errorf("plugin connection timeout: exceeded 5s deadline")
 	}
 }
 
@@ -81,45 +190,45 @@ func (m *RPCPluginManager) SetPluginsDir(dir string) {
 }
 
 // Discover finds plugins in the plugins directory.
-// Returns ErrRPCNotImplemented if no loader is configured.
+// Returns ErrNoPluginsConfigured if no loader or plugins directory is configured.
 func (m *RPCPluginManager) Discover(ctx context.Context) ([]*pluginmodel.PluginInfo, error) {
-	// Check context first
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("discover: %w", err)
 	}
 
-	// Check if loader is configured
 	if m.loader == nil {
-		return nil, ErrRPCNotImplemented
+		return nil, ErrNoPluginsConfigured
 	}
 
-	// Get plugins directory
 	m.mu.RLock()
 	pluginsDir := m.pluginsDir
 	m.mu.RUnlock()
 
 	if pluginsDir == "" {
-		// No plugins directory configured - return not implemented to allow test skipping
-		return nil, ErrRPCNotImplemented
+		return nil, ErrNoPluginsConfigured
 	}
 
-	// Use loader to discover plugins
 	discovered, err := m.loader.DiscoverPlugins(ctx, pluginsDir)
 	if err != nil {
 		return nil, WrapRPCManagerError("discover", "", err)
 	}
 
-	// Store discovered plugins in our map
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	valid := make([]*pluginmodel.PluginInfo, 0, len(discovered))
 	for _, info := range discovered {
-		if info.Manifest != nil && info.Manifest.Name != "" {
-			m.plugins[info.Manifest.Name] = info
+		if info.Manifest == nil || info.Manifest.Name == "" {
+			continue
 		}
+		if err := m.loader.ValidatePlugin(info); err != nil {
+			continue
+		}
+		m.plugins[info.Manifest.Name] = info
+		valid = append(valid, info)
 	}
 
-	return discovered, nil
+	return valid, nil
 }
 
 // Load loads a plugin by name.
@@ -137,7 +246,7 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 
 	// Check if loader is configured
 	if m.loader == nil {
-		return ErrRPCNotImplemented
+		return ErrNoPluginsConfigured
 	}
 
 	// Check if already loaded
@@ -159,8 +268,8 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 
 	// Need to load from filesystem
 	if pluginsDir == "" {
-		// Not fully configured - return not implemented to allow test skipping
-		return ErrRPCNotImplemented
+		// Not fully configured
+		return ErrNoPluginsConfigured
 	}
 
 	// Try to load the plugin from the plugins directory
@@ -185,66 +294,241 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 
 // Init initializes a loaded plugin with configuration.
 func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[string]any) error {
-	// Check context first
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
 
-	// Validate name
 	if name == "" {
 		return NewRPCManagerError("init", "", "plugin name is required")
 	}
 
-	// Check if loader is configured (required for full functionality)
 	if m.loader == nil {
-		return ErrRPCNotImplemented
+		return ErrNoPluginsConfigured
 	}
 
-	// Get the plugin
+	binaryPath, info, err := m.resolvePluginBinary(name)
+	if err != nil {
+		return err
+	}
+
+	if binaryPath == "" {
+		return nil // Already running
+	}
+
+	if compatErr := m.checkVersionCompatibility(name, info); compatErr != nil {
+		return compatErr
+	}
+
+	conn, _, err := m.startPluginProcess(ctx, name, binaryPath, config)
+	if err != nil {
+		return err
+	}
+
+	// Store connection and update status
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	info, found := m.plugins[name]
-	if !found {
-		return NewRPCManagerError("init", name, "plugin not loaded")
+	m.connections[name] = conn
+	if pluginInfo, found := m.plugins[name]; found {
+		pluginInfo.Status = pluginmodel.StatusRunning
+		pluginInfo.Operations = m.queryOperationNames(ctx, name, conn)
 	}
-
-	// Check if already running
-	if info.Status == pluginmodel.StatusRunning {
-		return nil // Already initialized
-	}
-
-	// Check if in valid state for initialization
-	if info.Status != pluginmodel.StatusLoaded && info.Status != pluginmodel.StatusDiscovered {
-		return NewRPCManagerError("init", name, fmt.Sprintf("cannot initialize plugin in state %q", info.Status))
-	}
-
-	// For now, since we don't have actual RPC plugin binaries,
-	// we just transition the state to Running.
-	// In a full implementation, this would:
-	// 1. Start the plugin process
-	// 2. Establish RPC connection
-	// 3. Call pluginmodel.Init(config)
-	info.Status = pluginmodel.StatusRunning
 
 	return nil
 }
 
+// resolvePluginBinary validates plugin state and resolves the binary path.
+func (m *RPCPluginManager) resolvePluginBinary(name string) (string, *pluginmodel.PluginInfo, error) {
+	m.mu.Lock()
+	info, found := m.plugins[name]
+	if !found {
+		m.mu.Unlock()
+		return "", nil, NewRPCManagerError("init", name, "plugin not loaded")
+	}
+
+	if info.Status == pluginmodel.StatusRunning {
+		m.mu.Unlock()
+		return "", nil, nil // Already initialized — caller checks for empty path
+	}
+
+	if info.Status != pluginmodel.StatusLoaded && info.Status != pluginmodel.StatusDiscovered {
+		m.mu.Unlock()
+		return "", nil, NewRPCManagerError("init", name, fmt.Sprintf("cannot initialize plugin in state %q", info.Status))
+	}
+
+	pluginPath := info.Path
+	m.mu.Unlock()
+
+	if pluginPath == "" {
+		return "", nil, NewRPCManagerError("init", name, "plugin path not set")
+	}
+
+	// Convention: binary is awf-plugin-<dirName> inside the plugin directory.
+	dirName := filepath.Base(pluginPath)
+	binName := "awf-plugin-" + dirName
+	if strings.HasPrefix(dirName, "awf-plugin-") {
+		binName = dirName
+	}
+	binaryPath := filepath.Join(pluginPath, binName)
+
+	binaryInfo, err := os.Stat(binaryPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil, WrapRPCManagerError("init", name, fmt.Errorf("plugin binary not found at %s", binaryPath))
+		}
+		return "", nil, WrapRPCManagerError("init", name, err)
+	}
+
+	if binaryInfo.IsDir() {
+		return "", nil, NewRPCManagerError("init", name, fmt.Sprintf("plugin binary path is a directory, not executable: %s", binaryPath))
+	}
+
+	return binaryPath, info, nil
+}
+
+// checkVersionCompatibility validates manifest presence and AWF version constraints.
+func (m *RPCPluginManager) checkVersionCompatibility(name string, info *pluginmodel.PluginInfo) error {
+	m.mu.RLock()
+	manifest := info.Manifest
+	m.mu.RUnlock()
+
+	if manifest == nil {
+		return NewRPCManagerError("init", name, "plugin manifest is nil")
+	}
+
+	if manifest.Version == "" {
+		return NewRPCManagerError("init", name, "plugin version is empty")
+	}
+
+	if manifest.AWFVersion == "" {
+		return nil
+	}
+
+	compatible, err := IsCompatible(manifest.AWFVersion, m.hostVersion)
+	if err != nil {
+		return WrapRPCManagerError("init", name, fmt.Errorf("version compatibility check failed: %w", err))
+	}
+	if !compatible {
+		return NewRPCManagerError("init", name, fmt.Sprintf("plugin requires AWF version %s (host is %s)", manifest.AWFVersion, m.hostVersion))
+	}
+
+	return nil
+}
+
+// startPluginProcess creates a go-plugin client, establishes gRPC connection,
+// verifies the plugin via GetInfo, and calls Init RPC.
+// Returns the connection and processCancel (caller must store or invoke on error).
+func (m *RPCPluginManager) startPluginProcess(ctx context.Context, name, binaryPath string, config map[string]any) (*pluginConnection, context.CancelFunc, error) {
+	processCtx, processCancel := context.WithCancel(context.Background())
+
+	client := goplugin.NewClient(&goplugin.ClientConfig{
+		HandshakeConfig: sdk.Handshake,
+		Plugins: goplugin.PluginSet{
+			"awf-plugin": &clientPlugin{},
+		},
+		Cmd:              exec.CommandContext(processCtx, binaryPath), //nolint:gosec // binaryPath is validated by resolvePluginBinary
+		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
+		Logger:           hclog.NewNullLogger(),
+	})
+
+	conn, err := m.connectWithTimeout(ctx, client)
+	if err != nil {
+		processCancel()
+		return nil, nil, WrapRPCManagerError("init", name, fmt.Errorf("failed to establish gRPC connection: %w", err))
+	}
+
+	if conn == nil {
+		processCancel()
+		client.Kill()
+		return nil, nil, NewRPCManagerError("init", name, "connection is nil after connectWithTimeout")
+	}
+
+	infoResp, err := conn.plugin.GetInfo(ctx, &pluginv1.GetInfoRequest{})
+	if err != nil {
+		processCancel()
+		client.Kill()
+		return nil, nil, WrapRPCManagerError("init", name, fmt.Errorf("GetInfo RPC failed: %w", err))
+	}
+
+	if infoResp == nil {
+		processCancel()
+		client.Kill()
+		return nil, nil, NewRPCManagerError("init", name, "GetInfo RPC returned nil response")
+	}
+
+	if err := m.sendInitRPC(ctx, name, conn, client, processCancel, config); err != nil {
+		return nil, nil, err
+	}
+
+	conn.processCancel = processCancel
+
+	return conn, processCancel, nil
+}
+
+// sendInitRPC encodes config and calls the Init RPC. Cleans up on failure.
+func (m *RPCPluginManager) sendInitRPC(ctx context.Context, name string, conn *pluginConnection, client *goplugin.Client, processCancel context.CancelFunc, config map[string]any) error {
+	initRequest := &pluginv1.InitRequest{
+		Config: make(map[string][]byte),
+	}
+
+	for key, val := range config {
+		encoded, encErr := json.Marshal(val)
+		if encErr != nil {
+			processCancel()
+			client.Kill()
+			return WrapRPCManagerError("init", name, fmt.Errorf("failed to encode config: %w", encErr))
+		}
+		initRequest.Config[key] = encoded
+	}
+
+	_, err := conn.plugin.Init(ctx, initRequest)
+	if err != nil {
+		processCancel()
+		client.Kill()
+		return WrapRPCManagerError("init", name, fmt.Errorf("Init RPC failed: %w", err))
+	}
+
+	return nil
+}
+
+// queryOperationNames lists operation names from a connected plugin via gRPC.
+// Returns nil on failure (non-fatal — operations are optional metadata).
+func (m *RPCPluginManager) queryOperationNames(ctx context.Context, pluginID string, conn *pluginConnection) []string {
+	if conn.operation == nil {
+		return nil
+	}
+
+	opCtx, opCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer opCancel()
+
+	resp, err := conn.operation.ListOperations(opCtx, &pluginv1.ListOperationsRequest{})
+	if err != nil || resp == nil {
+		return nil
+	}
+
+	names := make([]string, 0, len(resp.Operations))
+	for _, schema := range resp.Operations {
+		if schema != nil && schema.Name != "" {
+			names = append(names, pluginID+"."+schema.Name)
+		}
+	}
+
+	return names
+}
+
 // Shutdown stops a running plugin gracefully.
+// Full implementation: gRPC Shutdown call, client.Kill(), connection cleanup from m.connections.
 func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
-	// Check context first
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 
-	// Validate name
 	if name == "" {
 		return NewRPCManagerError("shutdown", "", "plugin name is required")
 	}
 
-	// Check if loader is configured (required for full functionality)
 	if m.loader == nil {
-		return ErrRPCNotImplemented
+		return ErrNoPluginsConfigured
 	}
 
 	m.mu.Lock()
@@ -252,49 +536,63 @@ func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
 
 	info, found := m.plugins[name]
 	if !found {
-		// Plugin not found - not an error, just nothing to shutdown
 		return nil
 	}
 
-	// Check if already stopped
 	if info.Status == pluginmodel.StatusStopped || info.Status == pluginmodel.StatusDisabled {
 		return nil
 	}
 
-	// For now, since we don't have actual RPC plugin processes,
-	// we just transition the state to Stopped.
-	// In a full implementation, this would:
-	// 1. Call pluginmodel.Shutdown()
-	// 2. Close RPC connection
-	// 3. Kill the plugin process
+	conn := m.connections[name]
+	if conn != nil {
+		if conn.plugin != nil {
+			conn.plugin.Shutdown(ctx, &pluginv1.ShutdownRequest{}) //nolint:gosec,errcheck // Best effort shutdown, don't fail if RPC fails
+		}
+		if conn.client != nil {
+			conn.client.Kill()
+		}
+		if conn.processCancel != nil {
+			conn.processCancel()
+		}
+		delete(m.connections, name)
+	}
+
 	info.Status = pluginmodel.StatusStopped
 
 	return nil
 }
 
-// ShutdownAll stops all running plugins gracefully.
+// ShutdownAll stops all running plugins with a 5s per-plugin deadline.
+// Errors are accumulated via errors.Join() so all plugins are attempted even on partial failure.
 func (m *RPCPluginManager) ShutdownAll(ctx context.Context) error {
-	// Check context first
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("shutdown all: %w", err)
 	}
 
-	// Check if loader is configured (required for full functionality)
 	if m.loader == nil {
-		return ErrRPCNotImplemented
+		return ErrNoPluginsConfigured
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for _, info := range m.plugins {
+	names := make([]string, 0, len(m.plugins))
+	for name, info := range m.plugins {
 		if info.Status == pluginmodel.StatusRunning || info.Status == pluginmodel.StatusInitialized {
-			// For now, just transition the state
-			info.Status = pluginmodel.StatusStopped
+			names = append(names, name)
+		}
+	}
+	m.mu.Unlock()
+
+	var errs []error
+	for _, name := range names {
+		pluginCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := m.Shutdown(pluginCtx, name)
+		cancel()
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // Get returns plugin info by name.
@@ -317,5 +615,153 @@ func (m *RPCPluginManager) List() []*pluginmodel.PluginInfo {
 	return result
 }
 
-// compile-time check that RPCPluginManager implements PluginManager
-var _ ports.PluginManager = (*RPCPluginManager)(nil)
+// connectionsSnapshot returns a shallow copy of m.connections under RLock.
+// Callers must not hold the lock when making gRPC calls (which can block for seconds).
+func (m *RPCPluginManager) connectionsSnapshot() map[string]*pluginConnection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	conns := make(map[string]*pluginConnection, len(m.connections))
+	for k, v := range m.connections {
+		conns[k] = v
+	}
+	return conns
+}
+
+// GetOperation returns an operation schema by name, searching all connected plugins.
+// Name format is "pluginName.operationName" (consistent with built-in providers).
+// Uses an internal 5s timeout per call because the port interface does not accept ctx.
+func (m *RPCPluginManager) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
+	pluginID, opName := splitOperationName(name)
+	conns := m.connectionsSnapshot()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// If prefixed, route directly to the target plugin.
+	if pluginID != "" {
+		conn, found := conns[pluginID]
+		if !found || conn.operation == nil {
+			return nil, false
+		}
+		resp, err := conn.operation.GetOperation(ctx, &pluginv1.GetOperationRequest{Name: opName})
+		if err != nil || resp == nil || resp.Operation == nil {
+			return nil, false
+		}
+		return convertOperationSchema(pluginID, resp.Operation), true
+	}
+
+	// Unprefixed: search all plugins (fallback).
+	for pid, conn := range conns {
+		if conn.operation == nil {
+			continue
+		}
+		resp, err := conn.operation.GetOperation(ctx, &pluginv1.GetOperationRequest{Name: name})
+		if err != nil || resp == nil || resp.Operation == nil {
+			continue
+		}
+		return convertOperationSchema(pid, resp.Operation), true
+	}
+	return nil, false
+}
+
+// ListOperations returns all operation schemas from all connected plugins.
+// Calls gRPC ListOperations on each connection; skips plugins that fail.
+// Uses an internal 5s timeout per call because the port interface does not accept ctx.
+func (m *RPCPluginManager) ListOperations() []*pluginmodel.OperationSchema {
+	conns := m.connectionsSnapshot()
+
+	result := make([]*pluginmodel.OperationSchema, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for pluginID, conn := range conns {
+		if conn.operation == nil {
+			continue
+		}
+		resp, err := conn.operation.ListOperations(ctx, &pluginv1.ListOperationsRequest{})
+		if err != nil || resp == nil {
+			continue
+		}
+		for _, schema := range resp.Operations {
+			if schema != nil {
+				result = append(result, convertOperationSchema(pluginID, schema))
+			}
+		}
+	}
+	return result
+}
+
+// Execute delegates an operation call to the correct connected plugin via gRPC.
+// Name format is "pluginName.operationName" (consistent with built-in providers).
+// If unprefixed, iterates all connections as fallback.
+func (m *RPCPluginManager) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("execute: %w", err)
+	}
+
+	conns := m.connectionsSnapshot()
+
+	if len(conns) == 0 {
+		return nil, NewRPCManagerError("execute", name, "operation not found: no plugins connected")
+	}
+
+	pluginID, opName := splitOperationName(name)
+
+	encInputs := make(map[string][]byte, len(inputs))
+	for key, val := range inputs {
+		data, err := json.Marshal(val)
+		if err != nil {
+			return nil, WrapRPCManagerError("execute", name, fmt.Errorf("failed to encode input %q: %w", key, err))
+		}
+		encInputs[key] = data
+	}
+
+	// If prefixed, route directly to the target plugin.
+	if pluginID != "" {
+		conn, found := conns[pluginID]
+		if !found || conn.operation == nil {
+			return nil, NewRPCManagerError("execute", name, "plugin not connected")
+		}
+		req := &pluginv1.ExecuteRequest{Operation: opName, Inputs: encInputs}
+		resp, err := conn.operation.Execute(ctx, req)
+		if err != nil {
+			return nil, WrapRPCManagerError("execute", name, err)
+		}
+		return convertExecuteResponse(pluginID, resp), nil
+	}
+
+	// Unprefixed: search all plugins (fallback).
+	req := &pluginv1.ExecuteRequest{Operation: name, Inputs: encInputs}
+	var lastErr error
+	for pid, conn := range conns {
+		if conn.operation == nil {
+			continue
+		}
+		resp, err := conn.operation.Execute(ctx, req)
+		if err != nil {
+			lastErr = WrapRPCManagerError("execute", name, err)
+			continue
+		}
+		return convertExecuteResponse(pid, resp), nil
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, NewRPCManagerError("execute", name, "operation not found")
+}
+
+// splitOperationName splits "pluginName.opName" into (pluginName, opName).
+// Returns ("", name) if no prefix is found.
+func splitOperationName(name string) (pluginName, opName string) {
+	idx := strings.IndexByte(name, '.')
+	if idx < 0 {
+		return "", name
+	}
+	return name[:idx], name[idx+1:]
+}
+
+// compile-time checks that RPCPluginManager implements PluginManager and OperationProvider
+var (
+	_ ports.PluginManager     = (*RPCPluginManager)(nil)
+	_ ports.OperationProvider = (*RPCPluginManager)(nil)
+)

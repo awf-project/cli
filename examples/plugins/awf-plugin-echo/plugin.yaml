@@ -1,0 +1,8 @@
+name: awf-plugin-echo
+version: 1.0.0
+description: Example echo plugin — returns input text unchanged
+awf_version: ">=0.4.0"
+author: AWF Project
+license: MIT
+capabilities:
+  - operations

@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Domain layer packages must restrict dependencies via go-arch-lint rules; domain/operation imports only domain/plugin, domain/ports, and stdlib
-- Implement domain ports directly on domain types (e.g., OperationRegistry implements ports.OperationProvider) to enable zero-change integration with application services
 - Use pkg pattern for cross-layer HTTP utilities (pkg/httpx) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
 - Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
 - Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
@@ -239,10 +237,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
 - Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
 - Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
+- Plugin binaries must be discoverable at <plugins_dir>/<plugin_name>/awf-plugin-<plugin_name>; host validates binary existence and version compatibility via gRPC handshake after process start
+- Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
 
 ## Common Pitfalls
 
-- Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent accidental memory issues and provide fast failure feedback for misconfigured paths
 - Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
 - Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
 - Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; ensures consistent behavior regardless of CLI invocation location
@@ -279,14 +278,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Avoid variable shadowing; never redeclare outer-scope variables with := in inner blocks
 - Use index-based loops or pointer ranges when iterating large structs (>128 bytes); avoid per-iteration copying
 - Limit function return values to 5; return a struct for 6+ outputs to maintain readability
-
 - Always defer cancel() immediately after context.WithCancel() to prevent goroutine leaks
-
 - Always validate shell paths with filepath.Clean before file operations to prevent path traversal violations
-
 - Always include explanatory comments with //nolint directives; document why the warning is a false positive (e.g., 'controlled test input', 'architecturally safe conversion')
-
 - File descriptor conversions (uintptr→int) are architecturally safe on all supported platforms; add //nolint:gosec G115 with explanation rather than runtime guards
+- Use atomic file renames (os.Rename after close) for executable test fixtures; prevents 'text file busy' errors when replacing binaries that running tests currently execute from
 
 ## Test Conventions
 
@@ -305,8 +301,9 @@ func TestWorkflowValidation(t *testing.T) {
 - Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
 - Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
 - Update all YAML fixtures when removing option support from code; synchronize fixtures with validation rule changes to prevent accidental bypass of removed validations
-
 - Add //nolint:gosec to test code with controlled inputs when GOSEC flags false positives
+- When replacing stub implementations with real methods, delete tests validating stub-only behavior (e.g., ReturnsNotImplemented assertions); stub tests become false positives after implementation replaces the stub
+- For plugin lifecycle testing, use self-hosting pattern: detect AWF_PLUGIN env var in TestMain to serve subprocess plugin; eliminates need for separate plugin test binaries
 
 ## Review Standards
 

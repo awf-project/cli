@@ -802,6 +802,8 @@ func TestInitPluginSystemReadOnly_UsesBuildPluginPaths(t *testing.T) {
 	manifestContent := `name: env-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -848,6 +850,8 @@ func TestInitPluginSystemReadOnly_MultiplePlugins(t *testing.T) {
 		manifestContent := "name: " + name + `
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 		require.NoError(t, os.WriteFile(
 			filepath.Join(pluginDir, "plugin.yaml"),
