@@ -35,15 +35,21 @@ Examples:
 }
 
 func newPluginListCommand(cfg *Config) *cobra.Command {
-	return &cobra.Command{
+	var showOperations bool
+
+	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List all available plugins",
 		Long:    "Display all discovered plugins with their status and capabilities.",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPluginList(cmd, cfg)
+			return runPluginList(cmd, cfg, showOperations)
 		},
 	}
+
+	cmd.Flags().BoolVar(&showOperations, "operations", false, "List operations provided by each plugin")
+
+	return cmd
 }
 
 func newPluginEnableCommand(cfg *Config) *cobra.Command {
@@ -78,7 +84,7 @@ Examples:
 	}
 }
 
-func runPluginList(cmd *cobra.Command, cfg *Config) error {
+func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
@@ -98,7 +104,7 @@ func runPluginList(cmd *cobra.Command, cfg *Config) error {
 	// Build plugin info list
 	infos := make([]ui.PluginInfo, 0, len(plugins)+len(disabledNames))
 
-	// Add discovered plugins
+	// Add all plugins (builtins + discovered)
 	for _, p := range plugins {
 		if p.Manifest == nil {
 			continue
@@ -106,18 +112,20 @@ func runPluginList(cmd *cobra.Command, cfg *Config) error {
 		enabled := result.Service.IsPluginEnabled(p.Manifest.Name)
 		infos = append(infos, ui.PluginInfo{
 			Name:         p.Manifest.Name,
+			Type:         string(p.Type),
 			Version:      p.Manifest.Version,
 			Description:  p.Manifest.Description,
 			Status:       string(p.Status),
 			Enabled:      enabled,
 			Capabilities: p.Manifest.Capabilities,
+			Operations:   p.Operations,
 		})
 	}
 
 	// Add disabled plugins that weren't discovered (might be removed from disk)
 	existingNames := make(map[string]struct{})
-	for _, info := range infos {
-		existingNames[info.Name] = struct{}{}
+	for i := range infos {
+		existingNames[infos[i].Name] = struct{}{}
 	}
 	for _, name := range disabledNames {
 		if _, exists := existingNames[name]; !exists {
@@ -127,6 +135,19 @@ func runPluginList(cmd *cobra.Command, cfg *Config) error {
 				Enabled: false,
 			})
 		}
+	}
+
+	if showOperations {
+		ops := make([]ui.OperationEntry, 0)
+		for i := range infos {
+			for _, opName := range infos[i].Operations {
+				ops = append(ops, ui.OperationEntry{
+					Name:   opName,
+					Plugin: infos[i].Name,
+				})
+			}
+		}
+		return writer.WriteOperations(ops)
 	}
 
 	return writer.WritePlugins(infos)
@@ -242,6 +263,7 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 	// If no plugins directory exists, return a stub service
 	if pluginsDir == "" {
 		service := application.NewPluginService(nil, stateStore, nil)
+		registerBuiltins(service, Version)
 		return &PluginSystemResult{
 			Service: service,
 			Cleanup: func() {},
@@ -260,6 +282,7 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 
 	// Create the plugin service
 	service := application.NewPluginService(manager, stateStore, nil)
+	registerBuiltins(service, Version)
 
 	return &PluginSystemResult{
 		Service: service,

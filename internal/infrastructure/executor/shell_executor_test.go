@@ -134,6 +134,7 @@ func TestShellExecutor_Execute_ContextCancellation(t *testing.T) {
 	cmd := ports.Command{Program: "sleep 10"}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// cancel after 500ms
 	go func() {

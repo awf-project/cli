@@ -605,7 +605,7 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				name := "tpl-" + string(rune('A'+i))
+				name := "tpl-" + string(rune(int32('A')+int32(i))) //nolint:gosec // loop bounded to alphabet range
 				repo.AddTemplate(name, &workflow.Template{Name: name})
 			}
 		}()
@@ -616,7 +616,7 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				name := "tpl-" + string(rune('A'+i))
+				name := "tpl-" + string(rune(int32('A')+int32(i))) //nolint:gosec // loop bounded to alphabet range
 				_, _ = repo.GetTemplate(ctx, name)
 			}
 		}()
@@ -628,7 +628,7 @@ func TestMockTemplateRepository_ThreadSafety(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				_, _ = repo.ListTemplates(ctx)
-				name := "tpl-" + string(rune('A'+i))
+				name := "tpl-" + string(rune(int32('A')+int32(i))) //nolint:gosec // loop bounded to alphabet range
 				_ = repo.Exists(ctx, name)
 			}
 		}()

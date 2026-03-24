@@ -101,11 +101,18 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 		}
 	}
 
+	// Collect disabled plugin warnings (non-blocking, skipped on quiet format)
+	var pluginWarnings []string
+	if validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
+		pluginWarnings = collectDisabledPluginWarnings(ctx, cfg, wf)
+	}
+
 	// JSON/quiet format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 		result := ui.ValidationResult{
 			Valid:    validationErr == nil,
 			Workflow: workflowName,
+			Warnings: pluginWarnings,
 		}
 		if validationErr != nil {
 			result.Errors = []string{validationErr.Error()}
@@ -124,6 +131,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 		result := ui.ValidationResultTable{
 			Valid:    validationErr == nil,
 			Workflow: workflowName,
+			Warnings: pluginWarnings,
 		}
 		if validationErr != nil {
 			result.Errors = []string{validationErr.Error()}
@@ -180,6 +188,15 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	// Show success
 	formatter.Success(fmt.Sprintf("Workflow '%s' is valid", workflowName))
 
+	// Print disabled plugin warnings
+	for _, warning := range pluginWarnings {
+		fmt.Fprintf(cmd.ErrOrStderr(), "\n  warning: %s", warning)
+		fmt.Fprintf(cmd.ErrOrStderr(), "\n  Hint: Run 'awf plugin enable <name>' to re-enable")
+	}
+	if len(pluginWarnings) > 0 {
+		fmt.Fprintln(cmd.ErrOrStderr())
+	}
+
 	// Verbose output
 	if cfg.Verbose {
 		formatter.Println()
@@ -207,4 +224,34 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 	}
 
 	return nil
+}
+
+// collectDisabledPluginWarnings checks operation steps for disabled plugin references.
+// Returns warning strings for each operation whose plugin prefix is explicitly disabled.
+// Gracefully returns nil if the plugin system cannot be initialized.
+func collectDisabledPluginWarnings(ctx context.Context, cfg *Config, wf *workflow.Workflow) []string {
+	result, err := initPluginSystemReadOnly(ctx, cfg)
+	if err != nil {
+		return nil
+	}
+	defer result.Cleanup()
+
+	var warnings []string
+	for _, step := range wf.Steps {
+		if step.Type != workflow.StepTypeOperation {
+			continue
+		}
+		parts := strings.SplitN(step.Operation, ".", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		pluginPrefix := parts[0]
+		if !result.Service.IsPluginEnabled(pluginPrefix) {
+			warnings = append(warnings, fmt.Sprintf(
+				"step %q uses operation %q but plugin %q is disabled",
+				step.Name, step.Operation, pluginPrefix,
+			))
+		}
+	}
+	return warnings
 }

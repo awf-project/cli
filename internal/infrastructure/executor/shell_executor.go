@@ -51,7 +51,7 @@ func detectShell() string {
 	if shell == "" || !filepath.IsAbs(shell) {
 		return "/bin/sh"
 	}
-	if _, err := os.Stat(shell); err != nil {
+	if _, err := os.Stat(shell); err != nil { //nolint:gosec // shell is validated: non-empty and absolute path checked above
 		return "/bin/sh"
 	}
 	return shell

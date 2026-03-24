@@ -132,8 +132,8 @@ func TestOpenAICompatibleProvider_SingleTurnWithOptions_Integration(t *testing.T
 	assert.Equal(t, capturedReq.Model, "gpt-3.5-turbo")
 	assert.NotNil(t, capturedReq.Temperature)
 	assert.Equal(t, *capturedReq.Temperature, 1.5)
-	assert.NotNil(t, capturedReq.MaxTokens)
-	assert.Equal(t, *capturedReq.MaxTokens, 100)
+	assert.NotNil(t, capturedReq.MaxCompletionTokens)
+	assert.Equal(t, *capturedReq.MaxCompletionTokens, 100)
 }
 
 // TestOpenAICompatibleProvider_Conversation_Integration verifies multi-turn
@@ -397,8 +397,8 @@ func TestOpenAICompatibleProvider_RequestBodyValidation_Integration(t *testing.T
 	assert.Equal(t, "Test prompt", capturedReq.Messages[0].Content)
 	assert.NotNil(t, capturedReq.Temperature)
 	assert.Equal(t, 0.7, *capturedReq.Temperature)
-	assert.NotNil(t, capturedReq.MaxTokens)
-	assert.Equal(t, 1024, *capturedReq.MaxTokens)
+	assert.NotNil(t, capturedReq.MaxCompletionTokens)
+	assert.Equal(t, 1024, *capturedReq.MaxCompletionTokens)
 	assert.NotNil(t, capturedReq.TopP)
 	assert.Equal(t, 0.9, *capturedReq.TopP)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -590,6 +591,7 @@ func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
 	plugins := []ui.PluginInfo{
 		{
 			Name:         "test-plugin",
+			Type:         "builtin",
 			Version:      "1.0.0",
 			Description:  "Test plugin",
 			Status:       "discovered",
@@ -606,6 +608,7 @@ func TestOutputWriter_WritePlugins_JSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, got, 1)
 	assert.Equal(t, "test-plugin", got[0].Name)
+	assert.Equal(t, "builtin", got[0].Type)
 	assert.Equal(t, "1.0.0", got[0].Version)
 	assert.True(t, got[0].Enabled)
 	assert.Contains(t, got[0].Capabilities, "operations")
@@ -652,6 +655,7 @@ func TestOutputWriter_WritePlugins_Table(t *testing.T) {
 	plugins := []ui.PluginInfo{
 		{
 			Name:         "my-plugin",
+			Type:         "external",
 			Version:      "1.0.0",
 			Status:       "running",
 			Enabled:      true,
@@ -665,6 +669,7 @@ func TestOutputWriter_WritePlugins_Table(t *testing.T) {
 	output := buf.String()
 	// Should have ASCII borders
 	assert.Contains(t, output, "+")
+	assert.Contains(t, output, "TYPE")
 	assert.Contains(t, output, "|")
 	// Should have headers
 	assert.Contains(t, output, "NAME")
@@ -698,6 +703,7 @@ func TestOutputWriter_WritePlugins_Text(t *testing.T) {
 	plugins := []ui.PluginInfo{
 		{
 			Name:         "text-plugin",
+			Type:         "external",
 			Version:      "2.0.0",
 			Status:       "initialized",
 			Enabled:      true,
@@ -711,6 +717,7 @@ func TestOutputWriter_WritePlugins_Text(t *testing.T) {
 	output := buf.String()
 	// Should have tabular output (tabwriter format)
 	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "TYPE")
 	assert.Contains(t, output, "text-plugin")
 	assert.Contains(t, output, "2.0.0")
 }
@@ -871,11 +878,13 @@ func TestPluginInfo_JSONSerialization(t *testing.T) {
 	// Test that PluginInfo serializes correctly with all fields
 	plugin := ui.PluginInfo{
 		Name:         "full-plugin",
+		Type:         "builtin",
 		Version:      "1.2.3",
 		Description:  "A full plugin for testing",
 		Status:       "running",
 		Enabled:      true,
 		Capabilities: []string{"operations", "commands"},
+		Operations:   []string{"run", "validate"},
 	}
 
 	data, err := json.Marshal(plugin)
@@ -886,11 +895,13 @@ func TestPluginInfo_JSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, plugin.Name, got.Name)
+	assert.Equal(t, plugin.Type, got.Type)
 	assert.Equal(t, plugin.Version, got.Version)
 	assert.Equal(t, plugin.Description, got.Description)
 	assert.Equal(t, plugin.Status, got.Status)
 	assert.Equal(t, plugin.Enabled, got.Enabled)
 	assert.Equal(t, plugin.Capabilities, got.Capabilities)
+	assert.Equal(t, plugin.Operations, got.Operations)
 }
 
 func TestPluginInfo_JSONOmitsEmptyFields(t *testing.T) {
@@ -909,6 +920,63 @@ func TestPluginInfo_JSONOmitsEmptyFields(t *testing.T) {
 	// Should not contain empty optional fields (due to omitempty tags)
 	assert.NotContains(t, output, `"version":""`)
 	assert.NotContains(t, output, `"description":""`)
+	assert.NotContains(t, output, `"type":""`)
+	assert.NotContains(t, output, `"operations":null`)
+}
+
+func TestOutputWriter_WritePlugins_ShowsTypeValue(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	plugins := []ui.PluginInfo{
+		{Name: "typed-plugin", Type: "builtin", Version: "1.0.0", Status: "running", Enabled: true},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "builtin")
+}
+
+func TestOutputWriter_WritePlugins_ShowsTypeValueInBorderedTable(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	plugins := []ui.PluginInfo{
+		{Name: "typed-plugin", Type: "external", Version: "1.0.0", Status: "running", Enabled: true},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "external")
+}
+
+func TestOutputWriter_WritePlugins_JSONIncludesOperations(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:       "ops-plugin",
+			Type:       "builtin",
+			Status:     "running",
+			Enabled:    true,
+			Operations: []string{"run", "validate", "list"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	var got []ui.PluginInfo
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, []string{"run", "validate", "list"}, got[0].Operations)
+	assert.Equal(t, "builtin", got[0].Type)
 }
 
 func TestInputInfo_DescriptionField(t *testing.T) {
@@ -1066,6 +1134,235 @@ func TestInputInfo_DescriptionWithSpecialCharacters(t *testing.T) {
 				Description: tt.description,
 			}
 			assert.Equal(t, tt.description, input.Description)
+		})
+	}
+}
+
+func TestOutputWriter_WriteOperations_JSON(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	operations := []ui.OperationEntry{
+		{Name: "process-data", Plugin: "dataproc"},
+		{Name: "validate", Plugin: "dataproc"},
+		{Name: "transform", Plugin: "transform-engine"},
+	}
+
+	err := w.WriteOperations(operations)
+	require.NoError(t, err)
+
+	var got []ui.OperationEntry
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 3)
+	assert.Equal(t, "process-data", got[0].Name)
+	assert.Equal(t, "dataproc", got[0].Plugin)
+	assert.Equal(t, "validate", got[1].Name)
+	assert.Equal(t, "transform", got[2].Name)
+	assert.Equal(t, "transform-engine", got[2].Plugin)
+}
+
+func TestOutputWriter_WriteOperations_JSON_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	err := w.WriteOperations([]ui.OperationEntry{})
+	require.NoError(t, err)
+
+	var got []ui.OperationEntry
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 0)
+}
+
+func TestOutputWriter_WriteOperations_Table(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	operations := []ui.OperationEntry{
+		{Name: "process", Plugin: "core"},
+		{Name: "analyze", Plugin: "analytics"},
+	}
+
+	err := w.WriteOperations(operations)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "+")
+	assert.Contains(t, output, "|")
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "PLUGIN")
+	assert.Contains(t, output, "process")
+	assert.Contains(t, output, "core")
+	assert.Contains(t, output, "analyze")
+	assert.Contains(t, output, "analytics")
+}
+
+func TestOutputWriter_WriteOperations_Table_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	err := w.WriteOperations([]ui.OperationEntry{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No operations found")
+}
+
+func TestOutputWriter_WriteOperations_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	operations := []ui.OperationEntry{
+		{Name: "execute", Plugin: "executor"},
+		{Name: "validate", Plugin: "validator"},
+	}
+
+	err := w.WriteOperations(operations)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "PLUGIN")
+	assert.Contains(t, output, "execute")
+	assert.Contains(t, output, "executor")
+	assert.Contains(t, output, "validate")
+	assert.Contains(t, output, "validator")
+}
+
+func TestOutputWriter_WriteOperations_Text_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	err := w.WriteOperations([]ui.OperationEntry{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No operations found")
+}
+
+func TestOutputWriter_WriteOperations_Quiet(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
+
+	operations := []ui.OperationEntry{
+		{Name: "op1", Plugin: "plugin-a"},
+		{Name: "op2", Plugin: "plugin-b"},
+		{Name: "op3", Plugin: "plugin-c"},
+	}
+
+	err := w.WriteOperations(operations)
+	require.NoError(t, err)
+
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	assert.Len(t, lines, 3)
+	assert.Equal(t, "op1", lines[0])
+	assert.Equal(t, "op2", lines[1])
+	assert.Equal(t, "op3", lines[2])
+}
+
+func TestOutputWriter_WriteOperations_Quiet_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
+
+	err := w.WriteOperations([]ui.OperationEntry{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Equal(t, "", strings.TrimSpace(output))
+}
+
+func TestOperationEntry_JSONSerialization(t *testing.T) {
+	op := ui.OperationEntry{
+		Name:   "transform",
+		Plugin: "data-transform",
+	}
+
+	data, err := json.Marshal(op)
+	require.NoError(t, err)
+
+	var decoded ui.OperationEntry
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, "transform", decoded.Name)
+	assert.Equal(t, "data-transform", decoded.Plugin)
+
+	var asMap map[string]interface{}
+	err = json.Unmarshal(data, &asMap)
+	require.NoError(t, err)
+	assert.Equal(t, "transform", asMap["name"])
+	assert.Equal(t, "data-transform", asMap["plugin"])
+}
+
+func TestOperationEntry_Fields(t *testing.T) {
+	op := ui.OperationEntry{
+		Name:   "extract",
+		Plugin: "extract-plugin",
+	}
+
+	assert.Equal(t, "extract", op.Name)
+	assert.Equal(t, "extract-plugin", op.Plugin)
+}
+
+func TestOutputWriter_WriteOperations_AllFormats(t *testing.T) {
+	tests := []struct {
+		name     string
+		format   ui.OutputFormat
+		validate func(t *testing.T, output string)
+	}{
+		{
+			name:   "JSON format",
+			format: ui.FormatJSON,
+			validate: func(t *testing.T, output string) {
+				var ops []ui.OperationEntry
+				err := json.Unmarshal([]byte(output), &ops)
+				require.NoError(t, err)
+				assert.Len(t, ops, 1)
+				assert.Equal(t, "test-op", ops[0].Name)
+			},
+		},
+		{
+			name:   "Table format",
+			format: ui.FormatTable,
+			validate: func(t *testing.T, output string) {
+				assert.Contains(t, output, "test-op")
+				assert.Contains(t, output, "test-plugin")
+				assert.Contains(t, output, "+")
+			},
+		},
+		{
+			name:   "Text format",
+			format: ui.FormatText,
+			validate: func(t *testing.T, output string) {
+				assert.Contains(t, output, "test-op")
+				assert.Contains(t, output, "test-plugin")
+				assert.Contains(t, output, "NAME")
+			},
+		},
+		{
+			name:   "Quiet format",
+			format: ui.FormatQuiet,
+			validate: func(t *testing.T, output string) {
+				assert.Equal(t, "test-op", strings.TrimSpace(output))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, tt.format, true, false)
+
+			operations := []ui.OperationEntry{
+				{Name: "test-op", Plugin: "test-plugin"},
+			}
+
+			err := w.WriteOperations(operations)
+			require.NoError(t, err)
+
+			tt.validate(t, buf.String())
 		})
 	}
 }

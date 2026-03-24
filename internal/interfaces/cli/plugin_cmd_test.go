@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -118,7 +119,12 @@ func TestPluginListCommand_NoPlugins(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	assert.Contains(t, output, "No plugins found", "should show no plugins message")
+	// With builtin plugins always present, should show at least the 3 builtins
+	assert.Contains(t, output, "github", "should show github builtin")
+	assert.Contains(t, output, "http", "should show http builtin")
+	assert.Contains(t, output, "notify", "should show notify builtin")
+	// Should NOT show the "No plugins found" message since builtins exist
+	assert.NotContains(t, output, "No plugins found", "should not show no plugins message when builtins exist")
 }
 
 func TestPluginListCommand_WithPlugins(t *testing.T) {
@@ -284,9 +290,13 @@ awf_version: ">=0.1.0"
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
 	// Quiet mode: just names, one per line
-	assert.Len(t, lines, 2, "quiet mode should output one name per line")
+	// Should include 3 builtins (github, http, notify) + 2 external plugins
+	assert.Len(t, lines, 5, "quiet mode should output one name per line (3 builtins + 2 external)")
 	assert.Contains(t, output, "plugin-one")
 	assert.Contains(t, output, "plugin-two")
+	assert.Contains(t, output, "github")
+	assert.Contains(t, output, "http")
+	assert.Contains(t, output, "notify")
 }
 
 func TestPluginListCommand_ShowsDisabledPlugins(t *testing.T) {
@@ -699,10 +709,10 @@ func TestPluginEnableCommand_NonexistentPlugin(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"plugin", "enable", "nonexistent-plugin", "--storage", tmpDir})
 
-	// Should succeed (enabling unknown plugin just stores the state)
-	// The plugin will be loaded when discovered later
+	// Should fail with unknown plugin error (C066/T003: validate plugin exists before enable/disable)
 	err := cmd.Execute()
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown plugin")
 }
 
 func TestPluginDisableCommand_NonexistentPlugin(t *testing.T) {
@@ -718,9 +728,10 @@ func TestPluginDisableCommand_NonexistentPlugin(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"plugin", "disable", "nonexistent-plugin", "--storage", tmpDir})
 
-	// Should succeed (disabling unknown plugin just stores the state)
+	// Should fail with unknown plugin error (C066/T003: validate plugin exists before enable/disable)
 	err := cmd.Execute()
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown plugin")
 }
 
 func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
@@ -866,4 +877,235 @@ func TestPluginCommands_StorageFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPluginListCommand_OperationsFlag_Recognized(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	pluginCmd, _, err := cmd.Find([]string{"plugin", "list"})
+	require.NoError(t, err)
+
+	found := false
+	pluginCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "operations" {
+			found = true
+		}
+	})
+
+	assert.True(t, found, "plugin list command should have --operations flag")
+}
+
+func TestPluginListCommand_OperationsFlag_NoPlugins(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	// With builtin plugins always present, there will be operations
+	assert.NotEmpty(t, output, "should produce output when --operations flag is set")
+	// Should contain at least one builtin provider name
+	assert.True(t,
+		strings.Contains(output, "github") ||
+			strings.Contains(output, "http") ||
+			strings.Contains(output, "notify"),
+		"operations output should reference at least one built-in provider")
+}
+
+func TestPluginListCommand_OperationsFlag_WithPlugins(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	testPluginDir := filepath.Join(pluginsDir, "ops-test-plugin")
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+
+	manifestContent := `name: ops-test-plugin
+version: 1.0.0
+description: Test plugin with operations
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(testPluginDir, "plugin.yaml"),
+		[]byte(manifestContent),
+		0o644,
+	))
+
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.NotEmpty(t, output, "should produce output when --operations flag is set")
+}
+
+func TestPluginListCommand_OperationsFlag_WithTextFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	testPluginDir := filepath.Join(pluginsDir, "text-ops-plugin")
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+
+	manifestContent := `name: text-ops-plugin
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(testPluginDir, "plugin.yaml"),
+		[]byte(manifestContent),
+		0o644,
+	))
+
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--format", "text", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.NotEmpty(t, output, "should produce text output with --operations flag")
+}
+
+func TestPluginListCommand_OperationsFlag_WithJSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	testPluginDir := filepath.Join(pluginsDir, "json-ops-plugin")
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+
+	manifestContent := `name: json-ops-plugin
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(testPluginDir, "plugin.yaml"),
+		[]byte(manifestContent),
+		0o644,
+	))
+
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--format", "json", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	var result []map[string]any
+	err = json.Unmarshal([]byte(output), &result)
+	assert.NoError(t, err, "JSON output with --operations should be valid JSON")
+}
+
+func TestPluginListCommand_OperationsFlag_WithTableFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	testPluginDir := filepath.Join(pluginsDir, "table-ops-plugin")
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+
+	manifestContent := `name: table-ops-plugin
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(testPluginDir, "plugin.yaml"),
+		[]byte(manifestContent),
+		0o644,
+	))
+
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--format", "table", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.NotEmpty(t, output, "should produce table output with --operations flag")
+}
+
+func TestPluginListCommand_OperationsFlag_WithoutFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	testPluginDir := filepath.Join(pluginsDir, "noflag-plugin")
+	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+
+	manifestContent := `name: noflag-plugin
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(testPluginDir, "plugin.yaml"),
+		[]byte(manifestContent),
+		0o644,
+	))
+
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "noflag-plugin", "should show plugin list without --operations flag")
+	assert.NotContains(t, output, "No operations", "should not show operations output without --operations flag")
+}
+
+func TestPluginListCommand_OperationsFlag_InitFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	invalidPluginPath := filepath.Join(tmpDir, "nonexistent", "path", "to", "plugins")
+	t.Setenv("AWF_PLUGINS_PATH", invalidPluginPath)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
 }

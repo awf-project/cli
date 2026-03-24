@@ -44,27 +44,27 @@ func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) 
 		return err
 	}
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil { //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return err
 	}
 
 	if _, err := f.Write(data); err != nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return err
 	}
 
 	if err := f.Sync(); err != nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return err
 	}
 
-	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 	_ = f.Close()
 
 	return os.Rename(tmpPath, finalPath)

@@ -44,6 +44,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	if pluginsDir == "" {
 		// Create service with nil manager (no plugins available)
 		service := application.NewPluginService(nil, stateStore, logger)
+		registerBuiltins(service, Version)
 		return &PluginSystemResult{
 			Service: service,
 			Cleanup: func() {},
@@ -58,6 +59,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 
 	// Create the plugin service
 	service := application.NewPluginService(manager, stateStore, logger)
+	registerBuiltins(service, Version)
 
 	// Startup enabled plugins
 	if err := service.StartupEnabledPlugins(ctx); err != nil {
@@ -113,4 +115,25 @@ func findFirstExistingDir(paths []string) string {
 		}
 	}
 	return ""
+}
+
+// registerBuiltins registers the built-in operation providers into the plugin service.
+// Uses version as the synthesized manifest version for each built-in entry.
+func registerBuiltins(svc *application.PluginService, version string) {
+	svc.RegisterBuiltin("github", "GitHub operation provider", version, []string{
+		"github.get_issue",
+		"github.get_pr",
+		"github.create_pr",
+		"github.create_issue",
+		"github.add_labels",
+		"github.list_comments",
+		"github.add_comment",
+		"github.batch",
+	})
+	svc.RegisterBuiltin("notify", "Notification operation provider", version, []string{
+		"notify.send",
+	})
+	svc.RegisterBuiltin("http", "HTTP operation provider", version, []string{
+		"http.request",
+	})
 }

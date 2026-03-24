@@ -125,6 +125,7 @@ func TestPluginService_OptionB_CanUseSeparateConfigInterface(t *testing.T) {
 	}
 
 	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", pluginmodel.StatusDiscovered)
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -229,6 +230,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 	}
 
 	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("shared-plugin", pluginmodel.StatusDiscovered)
 	logger := newMockPluginLogger()
 
 	svc := application.NewPluginService(manager, composite, logger)
@@ -262,6 +264,7 @@ func TestPluginService_OptionB_SharedStateBetweenInterfaces(t *testing.T) {
 func TestPluginService_OptionA_ErrorPropagation(t *testing.T) {
 	// Errors from the composite interface should propagate correctly
 	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("test-plugin", pluginmodel.StatusDiscovered)
 	stateStore := newMockPluginStateStore()
 	logger := newMockPluginLogger()
 

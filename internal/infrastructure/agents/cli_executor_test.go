@@ -367,6 +367,7 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			// Cancel immediately after starting
 			go func() {
@@ -399,6 +400,7 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 func TestExecCLIExecutor_Run_ContextCancellation_TerminatesProcessGroup(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Cancel after 50ms
 	go func() {
@@ -604,7 +606,7 @@ func TestRun_SetsProcessGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := NewExecCLIExecutor()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called in goroutine below, not deferred
 
 			go func() {
 				time.Sleep(tt.cancelDelay)
@@ -653,7 +655,7 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := NewExecCLIExecutor()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called in goroutine below, not deferred
 
 			go func() {
 				time.Sleep(tt.cancelDelay)

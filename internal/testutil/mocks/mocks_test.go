@@ -473,7 +473,7 @@ func TestMockWorkflowRepository_ConcurrentAddAndRead(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			name := string(rune('a' + id))
+			name := string(rune('a' + id)) //nolint:gosec // controlled test input: id is 0-9, well within int32 range
 			repo.AddWorkflow(name, &workflow.Workflow{Name: name})
 		}(i)
 	}

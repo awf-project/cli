@@ -24,7 +24,7 @@ func TestCallWorkflowStepValidation(t *testing.T) {
 				Type: workflow.StepTypeCallWorkflow,
 				CallWorkflow: &workflow.CallWorkflowConfig{
 					Workflow: "analyze-file",
-					Inputs: map[string]string{
+					Inputs: map[string]string{ //nolint:gosec // G101: test fixture values, not real credentials
 						"file_path": "{{inputs.source_file}}",
 					},
 					Outputs: map[string]string{
@@ -140,7 +140,7 @@ func TestCallWorkflowStepCreation(t *testing.T) {
 		OnFailure:   "handle_error",
 		CallWorkflow: &workflow.CallWorkflowConfig{
 			Workflow: "analyze-single-file",
-			Inputs: map[string]string{
+			Inputs: map[string]string{ //nolint:gosec // G101: false positive — these are template interpolation placeholders, not credentials
 				"file_path":  "{{loop.item}}",
 				"max_tokens": "{{inputs.max_tokens}}",
 			},

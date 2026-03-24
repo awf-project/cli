@@ -1118,7 +1118,7 @@ func TestPluginService_ShutdownPlugin_ContextCanceled(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 // TestPluginService_ShutdownPlugin_ManagerError tests ShutdownPlugin when manager returns error
@@ -1159,7 +1159,7 @@ func TestPluginService_EnablePlugin_ContextCanceled(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 // TestPluginService_DisablePlugin_ContextCanceled tests DisablePlugin with canceled context
@@ -1179,7 +1179,7 @@ func TestPluginService_DisablePlugin_ContextCanceled(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 // TestPluginService_DisablePlugin_ShutdownError tests DisablePlugin when shutdown during disable fails
@@ -1248,7 +1248,7 @@ func TestPluginService_SetPluginConfig_ContextCanceled(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 // TestPluginService_SetPluginConfig_SetConfigError tests SetPluginConfig when SetConfig fails
@@ -1268,4 +1268,242 @@ func TestPluginService_SetPluginConfig_SetConfigError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "set config for plugin")
 	assert.ErrorIs(t, err, configErr)
+}
+
+// T003: RegisterBuiltin and isKnownPlugin tests
+
+func TestPluginService_RegisterBuiltin_HappyPath(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub operation provider", "1.0.0", []string{"create_issue", "list_repos"})
+
+	info, found := svc.GetPlugin("github")
+
+	require.True(t, found)
+	require.NotNil(t, info)
+	assert.Equal(t, "github", info.Manifest.Name)
+	assert.Equal(t, pluginmodel.PluginTypeBuiltin, info.Type)
+	assert.Len(t, info.Operations, 2)
+}
+
+func TestPluginService_RegisterBuiltin_Idempotency(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("http", "HTTP operation provider", "1.0.0", []string{"request"})
+	svc.RegisterBuiltin("http", "HTTP operation provider", "1.0.0", []string{"request"})
+
+	plugins := svc.ListPlugins()
+
+	httpPlugins := 0
+	for _, p := range plugins {
+		if p.Manifest.Name == "http" {
+			httpPlugins++
+		}
+	}
+	assert.Equal(t, 1, httpPlugins, "RegisterBuiltin should be idempotent, no duplicates")
+}
+
+func TestPluginService_ListPlugins_MergesBuiltins(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("external-plugin", pluginmodel.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub provider", "1.0.0", []string{"create_issue"})
+	svc.RegisterBuiltin("notify", "Notification provider", "1.0.0", []string{"send_message"})
+
+	plugins := svc.ListPlugins()
+
+	assert.Len(t, plugins, 3)
+
+	names := make(map[string]bool)
+	for _, p := range plugins {
+		names[p.Manifest.Name] = true
+	}
+	assert.True(t, names["github"])
+	assert.True(t, names["notify"])
+	assert.True(t, names["external-plugin"])
+}
+
+func TestPluginService_GetPlugin_ReturnsBuiltin(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("http", "HTTP provider", "1.0.0", []string{"request", "get", "post"})
+
+	info, found := svc.GetPlugin("http")
+
+	require.True(t, found)
+	assert.Equal(t, "http", info.Manifest.Name)
+	assert.Equal(t, pluginmodel.PluginTypeBuiltin, info.Type)
+	assert.Len(t, info.Operations, 3)
+}
+
+func TestPluginService_ListEnabledPlugins_IncludesBuiltins(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("external", pluginmodel.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub provider", "1.0.0", []string{"create_issue"})
+	svc.RegisterBuiltin("notify", "Notification provider", "1.0.0", []string{"send_message"})
+
+	enabled := svc.ListEnabledPlugins()
+
+	assert.Len(t, enabled, 3)
+
+	names := make(map[string]bool)
+	for _, p := range enabled {
+		names[p.Manifest.Name] = true
+	}
+	assert.True(t, names["github"])
+	assert.True(t, names["notify"])
+	assert.True(t, names["external"])
+}
+
+func TestPluginService_ListEnabledPlugins_ExcludesDisabledBuiltin(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub provider", "1.0.0", []string{"create_issue"})
+	svc.RegisterBuiltin("http", "HTTP provider", "1.0.0", []string{"request"})
+
+	ctx := context.Background()
+	err := svc.DisablePlugin(ctx, "http")
+	require.NoError(t, err)
+
+	enabled := svc.ListEnabledPlugins()
+
+	names := make(map[string]bool)
+	for _, p := range enabled {
+		names[p.Manifest.Name] = true
+	}
+	assert.True(t, names["github"])
+	assert.False(t, names["http"])
+}
+
+func TestPluginService_EnablePlugin_UnknownName_Error(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx := context.Background()
+	err := svc.EnablePlugin(ctx, "unknown-plugin")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, application.ErrUnknownPlugin)
+}
+
+func TestPluginService_DisablePlugin_UnknownName_Error(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	ctx := context.Background()
+	err := svc.DisablePlugin(ctx, "unknown-plugin")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, application.ErrUnknownPlugin)
+}
+
+func TestPluginService_EnablePlugin_KnownBuiltin_Success(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub provider", "1.0.0", []string{"create_issue"})
+
+	ctx := context.Background()
+	err := svc.DisablePlugin(ctx, "github")
+	require.NoError(t, err)
+
+	err = svc.EnablePlugin(ctx, "github")
+
+	require.NoError(t, err)
+	assert.True(t, svc.IsPluginEnabled("github"))
+}
+
+func TestPluginService_DisablePlugin_KnownBuiltin_Success(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("notify", "Notification provider", "1.0.0", []string{"send_message"})
+
+	ctx := context.Background()
+	err := svc.DisablePlugin(ctx, "notify")
+
+	require.NoError(t, err)
+	assert.False(t, svc.IsPluginEnabled("notify"))
+}
+
+func TestPluginService_isKnownPlugin_Builtin(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	svc.RegisterBuiltin("github", "GitHub provider", "1.0.0", []string{"create_issue"})
+
+	info, found := svc.GetPlugin("github")
+
+	require.True(t, found)
+	assert.Equal(t, "github", info.Manifest.Name)
+}
+
+func TestPluginService_isKnownPlugin_External(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	manager.AddPlugin("external-plugin", pluginmodel.StatusRunning)
+
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	info, found := svc.GetPlugin("external-plugin")
+
+	require.True(t, found)
+	assert.Equal(t, "external-plugin", info.Manifest.Name)
+}
+
+func TestPluginService_GetPlugin_UnknownReturnsNotFound(t *testing.T) {
+	manager := mocks.NewMockPluginManager()
+	stateStore := newMockPluginStateStore()
+	logger := newMockPluginLogger()
+
+	svc := application.NewPluginService(manager, stateStore, logger)
+
+	info, found := svc.GetPlugin("unknown-plugin")
+
+	assert.False(t, found)
+	assert.Nil(t, info)
 }

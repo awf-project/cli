@@ -200,11 +200,11 @@ func copyDir(src, dst string) error {
 			return os.MkdirAll(dstPath, info.Mode())
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // test helper with controlled temp directory paths
 		if err != nil {
 			return err
 		}
 
-		return os.WriteFile(dstPath, data, info.Mode())
+		return os.WriteFile(dstPath, data, info.Mode()) //nolint:gosec // test helper with controlled temp directory paths
 	})
 }

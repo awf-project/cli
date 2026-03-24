@@ -713,6 +713,45 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 	return hints
 }
 
+// PluginDisabledHintGenerator examines disabled plugin errors and generates
+// actionable hints to re-enable the plugin.
+//
+// Detection:
+//   - Matches errors with code EXECUTION.PLUGIN.DISABLED
+//   - Extracts plugin name from error Details["plugin"]
+//
+// Hints generated:
+//   - Command to re-enable the plugin
+//   - Command to list all plugins and their status
+func PluginDisabledHintGenerator(err *errors.StructuredError) []errors.Hint {
+	if err == nil {
+		return []errors.Hint{}
+	}
+
+	if err.Code != errors.ErrorCodeExecutionPluginDisabled {
+		return []errors.Hint{}
+	}
+
+	if err.Details == nil {
+		return []errors.Hint{}
+	}
+
+	pluginValue, exists := err.Details["plugin"]
+	if !exists {
+		return []errors.Hint{}
+	}
+
+	pluginName, ok := pluginValue.(string)
+	if !ok || pluginName == "" {
+		return []errors.Hint{}
+	}
+
+	return []errors.Hint{
+		{Message: "Run 'awf plugin enable " + pluginName + "' to re-enable this plugin"},
+		{Message: "Run 'awf plugin list' to see all plugins and their status"},
+	}
+}
+
 // extractCommandName extracts the first word from a command string
 // e.g., "docker-compose up" -> "docker-compose"
 func extractCommandName(command string) string {
