@@ -267,10 +267,14 @@ func TestPluginListCommand_QuietFormat(t *testing.T) {
 	manifest1 := `name: plugin-one
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	manifest2 := `name: plugin-two
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(filepath.Join(plugin1Dir, "plugin.yaml"), []byte(manifest1), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(plugin2Dir, "plugin.yaml"), []byte(manifest2), 0o644))
@@ -310,6 +314,8 @@ func TestPluginListCommand_ShowsDisabledPlugins(t *testing.T) {
 	manifestContent := `name: disabled-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -373,6 +379,8 @@ func TestPluginEnableCommand_EnablesPlugin(t *testing.T) {
 	manifestContent := `name: enable-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -407,6 +415,8 @@ func TestPluginEnableCommand_JSONOutput(t *testing.T) {
 	manifestContent := `name: json-enable-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -447,6 +457,8 @@ func TestPluginEnableCommand_PersistsState(t *testing.T) {
 	manifestContent := `name: persist-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -514,6 +526,8 @@ func TestPluginDisableCommand_DisablesPlugin(t *testing.T) {
 	manifestContent := `name: disable-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -548,6 +562,8 @@ func TestPluginDisableCommand_JSONOutput(t *testing.T) {
 	manifestContent := `name: json-disable-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -588,6 +604,8 @@ func TestPluginDisableCommand_PersistsState(t *testing.T) {
 	manifestContent := `name: persist-disable-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -815,6 +833,8 @@ func TestPluginListCommand_OutputFormats(t *testing.T) {
 			manifestContent := `name: format-test-plugin
 version: 1.0.0
 awf_version: ">=0.1.0"
+capabilities:
+  - operations
 `
 			require.NoError(t, os.WriteFile(
 				filepath.Join(testPluginDir, "plugin.yaml"),

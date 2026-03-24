@@ -2,12 +2,14 @@ package pluginmgr
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/pkg/plugin/sdk"
 )
 
 const fixturesPath = "../../../tests/fixtures/plugins"
@@ -586,6 +588,79 @@ func TestManifestParser_ParseFile_EdgeCases(t *testing.T) {
 	}
 }
 
+// pluginNames are the fixture directory names that need real plugin binaries for Init() tests.
+var pluginNames = []string{"valid-simple", "valid-full"}
+
+// TestMain enables the test binary to act as a plugin subprocess when invoked by go-plugin,
+// and installs test plugin binaries at fixture paths before running tests.
+//
+// go-plugin sets AWF_PLUGIN=awf-plugin-v1 (HandshakeConfig.MagicCookieKey=Value) in the child
+// process environment. When the test binary detects this, it serves as a plugin instead of running tests.
 func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+	// If go-plugin launched us as a plugin subprocess, serve as a minimal test plugin.
+	if os.Getenv("AWF_PLUGIN") == "awf-plugin-v1" {
+		sdk.Serve(&sdk.BasePlugin{PluginName: "test", PluginVersion: "1.0.0"})
+		return
+	}
+
+	// Install the test binary at fixture paths so Init() can spawn plugin processes.
+	binary, err := os.Executable()
+	if err != nil {
+		panic("TestMain: cannot find test binary: " + err.Error())
+	}
+
+	var installed []string
+	for _, name := range pluginNames {
+		dst := filepath.Join(fixturesPath, name, "awf-plugin-"+name)
+		if copyErr := copyTestBinary(binary, dst); copyErr != nil {
+			panic("TestMain: cannot install test plugin binary: " + copyErr.Error())
+		}
+		installed = append(installed, dst)
+	}
+
+	code := m.Run()
+
+	for _, dst := range installed {
+		_ = os.Remove(dst)
+	}
+
+	os.Exit(code)
+}
+
+// copyTestBinary copies src to dst with executable permissions using atomic rename.
+// Atomic rename avoids "text file busy" errors when dst is still in use by a previous test run.
+func copyTestBinary(src, dst string) error {
+	in, err := os.Open(src) //nolint:gosec // controlled path: test binary location
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	// Write to a temp file in the same directory, then rename atomically.
+	dir := filepath.Dir(dst)
+	tmp, err := os.CreateTemp(dir, ".awf-plugin-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	if err := tmp.Chmod(0o755); err != nil { //nolint:gosec // test fixture permissions
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+
+	if _, err := io.Copy(tmp, in); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+
+	// Rename replaces the old inode atomically; previous processes keep the old inode open.
+	return os.Rename(tmpName, dst)
 }

@@ -88,8 +88,18 @@ func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Initialize plugin system (read-only mode)
-	result, err := initPluginSystemReadOnly(ctx, cfg)
+	// When listing operations, plugins must be started to query via gRPC.
+	// Otherwise use read-only mode for fast listing.
+	var result *PluginSystemResult
+	var err error
+	if showOperations {
+		result, err = initPluginSystem(ctx, cfg, nil)
+		if result != nil {
+			defer result.Cleanup()
+		}
+	} else {
+		result, err = initPluginSystemReadOnly(ctx, cfg)
+	}
 	if err != nil {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitSystem)

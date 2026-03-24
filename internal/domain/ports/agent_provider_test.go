@@ -118,7 +118,7 @@ func TestAgentProvider_Execute_HappyPath(t *testing.T) {
 
 	result, err := provider.Execute(ctx, prompt, options)
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected result, got nil")
@@ -273,7 +273,7 @@ func TestAgentProvider_Execute_PartialResult(t *testing.T) {
 	result, err := provider.Execute(context.Background(), "test", nil)
 
 	if err == nil {
-		t.Error("expected error, got nil")
+		t.Fatal("expected error, got nil")
 	}
 	if result == nil {
 		t.Fatal("expected partial result, got nil")
@@ -505,7 +505,7 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected result, got nil")

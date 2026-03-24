@@ -13,6 +13,7 @@ import (
 // PluginSystemResult contains the initialized plugin system components.
 type PluginSystemResult struct {
 	Service *application.PluginService
+	Manager ports.OperationProvider
 	Cleanup func()
 }
 
@@ -87,6 +88,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 
 	return &PluginSystemResult{
 		Service: service,
+		Manager: manager,
 		Cleanup: cleanup,
 	}, nil
 }
