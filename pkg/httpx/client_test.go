@@ -193,7 +193,7 @@ func TestClientContextAndTimeout(t *testing.T) {
 			name:          "context deadline takes precedence",
 			clientTimeout: 5 * time.Second,
 			contextSetup: func() (context.Context, context.CancelFunc) {
-				return context.WithTimeout(context.Background(), 50*time.Millisecond)
+				return context.WithTimeout(context.Background(), 50*time.Millisecond) //nolint:gosec // cancel is returned to caller and deferred at call site
 			},
 			serverDelay: 100 * time.Millisecond,
 			wantErr:     true,
@@ -433,7 +433,7 @@ func TestClientWithMockDoer(t *testing.T) {
 func TestClientConvenienceMethods(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(r.Method))
+		w.Write([]byte(r.Method)) //nolint:gosec // G705: test handler writes method name, not user input
 	}))
 	defer server.Close()
 

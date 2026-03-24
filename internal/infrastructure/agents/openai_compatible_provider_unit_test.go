@@ -1554,14 +1554,14 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_APIKeyNeverInError(t *testing
 		{
 			name:       "401 with API key should not leak key",
 			statusCode: 401,
-			apiKey:     "sk-test-secret-key-12345",
+			apiKey:     "sk-test-secret-key-12345", //nolint:gosec // test fixture value for API key leak detection test
 		},
-		{
+		{ //nolint:gosec // G101: test fixture value for API key leak detection test
 			name:       "429 with API key should not leak key",
 			statusCode: 429,
 			apiKey:     "sk-another-secret-key",
 		},
-		{
+		{ //nolint:gosec // G101: test fixture value for API key leak detection test
 			name:       "500 with API key should not leak key",
 			statusCode: 500,
 			apiKey:     "sk-secret-api-key-xyz",

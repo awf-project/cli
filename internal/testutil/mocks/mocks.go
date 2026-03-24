@@ -33,6 +33,9 @@ var (
 	_ ports.AgentProvider       = (*MockAgentProvider)(nil)
 	_ ports.ErrorFormatter      = (*MockErrorFormatter)(nil)
 	_ ports.AuditTrailWriter    = (*MockAuditTrailWriter)(nil)
+	_ ports.PluginStore         = (*MockPluginStore)(nil)
+	_ ports.PluginConfig        = (*MockPluginConfig)(nil)
+	_ ports.PluginStateStore    = (*MockPluginStateStore)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1601,4 +1604,164 @@ func (m *MockAuditTrailWriter) Clear() {
 	m.writeErr = nil
 	m.closeErr = nil
 	m.isClosed = false
+}
+
+// MockPluginStore is a thread-safe mock implementation of ports.PluginStore.
+// It supports optional error injection via SaveErr and LoadErr fields, and
+// custom behavior via SaveFunc and LoadFunc overrides.
+type MockPluginStore struct {
+	mu       sync.RWMutex
+	states   map[string]*pluginmodel.PluginState
+	SaveFunc func(ctx context.Context) error
+	LoadFunc func(ctx context.Context) error
+	SaveErr  error
+	LoadErr  error
+}
+
+// NewMockPluginStore creates a new thread-safe mock plugin store.
+func NewMockPluginStore() *MockPluginStore {
+	return &MockPluginStore{
+		states: make(map[string]*pluginmodel.PluginState),
+	}
+}
+
+// Save persists plugin states. Honors SaveFunc override, then SaveErr, then returns nil.
+// Thread-safe for concurrent access.
+func (m *MockPluginStore) Save(ctx context.Context) error {
+	if m.SaveFunc != nil {
+		return m.SaveFunc(ctx)
+	}
+	if m.SaveErr != nil {
+		return m.SaveErr
+	}
+	return nil
+}
+
+// Load reads plugin states. Honors LoadFunc override, then LoadErr, then returns nil.
+// Thread-safe for concurrent access.
+func (m *MockPluginStore) Load(ctx context.Context) error {
+	if m.LoadFunc != nil {
+		return m.LoadFunc(ctx)
+	}
+	if m.LoadErr != nil {
+		return m.LoadErr
+	}
+	return nil
+}
+
+// GetState returns the full state for a plugin, or nil if not found.
+// Thread-safe for concurrent access.
+func (m *MockPluginStore) GetState(name string) *pluginmodel.PluginState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.states[name]
+}
+
+// ListDisabled returns names of all explicitly disabled plugins.
+// Thread-safe for concurrent access.
+func (m *MockPluginStore) ListDisabled() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var disabled []string
+	for name, state := range m.states {
+		if !state.Enabled {
+			disabled = append(disabled, name)
+		}
+	}
+	return disabled
+}
+
+// MockPluginConfig is a thread-safe mock implementation of ports.PluginConfig.
+// It supports optional error injection via SetEnabledErr and SetConfigErr fields.
+type MockPluginConfig struct {
+	mu            sync.RWMutex
+	states        map[string]*pluginmodel.PluginState
+	SetEnabledErr error
+	SetConfigErr  error
+}
+
+// NewMockPluginConfig creates a new thread-safe mock plugin config.
+func NewMockPluginConfig() *MockPluginConfig {
+	return &MockPluginConfig{
+		states: make(map[string]*pluginmodel.PluginState),
+	}
+}
+
+// SetEnabled enables or disables a plugin by name.
+// Returns SetEnabledErr if set. Thread-safe for concurrent access.
+func (m *MockPluginConfig) SetEnabled(ctx context.Context, name string, enabled bool) error {
+	if m.SetEnabledErr != nil {
+		return m.SetEnabledErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state, ok := m.states[name]
+	if !ok {
+		state = pluginmodel.NewPluginState()
+		m.states[name] = state
+	}
+	state.Enabled = enabled
+	return nil
+}
+
+// IsEnabled returns whether a plugin is enabled.
+// Unknown plugin names return true (default-enabled contract).
+// Thread-safe for concurrent access.
+func (m *MockPluginConfig) IsEnabled(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	state, ok := m.states[name]
+	if !ok {
+		return true
+	}
+	return state.Enabled
+}
+
+// GetConfig returns the stored configuration for a plugin.
+// Thread-safe for concurrent access.
+func (m *MockPluginConfig) GetConfig(name string) map[string]any {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	state, ok := m.states[name]
+	if !ok {
+		return nil
+	}
+	return state.Config
+}
+
+// SetConfig stores configuration for a plugin.
+// Returns SetConfigErr if set. Thread-safe for concurrent access.
+func (m *MockPluginConfig) SetConfig(ctx context.Context, name string, config map[string]any) error {
+	if m.SetConfigErr != nil {
+		return m.SetConfigErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state, ok := m.states[name]
+	if !ok {
+		state = pluginmodel.NewPluginState()
+		m.states[name] = state
+	}
+	state.Config = config
+	return nil
+}
+
+// MockPluginStateStore combines MockPluginStore and MockPluginConfig behind the
+// ports.PluginStateStore composite interface. Both halves share a single states
+// map so that mutations made through one interface are visible through the other.
+type MockPluginStateStore struct {
+	*MockPluginStore
+	*MockPluginConfig
+}
+
+// NewMockPluginStateStore creates a new MockPluginStateStore with shared state.
+func NewMockPluginStateStore() *MockPluginStateStore {
+	store := NewMockPluginStore()
+	config := NewMockPluginConfig()
+	// Share the same states map so mutations are visible across both interfaces.
+	config.states = store.states
+	return &MockPluginStateStore{
+		MockPluginStore:  store,
+		MockPluginConfig: config,
+	}
 }

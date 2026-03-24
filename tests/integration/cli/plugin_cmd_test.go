@@ -106,7 +106,7 @@ func TestPluginListCommand_HasLsAlias(t *testing.T) {
 func TestPluginListCommand_NoPlugins(t *testing.T) {
 	tmpDir := setupTestDir(t)
 
-	// Isolate from global plugins
+	// Isolate from external plugins - but builtins will still show
 	t.Setenv("XDG_DATA_HOME", tmpDir)
 	t.Setenv("AWF_PLUGINS_PATH", "")
 
@@ -120,7 +120,12 @@ func TestPluginListCommand_NoPlugins(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	assert.Contains(t, output, "No plugins found", "should show no plugins message")
+	// With builtin plugins always present, should show at least the 3 builtins
+	assert.Contains(t, output, "github", "should show github builtin")
+	assert.Contains(t, output, "http", "should show http builtin")
+	assert.Contains(t, output, "notify", "should show notify builtin")
+	// Should NOT show the "No plugins found" message since builtins exist
+	assert.NotContains(t, output, "No plugins found", "should not show no plugins message when builtins exist")
 }
 
 func TestPluginListCommand_WithPlugins(t *testing.T) {
@@ -286,9 +291,13 @@ awf_version: ">=0.1.0"
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
 	// Quiet mode: just names, one per line
-	assert.Len(t, lines, 2, "quiet mode should output one name per line")
+	// Should include 3 builtins (github, http, notify) + 2 external plugins
+	assert.Len(t, lines, 5, "quiet mode should output one name per line (3 builtins + 2 external)")
 	assert.Contains(t, output, "plugin-one")
 	assert.Contains(t, output, "plugin-two")
+	assert.Contains(t, output, "github")
+	assert.Contains(t, output, "http")
+	assert.Contains(t, output, "notify")
 }
 
 func TestPluginListCommand_ShowsDisabledPlugins(t *testing.T) {
@@ -701,10 +710,10 @@ func TestPluginEnableCommand_NonexistentPlugin(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"plugin", "enable", "nonexistent-plugin", "--storage", tmpDir})
 
-	// Should succeed (enabling unknown plugin just stores the state)
-	// The plugin will be loaded when discovered later
+	// Should fail with unknown plugin error
 	err := cmd.Execute()
-	require.NoError(t, err)
+	assert.Error(t, err, "enabling unknown plugin should return error")
+	assert.Contains(t, err.Error(), "unknown plugin", "error should mention unknown plugin")
 }
 
 func TestPluginDisableCommand_NonexistentPlugin(t *testing.T) {
@@ -720,9 +729,10 @@ func TestPluginDisableCommand_NonexistentPlugin(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"plugin", "disable", "nonexistent-plugin", "--storage", tmpDir})
 
-	// Should succeed (disabling unknown plugin just stores the state)
+	// Should fail with unknown plugin error
 	err := cmd.Execute()
-	require.NoError(t, err)
+	assert.Error(t, err, "disabling unknown plugin should return error")
+	assert.Contains(t, err.Error(), "unknown plugin", "error should mention unknown plugin")
 }
 
 func TestPluginListCommand_ShowsRemovedPlugins(t *testing.T) {
@@ -868,4 +878,197 @@ func TestPluginCommands_StorageFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPluginListCommand_ShowsThreeBuiltins(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	// Isolate from external plugins
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	// Should show the 3 built-in providers
+	assert.Contains(t, output, "github", "should show github builtin provider")
+	assert.Contains(t, output, "http", "should show http builtin provider")
+	assert.Contains(t, output, "notify", "should show notify builtin provider")
+}
+
+func TestPluginListCommand_JSONOutputIncludesTypeAndOperations(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--format", "json", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+
+	// Parse JSON output
+	var plugins []map[string]any
+	err = json.Unmarshal([]byte(output), &plugins)
+	require.NoError(t, err, "output should be valid JSON")
+
+	// Should contain 3 built-in plugins
+	assert.True(t, len(plugins) >= 3, "should have at least 3 built-in providers")
+
+	// Find github builtin in output
+	var foundGithub bool
+	for _, p := range plugins {
+		if p["name"] == "github" {
+			foundGithub = true
+			assert.Equal(t, "builtin", p["type"], "github should have type=builtin")
+			// Operations field should exist and be a list
+			ops, ok := p["operations"]
+			assert.True(t, ok, "github should have operations field")
+			assert.NotNil(t, ops, "operations should not be nil")
+			break
+		}
+	}
+	assert.True(t, foundGithub, "should find github builtin in JSON output")
+}
+
+func TestPluginListCommand_OperationsFlag(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--operations", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	// When --operations flag is used, output should include operation names
+	// At minimum, operations from built-in providers should be shown
+	assert.NotEmpty(t, output, "operations output should not be empty")
+	// Should contain at least one of the built-in provider names
+	assert.True(t,
+		strings.Contains(output, "github") ||
+			strings.Contains(output, "http") ||
+			strings.Contains(output, "notify"),
+		"operations output should reference at least one built-in provider")
+}
+
+func TestPluginDisableCommand_UnknownPlugin(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "disable", "foobar", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	// Should fail with unknown plugin error
+	assert.Error(t, err, "disabling unknown plugin should return error")
+	assert.Contains(t, err.Error(), "unknown plugin", "error should mention unknown plugin")
+}
+
+func TestPluginDisableEnable_BuiltinRoundtrip(t *testing.T) {
+	tmpDir := setupTestDir(t)
+
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	// Disable a built-in provider
+	cmd1 := cli.NewRootCommand()
+	var out1 bytes.Buffer
+	cmd1.SetOut(&out1)
+	cmd1.SetErr(&out1)
+	cmd1.SetArgs([]string{"plugin", "disable", "http", "--storage", tmpDir})
+
+	err := cmd1.Execute()
+	require.NoError(t, err, "disabling http builtin should succeed")
+
+	// List plugins to verify disabled
+	cmd2 := cli.NewRootCommand()
+	var out2 bytes.Buffer
+	cmd2.SetOut(&out2)
+	cmd2.SetErr(&out2)
+	cmd2.SetArgs([]string{"plugin", "list", "--format", "json", "--storage", tmpDir})
+
+	err = cmd2.Execute()
+	require.NoError(t, err)
+
+	output := out2.String()
+	var plugins []map[string]any
+	err = json.Unmarshal([]byte(output), &plugins)
+	require.NoError(t, err)
+
+	// Find http plugin and verify it's disabled
+	var httpDisabled bool
+	for _, p := range plugins {
+		if p["name"] == "http" {
+			enabled, ok := p["enabled"]
+			if ok && enabled == false {
+				httpDisabled = true
+			}
+			break
+		}
+	}
+	assert.True(t, httpDisabled, "http should show as disabled after disable command")
+
+	// Re-enable the provider
+	cmd3 := cli.NewRootCommand()
+	var out3 bytes.Buffer
+	cmd3.SetOut(&out3)
+	cmd3.SetErr(&out3)
+	cmd3.SetArgs([]string{"plugin", "enable", "http", "--storage", tmpDir})
+
+	err = cmd3.Execute()
+	require.NoError(t, err, "enabling http builtin should succeed")
+
+	// List plugins again to verify enabled
+	cmd4 := cli.NewRootCommand()
+	var out4 bytes.Buffer
+	cmd4.SetOut(&out4)
+	cmd4.SetErr(&out4)
+	cmd4.SetArgs([]string{"plugin", "list", "--format", "json", "--storage", tmpDir})
+
+	err = cmd4.Execute()
+	require.NoError(t, err)
+
+	output = out4.String()
+	var plugins2 []map[string]any
+	err = json.Unmarshal([]byte(output), &plugins2)
+	require.NoError(t, err)
+
+	// Find http plugin and verify it's enabled
+	var httpEnabled bool
+	for _, p := range plugins2 {
+		if p["name"] == "http" {
+			enabled, ok := p["enabled"]
+			if ok && enabled == true {
+				httpEnabled = true
+			}
+			break
+		}
+	}
+	assert.True(t, httpEnabled, "http should show as enabled after enable command")
 }

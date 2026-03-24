@@ -84,6 +84,9 @@ type PluginConfig interface {
 	// SetEnabled enables or disables a plugin by name.
 	SetEnabled(ctx context.Context, name string, enabled bool) error
 	// IsEnabled returns whether a plugin is enabled.
+	// Default is true: plugins not explicitly disabled are considered enabled.
+	// Only plugins whose name appears in the disabled set return false.
+	// Unknown plugin names return true (default-enabled contract).
 	IsEnabled(name string) bool
 	// GetConfig returns the stored configuration for a plugin.
 	GetConfig(name string) map[string]any

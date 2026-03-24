@@ -1217,7 +1217,7 @@ func TestLoopExecutor_ExecuteWhile_DynamicMaxIterations_ContextCancellation(t *t
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-while-dynamic-cancel")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called inside the step callback below, not deferred
 	callCount := 0
 
 	result, err := loopExec.ExecuteWhile(

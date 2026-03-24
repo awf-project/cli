@@ -66,7 +66,7 @@ func TestFixtureScripts_NoShebang_ProducesExpectedOutput(t *testing.T) {
 	}
 	content, err := os.ReadFile(filepath.Join(dir, "no_shebang.sh"))
 	require.NoError(t, err)
-	out, err := exec.CommandContext(context.Background(), shell, "-c", string(content)).Output()
+	out, err := exec.CommandContext(context.Background(), shell, "-c", string(content)).Output() //nolint:gosec // shell and content are controlled test fixtures
 	require.NoError(t, err, "no_shebang.sh content must execute via $SHELL -c without error")
 	assert.Contains(t, string(out), "no-shebang-executed",
 		"no_shebang.sh must produce expected output when run via $SHELL -c")

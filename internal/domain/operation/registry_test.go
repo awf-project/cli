@@ -703,7 +703,7 @@ func runConcurrentWrites(t *testing.T, wg *sync.WaitGroup, registry *operation.O
 }
 
 func performWrites(id, j int, registry *operation.OperationRegistry, errors chan<- error) {
-	opName := "concurrent.op" + string(rune('0'+id)) + string(rune('0'+j))
+	opName := "concurrent.op" + string(rune('0'+id)) + string(rune('0'+j)) //nolint:gosec // G115: controlled test input, id/j are small loop indices
 	op := &mockOperation{
 		name: opName,
 		schema: &pluginmodel.OperationSchema{

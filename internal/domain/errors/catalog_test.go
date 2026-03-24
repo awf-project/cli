@@ -87,6 +87,7 @@ func TestErrorCatalog_AllDefinedCodesHaveEntries(t *testing.T) {
 		errors.ErrorCodeExecutionCommandFailed,
 		errors.ErrorCodeExecutionCommandTimeout,
 		errors.ErrorCodeExecutionParallelPartialFailure,
+		errors.ErrorCodeExecutionPluginDisabled,
 		// SYSTEM category
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
@@ -242,6 +243,15 @@ func TestGetCatalogEntry_ValidCodes(t *testing.T) {
 	}
 }
 
+func TestGetCatalogEntry_ExecutionPluginDisabled(t *testing.T) {
+	entry, found := errors.GetCatalogEntry(errors.ErrorCodeExecutionPluginDisabled)
+	assert.True(t, found, "catalog entry should exist")
+	assert.Equal(t, errors.ErrorCodeExecutionPluginDisabled, entry.Code)
+	assert.NotEmpty(t, entry.Description)
+	assert.NotEmpty(t, entry.Resolution)
+	assert.Contains(t, entry.Resolution, "awf plugin enable")
+}
+
 func TestGetCatalogEntry_InvalidCode(t *testing.T) {
 	tests := []struct {
 		name string
@@ -284,8 +294,8 @@ func TestGetCatalogEntry_ReturnsZeroValue(t *testing.T) {
 func TestAllErrorCodes_ReturnsAllCodes(t *testing.T) {
 	codes := errors.AllErrorCodes()
 
-	// Should return all 14 defined error codes
-	assert.Len(t, codes, 14, "Should return all 14 defined error codes")
+	// Should return all 15 defined error codes
+	assert.Len(t, codes, 15, "Should return all 15 defined error codes")
 
 	// Verify all codes are valid
 	for _, code := range codes {

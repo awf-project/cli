@@ -248,7 +248,6 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to initialize plugins: %w", err)
 	}
 	defer pluginResult.Cleanup()
-	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -259,7 +258,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 
 	// Setup agent registry for F039 agent step execution
 	agentRegistry := agents.NewAgentRegistry()
-	if err := agentRegistry.RegisterDefaults(); err != nil {
+	if err = agentRegistry.RegisterDefaults(); err != nil {
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
@@ -275,25 +274,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		}
 	}
 
-	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
-	githubClient := github.NewClient(logger)
-	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
-
-	// Load notify config from .awf/config.yaml (F056)
-	notifyProvider := notify.NewNotifyOperationProvider(logger)
-
-	// Register notification backends from config (T027)
-	if err := registerNotifyBackends(notifyProvider, projectCfg, logger); err != nil {
-		return fmt.Errorf("failed to register notify backends: %w", err)
+	// Setup operation providers gated by plugin enable/disable state
+	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to build operation providers: %w", err)
 	}
-
-	// Setup HTTP operation provider (F058)
-	httpClient := httpx.NewClient()
-	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
-
-	// Wrap all providers in composite for coexistence
-	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
+	execSvc.SetPluginService(pluginResult.Service)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -941,7 +928,6 @@ func runSingleStep(
 		return fmt.Errorf("failed to initialize plugins: %w", err)
 	}
 	defer pluginResult.Cleanup()
-	_ = pluginResult.Service // Available for future integration with execution service
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -952,31 +938,19 @@ func runSingleStep(
 
 	// Setup agent registry for F039 agent step execution
 	agentRegistry := agents.NewAgentRegistry()
-	if err := agentRegistry.RegisterDefaults(); err != nil {
+	if err = agentRegistry.RegisterDefaults(); err != nil {
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
 	execSvc.SetAWFPaths(buildAWFPaths())
 
-	// Setup operation providers (F054 GitHub + F056 Notify + F058 HTTP)
-	githubClient := github.NewClient(logger)
-	githubProvider := github.NewGitHubOperationProvider(githubClient, logger)
-
-	// Load notify config from .awf/config.yaml (F056)
-	notifyProvider := notify.NewNotifyOperationProvider(logger)
-
-	// Register notification backends from config (T027)
-	if err := registerNotifyBackends(notifyProvider, projectCfg, logger); err != nil {
-		return fmt.Errorf("failed to register notify backends: %w", err)
+	// Setup operation providers gated by plugin enable/disable state
+	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to build operation providers: %w", err)
 	}
-
-	// Setup HTTP operation provider (F058)
-	httpClient := httpx.NewClient()
-	httpProvider := http.NewHTTPOperationProvider(httpClient, logger)
-
-	// Wrap all providers in composite for coexistence
-	compositeProvider := pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider)
 	execSvc.SetOperationProvider(compositeProvider)
+	execSvc.SetPluginService(pluginResult.Service)
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -1129,7 +1103,7 @@ func collectMissingInputsIfNeeded(
 // isTerminal checks if the given reader is connected to a terminal.
 func isTerminal(r io.Reader) bool {
 	if f, ok := r.(*os.File); ok {
-		return term.IsTerminal(int(f.Fd()))
+		return term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 	}
 	return false
 }
@@ -1219,4 +1193,36 @@ func buildAuditWriter(logger ports.Logger) (ports.AuditTrailWriter, func(), erro
 		}
 	}
 	return w, cleanup, nil
+}
+
+// buildBuiltinProviders constructs a CompositeOperationProvider from the three built-in providers,
+// gating each behind an IsPluginEnabled() check so disabled providers are excluded from execution.
+func buildBuiltinProviders(pluginSvc *application.PluginService, projectCfg *config.ProjectConfig, logger ports.Logger) (*pluginmgr.CompositeOperationProvider, error) {
+	// pluginSvc nil check is a defensive guard — both call-sites pass non-nil service,
+	// but we fall back to enabling all providers if called without a service.
+	var providers []ports.OperationProvider
+
+	if pluginSvc == nil || pluginSvc.IsPluginEnabled("github") {
+		githubClient := github.NewClient(logger)
+		providers = append(providers, github.NewGitHubOperationProvider(githubClient, logger))
+	}
+
+	if pluginSvc == nil || pluginSvc.IsPluginEnabled("notify") {
+		notifyProvider := notify.NewNotifyOperationProvider(logger)
+		cfg := projectCfg
+		if cfg == nil {
+			cfg = &config.ProjectConfig{}
+		}
+		if err := registerNotifyBackends(notifyProvider, cfg, logger); err != nil {
+			return nil, fmt.Errorf("failed to register notify backends: %w", err)
+		}
+		providers = append(providers, notifyProvider)
+	}
+
+	if pluginSvc == nil || pluginSvc.IsPluginEnabled("http") {
+		httpClient := httpx.NewClient()
+		providers = append(providers, http.NewHTTPOperationProvider(httpClient, logger))
+	}
+
+	return pluginmgr.NewCompositeOperationProvider(providers...), nil
 }

@@ -429,7 +429,7 @@ func TestHandleNonZeroExit_DifferentExitCodes(t *testing.T) {
 
 			step := &workflow.Step{
 				Name:    "test_step",
-				Command: "exit " + string(rune(tt.exitCode)),
+				Command: "exit " + string(rune(tt.exitCode)), //nolint:gosec // G115: test code with controlled exit code inputs within valid rune range
 				Hooks:   workflow.StepHooks{},
 			}
 

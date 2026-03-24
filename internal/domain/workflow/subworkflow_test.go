@@ -34,7 +34,7 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 			name: "valid config with all fields",
 			config: CallWorkflowConfig{
 				Workflow: "analyze-file",
-				Inputs: map[string]string{
+				Inputs: map[string]string{ //nolint:gosec // G101: workflow template variable key, not a credential
 					"file_path":  "{{inputs.file}}",
 					"max_tokens": "{{inputs.tokens}}",
 				},
@@ -240,7 +240,7 @@ func TestCallWorkflowConfig_InputMappings(t *testing.T) {
 		},
 		{
 			name: "multiple inputs",
-			inputs: map[string]string{
+			inputs: map[string]string{ //nolint:gosec // G101: workflow template variable key, not a credential
 				"file":       "{{inputs.file_path}}",
 				"max_tokens": "{{inputs.tokens}}",
 				"verbose":    "true",
@@ -530,7 +530,7 @@ func TestSubWorkflowResult_AllFields(t *testing.T) {
 func TestCallWorkflowConfig_CompleteExample(t *testing.T) {
 	config := CallWorkflowConfig{
 		Workflow: "analyze-single-file",
-		Inputs: map[string]string{
+		Inputs: map[string]string{ //nolint:gosec // G101: workflow template variable key, not a credential
 			"file_path":  "{{loop.item}}",
 			"max_tokens": "{{inputs.max_tokens}}",
 			"format":     "json",

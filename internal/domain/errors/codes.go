@@ -67,6 +67,9 @@ const (
 
 	// ErrorCodeExecutionParallelPartialFailure indicates some parallel branches failed.
 	ErrorCodeExecutionParallelPartialFailure ErrorCode = "EXECUTION.PARALLEL.PARTIAL_FAILURE"
+
+	// ErrorCodeExecutionPluginDisabled indicates an operation references a disabled plugin.
+	ErrorCodeExecutionPluginDisabled ErrorCode = "EXECUTION.PLUGIN.DISABLED"
 )
 
 // Error code constants for SYSTEM category (exit code 4).

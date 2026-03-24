@@ -88,6 +88,12 @@ var ErrorCatalog = map[ErrorCode]CatalogEntry{
 		Resolution:   "Review logs for failed branches. Fix underlying issues in failed steps or adjust parallel strategy.",
 		RelatedCodes: []ErrorCode{ErrorCodeExecutionCommandFailed, ErrorCodeExecutionCommandTimeout},
 	},
+	ErrorCodeExecutionPluginDisabled: {
+		Code:         ErrorCodeExecutionPluginDisabled,
+		Description:  "An operation references a plugin that has been explicitly disabled.",
+		Resolution:   "Re-enable the plugin with 'awf plugin enable <name>' or remove the operation step from the workflow.",
+		RelatedCodes: []ErrorCode{},
+	},
 
 	ErrorCodeSystemIOReadFailed: {
 		Code:         ErrorCodeSystemIOReadFailed,

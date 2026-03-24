@@ -3267,6 +3267,52 @@ func TestCommandFailureHintGenerator_HandlesExitCode2_MisuseOfShellBuiltin(t *te
 }
 
 // containsSubstring checks if a string contains a substring (case-insensitive for robustness)
+func TestPluginDisabledHintGenerator_ReturnsHints_ForDisabledPlugin(t *testing.T) {
+	structErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeExecutionPluginDisabled,
+		`step send_notification: plugin "notify" is disabled`,
+		map[string]any{"plugin": "notify", "operation": "notify.send"},
+		nil,
+	)
+
+	hints := PluginDisabledHintGenerator(structErr)
+
+	assert.Len(t, hints, 2)
+	assert.Contains(t, hints[0].Message, "awf plugin enable notify")
+	assert.Contains(t, hints[1].Message, "awf plugin list")
+}
+
+func TestPluginDisabledHintGenerator_ReturnsEmpty_ForOtherErrors(t *testing.T) {
+	structErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeExecutionCommandFailed,
+		"command failed",
+		map[string]any{"exit_code": 1},
+		nil,
+	)
+
+	hints := PluginDisabledHintGenerator(structErr)
+
+	assert.Empty(t, hints)
+}
+
+func TestPluginDisabledHintGenerator_ReturnsEmpty_ForNilError(t *testing.T) {
+	hints := PluginDisabledHintGenerator(nil)
+	assert.Empty(t, hints)
+}
+
+func TestPluginDisabledHintGenerator_ReturnsEmpty_ForMissingDetails(t *testing.T) {
+	structErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeExecutionPluginDisabled,
+		"plugin disabled",
+		nil,
+		nil,
+	)
+
+	hints := PluginDisabledHintGenerator(structErr)
+
+	assert.Empty(t, hints)
+}
+
 func containsSubstring(s, substr string) bool {
 	return contains(s, substr)
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -48,6 +49,7 @@ type ExecutionService struct {
 	templateSvc       *TemplateService
 	operationProvider ports.OperationProvider
 	agentRegistry     ports.AgentRegistry
+	pluginSvc         *PluginService
 	conversationMgr   ConversationExecutor
 	outputLimiter     *OutputLimiter
 	awfPaths          map[string]string
@@ -100,6 +102,13 @@ func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
 // When nil, audit emission is skipped without error.
 func (s *ExecutionService) SetAuditTrailWriter(w ports.AuditTrailWriter) {
 	s.auditTrailWriter = w
+}
+
+// SetPluginService configures the plugin service for disabled-plugin detection.
+// When set, executePluginOperation checks if the plugin is disabled before lookup.
+// When nil, the check is skipped (backward compatible).
+func (s *ExecutionService) SetPluginService(svc *PluginService) {
+	s.pluginSvc = svc
 }
 
 func (s *ExecutionService) resolveAuditUser() string {
@@ -620,7 +629,7 @@ func (s *ExecutionService) executeWithRetry(
 			exitCode = result.ExitCode
 		}
 		if execErr != nil && exitCode == 0 {
-			// Execution error without exit code (e.g., context cancelled)
+			// Execution error without exit code (e.g., context canceled)
 			// Don't retry on context errors
 			if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) {
 				return result, attempt, execErr
@@ -1036,7 +1045,7 @@ func (s *ExecutionService) prepareStepExecution(
 	// apply step timeout
 	stepCtx = ctx
 	if step.Timeout > 0 {
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second) //nolint:gosec // G118: cancel is returned to caller who defers it
 	}
 
 	// build interpolation context
@@ -1645,6 +1654,26 @@ func (s *ExecutionService) executePluginOperation(
 		return "", fmt.Errorf("step %s: %w", step.Name, ErrNoOperationProvider)
 	}
 
+	// Check if operation's plugin is disabled before attempting lookup
+	if s.pluginSvc != nil {
+		parts := strings.SplitN(step.Operation, ".", 2)
+		if len(parts) == 2 {
+			pluginPrefix := parts[0]
+			if !s.pluginSvc.IsPluginEnabled(pluginPrefix) {
+				return "", domainerrors.NewExecutionError(
+					domainerrors.ErrorCodeExecutionPluginDisabled,
+					fmt.Sprintf("step %s: plugin %q is disabled", step.Name, pluginPrefix),
+					map[string]any{
+						"plugin":    pluginPrefix,
+						"operation": step.Operation,
+						"step":      step.Name,
+					},
+					nil,
+				)
+			}
+		}
+	}
+
 	// Validate operation exists
 	_, found := s.operationProvider.GetOperation(step.Operation)
 	if !found {
@@ -1691,7 +1720,7 @@ func (s *ExecutionService) executePluginOperation(
 		state.Response = result.Outputs
 	}
 
-	// Handle execution error (e.g., context cancelled, provider error)
+	// Handle execution error (e.g., context canceled, provider error)
 	if execErr != nil {
 		// Check if parent context was cancelled (workflow-level cancellation)
 		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
@@ -1883,7 +1912,7 @@ func (s *ExecutionService) executeAgentStep(
 		}
 	}
 
-	// Handle execution error (e.g., context cancelled, provider error)
+	// Handle execution error (e.g., context canceled, provider error)
 	if execErr != nil {
 		// Check if parent context was cancelled (workflow-level cancellation)
 		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
@@ -2112,7 +2141,7 @@ func (s *ExecutionService) serializeOperationOutputs(outputs map[string]any) str
 		if !first {
 			result.WriteString("\n")
 		}
-		result.WriteString(fmt.Sprintf("%s=%v", k, v))
+		fmt.Fprintf(&result, "%s=%v", k, v)
 		first = false
 	}
 	return result.String()

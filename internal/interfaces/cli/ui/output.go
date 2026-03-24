@@ -129,6 +129,7 @@ type ValidationResult struct {
 	Valid    bool     `json:"valid"`
 	Workflow string   `json:"workflow"`
 	Errors   []string `json:"errors,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // InputInfo represents workflow input for table output.
@@ -154,6 +155,7 @@ type ValidationResultTable struct {
 	Inputs   []InputInfo
 	Steps    []StepSummary
 	Errors   []string
+	Warnings []string
 }
 
 // PromptInfo represents a prompt file for list prompts command.
@@ -168,11 +170,19 @@ type PromptInfo struct {
 // PluginInfo represents a plugin for list plugins command.
 type PluginInfo struct {
 	Name         string   `json:"name"`
+	Type         string   `json:"type,omitempty"`
 	Version      string   `json:"version,omitempty"`
 	Description  string   `json:"description,omitempty"`
 	Status       string   `json:"status"`
 	Enabled      bool     `json:"enabled"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	Operations   []string `json:"operations,omitempty"`
+}
+
+// OperationEntry represents an operation for operation listing.
+type OperationEntry struct {
+	Name   string `json:"name"`
+	Plugin string `json:"plugin"`
 }
 
 // tableWriter renders ASCII-bordered tables.
@@ -391,12 +401,13 @@ func (w *OutputWriter) writeStructuredError(err *domerrors.StructuredError, code
 // newHumanErrorFormatter creates a HumanErrorFormatter using the output writer's color settings.
 // Extracted as a method to facilitate testing and maintain separation of concerns.
 //
-// Includes all 5 hint generators for C048:
+// Includes all 6 hint generators for C048:
 //   - FileNotFoundHintGenerator: "did you mean?" for missing files
 //   - YAMLSyntaxHintGenerator: line/column references for syntax errors
 //   - InvalidStateHintGenerator: closest state match suggestions
 //   - MissingInputHintGenerator: required inputs with examples
 //   - CommandFailureHintGenerator: permission/path verification guidance
+//   - PluginDisabledHintGenerator: plugin disable/enable guidance
 func (w *OutputWriter) newHumanErrorFormatter() ErrorFormatter {
 	return NewHumanErrorFormatter(!w.noColor, w.noHints,
 		errfmt.FileNotFoundHintGenerator,
@@ -404,6 +415,7 @@ func (w *OutputWriter) newHumanErrorFormatter() ErrorFormatter {
 		errfmt.InvalidStateHintGenerator,
 		errfmt.MissingInputHintGenerator,
 		errfmt.CommandFailureHintGenerator,
+		errfmt.PluginDisabledHintGenerator,
 	)
 }
 
@@ -432,12 +444,29 @@ func (w *OutputWriter) WritePlugins(plugins []PluginInfo) error {
 	case FormatTable:
 		return w.writePluginsBorderedTable(plugins)
 	case FormatQuiet:
-		for _, p := range plugins {
-			_, _ = fmt.Fprintln(w.out, p.Name)
+		for i := range plugins {
+			_, _ = fmt.Fprintln(w.out, plugins[i].Name)
 		}
 		return nil
 	default: // text
 		return w.writePluginsTable(plugins)
+	}
+}
+
+// WriteOperations outputs operation list.
+func (w *OutputWriter) WriteOperations(operations []OperationEntry) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(operations)
+	case FormatTable:
+		return w.writeOperationsBorderedTable(operations)
+	case FormatQuiet:
+		for _, op := range operations {
+			_, _ = fmt.Fprintln(w.out, op.Name)
+		}
+		return nil
+	default: // text
+		return w.writeOperationsTable(operations)
 	}
 }
 
@@ -546,18 +575,11 @@ func (w *OutputWriter) writePluginsTable(plugins []PluginInfo) error {
 	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
 
 	// Header
-	_, _ = fmt.Fprintln(tw, "NAME\tVERSION\tSTATUS\tENABLED\tCAPABILITIES")
+	_, _ = fmt.Fprintln(tw, "NAME\tTYPE\tVERSION\tSTATUS\tENABLED\tCAPABILITIES")
 
-	for _, p := range plugins {
-		enabled := "yes"
-		if !p.Enabled {
-			enabled = "no"
-		}
-		caps := strings.Join(p.Capabilities, ", ")
-		if caps == "" {
-			caps = "-"
-		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Name, p.Version, p.Status, enabled, caps)
+	for i := range plugins {
+		r := pluginRow(&plugins[i])
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.name, r.pluginType, r.version, r.status, r.enabled, r.caps)
 	}
 
 	if err := tw.Flush(); err != nil {
@@ -572,22 +594,55 @@ func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
 		return nil
 	}
 
-	table := newTableWriter(w.out, 20, 10, 12, 8, 25)
+	table := newTableWriter(w.out, 20, 10, 10, 12, 8, 25)
 
 	table.separator()
-	table.row("NAME", "VERSION", "STATUS", "ENABLED", "CAPABILITIES")
+	table.row("NAME", "TYPE", "VERSION", "STATUS", "ENABLED", "CAPABILITIES")
 	table.separator()
 
-	for _, p := range plugins {
-		enabled := "yes"
-		if !p.Enabled {
-			enabled = "no"
-		}
-		caps := strings.Join(p.Capabilities, ", ")
-		if caps == "" {
-			caps = "-"
-		}
-		table.row(p.Name, p.Version, p.Status, enabled, caps)
+	for i := range plugins {
+		r := pluginRow(&plugins[i])
+		table.row(r.name, r.pluginType, r.version, r.status, r.enabled, r.caps)
+	}
+	table.separator()
+
+	return nil
+}
+
+func (w *OutputWriter) writeOperationsTable(operations []OperationEntry) error {
+	if len(operations) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No operations found")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+
+	_, _ = fmt.Fprintln(tw, "NAME\tPLUGIN")
+
+	for _, op := range operations {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\n", op.Name, op.Plugin)
+	}
+
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
+}
+
+func (w *OutputWriter) writeOperationsBorderedTable(operations []OperationEntry) error {
+	if len(operations) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No operations found")
+		return nil
+	}
+
+	table := newTableWriter(w.out, 30, 20)
+
+	table.separator()
+	table.row("NAME", "PLUGIN")
+	table.separator()
+
+	for _, op := range operations {
+		table.row(op.Name, op.Plugin)
 	}
 	table.separator()
 
@@ -812,6 +867,22 @@ func formatInputRow(inp InputInfo) (name, typ, required, defaultVal string) {
 	return name, typ, required, defaultVal
 }
 
+type pluginRowData struct {
+	name, pluginType, version, status, enabled, caps string
+}
+
+func pluginRow(p *PluginInfo) pluginRowData {
+	enabled := "yes"
+	if !p.Enabled {
+		enabled = "no"
+	}
+	caps := strings.Join(p.Capabilities, ", ")
+	if caps == "" {
+		caps = "-"
+	}
+	return pluginRowData{p.Name, p.Type, p.Version, p.Status, enabled, caps}
+}
+
 // formatStepRow formats a single step row for the validation table.
 // Returns: name, type, next as strings.
 func formatStepRow(step StepSummary) (name, typ, next string) {
@@ -896,6 +967,14 @@ func (w *OutputWriter) writeValidationResultTable(result *ValidationResultTable)
 		_, _ = fmt.Fprintln(w.out)
 		for _, e := range result.Errors {
 			_, _ = fmt.Fprintf(w.out, "ERROR: %s\n", e)
+		}
+	}
+
+	// Warnings
+	if len(result.Warnings) > 0 {
+		_, _ = fmt.Fprintln(w.out)
+		for _, warning := range result.Warnings {
+			_, _ = fmt.Fprintf(w.out, "WARNING: %s\n", warning)
 		}
 	}
 

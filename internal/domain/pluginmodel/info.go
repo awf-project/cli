@@ -11,19 +11,30 @@ const (
 	StatusStopped     PluginStatus = "stopped"     // Shutdown() completed
 	StatusFailed      PluginStatus = "failed"      // Error occurred
 	StatusDisabled    PluginStatus = "disabled"    // Manually disabled by user
+	StatusBuiltin     PluginStatus = "builtin"     // Built-in provider registered at startup
+)
+
+// PluginType distinguishes built-in providers from external plugins.
+type PluginType string
+
+const (
+	PluginTypeBuiltin  PluginType = "builtin"
+	PluginTypeExternal PluginType = "external"
 )
 
 type PluginInfo struct {
 	Manifest      *Manifest
 	Status        PluginStatus
+	Type          PluginType
 	Path          string
 	Error         error
 	LoadedAt      int64
 	InitializedAt int64
+	Operations    []string
 }
 
 func (p *PluginInfo) IsActive() bool {
-	return p.Status == StatusRunning
+	return p.Status == StatusRunning || p.Status == StatusBuiltin
 }
 
 func (p *PluginInfo) CanLoad() bool {

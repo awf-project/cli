@@ -100,6 +100,11 @@ func TestErrorCodeConstants_EXECUTION_Category(t *testing.T) {
 			code:     errors.ErrorCodeExecutionParallelPartialFailure,
 			expected: "EXECUTION.PARALLEL.PARTIAL_FAILURE",
 		},
+		{
+			name:     "ErrorCodeExecutionPluginDisabled",
+			code:     errors.ErrorCodeExecutionPluginDisabled,
+			expected: "EXECUTION.PLUGIN.DISABLED",
+		},
 	}
 
 	for _, tt := range tests {
@@ -158,6 +163,7 @@ func TestErrorCodeConstants_AllValid(t *testing.T) {
 		errors.ErrorCodeExecutionCommandFailed,
 		errors.ErrorCodeExecutionCommandTimeout,
 		errors.ErrorCodeExecutionParallelPartialFailure,
+		errors.ErrorCodeExecutionPluginDisabled,
 		// SYSTEM category
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
@@ -185,6 +191,7 @@ func TestErrorCodeConstants_UniqueValues(t *testing.T) {
 		errors.ErrorCodeExecutionCommandFailed,
 		errors.ErrorCodeExecutionCommandTimeout,
 		errors.ErrorCodeExecutionParallelPartialFailure,
+		errors.ErrorCodeExecutionPluginDisabled,
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
 		errors.ErrorCodeSystemIOPermissionDenied,

@@ -332,6 +332,7 @@ func TestWait(t *testing.T) {
 		}, nil, 42)
 
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		go func() {
 			time.Sleep(10 * time.Millisecond)

@@ -1205,7 +1205,7 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 		WithExecutor(slowExecutor).
 		Build()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called in goroutine below, not deferred
 
 	// Cancel after a short delay
 	go func() {

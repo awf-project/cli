@@ -276,7 +276,7 @@ func TestLoopExecutor_ExecuteForEach_ContextCancellation(t *testing.T) {
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-foreach-cancel")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is called inside the step callback below, not deferred
 	callCount := 0
 
 	result, err := loopExec.ExecuteForEach(

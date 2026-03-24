@@ -205,10 +205,6 @@ func TestWorkflowValidation(t *testing.T) {
 // Integration tests use fixtures from tests/fixtures/
 ```
 
-## Recent Changes (December 2025)
-
-See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
-
 ### Breaking Changes
 - `Args` field removed from `ports.Command` struct (was unused)
 
@@ -237,25 +233,15 @@ See `CHANGELOG.md` and `docs/code-review-2025-12.md` for details.
 - Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
 - Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
 - Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
-
-Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
-
-Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
-
-Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
-
-Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
-
-Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
-
-Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
+- Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
+- Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
+- Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
+- Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
+- Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
+- Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
 
 ## Common Pitfalls
 
-- Preserve existing infrastructure layers when adding domain registries; ADR-004 enforces infrastructure plugin registry coexistence for separate lifecycle concerns
-- Never duplicate HTTP client logic across notification backends; extract to pkg/httpx with HTTPDoer interface for testability and shared timeout/header handling
-- Limit HTTP response bodies at operation level (default 1MB via io.LimitReader) with truncated flag; preserve unlimited reads for notify backends by allowing maxBytes=0
-- Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; enables consistent behavior regardless of CLI invocation location
 - Enforce 1MB size limit on loaded prompt files via io.LimitReader to prevent accidental memory issues and provide fast failure feedback for misconfigured paths
 - Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
 - Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
@@ -281,24 +267,26 @@ Validate agent provider options only against what each CLI actually accepts; do 
 - When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
 - Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
 - Halt implementation immediately when scope deviations are discovered; update plan and communicate changes before continuing work
+- Apply identical error handling patterns across similar functions; handleNonZeroExit and handleExecutionError must both evaluate transitions before fallbacks
+- When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
+- Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
+- Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
+- Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
+- When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
+- Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
+- When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
+- Leverage Go's map[string]any behavior to silently ignore unsupported provider options; avoids validation errors while maintaining clear intent
+- Avoid variable shadowing; never redeclare outer-scope variables with := in inner blocks
+- Use index-based loops or pointer ranges when iterating large structs (>128 bytes); avoid per-iteration copying
+- Limit function return values to 5; return a struct for 6+ outputs to maintain readability
 
-Apply identical error handling patterns across similar functions; handleNonZeroExit and handleExecutionError must both evaluate transitions before fallbacks
+- Always defer cancel() immediately after context.WithCancel() to prevent goroutine leaks
 
-When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
+- Always validate shell paths with filepath.Clean before file operations to prevent path traversal violations
 
-Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
+- Always include explanatory comments with //nolint directives; document why the warning is a false positive (e.g., 'controlled test input', 'architecturally safe conversion')
 
-Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
-
-Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
-
-When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
-
-Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
-
-When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
-
-Leverage Go's map[string]any behavior to silently ignore unsupported provider options; avoids validation errors while maintaining clear intent
+- File descriptor conversions (uintptr→int) are architecturally safe on all supported platforms; add //nolint:gosec G115 with explanation rather than runtime guards
 
 ## Test Conventions
 
@@ -314,12 +302,11 @@ Leverage Go's map[string]any behavior to silently ignore unsupported provider op
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
 - Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
 - Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
+- Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
+- Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
+- Update all YAML fixtures when removing option support from code; synchronize fixtures with validation rule changes to prevent accidental bypass of removed validations
 
-Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
-
-Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
-
-Update all YAML fixtures when removing option support from code; synchronize fixtures with validation rule changes to prevent accidental bypass of removed validations
+- Add //nolint:gosec to test code with controlled inputs when GOSEC flags false positives
 
 ## Review Standards
 

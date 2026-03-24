@@ -311,12 +311,15 @@ config:
 awf plugin list
 ```
 
-Output shows all discovered plugins with their status:
+Output shows all plugins (built-in and external) with their status:
 
 ```
-NAME                VERSION  STATUS   CAPABILITIES  DESCRIPTION
-awf-plugin-github   2.1.0    enabled  operations    GitHub API integration
-awf-plugin-metrics  1.0.0    disabled operations    Metrics collection
+NAME                TYPE      VERSION  STATUS   ENABLED  CAPABILITIES
+github              builtin   dev      builtin  yes      operations
+http                builtin   dev      builtin  yes      operations
+notify              builtin   dev      builtin  yes      operations
+awf-plugin-github   external  2.1.0    enabled  yes      operations
+awf-plugin-metrics  external  1.0.0    disabled no       operations
 ```
 
 #### Enable/Disable Plugins
@@ -392,48 +395,40 @@ plugins:
 
 Environment variables in config values are expanded at runtime.
 
-### Plugin Development
+### Built-in Plugin Visibility
 
-Use the `pkg/plugin/sdk` package to create your own plugins.
+AWF ships with 3 built-in plugins that always appear in `awf plugin list`:
 
-#### Quick Start
+```
+$ awf plugin list
+NAME    TYPE     VERSION  STATUS   ENABLED  CAPABILITIES
+github  builtin  dev      builtin  yes      operations
+http    builtin  dev      builtin  yes      operations
+notify  builtin  dev      builtin  yes      operations
+```
 
-```go
-package main
+Built-in plugins can be disabled and re-enabled like external plugins:
 
-import (
-    "github.com/awf-project/cli/pkg/plugin/sdk"
-)
+```bash
+awf plugin disable http    # Disable the HTTP provider
+awf plugin enable http     # Re-enable it
+```
 
-type MyPlugin struct{}
+Use `--operations` to see operations grouped by plugin:
 
-func (p *MyPlugin) Name() string    { return "awf-plugin-example" }
-func (p *MyPlugin) Version() string { return "1.0.0" }
-
-func (p *MyPlugin) Init(config map[string]interface{}) error {
-    return nil
-}
-
-func (p *MyPlugin) Shutdown() error {
-    return nil
-}
-
-func (p *MyPlugin) Operations() []sdk.Operation {
-    return []sdk.Operation{
-        {
-            Name:        "greet",
-            Description: "Say hello",
-            Execute: func(ctx sdk.Context, inputs map[string]interface{}) (sdk.Result, error) {
-                name := inputs["name"].(string)
-                return sdk.Result{Output: "Hello, " + name}, nil
-            },
-        },
-    }
-}
-
-func main() {
-    sdk.Serve(&MyPlugin{})
-}
+```
+$ awf plugin list --operations
+NAME                  PLUGIN
+github.get_issue      github
+github.get_pr         github
+github.create_pr      github
+github.create_issue   github
+github.add_labels     github
+github.list_comments  github
+github.add_comment    github
+github.batch          github
+http.request          http
+notify.send           notify
 ```
 
 ## Troubleshooting

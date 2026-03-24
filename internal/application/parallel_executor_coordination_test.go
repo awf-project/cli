@@ -223,7 +223,7 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 				}
 			},
 			setupContext: func() (context.Context, context.CancelFunc) {
-				return context.WithCancel(context.Background())
+				return context.WithCancel(context.Background()) //nolint:gosec // G118: cancel returned to caller who manages lifecycle
 			},
 			semaphoreSize: 2,
 			fillSemaphore: false,
@@ -240,7 +240,7 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 				m.errors["error"] = errors.New("step failed")
 			},
 			setupContext: func() (context.Context, context.CancelFunc) {
-				return context.WithCancel(context.Background())
+				return context.WithCancel(context.Background()) //nolint:gosec // G118: cancel returned to caller who manages lifecycle
 			},
 			semaphoreSize: 1,
 			fillSemaphore: false,
@@ -252,7 +252,7 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			name:       "context cancelled before execution",
+			name:       "context canceled before execution",
 			branchName: "cancelled",
 			setupExecutor: func(m *mockStepExecutor) {
 				m.delay = 100 * time.Millisecond
@@ -280,7 +280,7 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 				}
 			},
 			setupContext: func() (context.Context, context.CancelFunc) {
-				return context.WithTimeout(context.Background(), 50*time.Millisecond)
+				return context.WithTimeout(context.Background(), 50*time.Millisecond) //nolint:gosec // G118: cancel returned to caller who manages lifecycle
 			},
 			semaphoreSize: 1,
 			fillSemaphore: true, // Block semaphore
@@ -301,7 +301,7 @@ func TestParallelExecutor_RunBranchWithSemaphore_TableDriven(t *testing.T) {
 				}
 			},
 			setupContext: func() (context.Context, context.CancelFunc) {
-				return context.WithCancel(context.Background())
+				return context.WithCancel(context.Background()) //nolint:gosec // G118: cancel returned to caller who manages lifecycle
 			},
 			semaphoreSize: 0, // No semaphore (nil)
 			fillSemaphore: false,

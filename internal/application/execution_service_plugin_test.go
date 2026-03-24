@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -150,7 +152,7 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 		expectedErrMessage string
 	}{
 		{
-			name:               "parent context cancelled during operation execution",
+			name:               "parent context canceled during operation execution",
 			cancelBeforeExec:   false,
 			providerDelay:      200 * time.Millisecond,
 			expectedStatus:     workflow.StatusCancelled,
@@ -940,4 +942,133 @@ func (m *mockOperationProviderWithCapture) Execute(
 	// Capture inputs
 	m.capturedInputs[name] = inputs
 	return m.mockOperationProvider.Execute(ctx, name, inputs)
+}
+
+// createPluginServiceWithDisabled creates a PluginService where the named plugin is disabled.
+// It reuses the mockPluginStateStore defined in plugin_service_test.go (same package).
+func createPluginServiceWithDisabled(t *testing.T, pluginName string) *application.PluginService {
+	t.Helper()
+	store := newMockPluginStateStore()
+	store.setPluginEnabled(pluginName, false)
+	logger := newMockPluginLogger()
+	return application.NewPluginService(nil, store, logger)
+}
+
+// TestExecutePluginOperation_DisabledPlugin_ReturnsStructuredError verifies that when a plugin
+// is disabled, executePluginOperation returns a StructuredError with code EXECUTION.PLUGIN.DISABLED
+// before attempting any operation lookup.
+func TestExecutePluginOperation_DisabledPlugin_ReturnsStructuredError(t *testing.T) {
+	provider := newMockOperationProvider()
+	provider.addOperation("notify.send", "Send notification", "notify")
+
+	step := builders.NewStepBuilder("notify-step").
+		WithType(workflow.StepTypeOperation).
+		WithOperation("notify.send", nil).
+		WithOnSuccess("done").
+		Build()
+
+	wf := &workflow.Workflow{
+		Name:    "disabled-plugin-test",
+		Initial: "notify-step",
+		Steps: map[string]*workflow.Step{
+			"notify-step": step,
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("disabled-plugin-test", wf).
+		Build()
+	execSvc.SetOperationProvider(provider)
+	execSvc.SetPluginService(createPluginServiceWithDisabled(t, "notify"))
+
+	_, err := execSvc.Run(context.Background(), "disabled-plugin-test", nil)
+
+	require.Error(t, err)
+	var structErr *domainerrors.StructuredError
+	require.True(t, errors.As(err, &structErr), "expected StructuredError, got: %T %v", err, err)
+	assert.Equal(t, domainerrors.ErrorCodeExecutionPluginDisabled, structErr.Code)
+	assert.Equal(t, "notify", structErr.Details["plugin"])
+}
+
+// TestExecutePluginOperation_NilPluginService_SkipsCheck verifies backward compatibility:
+// when no PluginService is configured, the disabled-plugin check is skipped entirely
+// and execution falls through to the normal "not found" error path.
+func TestExecutePluginOperation_NilPluginService_SkipsCheck(t *testing.T) {
+	// Provider has no operations registered — will return "not found"
+	provider := newMockOperationProvider()
+
+	step := builders.NewStepBuilder("op-step").
+		WithType(workflow.StepTypeOperation).
+		WithOperation("notify.send", nil).
+		WithOnSuccess("done").
+		Build()
+
+	wf := &workflow.Workflow{
+		Name:    "nil-plugin-svc-test",
+		Initial: "op-step",
+		Steps: map[string]*workflow.Step{
+			"op-step": step,
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("nil-plugin-svc-test", wf).
+		Build()
+	execSvc.SetOperationProvider(provider)
+	// Intentionally: no SetPluginService call
+
+	_, err := execSvc.Run(context.Background(), "nil-plugin-svc-test", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.NotContains(t, err.Error(), "disabled")
+}
+
+// TestExecutePluginOperation_NoDotInOperation_SkipsCheck verifies that when the operation
+// name has no dot separator (no plugin prefix), the disabled-plugin check is skipped.
+func TestExecutePluginOperation_NoDotInOperation_SkipsCheck(t *testing.T) {
+	provider := newMockOperationProvider()
+	// No operations — will return "not found" regardless
+
+	step := builders.NewStepBuilder("op-step").
+		WithType(workflow.StepTypeOperation).
+		WithOperation("send", nil). // no dot — no plugin prefix
+		WithOnSuccess("done").
+		Build()
+
+	wf := &workflow.Workflow{
+		Name:    "no-dot-test",
+		Initial: "op-step",
+		Steps: map[string]*workflow.Step{
+			"op-step": step,
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	// Plugin service reports "send" as disabled — but the check should be skipped
+	// because there is no dot in the operation name.
+	pluginSvc := createPluginServiceWithDisabled(t, "send")
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("no-dot-test", wf).
+		Build()
+	execSvc.SetOperationProvider(provider)
+	execSvc.SetPluginService(pluginSvc)
+
+	_, err := execSvc.Run(context.Background(), "no-dot-test", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.NotContains(t, err.Error(), "disabled")
 }

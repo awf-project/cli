@@ -732,7 +732,7 @@ awf plugin <subcommand> [flags]
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | List all discovered plugins |
+| `list` | List all plugins (use `--operations` to show provided operations) |
 | `enable <name>` | Enable a disabled plugin |
 | `disable <name>` | Disable an enabled plugin |
 
@@ -751,14 +751,16 @@ awf plugin list [flags]
 | Flag | Description |
 |------|-------------|
 | `-f, --format` | Output format (text, json) |
+| `--operations` | List operations provided by each plugin |
 
 ### Output Columns
 
 | Column | Description |
 |--------|-------------|
 | Name | Plugin identifier |
+| Type | `builtin` or `external` |
 | Version | Semantic version |
-| Status | `enabled`, `disabled`, or `error` |
+| Status | `builtin`, `enabled`, `disabled`, or `error` |
 | Description | Brief plugin description |
 | Capabilities | Plugin features: `operations`, `commands`, `validators` |
 
@@ -770,13 +772,16 @@ awf plugin list
 
 # JSON output for scripting
 awf plugin list -f json
+
+# Show operations provided by each plugin
+awf plugin list --operations
 ```
 
 ---
 
 ## awf plugin enable
 
-Enable a disabled plugin.
+Enable a disabled plugin. Works with both built-in and external plugins.
 
 ```bash
 awf plugin enable <name>
@@ -791,15 +796,24 @@ awf plugin enable <name>
 ### Examples
 
 ```bash
-# Enable a plugin
+# Enable an external plugin
 awf plugin enable awf-plugin-github
+
+# Enable a built-in plugin
+awf plugin enable http
 ```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `unknown plugin "<name>"` | Plugin name is not registered (typo or not installed) |
 
 ---
 
 ## awf plugin disable
 
-Disable an enabled plugin.
+Disable an enabled plugin. Works with both built-in and external plugins.
 
 ```bash
 awf plugin disable <name>
@@ -814,9 +828,18 @@ awf plugin disable <name>
 ### Examples
 
 ```bash
-# Disable a plugin
+# Disable an external plugin
 awf plugin disable awf-plugin-github
+
+# Disable a built-in plugin
+awf plugin disable http
 ```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `unknown plugin "<name>"` | Plugin name is not registered (typo or not installed) |
 
 ---
 

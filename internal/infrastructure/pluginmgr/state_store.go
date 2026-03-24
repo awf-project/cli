@@ -61,27 +61,27 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 		return fmt.Errorf("open temp file: %w", err)
 	}
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil { //nolint:gosec // G115: file descriptors are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("lock file: %w", err)
 	}
 
 	if _, err := f.Write(data); err != nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptors are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write temp file: %w", err)
 	}
 
 	if err := f.Sync(); err != nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptors are within int range on all supported platforms
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("sync temp file: %w", err)
 	}
 
-	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptors are within int range on all supported platforms
 	_ = f.Close()
 
 	if err := os.Rename(tmpPath, finalPath); err != nil {
