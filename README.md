@@ -27,7 +27,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
 - **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
-- **Plugin System** - Extend AWF with custom operations via gRPC plugins (HashiCorp go-plugin), with `sdk.Serve()` entry point for plugin authors
+- **Plugin System** - Extend AWF with custom operations via gRPC plugins (HashiCorp go-plugin), with `sdk.Serve()` entry point for plugin authors, and install/update/remove from GitHub Releases with checksum verification
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
@@ -119,6 +119,10 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf status <id>` | Check workflow status |
 | `awf config show` | Display project configuration |
 | `awf plugin list` | List installed plugins |
+| `awf plugin install <owner/repo>` | Install a plugin from GitHub Releases |
+| `awf plugin update [name]` | Update an installed plugin |
+| `awf plugin remove <name>` | Remove an installed plugin |
+| `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
 | `awf version` | Show version information |

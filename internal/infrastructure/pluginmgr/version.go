@@ -316,3 +316,13 @@ func CheckVersionConstraint(constraintStr, versionStr string) (bool, error) {
 func IsCompatible(awfVersionConstraint, currentAWFVersion string) (bool, error) {
 	return CheckVersionConstraint(awfVersionConstraint, currentAWFVersion)
 }
+
+// NormalizeTag strips a leading "v" prefix from a GitHub release tag.
+func NormalizeTag(tag string) string {
+	return strings.TrimPrefix(tag, "v")
+}
+
+// IsPrerelease returns true if this version has a prerelease identifier.
+func (v Version) IsPrerelease() bool {
+	return v.Prerelease != ""
+}

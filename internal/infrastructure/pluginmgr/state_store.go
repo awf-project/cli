@@ -38,9 +38,22 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 	}
 
 	s.mu.RLock()
-	statesToSave := make(map[string]*pluginmodel.PluginState, len(s.states))
+	snapshot := make(map[string]pluginmodel.PluginState, len(s.states))
 	for k, v := range s.states {
-		statesToSave[k] = v
+		copied := *v
+		if v.Config != nil {
+			copied.Config = make(map[string]any, len(v.Config))
+			for ck, cv := range v.Config {
+				copied.Config[ck] = cv
+			}
+		}
+		if v.SourceData != nil {
+			copied.SourceData = make(map[string]any, len(v.SourceData))
+			for sk, sv := range v.SourceData {
+				copied.SourceData[sk] = sv
+			}
+		}
+		snapshot[k] = copied
 	}
 	s.mu.RUnlock()
 
@@ -51,7 +64,7 @@ func (s *JSONPluginStateStore) Save(ctx context.Context) error {
 	finalPath := s.filePath()
 	tmpPath := fmt.Sprintf("%s.%d.%d.tmp", finalPath, os.Getpid(), time.Now().UnixNano())
 
-	data, err := json.MarshalIndent(statesToSave, "", "  ")
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal state: %w", err)
 	}
@@ -234,4 +247,51 @@ func (s *JSONPluginStateStore) BasePath() string {
 // filePath returns the full path to the plugins.json file.
 func (s *JSONPluginStateStore) filePath() string {
 	return filepath.Join(s.basePath, pluginsFileName)
+}
+
+// SetSourceData stores source metadata for a plugin.
+func (s *JSONPluginStateStore) SetSourceData(ctx context.Context, name string, data map[string]any) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("set source data: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, exists := s.states[name]
+	if !exists {
+		state = pluginmodel.NewPluginState()
+		s.states[name] = state
+	}
+
+	state.SourceData = data
+
+	return nil
+}
+
+// GetSourceData returns the stored source metadata for a plugin.
+// Returns nil if plugin has no stored source data.
+func (s *JSONPluginStateStore) GetSourceData(name string) map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	state, exists := s.states[name]
+	if !exists {
+		return nil
+	}
+	return state.SourceData
+}
+
+// RemoveState removes all state entries for a plugin name.
+func (s *JSONPluginStateStore) RemoveState(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("remove state: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.states, name)
+
+	return nil
 }

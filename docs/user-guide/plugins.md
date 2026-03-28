@@ -311,16 +311,130 @@ config:
 awf plugin list
 ```
 
-Output shows all plugins (built-in and external) with their status:
+Output shows all plugins (built-in and external) with their status and source:
 
 ```
-NAME                TYPE      VERSION  STATUS   ENABLED  CAPABILITIES
-github              builtin   dev      builtin  yes      operations
-http                builtin   dev      builtin  yes      operations
-notify              builtin   dev      builtin  yes      operations
-awf-plugin-github   external  2.1.0    enabled  yes      operations
-awf-plugin-metrics  external  1.0.0    disabled no       operations
+NAME                TYPE      VERSION  STATUS   ENABLED  CAPABILITIES  SOURCE
+github              builtin   dev      builtin  yes      operations    -
+http                builtin   dev      builtin  yes      operations    -
+notify              builtin   dev      builtin  yes      operations    -
+awf-plugin-jira     external  2.1.0    enabled  yes      operations    myorg/awf-plugin-jira
+awf-plugin-metrics  external  1.0.0    disabled no       operations    acme/awf-plugin-metrics
 ```
+
+The `SOURCE` column shows the GitHub `owner/repo` for plugins installed via `awf plugin install`. Manually installed plugins and built-in plugins show `-`.
+
+#### Install a Plugin
+
+Install an external plugin from GitHub Releases:
+
+```bash
+awf plugin install owner/repo
+```
+
+AWF downloads the latest release, verifies the SHA-256 checksum, extracts the archive, validates the manifest, and installs atomically.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Version constraint (e.g. `">=1.0.0 <2.0.0"`) |
+| `--pre-release` | Include alpha/beta/rc versions in resolution |
+| `--force` | Overwrite an existing installation |
+
+**Examples:**
+
+```bash
+# Install latest stable release
+awf plugin install myorg/awf-plugin-jira
+
+# Install with version constraint
+awf plugin install myorg/awf-plugin-jira --version ">=1.0.0 <2.0.0"
+
+# Include pre-release versions
+awf plugin install myorg/awf-plugin-jira --pre-release
+
+# Reinstall (overwrite existing)
+awf plugin install myorg/awf-plugin-jira --force
+```
+
+The `owner/repo` argument must be a GitHub repository path (not a URL). The repository must contain GitHub Releases with `.tar.gz` assets matching the AWF naming convention (see [Release Asset Naming](#release-asset-naming)).
+
+#### Update a Plugin
+
+Update an installed plugin to the latest version:
+
+```bash
+awf plugin update <name>
+```
+
+AWF fetches the latest release from the plugin's source repository, verifies the checksum, and performs an atomic replacement.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Update all externally installed plugins |
+
+**Examples:**
+
+```bash
+# Update a specific plugin
+awf plugin update jira
+
+# Update all external plugins
+awf plugin update --all
+```
+
+Running `awf plugin update` without a plugin name and without `--all` returns a usage error.
+
+#### Remove a Plugin
+
+Remove an installed external plugin:
+
+```bash
+awf plugin remove <name>
+```
+
+AWF shuts down the plugin process, removes the plugin directory, and clears its state.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--keep-data` | Preserve plugin configuration and state |
+
+**Examples:**
+
+```bash
+# Remove a plugin
+awf plugin remove jira
+
+# Remove but keep configuration
+awf plugin remove jira --keep-data
+```
+
+Built-in plugins cannot be removed. Attempting to remove a built-in plugin returns an error with a hint to use `awf plugin disable` instead.
+
+#### Search for Plugins
+
+Search for AWF plugins on GitHub:
+
+```bash
+awf plugin search [query]
+```
+
+Searches GitHub repositories tagged with the `awf-plugin` topic. Results include repository name, description, and latest version.
+
+```bash
+# Search all AWF plugins
+awf plugin search
+
+# Search with a keyword
+awf plugin search jira
+```
+
+Use `--output=json` for machine-readable output.
 
 #### Enable/Disable Plugins
 
@@ -401,10 +515,10 @@ AWF ships with 3 built-in plugins that always appear in `awf plugin list`:
 
 ```
 $ awf plugin list
-NAME    TYPE     VERSION  STATUS   ENABLED  CAPABILITIES
-github  builtin  dev      builtin  yes      operations
-http    builtin  dev      builtin  yes      operations
-notify  builtin  dev      builtin  yes      operations
+NAME    TYPE     VERSION  STATUS   ENABLED  CAPABILITIES  SOURCE
+github  builtin  dev      builtin  yes      operations    -
+http    builtin  dev      builtin  yes      operations    -
+notify  builtin  dev      builtin  yes      operations    -
 ```
 
 Built-in plugins can be disabled and re-enabled like external plugins:
@@ -502,6 +616,96 @@ echo_step:
     prefix: ">>>"
   on_success: done
 ```
+
+---
+
+## Distributing Plugins via GitHub Releases
+
+AWF installs plugins from GitHub Releases. Plugin authors must publish `.tar.gz` archives with a specific naming convention so AWF can resolve the correct asset for each platform.
+
+### Release Asset Naming
+
+Assets must follow this pattern:
+
+```
+<plugin-name>_<version>_<os>_<arch>.tar.gz
+```
+
+| Component | Values |
+|-----------|--------|
+| `plugin-name` | Plugin binary name (e.g. `awf-plugin-jira`) |
+| `version` | Semantic version without `v` prefix (e.g. `1.2.0`) |
+| `os` | `linux`, `darwin`, `windows` |
+| `arch` | `amd64`, `arm64` |
+
+**Example release assets:**
+
+```
+awf-plugin-jira_1.2.0_linux_amd64.tar.gz
+awf-plugin-jira_1.2.0_linux_arm64.tar.gz
+awf-plugin-jira_1.2.0_darwin_amd64.tar.gz
+awf-plugin-jira_1.2.0_darwin_arm64.tar.gz
+```
+
+Each archive must contain:
+- The plugin binary (`awf-plugin-<name>`)
+- A `plugin.yaml` manifest
+
+A `checksums.txt` file (SHA-256) must be included as a separate release asset. AWF verifies the checksum before installation.
+
+### GoReleaser Configuration
+
+Use [GoReleaser](https://goreleaser.com/) to automate plugin releases. Add a `.goreleaser.yml` to your plugin repository:
+
+```yaml
+project_name: awf-plugin-myplugin
+
+builds:
+  - main: .
+    binary: awf-plugin-myplugin
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - plugin.yaml
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: your-org
+    name: awf-plugin-myplugin
+```
+
+All archives must use `.tar.gz` format. This differs from AWF's own releases which use `.zip` on macOS.
+
+### Authentication
+
+AWF uses authentication for GitHub API requests in the following order:
+
+1. `GITHUB_TOKEN` environment variable (if set)
+2. `gh auth token` output (if `gh` CLI is installed and authenticated)
+3. Unauthenticated requests (subject to lower rate limits)
+
+Set `GITHUB_TOKEN` for CI environments or to avoid rate limiting:
+
+```bash
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+awf plugin install myorg/awf-plugin-jira
+```
+
+When the GitHub API rate limit is exceeded, AWF detects the `X-RateLimit-Remaining: 0` header and returns an actionable error message suggesting authentication.
 
 ---
 

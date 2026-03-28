@@ -177,6 +177,7 @@ type PluginInfo struct {
 	Enabled      bool     `json:"enabled"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	Operations   []string `json:"operations,omitempty"`
+	Source       string   `json:"source,omitempty"`
 }
 
 // OperationEntry represents an operation for operation listing.
@@ -575,11 +576,11 @@ func (w *OutputWriter) writePluginsTable(plugins []PluginInfo) error {
 	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
 
 	// Header
-	_, _ = fmt.Fprintln(tw, "NAME\tTYPE\tVERSION\tSTATUS\tENABLED\tCAPABILITIES")
+	_, _ = fmt.Fprintln(tw, "NAME\tTYPE\tVERSION\tSTATUS\tENABLED\tCAPABILITIES\tSOURCE")
 
 	for i := range plugins {
 		r := pluginRow(&plugins[i])
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.name, r.pluginType, r.version, r.status, r.enabled, r.caps)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.name, r.pluginType, r.version, r.status, r.enabled, r.caps, r.source)
 	}
 
 	if err := tw.Flush(); err != nil {
@@ -594,15 +595,15 @@ func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
 		return nil
 	}
 
-	table := newTableWriter(w.out, 20, 10, 10, 12, 8, 25)
+	table := newTableWriter(w.out, 20, 10, 10, 12, 8, 25, 20)
 
 	table.separator()
-	table.row("NAME", "TYPE", "VERSION", "STATUS", "ENABLED", "CAPABILITIES")
+	table.row("NAME", "TYPE", "VERSION", "STATUS", "ENABLED", "CAPABILITIES", "SOURCE")
 	table.separator()
 
 	for i := range plugins {
 		r := pluginRow(&plugins[i])
-		table.row(r.name, r.pluginType, r.version, r.status, r.enabled, r.caps)
+		table.row(r.name, r.pluginType, r.version, r.status, r.enabled, r.caps, r.source)
 	}
 	table.separator()
 
@@ -868,7 +869,7 @@ func formatInputRow(inp InputInfo) (name, typ, required, defaultVal string) {
 }
 
 type pluginRowData struct {
-	name, pluginType, version, status, enabled, caps string
+	name, pluginType, version, status, enabled, caps, source string
 }
 
 func pluginRow(p *PluginInfo) pluginRowData {
@@ -880,7 +881,11 @@ func pluginRow(p *PluginInfo) pluginRowData {
 	if caps == "" {
 		caps = "-"
 	}
-	return pluginRowData{p.Name, p.Type, p.Version, p.Status, enabled, caps}
+	source := p.Source
+	if source == "" {
+		source = "-"
+	}
+	return pluginRowData{p.Name, p.Type, p.Version, p.Status, enabled, caps, source}
 }
 
 // formatStepRow formats a single step row for the validation table.

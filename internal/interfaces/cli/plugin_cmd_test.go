@@ -1,10 +1,17 @@
 package cli_test
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1128,4 +1135,506 @@ func TestPluginListCommand_OperationsFlag_InitFailure(t *testing.T) {
 
 	err := cmd.Execute()
 	require.NoError(t, err)
+}
+
+func TestPluginInstallCommand_Exists(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	pluginCmd, _, err := cmd.Find([]string{"plugin"})
+	require.NoError(t, err)
+
+	found := false
+	for _, sub := range pluginCmd.Commands() {
+		if sub.Name() == "install" {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found, "plugin command should have 'install' subcommand")
+}
+
+func TestPluginInstallCommand_HasExpectedFlags(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	installCmd, _, err := cmd.Find([]string{"plugin", "install"})
+	require.NoError(t, err)
+
+	flagNames := map[string]bool{}
+	installCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		flagNames[flag.Name] = true
+	})
+
+	assert.True(t, flagNames["version"], "install command should have --version flag")
+	assert.True(t, flagNames["pre-release"], "install command should have --pre-release flag")
+	assert.True(t, flagNames["force"], "install command should have --force flag")
+}
+
+func TestPluginInstallCommand_RequiresExactlyOneArg(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "install", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "install without repo arg should fail")
+	assert.Contains(t, err.Error(), "accepts 1 arg", "error should mention argument requirement")
+}
+
+func TestPluginInstallCommand_RejectsInvalidOwnerRepo(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "install", "not-a-valid-repo", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "install with invalid owner/repo format should fail")
+}
+
+func TestPluginInstallCommand_RejectsURLPrefixOwnerRepo(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "install", "https://github.com/owner/repo", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "install with https:// URL format should fail")
+}
+
+func TestPluginUpdateCommand_Exists(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	pluginCmd, _, err := cmd.Find([]string{"plugin"})
+	require.NoError(t, err)
+
+	found := false
+	for _, sub := range pluginCmd.Commands() {
+		if sub.Name() == "update" {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found, "plugin command should have 'update' subcommand")
+}
+
+func TestPluginUpdateCommand_HasAllFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	updateCmd, _, err := cmd.Find([]string{"plugin", "update"})
+	require.NoError(t, err)
+
+	flagNames := map[string]bool{}
+	updateCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		flagNames[flag.Name] = true
+	})
+
+	assert.True(t, flagNames["all"], "update command should have --all flag")
+}
+
+func TestPluginUpdateCommand_RequiresNameOrAllFlag(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "update", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "update without plugin name or --all should fail")
+	assert.Contains(t, err.Error(), "plugin name or --all", "error should mention the requirement")
+}
+
+func TestPluginUpdateCommand_FailsForNotInstalledPlugin(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "update", "nonexistent-plugin", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "update of a plugin with no source metadata should fail")
+}
+
+func TestPluginRemoveCommand_Exists(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	pluginCmd, _, err := cmd.Find([]string{"plugin"})
+	require.NoError(t, err)
+
+	found := false
+	for _, sub := range pluginCmd.Commands() {
+		if sub.Name() == "remove" {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found, "plugin command should have 'remove' subcommand")
+}
+
+func TestPluginRemoveCommand_HasKeepDataFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	removeCmd, _, err := cmd.Find([]string{"plugin", "remove"})
+	require.NoError(t, err)
+
+	flagNames := make(map[string]bool)
+	removeCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		flagNames[f.Name] = true
+	})
+
+	assert.True(t, flagNames["keep-data"], "remove command should have --keep-data flag")
+}
+
+func TestPluginRemoveCommand_RequiresExactlyOneArg(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "remove", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "remove without plugin name should error")
+	assert.Contains(t, err.Error(), "accepts 1 arg", "error should mention argument requirement")
+}
+
+func TestPluginRemoveCommand_FailsForBuiltinPlugin(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "remove", "github", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "removing a built-in plugin should fail")
+}
+
+func TestPluginRemoveCommand_FailsForNotInstalledPlugin(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "remove", "nonexistent-plugin", "--storage", tmpDir})
+
+	err := cmd.Execute()
+
+	assert.Error(t, err, "removing a plugin that is not installed should fail")
+}
+
+func TestPluginCommand_HasSearchSubcommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	pluginCmd, _, err := cmd.Find([]string{"plugin"})
+	require.NoError(t, err)
+
+	found := false
+	for _, sub := range pluginCmd.Commands() {
+		if sub.Name() == "search" {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found, "plugin command should have 'search' subcommand")
+}
+
+// newMockGitHubSearchServer creates a httptest server that serves GitHub Search API responses.
+func newMockGitHubSearchServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"items": []map[string]interface{}{
+				{"full_name": "myorg/awf-plugin-jira", "description": "Jira integration", "stargazers_count": 42},
+				{"full_name": "myorg/awf-plugin-slack", "description": "Slack notifications", "stargazers_count": 15},
+			},
+		}
+		json.NewEncoder(w).Encode(resp) //nolint:errcheck // test helper; encoding error won't occur with static data
+	}))
+}
+
+func TestPluginSearchCommand_NoArgs(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	srv := newMockGitHubSearchServer(t)
+	defer srv.Close()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "search", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "search without query should succeed")
+
+	output := out.String()
+	assert.NotEmpty(t, output, "search output should not be empty")
+	assert.Contains(t, output, "awf-plugin-jira")
+}
+
+func TestPluginSearchCommand_WithQuery(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	srv := newMockGitHubSearchServer(t)
+	defer srv.Close()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "search", "jira", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "search with query should succeed")
+
+	output := out.String()
+	assert.NotEmpty(t, output, "search results should not be empty")
+}
+
+func TestPluginSearchCommand_JSONOutput(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	srv := newMockGitHubSearchServer(t)
+	defer srv.Close()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "search", "--format", "json", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "search with JSON format should succeed")
+
+	output := strings.TrimSpace(out.String())
+
+	// Output should be valid JSON (array of repositories)
+	var result interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	assert.NoError(t, err, "output should be valid JSON")
+}
+
+// seedUpdateSourceData writes state metadata so updatePlugin can read origin repo and version.
+func seedUpdateSourceData(t *testing.T, storagePath, pluginName, ownerRepo, version string) {
+	t.Helper()
+
+	stateDir := filepath.Join(storagePath, "plugins")
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
+
+	content := fmt.Sprintf(`{
+	%q: {
+		"enabled": true,
+		"source_data": {
+			"repository": %q,
+			"version": %q,
+			"installed_at": "2024-01-01T00:00:00Z",
+			"updated_at": "2024-01-01T00:00:00Z"
+		}
+	}
+}`, pluginName, ownerRepo, version)
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(stateDir, "plugins.json"),
+		[]byte(content),
+		0o600,
+	))
+}
+
+// newMockGitHubReleasesServer creates an httptest server returning a single release for a plugin.
+func newMockGitHubReleasesServer(t *testing.T, pluginName, tagName string) *httptest.Server {
+	t.Helper()
+	assetName := fmt.Sprintf("awf-plugin-%s_%s_%s_%s.tar.gz", pluginName, strings.TrimPrefix(tagName, "v"), runtime.GOOS, runtime.GOARCH)
+
+	var buf bytes.Buffer
+	gz, _ := gzip.NewWriterLevel(&buf, gzip.DefaultCompression) //nolint:errcheck // test helper
+	tw := tar.NewWriter(gz)
+	binaryContent := []byte("#!/bin/bash\necho mock plugin")
+	manifestContent := fmt.Sprintf("name: %s\nversion: 1.0.0\ndescription: Test\ncapabilities: []\n", pluginName)
+	for _, entry := range []struct {
+		name    string
+		mode    int64
+		content []byte
+	}{
+		{fmt.Sprintf("awf-plugin-%s", pluginName), 0o755, binaryContent},
+		{"plugin.yaml", 0o644, []byte(manifestContent)},
+	} {
+		_ = tw.WriteHeader(&tar.Header{Name: entry.name, Size: int64(len(entry.content)), Mode: entry.mode}) //nolint:errcheck // test helper
+		_, _ = tw.Write(entry.content)                                                                       //nolint:errcheck // test helper
+	}
+	_ = tw.Close() //nolint:errcheck // test helper
+	_ = gz.Close() //nolint:errcheck // test helper
+	tarball := buf.Bytes()
+
+	hash := sha256.Sum256(tarball)
+	checksumLine := fmt.Sprintf("%x  %s", hash, assetName)
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/releases"):
+			releases := []map[string]interface{}{
+				{
+					"tag_name": tagName,
+					"assets": []map[string]interface{}{
+						{
+							"name":                 assetName,
+							"browser_download_url": "http://" + r.Host + "/downloads/" + assetName,
+						},
+						{
+							"name":                 "checksums.txt",
+							"browser_download_url": "http://" + r.Host + "/downloads/checksums.txt",
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(releases)
+		case strings.Contains(r.URL.Path, "/downloads/"+assetName):
+			w.Header().Set("Content-Type", "application/gzip")
+			_, _ = w.Write(tarball)
+		case strings.Contains(r.URL.Path, "/downloads/checksums.txt"):
+			_, _ = w.Write([]byte(checksumLine))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+// TestPluginUpdateCommand_AlreadyUpToDate verifies that update prints "already up to date"
+// and returns nil when the installed version matches the latest GitHub release.
+func TestPluginUpdateCommand_AlreadyUpToDate(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	pluginDir := filepath.Join(pluginsDir, "test-plugin")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "awf-plugin-test-plugin"), []byte("binary"), 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	// Seed state with v1.0.0 — same as what the mock server returns.
+	seedUpdateSourceData(t, tmpDir, "test-plugin", "testorg/awf-plugin-test-plugin", "v1.0.0")
+
+	srv := newMockGitHubReleasesServer(t, "test-plugin", "v1.0.0")
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "update", "test-plugin", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "update should succeed when already up to date")
+	assert.Contains(t, out.String(), "already up to date", "should report no update needed")
+}
+
+// TestPluginUpdateCommand_NoSourceData verifies that update returns a descriptive error
+// when the plugin was installed manually without source metadata.
+func TestPluginUpdateCommand_NoSourceData(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	pluginDir := filepath.Join(pluginsDir, "manual-plugin")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "awf-plugin-manual-plugin"), []byte("binary"), 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	// No source data written to state store — simulates a manually installed plugin.
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "update", "manual-plugin", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	assert.Error(t, err, "update should fail when no source data exists")
+	assert.Contains(t, err.Error(), "remote source", "error should explain why update cannot proceed")
+}
+
+// TestPluginUpdateCommand_NotInstalled verifies that update returns an error
+// when the plugin directory does not exist on disk.
+func TestPluginUpdateCommand_NotInstalled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "update", "ghost-plugin", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	assert.Error(t, err, "update should fail when plugin is not installed")
+	assert.Contains(t, err.Error(), "not installed", "error should indicate plugin is not installed")
+}
+
+func TestPluginSearchCommand_QueryWithJSON(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	srv := newMockGitHubSearchServer(t)
+	defer srv.Close()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "search", "slack", "--format", "json", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "search with query and JSON format should succeed")
+
+	output := strings.TrimSpace(out.String())
+
+	// Should parse as JSON (array of search results)
+	var results interface{}
+	err = json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err, "JSON search results should be valid")
 }

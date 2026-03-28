@@ -4,6 +4,7 @@ type PluginState struct {
 	Enabled    bool           `json:"enabled"`
 	Config     map[string]any `json:"config,omitempty"`
 	DisabledAt int64          `json:"disabled_at,omitempty"`
+	SourceData map[string]any `json:"source_data,omitempty"`
 }
 
 func NewPluginState() *PluginState {
