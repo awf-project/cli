@@ -1366,3 +1366,215 @@ func TestOutputWriter_WriteOperations_AllFormats(t *testing.T) {
 		})
 	}
 }
+
+// T013: Plugin Source Field Tests
+
+// TestWritePluginsJSONIncludesSource verifies JSON output includes Source field.
+func TestWritePluginsJSONIncludesSource(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:    "github-plugin",
+			Type:    "external",
+			Source:  "owner/github-plugin",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+		{
+			Name:    "builtin-http",
+			Type:    "builtin",
+			Source:  "",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	var result []ui.PluginInfo
+	err = json.Unmarshal(buf.Bytes(), &result)
+	require.NoError(t, err)
+
+	assert.Len(t, result, 2)
+	assert.Equal(t, "owner/github-plugin", result[0].Source)
+	assert.Equal(t, "", result[1].Source)
+}
+
+// TestWritePluginsTableIncludesSourceColumn verifies simple table output includes SOURCE column.
+func TestWritePluginsTableIncludesSourceColumn(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:    "test-plugin",
+			Type:    "external",
+			Source:  "owner/repo",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	result := buf.String()
+	assert.Contains(t, result, "SOURCE")
+	assert.Contains(t, result, "owner/repo")
+	assert.Contains(t, result, "test-plugin")
+}
+
+// TestWritePluginsTableBuiltinSourceDisplay verifies table renders empty source as dash for builtin plugins.
+func TestWritePluginsTableBuiltinSourceDisplay(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:    "builtin-http",
+			Type:    "builtin",
+			Source:  "",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	result := buf.String()
+	assert.Contains(t, result, "SOURCE")
+	assert.Contains(t, result, "-")
+}
+
+// TestWritePluginsMultiplePluginsWithSources verifies multiple plugins render with correct source values in table.
+func TestWritePluginsMultiplePluginsWithSources(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:    "plugin-one",
+			Source:  "org/one",
+			Type:    "external",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+		{
+			Name:    "plugin-two",
+			Source:  "org/two",
+			Type:    "external",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+		{
+			Name:    "builtin",
+			Source:  "",
+			Type:    "builtin",
+			Version: "1.0.0",
+			Status:  "loaded",
+			Enabled: true,
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	result := buf.String()
+	assert.Contains(t, result, "org/one")
+	assert.Contains(t, result, "org/two")
+	assert.Contains(t, result, "SOURCE")
+}
+
+// TestPluginInfoSourceFieldSerialization verifies Source field serializes to JSON.
+func TestPluginInfoSourceFieldSerialization(t *testing.T) {
+	plugin := ui.PluginInfo{
+		Name:    "test-plugin",
+		Type:    "external",
+		Source:  "org/plugin",
+		Version: "1.0.0",
+		Status:  "loaded",
+		Enabled: true,
+	}
+
+	data, err := json.Marshal(plugin)
+	require.NoError(t, err)
+
+	var result ui.PluginInfo
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "org/plugin", result.Source)
+}
+
+// TestWritePluginsBorderedTableSourceColumn verifies bordered table includes SOURCE column.
+func TestWritePluginsBorderedTableSourceColumn(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	plugins := []ui.PluginInfo{
+		{
+			Name:         "external-plugin",
+			Type:         "external",
+			Source:       "myorg/external",
+			Version:      "2.0.0",
+			Status:       "loaded",
+			Enabled:      true,
+			Capabilities: []string{"storage"},
+		},
+	}
+
+	err := w.WritePlugins(plugins)
+	require.NoError(t, err)
+
+	result := buf.String()
+	assert.Contains(t, result, "SOURCE")
+	assert.Contains(t, result, "myorg/external")
+	assert.Contains(t, result, "external-plugin")
+	assert.Contains(t, result, "storage")
+}
+
+// TestWritePluginsSourceFieldPresence verifies Source field is populated in table output.
+func TestWritePluginsSourceFieldPresence(t *testing.T) {
+	tests := []struct {
+		name       string
+		source     string
+		expectText string
+	}{
+		{"external source", "owner/repo", "owner/repo"},
+		{"empty source", "", "-"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+			plugins := []ui.PluginInfo{
+				{
+					Name:    "test",
+					Source:  tt.source,
+					Type:    "external",
+					Version: "1.0.0",
+					Status:  "loaded",
+					Enabled: true,
+				},
+			}
+
+			err := w.WritePlugins(plugins)
+			require.NoError(t, err)
+
+			result := buf.String()
+			assert.Contains(t, result, tt.expectText)
+		})
+	}
+}

@@ -18,6 +18,10 @@ title: "CLI Commands"
 | `awf error [code]` | Look up error code documentation |
 | `awf history` | Show workflow execution history |
 | `awf plugin list` | List installed plugins |
+| `awf plugin install <owner/repo>` | Install a plugin from GitHub releases |
+| `awf plugin update [name]` | Update an installed plugin |
+| `awf plugin remove <name>` | Remove an installed plugin |
+| `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
 | `awf config show` | Display project configuration |
@@ -733,6 +737,10 @@ awf plugin <subcommand> [flags]
 | Subcommand | Description |
 |------------|-------------|
 | `list` | List all plugins (use `--operations` to show provided operations) |
+| `install <owner/repo>` | Install a plugin from GitHub releases |
+| `update [name]` | Update an installed plugin to the latest version |
+| `remove <name>` | Remove an installed plugin |
+| `search [query]` | Search for available plugins on GitHub |
 | `enable <name>` | Enable a disabled plugin |
 | `disable <name>` | Disable an enabled plugin |
 
@@ -761,6 +769,7 @@ awf plugin list [flags]
 | Type | `builtin` or `external` |
 | Version | Semantic version |
 | Status | `builtin`, `enabled`, `disabled`, or `error` |
+| Source | GitHub `owner/repo` for installed plugins, `-` for built-in |
 | Description | Brief plugin description |
 | Capabilities | Plugin features: `operations`, `commands`, `validators` |
 
@@ -775,6 +784,181 @@ awf plugin list -f json
 
 # Show operations provided by each plugin
 awf plugin list --operations
+```
+
+---
+
+## awf plugin install
+
+Install a plugin from a GitHub repository.
+
+```bash
+awf plugin install <owner/repo> [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `owner/repo` | GitHub repository in `owner/repo` format (not a URL) |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Version constraint (e.g. `">=1.0.0 <2.0.0"`) |
+| `--pre-release` | Include pre-release versions (alpha, beta, rc) |
+| `--force` | Overwrite existing installation |
+
+### Description
+
+Downloads the latest compatible release from the GitHub repository, verifies the SHA-256 checksum, extracts the `.tar.gz` archive, validates the plugin manifest, and installs atomically. The plugin is enabled automatically after installation.
+
+Release assets must follow the naming convention: `awf-plugin-<name>_<os>_<arch>.tar.gz` with a corresponding `checksums.txt` file.
+
+### Examples
+
+```bash
+# Install a plugin
+awf plugin install myorg/awf-plugin-jira
+
+# Install with version constraint
+awf plugin install myorg/awf-plugin-jira --version ">=1.0.0 <2.0.0"
+
+# Include pre-release versions
+awf plugin install myorg/awf-plugin-jira --pre-release
+
+# Force reinstall over existing
+awf plugin install myorg/awf-plugin-jira --force
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `invalid format: use owner/repo` | A URL was provided instead of `owner/repo` |
+| `invalid format: expected owner/repo` | Missing owner or repo component |
+| `already installed` | Plugin exists (use `--force` to overwrite) |
+| `checksum mismatch` | Downloaded archive failed SHA-256 verification |
+| `no compatible asset` | No release asset matches the current platform |
+
+---
+
+## awf plugin update
+
+Update an installed plugin to the latest compatible version.
+
+```bash
+awf plugin update [plugin-name] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `plugin-name` | Name of the plugin to update (optional with `--all`) |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Update all externally installed plugins |
+
+### Description
+
+Fetches the latest release from the plugin's source repository and performs an atomic replacement. Built-in plugins cannot be updated. Requires either a plugin name or the `--all` flag.
+
+### Examples
+
+```bash
+# Update a specific plugin
+awf plugin update jira
+
+# Update all external plugins
+awf plugin update --all
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `requires a plugin name or --all flag` | No plugin name and `--all` not specified |
+| `plugin "<name>" is not installed` | Plugin name not found in installed plugins |
+
+---
+
+## awf plugin remove
+
+Remove an installed plugin.
+
+```bash
+awf plugin remove <plugin-name> [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `plugin-name` | Name of the plugin to remove |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--keep-data` | Preserve plugin configuration and state |
+
+### Description
+
+Removes the plugin binary and manifest from the plugins directory. Plugin state is also cleared unless `--keep-data` is specified. Built-in plugins cannot be removed — use `awf plugin disable` instead.
+
+### Examples
+
+```bash
+# Remove a plugin
+awf plugin remove jira
+
+# Remove but keep configuration
+awf plugin remove jira --keep-data
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `plugin "<name>" is not installed` | Plugin name not found |
+| `built-in provider cannot be removed` | Attempted to remove a built-in plugin (use `disable` instead) |
+
+---
+
+## awf plugin search
+
+Search for available AWF plugins on GitHub.
+
+```bash
+awf plugin search [query] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `query` | Optional keyword to filter results |
+
+### Description
+
+Discovers AWF plugins on GitHub by searching repositories tagged with the `awf-plugin` topic. Without a query, lists the full catalog. Results can be output as JSON for scripting.
+
+### Examples
+
+```bash
+# List all available plugins
+awf plugin search
+
+# Search by keyword
+awf plugin search jira
+
+# JSON output for scripting
+awf plugin search --output=json
 ```
 
 ---

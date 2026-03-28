@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Use pkg pattern for cross-layer HTTP utilities (pkg/httpx) to avoid infrastructure-to-infrastructure mayDependOn violations; register as commonComponent in go-arch-lint.yml
-- Implement infrastructure operation providers (e.g., HTTPOperationProvider) with direct domain type implementation to enable zero-change wiring into CompositeOperationProvider
 - Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
 - Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
 - Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
@@ -239,13 +237,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
 - Plugin binaries must be discoverable at <plugins_dir>/<plugin_name>/awf-plugin-<plugin_name>; host validates binary existence and version compatibility via gRPC handshake after process start
 - Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
+- CLI command implementations must call infrastructure layer methods rather than reimplementing HTTP requests, parsing, or validation; avoid logic duplication
+- Application layer must persist source metadata (SetSourceData) after successful infrastructure installation; omitting state blocks downstream operations like updates
 
 ## Common Pitfalls
 
-- Never allow both Prompt and PromptFile fields to be set simultaneously; AgentConfig.Validate must enforce XOR constraint with clear error messages
-- Never allow both Prompt and PromptFile fields to be set simultaneously in agent configuration; enforce XOR constraint in AgentConfig.Validate with clear error message
-- Always resolve relative prompt file paths against workflow.SourceDir, not current working directory; ensures consistent behavior regardless of CLI invocation location
-- Enforce 1MB size limit on loaded prompt files via io.LimitReader; prevents accidental memory issues and provides fast failure feedback for misconfigured paths
 - Always resolve script_file and prompt_file paths against workflow.SourceDir first, then check for local XDG overrides via resolveLocalOverGlobal() before falling back to global XDG paths
 - Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
 - Never initialize interpolation context with nil AWF map in loadExternalFile() and related functions; always pass initialized empty map to prevent nil dereference in resolveLocalOverGlobal() and path resolution helpers
@@ -283,6 +279,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Always include explanatory comments with //nolint directives; document why the warning is a false positive (e.g., 'controlled test input', 'architecturally safe conversion')
 - File descriptor conversions (uintptr→int) are architecturally safe on all supported platforms; add //nolint:gosec G115 with explanation rather than runtime guards
 - Use atomic file renames (os.Rename after close) for executable test fixtures; prevents 'text file busy' errors when replacing binaries that running tests currently execute from
+- Never hardcode resource identifiers (filenames, URLs) in lookup operations; derive from actual source data or pass as parameter to enable correct matching
+- Never include test-only fallback logic (localhost URLs, test servers) in production code paths; use env vars or dependency injection for test mocking instead
+- Always shutdown gRPC plugin connections before removing plugin binaries; prevents 'text file busy' errors and ensures graceful termination
+- Never commit CLI command implementations as stubs; implement fully or return explicit NotImplementedError with linked issue
 
 ## Test Conventions
 
@@ -304,6 +304,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Add //nolint:gosec to test code with controlled inputs when GOSEC flags false positives
 - When replacing stub implementations with real methods, delete tests validating stub-only behavior (e.g., ReturnsNotImplemented assertions); stub tests become false positives after implementation replaces the stub
 - For plugin lifecycle testing, use self-hosting pattern: detect AWF_PLUGIN env var in TestMain to serve subprocess plugin; eliminates need for separate plugin test binaries
+- Write integration tests covering all command lifecycle paths (success, errors, state transitions) before marking implementation complete; include platform detection edge cases
 
 ## Review Standards
 

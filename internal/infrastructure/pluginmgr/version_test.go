@@ -1042,3 +1042,99 @@ func TestConstraints_String(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeTag(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+		want string
+	}{
+		{
+			name: "tag with v prefix",
+			tag:  "v1.0.0",
+			want: "1.0.0",
+		},
+		{
+			name: "tag without v prefix",
+			tag:  "1.0.0",
+			want: "1.0.0",
+		},
+		{
+			name: "empty string",
+			tag:  "",
+			want: "",
+		},
+		{
+			name: "only v",
+			tag:  "v",
+			want: "",
+		},
+		{
+			name: "multiple v prefixes",
+			tag:  "vv1.0.0",
+			want: "v1.0.0",
+		},
+		{
+			name: "v with prerelease",
+			tag:  "v1.0.0-alpha.1",
+			want: "1.0.0-alpha.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeTag(tt.tag)
+			if got != tt.want {
+				t.Errorf("NormalizeTag(%q) = %q, want %q", tt.tag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVersion_IsPrerelease(t *testing.T) {
+	tests := []struct {
+		name    string
+		version Version
+		want    bool
+	}{
+		{
+			name:    "version with prerelease",
+			version: Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "alpha"},
+			want:    true,
+		},
+		{
+			name:    "version with prerelease and dot notation",
+			version: Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "alpha.1"},
+			want:    true,
+		},
+		{
+			name:    "version without prerelease",
+			version: Version{Major: 1, Minor: 0, Patch: 0, Prerelease: ""},
+			want:    false,
+		},
+		{
+			name:    "zero version without prerelease",
+			version: Version{Major: 0, Minor: 0, Patch: 0, Prerelease: ""},
+			want:    false,
+		},
+		{
+			name:    "beta prerelease",
+			version: Version{Major: 2, Minor: 1, Patch: 3, Prerelease: "beta.2"},
+			want:    true,
+		},
+		{
+			name:    "rc prerelease",
+			version: Version{Major: 1, Minor: 2, Patch: 3, Prerelease: "rc"},
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.version.IsPrerelease()
+			if got != tt.want {
+				t.Errorf("Version.IsPrerelease() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

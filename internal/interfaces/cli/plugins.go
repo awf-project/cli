@@ -12,9 +12,10 @@ import (
 
 // PluginSystemResult contains the initialized plugin system components.
 type PluginSystemResult struct {
-	Service *application.PluginService
-	Manager ports.OperationProvider
-	Cleanup func()
+	Service    *application.PluginService
+	Manager    ports.OperationProvider
+	StateStore *infrastructurePlugin.JSONPluginStateStore
+	Cleanup    func()
 }
 
 // initPluginSystem initializes the plugin infrastructure for workflow execution.
@@ -47,8 +48,9 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 		service := application.NewPluginService(nil, stateStore, logger)
 		registerBuiltins(service, Version)
 		return &PluginSystemResult{
-			Service: service,
-			Cleanup: func() {},
+			Service:    service,
+			StateStore: stateStore,
+			Cleanup:    func() {},
 		}, nil
 	}
 
@@ -87,9 +89,10 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	}
 
 	return &PluginSystemResult{
-		Service: service,
-		Manager: manager,
-		Cleanup: cleanup,
+		Service:    service,
+		Manager:    manager,
+		StateStore: stateStore,
+		Cleanup:    cleanup,
 	}, nil
 }
 

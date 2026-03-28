@@ -419,6 +419,7 @@ deps:
       - domain-ports
       - domain-errors
       - proto-plugin
+      - pkg-httpx
     canUse:
       - go-stdlib
       - yaml

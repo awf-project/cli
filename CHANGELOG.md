@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Operations & Plugins
 
+- **C068**: Plugin registry with `awf plugin install/update/remove/search` — download from GitHub Releases with SHA-256 checksum verification, atomic installation, version constraints, pre-release support, `gh auth token` fallback, and `SOURCE` column in `awf plugin list`
 - **C067**: External plugin gRPC transport via HashiCorp go-plugin — `RPCPluginManager` starts real plugin processes, `sdk.Serve()` entry point for plugin authors, echo example plugin in `examples/plugins/` ([ADR-015](docs/ADR/015-grpc-go-plugin-transport-for-external-plugins.md))
 - **C066**: Built-in operation providers (GitHub, HTTP, Notify) visible in `awf plugin list` with `--operations` flag
 - **F058**: `http.request` operation for declarative REST API calls (GET/POST/PUT/DELETE, timeout, retry, response capture)

@@ -1,4 +1,4 @@
-package pluginmgr
+package pluginmgr_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,46 +18,47 @@ import (
 // --- Interface compliance tests ---
 
 func TestJSONPluginStateStore_ImplementsPluginStateStore(t *testing.T) {
-	var _ ports.PluginStateStore = (*JSONPluginStateStore)(nil)
+	var _ ports.PluginStateStore = (*pluginmgr.JSONPluginStateStore)(nil)
 }
 
 func TestJSONPluginStateStore_ImplementsPluginStore(t *testing.T) {
-	var _ ports.PluginStore = (*JSONPluginStateStore)(nil)
+	var _ ports.PluginStore = (*pluginmgr.JSONPluginStateStore)(nil)
 }
 
 func TestJSONPluginStateStore_ImplementsPluginConfig(t *testing.T) {
-	var _ ports.PluginConfig = (*JSONPluginStateStore)(nil)
+	var _ ports.PluginConfig = (*pluginmgr.JSONPluginStateStore)(nil)
 }
 
 // --- Constructor tests ---
 
 func TestNewJSONPluginStateStore(t *testing.T) {
-	store := NewJSONPluginStateStore("/test/path")
+	store := pluginmgr.NewJSONPluginStateStore("/test/path")
 
 	if store == nil {
 		t.Fatal("NewJSONPluginStateStore() returned nil")
 	}
-	if store.basePath != "/test/path" {
-		t.Errorf("basePath = %q, want %q", store.basePath, "/test/path")
+	if store.BasePath() != "/test/path" {
+		t.Errorf("BasePath() = %q, want %q", store.BasePath(), "/test/path")
 	}
-	if store.states == nil {
-		t.Error("states map should be initialized")
+	// Verify states map initialized: unknown plugin returns default enabled (not a panic)
+	if !store.IsEnabled("nonexistent") {
+		t.Error("states map should be initialized: unknown plugin should return default enabled")
 	}
 }
 
 func TestNewJSONPluginStateStore_EmptyPath(t *testing.T) {
-	store := NewJSONPluginStateStore("")
+	store := pluginmgr.NewJSONPluginStateStore("")
 
 	if store == nil {
 		t.Fatal("NewJSONPluginStateStore(\"\") returned nil")
 	}
-	if store.basePath != "" {
-		t.Errorf("basePath = %q, want empty", store.basePath)
+	if store.BasePath() != "" {
+		t.Errorf("BasePath() = %q, want empty", store.BasePath())
 	}
 }
 
 func TestJSONPluginStateStore_BasePath(t *testing.T) {
-	store := NewJSONPluginStateStore("/custom/path")
+	store := pluginmgr.NewJSONPluginStateStore("/custom/path")
 
 	if store.BasePath() != "/custom/path" {
 		t.Errorf("BasePath() = %q, want %q", store.BasePath(), "/custom/path")
@@ -67,7 +69,7 @@ func TestJSONPluginStateStore_BasePath(t *testing.T) {
 
 func TestJSONPluginStateStore_Save_CreatesFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.Save(ctx)
@@ -80,7 +82,7 @@ func TestJSONPluginStateStore_Save_CreatesFile(t *testing.T) {
 
 func TestJSONPluginStateStore_Save_PersistsStates(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Set up some state
@@ -95,7 +97,7 @@ func TestJSONPluginStateStore_Save_PersistsStates(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load in new store instance
-	store2 := NewJSONPluginStateStore(tmpDir)
+	store2 := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	err = store2.Load(ctx)
 	require.NoError(t, err)
 
@@ -107,7 +109,7 @@ func TestJSONPluginStateStore_Save_PersistsStates(t *testing.T) {
 
 func TestJSONPluginStateStore_Save_EmptyStates(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.Save(ctx)
@@ -123,7 +125,7 @@ func TestJSONPluginStateStore_Save_EmptyStates(t *testing.T) {
 func TestJSONPluginStateStore_Save_CreatesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	nestedPath := filepath.Join(tmpDir, "nested", "storage")
-	store := NewJSONPluginStateStore(nestedPath)
+	store := pluginmgr.NewJSONPluginStateStore(nestedPath)
 	ctx := context.Background()
 
 	err := store.Save(ctx)
@@ -135,7 +137,7 @@ func TestJSONPluginStateStore_Save_CreatesDirectory(t *testing.T) {
 
 func TestJSONPluginStateStore_Save_AtomicWrite(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.Save(ctx)
@@ -158,7 +160,7 @@ func TestJSONPluginStateStore_Save_PermissionDenied(t *testing.T) {
 	require.NoError(t, os.Chmod(readOnlyDir, 0o444))
 	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0o755) })
 
-	store := NewJSONPluginStateStore(readOnlyDir)
+	store := pluginmgr.NewJSONPluginStateStore(readOnlyDir)
 	ctx := context.Background()
 
 	err := store.Save(ctx)
@@ -167,7 +169,7 @@ func TestJSONPluginStateStore_Save_PermissionDenied(t *testing.T) {
 
 func TestJSONPluginStateStore_Save_ContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -181,7 +183,7 @@ func TestJSONPluginStateStore_Save_ContextCancellation(t *testing.T) {
 
 func TestJSONPluginStateStore_Load_ExistingFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Create a valid plugins.json file
@@ -201,7 +203,7 @@ func TestJSONPluginStateStore_Load_ExistingFile(t *testing.T) {
 
 func TestJSONPluginStateStore_Load_NonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.Load(ctx)
@@ -211,7 +213,7 @@ func TestJSONPluginStateStore_Load_NonExistentFile(t *testing.T) {
 
 func TestJSONPluginStateStore_Load_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Create invalid JSON
@@ -224,7 +226,7 @@ func TestJSONPluginStateStore_Load_InvalidJSON(t *testing.T) {
 
 func TestJSONPluginStateStore_Load_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Create empty file
@@ -243,7 +245,7 @@ func TestJSONPluginStateStore_Load_PermissionDenied(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Create unreadable file
@@ -258,7 +260,7 @@ func TestJSONPluginStateStore_Load_PermissionDenied(t *testing.T) {
 
 func TestJSONPluginStateStore_Load_ContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -271,7 +273,7 @@ func TestJSONPluginStateStore_Load_ContextCancellation(t *testing.T) {
 
 func TestJSONPluginStateStore_SetEnabled_DisablePlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
@@ -282,7 +284,7 @@ func TestJSONPluginStateStore_SetEnabled_DisablePlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_SetEnabled_EnablePlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// First disable
@@ -298,7 +300,7 @@ func TestJSONPluginStateStore_SetEnabled_EnablePlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_SetEnabled_SetsDisabledAt(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
@@ -313,7 +315,7 @@ func TestJSONPluginStateStore_SetEnabled_SetsDisabledAt(t *testing.T) {
 
 func TestJSONPluginStateStore_SetEnabled_ClearsDisabledAtOnEnable(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Disable first
@@ -333,7 +335,7 @@ func TestJSONPluginStateStore_SetEnabled_ClearsDisabledAtOnEnable(t *testing.T) 
 
 func TestJSONPluginStateStore_SetEnabled_EmptyName(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "", false)
@@ -343,7 +345,7 @@ func TestJSONPluginStateStore_SetEnabled_EmptyName(t *testing.T) {
 
 func TestJSONPluginStateStore_SetEnabled_ContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -356,7 +358,7 @@ func TestJSONPluginStateStore_SetEnabled_ContextCancellation(t *testing.T) {
 
 func TestJSONPluginStateStore_IsEnabled_UnknownPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	// Unknown plugins should be enabled by default
 	assert.True(t, store.IsEnabled("unknown-plugin"), "unknown plugins should be enabled by default")
@@ -364,7 +366,7 @@ func TestJSONPluginStateStore_IsEnabled_UnknownPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_IsEnabled_DisabledPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "disabled-plugin", false)
@@ -375,7 +377,7 @@ func TestJSONPluginStateStore_IsEnabled_DisabledPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_IsEnabled_EnabledPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Explicitly enable (should be redundant but explicit)
@@ -387,7 +389,7 @@ func TestJSONPluginStateStore_IsEnabled_EnabledPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_IsEnabled_EmptyName(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	// Empty name should return default (enabled)
 	assert.True(t, store.IsEnabled(""))
@@ -397,7 +399,7 @@ func TestJSONPluginStateStore_IsEnabled_EmptyName(t *testing.T) {
 
 func TestJSONPluginStateStore_GetConfig_UnknownPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	config := store.GetConfig("unknown-plugin")
 	assert.Nil(t, config, "unknown plugins should have nil config")
@@ -405,7 +407,7 @@ func TestJSONPluginStateStore_GetConfig_UnknownPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_GetConfig_ExistingConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	testConfig := map[string]any{
@@ -424,7 +426,7 @@ func TestJSONPluginStateStore_GetConfig_ExistingConfig(t *testing.T) {
 
 func TestJSONPluginStateStore_GetConfig_EmptyConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{})
@@ -439,7 +441,7 @@ func TestJSONPluginStateStore_GetConfig_EmptyConfig(t *testing.T) {
 
 func TestJSONPluginStateStore_SetConfig_NewPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	testConfig := map[string]any{"key": "value"}
@@ -452,7 +454,7 @@ func TestJSONPluginStateStore_SetConfig_NewPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_SetConfig_OverwriteExisting(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Set initial config
@@ -470,7 +472,7 @@ func TestJSONPluginStateStore_SetConfig_OverwriteExisting(t *testing.T) {
 
 func TestJSONPluginStateStore_SetConfig_NilConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", nil)
@@ -480,7 +482,7 @@ func TestJSONPluginStateStore_SetConfig_NilConfig(t *testing.T) {
 
 func TestJSONPluginStateStore_SetConfig_PreservesEnabled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Disable plugin first
@@ -497,7 +499,7 @@ func TestJSONPluginStateStore_SetConfig_PreservesEnabled(t *testing.T) {
 
 func TestJSONPluginStateStore_SetConfig_ContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -510,7 +512,7 @@ func TestJSONPluginStateStore_SetConfig_ContextCancellation(t *testing.T) {
 
 func TestJSONPluginStateStore_GetState_UnknownPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	state := store.GetState("unknown-plugin")
 	assert.Nil(t, state, "unknown plugins should return nil state")
@@ -518,7 +520,7 @@ func TestJSONPluginStateStore_GetState_UnknownPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_GetState_ExistingPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "test-plugin", false)
@@ -531,7 +533,7 @@ func TestJSONPluginStateStore_GetState_ExistingPlugin(t *testing.T) {
 
 func TestJSONPluginStateStore_GetState_WithConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetConfig(ctx, "test-plugin", map[string]any{"key": "value"})
@@ -546,7 +548,7 @@ func TestJSONPluginStateStore_GetState_WithConfig(t *testing.T) {
 
 func TestJSONPluginStateStore_ListDisabled_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	disabled := store.ListDisabled()
 	assert.Empty(t, disabled, "should return empty list when no plugins disabled")
@@ -554,7 +556,7 @@ func TestJSONPluginStateStore_ListDisabled_Empty(t *testing.T) {
 
 func TestJSONPluginStateStore_ListDisabled_SingleDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	err := store.SetEnabled(ctx, "disabled-plugin", false)
@@ -567,7 +569,7 @@ func TestJSONPluginStateStore_ListDisabled_SingleDisabled(t *testing.T) {
 
 func TestJSONPluginStateStore_ListDisabled_MultipleDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	for _, name := range []string{"plugin-a", "plugin-b", "plugin-c"} {
@@ -584,7 +586,7 @@ func TestJSONPluginStateStore_ListDisabled_MultipleDisabled(t *testing.T) {
 
 func TestJSONPluginStateStore_ListDisabled_MixedEnabledDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	// Disable some plugins
@@ -611,7 +613,7 @@ func TestJSONPluginStateStore_ConcurrentSetEnabled(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	const goroutines = 20
@@ -637,7 +639,7 @@ func TestJSONPluginStateStore_ConcurrentSetConfig(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	const goroutines = 20
@@ -660,7 +662,7 @@ func TestJSONPluginStateStore_ConcurrentReadWrite(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	const iterations = 50
@@ -696,7 +698,7 @@ func TestJSONPluginStateStore_ConcurrentSaveLoad(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	const iterations = 20
@@ -780,7 +782,7 @@ func TestJSONPluginStateStore_EdgeCases(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	store := NewJSONPluginStateStore(tmpDir)
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	ctx := context.Background()
 
 	for _, tt := range tests {
@@ -805,7 +807,7 @@ func TestJSONPluginStateStore_Roundtrip(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and populate store
-	store1 := NewJSONPluginStateStore(tmpDir)
+	store1 := pluginmgr.NewJSONPluginStateStore(tmpDir)
 
 	err := store1.SetEnabled(ctx, "plugin-a", false)
 	require.NoError(t, err)
@@ -826,7 +828,7 @@ func TestJSONPluginStateStore_Roundtrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load in new store instance
-	store2 := NewJSONPluginStateStore(tmpDir)
+	store2 := pluginmgr.NewJSONPluginStateStore(tmpDir)
 	err = store2.Load(ctx)
 	require.NoError(t, err)
 
@@ -841,4 +843,121 @@ func TestJSONPluginStateStore_Roundtrip(t *testing.T) {
 	disabled := store2.ListDisabled()
 	assert.Len(t, disabled, 1)
 	assert.Contains(t, disabled, "plugin-a")
+}
+
+// --- SetSourceData tests ---
+
+func TestJSONPluginStateStore_SetSourceData_NewPlugin(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx := context.Background()
+
+	sourceData := map[string]any{"repository": "owner/repo", "version": "1.0.0"}
+	err := store.SetSourceData(ctx, "new-plugin", sourceData)
+	require.NoError(t, err)
+
+	data := store.GetSourceData("new-plugin")
+	assert.Equal(t, "owner/repo", data["repository"])
+	assert.Equal(t, "1.0.0", data["version"])
+}
+
+func TestJSONPluginStateStore_SetSourceData_ExistingPlugin(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx := context.Background()
+
+	// Set initial source data
+	err := store.SetSourceData(ctx, "test-plugin", map[string]any{"repository": "old/repo"})
+	require.NoError(t, err)
+
+	// Overwrite with new source data
+	err = store.SetSourceData(ctx, "test-plugin", map[string]any{"repository": "new/repo", "version": "2.0.0"})
+	require.NoError(t, err)
+
+	data := store.GetSourceData("test-plugin")
+	assert.Equal(t, "new/repo", data["repository"])
+	assert.Equal(t, "2.0.0", data["version"])
+}
+
+func TestJSONPluginStateStore_SetSourceData_ContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := store.SetSourceData(ctx, "test-plugin", map[string]any{"repository": "owner/repo"})
+	// Should either error or succeed quickly
+	_ = err
+}
+
+// --- GetSourceData tests ---
+
+func TestJSONPluginStateStore_GetSourceData_UnknownPlugin(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+
+	data := store.GetSourceData("unknown-plugin")
+	assert.Nil(t, data, "unknown plugins should have nil source data")
+}
+
+func TestJSONPluginStateStore_GetSourceData_ExistingData(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx := context.Background()
+
+	sourceData := map[string]any{
+		"repository":   "owner/repo",
+		"version":      "1.0.0",
+		"installed_at": int64(1234567890),
+	}
+
+	err := store.SetSourceData(ctx, "test-plugin", sourceData)
+	require.NoError(t, err)
+
+	data := store.GetSourceData("test-plugin")
+	require.NotNil(t, data)
+	assert.Equal(t, "owner/repo", data["repository"])
+	assert.Equal(t, "1.0.0", data["version"])
+}
+
+// --- RemoveState tests ---
+
+func TestJSONPluginStateStore_RemoveState_ExistingPlugin(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx := context.Background()
+
+	// Create a plugin with state
+	err := store.SetEnabled(ctx, "test-plugin", false)
+	require.NoError(t, err)
+
+	// Verify state exists
+	assert.False(t, store.IsEnabled("test-plugin"))
+
+	// Remove state
+	err = store.RemoveState(ctx, "test-plugin")
+	require.NoError(t, err)
+
+	// Verify state is removed (should return default enabled)
+	assert.True(t, store.IsEnabled("test-plugin"), "removed plugin should return default enabled")
+}
+
+func TestJSONPluginStateStore_RemoveState_UnknownPlugin(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx := context.Background()
+
+	err := store.RemoveState(ctx, "unknown-plugin")
+	require.NoError(t, err, "removing unknown plugin should not error")
+}
+
+func TestJSONPluginStateStore_RemoveState_ContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := store.RemoveState(ctx, "test-plugin")
+	// Should either error or succeed quickly
+	_ = err
 }
