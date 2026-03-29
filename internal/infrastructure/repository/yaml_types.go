@@ -11,6 +11,7 @@ type yamlWorkflow struct {
 	Env         []string           `yaml:"env"`
 	States      yamlStates         `yaml:"states"`
 	Hooks       *yamlWorkflowHooks `yaml:"hooks"`
+	Plugins     map[string]string  `yaml:"plugins"` // alias → manifest name (e.g. pg: database)
 }
 
 // yamlStates holds the initial state and step definitions.
@@ -71,6 +72,9 @@ type yamlStep struct {
 	PromptFile   string         `yaml:"prompt_file"`   // path to external prompt template file
 	Options      map[string]any `yaml:"options"`       // provider-specific options (model, temperature, max_tokens, etc.)
 	OutputFormat string         `yaml:"output_format"` // output post-processing: json, text (F065)
+
+	// Plugin step type configuration (C069)
+	Config map[string]any `yaml:"config"` // plugin-provided step type parameters
 
 	// Agent conversation mode (F033) - extends agent configuration
 	Mode          string                  `yaml:"mode"`           // execution mode: "single" (default) or "conversation"

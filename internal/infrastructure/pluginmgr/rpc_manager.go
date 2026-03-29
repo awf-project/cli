@@ -73,6 +73,8 @@ type pluginConnection struct {
 	client        *goplugin.Client
 	plugin        pluginv1.PluginServiceClient
 	operation     pluginv1.OperationServiceClient
+	validator     pluginv1.ValidatorServiceClient
+	stepType      pluginv1.StepTypeServiceClient
 	processCancel context.CancelFunc // cancels the long-lived process context on Shutdown
 }
 
@@ -87,6 +89,8 @@ type clientPlugin struct {
 type grpcClientBundle struct {
 	plugin    pluginv1.PluginServiceClient
 	operation pluginv1.OperationServiceClient
+	validator pluginv1.ValidatorServiceClient
+	stepType  pluginv1.StepTypeServiceClient
 }
 
 // GRPCClient creates gRPC service clients from the connection established by go-plugin.
@@ -95,6 +99,8 @@ func (p *clientPlugin) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, con
 	return &grpcClientBundle{
 		plugin:    pluginv1.NewPluginServiceClient(conn),
 		operation: pluginv1.NewOperationServiceClient(conn),
+		validator: pluginv1.NewValidatorServiceClient(conn),
+		stepType:  pluginv1.NewStepTypeServiceClient(conn),
 	}, nil
 }
 
@@ -115,7 +121,7 @@ type RPCPluginManager struct {
 	plugins     map[string]*pluginmodel.PluginInfo // plugin name -> info
 	connections map[string]*pluginConnection       // active connections, protected by mu (NFR-004)
 	loader      *FileSystemLoader                  // for plugin discovery
-	pluginsDir  string                             // directory to discover plugins from
+	pluginsDirs []string                           // directories to discover plugins from
 	hostVersion string                             // current AWF version for plugin compatibility checks
 }
 
@@ -170,6 +176,8 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 		if bundle, ok := result.(*grpcClientBundle); ok {
 			conn.plugin = bundle.plugin
 			conn.operation = bundle.operation
+			conn.validator = bundle.validator
+			conn.stepType = bundle.stepType
 		}
 
 		return conn, nil
@@ -183,10 +191,19 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 }
 
 // SetPluginsDir sets the directory to discover plugins from.
+// SetPluginsDir configures a single plugin directory (replaces any previous config).
 func (m *RPCPluginManager) SetPluginsDir(dir string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.pluginsDir = dir
+	m.pluginsDirs = []string{dir}
+}
+
+// SetPluginsDirs configures multiple plugin directories to scan.
+// Plugins are discovered from all directories; first-found wins on name conflicts.
+func (m *RPCPluginManager) SetPluginsDirs(dirs []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pluginsDirs = dirs
 }
 
 // Discover finds plugins in the plugins directory.
@@ -201,27 +218,36 @@ func (m *RPCPluginManager) Discover(ctx context.Context) ([]*pluginmodel.PluginI
 	}
 
 	m.mu.RLock()
-	pluginsDir := m.pluginsDir
+	dirs := m.pluginsDirs
 	m.mu.RUnlock()
 
-	if pluginsDir == "" {
+	if len(dirs) == 0 {
 		return nil, ErrNoPluginsConfigured
 	}
 
-	discovered, err := m.loader.DiscoverPlugins(ctx, pluginsDir)
-	if err != nil {
-		return nil, WrapRPCManagerError("discover", "", err)
+	// Discover from all directories; first-found wins on manifest name conflicts.
+	var allDiscovered []*pluginmodel.PluginInfo
+	for _, dir := range dirs {
+		discovered, err := m.loader.DiscoverPlugins(ctx, dir)
+		if err != nil {
+			continue // skip dirs that fail (e.g. missing directory)
+		}
+		allDiscovered = append(allDiscovered, discovered...)
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	valid := make([]*pluginmodel.PluginInfo, 0, len(discovered))
-	for _, info := range discovered {
+	valid := make([]*pluginmodel.PluginInfo, 0, len(allDiscovered))
+	for _, info := range allDiscovered {
 		if info.Manifest == nil || info.Manifest.Name == "" {
 			continue
 		}
 		if err := m.loader.ValidatePlugin(info); err != nil {
+			continue
+		}
+		// First-found wins: skip if already registered by an earlier directory
+		if _, exists := m.plugins[info.Manifest.Name]; exists {
 			continue
 		}
 		m.plugins[info.Manifest.Name] = info
@@ -252,7 +278,7 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 	// Check if already loaded
 	m.mu.RLock()
 	existing, found := m.plugins[name]
-	pluginsDir := m.pluginsDir
+	dirs := m.pluginsDirs
 	m.mu.RUnlock()
 
 	if found {
@@ -267,13 +293,23 @@ func (m *RPCPluginManager) Load(ctx context.Context, name string) error {
 	}
 
 	// Need to load from filesystem
-	if pluginsDir == "" {
+	if len(dirs) == 0 {
 		// Not fully configured
 		return ErrNoPluginsConfigured
 	}
 
-	// Try to load the plugin from the plugins directory
-	pluginPath := pluginsDir + "/" + name
+	// Try to load the plugin from any configured directory
+	pluginPath := ""
+	for _, dir := range dirs {
+		candidate := dir + "/" + name
+		if _, err := os.Stat(candidate); err == nil {
+			pluginPath = candidate
+			break
+		}
+	}
+	if pluginPath == "" {
+		return NewRPCManagerError("load", name, "plugin directory not found in any search path")
+	}
 	info, err := m.loader.LoadPlugin(ctx, pluginPath)
 	if err != nil {
 		return WrapRPCManagerError("load", name, err)
@@ -332,6 +368,7 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 	if pluginInfo, found := m.plugins[name]; found {
 		pluginInfo.Status = pluginmodel.StatusRunning
 		pluginInfo.Operations = m.queryOperationNames(ctx, name, conn)
+		pluginInfo.StepTypes = m.queryStepTypeNames(ctx, name, conn)
 	}
 
 	return nil
@@ -510,6 +547,31 @@ func (m *RPCPluginManager) queryOperationNames(ctx context.Context, pluginID str
 	for _, schema := range resp.Operations {
 		if schema != nil && schema.Name != "" {
 			names = append(names, pluginID+"."+schema.Name)
+		}
+	}
+
+	return names
+}
+
+// queryStepTypeNames lists step type names from a connected plugin via gRPC.
+// Returns nil on failure (non-fatal — step types are optional metadata).
+func (m *RPCPluginManager) queryStepTypeNames(ctx context.Context, pluginID string, conn *pluginConnection) []string {
+	if conn.stepType == nil {
+		return nil
+	}
+
+	stCtx, stCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer stCancel()
+
+	resp, err := conn.stepType.ListStepTypes(stCtx, &pluginv1.ListStepTypesRequest{})
+	if err != nil || resp == nil {
+		return nil
+	}
+
+	names := make([]string, 0, len(resp.StepTypes))
+	for _, st := range resp.StepTypes {
+		if st != nil && st.Name != "" {
+			names = append(names, pluginID+"."+st.Name)
 		}
 	}
 
@@ -748,6 +810,102 @@ func (m *RPCPluginManager) Execute(ctx context.Context, name string, inputs map[
 		return nil, lastErr
 	}
 	return nil, NewRPCManagerError("execute", name, "operation not found")
+}
+
+// validatorClients returns validator adapters for all connected plugins that declare the validators capability.
+// Intended for use by WorkflowService to run plugin-provided validation rules.
+func (m *RPCPluginManager) validatorClients(timeout time.Duration) []*grpcValidatorAdapter {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	adapters := make([]*grpcValidatorAdapter, 0)
+
+	for pluginName, conn := range m.connections {
+		if conn.validator == nil {
+			continue
+		}
+
+		info, found := m.plugins[pluginName]
+		if !found || info.Manifest == nil {
+			continue
+		}
+
+		// Check if plugin has validators capability
+		hasCapability := false
+		for _, cap := range info.Manifest.Capabilities {
+			if cap == pluginmodel.CapabilityValidators {
+				hasCapability = true
+				break
+			}
+		}
+
+		if !hasCapability {
+			continue
+		}
+
+		adapter := newGRPCValidatorAdapter(conn.validator, pluginName, timeout)
+		adapters = append(adapters, adapter)
+	}
+
+	return adapters
+}
+
+// stepTypeClient returns step type adapters for all connected plugins that declare the step_types capability.
+// Intended for use by ExecutionService to dispatch unknown step type executions to plugins.
+func (m *RPCPluginManager) stepTypeClient(logger ports.Logger) []*grpcStepTypeAdapter {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	adapters := make([]*grpcStepTypeAdapter, 0)
+
+	for pluginName, conn := range m.connections {
+		if conn.stepType == nil {
+			continue
+		}
+
+		info, found := m.plugins[pluginName]
+		if !found || info.Manifest == nil {
+			continue
+		}
+
+		// Check if plugin has step_types capability
+		hasCapability := false
+		for _, cap := range info.Manifest.Capabilities {
+			if cap == pluginmodel.CapabilityStepTypes {
+				hasCapability = true
+				break
+			}
+		}
+
+		if !hasCapability {
+			continue
+		}
+
+		adapter := newGRPCStepTypeAdapter(conn.stepType, pluginName, 0, logger)
+		adapters = append(adapters, adapter)
+	}
+
+	return adapters
+}
+
+// ValidatorProvider returns a WorkflowValidatorProvider wrapping all validator-capable plugins.
+// Returns nil when no plugins have declared the validators capability.
+func (m *RPCPluginManager) ValidatorProvider(timeout time.Duration) ports.WorkflowValidatorProvider {
+	adapters := m.validatorClients(timeout)
+	if len(adapters) == 0 {
+		return nil
+	}
+	return &compositeValidatorProvider{adapters: adapters}
+}
+
+// StepTypeProvider returns a StepTypeProvider wrapping all step-type-capable plugins.
+// Returns nil when no plugins have declared the step_types capability.
+func (m *RPCPluginManager) StepTypeProvider(logger ports.Logger) ports.StepTypeProvider {
+	adapters := m.stepTypeClient(logger)
+	if len(adapters) == 0 {
+		return nil
+	}
+	return &compositeStepTypeProvider{adapters: adapters}
 }
 
 // splitOperationName splits "pluginName.opName" into (pluginName, opName).

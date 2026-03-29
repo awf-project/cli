@@ -1578,3 +1578,104 @@ func TestWritePluginsSourceFieldPresence(t *testing.T) {
 		})
 	}
 }
+
+func TestOutputWriter_WriteCapabilities_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	entries := []ui.CapabilityEntry{
+		{Type: "operation", Name: "github.get_issue", Plugin: "github"},
+		{Type: "step_type", Name: "database.query", Plugin: "database"},
+		{Type: "validator", Name: "security-validator", Plugin: "security-validator"},
+	}
+
+	err := w.WriteCapabilities(entries)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "TYPE")
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "PLUGIN")
+	assert.Contains(t, output, "operation")
+	assert.Contains(t, output, "step_type")
+	assert.Contains(t, output, "validator")
+}
+
+func TestOutputWriter_WriteCapabilities_JSON(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	entries := []ui.CapabilityEntry{
+		{Type: "operation", Name: "github.get_issue", Plugin: "github"},
+	}
+
+	err := w.WriteCapabilities(entries)
+	require.NoError(t, err)
+
+	var got []ui.CapabilityEntry
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "operation", got[0].Type)
+}
+
+func TestOutputWriter_WriteCapabilities_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	err := w.WriteCapabilities(nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "No capabilities found")
+}
+
+func TestOutputWriter_WriteStepTypes_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	entries := []ui.OperationEntry{
+		{Name: "database.query", Plugin: "database"},
+		{Name: "database.migrate", Plugin: "database"},
+	}
+
+	err := w.WriteStepTypes(entries)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "STEP TYPE")
+	assert.Contains(t, output, "database.query")
+}
+
+func TestOutputWriter_WriteStepTypes_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	err := w.WriteStepTypes(nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "No step types found")
+}
+
+func TestOutputWriter_WriteValidators_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	entries := []ui.ValidatorEntry{
+		{Name: "security-validator", Description: "Security best practices"},
+	}
+
+	err := w.WriteValidators(entries)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "DESCRIPTION")
+	assert.Contains(t, output, "security-validator")
+}
+
+func TestOutputWriter_WriteValidators_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	err := w.WriteValidators(nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "No validators found")
+}

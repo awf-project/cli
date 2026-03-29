@@ -16,6 +16,16 @@ service OperationService {
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
 }
 
+service ValidatorService {
+  rpc ValidateWorkflow(ValidateWorkflowRequest) returns (ValidateWorkflowResponse);
+  rpc ValidateStep(ValidateStepRequest) returns (ValidateStepResponse);
+}
+
+service StepTypeService {
+  rpc ListStepTypes(ListStepTypesRequest) returns (ListStepTypesResponse);
+  rpc ExecuteStep(ExecuteStepRequest) returns (ExecuteStepResponse);
+}
+
 message GetInfoRequest {}
 
 message GetInfoResponse {
@@ -81,4 +91,61 @@ message OutputSchema {
   string name = 1;
   string type = 2;
   string description = 3;
+}
+
+// Severity of a validation issue.
+// SEVERITY_UNSPECIFIED (proto3 zero value) is treated as ERROR by the host.
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_WARNING = 1;
+  SEVERITY_ERROR = 2;
+  SEVERITY_INFO = 3;
+}
+
+message ValidationIssue {
+  Severity severity = 1;
+  string message = 2;
+  string step = 3;
+  string field = 4;
+}
+
+message ValidateWorkflowRequest {
+  bytes workflow_json = 1;
+}
+
+message ValidateWorkflowResponse {
+  repeated ValidationIssue issues = 1;
+}
+
+message ValidateStepRequest {
+  bytes workflow_json = 1;
+  string step_name = 2;
+}
+
+message ValidateStepResponse {
+  repeated ValidationIssue issues = 1;
+}
+
+message ListStepTypesRequest {}
+
+message StepTypeInfo {
+  string name = 1;
+  string description = 2;
+}
+
+message ListStepTypesResponse {
+  repeated StepTypeInfo step_types = 1;
+}
+
+message ExecuteStepRequest {
+  string step_name = 1;
+  string step_type = 2;
+  bytes config = 3;
+  bytes inputs = 4;
+}
+
+message ExecuteStepResponse {
+  string output = 1;
+  bytes data = 2;
+  int32 exit_code = 3;
 }

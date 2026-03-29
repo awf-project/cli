@@ -24,16 +24,15 @@ func TestBuildPluginPaths_ReturnsCorrectNumberOfPaths(t *testing.T) {
 }
 
 func TestBuildPluginPaths_EnvVarTakesPriority(t *testing.T) {
-	// Save and restore environment
-	// Set custom env var
 	customPath := "/custom/plugins/path"
 	t.Setenv("AWF_PLUGINS_PATH", customPath)
 
 	paths := cli.BuildPluginPaths()
 
-	require.Len(t, paths, 3, "BuildPluginPaths should return 3 paths when env var is set")
-	assert.Equal(t, repository.SourceEnv, paths[0].Source, "First path should be env source")
-	assert.Equal(t, customPath, paths[0].Path, "First path should be env path")
+	// AWF_PLUGINS_PATH is exclusive — only the env path is returned
+	require.Len(t, paths, 1, "BuildPluginPaths should return 1 path when env var is set")
+	assert.Equal(t, repository.SourceEnv, paths[0].Source, "Path should be env source")
+	assert.Equal(t, customPath, paths[0].Path, "Path should be env path")
 }
 
 func TestBuildPluginPaths_LocalPathSecond(t *testing.T) {
@@ -59,30 +58,15 @@ func TestBuildPluginPaths_GlobalPathLast(t *testing.T) {
 }
 
 func TestBuildPluginPaths_PriorityOrder(t *testing.T) {
-	// Save and restore environment
+	// AWF_PLUGINS_PATH is exclusive — when set, only the env path is returned
 	customPath := "/custom/plugins"
 	t.Setenv("AWF_PLUGINS_PATH", customPath)
 
 	paths := cli.BuildPluginPaths()
 
-	require.Len(t, paths, 3)
-
-	// Verify complete ordering: env -> local -> global
-	expectedOrder := []struct {
-		source repository.Source
-		path   string
-	}{
-		{repository.SourceEnv, customPath},
-		{repository.SourceLocal, xdg.LocalPluginsDir()},
-		{repository.SourceGlobal, xdg.AWFPluginsDir()},
-	}
-
-	for i, expected := range expectedOrder {
-		assert.Equal(t, expected.source, paths[i].Source,
-			"Path %d should have source %v", i, expected.source)
-		assert.Equal(t, expected.path, paths[i].Path,
-			"Path %d should have path %s", i, expected.path)
-	}
+	require.Len(t, paths, 1)
+	assert.Equal(t, repository.SourceEnv, paths[0].Source)
+	assert.Equal(t, customPath, paths[0].Path)
 }
 
 func TestBuildPluginPaths_LocalPathIsRelative(t *testing.T) {
@@ -192,30 +176,29 @@ func TestBuildPluginPaths_SourcedPathStructure(t *testing.T) {
 	}
 }
 
-func TestBuildPluginPaths_MirrorsWorkflowPathsPattern(t *testing.T) {
-	// BuildPluginPaths follows same pattern as BuildWorkflowPaths
-	// Both should support env var (if set), local, global in same order
-
-	// Set both env vars
+func TestBuildPluginPaths_EnvVarIsExclusive(t *testing.T) {
+	// AWF_PLUGINS_PATH is exclusive — overrides local + global paths.
+	// This differs from workflow paths (which merge all sources).
+	// Rationale: env var override for plugins means "use only this directory",
+	// preventing unexpected plugin discovery from local/global dirs.
 	t.Setenv("AWF_PLUGINS_PATH", "/custom/plugins")
-	t.Setenv("AWF_WORKFLOWS_PATH", "/custom/workflows")
 
 	pluginPaths := cli.BuildPluginPaths()
-	workflowPaths := cli.BuildWorkflowPaths()
 
-	// Both should have 3 paths when env vars are set
-	require.Len(t, pluginPaths, 3)
-	require.Len(t, workflowPaths, 3)
-
-	// Both should have same source order: env -> local -> global
+	require.Len(t, pluginPaths, 1)
 	assert.Equal(t, repository.SourceEnv, pluginPaths[0].Source)
-	assert.Equal(t, repository.SourceEnv, workflowPaths[0].Source)
+	assert.Equal(t, "/custom/plugins", pluginPaths[0].Path)
+}
 
-	assert.Equal(t, repository.SourceLocal, pluginPaths[1].Source)
-	assert.Equal(t, repository.SourceLocal, workflowPaths[1].Source)
+func TestBuildPluginPaths_WithoutEnvVar_ReturnsLocalAndGlobal(t *testing.T) {
+	// Without env var, both local and global are returned
+	t.Setenv("AWF_PLUGINS_PATH", "")
 
-	assert.Equal(t, repository.SourceGlobal, pluginPaths[2].Source)
-	assert.Equal(t, repository.SourceGlobal, workflowPaths[2].Source)
+	pluginPaths := cli.BuildPluginPaths()
+
+	require.Len(t, pluginPaths, 2)
+	assert.Equal(t, repository.SourceLocal, pluginPaths[0].Source)
+	assert.Equal(t, repository.SourceGlobal, pluginPaths[1].Source)
 }
 
 func TestBuildPluginPaths_TableDriven(t *testing.T) {
@@ -253,12 +236,9 @@ func TestBuildPluginPaths_TableDriven(t *testing.T) {
 			name:           "with_env_var",
 			xdgDataHome:    "",
 			awfPluginsPath: "/env/plugins",
-			expectedLen:    3,
-			expectLocalDir: ".awf/plugins",
-			expectGlobal: func() string {
-				home, _ := os.UserHomeDir()
-				return filepath.Join(home, ".local", "share", "awf", "plugins")
-			},
+			expectedLen:    1, // AWF_PLUGINS_PATH is exclusive — overrides local + global
+			expectLocalDir: "",
+			expectGlobal:   func() string { return "" },
 		},
 	}
 

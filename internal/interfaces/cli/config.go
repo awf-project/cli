@@ -143,27 +143,16 @@ func BuildPromptPaths() []repository.SourcedPath {
 // 2. ./.awf/plugins/ (local project)
 // 3. $XDG_DATA_HOME/awf/plugins/ (global)
 func BuildPluginPaths() []repository.SourcedPath {
-	var paths []repository.SourcedPath
-
-	// 1. Environment variable (highest priority)
+	// Environment variable is exclusive — overrides local + global paths
 	if envPath := os.Getenv("AWF_PLUGINS_PATH"); envPath != "" {
-		paths = append(paths, repository.SourcedPath{
-			Path:   envPath,
-			Source: repository.SourceEnv,
-		})
+		return []repository.SourcedPath{
+			{Path: envPath, Source: repository.SourceEnv},
+		}
 	}
 
-	// 2. Local project directory and 3. Global XDG data directory (lowest priority)
-	paths = append(paths,
-		repository.SourcedPath{
-			Path:   xdg.LocalPluginsDir(),
-			Source: repository.SourceLocal,
-		},
-		repository.SourcedPath{
-			Path:   xdg.AWFPluginsDir(),
-			Source: repository.SourceGlobal,
-		},
-	)
-
-	return paths
+	// Local project directory (highest priority) + Global XDG data directory
+	return []repository.SourcedPath{
+		{Path: xdg.LocalPluginsDir(), Source: repository.SourceLocal},
+		{Path: xdg.AWFPluginsDir(), Source: repository.SourceGlobal},
+	}
 }

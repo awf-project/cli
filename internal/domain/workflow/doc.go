@@ -169,7 +169,7 @@
 //	}
 //
 //	// Validate workflow
-//	if err := wf.Validate(validator); err != nil {
+//	if err := wf.Validate(validator, nil); err != nil {
 //	    log.Fatal(err)
 //	}
 //

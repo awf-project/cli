@@ -111,9 +111,9 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 
 	// Capabilities
 	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityOperations)
-	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityCommands)
+	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityStepTypes)
 	assert.True(t, m.HasCapability(pluginmodel.CapabilityOperations))
-	assert.True(t, m.HasCapability(pluginmodel.CapabilityCommands))
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityStepTypes))
 	assert.False(t, m.HasCapability(pluginmodel.CapabilityValidators))
 
 	// Config schema
@@ -909,11 +909,11 @@ func TestOperationResult_Helpers_Integration(t *testing.T) {
 // TestManifest_HasCapability_Integration tests capability checking.
 func TestManifest_HasCapability_Integration(t *testing.T) {
 	m := &pluginmodel.Manifest{
-		Capabilities: []string{pluginmodel.CapabilityOperations, pluginmodel.CapabilityCommands},
+		Capabilities: []string{pluginmodel.CapabilityOperations, pluginmodel.CapabilityStepTypes},
 	}
 
 	assert.True(t, m.HasCapability(pluginmodel.CapabilityOperations))
-	assert.True(t, m.HasCapability(pluginmodel.CapabilityCommands))
+	assert.True(t, m.HasCapability(pluginmodel.CapabilityStepTypes))
 	assert.False(t, m.HasCapability(pluginmodel.CapabilityValidators))
 	assert.False(t, m.HasCapability("unknown"))
 }

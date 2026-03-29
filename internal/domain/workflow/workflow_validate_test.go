@@ -145,7 +145,7 @@ func TestWorkflow_Validate_StateReferenceErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.wf.Validate(nil)
+			err := tt.wf.Validate(nil, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Equal(t, tt.errMsg, err.Error())
@@ -396,7 +396,7 @@ func TestWorkflow_Validate_MultipleValidationPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.wf.Validate(nil)
+			err := tt.wf.Validate(nil, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -581,7 +581,7 @@ func TestWorkflow_Validate_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.wf.Validate(nil)
+			err := tt.wf.Validate(nil, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -702,7 +702,7 @@ func TestStateReferenceError_AvailableStatesField(t *testing.T) {
 		},
 	}
 
-	err := wf.Validate(nil)
+	err := wf.Validate(nil, nil)
 	require.Error(t, err)
 
 	var stateRefErr *workflow.StateReferenceError

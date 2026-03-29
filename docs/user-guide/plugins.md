@@ -291,7 +291,7 @@ config:
 | `version` | string | Yes | Semantic version |
 | `description` | string | No | Brief description |
 | `awf_version` | string | Yes | AWF version constraint (semver) |
-| `capabilities` | array | Yes | List: `operations`, `commands`, `validators` |
+| `capabilities` | array | Yes | List: `operations`, `step_types`, `validators` |
 | `config` | object | No | Configuration schema |
 
 #### Config Field Schema
@@ -594,6 +594,154 @@ func main() {
 | `sdk.GetStringDefault(inputs, key, default)` | Extract string input with fallback |
 | `sdk.GetIntDefault(inputs, key, default)` | Extract integer input with fallback |
 | `sdk.GetBoolDefault(inputs, key, default)` | Extract boolean input with fallback |
+
+### Validator Plugin
+
+Implement `sdk.Validator` to add custom validation rules that run during `awf validate`. AWF calls your validator after built-in validation and displays findings alongside built-in errors.
+
+**Severity levels:**
+
+| Icon | Severity | Constant |
+|------|----------|----------|
+| `✗` | Error | `sdk.SeverityError` |
+| `⚠` | Warning | `sdk.SeverityWarning` |
+| `ℹ` | Info | `sdk.SeverityInfo` |
+
+```go
+package main
+
+import (
+    "context"
+
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type SecurityValidator struct {
+    sdk.BasePlugin
+}
+
+func (v *SecurityValidator) ValidateWorkflow(ctx context.Context, w sdk.WorkflowDefinition) ([]sdk.ValidationIssue, error) {
+    var issues []sdk.ValidationIssue
+    if w.Version == "" {
+        issues = append(issues, sdk.ValidationIssue{
+            Severity: sdk.SeverityWarning,
+            Message:  "workflow is missing a version field",
+        })
+    }
+    return issues, nil
+}
+
+func (v *SecurityValidator) ValidateStep(ctx context.Context, w sdk.WorkflowDefinition, stepName string) ([]sdk.ValidationIssue, error) {
+    step, ok := w.Steps[stepName]
+    if !ok {
+        return nil, nil
+    }
+    var issues []sdk.ValidationIssue
+    if step.Type == "step" && step.Timeout == 0 {
+        issues = append(issues, sdk.ValidationIssue{
+            Severity: sdk.SeverityInfo,
+            Message:  "step has no timeout",
+            Step:     stepName,
+            Field:    "timeout",
+        })
+    }
+    return issues, nil
+}
+
+func main() {
+    sdk.Serve(&SecurityValidator{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "awf-plugin-security-validator",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+Declare the `validators` capability in `plugin.yaml`:
+
+```yaml
+capabilities:
+  - validators
+```
+
+**Flags for `awf validate`:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-plugins` | false | Skip all plugin validators |
+| `--validator-timeout` | 5s | Per-plugin timeout (e.g., `10s`, `2m`) |
+
+Validator crashes are treated as timeouts — AWF logs a warning and continues with remaining validators. Results are deduplicated by `(message + step + field)`.
+
+---
+
+### Step Type Plugin
+
+Implement `sdk.StepTypeHandler` to register new `type:` values for workflow steps. AWF calls `StepTypes()` once at init to cache registrations, then routes any step with a matching type to your plugin.
+
+**Automatic namespacing:** Plugins declare short step type names (e.g. `query`). The host automatically prefixes with `<manifest-name>.` at registration. Users write the qualified name in YAML (e.g. `type: database.query` where `database` is the `name` in `plugin.yaml`). The plugin receives the short name in `ExecuteStep`. This follows the same pattern as operation namespacing.
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type DatabasePlugin struct {
+    sdk.BasePlugin
+}
+
+// StepTypes declares short names — the host auto-prefixes with "awf-plugin-database."
+func (p *DatabasePlugin) StepTypes() []sdk.StepTypeInfo {
+    return []sdk.StepTypeInfo{
+        {Name: "query", Description: "Execute a SQL query"},
+        {Name: "migrate", Description: "Run database migrations"},
+    }
+}
+
+// ExecuteStep receives the short name (prefix stripped by host)
+func (p *DatabasePlugin) ExecuteStep(ctx context.Context, req sdk.StepExecuteRequest) (sdk.StepExecuteResult, error) {
+    switch req.StepType {
+    case "query":
+        query, _ := req.Config["query"].(string)
+        // ... execute query
+        return sdk.StepExecuteResult{
+            Output:   fmt.Sprintf("executed: %s", query),
+            Data:     map[string]any{"rows": 42},
+            ExitCode: 0,
+        }, nil
+    default:
+        return sdk.StepExecuteResult{ExitCode: 1}, fmt.Errorf("unknown step type: %s", req.StepType)
+    }
+}
+
+func main() {
+    sdk.Serve(&DatabasePlugin{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "database",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+Declare the `step_types` capability in `plugin.yaml`:
+
+```yaml
+capabilities:
+  - step_types
+```
+
+Step type name conflicts are resolved by first-registered-wins on the qualified name. AWF logs a warning if two plugins register the same qualified type name.
+
+See [Workflow Syntax - Custom Step Types](workflow-syntax.md#custom-step-type-state) for how to use custom step types in workflows.
+
+---
 
 ### Echo Plugin Example
 

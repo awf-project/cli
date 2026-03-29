@@ -42,6 +42,9 @@ type StepState struct {
 	OutputPath string // Path to temp file if output was streamed (empty if in-memory)
 	StderrPath string // Path to temp file if stderr was streamed (empty if in-memory)
 	Truncated  bool   // True if output was truncated (not streamed)
+
+	// C069: Structured output from custom step types, accessible via {{states.step_name.Data.key}}
+	Data map[string]any
 }
 
 // LoopContext holds the current loop iteration state.

@@ -31,6 +31,7 @@ type PluginInfo struct {
 	LoadedAt      int64
 	InitializedAt int64
 	Operations    []string
+	StepTypes     []string
 }
 
 func (p *PluginInfo) IsActive() bool {

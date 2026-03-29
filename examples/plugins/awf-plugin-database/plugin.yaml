@@ -1,0 +1,8 @@
+name: database
+version: 1.0.0
+description: Example step type plugin — provides custom database operation step types
+awf_version: ">=0.5.0"
+author: AWF Project
+license: MIT
+capabilities:
+  - step_types

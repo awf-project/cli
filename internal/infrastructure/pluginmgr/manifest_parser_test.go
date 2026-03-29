@@ -115,8 +115,8 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
-	if !manifest.HasCapability(pluginmodel.CapabilityCommands) {
-		t.Error("expected commands capability")
+	if !manifest.HasCapability(pluginmodel.CapabilityStepTypes) {
+		t.Error("expected step_types capability")
 	}
 
 	// Check config fields
@@ -378,7 +378,7 @@ version: 1.0.0
 awf_version: ">=0.4.0"
 capabilities:
   - operations
-  - commands
+  - step_types
   - validators
 `
 	reader := strings.NewReader(yamlContent)
@@ -397,8 +397,8 @@ capabilities:
 	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
-	if !manifest.HasCapability(pluginmodel.CapabilityCommands) {
-		t.Error("expected commands capability")
+	if !manifest.HasCapability(pluginmodel.CapabilityStepTypes) {
+		t.Error("expected step_types capability")
 	}
 	if !manifest.HasCapability(pluginmodel.CapabilityValidators) {
 		t.Error("expected validators capability")

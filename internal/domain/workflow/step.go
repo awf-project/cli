@@ -116,13 +116,16 @@ type Step struct {
 	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
 	CallWorkflow    *CallWorkflowConfig  // for call_workflow type: sub-workflow configuration
 	Agent           *AgentConfig         // for agent type: AI agent configuration
+	Config          map[string]any       // C069: plugin-provided step type configuration
 }
 
 // Validate checks if the step configuration is valid.
 // The validator parameter is used to check expression syntax in agent configurations.
+// The checker parameter is used to accept unknown step types registered by plugins;
+// pass nil to reject all unknown types (backward-compatible behavior).
 //
 //nolint:gocognit // Complexity 37: step validation checks all step types (command, agent, parallel, loop, operation, subworkflow) and their type-specific constraints. Comprehensive validation required.
-func (s *Step) Validate(validator ExpressionCompiler) error {
+func (s *Step) Validate(validator ExpressionCompiler, checker StepTypeChecker) error {
 	if s.Name == "" {
 		return errors.New("step name is required")
 	}
@@ -191,6 +194,9 @@ func (s *Step) Validate(validator ExpressionCompiler) error {
 			return fmt.Errorf("agent config: %w", err)
 		}
 	default:
+		if checker != nil && checker(string(s.Type)) {
+			break
+		}
 		return errors.New("unknown step type")
 	}
 

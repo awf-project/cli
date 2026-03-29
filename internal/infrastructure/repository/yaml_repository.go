@@ -79,7 +79,7 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 
 	// Domain validation
 	validator := expression.NewExprValidator()
-	if err := wf.Validate(validator.Compile); err != nil {
+	if err := wf.Validate(validator.Compile, nil); err != nil {
 		// Convert domain StateReferenceError to StructuredError
 		var stateRefErr *workflow.StateReferenceError
 		if errors.As(err, &stateRefErr) {

@@ -3,6 +3,7 @@ package workflow
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1231,4 +1232,150 @@ func TestConversationState_SessionID_JSONSerializationFormat(t *testing.T) {
 	jsonStr := string(data)
 	assert.Contains(t, jsonStr, "\"SessionID\"", "JSON must contain quoted SessionID field name")
 	assert.Contains(t, jsonStr, "test-session-id", "JSON must contain the SessionID value")
+}
+
+// C069: Tests for StepTypeChecker function type
+
+func TestStepTypeChecker_Basic(t *testing.T) {
+	tests := []struct {
+		name      string
+		checker   StepTypeChecker
+		typeName  string
+		wantFound bool
+	}{
+		{
+			name: "checker returns true for known type",
+			checker: func(typeName string) bool {
+				return typeName == "custom-step"
+			},
+			typeName:  "custom-step",
+			wantFound: true,
+		},
+		{
+			name: "checker returns false for unknown type",
+			checker: func(typeName string) bool {
+				return typeName == "custom-step"
+			},
+			typeName:  "unknown-step",
+			wantFound: false,
+		},
+		{
+			name: "checker with empty type name",
+			checker: func(typeName string) bool {
+				return typeName != ""
+			},
+			typeName:  "",
+			wantFound: false,
+		},
+		{
+			name: "checker accepts multiple types",
+			checker: func(typeName string) bool {
+				return typeName == "type-a" || typeName == "type-b" || typeName == "type-c"
+			},
+			typeName:  "type-b",
+			wantFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.checker(tt.typeName)
+			assert.Equal(t, tt.wantFound, result)
+		})
+	}
+}
+
+func TestStepTypeChecker_CaseInsensitive(t *testing.T) {
+	checker := func(typeName string) bool {
+		normalized := strings.ToLower(typeName)
+		return normalized == "custom-validator" || normalized == "custom-processor"
+	}
+
+	assert.True(t, checker("custom-validator"))
+	assert.True(t, checker("CUSTOM-VALIDATOR"))
+	assert.True(t, checker("Custom-Validator"))
+	assert.False(t, checker("unknown-validator"))
+}
+
+func TestStepTypeChecker_MapBased(t *testing.T) {
+	registeredTypes := map[string]bool{
+		"validator":   true,
+		"processor":   true,
+		"transformer": true,
+	}
+
+	checker := func(typeName string) bool {
+		_, exists := registeredTypes[typeName]
+		return exists
+	}
+
+	assert.True(t, checker("validator"))
+	assert.True(t, checker("processor"))
+	assert.False(t, checker("unknown"))
+}
+
+func TestStepTypeChecker_PrefixMatching(t *testing.T) {
+	checker := func(typeName string) bool {
+		return strings.HasPrefix(typeName, "awf-plugin-")
+	}
+
+	assert.True(t, checker("awf-plugin-custom"))
+	assert.True(t, checker("awf-plugin-validator"))
+	assert.False(t, checker("custom-plugin"))
+	assert.False(t, checker("awf-other"))
+}
+
+func TestStepTypeChecker_Callable(t *testing.T) {
+	checker := func(typeName string) bool {
+		return typeName == "test-type"
+	}
+
+	assert.NotNil(t, checker)
+	assert.True(t, checker("test-type"))
+	assert.False(t, checker("other-type"))
+}
+
+func TestStepTypeChecker_CanBeNil(t *testing.T) {
+	var checker StepTypeChecker
+	assert.Nil(t, checker)
+	// A nil function type won't execute, but can be safely assigned
+	// This validates the function type can represent uninitialized state
+}
+
+func TestStepTypeChecker_MultipleInstances(t *testing.T) {
+	checker1 := func(typeName string) bool {
+		return typeName == "type-a"
+	}
+
+	checker2 := func(typeName string) bool {
+		return typeName == "type-b"
+	}
+
+	assert.True(t, checker1("type-a"))
+	assert.False(t, checker1("type-b"))
+	assert.False(t, checker2("type-a"))
+	assert.True(t, checker2("type-b"))
+}
+
+func TestStepTypeChecker_WithRegularExpression(t *testing.T) {
+	checker := func(typeName string) bool {
+		matched, _ := regexp.MatchString(`^[a-z]+-[a-z]+$`, typeName)
+		return matched
+	}
+
+	assert.True(t, checker("custom-step"))
+	assert.True(t, checker("my-validator"))
+	assert.False(t, checker("InvalidFormat"))
+	assert.False(t, checker("123"))
+}
+
+func TestStepTypeChecker_WithLength(t *testing.T) {
+	checker := func(typeName string) bool {
+		return typeName != "" && len(typeName) <= 50
+	}
+
+	assert.True(t, checker("short"))
+	assert.True(t, checker("this-is-a-medium-length-type-name"))
+	assert.False(t, checker(""))
+	assert.False(t, checker(strings.Repeat("x", 51)))
 }

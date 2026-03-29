@@ -65,6 +65,7 @@ states:
 | `while` | Repeat until condition is false |
 | `operation` | Execute a declarative plugin operation (e.g., HTTP, GitHub, notifications) |
 | `call_workflow` | Invoke another workflow as a sub-workflow |
+| `<plugin-type>` | Execute a custom step type provided by an installed plugin (e.g., `db.query`) |
 
 ---
 
@@ -885,6 +886,60 @@ delete_resource:
   on_success: done
   on_failure: error
 ```
+
+---
+
+## Custom Step Type State
+
+Execute a custom step type provided by an installed plugin. The `type:` field must use the qualified name: `<manifest-name>.<step-type>`. Plugins declare short names; the host auto-prefixes with the manifest `name` at registration. AWF verifies type availability at validation time and delegates execution to the owning plugin at runtime.
+
+```yaml
+run_query:
+  type: database.query
+  config:
+    query: "SELECT count(*) FROM users WHERE active = true"
+    database: "{{.inputs.db_name}}"
+  on_success: process
+  on_failure: error
+```
+
+### Custom Step Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | string | Qualified step type name: `<manifest-name>.<type>` (e.g., `database.query`) |
+| `config` | map | Step-type-specific configuration (passed to plugin as-is) |
+| `on_success` | string | Next state on exit code 0 |
+| `on_failure` | string or object | Next state on non-zero exit code — string ref or [inline object](#inline-error-shorthand) |
+| `timeout` | int or string | Execution timeout passed to the plugin |
+| `retry` | object | Retry configuration (same as standard step retry) |
+| `transitions` | array | Conditional routing by exit code (see [Conditional Transitions](#conditional-transitions)) |
+| `pre_hook` | object | Command to run before the plugin step |
+| `post_hook` | object | Command to run after the plugin step |
+
+### Custom Step Output
+
+Plugin step results are accessible via the standard state interpolation:
+
+| Variable | Description |
+|----------|-------------|
+| `{{.states.step_name.Output}}` | Text output from the plugin step |
+| `{{.states.step_name.Data.key}}` | Structured data field returned by the plugin |
+| `{{.states.step_name.ExitCode}}` | Exit code for use in transitions |
+
+```yaml
+process:
+  type: step
+  command: echo "Rows: {{.states.run_query.Data.rows}}"
+  on_success: done
+```
+
+### Limitations
+
+- `capture:` is not supported on custom step types. Use `{{.states.step_name.Output}}` and `{{.states.step_name.Data.key}}` instead.
+- Custom step types require the owning plugin to be installed and enabled. Running with `--skip-plugins` causes the workflow to fail with a clear explanation when a custom step type is encountered.
+
+See [Plugins - Step Type Plugin](plugins.md#step-type-plugin) for how to implement a step type plugin.
 
 ---
 

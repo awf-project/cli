@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,11 +15,12 @@ import (
 )
 
 type WorkflowService struct {
-	repo      ports.WorkflowRepository
-	store     ports.StateStore
-	executor  ports.CommandExecutor
-	logger    ports.Logger
-	validator ports.ExpressionValidator
+	repo              ports.WorkflowRepository
+	store             ports.StateStore
+	executor          ports.CommandExecutor
+	logger            ports.Logger
+	validator         ports.ExpressionValidator
+	validatorProvider ports.WorkflowValidatorProvider
 }
 
 func NewWorkflowService(
@@ -35,6 +37,10 @@ func NewWorkflowService(
 		logger:    logger,
 		validator: validator,
 	}
+}
+
+func (s *WorkflowService) SetValidatorProvider(p ports.WorkflowValidatorProvider) {
+	s.validatorProvider = p
 }
 
 func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
@@ -58,7 +64,7 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	if err != nil {
 		return fmt.Errorf("load workflow %s: %w", name, err)
 	}
-	if err := wf.Validate(s.validator.Compile); err != nil {
+	if err := wf.Validate(s.validator.Compile, nil); err != nil {
 		var stateRefErr *workflow.StateReferenceError
 		if errors.As(err, &stateRefErr) {
 			availableAny := make([]any, len(stateRefErr.AvailableStates))
@@ -80,7 +86,11 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 		return fmt.Errorf("validate workflow %s: %w", name, err)
 	}
 
-	return s.validatePromptFiles(wf)
+	if err := s.validatePromptFiles(wf); err != nil {
+		return err
+	}
+
+	return s.validateWithPluginProvider(ctx, wf)
 }
 
 func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
@@ -152,6 +162,30 @@ func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
 			)
 		}
 		_ = f.Close()
+	}
+
+	return nil
+}
+
+func (s *WorkflowService) validateWithPluginProvider(ctx context.Context, wf *workflow.Workflow) error {
+	if s.validatorProvider == nil {
+		return nil
+	}
+
+	workflowJSON, err := json.Marshal(wf)
+	if err != nil {
+		return fmt.Errorf("marshal workflow for plugin validation: %w", err)
+	}
+
+	results, err := s.validatorProvider.ValidateWorkflow(ctx, workflowJSON)
+	if err != nil {
+		return fmt.Errorf("plugin validation error: %w", err)
+	}
+
+	for _, result := range results {
+		if result.Severity == ports.SeverityError {
+			return fmt.Errorf("workflow validation failed: %s", result.Message)
+		}
 	}
 
 	return nil

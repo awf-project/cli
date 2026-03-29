@@ -373,3 +373,283 @@ var OperationService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/plugin/v1/plugin.proto",
 }
+
+const (
+	ValidatorService_ValidateWorkflow_FullMethodName = "/plugin.v1.ValidatorService/ValidateWorkflow"
+	ValidatorService_ValidateStep_FullMethodName     = "/plugin.v1.ValidatorService/ValidateStep"
+)
+
+// ValidatorServiceClient is the client API for ValidatorService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ValidatorServiceClient interface {
+	ValidateWorkflow(ctx context.Context, in *ValidateWorkflowRequest, opts ...grpc.CallOption) (*ValidateWorkflowResponse, error)
+	ValidateStep(ctx context.Context, in *ValidateStepRequest, opts ...grpc.CallOption) (*ValidateStepResponse, error)
+}
+
+type validatorServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewValidatorServiceClient(cc grpc.ClientConnInterface) ValidatorServiceClient {
+	return &validatorServiceClient{cc}
+}
+
+func (c *validatorServiceClient) ValidateWorkflow(ctx context.Context, in *ValidateWorkflowRequest, opts ...grpc.CallOption) (*ValidateWorkflowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateWorkflowResponse)
+	err := c.cc.Invoke(ctx, ValidatorService_ValidateWorkflow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *validatorServiceClient) ValidateStep(ctx context.Context, in *ValidateStepRequest, opts ...grpc.CallOption) (*ValidateStepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateStepResponse)
+	err := c.cc.Invoke(ctx, ValidatorService_ValidateStep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ValidatorServiceServer is the server API for ValidatorService service.
+// All implementations must embed UnimplementedValidatorServiceServer
+// for forward compatibility.
+type ValidatorServiceServer interface {
+	ValidateWorkflow(context.Context, *ValidateWorkflowRequest) (*ValidateWorkflowResponse, error)
+	ValidateStep(context.Context, *ValidateStepRequest) (*ValidateStepResponse, error)
+	mustEmbedUnimplementedValidatorServiceServer()
+}
+
+// UnimplementedValidatorServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedValidatorServiceServer struct{}
+
+func (UnimplementedValidatorServiceServer) ValidateWorkflow(context.Context, *ValidateWorkflowRequest) (*ValidateWorkflowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateWorkflow not implemented")
+}
+func (UnimplementedValidatorServiceServer) ValidateStep(context.Context, *ValidateStepRequest) (*ValidateStepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateStep not implemented")
+}
+func (UnimplementedValidatorServiceServer) mustEmbedUnimplementedValidatorServiceServer() {}
+func (UnimplementedValidatorServiceServer) testEmbeddedByValue()                          {}
+
+// UnsafeValidatorServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ValidatorServiceServer will
+// result in compilation errors.
+type UnsafeValidatorServiceServer interface {
+	mustEmbedUnimplementedValidatorServiceServer()
+}
+
+func RegisterValidatorServiceServer(s grpc.ServiceRegistrar, srv ValidatorServiceServer) {
+	// If the following call panics, it indicates UnimplementedValidatorServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ValidatorService_ServiceDesc, srv)
+}
+
+func _ValidatorService_ValidateWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ValidatorServiceServer).ValidateWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ValidatorService_ValidateWorkflow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ValidatorServiceServer).ValidateWorkflow(ctx, req.(*ValidateWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ValidatorService_ValidateStep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateStepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ValidatorServiceServer).ValidateStep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ValidatorService_ValidateStep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ValidatorServiceServer).ValidateStep(ctx, req.(*ValidateStepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ValidatorService_ServiceDesc is the grpc.ServiceDesc for ValidatorService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ValidatorService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "plugin.v1.ValidatorService",
+	HandlerType: (*ValidatorServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ValidateWorkflow",
+			Handler:    _ValidatorService_ValidateWorkflow_Handler,
+		},
+		{
+			MethodName: "ValidateStep",
+			Handler:    _ValidatorService_ValidateStep_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/plugin/v1/plugin.proto",
+}
+
+const (
+	StepTypeService_ListStepTypes_FullMethodName = "/plugin.v1.StepTypeService/ListStepTypes"
+	StepTypeService_ExecuteStep_FullMethodName   = "/plugin.v1.StepTypeService/ExecuteStep"
+)
+
+// StepTypeServiceClient is the client API for StepTypeService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type StepTypeServiceClient interface {
+	ListStepTypes(ctx context.Context, in *ListStepTypesRequest, opts ...grpc.CallOption) (*ListStepTypesResponse, error)
+	ExecuteStep(ctx context.Context, in *ExecuteStepRequest, opts ...grpc.CallOption) (*ExecuteStepResponse, error)
+}
+
+type stepTypeServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewStepTypeServiceClient(cc grpc.ClientConnInterface) StepTypeServiceClient {
+	return &stepTypeServiceClient{cc}
+}
+
+func (c *stepTypeServiceClient) ListStepTypes(ctx context.Context, in *ListStepTypesRequest, opts ...grpc.CallOption) (*ListStepTypesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStepTypesResponse)
+	err := c.cc.Invoke(ctx, StepTypeService_ListStepTypes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stepTypeServiceClient) ExecuteStep(ctx context.Context, in *ExecuteStepRequest, opts ...grpc.CallOption) (*ExecuteStepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteStepResponse)
+	err := c.cc.Invoke(ctx, StepTypeService_ExecuteStep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// StepTypeServiceServer is the server API for StepTypeService service.
+// All implementations must embed UnimplementedStepTypeServiceServer
+// for forward compatibility.
+type StepTypeServiceServer interface {
+	ListStepTypes(context.Context, *ListStepTypesRequest) (*ListStepTypesResponse, error)
+	ExecuteStep(context.Context, *ExecuteStepRequest) (*ExecuteStepResponse, error)
+	mustEmbedUnimplementedStepTypeServiceServer()
+}
+
+// UnimplementedStepTypeServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedStepTypeServiceServer struct{}
+
+func (UnimplementedStepTypeServiceServer) ListStepTypes(context.Context, *ListStepTypesRequest) (*ListStepTypesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStepTypes not implemented")
+}
+func (UnimplementedStepTypeServiceServer) ExecuteStep(context.Context, *ExecuteStepRequest) (*ExecuteStepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteStep not implemented")
+}
+func (UnimplementedStepTypeServiceServer) mustEmbedUnimplementedStepTypeServiceServer() {}
+func (UnimplementedStepTypeServiceServer) testEmbeddedByValue()                         {}
+
+// UnsafeStepTypeServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to StepTypeServiceServer will
+// result in compilation errors.
+type UnsafeStepTypeServiceServer interface {
+	mustEmbedUnimplementedStepTypeServiceServer()
+}
+
+func RegisterStepTypeServiceServer(s grpc.ServiceRegistrar, srv StepTypeServiceServer) {
+	// If the following call panics, it indicates UnimplementedStepTypeServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&StepTypeService_ServiceDesc, srv)
+}
+
+func _StepTypeService_ListStepTypes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStepTypesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StepTypeServiceServer).ListStepTypes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StepTypeService_ListStepTypes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StepTypeServiceServer).ListStepTypes(ctx, req.(*ListStepTypesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StepTypeService_ExecuteStep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteStepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StepTypeServiceServer).ExecuteStep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StepTypeService_ExecuteStep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StepTypeServiceServer).ExecuteStep(ctx, req.(*ExecuteStepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// StepTypeService_ServiceDesc is the grpc.ServiceDesc for StepTypeService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var StepTypeService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "plugin.v1.StepTypeService",
+	HandlerType: (*StepTypeServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListStepTypes",
+			Handler:    _StepTypeService_ListStepTypes_Handler,
+		},
+		{
+			MethodName: "ExecuteStep",
+			Handler:    _StepTypeService_ExecuteStep_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/plugin/v1/plugin.proto",
+}

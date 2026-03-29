@@ -1,4 +1,4 @@
-name: awf-plugin-echo
+name: echo
 version: 1.0.0
 description: Example echo plugin — returns input text unchanged
 awf_version: ">=0.4.0"

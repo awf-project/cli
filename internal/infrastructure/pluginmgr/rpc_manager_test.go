@@ -3,15 +3,18 @@ package pluginmgr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/ports"
 	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
 )
 
@@ -1404,19 +1407,28 @@ func TestRPCPluginManager_SetPluginsDir(t *testing.T) {
 
 	// Initially empty
 	manager.mu.RLock()
-	initial := manager.pluginsDir
+	initial := manager.pluginsDirs
 	manager.mu.RUnlock()
-	if initial != "" {
-		t.Errorf("Initial pluginsDir = %q, want empty", initial)
+	if len(initial) != 0 {
+		t.Errorf("Initial pluginsDirs = %v, want empty", initial)
 	}
 
-	// Set directory
+	// Set single directory
 	manager.SetPluginsDir("/custom/plugins")
 	manager.mu.RLock()
-	after := manager.pluginsDir
+	after := manager.pluginsDirs
 	manager.mu.RUnlock()
-	if after != "/custom/plugins" {
-		t.Errorf("After SetPluginsDir() pluginsDir = %q, want %q", after, "/custom/plugins")
+	if len(after) != 1 || after[0] != "/custom/plugins" {
+		t.Errorf("After SetPluginsDir() pluginsDirs = %v, want [/custom/plugins]", after)
+	}
+
+	// Set multiple directories
+	manager.SetPluginsDirs([]string{"/local/plugins", "/global/plugins"})
+	manager.mu.RLock()
+	multi := manager.pluginsDirs
+	manager.mu.RUnlock()
+	if len(multi) != 2 {
+		t.Errorf("After SetPluginsDirs() pluginsDirs = %v, want 2 entries", multi)
 	}
 }
 
@@ -1427,17 +1439,14 @@ func TestRPCPluginManager_Discover_NonExistentDirectory(t *testing.T) {
 	manager.SetPluginsDir("/nonexistent/plugins/directory")
 	ctx := context.Background()
 
-	_, err := manager.Discover(ctx)
-	if err == nil {
-		t.Fatal("Discover() error = nil, want error for non-existent directory")
+	// Non-existent directories are skipped gracefully (multi-dir support).
+	// Result is zero discovered plugins, not an error.
+	plugins, err := manager.Discover(ctx)
+	if err != nil {
+		t.Fatalf("Discover() error = %v, want nil (non-existent dirs are skipped)", err)
 	}
-
-	// Should be wrapped in RPCManagerError
-	var mgrErr *RPCManagerError
-	if errors.As(err, &mgrErr) {
-		if mgrErr.Op != "discover" {
-			t.Errorf("RPCManagerError.Op = %q, want %q", mgrErr.Op, "discover")
-		}
+	if len(plugins) != 0 {
+		t.Errorf("Discover() returned %d plugins, want 0", len(plugins))
 	}
 }
 
@@ -2132,6 +2141,333 @@ func TestRPCPluginManager_Execute_ResultConversion(t *testing.T) {
 			assert.Equal(t, tt.want.Outputs, result.Outputs)
 		})
 	}
+}
+
+// --- validatorClients Tests ---
+
+func TestRPCPluginManager_validatorClients_Empty(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	adapters := manager.validatorClients(time.Second)
+
+	assert.NotNil(t, adapters)
+	assert.Len(t, adapters, 0)
+}
+
+func TestRPCPluginManager_validatorClients_WithCapability(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockValidator := &mockValidatorServiceClient{}
+	manager.plugins["validator-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "validator-plugin",
+			Capabilities: []string{pluginmodel.CapabilityValidators},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["validator-plugin"] = &pluginConnection{validator: mockValidator}
+
+	adapters := manager.validatorClients(time.Second)
+
+	assert.Len(t, adapters, 1)
+	assert.NotNil(t, adapters[0])
+}
+
+func TestRPCPluginManager_validatorClients_SkipsPluginsWithoutCapability(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockOp := &mockOperationServiceClient{}
+	mockValidator := &mockValidatorServiceClient{}
+
+	manager.plugins["op-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "op-plugin",
+			Capabilities: []string{pluginmodel.CapabilityOperations},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["op-plugin"] = &pluginConnection{operation: mockOp}
+
+	manager.plugins["validator-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "validator-plugin",
+			Capabilities: []string{pluginmodel.CapabilityValidators},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["validator-plugin"] = &pluginConnection{validator: mockValidator}
+
+	adapters := manager.validatorClients(time.Second)
+
+	assert.Len(t, adapters, 1)
+	assert.Equal(t, "validator-plugin", adapters[0].pluginName)
+}
+
+func TestRPCPluginManager_validatorClients_MultiplePlugins(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	for i := 1; i <= 3; i++ {
+		name := fmt.Sprintf("validator-plugin-%d", i)
+		manager.plugins[name] = &pluginmodel.PluginInfo{
+			Manifest: &pluginmodel.Manifest{
+				Name:         name,
+				Capabilities: []string{pluginmodel.CapabilityValidators},
+			},
+			Status: pluginmodel.StatusRunning,
+		}
+		manager.connections[name] = &pluginConnection{validator: &mockValidatorServiceClient{}}
+	}
+
+	adapters := manager.validatorClients(time.Second)
+
+	assert.Len(t, adapters, 3)
+}
+
+func TestRPCPluginManager_validatorClients_DefaultTimeout(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	manager.plugins["validator-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "validator-plugin",
+			Capabilities: []string{pluginmodel.CapabilityValidators},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["validator-plugin"] = &pluginConnection{validator: &mockValidatorServiceClient{}}
+
+	adapters := manager.validatorClients(0)
+
+	assert.Len(t, adapters, 1)
+	assert.NotNil(t, adapters[0])
+}
+
+// --- stepTypeClient Tests ---
+
+func TestRPCPluginManager_stepTypeClient_Empty(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockLogger := &mockLogger{}
+	adapters := manager.stepTypeClient(mockLogger)
+
+	assert.NotNil(t, adapters)
+	assert.Len(t, adapters, 0)
+}
+
+func TestRPCPluginManager_stepTypeClient_WithCapability(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockStepType := &mockStepTypeServiceClient{}
+	manager.plugins["step-type-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "step-type-plugin",
+			Capabilities: []string{pluginmodel.CapabilityStepTypes},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["step-type-plugin"] = &pluginConnection{stepType: mockStepType}
+
+	mockLogger := &mockLogger{}
+	adapters := manager.stepTypeClient(mockLogger)
+
+	assert.Len(t, adapters, 1)
+	assert.NotNil(t, adapters[0])
+}
+
+func TestRPCPluginManager_stepTypeClient_SkipsPluginsWithoutCapability(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockOp := &mockOperationServiceClient{}
+	mockStepType := &mockStepTypeServiceClient{}
+
+	manager.plugins["op-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "op-plugin",
+			Capabilities: []string{pluginmodel.CapabilityOperations},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["op-plugin"] = &pluginConnection{operation: mockOp}
+
+	manager.plugins["step-type-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "step-type-plugin",
+			Capabilities: []string{pluginmodel.CapabilityStepTypes},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["step-type-plugin"] = &pluginConnection{stepType: mockStepType}
+
+	mockLogger := &mockLogger{}
+	adapters := manager.stepTypeClient(mockLogger)
+
+	assert.Len(t, adapters, 1)
+	assert.Equal(t, "step-type-plugin", adapters[0].pluginName)
+}
+
+func TestRPCPluginManager_stepTypeClient_MultiplePlugins(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	mockLogger := &mockLogger{}
+	for i := 1; i <= 3; i++ {
+		name := fmt.Sprintf("step-type-plugin-%d", i)
+		manager.plugins[name] = &pluginmodel.PluginInfo{
+			Manifest: &pluginmodel.Manifest{
+				Name:         name,
+				Capabilities: []string{pluginmodel.CapabilityStepTypes},
+			},
+			Status: pluginmodel.StatusRunning,
+		}
+		manager.connections[name] = &pluginConnection{stepType: &mockStepTypeServiceClient{}}
+	}
+
+	adapters := manager.stepTypeClient(mockLogger)
+
+	assert.Len(t, adapters, 3)
+}
+
+func TestRPCPluginManager_stepTypeClient_PassesLoggerToAdapter(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	manager.plugins["step-type-plugin"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:         "step-type-plugin",
+			Capabilities: []string{pluginmodel.CapabilityStepTypes},
+		},
+		Status: pluginmodel.StatusRunning,
+	}
+	manager.connections["step-type-plugin"] = &pluginConnection{stepType: &mockStepTypeServiceClient{}}
+
+	mockLogger := &mockLogger{}
+	adapters := manager.stepTypeClient(mockLogger)
+
+	assert.Len(t, adapters, 1)
+	assert.NotNil(t, adapters[0].logger)
+}
+
+// --- Mock Helpers ---
+
+type mockValidatorServiceClient struct {
+	mock.Mock
+}
+
+func (m *mockValidatorServiceClient) ValidateWorkflow(ctx context.Context, in *pluginv1.ValidateWorkflowRequest, opts ...grpc.CallOption) (*pluginv1.ValidateWorkflowResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pluginv1.ValidateWorkflowResponse), args.Error(1)
+}
+
+func (m *mockValidatorServiceClient) ValidateStep(ctx context.Context, in *pluginv1.ValidateStepRequest, opts ...grpc.CallOption) (*pluginv1.ValidateStepResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pluginv1.ValidateStepResponse), args.Error(1)
+}
+
+type mockStepTypeServiceClient struct {
+	mock.Mock
+}
+
+func (m *mockStepTypeServiceClient) ListStepTypes(ctx context.Context, in *pluginv1.ListStepTypesRequest, opts ...grpc.CallOption) (*pluginv1.ListStepTypesResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pluginv1.ListStepTypesResponse), args.Error(1)
+}
+
+func (m *mockStepTypeServiceClient) ExecuteStep(ctx context.Context, in *pluginv1.ExecuteStepRequest, opts ...grpc.CallOption) (*pluginv1.ExecuteStepResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pluginv1.ExecuteStepResponse), args.Error(1)
+}
+
+type mockLogger struct {
+	mock.Mock
+}
+
+func (m *mockLogger) Debug(msg string, fields ...any) {
+	m.Called(msg, fields)
+}
+
+func (m *mockLogger) Info(msg string, fields ...any) {
+	m.Called(msg, fields)
+}
+
+func (m *mockLogger) Warn(msg string, fields ...any) {
+	m.Called(msg, fields)
+}
+
+func (m *mockLogger) Error(msg string, fields ...any) {
+	m.Called(msg, fields)
+}
+
+func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(ports.Logger)
+}
+
+func TestRPCPluginManager_queryStepTypeNames_NoClient(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	conn := &pluginConnection{stepType: nil}
+	names := manager.queryStepTypeNames(context.Background(), "test", conn)
+	assert.Nil(t, names)
+}
+
+func TestRPCPluginManager_queryStepTypeNames_WithTypes(t *testing.T) {
+	mockClient := new(mockStepTypeServiceClient)
+	mockClient.On("ListStepTypes", mock.Anything, &pluginv1.ListStepTypesRequest{}).
+		Return(&pluginv1.ListStepTypesResponse{
+			StepTypes: []*pluginv1.StepTypeInfo{
+				{Name: "query"},
+				{Name: "migrate"},
+			},
+		}, nil)
+
+	manager := NewRPCPluginManager(nil)
+	conn := &pluginConnection{stepType: mockClient}
+	names := manager.queryStepTypeNames(context.Background(), "database", conn)
+
+	assert.Equal(t, []string{"database.query", "database.migrate"}, names)
+}
+
+func TestRPCPluginManager_queryStepTypeNames_Error(t *testing.T) {
+	mockClient := new(mockStepTypeServiceClient)
+	mockClient.On("ListStepTypes", mock.Anything, mock.Anything).
+		Return(nil, fmt.Errorf("connection lost"))
+
+	manager := NewRPCPluginManager(nil)
+	conn := &pluginConnection{stepType: mockClient}
+	names := manager.queryStepTypeNames(context.Background(), "broken", conn)
+
+	assert.Nil(t, names)
 }
 
 // TestRPCPluginManager_ShutdownAll_IdempotentWithMixedStates validates mixed state handling.

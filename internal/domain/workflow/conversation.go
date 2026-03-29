@@ -12,6 +12,11 @@ import (
 // Returns nil if the expression is syntactically valid, error otherwise.
 type ExpressionCompiler func(expression string) error
 
+// StepTypeChecker is a function type for querying whether a step type name is registered
+// by a plugin provider. Defined in the workflow package to avoid import cycles.
+// Returns true if the type is known (custom step type accepted), false otherwise.
+type StepTypeChecker func(typeName string) bool
+
 // Conversation errors
 var (
 	ErrNilTurn = errors.New("cannot add nil turn")

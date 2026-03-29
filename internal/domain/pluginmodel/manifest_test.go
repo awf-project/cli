@@ -10,14 +10,14 @@ import (
 
 func TestValidCapabilities_ContainsExpectedValues(t *testing.T) {
 	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityOperations)
-	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityCommands)
+	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityStepTypes)
 	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityValidators)
 	assert.Len(t, pluginmodel.ValidCapabilities, 3)
 }
 
 func TestCapabilityConstants_Values(t *testing.T) {
 	assert.Equal(t, "operations", pluginmodel.CapabilityOperations)
-	assert.Equal(t, "commands", pluginmodel.CapabilityCommands)
+	assert.Equal(t, "step_types", pluginmodel.CapabilityStepTypes)
 	assert.Equal(t, "validators", pluginmodel.CapabilityValidators)
 }
 
@@ -166,7 +166,7 @@ func TestManifest_FullManifest(t *testing.T) {
 		Homepage:    "https://github.com/awf-project/cli",
 		Capabilities: []string{
 			pluginmodel.CapabilityOperations,
-			pluginmodel.CapabilityCommands,
+			pluginmodel.CapabilityStepTypes,
 		},
 		Config: map[string]pluginmodel.ConfigField{
 			"api_key": {
@@ -202,13 +202,13 @@ func TestManifest_MultipleCapabilities(t *testing.T) {
 		AWFVersion: ">=0.4.0",
 		Capabilities: []string{
 			pluginmodel.CapabilityOperations,
-			pluginmodel.CapabilityCommands,
+			pluginmodel.CapabilityStepTypes,
 			pluginmodel.CapabilityValidators,
 		},
 	}
 	assert.Len(t, m.Capabilities, 3)
 	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityOperations)
-	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityCommands)
+	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityStepTypes)
 	assert.Contains(t, m.Capabilities, pluginmodel.CapabilityValidators)
 }
 
@@ -239,7 +239,7 @@ func TestManifest_HasCapability(t *testing.T) {
 	}
 
 	assert.True(t, m.HasCapability(pluginmodel.CapabilityOperations))
-	assert.False(t, m.HasCapability(pluginmodel.CapabilityCommands))
+	assert.False(t, m.HasCapability(pluginmodel.CapabilityStepTypes))
 	assert.False(t, m.HasCapability(pluginmodel.CapabilityValidators))
 }
 
@@ -1663,7 +1663,7 @@ func TestManifestValidate_HappyPath(t *testing.T) {
 				Homepage:    "https://github.com/awf-project/cli",
 				Capabilities: []string{
 					pluginmodel.CapabilityOperations,
-					pluginmodel.CapabilityCommands,
+					pluginmodel.CapabilityStepTypes,
 					pluginmodel.CapabilityValidators,
 				},
 				Config: map[string]pluginmodel.ConfigField{
@@ -2098,12 +2098,12 @@ func TestManifestValidate_CapabilitiesValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "single valid capability - commands",
+			name: "single valid capability - step_types",
 			manifest: pluginmodel.Manifest{
 				Name:         "test-plugin",
 				Version:      "1.0.0",
 				AWFVersion:   ">=0.4.0",
-				Capabilities: []string{pluginmodel.CapabilityCommands},
+				Capabilities: []string{pluginmodel.CapabilityStepTypes},
 			},
 			wantErr: false,
 		},
@@ -2125,7 +2125,7 @@ func TestManifestValidate_CapabilitiesValidation(t *testing.T) {
 				AWFVersion: ">=0.4.0",
 				Capabilities: []string{
 					pluginmodel.CapabilityOperations,
-					pluginmodel.CapabilityCommands,
+					pluginmodel.CapabilityStepTypes,
 					pluginmodel.CapabilityValidators,
 				},
 			},
@@ -2459,7 +2459,7 @@ func TestManifestValidate_EdgeCases(t *testing.T) {
 				Homepage:    "https://example.com",
 				Capabilities: []string{
 					pluginmodel.CapabilityOperations,
-					pluginmodel.CapabilityCommands,
+					pluginmodel.CapabilityStepTypes,
 				},
 				Config: map[string]pluginmodel.ConfigField{
 					"key": {
@@ -2539,7 +2539,7 @@ func TestManifestValidate_ErrorMessages(t *testing.T) {
 				AWFVersion:   ">=0.4.0",
 				Capabilities: []string{"bad-capability"},
 			},
-			expectedSubstr: []string{"invalid capability", "bad-capability", "operations", "commands", "validators"},
+			expectedSubstr: []string{"invalid capability", "bad-capability", "operations", "step_types", "validators"},
 		},
 		{
 			name: "config field error includes field name",
@@ -2565,6 +2565,26 @@ func TestManifestValidate_ErrorMessages(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCapabilityStepTypes_ReplaceCommands verifies T005: "commands" is renamed to "step_types"
+func TestCapabilityStepTypes_ReplaceCommands(t *testing.T) {
+	// Component: T005
+	// Feature: C069
+	assert.NotContains(t, pluginmodel.ValidCapabilities, "commands",
+		"'commands' capability was renamed to 'step_types' in T005")
+
+	m := pluginmodel.Manifest{
+		Name:         "test-plugin",
+		Version:      "1.0.0",
+		AWFVersion:   ">=0.4.0",
+		Capabilities: []string{"commands"},
+	}
+	err := m.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid capability")
+	assert.Contains(t, err.Error(), "step_types",
+		"error should suggest 'step_types' as the replacement")
 }
 
 // TestManifestValidate_NoLongerReturnsErrNotImplemented verifies stub is replaced

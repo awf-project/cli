@@ -42,6 +42,7 @@ func newRunCommand(cfg *Config) *cobra.Command {
 	var dryRunFlag bool
 	var interactiveFlag bool
 	var breakpointFlags []string
+	var skipPlugins bool
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -80,15 +81,15 @@ Examples:
 				cfg.OutputMode = mode
 			}
 			if dryRunFlag {
-				return runDryRun(cmd, cfg, args[0], inputFlags)
+				return runDryRun(cmd, cfg, args[0], inputFlags, skipPlugins)
 			}
 			if interactiveFlag {
-				return runInteractive(cmd, cfg, args[0], inputFlags, breakpointFlags)
+				return runInteractive(cmd, cfg, args[0], inputFlags, breakpointFlags, skipPlugins)
 			}
 			if stepFlag != "" {
-				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags)
+				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags, skipPlugins)
 			}
-			return runWorkflow(cmd, cfg, args[0], inputFlags)
+			return runWorkflow(cmd, cfg, args[0], inputFlags, skipPlugins)
 		},
 	}
 
@@ -104,6 +105,7 @@ Examples:
 		"Execute in interactive step-by-step mode with prompts")
 	cmd.Flags().StringArrayVarP(&breakpointFlags, "breakpoint", "b", nil,
 		"Pause only at specified steps in interactive mode (comma-separated)")
+	cmd.Flags().BoolVar(&skipPlugins, "skip-plugins", false, "Skip plugin validators")
 
 	// Wire custom help function for workflow-specific help (F035)
 	cmd.SetHelpFunc(workflowHelpFunc(cfg))
@@ -161,7 +163,7 @@ func workflowHelpFunc(cfg *Config) func(*cobra.Command, []string) {
 	}
 }
 
-func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string) error {
+func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, skipPlugins bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -242,12 +244,23 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}()
 	historySvc := application.NewHistoryService(historyStore, logger)
 
-	// Initialize plugin system
-	pluginResult, err := initPluginSystem(ctx, cfg, logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize plugins: %w", err)
+	// Initialize plugin system (skip if --skip-plugins flag is set)
+	var pluginResult *PluginSystemResult
+	if !skipPlugins {
+		var initErr error
+		pluginResult, initErr = initPluginSystem(ctx, cfg, logger)
+		if initErr != nil {
+			return fmt.Errorf("failed to initialize plugins: %w", initErr)
+		}
+		defer pluginResult.Cleanup()
+	} else {
+		// Create a stub plugin service when skipping plugins
+		pluginResult = &PluginSystemResult{
+			Service: application.NewPluginService(nil, nil, logger),
+			Manager: nil,
+			Cleanup: func() {},
+		}
 	}
-	defer pluginResult.Cleanup()
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -281,6 +294,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	execSvc.SetOperationProvider(compositeProvider)
 	execSvc.SetPluginService(pluginResult.Service)
+	if pluginResult.RPCManager != nil {
+		wfSvc.SetValidatorProvider(pluginResult.RPCManager.ValidatorProvider(0))
+		execSvc.SetStepTypeProvider(pluginResult.RPCManager.StepTypeProvider(logger))
+	}
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -402,7 +419,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 }
 
 // runDryRun executes a dry-run of the workflow, showing the execution plan without running commands.
-func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string) error {
+func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, skipPlugins bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -467,7 +484,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 }
 
 // runInteractive executes the workflow in interactive step-by-step mode.
-func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string) error {
+func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string, skipPlugins bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -523,6 +540,9 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
+
+	// Note: skipPlugins flag is accepted for consistency with other modes but
+	// not used in interactive mode as InteractiveExecutor doesn't use plugin providers
 
 	// Create interactive prompt
 	prompt := ui.NewCLIPrompt(cmd.InOrStdin(), cmd.OutOrStdout(), !cfg.NoColor)
@@ -864,6 +884,7 @@ func runSingleStep(
 	stepName string,
 	inputFlags []string,
 	mockFlags []string,
+	skipPlugins bool,
 ) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
@@ -922,12 +943,23 @@ func runSingleStep(
 	}()
 	historySvc := application.NewHistoryService(historyStore, logger)
 
-	// Initialize plugin system
-	pluginResult, err := initPluginSystem(ctx, cfg, logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize plugins: %w", err)
+	// Initialize plugin system (skip if --skip-plugins flag is set)
+	var pluginResult *PluginSystemResult
+	if !skipPlugins {
+		var initErr error
+		pluginResult, initErr = initPluginSystem(ctx, cfg, logger)
+		if initErr != nil {
+			return fmt.Errorf("failed to initialize plugins: %w", initErr)
+		}
+		defer pluginResult.Cleanup()
+	} else {
+		// Create a stub plugin service when skipping plugins
+		pluginResult = &PluginSystemResult{
+			Service: application.NewPluginService(nil, nil, logger),
+			Manager: nil,
+			Cleanup: func() {},
+		}
 	}
-	defer pluginResult.Cleanup()
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -951,6 +983,9 @@ func runSingleStep(
 	}
 	execSvc.SetOperationProvider(compositeProvider)
 	execSvc.SetPluginService(pluginResult.Service)
+	if pluginResult.RPCManager != nil {
+		execSvc.SetStepTypeProvider(pluginResult.RPCManager.StepTypeProvider(logger))
+	}
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{

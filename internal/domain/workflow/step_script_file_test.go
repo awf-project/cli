@@ -55,7 +55,7 @@ func TestStepScriptFileValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -135,7 +135,7 @@ func TestStepScriptFileEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -191,7 +191,7 @@ func TestStepScriptFileWithOtherFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if err != nil {
 				t.Errorf("Step.Validate() unexpected error = %v", err)
 			}
@@ -254,7 +254,7 @@ func TestStepScriptFileOnlyForCommandType(t *testing.T) {
 				// No additional fields needed for these types in this test
 			}
 
-			err := step.Validate(nil)
+			err := step.Validate(nil, nil)
 			if stepType == workflow.StepTypeTerminal {
 				if err != nil {
 					t.Errorf("Terminal step should validate even with ScriptFile: %v", err)

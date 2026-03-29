@@ -13,9 +13,6 @@ type EchoPlugin struct {
 	sdk.BasePlugin
 }
 
-func (p *EchoPlugin) Name() string    { return "awf-plugin-echo" }
-func (p *EchoPlugin) Version() string { return "1.0.0" }
-
 func (p *EchoPlugin) Operations() []string {
 	return []string{"echo"}
 }
@@ -45,7 +42,7 @@ func (p *EchoPlugin) HandleOperation(_ context.Context, name string, inputs map[
 func main() {
 	sdk.Serve(&EchoPlugin{
 		BasePlugin: sdk.BasePlugin{
-			PluginName:    "awf-plugin-echo",
+			PluginName:    "echo",
 			PluginVersion: "1.0.0",
 		},
 	})

@@ -43,6 +43,7 @@ type StepStateData struct {
 	Response   map[string]any // parsed JSON response from agent steps
 	TokensUsed int            // total tokens used from agent steps
 	JSON       any            // explicit JSON output from output_format (map[string]any or []any)
+	Data       map[string]any // structured output from plugin custom step types
 }
 
 // WorkflowData holds workflow metadata for interpolation.

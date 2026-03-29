@@ -112,7 +112,7 @@ func TestStepMessageField_TerminalWithMessageValidates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
