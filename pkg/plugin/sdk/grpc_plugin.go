@@ -189,6 +189,8 @@ func (b *GRPCPluginBridge) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) (e
 
 	pluginv1.RegisterPluginServiceServer(s, &pluginServiceServer{impl: b.impl})
 	pluginv1.RegisterOperationServiceServer(s, &operationServiceServer{impl: b.impl})
+	pluginv1.RegisterValidatorServiceServer(s, &validatorServiceServer{impl: b.impl})
+	pluginv1.RegisterStepTypeServiceServer(s, &stepTypeServiceServer{impl: b.impl})
 	return nil
 }
 

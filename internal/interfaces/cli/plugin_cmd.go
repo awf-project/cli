@@ -47,8 +47,15 @@ Examples:
 	return cmd
 }
 
+type pluginListFlags struct {
+	operations bool
+	details    bool
+	stepTypes  bool
+	validators bool
+}
+
 func newPluginListCommand(cfg *Config) *cobra.Command {
-	var showOperations bool
+	var flags pluginListFlags
 
 	cmd := &cobra.Command{
 		Use:     "list",
@@ -56,11 +63,14 @@ func newPluginListCommand(cfg *Config) *cobra.Command {
 		Long:    "Display all discovered plugins with their status and capabilities.",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPluginList(cmd, cfg, showOperations)
+			return runPluginList(cmd, cfg, flags)
 		},
 	}
 
-	cmd.Flags().BoolVar(&showOperations, "operations", false, "List operations provided by each plugin")
+	cmd.Flags().BoolVar(&flags.operations, "operations", false, "List operations provided by each plugin")
+	cmd.Flags().BoolVar(&flags.details, "details", false, "List all capabilities (operations, step types, validators)")
+	cmd.Flags().BoolVar(&flags.stepTypes, "step-types", false, "List step types provided by each plugin")
+	cmd.Flags().BoolVar(&flags.validators, "validators", false, "List validator plugins")
 
 	return cmd
 }
@@ -97,15 +107,27 @@ Examples:
 	}
 }
 
-func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
+func runPluginList(cmd *cobra.Command, cfg *Config, flags pluginListFlags) error {
+	// Validate mutual exclusivity
+	setCount := 0
+	for _, set := range []bool{flags.operations, flags.details, flags.stepTypes, flags.validators} {
+		if set {
+			setCount++
+		}
+	}
+	if setCount > 1 {
+		return fmt.Errorf("flags --operations, --details, --step-types, and --validators are mutually exclusive")
+	}
+
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// When listing operations, plugins must be started to query via gRPC.
-	// Otherwise use read-only mode for fast listing.
+	// --validators doesn't need gRPC; others with detail flags do
+	needsGRPC := flags.operations || flags.details || flags.stepTypes
+
 	var result *PluginSystemResult
 	var err error
-	if showOperations {
+	if needsGRPC {
 		result, err = initPluginSystem(ctx, cfg, nil)
 		if result != nil {
 			defer result.Cleanup()
@@ -120,20 +142,16 @@ func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
 		return fmt.Errorf("failed to initialize plugin system: %w", err)
 	}
 
-	// Get all plugins (discovered + disabled)
 	plugins := result.Service.ListPlugins()
 	disabledNames := result.Service.ListDisabledPlugins()
 
-	// Build plugin info list
 	infos := make([]ui.PluginInfo, 0, len(plugins)+len(disabledNames))
 
-	// Add all plugins (builtins + discovered)
 	for _, p := range plugins {
 		if p.Manifest == nil {
 			continue
 		}
 		enabled := result.Service.IsPluginEnabled(p.Manifest.Name)
-		// Resolve source metadata — try manifest name first, then directory name.
 		var sourceStr string
 		dirName := filepath.Base(p.Path)
 		if sd := result.StateStore.GetSourceData(p.Manifest.Name); sd != nil {
@@ -155,11 +173,12 @@ func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
 			Enabled:      enabled,
 			Capabilities: p.Manifest.Capabilities,
 			Operations:   p.Operations,
+			StepTypes:    p.StepTypes,
 			Source:       sourceStr,
 		})
 	}
 
-	// Add disabled plugins that weren't discovered (might be removed from disk)
+	// Add disabled plugins that weren't discovered
 	existingNames := make(map[string]struct{})
 	for i := range infos {
 		existingNames[infos[i].Name] = struct{}{}
@@ -174,20 +193,73 @@ func runPluginList(cmd *cobra.Command, cfg *Config, showOperations bool) error {
 		}
 	}
 
-	if showOperations {
-		ops := make([]ui.OperationEntry, 0)
-		for i := range infos {
-			for _, opName := range infos[i].Operations {
-				ops = append(ops, ui.OperationEntry{
-					Name:   opName,
-					Plugin: infos[i].Name,
+	switch {
+	case flags.operations:
+		return writer.WriteOperations(buildOperationEntries(infos))
+	case flags.stepTypes:
+		return writer.WriteStepTypes(buildStepTypeEntries(infos))
+	case flags.validators:
+		return writer.WriteValidators(buildValidatorEntries(infos))
+	case flags.details:
+		return writer.WriteCapabilities(buildCapabilityEntries(infos))
+	default:
+		return writer.WritePlugins(infos)
+	}
+}
+
+func buildOperationEntries(infos []ui.PluginInfo) []ui.OperationEntry {
+	var entries []ui.OperationEntry
+	for i := range infos {
+		for _, opName := range infos[i].Operations {
+			entries = append(entries, ui.OperationEntry{Name: opName, Plugin: infos[i].Name})
+		}
+	}
+	return entries
+}
+
+func buildStepTypeEntries(infos []ui.PluginInfo) []ui.OperationEntry {
+	var entries []ui.OperationEntry
+	for i := range infos {
+		for _, stName := range infos[i].StepTypes {
+			entries = append(entries, ui.OperationEntry{Name: stName, Plugin: infos[i].Name})
+		}
+	}
+	return entries
+}
+
+func buildValidatorEntries(infos []ui.PluginInfo) []ui.ValidatorEntry {
+	var entries []ui.ValidatorEntry
+	for i := range infos {
+		for _, cap := range infos[i].Capabilities {
+			if cap == "validators" {
+				entries = append(entries, ui.ValidatorEntry{
+					Name:        infos[i].Name,
+					Description: infos[i].Description,
 				})
+				break
 			}
 		}
-		return writer.WriteOperations(ops)
 	}
+	return entries
+}
 
-	return writer.WritePlugins(infos)
+func buildCapabilityEntries(infos []ui.PluginInfo) []ui.CapabilityEntry {
+	var entries []ui.CapabilityEntry
+	for i := range infos {
+		for _, opName := range infos[i].Operations {
+			entries = append(entries, ui.CapabilityEntry{Type: "operation", Name: opName, Plugin: infos[i].Name})
+		}
+		for _, stName := range infos[i].StepTypes {
+			entries = append(entries, ui.CapabilityEntry{Type: "step_type", Name: stName, Plugin: infos[i].Name})
+		}
+		for _, cap := range infos[i].Capabilities {
+			if cap == "validators" {
+				entries = append(entries, ui.CapabilityEntry{Type: "validator", Name: infos[i].Name, Plugin: infos[i].Name})
+				break
+			}
+		}
+	}
+	return entries
 }
 
 func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
@@ -286,8 +358,8 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 	// Get plugin paths
 	pluginPaths := getPluginSearchPaths(cfg)
 
-	// Find the first existing plugin directory
-	pluginsDir := findFirstExistingDir(pluginPaths)
+	// Find all existing plugin directories
+	pluginsDirs := findExistingDirs(pluginPaths)
 
 	// Create state store for plugin enable/disable persistence
 	stateStorePath := filepath.Join(cfg.StoragePath, "plugins")
@@ -298,7 +370,7 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 	stateStore.Load(ctx)
 
 	// If no plugins directory exists, return a stub service
-	if pluginsDir == "" {
+	if len(pluginsDirs) == 0 {
 		service := application.NewPluginService(nil, stateStore, nil)
 		registerBuiltins(service, Version)
 		return &PluginSystemResult{
@@ -312,7 +384,7 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
 	manager := infrastructurePlugin.NewRPCPluginManager(loader)
-	manager.SetPluginsDir(pluginsDir)
+	manager.SetPluginsDirs(pluginsDirs)
 
 	// Discover plugins without loading/initializing them (non-fatal: we can still show state store info)
 	//nolint:errcheck,gosec // Non-fatal error: can still show state store info

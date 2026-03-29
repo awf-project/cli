@@ -187,7 +187,7 @@ description: Plugin for JSON testing
 awf_version: ">=0.1.0"
 capabilities:
   - operations
-  - commands
+  - step_types
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -1612,6 +1612,97 @@ func TestPluginUpdateCommand_NotInstalled(t *testing.T) {
 	err := cmd.Execute()
 	assert.Error(t, err, "update should fail when plugin is not installed")
 	assert.Contains(t, err.Error(), "not installed", "error should indicate plugin is not installed")
+}
+
+func TestPluginListCommand_DetailsFlag_Recognized(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
+	require.NoError(t, err)
+
+	found := false
+	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "details" {
+			found = true
+		}
+	})
+	assert.True(t, found, "plugin list command should have --details flag")
+}
+
+func TestPluginListCommand_StepTypesFlag_Recognized(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
+	require.NoError(t, err)
+
+	found := false
+	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "step-types" {
+			found = true
+		}
+	})
+	assert.True(t, found, "plugin list command should have --step-types flag")
+}
+
+func TestPluginListCommand_ValidatorsFlag_Recognized(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
+	require.NoError(t, err)
+
+	found := false
+	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "validators" {
+			found = true
+		}
+	})
+	assert.True(t, found, "plugin list command should have --validators flag")
+}
+
+func TestPluginListCommand_MutuallyExclusiveFlags(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	tests := []struct {
+		name  string
+		flags []string
+	}{
+		{"operations+details", []string{"--operations", "--details"}},
+		{"operations+step-types", []string{"--operations", "--step-types"}},
+		{"operations+validators", []string{"--operations", "--validators"}},
+		{"details+step-types", []string{"--details", "--step-types"}},
+		{"details+validators", []string{"--details", "--validators"}},
+		{"step-types+validators", []string{"--step-types", "--validators"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand()
+			out := new(bytes.Buffer)
+			cmd.SetOut(out)
+			cmd.SetErr(out)
+			args := append([]string{"plugin", "list"}, tc.flags...)
+			cmd.SetArgs(args)
+
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "mutually exclusive")
+		})
+	}
+}
+
+func TestPluginListCommand_ValidatorsFlag_ShowsValidatorPlugins(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	out := new(bytes.Buffer)
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	cmd.SetArgs([]string{"plugin", "list", "--validators"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "No validators found")
 }
 
 func TestPluginSearchCommand_QueryWithJSON(t *testing.T) {

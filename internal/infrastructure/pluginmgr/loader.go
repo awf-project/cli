@@ -168,6 +168,7 @@ func (l *FileSystemLoader) LoadPlugin(ctx context.Context, pluginDir string) (*p
 	// Create PluginInfo
 	pluginInfo := &pluginmodel.PluginInfo{
 		Manifest: manifest,
+		Type:     pluginmodel.PluginTypeExternal,
 		Status:   pluginmodel.StatusLoaded,
 		Path:     pluginDir,
 		LoadedAt: time.Now().Unix(),

@@ -14,13 +14,13 @@ var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 const (
 	CapabilityOperations = "operations"
-	CapabilityCommands   = "commands"
+	CapabilityStepTypes  = "step_types"
 	CapabilityValidators = "validators"
 )
 
 var ValidCapabilities = []string{
 	CapabilityOperations,
-	CapabilityCommands,
+	CapabilityStepTypes,
 	CapabilityValidators,
 }
 

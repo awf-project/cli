@@ -21,6 +21,60 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Severity of a validation issue.
+// SEVERITY_UNSPECIFIED (proto3 zero value) is treated as ERROR by the host.
+type Severity int32
+
+const (
+	Severity_SEVERITY_UNSPECIFIED Severity = 0
+	Severity_SEVERITY_WARNING     Severity = 1
+	Severity_SEVERITY_ERROR       Severity = 2
+	Severity_SEVERITY_INFO        Severity = 3
+)
+
+// Enum value maps for Severity.
+var (
+	Severity_name = map[int32]string{
+		0: "SEVERITY_UNSPECIFIED",
+		1: "SEVERITY_WARNING",
+		2: "SEVERITY_ERROR",
+		3: "SEVERITY_INFO",
+	}
+	Severity_value = map[string]int32{
+		"SEVERITY_UNSPECIFIED": 0,
+		"SEVERITY_WARNING":     1,
+		"SEVERITY_ERROR":       2,
+		"SEVERITY_INFO":        3,
+	}
+)
+
+func (x Severity) Enum() *Severity {
+	p := new(Severity)
+	*p = x
+	return p
+}
+
+func (x Severity) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Severity) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_plugin_v1_plugin_proto_enumTypes[0].Descriptor()
+}
+
+func (Severity) Type() protoreflect.EnumType {
+	return &file_proto_plugin_v1_plugin_proto_enumTypes[0]
+}
+
+func (x Severity) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Severity.Descriptor instead.
+func (Severity) EnumDescriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{0}
+}
+
 type GetInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -777,6 +831,518 @@ func (x *OutputSchema) GetDescription() string {
 	return ""
 }
 
+type ValidationIssue struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Severity      Severity               `protobuf:"varint,1,opt,name=severity,proto3,enum=plugin.v1.Severity" json:"severity,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Step          string                 `protobuf:"bytes,3,opt,name=step,proto3" json:"step,omitempty"`
+	Field         string                 `protobuf:"bytes,4,opt,name=field,proto3" json:"field,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidationIssue) Reset() {
+	*x = ValidationIssue{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidationIssue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidationIssue) ProtoMessage() {}
+
+func (x *ValidationIssue) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidationIssue.ProtoReflect.Descriptor instead.
+func (*ValidationIssue) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ValidationIssue) GetSeverity() Severity {
+	if x != nil {
+		return x.Severity
+	}
+	return Severity_SEVERITY_UNSPECIFIED
+}
+
+func (x *ValidationIssue) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ValidationIssue) GetStep() string {
+	if x != nil {
+		return x.Step
+	}
+	return ""
+}
+
+func (x *ValidationIssue) GetField() string {
+	if x != nil {
+		return x.Field
+	}
+	return ""
+}
+
+type ValidateWorkflowRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkflowJson  []byte                 `protobuf:"bytes,1,opt,name=workflow_json,json=workflowJson,proto3" json:"workflow_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateWorkflowRequest) Reset() {
+	*x = ValidateWorkflowRequest{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateWorkflowRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateWorkflowRequest) ProtoMessage() {}
+
+func (x *ValidateWorkflowRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateWorkflowRequest.ProtoReflect.Descriptor instead.
+func (*ValidateWorkflowRequest) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ValidateWorkflowRequest) GetWorkflowJson() []byte {
+	if x != nil {
+		return x.WorkflowJson
+	}
+	return nil
+}
+
+type ValidateWorkflowResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issues        []*ValidationIssue     `protobuf:"bytes,1,rep,name=issues,proto3" json:"issues,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateWorkflowResponse) Reset() {
+	*x = ValidateWorkflowResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateWorkflowResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateWorkflowResponse) ProtoMessage() {}
+
+func (x *ValidateWorkflowResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateWorkflowResponse.ProtoReflect.Descriptor instead.
+func (*ValidateWorkflowResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ValidateWorkflowResponse) GetIssues() []*ValidationIssue {
+	if x != nil {
+		return x.Issues
+	}
+	return nil
+}
+
+type ValidateStepRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkflowJson  []byte                 `protobuf:"bytes,1,opt,name=workflow_json,json=workflowJson,proto3" json:"workflow_json,omitempty"`
+	StepName      string                 `protobuf:"bytes,2,opt,name=step_name,json=stepName,proto3" json:"step_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateStepRequest) Reset() {
+	*x = ValidateStepRequest{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateStepRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateStepRequest) ProtoMessage() {}
+
+func (x *ValidateStepRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateStepRequest.ProtoReflect.Descriptor instead.
+func (*ValidateStepRequest) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ValidateStepRequest) GetWorkflowJson() []byte {
+	if x != nil {
+		return x.WorkflowJson
+	}
+	return nil
+}
+
+func (x *ValidateStepRequest) GetStepName() string {
+	if x != nil {
+		return x.StepName
+	}
+	return ""
+}
+
+type ValidateStepResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issues        []*ValidationIssue     `protobuf:"bytes,1,rep,name=issues,proto3" json:"issues,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateStepResponse) Reset() {
+	*x = ValidateStepResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateStepResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateStepResponse) ProtoMessage() {}
+
+func (x *ValidateStepResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateStepResponse.ProtoReflect.Descriptor instead.
+func (*ValidateStepResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ValidateStepResponse) GetIssues() []*ValidationIssue {
+	if x != nil {
+		return x.Issues
+	}
+	return nil
+}
+
+type ListStepTypesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStepTypesRequest) Reset() {
+	*x = ListStepTypesRequest{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStepTypesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStepTypesRequest) ProtoMessage() {}
+
+func (x *ListStepTypesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStepTypesRequest.ProtoReflect.Descriptor instead.
+func (*ListStepTypesRequest) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{20}
+}
+
+type StepTypeInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StepTypeInfo) Reset() {
+	*x = StepTypeInfo{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StepTypeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StepTypeInfo) ProtoMessage() {}
+
+func (x *StepTypeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StepTypeInfo.ProtoReflect.Descriptor instead.
+func (*StepTypeInfo) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *StepTypeInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StepTypeInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type ListStepTypesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StepTypes     []*StepTypeInfo        `protobuf:"bytes,1,rep,name=step_types,json=stepTypes,proto3" json:"step_types,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStepTypesResponse) Reset() {
+	*x = ListStepTypesResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStepTypesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStepTypesResponse) ProtoMessage() {}
+
+func (x *ListStepTypesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStepTypesResponse.ProtoReflect.Descriptor instead.
+func (*ListStepTypesResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ListStepTypesResponse) GetStepTypes() []*StepTypeInfo {
+	if x != nil {
+		return x.StepTypes
+	}
+	return nil
+}
+
+type ExecuteStepRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StepName      string                 `protobuf:"bytes,1,opt,name=step_name,json=stepName,proto3" json:"step_name,omitempty"`
+	StepType      string                 `protobuf:"bytes,2,opt,name=step_type,json=stepType,proto3" json:"step_type,omitempty"`
+	Config        []byte                 `protobuf:"bytes,3,opt,name=config,proto3" json:"config,omitempty"`
+	Inputs        []byte                 `protobuf:"bytes,4,opt,name=inputs,proto3" json:"inputs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteStepRequest) Reset() {
+	*x = ExecuteStepRequest{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteStepRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteStepRequest) ProtoMessage() {}
+
+func (x *ExecuteStepRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteStepRequest.ProtoReflect.Descriptor instead.
+func (*ExecuteStepRequest) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ExecuteStepRequest) GetStepName() string {
+	if x != nil {
+		return x.StepName
+	}
+	return ""
+}
+
+func (x *ExecuteStepRequest) GetStepType() string {
+	if x != nil {
+		return x.StepType
+	}
+	return ""
+}
+
+func (x *ExecuteStepRequest) GetConfig() []byte {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *ExecuteStepRequest) GetInputs() []byte {
+	if x != nil {
+		return x.Inputs
+	}
+	return nil
+}
+
+type ExecuteStepResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Output        string                 `protobuf:"bytes,1,opt,name=output,proto3" json:"output,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,3,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteStepResponse) Reset() {
+	*x = ExecuteStepResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteStepResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteStepResponse) ProtoMessage() {}
+
+func (x *ExecuteStepResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteStepResponse.ProtoReflect.Descriptor instead.
+func (*ExecuteStepResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ExecuteStepResponse) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *ExecuteStepResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ExecuteStepResponse) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
 var File_proto_plugin_v1_plugin_proto protoreflect.FileDescriptor
 
 const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
@@ -836,7 +1402,42 @@ const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
 	"\fOutputSchema\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription2\xcf\x01\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x86\x01\n" +
+	"\x0fValidationIssue\x12/\n" +
+	"\bseverity\x18\x01 \x01(\x0e2\x13.plugin.v1.SeverityR\bseverity\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\tR\x04step\x12\x14\n" +
+	"\x05field\x18\x04 \x01(\tR\x05field\">\n" +
+	"\x17ValidateWorkflowRequest\x12#\n" +
+	"\rworkflow_json\x18\x01 \x01(\fR\fworkflowJson\"N\n" +
+	"\x18ValidateWorkflowResponse\x122\n" +
+	"\x06issues\x18\x01 \x03(\v2\x1a.plugin.v1.ValidationIssueR\x06issues\"W\n" +
+	"\x13ValidateStepRequest\x12#\n" +
+	"\rworkflow_json\x18\x01 \x01(\fR\fworkflowJson\x12\x1b\n" +
+	"\tstep_name\x18\x02 \x01(\tR\bstepName\"J\n" +
+	"\x14ValidateStepResponse\x122\n" +
+	"\x06issues\x18\x01 \x03(\v2\x1a.plugin.v1.ValidationIssueR\x06issues\"\x16\n" +
+	"\x14ListStepTypesRequest\"D\n" +
+	"\fStepTypeInfo\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\"O\n" +
+	"\x15ListStepTypesResponse\x126\n" +
+	"\n" +
+	"step_types\x18\x01 \x03(\v2\x17.plugin.v1.StepTypeInfoR\tstepTypes\"~\n" +
+	"\x12ExecuteStepRequest\x12\x1b\n" +
+	"\tstep_name\x18\x01 \x01(\tR\bstepName\x12\x1b\n" +
+	"\tstep_type\x18\x02 \x01(\tR\bstepType\x12\x16\n" +
+	"\x06config\x18\x03 \x01(\fR\x06config\x12\x16\n" +
+	"\x06inputs\x18\x04 \x01(\fR\x06inputs\"^\n" +
+	"\x13ExecuteStepResponse\x12\x16\n" +
+	"\x06output\x18\x01 \x01(\tR\x06output\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1b\n" +
+	"\texit_code\x18\x03 \x01(\x05R\bexitCode*a\n" +
+	"\bSeverity\x12\x18\n" +
+	"\x14SEVERITY_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10SEVERITY_WARNING\x10\x01\x12\x12\n" +
+	"\x0eSEVERITY_ERROR\x10\x02\x12\x11\n" +
+	"\rSEVERITY_INFO\x10\x032\xcf\x01\n" +
 	"\rPluginService\x12@\n" +
 	"\aGetInfo\x12\x19.plugin.v1.GetInfoRequest\x1a\x1a.plugin.v1.GetInfoResponse\x127\n" +
 	"\x04Init\x12\x16.plugin.v1.InitRequest\x1a\x17.plugin.v1.InitResponse\x12C\n" +
@@ -844,7 +1445,13 @@ const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
 	"\x10OperationService\x12U\n" +
 	"\x0eListOperations\x12 .plugin.v1.ListOperationsRequest\x1a!.plugin.v1.ListOperationsResponse\x12O\n" +
 	"\fGetOperation\x12\x1e.plugin.v1.GetOperationRequest\x1a\x1f.plugin.v1.GetOperationResponse\x12@\n" +
-	"\aExecute\x12\x19.plugin.v1.ExecuteRequest\x1a\x1a.plugin.v1.ExecuteResponseB5Z3github.com/awf-project/cli/proto/plugin/v1;pluginv1b\x06proto3"
+	"\aExecute\x12\x19.plugin.v1.ExecuteRequest\x1a\x1a.plugin.v1.ExecuteResponse2\xc0\x01\n" +
+	"\x10ValidatorService\x12[\n" +
+	"\x10ValidateWorkflow\x12\".plugin.v1.ValidateWorkflowRequest\x1a#.plugin.v1.ValidateWorkflowResponse\x12O\n" +
+	"\fValidateStep\x12\x1e.plugin.v1.ValidateStepRequest\x1a\x1f.plugin.v1.ValidateStepResponse2\xb3\x01\n" +
+	"\x0fStepTypeService\x12R\n" +
+	"\rListStepTypes\x12\x1f.plugin.v1.ListStepTypesRequest\x1a .plugin.v1.ListStepTypesResponse\x12L\n" +
+	"\vExecuteStep\x12\x1d.plugin.v1.ExecuteStepRequest\x1a\x1e.plugin.v1.ExecuteStepResponseB5Z3github.com/awf-project/cli/proto/plugin/v1;pluginv1b\x06proto3"
 
 var (
 	file_proto_plugin_v1_plugin_proto_rawDescOnce sync.Once
@@ -858,52 +1465,76 @@ func file_proto_plugin_v1_plugin_proto_rawDescGZIP() []byte {
 	return file_proto_plugin_v1_plugin_proto_rawDescData
 }
 
-var file_proto_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_proto_plugin_v1_plugin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_plugin_v1_plugin_proto_goTypes = []any{
-	(*GetInfoRequest)(nil),         // 0: plugin.v1.GetInfoRequest
-	(*GetInfoResponse)(nil),        // 1: plugin.v1.GetInfoResponse
-	(*InitRequest)(nil),            // 2: plugin.v1.InitRequest
-	(*InitResponse)(nil),           // 3: plugin.v1.InitResponse
-	(*ShutdownRequest)(nil),        // 4: plugin.v1.ShutdownRequest
-	(*ShutdownResponse)(nil),       // 5: plugin.v1.ShutdownResponse
-	(*ListOperationsRequest)(nil),  // 6: plugin.v1.ListOperationsRequest
-	(*ListOperationsResponse)(nil), // 7: plugin.v1.ListOperationsResponse
-	(*GetOperationRequest)(nil),    // 8: plugin.v1.GetOperationRequest
-	(*GetOperationResponse)(nil),   // 9: plugin.v1.GetOperationResponse
-	(*ExecuteRequest)(nil),         // 10: plugin.v1.ExecuteRequest
-	(*ExecuteResponse)(nil),        // 11: plugin.v1.ExecuteResponse
-	(*OperationSchema)(nil),        // 12: plugin.v1.OperationSchema
-	(*InputSchema)(nil),            // 13: plugin.v1.InputSchema
-	(*OutputSchema)(nil),           // 14: plugin.v1.OutputSchema
-	nil,                            // 15: plugin.v1.InitRequest.ConfigEntry
-	nil,                            // 16: plugin.v1.ExecuteRequest.InputsEntry
-	nil,                            // 17: plugin.v1.ExecuteResponse.DataEntry
+	(Severity)(0),                    // 0: plugin.v1.Severity
+	(*GetInfoRequest)(nil),           // 1: plugin.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),          // 2: plugin.v1.GetInfoResponse
+	(*InitRequest)(nil),              // 3: plugin.v1.InitRequest
+	(*InitResponse)(nil),             // 4: plugin.v1.InitResponse
+	(*ShutdownRequest)(nil),          // 5: plugin.v1.ShutdownRequest
+	(*ShutdownResponse)(nil),         // 6: plugin.v1.ShutdownResponse
+	(*ListOperationsRequest)(nil),    // 7: plugin.v1.ListOperationsRequest
+	(*ListOperationsResponse)(nil),   // 8: plugin.v1.ListOperationsResponse
+	(*GetOperationRequest)(nil),      // 9: plugin.v1.GetOperationRequest
+	(*GetOperationResponse)(nil),     // 10: plugin.v1.GetOperationResponse
+	(*ExecuteRequest)(nil),           // 11: plugin.v1.ExecuteRequest
+	(*ExecuteResponse)(nil),          // 12: plugin.v1.ExecuteResponse
+	(*OperationSchema)(nil),          // 13: plugin.v1.OperationSchema
+	(*InputSchema)(nil),              // 14: plugin.v1.InputSchema
+	(*OutputSchema)(nil),             // 15: plugin.v1.OutputSchema
+	(*ValidationIssue)(nil),          // 16: plugin.v1.ValidationIssue
+	(*ValidateWorkflowRequest)(nil),  // 17: plugin.v1.ValidateWorkflowRequest
+	(*ValidateWorkflowResponse)(nil), // 18: plugin.v1.ValidateWorkflowResponse
+	(*ValidateStepRequest)(nil),      // 19: plugin.v1.ValidateStepRequest
+	(*ValidateStepResponse)(nil),     // 20: plugin.v1.ValidateStepResponse
+	(*ListStepTypesRequest)(nil),     // 21: plugin.v1.ListStepTypesRequest
+	(*StepTypeInfo)(nil),             // 22: plugin.v1.StepTypeInfo
+	(*ListStepTypesResponse)(nil),    // 23: plugin.v1.ListStepTypesResponse
+	(*ExecuteStepRequest)(nil),       // 24: plugin.v1.ExecuteStepRequest
+	(*ExecuteStepResponse)(nil),      // 25: plugin.v1.ExecuteStepResponse
+	nil,                              // 26: plugin.v1.InitRequest.ConfigEntry
+	nil,                              // 27: plugin.v1.ExecuteRequest.InputsEntry
+	nil,                              // 28: plugin.v1.ExecuteResponse.DataEntry
 }
 var file_proto_plugin_v1_plugin_proto_depIdxs = []int32{
-	15, // 0: plugin.v1.InitRequest.config:type_name -> plugin.v1.InitRequest.ConfigEntry
-	12, // 1: plugin.v1.ListOperationsResponse.operations:type_name -> plugin.v1.OperationSchema
-	12, // 2: plugin.v1.GetOperationResponse.operation:type_name -> plugin.v1.OperationSchema
-	16, // 3: plugin.v1.ExecuteRequest.inputs:type_name -> plugin.v1.ExecuteRequest.InputsEntry
-	17, // 4: plugin.v1.ExecuteResponse.data:type_name -> plugin.v1.ExecuteResponse.DataEntry
-	13, // 5: plugin.v1.OperationSchema.inputs:type_name -> plugin.v1.InputSchema
-	14, // 6: plugin.v1.OperationSchema.outputs:type_name -> plugin.v1.OutputSchema
-	0,  // 7: plugin.v1.PluginService.GetInfo:input_type -> plugin.v1.GetInfoRequest
-	2,  // 8: plugin.v1.PluginService.Init:input_type -> plugin.v1.InitRequest
-	4,  // 9: plugin.v1.PluginService.Shutdown:input_type -> plugin.v1.ShutdownRequest
-	6,  // 10: plugin.v1.OperationService.ListOperations:input_type -> plugin.v1.ListOperationsRequest
-	8,  // 11: plugin.v1.OperationService.GetOperation:input_type -> plugin.v1.GetOperationRequest
-	10, // 12: plugin.v1.OperationService.Execute:input_type -> plugin.v1.ExecuteRequest
-	1,  // 13: plugin.v1.PluginService.GetInfo:output_type -> plugin.v1.GetInfoResponse
-	3,  // 14: plugin.v1.PluginService.Init:output_type -> plugin.v1.InitResponse
-	5,  // 15: plugin.v1.PluginService.Shutdown:output_type -> plugin.v1.ShutdownResponse
-	7,  // 16: plugin.v1.OperationService.ListOperations:output_type -> plugin.v1.ListOperationsResponse
-	9,  // 17: plugin.v1.OperationService.GetOperation:output_type -> plugin.v1.GetOperationResponse
-	11, // 18: plugin.v1.OperationService.Execute:output_type -> plugin.v1.ExecuteResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	26, // 0: plugin.v1.InitRequest.config:type_name -> plugin.v1.InitRequest.ConfigEntry
+	13, // 1: plugin.v1.ListOperationsResponse.operations:type_name -> plugin.v1.OperationSchema
+	13, // 2: plugin.v1.GetOperationResponse.operation:type_name -> plugin.v1.OperationSchema
+	27, // 3: plugin.v1.ExecuteRequest.inputs:type_name -> plugin.v1.ExecuteRequest.InputsEntry
+	28, // 4: plugin.v1.ExecuteResponse.data:type_name -> plugin.v1.ExecuteResponse.DataEntry
+	14, // 5: plugin.v1.OperationSchema.inputs:type_name -> plugin.v1.InputSchema
+	15, // 6: plugin.v1.OperationSchema.outputs:type_name -> plugin.v1.OutputSchema
+	0,  // 7: plugin.v1.ValidationIssue.severity:type_name -> plugin.v1.Severity
+	16, // 8: plugin.v1.ValidateWorkflowResponse.issues:type_name -> plugin.v1.ValidationIssue
+	16, // 9: plugin.v1.ValidateStepResponse.issues:type_name -> plugin.v1.ValidationIssue
+	22, // 10: plugin.v1.ListStepTypesResponse.step_types:type_name -> plugin.v1.StepTypeInfo
+	1,  // 11: plugin.v1.PluginService.GetInfo:input_type -> plugin.v1.GetInfoRequest
+	3,  // 12: plugin.v1.PluginService.Init:input_type -> plugin.v1.InitRequest
+	5,  // 13: plugin.v1.PluginService.Shutdown:input_type -> plugin.v1.ShutdownRequest
+	7,  // 14: plugin.v1.OperationService.ListOperations:input_type -> plugin.v1.ListOperationsRequest
+	9,  // 15: plugin.v1.OperationService.GetOperation:input_type -> plugin.v1.GetOperationRequest
+	11, // 16: plugin.v1.OperationService.Execute:input_type -> plugin.v1.ExecuteRequest
+	17, // 17: plugin.v1.ValidatorService.ValidateWorkflow:input_type -> plugin.v1.ValidateWorkflowRequest
+	19, // 18: plugin.v1.ValidatorService.ValidateStep:input_type -> plugin.v1.ValidateStepRequest
+	21, // 19: plugin.v1.StepTypeService.ListStepTypes:input_type -> plugin.v1.ListStepTypesRequest
+	24, // 20: plugin.v1.StepTypeService.ExecuteStep:input_type -> plugin.v1.ExecuteStepRequest
+	2,  // 21: plugin.v1.PluginService.GetInfo:output_type -> plugin.v1.GetInfoResponse
+	4,  // 22: plugin.v1.PluginService.Init:output_type -> plugin.v1.InitResponse
+	6,  // 23: plugin.v1.PluginService.Shutdown:output_type -> plugin.v1.ShutdownResponse
+	8,  // 24: plugin.v1.OperationService.ListOperations:output_type -> plugin.v1.ListOperationsResponse
+	10, // 25: plugin.v1.OperationService.GetOperation:output_type -> plugin.v1.GetOperationResponse
+	12, // 26: plugin.v1.OperationService.Execute:output_type -> plugin.v1.ExecuteResponse
+	18, // 27: plugin.v1.ValidatorService.ValidateWorkflow:output_type -> plugin.v1.ValidateWorkflowResponse
+	20, // 28: plugin.v1.ValidatorService.ValidateStep:output_type -> plugin.v1.ValidateStepResponse
+	23, // 29: plugin.v1.StepTypeService.ListStepTypes:output_type -> plugin.v1.ListStepTypesResponse
+	25, // 30: plugin.v1.StepTypeService.ExecuteStep:output_type -> plugin.v1.ExecuteStepResponse
+	21, // [21:31] is the sub-list for method output_type
+	11, // [11:21] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_plugin_v1_plugin_proto_init() }
@@ -916,13 +1547,14 @@ func file_proto_plugin_v1_plugin_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_plugin_v1_plugin_proto_rawDesc), len(file_proto_plugin_v1_plugin_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   18,
+			NumEnums:      1,
+			NumMessages:   28,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   4,
 		},
 		GoTypes:           file_proto_plugin_v1_plugin_proto_goTypes,
 		DependencyIndexes: file_proto_plugin_v1_plugin_proto_depIdxs,
+		EnumInfos:         file_proto_plugin_v1_plugin_proto_enumTypes,
 		MessageInfos:      file_proto_plugin_v1_plugin_proto_msgTypes,
 	}.Build()
 	File_proto_plugin_v1_plugin_proto = out.File

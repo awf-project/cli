@@ -50,6 +50,7 @@ type ExecutionService struct {
 	operationProvider ports.OperationProvider
 	agentRegistry     ports.AgentRegistry
 	pluginSvc         *PluginService
+	stepTypeProvider  ports.StepTypeProvider
 	conversationMgr   ConversationExecutor
 	outputLimiter     *OutputLimiter
 	awfPaths          map[string]string
@@ -109,6 +110,13 @@ func (s *ExecutionService) SetAuditTrailWriter(w ports.AuditTrailWriter) {
 // When nil, the check is skipped (backward compatible).
 func (s *ExecutionService) SetPluginService(svc *PluginService) {
 	s.pluginSvc = svc
+}
+
+// SetStepTypeProvider configures the plugin step type provider for C069 custom step type execution.
+// When set, unknown step types are delegated to the provider via ExecuteStep.
+// When nil, unknown step types fall through to the default command executor (backward compatible).
+func (s *ExecutionService) SetStepTypeProvider(provider ports.StepTypeProvider) {
+	s.stepTypeProvider = provider
 }
 
 func (s *ExecutionService) resolveAuditUser() string {
@@ -380,6 +388,8 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		s.logger.Debug("executing step", "step", step.Name)
 
 		switch step.Type {
+		case workflow.StepTypeCommand:
+			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeParallel:
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
@@ -391,7 +401,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		case workflow.StepTypeAgent:
 			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
 		default:
-			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
+			nextStep, err = s.executeCustomStepType(ctx, wf, step, execCtx)
 		}
 
 		if err != nil {
@@ -830,6 +840,8 @@ func (s *ExecutionService) executeLoopStep(
 		var nextStep string
 		var err error
 		switch bodyStep.Type {
+		case workflow.StepTypeCommand:
+			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
 			nextStep, err = s.executeLoopStep(ctx, wf, bodyStep, execCtx)
 		case workflow.StepTypeParallel:
@@ -839,7 +851,7 @@ func (s *ExecutionService) executeLoopStep(
 		case workflow.StepTypeAgent:
 			nextStep, err = s.executeAgentStep(ctx, wf, bodyStep, execCtx)
 		default:
-			nextStep, err = s.executeStep(ctx, wf, bodyStep, execCtx)
+			nextStep, err = s.executeCustomStepType(ctx, wf, bodyStep, execCtx)
 		}
 		if err != nil {
 			return "", err
@@ -1378,6 +1390,8 @@ func (a *stepExecutorAdapter) ExecuteStep(
 		_, err = a.execSvc.executeAgentStep(ctx, wf, step, execCtx)
 	case workflow.StepTypeParallel:
 		_, err = a.execSvc.executeParallelStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeCommand:
+		_, err = a.execSvc.executeStep(ctx, wf, step, execCtx)
 	case workflow.StepTypeForEach, workflow.StepTypeWhile:
 		_, err = a.execSvc.executeLoopStep(ctx, wf, step, execCtx)
 	case workflow.StepTypeOperation:
@@ -1385,7 +1399,7 @@ func (a *stepExecutorAdapter) ExecuteStep(
 	case workflow.StepTypeCallWorkflow:
 		_, err = a.execSvc.executeCallWorkflowStep(ctx, wf, step, execCtx)
 	default:
-		_, err = a.execSvc.executeStep(ctx, wf, step, execCtx)
+		_, err = a.execSvc.executeCustomStepType(ctx, wf, step, execCtx)
 	}
 
 	result.CompletedAt = time.Now()
@@ -1567,6 +1581,8 @@ func (s *ExecutionService) executeFromStep(
 		s.logger.Debug("executing step", "step", step.Name)
 
 		switch step.Type {
+		case workflow.StepTypeCommand:
+			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeParallel:
 			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
 		case workflow.StepTypeForEach, workflow.StepTypeWhile:
@@ -1578,7 +1594,7 @@ func (s *ExecutionService) executeFromStep(
 		case workflow.StepTypeAgent:
 			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
 		default:
-			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
+			nextStep, err = s.executeCustomStepType(ctx, wf, step, execCtx)
 		}
 
 		if err != nil {
@@ -1632,6 +1648,117 @@ func (s *ExecutionService) executeFromStep(
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
 	return execCtx, nil
+}
+
+// ErrNoStepTypeProvider is returned when a custom step type is executed without a configured provider.
+var ErrNoStepTypeProvider = errors.New("step type provider not configured")
+
+func (s *ExecutionService) executeCustomStepType(
+	ctx context.Context,
+	_ *workflow.Workflow,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	startTime := time.Now()
+
+	if s.stepTypeProvider == nil {
+		state := workflow.StepState{
+			Name:        step.Name,
+			StartedAt:   startTime,
+			CompletedAt: time.Now(),
+			Status:      workflow.StatusFailed,
+			Error:       ErrNoStepTypeProvider.Error(),
+			Attempt:     1,
+		}
+		execCtx.SetStepState(step.Name, state)
+		return "", fmt.Errorf("step %s: %w", step.Name, ErrNoStepTypeProvider)
+	}
+
+	if !s.stepTypeProvider.HasStepType(string(step.Type)) {
+		errMsg := fmt.Sprintf("unsupported step type %q", step.Type)
+		state := workflow.StepState{
+			Name:        step.Name,
+			StartedAt:   startTime,
+			CompletedAt: time.Now(),
+			Status:      workflow.StatusFailed,
+			Error:       errMsg,
+			Attempt:     1,
+		}
+		execCtx.SetStepState(step.Name, state)
+		return "", fmt.Errorf("step %s: %s", step.Name, errMsg)
+	}
+
+	stepCtx := ctx
+	if step.Timeout > 0 {
+		var cancel context.CancelFunc
+		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	intCtx := s.buildInterpolationContext(execCtx)
+	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
+		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
+	}
+
+	req := ports.StepExecuteRequest{
+		StepName: step.Name,
+		StepType: string(step.Type),
+		Config:   step.Config,
+		Inputs:   execCtx.Inputs,
+	}
+
+	s.logger.Debug("executing custom step type", "step", step.Name, "type", step.Type)
+	result, execErr := s.stepTypeProvider.ExecuteStep(stepCtx, req)
+
+	state := workflow.StepState{
+		Name:        step.Name,
+		StartedAt:   startTime,
+		CompletedAt: time.Now(),
+		Output:      result.Output,
+		Data:        result.Data,
+		ExitCode:    result.ExitCode,
+		Attempt:     1,
+	}
+
+	if execErr != nil {
+		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
+			state.Status = workflow.StatusFailed
+			state.Error = execErr.Error()
+			execCtx.SetStepState(step.Name, state)
+			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+		}
+
+		state.Status = workflow.StatusFailed
+		state.Error = execErr.Error()
+		execCtx.SetStepState(step.Name, state)
+
+		intCtx = s.buildInterpolationContext(execCtx)
+		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
+			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+
+		return "", fmt.Errorf("step %s: %w", step.Name, execErr)
+	}
+
+	if result.ExitCode != 0 {
+		execCtx.SetStepState(step.Name, state)
+		// Route through handleNonZeroExit for transition evaluation (F068)
+		cmdResult := &ports.CommandResult{
+			Stdout:   result.Output,
+			ExitCode: result.ExitCode,
+		}
+		return s.handleNonZeroExit(stepCtx, step, execCtx, &state, cmdResult)
+	}
+
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	return s.resolveNextStep(step, intCtx, true)
 }
 
 // ErrNoOperationProvider is returned when an operation step is executed without a configured provider.

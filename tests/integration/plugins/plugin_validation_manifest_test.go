@@ -469,7 +469,7 @@ func TestManifestValidation_MultipleValidCapabilities_Integration(t *testing.T) 
 		AWFVersion: ">=0.4.0",
 		Capabilities: []string{
 			pluginmodel.CapabilityOperations,
-			pluginmodel.CapabilityCommands,
+			pluginmodel.CapabilityStepTypes,
 			pluginmodel.CapabilityValidators,
 		},
 	}
@@ -516,7 +516,7 @@ func TestManifestValidation_CompleteWorkflow_Integration(t *testing.T) {
 		Homepage:    "https://github.com/example/awf-plugin-github",
 		Capabilities: []string{
 			pluginmodel.CapabilityOperations,
-			pluginmodel.CapabilityCommands,
+			pluginmodel.CapabilityStepTypes,
 		},
 		Config: map[string]pluginmodel.ConfigField{
 			"token": {
@@ -560,7 +560,7 @@ func TestManifestValidation_CompleteWorkflow_Integration(t *testing.T) {
 
 	// Verify HasCapability works correctly
 	assert.True(t, manifest.HasCapability(pluginmodel.CapabilityOperations))
-	assert.True(t, manifest.HasCapability(pluginmodel.CapabilityCommands))
+	assert.True(t, manifest.HasCapability(pluginmodel.CapabilityStepTypes))
 	assert.False(t, manifest.HasCapability(pluginmodel.CapabilityValidators))
 }
 

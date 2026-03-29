@@ -146,6 +146,7 @@ awf run <workflow> [flags]
 | `--dry-run` | Show execution plan without running commands |
 | `--interactive` | Enable step-by-step mode with prompts |
 | `--breakpoint, -b` | Pause only at specific steps (requires --interactive) |
+| `--skip-plugins` | Skip plugin step type resolution (fails if workflow uses custom step types) |
 
 ### Output Modes
 
@@ -511,6 +512,13 @@ Validate workflow syntax without executing.
 awf validate <workflow> [flags]
 ```
 
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--skip-plugins` | Skip plugin validators |
+| `--validator-timeout` | Per-plugin validation timeout (default `5s`, e.g., `10s`, `2m`) |
+
 ### Validates
 
 - YAML syntax
@@ -520,6 +528,7 @@ awf validate <workflow> [flags]
 - Template references valid
 - Input definitions valid
 - Parallel strategy valid
+- Plugin validators (custom rules from enabled validator plugins, skipped with `--skip-plugins`)
 
 ### Examples
 
@@ -529,6 +538,12 @@ awf validate deploy
 
 # Validate with verbose output
 awf validate deploy -v
+
+# Skip plugin validators
+awf validate deploy --skip-plugins
+
+# Custom validator timeout
+awf validate deploy --validator-timeout 10s
 ```
 
 ---
@@ -760,6 +775,11 @@ awf plugin list [flags]
 |------|-------------|
 | `-f, --format` | Output format (text, json) |
 | `--operations` | List operations provided by each plugin |
+| `--step-types` | List step types provided by each plugin |
+| `--validators` | List validator plugins |
+| `--details` | List all capabilities (operations, step types, validators) |
+
+> Flags `--operations`, `--step-types`, `--validators`, and `--details` are mutually exclusive.
 
 ### Output Columns
 
@@ -771,7 +791,7 @@ awf plugin list [flags]
 | Status | `builtin`, `enabled`, `disabled`, or `error` |
 | Source | GitHub `owner/repo` for installed plugins, `-` for built-in |
 | Description | Brief plugin description |
-| Capabilities | Plugin features: `operations`, `commands`, `validators` |
+| Capabilities | Plugin features: `operations`, `step_types`, `validators` |
 
 ### Examples
 
@@ -784,6 +804,15 @@ awf plugin list -f json
 
 # Show operations provided by each plugin
 awf plugin list --operations
+
+# Show step types provided by plugins
+awf plugin list --step-types
+
+# Show validator plugins
+awf plugin list --validators
+
+# Show all capabilities in unified view
+awf plugin list --details
 ```
 
 ---

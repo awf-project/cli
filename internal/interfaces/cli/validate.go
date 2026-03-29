@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -16,7 +17,10 @@ import (
 )
 
 func newValidateCommand(cfg *Config) *cobra.Command {
-	return &cobra.Command{
+	var skipPlugins bool
+	var validatorTimeout time.Duration
+
+	cmd := &cobra.Command{
 		Use:   "validate <workflow>",
 		Short: "Validate a workflow definition",
 		Long: `Validate a workflow YAML file without executing it.
@@ -32,12 +36,17 @@ Examples:
   awf validate analyze-code --verbose`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, cfg, args[0])
+			return runValidate(cmd, cfg, args[0], skipPlugins, validatorTimeout)
 		},
 	}
+
+	cmd.Flags().BoolVar(&skipPlugins, "skip-plugins", false, "Skip plugin validators")
+	cmd.Flags().DurationVar(&validatorTimeout, "validator-timeout", 5*time.Second, "Timeout for each plugin validator")
+
+	return cmd
 }
 
-func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
+func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugins bool, validatorTimeout time.Duration) error {
 	ctx := context.Background()
 
 	// Create output writer
@@ -101,11 +110,14 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string) error {
 		}
 	}
 
-	// Collect disabled plugin warnings (non-blocking, skipped on quiet format)
+	// Collect disabled plugin warnings (non-blocking, skipped on quiet format or when --skip-plugins)
 	var pluginWarnings []string
-	if validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
+	if !skipPlugins && validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
 		pluginWarnings = collectDisabledPluginWarnings(ctx, cfg, wf)
 	}
+
+	// validatorTimeout is reserved for plugin validator invocation (wired in GREEN phase)
+	_ = validatorTimeout
 
 	// JSON/quiet format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {

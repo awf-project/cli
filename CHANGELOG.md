@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **C069**: Plugin capability `commands` renamed to `step_types` — update `plugin.yaml` manifests declaring `capabilities: [commands]` to use `capabilities: [step_types]`; `commands` was never implemented and has no runtime behavior to migrate
 - **F070**: Replaced `custom` agent provider with `openai_compatible` — `provider: custom` workflows fail validation with migration guidance; use `provider: openai_compatible` with `base_url` and `model`
 - **C059**: Removed unimplemented `github.set_project_status` operation — workflows using it now fail at validation instead of runtime
 - **C058**: Removed `ntfy` and `slack` notification backends — use `webhook` backend instead (supports ntfy, Slack, Discord, Teams, PagerDuty via URL + headers + body)
@@ -33,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Operations & Plugins
 
+- **C069**: Plugin validator capability — plugins implementing `sdk.Validator` run custom workflow validation rules during `awf validate`; results display with severity icons (`✗` error, `⚠` warning, `ℹ` info); per-plugin timeout (default 5s via `--validator-timeout`); crashes treated as timeouts; results deduplicated by `(message + step + field)`
+- **C069**: Plugin step type capability — plugins implementing `sdk.StepTypeHandler` register custom `type:` values for workflow steps; unknown types routed to matching plugin at runtime; step output accessible via `{{states.step_name.Output}}` and `{{states.step_name.Data.key}}`; first-registered-wins on name conflicts; step type registrations cached at plugin init
+- **C069**: `config:` field on workflow steps — passes structured configuration to custom step type plugins (separate from `inputs:` context interpolation)
+- **C069**: `--skip-plugins` flag on `awf run` and `awf validate` — bypasses plugin validators and step type resolution; `awf run` fails with clear error when workflow contains a custom step type
+- **C069**: `--validator-timeout` flag on `awf validate` — sets per-plugin validation timeout (default 5s)
 - **C068**: Plugin registry with `awf plugin install/update/remove/search` — download from GitHub Releases with SHA-256 checksum verification, atomic installation, version constraints, pre-release support, `gh auth token` fallback, and `SOURCE` column in `awf plugin list`
 - **C067**: External plugin gRPC transport via HashiCorp go-plugin — `RPCPluginManager` starts real plugin processes, `sdk.Serve()` entry point for plugin authors, echo example plugin in `examples/plugins/` ([ADR-015](docs/ADR/015-grpc-go-plugin-transport-for-external-plugins.md))
 - **C066**: Built-in operation providers (GitHub, HTTP, Notify) visible in `awf plugin list` with `--operations` flag

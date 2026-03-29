@@ -1,0 +1,8 @@
+name: security-validator
+version: 1.0.0
+description: Example security validator plugin — detects hardcoded secrets, dangerous commands, and missing timeouts
+awf_version: ">=0.5.0"
+author: AWF Project
+license: MIT
+capabilities:
+  - validators

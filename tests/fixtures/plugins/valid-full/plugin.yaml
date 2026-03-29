@@ -8,7 +8,7 @@ license: MIT
 homepage: https://github.com/example/awf-plugin-slack
 capabilities:
   - operations
-  - commands
+  - step_types
 
 config:
   webhook_url:

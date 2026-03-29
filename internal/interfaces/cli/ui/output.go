@@ -177,6 +177,7 @@ type PluginInfo struct {
 	Enabled      bool     `json:"enabled"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	Operations   []string `json:"operations,omitempty"`
+	StepTypes    []string `json:"step_types,omitempty"`
 	Source       string   `json:"source,omitempty"`
 }
 
@@ -184,6 +185,19 @@ type PluginInfo struct {
 type OperationEntry struct {
 	Name   string `json:"name"`
 	Plugin string `json:"plugin"`
+}
+
+// CapabilityEntry represents a unified capability for --details listing.
+type CapabilityEntry struct {
+	Type   string `json:"type"`
+	Name   string `json:"name"`
+	Plugin string `json:"plugin"`
+}
+
+// ValidatorEntry represents a validator plugin for --validators listing.
+type ValidatorEntry struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // tableWriter renders ASCII-bordered tables.
@@ -471,6 +485,57 @@ func (w *OutputWriter) WriteOperations(operations []OperationEntry) error {
 	}
 }
 
+// WriteCapabilities outputs unified capability list (--details).
+func (w *OutputWriter) WriteCapabilities(entries []CapabilityEntry) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(entries)
+	case FormatTable:
+		return w.writeCapabilitiesBorderedTable(entries)
+	case FormatQuiet:
+		for _, e := range entries {
+			_, _ = fmt.Fprintln(w.out, e.Name)
+		}
+		return nil
+	default:
+		return w.writeCapabilitiesTable(entries)
+	}
+}
+
+// WriteStepTypes outputs step type list (--step-types).
+func (w *OutputWriter) WriteStepTypes(entries []OperationEntry) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(entries)
+	case FormatTable:
+		return w.writeStepTypesBorderedTable(entries)
+	case FormatQuiet:
+		for _, e := range entries {
+			_, _ = fmt.Fprintln(w.out, e.Name)
+		}
+		return nil
+	default:
+		return w.writeStepTypesTable(entries)
+	}
+}
+
+// WriteValidators outputs validator plugin list (--validators).
+func (w *OutputWriter) WriteValidators(entries []ValidatorEntry) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(entries)
+	case FormatTable:
+		return w.writeValidatorsBorderedTable(entries)
+	case FormatQuiet:
+		for _, e := range entries {
+			_, _ = fmt.Fprintln(w.out, e.Name)
+		}
+		return nil
+	default:
+		return w.writeValidatorsTable(entries)
+	}
+}
+
 // WriteDryRun outputs the dry-run execution plan.
 func (w *OutputWriter) WriteDryRun(plan *workflow.DryRunPlan, formatter *DryRunFormatter) error {
 	switch w.format {
@@ -647,6 +712,93 @@ func (w *OutputWriter) writeOperationsBorderedTable(operations []OperationEntry)
 	}
 	table.separator()
 
+	return nil
+}
+
+func (w *OutputWriter) writeCapabilitiesTable(entries []CapabilityEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No capabilities found")
+		return nil
+	}
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "TYPE\tNAME\tPLUGIN")
+	for _, e := range entries {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", e.Type, e.Name, e.Plugin)
+	}
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writeCapabilitiesBorderedTable(entries []CapabilityEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No capabilities found")
+		return nil
+	}
+	table := newTableWriter(w.out, 12, 30, 20)
+	table.separator()
+	table.row("TYPE", "NAME", "PLUGIN")
+	table.separator()
+	for _, e := range entries {
+		table.row(e.Type, e.Name, e.Plugin)
+	}
+	table.separator()
+	return nil
+}
+
+func (w *OutputWriter) writeStepTypesTable(entries []OperationEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No step types found")
+		return nil
+	}
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "STEP TYPE\tPLUGIN")
+	for _, e := range entries {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\n", e.Name, e.Plugin)
+	}
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writeStepTypesBorderedTable(entries []OperationEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No step types found")
+		return nil
+	}
+	table := newTableWriter(w.out, 30, 20)
+	table.separator()
+	table.row("STEP TYPE", "PLUGIN")
+	table.separator()
+	for _, e := range entries {
+		table.row(e.Name, e.Plugin)
+	}
+	table.separator()
+	return nil
+}
+
+func (w *OutputWriter) writeValidatorsTable(entries []ValidatorEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No validators found")
+		return nil
+	}
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "NAME\tDESCRIPTION")
+	for _, e := range entries {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\n", e.Name, e.Description)
+	}
+	return tw.Flush()
+}
+
+func (w *OutputWriter) writeValidatorsBorderedTable(entries []ValidatorEntry) error {
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No validators found")
+		return nil
+	}
+	table := newTableWriter(w.out, 25, 40)
+	table.separator()
+	table.row("NAME", "DESCRIPTION")
+	table.separator()
+	for _, e := range entries {
+		table.row(e.Name, e.Description)
+	}
+	table.separator()
 	return nil
 }
 

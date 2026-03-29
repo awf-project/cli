@@ -355,7 +355,7 @@ func TestWorkflowValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.wf.Validate(nil)
+			err := tt.wf.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Workflow.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -451,7 +451,7 @@ func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.wf.Validate(nil)
+			err := tt.wf.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Workflow.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}

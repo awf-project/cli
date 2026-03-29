@@ -42,7 +42,7 @@ Learn how to use AWF effectively:
   - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop and webhook backends
 - [Retry Configuration](user-guide/retry.md) - Automatic retry with backoff strategies, delay capping, and exit code filtering
 - [Templates](user-guide/templates.md) - Reusable workflow templates
-- [Plugins](user-guide/plugins.md) - Extend AWF with custom operations
+- [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 

@@ -579,7 +579,7 @@ func TestFileSystemLoader_ValidatePlugin_MultipleCapabilities(t *testing.T) {
 			AWFVersion: ">=0.4.0",
 			Capabilities: []string{
 				pluginmodel.CapabilityOperations,
-				pluginmodel.CapabilityCommands,
+				pluginmodel.CapabilityStepTypes,
 				pluginmodel.CapabilityValidators,
 			},
 		},

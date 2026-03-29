@@ -29,6 +29,7 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 		Inputs:      mapInputs(y.Inputs),
 		Steps:       make(map[string]*workflow.Step),
 		Hooks:       mapWorkflowHooks(y.Hooks),
+		Plugins:     y.Plugins,
 		SourceDir:   filepath.Dir(absPath),
 	}
 
@@ -53,6 +54,14 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 				return nil, err
 			}
 			wf.Steps[synthName] = synthStep
+		}
+	}
+
+	// Resolve plugin aliases in step types at parse time.
+	// "pg.query" with alias pg→database becomes "database.query".
+	if len(wf.Plugins) > 0 {
+		for _, step := range wf.Steps {
+			step.Type = workflow.StepType(wf.ResolveStepType(string(step.Type)))
 		}
 	}
 
@@ -139,6 +148,7 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		TemplateRef:     mapTemplateRef(y.UseTemplate, y.Parameters),
 		CallWorkflow:    mapCallWorkflowFlat(y),
 		Agent:           mapAgentConfigFlat(y),
+		Config:          y.Config,
 	}
 
 	// Parse retry

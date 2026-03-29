@@ -14,6 +14,7 @@ import (
 type PluginSystemResult struct {
 	Service    *application.PluginService
 	Manager    ports.OperationProvider
+	RPCManager *infrastructurePlugin.RPCPluginManager // for validator/step-type providers (C069)
 	StateStore *infrastructurePlugin.JSONPluginStateStore
 	Cleanup    func()
 }
@@ -28,8 +29,8 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	// Get plugin paths
 	pluginPaths := getPluginSearchPaths(cfg)
 
-	// Find the first existing plugin directory
-	pluginsDir := findFirstExistingDir(pluginPaths)
+	// Find all existing plugin directories
+	pluginsDirs := findExistingDirs(pluginPaths)
 
 	// Create state store for plugin enable/disable persistence
 	stateStorePath := filepath.Join(cfg.StoragePath, "plugins")
@@ -43,7 +44,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	}
 
 	// If no plugins directory exists, return a stub service (graceful degradation)
-	if pluginsDir == "" {
+	if len(pluginsDirs) == 0 {
 		// Create service with nil manager (no plugins available)
 		service := application.NewPluginService(nil, stateStore, logger)
 		registerBuiltins(service, Version)
@@ -58,7 +59,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	parser := infrastructurePlugin.NewManifestParser()
 	loader := infrastructurePlugin.NewFileSystemLoader(parser)
 	manager := infrastructurePlugin.NewRPCPluginManager(loader)
-	manager.SetPluginsDir(pluginsDir)
+	manager.SetPluginsDirs(pluginsDirs)
 
 	// Create the plugin service
 	service := application.NewPluginService(manager, stateStore, logger)
@@ -91,6 +92,7 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	return &PluginSystemResult{
 		Service:    service,
 		Manager:    manager,
+		RPCManager: manager,
 		StateStore: stateStore,
 		Cleanup:    cleanup,
 	}, nil
@@ -111,13 +113,23 @@ func getPluginSearchPaths(cfg *Config) []string {
 	return paths
 }
 
-// findFirstExistingDir returns the first directory that exists, or empty string if none.
-func findFirstExistingDir(paths []string) string {
+// findExistingDirs returns all directories that exist from the given paths.
+func findExistingDirs(paths []string) []string {
+	var dirs []string
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err == nil && info.IsDir() {
-			return path
+			dirs = append(dirs, path)
 		}
+	}
+	return dirs
+}
+
+// findFirstExistingDir returns the first directory that exists, or empty string if none.
+func findFirstExistingDir(paths []string) string {
+	dirs := findExistingDirs(paths)
+	if len(dirs) > 0 {
+		return dirs[0]
 	}
 	return ""
 }

@@ -22,16 +22,16 @@ func TestEchoPlugin_ImplementsPlugin(t *testing.T) {
 
 // TestEchoPlugin_Name_ReturnsPluginName verifies Name returns the correct plugin identifier.
 func TestEchoPlugin_Name_ReturnsPluginName(t *testing.T) {
-	plugin := &EchoPlugin{}
+	plugin := &EchoPlugin{BasePlugin: sdk.BasePlugin{PluginName: "echo", PluginVersion: "1.0.0"}}
 
 	name := plugin.Name()
 
-	assert.Equal(t, "awf-plugin-echo", name)
+	assert.Equal(t, "echo", name)
 }
 
 // TestEchoPlugin_Version_ReturnsPluginVersion verifies Version returns semantic version.
 func TestEchoPlugin_Version_ReturnsPluginVersion(t *testing.T) {
-	plugin := &EchoPlugin{}
+	plugin := &EchoPlugin{BasePlugin: sdk.BasePlugin{PluginName: "echo", PluginVersion: "1.0.0"}}
 
 	version := plugin.Version()
 
@@ -212,7 +212,7 @@ func TestPluginYAMLManifest_ExistsAndIsValid(t *testing.T) {
 	// Verify required fields are present (basic string checks)
 	manifestStr := string(content)
 	assert.Contains(t, manifestStr, "name:", "manifest must contain 'name'")
-	assert.Contains(t, manifestStr, "awf-plugin-echo", "manifest must declare plugin name")
+	assert.Contains(t, manifestStr, "name: echo", "manifest must declare plugin name")
 	assert.Contains(t, manifestStr, "version:", "manifest must contain 'version'")
 	assert.Contains(t, manifestStr, "awf_version:", "manifest must contain 'awf_version'")
 	assert.Contains(t, manifestStr, "capabilities:", "manifest must declare capabilities")

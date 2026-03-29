@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -1117,4 +1118,256 @@ func TestStepState_ConversationFields_ZeroTokensUsed(t *testing.T) {
 	assert.Equal(t, 0, state.TokensUsed)
 	assert.NotNil(t, state.Conversation)
 	assert.Equal(t, 0, state.Conversation.TotalTokens)
+}
+
+// C069: Tests for StepState.Data field (structured output from custom step types)
+
+func TestStepState_Data_SetAndGet(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     map[string]any
+		wantKeys []string
+	}{
+		{
+			name: "empty data map",
+			data: map[string]any{},
+		},
+		{
+			name:     "single string value",
+			data:     map[string]any{"result": "success"},
+			wantKeys: []string{"result"},
+		},
+		{
+			name: "multiple types",
+			data: map[string]any{
+				"status":  "completed",
+				"count":   42,
+				"ratio":   3.14,
+				"enabled": true,
+			},
+			wantKeys: []string{"status", "count", "ratio", "enabled"},
+		},
+		{
+			name: "nested structures",
+			data: map[string]any{
+				"config": map[string]any{
+					"timeout": 30,
+					"retries": 3,
+				},
+				"items": []any{1, 2, 3},
+			},
+			wantKeys: []string{"config", "items"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := workflow.StepState{
+				Name: "test-step",
+				Data: tt.data,
+			}
+
+			assert.Equal(t, tt.data, state.Data)
+			for _, key := range tt.wantKeys {
+				assert.Contains(t, state.Data, key)
+			}
+		})
+	}
+}
+
+func TestStepState_Data_Modification(t *testing.T) {
+	state := workflow.StepState{
+		Name: "test-step",
+		Data: make(map[string]any),
+	}
+
+	state.Data["output"] = "value1"
+	assert.Equal(t, "value1", state.Data["output"])
+
+	state.Data["output"] = "updated"
+	assert.Equal(t, "updated", state.Data["output"])
+
+	delete(state.Data, "output")
+	_, exists := state.Data["output"]
+	assert.False(t, exists)
+}
+
+func TestStepState_Data_ComplexValues(t *testing.T) {
+	state := workflow.StepState{
+		Name: "test-step",
+		Data: map[string]any{
+			"timestamp": time.Now(),
+			"metadata": map[string]any{
+				"version": "1.0",
+				"cached":  true,
+			},
+			"results": []any{"pass", "fail", "skip"},
+		},
+	}
+
+	assert.NotNil(t, state.Data["timestamp"])
+	metadata := state.Data["metadata"].(map[string]any)
+	assert.Equal(t, "1.0", metadata["version"])
+
+	results := state.Data["results"].([]any)
+	assert.Len(t, results, 3)
+}
+
+func TestStepState_Data_NilMap(t *testing.T) {
+	state := workflow.StepState{
+		Name: "test-step",
+		Data: nil,
+	}
+
+	assert.Nil(t, state.Data)
+}
+
+func TestExecutionContext_SetStepState_WithData(t *testing.T) {
+	ctx := workflow.NewExecutionContext("wf-123", "test-workflow")
+
+	state := workflow.StepState{
+		Name:   "step-1",
+		Status: workflow.StatusCompleted,
+		Output: "success",
+		Data: map[string]any{
+			"result": "done",
+			"count":  42,
+		},
+	}
+
+	ctx.SetStepState("step-1", state)
+
+	retrieved, exists := ctx.GetStepState("step-1")
+	require.True(t, exists)
+	assert.Equal(t, "step-1", retrieved.Name)
+	assert.Equal(t, "success", retrieved.Output)
+	assert.Equal(t, map[string]any{"result": "done", "count": 42}, retrieved.Data)
+}
+
+func TestExecutionContext_GetStepState_DataAccess(t *testing.T) {
+	ctx := workflow.NewExecutionContext("wf-456", "workflow")
+
+	state := workflow.StepState{
+		Name: "step-2",
+		Data: map[string]any{
+			"message": "test message",
+			"active":  true,
+		},
+	}
+
+	ctx.SetStepState("step-2", state)
+
+	retrieved, _ := ctx.GetStepState("step-2")
+	assert.Equal(t, "test message", retrieved.Data["message"])
+	assert.Equal(t, true, retrieved.Data["active"])
+}
+
+func TestExecutionContext_ConcurrentDataAccess(t *testing.T) {
+	ctx := workflow.NewExecutionContext("wf-789", "concurrent-test")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			state := workflow.StepState{
+				Name: "step-concurrent",
+				Data: map[string]any{
+					"index": index,
+					"value": index * 10,
+				},
+			}
+
+			ctx.SetStepState("step-concurrent", state)
+
+			retrieved, exists := ctx.GetStepState("step-concurrent")
+			assert.True(t, exists)
+			assert.NotNil(t, retrieved.Data)
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestExecutionContext_GetAllStepStates_WithData(t *testing.T) {
+	ctx := workflow.NewExecutionContext("wf-abc", "multi-step")
+
+	states := map[string]workflow.StepState{
+		"step-1": {
+			Name: "step-1",
+			Data: map[string]any{"result": "pass"},
+		},
+		"step-2": {
+			Name: "step-2",
+			Data: map[string]any{"result": "fail"},
+		},
+		"step-3": {
+			Name: "step-3",
+			Data: map[string]any{"result": "skip"},
+		},
+	}
+
+	for name, state := range states {
+		ctx.SetStepState(name, state)
+	}
+
+	allStates := ctx.GetAllStepStates()
+	assert.Len(t, allStates, 3)
+
+	for name, expectedState := range states {
+		retrieved, exists := allStates[name]
+		assert.True(t, exists)
+		assert.Equal(t, expectedState.Data, retrieved.Data)
+	}
+}
+
+func TestStepState_Data_TypeAssertion(t *testing.T) {
+	state := workflow.StepState{
+		Name: "test-step",
+		Data: map[string]any{
+			"string_val": "test",
+			"int_val":    42,
+			"float_val":  3.14,
+			"bool_val":   true,
+		},
+	}
+
+	strVal, ok := state.Data["string_val"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "test", strVal)
+
+	intVal, ok := state.Data["int_val"].(int)
+	assert.True(t, ok)
+	assert.Equal(t, 42, intVal)
+
+	floatVal, ok := state.Data["float_val"].(float64)
+	assert.True(t, ok)
+	assert.Equal(t, 3.14, floatVal)
+
+	boolVal, ok := state.Data["bool_val"].(bool)
+	assert.True(t, ok)
+	assert.True(t, boolVal)
+}
+
+func TestExecutionContext_MultipleSteps_DataIsolation(t *testing.T) {
+	ctx := workflow.NewExecutionContext("wf-isolation", "isolation-test")
+
+	step1 := workflow.StepState{
+		Name: "step-1",
+		Data: map[string]any{"unique": "data-1"},
+	}
+	step2 := workflow.StepState{
+		Name: "step-2",
+		Data: map[string]any{"unique": "data-2"},
+	}
+
+	ctx.SetStepState("step-1", step1)
+	ctx.SetStepState("step-2", step2)
+
+	retrieved1, _ := ctx.GetStepState("step-1")
+	retrieved2, _ := ctx.GetStepState("step-2")
+
+	assert.Equal(t, "data-1", retrieved1.Data["unique"])
+	assert.Equal(t, "data-2", retrieved2.Data["unique"])
 }

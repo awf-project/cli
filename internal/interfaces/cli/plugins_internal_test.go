@@ -727,7 +727,7 @@ description: A plugin to be discovered
 awf_version: ">=0.1.0"
 capabilities:
   - operations
-  - commands
+  - step_types
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -756,7 +756,7 @@ capabilities:
 		found = true
 		assert.Equal(t, "2.5.0", p.Manifest.Version)
 		assert.Contains(t, p.Manifest.Capabilities, "operations")
-		assert.Contains(t, p.Manifest.Capabilities, "commands")
+		assert.Contains(t, p.Manifest.Capabilities, "step_types")
 		break
 	}
 	assert.True(t, found, "Plugin should be discovered")

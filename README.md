@@ -27,7 +27,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
 - **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
-- **Plugin System** - Extend AWF with custom operations via gRPC plugins (HashiCorp go-plugin), with `sdk.Serve()` entry point for plugin authors, and install/update/remove from GitHub Releases with checksum verification
+- **Plugin System** - Extend AWF with custom operations, validators, and step types via gRPC plugins (HashiCorp go-plugin); validators run custom rules during `awf validate`, custom step types register new `type:` values for workflow steps; includes `sdk.Serve()` entry point for plugin authors, and install/update/remove from GitHub Releases with checksum verification
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends

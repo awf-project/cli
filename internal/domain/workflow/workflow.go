@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Input defines an input parameter for a workflow.
@@ -23,11 +24,26 @@ type Workflow struct {
 	Author      string
 	Tags        []string
 	Inputs      []Input
-	Env         []string         // required environment variables
-	Initial     string           // initial state name
-	Steps       map[string]*Step // state name -> step
-	Hooks       WorkflowHooks    // workflow-level hooks
-	SourceDir   string           // workflow file directory for path resolution (runtime metadata)
+	Env         []string          // required environment variables
+	Initial     string            // initial state name
+	Steps       map[string]*Step  // state name -> step
+	Hooks       WorkflowHooks     // workflow-level hooks
+	Plugins     map[string]string // alias → manifest name (e.g. "pg" → "database")
+	SourceDir   string            // workflow file directory for path resolution (runtime metadata)
+}
+
+// ResolveStepType resolves a step type name through plugin aliases.
+// "pg.query" with alias pg→database returns "database.query".
+// Names without aliases or without a dot pass through unchanged.
+func (w *Workflow) ResolveStepType(typeName string) string {
+	prefix, suffix, ok := strings.Cut(typeName, ".")
+	if !ok || len(w.Plugins) == 0 {
+		return typeName
+	}
+	if target, aliased := w.Plugins[prefix]; aliased {
+		return target + "." + suffix
+	}
+	return typeName
 }
 
 // GetStep retrieves a step by name.
@@ -67,14 +83,25 @@ func (e *StateReferenceError) Error() string {
 
 // Validate checks if the workflow configuration is valid.
 // The validator parameter is used to check expression syntax in agent configurations.
+// The checker parameter is forwarded to each Step.Validate() call; pass nil to reject unknown step types.
 //
 //nolint:gocognit // Complexity 62: workflow validation is comprehensive, checking inputs, steps, graph, templates, parallel strategies. Central validation requires thorough checking.
-func (w *Workflow) Validate(validator ExpressionCompiler) error {
+func (w *Workflow) Validate(validator ExpressionCompiler, checker StepTypeChecker) error {
 	if w.Name == "" {
 		return errors.New("workflow name is required")
 	}
 	if w.Initial == "" {
 		return errors.New("initial state is required")
+	}
+
+	// Validate plugin aliases: no empty values, no duplicate targets mapping to same qualified name
+	for alias, target := range w.Plugins {
+		if alias == "" {
+			return errors.New("plugin alias cannot be empty")
+		}
+		if target == "" {
+			return fmt.Errorf("plugin alias %q maps to empty target", alias)
+		}
 	}
 
 	// Check initial state exists
@@ -128,7 +155,7 @@ func (w *Workflow) Validate(validator ExpressionCompiler) error {
 
 	// Validate each step
 	for name, step := range w.Steps {
-		if err := step.Validate(validator); err != nil {
+		if err := step.Validate(validator, checker); err != nil {
 			return fmt.Errorf("step '%s': %w", name, err)
 		}
 

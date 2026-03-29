@@ -153,7 +153,7 @@ func TestStepValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -419,7 +419,7 @@ func TestTerminalStatusValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -463,10 +463,10 @@ func TestTerminalStepWithStatus(t *testing.T) {
 	}
 
 	// Both should validate successfully
-	if err := successStep.Validate(nil); err != nil {
+	if err := successStep.Validate(nil, nil); err != nil {
 		t.Errorf("success terminal step should be valid: %v", err)
 	}
-	if err := failureStep.Validate(nil); err != nil {
+	if err := failureStep.Validate(nil, nil); err != nil {
 		t.Errorf("failure terminal step should be valid: %v", err)
 	}
 }

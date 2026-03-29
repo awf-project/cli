@@ -117,7 +117,7 @@ func TestCallWorkflowStepValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -185,7 +185,7 @@ func TestCallWorkflowStepCreation(t *testing.T) {
 		t.Errorf("expected OnFailure 'handle_error', got '%s'", step.OnFailure)
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("valid call_workflow step should not return error: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestCallWorkflowStepWithHooks(t *testing.T) {
 		t.Errorf("expected 1 post hook, got %d", len(step.Hooks.Post))
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("call_workflow step with hooks should be valid: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestCallWorkflowStepWithRetry(t *testing.T) {
 		t.Errorf("expected MaxAttempts 3, got %d", step.Retry.MaxAttempts)
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("call_workflow step with retry should be valid: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestCallWorkflowStepWithContinueOnError(t *testing.T) {
 		t.Error("expected ContinueOnError to be true")
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("call_workflow step with ContinueOnError should be valid: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestCallWorkflowStepWithEmptyInputsOutputs(t *testing.T) {
 		t.Error("expected Outputs to be initialized")
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("call_workflow step with empty inputs/outputs should be valid: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestCallWorkflowStepWithTemplateInterpolation(t *testing.T) {
 		t.Errorf("expected 4 inputs, got %d", len(step.CallWorkflow.Inputs))
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("call_workflow step with template inputs should be valid: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestStep_Validate_AgentType_HappyPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if err != nil {
 				t.Errorf("Step.Validate() error = %v, want nil", err)
 			}
@@ -508,7 +508,7 @@ func TestStep_Validate_AgentType_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -592,7 +592,7 @@ func TestStep_Validate_AgentType_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -625,7 +625,7 @@ func TestStep_Validate_AgentType_WithTransitions(t *testing.T) {
 		},
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with transitions should be valid: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestStep_Validate_AgentType_WithRetry(t *testing.T) {
 		},
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with retry config should be valid: %v", err)
 	}
@@ -679,7 +679,7 @@ func TestStep_Validate_AgentType_WithCapture(t *testing.T) {
 		},
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with capture config should be valid: %v", err)
 	}
@@ -703,7 +703,7 @@ func TestStep_Validate_AgentType_WithHooks(t *testing.T) {
 		},
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with hooks should be valid: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestStep_Validate_AgentType_WithTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.step.Validate(nil)
+			err := tt.step.Validate(nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Step.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -782,7 +782,7 @@ func TestStep_Validate_AgentType_WithContinueOnError(t *testing.T) {
 		ContinueOnError: true,
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with continue_on_error should be valid: %v", err)
 	}
@@ -803,7 +803,7 @@ func TestStep_Validate_AgentType_WithDependsOn(t *testing.T) {
 		DependsOn: []string{"step1", "step2"},
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("agent step with dependencies should be valid: %v", err)
 	}
@@ -865,7 +865,7 @@ func TestStep_Validate_AgentType_CompleteWorkflow(t *testing.T) {
 		ContinueOnError: false,
 	}
 
-	err := step.Validate(nil)
+	err := step.Validate(nil, nil)
 	if err != nil {
 		t.Errorf("comprehensive agent step should be valid: %v", err)
 	}

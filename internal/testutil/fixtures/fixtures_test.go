@@ -31,7 +31,7 @@ func TestSimpleWorkflow_HappyPath(t *testing.T) {
 	assert.LessOrEqual(t, len(wf.Steps), 2, "Simple workflow should have at most 2 steps")
 
 	// Verify workflow is valid (can call Validate)
-	err := wf.Validate(nil)
+	err := wf.Validate(nil, nil)
 	assert.NoError(t, err, "Simple workflow should be valid")
 }
 
@@ -42,7 +42,7 @@ func TestSimpleWorkflow_WithCustomName(t *testing.T) {
 	wf := fixtures.SimpleWorkflow(customName)
 
 	assert.Equal(t, customName, wf.Name, "Workflow name should match custom parameter")
-	assert.NoError(t, wf.Validate(nil))
+	assert.NoError(t, wf.Validate(nil, nil))
 }
 
 // TestSimpleWorkflow_WithMultipleParameters tests SimpleWorkflow with additional configuration options
@@ -94,7 +94,7 @@ func TestLinearWorkflow_HappyPath(t *testing.T) {
 	}
 
 	assert.GreaterOrEqual(t, stepCount, 3, "Should have walked through at least 3 steps")
-	assert.NoError(t, wf.Validate(nil))
+	assert.NoError(t, wf.Validate(nil, nil))
 }
 
 // TestLinearWorkflow_WithCustomStepCount tests LinearWorkflow with configurable number of steps
@@ -126,7 +126,7 @@ func TestLinearWorkflow_WithCustomStepCount(t *testing.T) {
 			wf := fixtures.LinearWorkflow(tt.stepCount)
 
 			assert.Len(t, wf.Steps, tt.wantSteps, "Should have %d total steps", tt.wantSteps)
-			assert.NoError(t, wf.Validate(nil))
+			assert.NoError(t, wf.Validate(nil, nil))
 		})
 	}
 }
@@ -137,7 +137,7 @@ func TestLinearWorkflow_EdgeCase_ZeroSteps(t *testing.T) {
 
 	// Should return minimal valid workflow (at least initial + terminal)
 	assert.GreaterOrEqual(t, len(wf.Steps), 1, "Should have at least one step")
-	assert.NoError(t, wf.Validate(nil), "Even zero-step workflow should be valid")
+	assert.NoError(t, wf.Validate(nil, nil), "Even zero-step workflow should be valid")
 }
 
 // TestParallelWorkflow_HappyPath tests ParallelWorkflow with default 2 branches
@@ -166,7 +166,7 @@ func TestParallelWorkflow_HappyPath(t *testing.T) {
 		assert.True(t, exists, "Branch step %s should exist in workflow", branchName)
 	}
 
-	assert.NoError(t, wf.Validate(nil))
+	assert.NoError(t, wf.Validate(nil, nil))
 }
 
 // TestParallelWorkflow_WithCustomBranchCount tests configurable number of parallel branches
@@ -256,7 +256,7 @@ func TestLoopWorkflow_HappyPath(t *testing.T) {
 		t.Fatalf("unexpected loop step type: %s", loopStep.Type)
 	}
 
-	assert.NoError(t, wf.Validate(nil))
+	assert.NoError(t, wf.Validate(nil, nil))
 }
 
 // TestLoopWorkflow_ForEachType tests LoopWorkflow configured as for_each
@@ -340,7 +340,7 @@ func TestConversationWorkflow_HappyPath(t *testing.T) {
 		assert.NotNil(t, agentStep.Agent.Options["model"], "Agent should have model in options")
 	}
 
-	assert.NoError(t, wf.Validate(nil))
+	assert.NoError(t, wf.Validate(nil, nil))
 }
 
 // TestConversationWorkflow_WithCustomProvider tests ConversationWorkflow with specific AI provider
@@ -416,7 +416,7 @@ func TestAllFixtures_ProduceValidWorkflows(t *testing.T) {
 			assert.NotEmpty(t, wf.Initial, "Workflow should have initial step")
 			assert.NotEmpty(t, wf.Steps, "Workflow should have steps")
 
-			err := wf.Validate(nil)
+			err := wf.Validate(nil, nil)
 			assert.NoError(t, err, "Workflow from %s should be valid", tt.name)
 		})
 	}
