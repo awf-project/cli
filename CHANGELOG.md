@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-30
+
 ### Breaking Changes
 
 - **C069**: Plugin capability `commands` renamed to `step_types` — update `plugin.yaml` manifests declaring `capabilities: [commands]` to use `capabilities: [step_types]`; `commands` was never implemented and has no runtime behavior to migrate
@@ -112,4 +114,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/awf-project/cli/compare/HEAD
+[Unreleased]: https://github.com/awf-project/cli/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/awf-project/cli/compare/v0.4.1...v0.5.0
