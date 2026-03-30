@@ -9,7 +9,7 @@ contributors: ["Alex"]
 ---
 
 ## Key improvements in this release
-Since the last release, I’ve been working on enhancing the plugin ecosystem, and I’m excited to announce that **v0.5.0** is now live!
+Since the last release, I’ve been working on enhancing the plugin ecosystem, and I’m excited to announce that **[v0.5.0](https://github.com/awf-project/cli)** is now live!
 
 Regarding the plugin architecture, AWF now leverages **go-plugin**, **gRPC gateway**, and **Protobuf**.
 Plugins can now expose operations, commands (step-types), and validators. This move provides a more flexible architecture
@@ -42,7 +42,7 @@ Available Commands:
   update      Update an installed plugin to the latest version
 ```
 
-Plugin examples are available in the [AWF repository](https://github.com/alexellis/awf/tree/main/examples). 
+Plugin examples are available in the [AWF repository](https://github.com/awf-project/cli/tree/main/examples). 
 I also wrote a simple one, [time](https://github.com/awf-project/awf-plugin-time), specifically to help our beloved LLMs handle time. 
 The documentation has been updated and can be found [here](https://awf-project.ai/cli/docs/user-guide/plugins/).
 
