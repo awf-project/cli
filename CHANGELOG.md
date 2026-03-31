@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **C071**: Workflow pack format and installation — `awf workflow install owner/repo[@version]` downloads packs from GitHub Releases with SHA-256 checksum verification, manifest validation (`name`, `version`, `awf_version` constraint, workflow file existence), and atomic installation to `.awf/workflow-packs/<name>/`; `--global` installs to `~/.local/share/awf/workflow-packs/`; `awf workflow remove <pack>` deletes installed packs; `state.json` tracks source metadata; plugin dependency warnings emitted during install
+
 ### Changed
 
 - **C070**: Extracted transport layer from `internal/infrastructure/pluginmgr/` into shared `pkg/registry/` package — version parsing, GitHub Releases client, and download/checksum/extraction utilities are now reusable across plugin and workflow pack systems; zero behavioral change to existing plugin commands

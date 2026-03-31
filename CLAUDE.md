@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
 - Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
 - Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
 - All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
@@ -239,12 +238,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Use dual import aliases (e.g., infrastructurePlugin + registry) when consuming refactored packages; explicitly requalify all symbol references to prevent ambiguity
 - Keep thin wrapper functions in original location for backward compatibility; delegate completely to extracted packages to maintain single source of truth
 - Verify pkg/ package extractions are complete by confirming orphaned imports are removed and make lint passes with zero violations
+- Extract duplicate interface types across packages when structurally identical; avoid declaring the same type signature in multiple infrastructure files
 
 ## Common Pitfalls
 
-- Extract validation functions with cognitive complexity > 30 into smaller helper functions to maintain readability
-- Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
-- Pass structs larger than 128 bytes by pointer in function parameters and method receivers to avoid expensive value copying
 - Never check if maps are nil before calling len(); Go defines len() as zero for nil maps
 - Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
 - Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
@@ -283,10 +280,12 @@ func TestWorkflowValidation(t *testing.T) {
 - Always limit external file downloads with size caps; use httpx.ReadBody instead of io.ReadAll for untrusted sources to prevent OOM attacks
 - Always URL-encode user input via url.QueryEscape before concatenating into API URLs to prevent query parameter injection
 - Delete empty placeholder files created during refactoring; verify no unintended artifacts remain before committing
+- Always validate user-provided pack and workflow names from YAML input; use filepath.Clean and verify no path traversal patterns before filepath.Join operations
+- Never rely on single-error checks in file operations; handle os.IsPermission and os.IsTimeout separately from os.IsNotExist to avoid silent failures
+- Never panic on nil input in public infrastructure functions; return explicit error type to enable proper error handling by callers
 
 ## Test Conventions
 
-- Integration tests use compile-time interface checks (var _ PortInterface = (*Implementation)(nil)) to verify port implementation at build time
 - Use HTTPDoer interface in pkg/httpx tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
 - Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 - Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
@@ -306,6 +305,7 @@ func TestWorkflowValidation(t *testing.T) {
 - For plugin lifecycle testing, use self-hosting pattern: detect AWF_PLUGIN env var in TestMain to serve subprocess plugin; eliminates need for separate plugin test binaries
 - Write integration tests covering all command lifecycle paths (success, errors, state transitions) before marking implementation complete; include platform detection edge cases
 - Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
+- Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 
 ## Review Standards
 

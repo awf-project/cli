@@ -237,6 +237,9 @@ components:
   infra-tokenizer:
     in: infrastructure/tokenizer
 
+  infra-workflowpkg:
+    in: infrastructure/workflowpkg
+
   infra-xdg:
     in: infrastructure/xdg
 
@@ -460,6 +463,14 @@ deps:
       - go-stdlib
       - tiktoken
 
+  infra-workflowpkg:
+    mayDependOn:
+      - pkg-registry
+      - pkg-httpx
+    canUse:
+      - go-stdlib
+      - yaml
+
   infra-xdg:
     canUse:
       - go-stdlib
@@ -489,6 +500,7 @@ deps:
       - infra-repository
       - infra-store
       - infra-tokenizer
+      - infra-workflowpkg
       - infra-xdg
       - interfaces-cli-ui
     canUse:

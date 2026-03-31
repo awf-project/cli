@@ -28,6 +28,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
 - **Audit Trail** - Structured JSONL audit log with paired start/end entries per execution, secret masking, configurable path, and atomic writes
 - **Plugin System** - Extend AWF with custom operations, validators, and step types via gRPC plugins (HashiCorp go-plugin); validators run custom rules during `awf validate`, custom step types register new `type:` values for workflow steps; includes `sdk.Serve()` entry point for plugin authors, and install/update/remove from GitHub Releases with checksum verification
+- **Workflow Packs** - Share reusable workflows and prompts via `awf workflow install owner/repo[@version]` from GitHub Releases with manifest validation, checksum verification, and atomic installation; `--global` flag for user-level installation; `awf workflow remove <pack>` for cleanup; source metadata tracking and plugin dependency warnings
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
@@ -125,6 +126,8 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow remove <pack>` | Remove an installed workflow pack |
 | `awf version` | Show version information |
 | `awf completion <shell>` | Generate shell autocompletion |
 
