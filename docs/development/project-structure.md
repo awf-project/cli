@@ -78,16 +78,26 @@ awf/
 │               └── formatter.go # Field formatting
 │
 ├── pkg/                         # Public packages
+│   ├── expression/              # Expression evaluation utilities
+│   ├── httpx/                   # HTTP client helpers (HTTPDoer, size-limited reads)
 │   ├── interpolation/           # Template interpolation
 │   │   ├── interpolate.go       # Variable substitution
 │   │   ├── escape.go            # Shell escaping
 │   │   └── interpolate_test.go
-│   ├── validation/              # Validation utilities
-│   │   ├── input.go             # Input validation
-│   │   └── input_test.go
-│   └── retry/                   # Retry logic
-│       ├── backoff.go           # Backoff strategies
-│       └── backoff_test.go
+│   ├── output/                  # Output formatting utilities
+│   ├── plugin/                  # Plugin SDK for plugin authors
+│   │   └── sdk/                 # sdk.Serve(), BasePlugin, helpers
+│   ├── registry/                # Shared registry transport (C070)
+│   │   ├── version.go           # Semantic versioning
+│   │   ├── github_client.go     # GitHub Releases API client
+│   │   └── downloader.go        # Download, checksum, extraction
+│   ├── retry/                   # Retry logic
+│   │   ├── backoff.go           # Backoff strategies
+│   │   └── backoff_test.go
+│   ├── stringutil/              # String manipulation utilities
+│   └── validation/              # Validation utilities
+│       ├── input.go             # Input validation
+│       └── input_test.go
 │
 ├── tests/                       # Integration tests
 │   ├── integration/             # End-to-end tests
@@ -195,6 +205,8 @@ See [Package Documentation Guide](../reference/package-documentation.md) for det
 **`internal/infrastructure/executor/shell.go`** - Shell command execution
 
 ### Public Packages
+
+**`pkg/registry/`** - Shared transport layer for GitHub Releases (versioning, downloads, checksum verification). Used by the plugin system and forthcoming workflow pack system.
 
 **`pkg/interpolation/`** - Variable interpolation (safe to import externally)
 

@@ -17,6 +17,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	registry "github.com/awf-project/cli/pkg/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -195,9 +196,9 @@ func runPluginList(cmd *cobra.Command, cfg *Config, flags pluginListFlags) error
 
 	switch {
 	case flags.operations:
-		return writer.WriteOperations(buildOperationEntries(infos))
+		return writer.WriteOperations(buildNamedEntries(infos, func(p ui.PluginInfo) []string { return p.Operations }))
 	case flags.stepTypes:
-		return writer.WriteStepTypes(buildStepTypeEntries(infos))
+		return writer.WriteStepTypes(buildNamedEntries(infos, func(p ui.PluginInfo) []string { return p.StepTypes }))
 	case flags.validators:
 		return writer.WriteValidators(buildValidatorEntries(infos))
 	case flags.details:
@@ -207,21 +208,11 @@ func runPluginList(cmd *cobra.Command, cfg *Config, flags pluginListFlags) error
 	}
 }
 
-func buildOperationEntries(infos []ui.PluginInfo) []ui.OperationEntry {
+func buildNamedEntries(infos []ui.PluginInfo, getNames func(ui.PluginInfo) []string) []ui.OperationEntry {
 	var entries []ui.OperationEntry
 	for i := range infos {
-		for _, opName := range infos[i].Operations {
-			entries = append(entries, ui.OperationEntry{Name: opName, Plugin: infos[i].Name})
-		}
-	}
-	return entries
-}
-
-func buildStepTypeEntries(infos []ui.PluginInfo) []ui.OperationEntry {
-	var entries []ui.OperationEntry
-	for i := range infos {
-		for _, stName := range infos[i].StepTypes {
-			entries = append(entries, ui.OperationEntry{Name: stName, Plugin: infos[i].Name})
+		for _, name := range getNames(infos[i]) {
+			entries = append(entries, ui.OperationEntry{Name: name, Plugin: infos[i].Name})
 		}
 	}
 	return entries
@@ -437,7 +428,7 @@ Examples:
 }
 
 func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts installOptions) error {
-	if err := infrastructurePlugin.ValidateOwnerRepo(source); err != nil {
+	if err := registry.ValidateOwnerRepo(source); err != nil {
 		return err
 	}
 	owner, repo, _ := strings.Cut(source, "/")
@@ -466,7 +457,7 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 
 	// Build a GitHub release client; redirect API calls to GITHUB_API_URL when set (testing).
 	doer := newAPIBaseURLDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
-	githubClient := infrastructurePlugin.NewGitHubReleaseClient(doer)
+	githubClient := registry.NewGitHubReleaseClient(doer)
 
 	ownerRepo := owner + "/" + repo
 	releases, err := githubClient.ListReleases(ctx, ownerRepo)
@@ -482,7 +473,7 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 		return fmt.Errorf("failed to resolve version for %s: %w", ownerRepo, err)
 	}
 
-	asset, err := infrastructurePlugin.FindPlatformAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
+	asset, err := registry.FindPlatformAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fmt.Errorf("failed to find platform asset: %w", err)
 	}
@@ -577,16 +568,16 @@ func httpGetWithContext(ctx context.Context, rawURL string) (*http.Response, err
 //
 // versionConstraint may be a bare version ("1.0.0"), a v-prefixed version ("v1.0.0"),
 // or a semver range expression (">=1.0.0 <2.0.0").
-func selectRelease(releases []infrastructurePlugin.Release, versionConstraint string, includePrerelease bool) (infrastructurePlugin.Release, error) {
-	var constraints infrastructurePlugin.Constraints
+func selectRelease(releases []registry.Release, versionConstraint string, includePrerelease bool) (registry.Release, error) {
+	var constraints registry.Constraints
 	if versionConstraint != "" {
 		// Normalize a bare v-prefixed version like "v1.0.0" → "1.0.0" so ParseConstraints
 		// can handle it. Range expressions such as ">=1.0.0" are left as-is.
-		normalized := infrastructurePlugin.NormalizeTag(versionConstraint)
+		normalized := registry.NormalizeTag(versionConstraint)
 		var err error
-		constraints, err = infrastructurePlugin.ParseConstraints(normalized)
+		constraints, err = registry.ParseConstraints(normalized)
 		if err != nil {
-			return infrastructurePlugin.Release{}, fmt.Errorf("invalid version constraint: %w", err)
+			return registry.Release{}, fmt.Errorf("invalid version constraint: %w", err)
 		}
 	}
 
@@ -597,8 +588,8 @@ func selectRelease(releases []infrastructurePlugin.Release, versionConstraint st
 		if versionConstraint == "" {
 			return r, nil
 		}
-		versionStr := infrastructurePlugin.NormalizeTag(r.TagName)
-		v, err := infrastructurePlugin.ParseVersion(versionStr)
+		versionStr := registry.NormalizeTag(r.TagName)
+		v, err := registry.ParseVersion(versionStr)
 		if err != nil {
 			continue
 		}
@@ -606,12 +597,12 @@ func selectRelease(releases []infrastructurePlugin.Release, versionConstraint st
 			return r, nil
 		}
 	}
-	return infrastructurePlugin.Release{}, fmt.Errorf("no release matches constraint %q (includePrerelease=%v)", versionConstraint, includePrerelease)
+	return registry.Release{}, fmt.Errorf("no release matches constraint %q (includePrerelease=%v)", versionConstraint, includePrerelease)
 }
 
 // findChecksumURL locates the checksum file URL among release assets.
 // Looks for assets named *checksums.txt or SHA256SUMS.
-func findChecksumURL(assets []infrastructurePlugin.Asset) string {
+func findChecksumURL(assets []registry.Asset) string {
 	for _, a := range assets {
 		name := strings.ToLower(a.Name)
 		if strings.HasSuffix(name, "checksums.txt") || name == "sha256sums" || strings.HasSuffix(name, "sha256sums.txt") {
@@ -633,7 +624,7 @@ func downloadTextFile(ctx context.Context, fileURL string) (string, error) {
 		return "", fmt.Errorf("failed to download checksum file: HTTP %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1*1024*1024))
 	if err != nil {
 		return "", fmt.Errorf("failed to read checksum file: %w", err)
 	}
@@ -730,13 +721,8 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	ctx := context.Background()
 
 	pluginPaths := getPluginSearchPaths(cfg)
-	pluginsDir := findFirstExistingDir(pluginPaths)
-	if pluginsDir == "" {
-		return fmt.Errorf("no plugins directory found")
-	}
-
-	pluginDir := filepath.Join(pluginsDir, name)
-	if _, err := os.Stat(pluginDir); err != nil {
+	pluginDir := findPluginDir(pluginPaths, name)
+	if pluginDir == "" {
 		return fmt.Errorf("plugin %q is not installed", name)
 	}
 
@@ -746,7 +732,8 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	//nolint:errcheck,gosec // Non-fatal: continue with empty state if load fails
 	stateStore.Load(ctx)
 
-	sourceData := stateStore.GetSourceData(name)
+	stateName := resolvePluginStateName(stateStore.GetSourceData, name)
+	sourceData := stateStore.GetSourceData(stateName)
 	if sourceData == nil {
 		return fmt.Errorf("plugin %q was not installed from a remote source and cannot be updated automatically", name)
 	}
@@ -758,7 +745,7 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 
 	// Fetch latest release from GitHub.
 	doer := newAPIBaseURLDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
-	githubClient := infrastructurePlugin.NewGitHubReleaseClient(doer)
+	githubClient := registry.NewGitHubReleaseClient(doer)
 
 	releases, err := githubClient.ListReleases(ctx, source.Repository)
 	if err != nil {
@@ -775,15 +762,15 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	}
 
 	// Compare current installed version against the latest release.
-	currentNorm := infrastructurePlugin.NormalizeTag(source.Version)
-	latestNorm := infrastructurePlugin.NormalizeTag(release.TagName)
+	currentNorm := registry.NormalizeTag(source.Version)
+	latestNorm := registry.NormalizeTag(release.TagName)
 	if currentNorm == latestNorm {
 		fmt.Fprintf(cmd.OutOrStdout(), "Plugin %q is already up to date (version %s)\n", name, release.TagName)
 		return nil
 	}
 
 	// Locate the platform-specific asset and checksum file.
-	asset, err := infrastructurePlugin.FindPlatformAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
+	asset, err := registry.FindPlatformAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fmt.Errorf("failed to find platform asset: %w", err)
 	}
@@ -827,7 +814,7 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to build updated source metadata: %w", err)
 	}
-	if err := stateStore.SetSourceData(ctx, name, updatedSourceData); err != nil {
+	if err := stateStore.SetSourceData(ctx, stateName, updatedSourceData); err != nil {
 		return fmt.Errorf("failed to persist updated source metadata: %w", err)
 	}
 	if err := stateStore.Save(ctx); err != nil {
@@ -875,31 +862,35 @@ func runPluginRemove(cmd *cobra.Command, cfg *Config, name string, opts removeOp
 		return fmt.Errorf("failed to initialize plugin system: %w", err)
 	}
 
+	// Resolve the plugin name: try exact name, then short name (without "awf-plugin-" prefix).
+	// This handles the mismatch between manifest names shown in "plugin list" and internal names.
+	resolvedName := name
+	if _, found := result.Service.GetPlugin(name); !found {
+		if short := extractPluginName(name); short != name {
+			if _, found := result.Service.GetPlugin(short); found {
+				resolvedName = short
+			}
+		}
+	}
+
 	// Check if plugin is built-in by checking in discovered plugins
-	info, found := result.Service.GetPlugin(name)
+	info, found := result.Service.GetPlugin(resolvedName)
 	if found && info.Type == pluginmodel.PluginTypeBuiltin {
-		errMsg := fmt.Sprintf("error: plugin %q is a built-in provider and cannot be removed; use 'awf plugin disable %s' to disable it\n", name, name)
+		errMsg := fmt.Sprintf("error: plugin %q is a built-in provider and cannot be removed; use 'awf plugin disable %s' to disable it\n", resolvedName, resolvedName)
 		fmt.Fprint(cmd.ErrOrStderr(), errMsg)
 		return fmt.Errorf("cannot remove built-in plugin")
 	}
 
 	pluginPaths := getPluginSearchPaths(cfg)
-	pluginsDir := findFirstExistingDir(pluginPaths)
-	if pluginsDir == "" {
-		return fmt.Errorf("no plugins directory found")
-	}
-
-	pluginDir := filepath.Join(pluginsDir, name)
-
-	// Check if plugin directory exists
-	if _, err := os.Stat(pluginDir); err != nil {
+	pluginDir := findPluginDir(pluginPaths, name)
+	if pluginDir == "" {
 		return fmt.Errorf("plugin %q is not installed", name)
 	}
 
 	// Shut down gRPC connection before removing the binary (prevents "text file busy" on Linux).
 	// Best-effort: the plugin might not be running, so we only warn on failure.
-	if shutdownErr := result.Service.ShutdownPlugin(ctx, name); shutdownErr != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to shutdown plugin %q before removal: %v\n", name, shutdownErr)
+	if shutdownErr := result.Service.ShutdownPlugin(ctx, resolvedName); shutdownErr != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to shutdown plugin %q before removal: %v\n", resolvedName, shutdownErr)
 	}
 
 	// Always remove the plugin directory
@@ -909,7 +900,7 @@ func runPluginRemove(cmd *cobra.Command, cfg *Config, name string, opts removeOp
 
 	// Remove state entry entirely (not just disable) so the plugin does not appear in the list.
 	if !opts.keepData {
-		if err := result.StateStore.RemoveState(ctx, name); err != nil {
+		if err := result.StateStore.RemoveState(ctx, resolvedName); err != nil {
 			return fmt.Errorf("failed to remove plugin state: %w", err)
 		}
 
@@ -955,7 +946,7 @@ func runPluginSearch(cmd *cobra.Command, cfg *Config, query string) error {
 
 	searchQuery := "topic:awf-plugin"
 	if query != "" {
-		searchQuery += "+" + query
+		searchQuery += "+" + url.QueryEscape(query)
 	}
 
 	apiURL := fmt.Sprintf("%s/search/repositories?q=%s&sort=stars&order=desc", baseURL, searchQuery)
@@ -976,7 +967,7 @@ func runPluginSearch(cmd *cobra.Command, cfg *Config, query string) error {
 		return fmt.Errorf("GitHub search API returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return fmt.Errorf("failed to read search results: %w", err)
 	}

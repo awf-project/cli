@@ -1,4 +1,4 @@
-package pluginmgr
+package registry
 
 import (
 	"errors"
@@ -8,31 +8,29 @@ import (
 	"strings"
 )
 
-// Version comparison operators supported by the constraint parser.
 const (
-	OpEqual          = "==" // Exact match
-	OpNotEqual       = "!=" // Not equal
-	OpGreater        = ">"  // Greater than
-	OpGreaterOrEqual = ">=" // Greater than or equal
-	OpLess           = "<"  // Less than
-	OpLessOrEqual    = "<=" // Less than or equal
-	OpTilde          = "~"  // Compatible with (allows patch updates)
-	OpCaret          = "^"  // Compatible with (allows minor updates)
+	OpEqual          = "=="
+	OpNotEqual       = "!="
+	OpGreater        = ">"
+	OpGreaterOrEqual = ">="
+	OpLess           = "<"
+	OpLessOrEqual    = "<="
+	OpTilde          = "~"
+	OpCaret          = "^"
 )
 
 // Version represents a parsed semantic version.
 type Version struct {
-	Major      int    // Major version number
-	Minor      int    // Minor version number
-	Patch      int    // Patch version number
-	Prerelease string // Prerelease identifier (e.g., "alpha.1")
+	Major      int
+	Minor      int
+	Patch      int
+	Prerelease string
 }
 
-// versionRegex matches semver strings: X.Y.Z or X.Y.Z-prerelease
+// versionRegex matches semver strings: X.Y.Z or X.Y.Z-prerelease or X.Y.Z-prerelease+build
 // Does not allow leading zeros (except for 0 itself)
-var versionRegex = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*))?$`)
+var versionRegex = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([a-zA-Z0-9]+(?:[.+][a-zA-Z0-9]+)*))?$`)
 
-// String returns the string representation of the version.
 func (v Version) String() string {
 	s := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
 	if v.Prerelease != "" {
@@ -44,7 +42,6 @@ func (v Version) String() string {
 // Compare compares this version to another.
 // Returns -1 if v < other, 0 if v == other, 1 if v > other.
 func (v Version) Compare(other Version) int {
-	// Compare major
 	if v.Major != other.Major {
 		if v.Major < other.Major {
 			return -1
@@ -52,7 +49,6 @@ func (v Version) Compare(other Version) int {
 		return 1
 	}
 
-	// Compare minor
 	if v.Minor != other.Minor {
 		if v.Minor < other.Minor {
 			return -1
@@ -60,7 +56,6 @@ func (v Version) Compare(other Version) int {
 		return 1
 	}
 
-	// Compare patch
 	if v.Patch != other.Patch {
 		if v.Patch < other.Patch {
 			return -1
@@ -68,7 +63,6 @@ func (v Version) Compare(other Version) int {
 		return 1
 	}
 
-	// Compare prerelease
 	// A version without prerelease is greater than one with prerelease
 	// E.g., 1.0.0 > 1.0.0-alpha
 	if v.Prerelease == "" && other.Prerelease != "" {
@@ -88,13 +82,16 @@ func (v Version) Compare(other Version) int {
 	return 1
 }
 
-// Constraint represents a single version constraint (e.g., ">=0.4.0").
-type Constraint struct {
-	Operator string  // One of the Op* constants
-	Version  Version // The version to compare against
+func (v Version) IsPrerelease() bool {
+	return v.Prerelease != ""
 }
 
-// Check tests if a version satisfies this constraint.
+// Constraint represents a single version constraint (e.g., ">=0.4.0").
+type Constraint struct {
+	Operator string
+	Version  Version
+}
+
 func (c Constraint) Check(v Version) bool {
 	cmp := v.Compare(c.Version)
 
@@ -150,7 +147,6 @@ type Constraints []Constraint
 
 // Check tests if a version satisfies all constraints.
 func (cs Constraints) Check(v Version) bool {
-	// Empty constraints always satisfied
 	if len(cs) == 0 {
 		return true
 	}
@@ -232,7 +228,6 @@ func ParseConstraint(s string) (Constraint, error) {
 	operator := matches[1]
 	versionStr := strings.TrimSpace(matches[2])
 
-	// Default to equal if no operator
 	if operator == "" {
 		operator = OpEqual
 	}
@@ -311,18 +306,7 @@ func CheckVersionConstraint(constraintStr, versionStr string) (bool, error) {
 	return constraints.Check(version), nil
 }
 
-// IsCompatible checks if the current AWF version is compatible with a plugin's
-// AWF version constraint. This is a convenience function.
-func IsCompatible(awfVersionConstraint, currentAWFVersion string) (bool, error) {
-	return CheckVersionConstraint(awfVersionConstraint, currentAWFVersion)
-}
-
 // NormalizeTag strips a leading "v" prefix from a GitHub release tag.
 func NormalizeTag(tag string) string {
 	return strings.TrimPrefix(tag, "v")
-}
-
-// IsPrerelease returns true if this version has a prerelease identifier.
-func (v Version) IsPrerelease() bool {
-	return v.Prerelease != ""
 }

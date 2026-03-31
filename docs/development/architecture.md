@@ -198,11 +198,16 @@ Implements domain ports with concrete technologies.
 - `github/` - Built-in GitHub operation provider implementing `OperationProvider` (issue/PR/label/project operations, batch executor, auth fallback)
 - `logger/` - Zap logger implementation (console, JSON, multi-logger, secret masking)
 - `notify/` - Built-in notification operation provider implementing `OperationProvider` (desktop, webhook backends)
-- `plugin/` - RPC plugin manager, manifest parser, state store, `CompositeOperationProvider` for multi-provider dispatch
+- `pluginmgr/` - Plugin lifecycle (manifest, state, gRPC connections); delegates transport to `pkg/registry/`
 - `repository/` - YAML file loader implementing `Repository`
 - `store/` - JSON state store implementing `StateStore`, SQLite history storage
 - `tokenizer/` - Token counting for conversation context management
 - `xdg/` - XDG directory discovery
+
+**Shared Packages (`pkg/`):**
+- `pkg/registry/` - Shared GitHub Releases transport (versioning, downloads, checksum verification) used by plugin system and forthcoming workflow pack system
+- `pkg/httpx/` - HTTP client abstractions (`HTTPDoer` interface, size-limited reads)
+- `pkg/plugin/sdk/` - Plugin author SDK (`Serve()`, `BasePlugin`, input helpers)
 
 **Implementation Details:**
 
@@ -372,6 +377,20 @@ External communication adapters.
 - REST API adapter
 - gRPC adapter
 - Message queue adapter
+
+### Public Packages
+
+Reusable utilities safe for external consumption.
+
+**Location:** `pkg/`
+
+**Packages:**
+- `interpolation/` - Template variable substitution and shell escaping
+- `registry/` - Package/plugin registry transport layer (C070) — GitHub Releases API client, semantic versioning, download & extraction utilities
+- `validation/` - Input validation rule evaluation
+- `retry/` - Backoff strategies (exponential, linear, constant)
+
+These packages have no domain/infrastructure dependencies and can be imported by external projects.
 
 ## Key Patterns
 

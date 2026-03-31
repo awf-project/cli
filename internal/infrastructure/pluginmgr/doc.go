@@ -79,16 +79,5 @@
 //
 // Uses file locking to prevent concurrent modification during workflow execution.
 //
-// # Version Handling
-//
-// ## Version (version.go)
-//
-// Semantic versioning support:
-//   - ParseVersion: Parse semver string (e.g., "1.2.3")
-//   - ParseConstraint: Parse version constraint (e.g., ">=1.0.0", "~1.2", "^2.0")
-//   - CheckVersionConstraint: Validate version against constraint
-//   - IsCompatible: Check plugin compatibility with AWF version
-//   - Compare: Semver comparison (major.minor.patch)
-//
-// Operators: =, !=, >, >=, <, <=, ~ (tilde range), ^ (caret range)
+// Version parsing, constraint checking, and comparison logic lives in pkg/registry/version.go.
 package pluginmgr

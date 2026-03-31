@@ -217,9 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Implement prompt file loading in application layer (ExecutionService); domain layer defines PromptFile field only; infrastructure layer handles YAML mapping
-- Populate AWF context variables (.awf.config_dir, .awf.cache_dir) in application layer during interpolation setup; use XDG directory standards for consistency
-- Inject optional dependencies like XDG paths via SetAWFPaths() pattern in application layer; never import infrastructure modules directly from application layer
 - Restrict local XDG overrides to scripts_dir and prompts_dir only; use allowlist-based matching against AWF map values to prevent unintended path resolution
 - Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
 - Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
@@ -239,13 +236,12 @@ func TestWorkflowValidation(t *testing.T) {
 - Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
 - CLI command implementations must call infrastructure layer methods rather than reimplementing HTTP requests, parsing, or validation; avoid logic duplication
 - Application layer must persist source metadata (SetSourceData) after successful infrastructure installation; omitting state blocks downstream operations like updates
+- Use dual import aliases (e.g., infrastructurePlugin + registry) when consuming refactored packages; explicitly requalify all symbol references to prevent ambiguity
+- Keep thin wrapper functions in original location for backward compatibility; delegate completely to extracted packages to maintain single source of truth
+- Verify pkg/ package extractions are complete by confirming orphaned imports are removed and make lint passes with zero violations
 
 ## Common Pitfalls
 
-- Always resolve script_file and prompt_file paths against workflow.SourceDir first, then check for local XDG overrides via resolveLocalOverGlobal() before falling back to global XDG paths
-- Never initialize interpolation context with nil AWF map; always pass initialized empty map to prevent nil dereference in path resolution helpers
-- Never initialize interpolation context with nil AWF map in loadExternalFile() and related functions; always pass initialized empty map to prevent nil dereference in resolveLocalOverGlobal() and path resolution helpers
-- Always use interpolateTerminalMessage() in application layer to evaluate template variables in Step.Message at runtime; store message verbatim during parsing to preserve {{var}} syntax until execution time
 - Extract validation functions with cognitive complexity > 30 into smaller helper functions to maintain readability
 - Always run reported failing tests directly with -v flag before implementing fixes; error reports may reference stale or incorrect file locations
 - Pass structs larger than 128 bytes by pointer in function parameters and method receivers to avoid expensive value copying
@@ -283,6 +279,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Never include test-only fallback logic (localhost URLs, test servers) in production code paths; use env vars or dependency injection for test mocking instead
 - Always shutdown gRPC plugin connections before removing plugin binaries; prevents 'text file busy' errors and ensures graceful termination
 - Never commit CLI command implementations as stubs; implement fully or return explicit NotImplementedError with linked issue
+- Always use http.NewRequestWithContext instead of http.NewRequest; pass context.Background() or appropriate request context
+- Always limit external file downloads with size caps; use httpx.ReadBody instead of io.ReadAll for untrusted sources to prevent OOM attacks
+- Always URL-encode user input via url.QueryEscape before concatenating into API URLs to prevent query parameter injection
+- Delete empty placeholder files created during refactoring; verify no unintended artifacts remain before committing
 
 ## Test Conventions
 
@@ -305,6 +305,7 @@ func TestWorkflowValidation(t *testing.T) {
 - When replacing stub implementations with real methods, delete tests validating stub-only behavior (e.g., ReturnsNotImplemented assertions); stub tests become false positives after implementation replaces the stub
 - For plugin lifecycle testing, use self-hosting pattern: detect AWF_PLUGIN env var in TestMain to serve subprocess plugin; eliminates need for separate plugin test binaries
 - Write integration tests covering all command lifecycle paths (success, errors, state transitions) before marking implementation complete; include platform detection edge cases
+- Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
 
 ## Review Standards
 
