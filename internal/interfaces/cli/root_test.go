@@ -533,3 +533,215 @@ func TestRootCommand_ErrorCommandPosition(t *testing.T) {
 		t.Error("error command should be registered")
 	}
 }
+
+// Component T010: Workflow Command Registration Tests
+
+func TestRootCommand_HasWorkflowSubcommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var workflowCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "workflow" {
+			workflowCmd = sub
+			break
+		}
+	}
+
+	if workflowCmd == nil {
+		t.Fatal("expected root command to have 'workflow' subcommand")
+	}
+}
+
+func TestRootCommand_WorkflowCommandStructure(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var workflowCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "workflow" {
+			workflowCmd = sub
+			break
+		}
+	}
+
+	if workflowCmd == nil {
+		t.Fatal("expected root command to have 'workflow' subcommand")
+	}
+
+	if workflowCmd.Use == "" {
+		t.Error("workflow command should have 'Use' field set")
+	}
+	if !strings.Contains(workflowCmd.Use, "workflow") {
+		t.Errorf("workflow command Use should contain 'workflow', got: %s", workflowCmd.Use)
+	}
+
+	if workflowCmd.Short == "" {
+		t.Error("workflow command should have Short description")
+	}
+
+	if strings.TrimSpace(workflowCmd.Short) == "" {
+		t.Error("workflow command Short description should not be empty")
+	}
+}
+
+func TestRootCommand_WorkflowCommandHasAlias(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "workflow" {
+			if !contains(sub.Aliases, "wf") {
+				t.Error("workflow command should have 'wf' alias")
+			}
+			return
+		}
+	}
+
+	t.Error("workflow command not found")
+}
+
+func TestRootCommand_WorkflowCommandHasSubcommands(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var workflowCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "workflow" {
+			workflowCmd = sub
+			break
+		}
+	}
+
+	if workflowCmd == nil {
+		t.Fatal("expected root command to have 'workflow' subcommand")
+	}
+
+	subcommandNames := []string{"install", "remove"}
+	subcommands := workflowCmd.Commands()
+
+	if len(subcommands) == 0 {
+		t.Fatal("workflow command should have subcommands")
+	}
+
+	for _, expectedName := range subcommandNames {
+		found := false
+		for _, sub := range subcommands {
+			if sub.Name() == expectedName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected workflow command to have '%s' subcommand", expectedName)
+		}
+	}
+}
+
+func TestRootCommand_WorkflowCommandHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"workflow", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+
+	expectedPhrases := []string{
+		"workflow",
+		"Manage",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(output, phrase) {
+			t.Errorf("expected workflow help to contain '%s', got:\n%s", phrase, output)
+		}
+	}
+}
+
+func TestRootCommand_WorkflowInstallHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"workflow", "install", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+
+	expectedPhrases := []string{
+		"install",
+		"workflow",
+		"GitHub",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(output, phrase) {
+			t.Errorf("expected workflow install help to contain '%s', got:\n%s", phrase, output)
+		}
+	}
+}
+
+func TestRootCommand_WorkflowRemoveHelp(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"workflow", "remove", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+
+	expectedPhrases := []string{
+		"remove",
+		"workflow",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(output, phrase) {
+			t.Errorf("expected workflow remove help to contain '%s', got:\n%s", phrase, output)
+		}
+	}
+}
+
+func TestRootCommand_WorkflowCommandIntegration(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetArgs([]string{"workflow", "--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("workflow command should be executable through root, got error: %v", err)
+	}
+
+	output := buf.String()
+	if output == "" && errBuf.String() == "" {
+		t.Error("workflow command should produce output")
+	}
+}
+
+// Helper function to check if slice contains string
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}

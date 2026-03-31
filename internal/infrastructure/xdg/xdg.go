@@ -86,6 +86,16 @@ func LocalPluginsDir() string {
 	return ".awf/plugins"
 }
 
+// AWFWorkflowPacksDir returns the global workflow packs directory ($XDG_DATA_HOME/awf/workflow-packs)
+func AWFWorkflowPacksDir() string {
+	return filepath.Join(AWFDataDir(), "workflow-packs")
+}
+
+// LocalWorkflowPacksDir returns the local project workflow packs directory
+func LocalWorkflowPacksDir() string {
+	return ".awf/workflow-packs"
+}
+
 // LocalConfigPath returns the local project config file path.
 // It checks AWF_CONFIG_PATH environment variable first, then defaults to ".awf/config.yaml".
 func LocalConfigPath() string {

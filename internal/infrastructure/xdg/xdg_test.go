@@ -488,3 +488,141 @@ func TestLocalConfigPath_DirectoryAndFileSeparation(t *testing.T) {
 	assert.Equal(t, "config.yaml", file,
 		"LocalConfigPath default file should be config.yaml, got: %s", file)
 }
+
+func TestAWFWorkflowPacksDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		envValue string
+		want     string
+	}{
+		{
+			name:     "uses XDG_DATA_HOME when set",
+			envValue: "/custom/data",
+			want:     "/custom/data/awf/workflow-packs",
+		},
+		{
+			name:     "defaults to ~/.local/share/awf/workflow-packs when unset",
+			envValue: "",
+			want:     filepath.Join(home, ".local", "share", "awf", "workflow-packs"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				t.Setenv("XDG_DATA_HOME", tt.envValue)
+			} else {
+				t.Setenv("XDG_DATA_HOME", "")
+			}
+
+			got := AWFWorkflowPacksDir()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestAWFWorkflowPacksDir_IsUnderDataDir(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "")
+
+	dataDir := AWFDataDir()
+	workflowPacksDir := AWFWorkflowPacksDir()
+
+	assert.True(t, strings.HasPrefix(workflowPacksDir, dataDir),
+		"AWFWorkflowPacksDir (%s) should be under AWFDataDir (%s)", workflowPacksDir, dataDir)
+}
+
+func TestAWFWorkflowPacksDir_EndsWithWorkflowPacks(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "")
+
+	got := AWFWorkflowPacksDir()
+
+	assert.True(t, filepath.Base(got) == "workflow-packs",
+		"AWFWorkflowPacksDir should end with 'workflow-packs', got: %s", got)
+}
+
+func TestLocalWorkflowPacksDir(t *testing.T) {
+	got := LocalWorkflowPacksDir()
+	assert.Equal(t, ".awf/workflow-packs", got)
+}
+
+func TestLocalWorkflowPacksDir_IsRelative(t *testing.T) {
+	got := LocalWorkflowPacksDir()
+
+	assert.False(t, filepath.IsAbs(got),
+		"LocalWorkflowPacksDir should be relative, got: %s", got)
+}
+
+func TestLocalWorkflowPacksDir_MirrorsLocalPluginsPattern(t *testing.T) {
+	pluginsDir := LocalPluginsDir()
+	workflowPacksDir := LocalWorkflowPacksDir()
+
+	assert.True(t, strings.HasPrefix(pluginsDir, ".awf/"),
+		"LocalPluginsDir should be under .awf/")
+	assert.True(t, strings.HasPrefix(workflowPacksDir, ".awf/"),
+		"LocalWorkflowPacksDir should be under .awf/")
+
+	assert.Equal(t, ".awf/plugins", pluginsDir)
+	assert.Equal(t, ".awf/workflow-packs", workflowPacksDir)
+}
+
+func TestWorkflowPacksDirs_ConsistentWithOtherDirs(t *testing.T) {
+	customPath := "/custom/data/path"
+	t.Setenv("XDG_DATA_HOME", customPath)
+
+	pluginsDir := AWFPluginsDir()
+	workflowPacksDir := AWFWorkflowPacksDir()
+
+	assert.Equal(t, filepath.Join(customPath, "awf", "plugins"), pluginsDir)
+	assert.Equal(t, filepath.Join(customPath, "awf", "workflow-packs"), workflowPacksDir)
+}
+
+func TestWorkflowPacksDirs_TableDriven(t *testing.T) {
+	tests := []struct {
+		name        string
+		xdgDataHome string
+		wantGlobal  func() string
+		wantLocal   string
+	}{
+		{
+			name:        "default XDG unset",
+			xdgDataHome: "",
+			wantGlobal: func() string {
+				home, _ := os.UserHomeDir()
+				return filepath.Join(home, ".local", "share", "awf", "workflow-packs")
+			},
+			wantLocal: ".awf/workflow-packs",
+		},
+		{
+			name:        "custom XDG_DATA_HOME",
+			xdgDataHome: "/opt/awf/data",
+			wantGlobal: func() string {
+				return "/opt/awf/data/awf/workflow-packs"
+			},
+			wantLocal: ".awf/workflow-packs",
+		},
+		{
+			name:        "XDG with trailing slash",
+			xdgDataHome: "/custom/data/",
+			wantGlobal: func() string {
+				return filepath.Join("/custom", "data", "awf", "workflow-packs")
+			},
+			wantLocal: ".awf/workflow-packs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.xdgDataHome != "" {
+				t.Setenv("XDG_DATA_HOME", tt.xdgDataHome)
+			} else {
+				t.Setenv("XDG_DATA_HOME", "")
+			}
+
+			assert.Equal(t, tt.wantGlobal(), AWFWorkflowPacksDir())
+			assert.Equal(t, tt.wantLocal, LocalWorkflowPacksDir())
+		})
+	}
+}

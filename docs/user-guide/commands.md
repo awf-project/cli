@@ -24,6 +24,8 @@ title: "CLI Commands"
 | `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow remove <name>` | Remove an installed workflow pack |
 | `awf config show` | Display project configuration |
 | `awf version` | Show version info |
 | `awf completion <shell>` | Generate shell autocompletion |
@@ -1053,6 +1055,135 @@ awf plugin disable http
 | Error | Cause |
 |-------|-------|
 | `unknown plugin "<name>"` | Plugin name is not registered (typo or not installed) |
+
+---
+
+## awf workflow
+
+Manage workflow packs installed from GitHub Releases.
+
+```bash
+awf workflow <subcommand> [flags]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `remove <name>` | Remove an installed workflow pack |
+
+---
+
+## awf workflow install
+
+Install a workflow pack from a GitHub repository.
+
+```bash
+awf workflow install <owner/repo> [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `owner/repo` | GitHub repository in `owner/repo` format (not a URL) |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Version constraint (e.g., `">=1.0.0 <2.0.0"` or `"1.2.0"` for exact version) |
+| `--global` | Install to global user-level directory (`~/.local/share/awf/workflow-packs/`) instead of local project |
+| `--force` | Overwrite existing installation |
+
+### Description
+
+Downloads the latest compatible release from the GitHub repository, verifies the SHA-256 checksum, extracts the `.tar.gz` archive, validates the `manifest.yaml`, checks AWF version compatibility, and installs atomically. The pack directory structure is created with source metadata.
+
+Release assets must include a single `.tar.gz` archive (e.g., `awf-workflow-<name>_<version>.tar.gz`) with a corresponding `checksums.txt` file. Workflow packs are platform-independent — no OS/architecture suffix is needed.
+
+**Pack manifest validation:**
+- `name`: Must match `^[a-z][a-z0-9-]*$` (lowercase, hyphens)
+- `version`: Must be valid semver
+- `awf_version`: Version constraint must be satisfied by current AWF CLI version
+- `workflows/`: All referenced workflow files must exist in the pack
+
+**Installation locations:**
+- **Local** (default): `.awf/workflow-packs/<name>/` (project-level)
+- **Global** (`--global`): `~/.local/share/awf/workflow-packs/<name>/` (user-level, applies to all projects)
+
+**Plugin dependencies:**
+If the manifest declares required plugins via the `plugins:` field, warnings are emitted during installation (non-blocking). Install missing plugins separately with `awf plugin install`.
+
+### Examples
+
+```bash
+# Install a workflow pack (latest version)
+awf workflow install myorg/awf-workflow-speckit
+
+# Install with specific version
+awf workflow install myorg/awf-workflow-speckit --version "1.2.0"
+
+# Install with version constraint
+awf workflow install myorg/awf-workflow-speckit --version ">=1.0.0 <2.0.0"
+
+# Install globally (available to all projects)
+awf workflow install myorg/awf-workflow-speckit --global
+
+# Force reinstall over existing
+awf workflow install myorg/awf-workflow-speckit --force
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `invalid format: use owner/repo` | A URL was provided instead of `owner/repo` |
+| `invalid format: expected owner/repo` | Missing owner or repo component |
+| `already installed` | Pack exists (use `--force` to overwrite) |
+| `checksum mismatch` | Downloaded archive failed SHA-256 verification |
+| `no .tar.gz archive found` | Release has no `.tar.gz` asset |
+| `manifest validation failed` | Pack manifest is invalid or missing required fields |
+| `AWF version not compatible` | Current AWF CLI version does not satisfy the pack's `awf_version` constraint |
+
+---
+
+## awf workflow remove
+
+Remove an installed workflow pack.
+
+```bash
+awf workflow remove <pack-name> [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pack-name` | Name of the workflow pack to remove |
+
+### Description
+
+Removes the workflow pack directory and all its contents (workflows, prompts, scripts, state.json). Deletion is immediate — no confirmation prompt is required.
+
+### Examples
+
+```bash
+# Remove a locally installed pack
+awf workflow remove speckit
+
+# Remove a globally installed pack
+awf workflow remove speckit
+```
+
+The command automatically detects whether the pack is installed locally or globally and removes it from the appropriate location.
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `pack "<name>" is not installed` | Pack name not found in local or global directories |
 
 ---
 
