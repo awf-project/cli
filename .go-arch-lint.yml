@@ -23,6 +23,7 @@ commonComponents:
   - pkg-validation
   - pkg-httpx
   - pkg-output
+  - pkg-registry
 
 vendors:
   go-stdlib:
@@ -172,6 +173,9 @@ components:
 
   pkg-output:
     in: ../pkg/output
+
+  pkg-registry:
+    in: ../pkg/registry
 
   pkg-validation:
     in: ../pkg/validation
@@ -420,6 +424,7 @@ deps:
       - domain-errors
       - proto-plugin
       - pkg-httpx
+      - pkg-registry
     canUse:
       - go-stdlib
       - yaml
