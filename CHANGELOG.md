@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **C070**: Extracted transport layer from `internal/infrastructure/pluginmgr/` into shared `pkg/registry/` package — version parsing, GitHub Releases client, and download/checksum/extraction utilities are now reusable across plugin and workflow pack systems; zero behavioral change to existing plugin commands
+
 ## [0.5.0] - 2026-03-30
 
 ### Breaking Changes

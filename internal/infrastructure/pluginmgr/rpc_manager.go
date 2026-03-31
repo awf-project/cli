@@ -19,6 +19,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/pkg/plugin/sdk"
+	"github.com/awf-project/cli/pkg/registry"
 	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
 )
 
@@ -441,7 +442,7 @@ func (m *RPCPluginManager) checkVersionCompatibility(name string, info *pluginmo
 		return nil
 	}
 
-	compatible, err := IsCompatible(manifest.AWFVersion, m.hostVersion)
+	compatible, err := registry.CheckVersionConstraint(manifest.AWFVersion, m.hostVersion)
 	if err != nil {
 		return WrapRPCManagerError("init", name, fmt.Errorf("version compatibility check failed: %w", err))
 	}

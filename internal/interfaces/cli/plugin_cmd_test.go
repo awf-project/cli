@@ -47,52 +47,19 @@ func TestPluginCommand_HasAlias(t *testing.T) {
 	t.Error("plugin command not found")
 }
 
-func TestPluginCommand_HasListSubcommand(t *testing.T) {
+func TestPluginCommand_HasSubcommands(t *testing.T) {
 	cmd := cli.NewRootCommand()
 	pluginCmd, _, err := cmd.Find([]string{"plugin"})
 	require.NoError(t, err)
 
-	found := false
+	subcommands := make(map[string]bool)
 	for _, sub := range pluginCmd.Commands() {
-		if sub.Name() == "list" {
-			found = true
-			break
-		}
+		subcommands[sub.Name()] = true
 	}
 
-	assert.True(t, found, "plugin command should have 'list' subcommand")
-}
-
-func TestPluginCommand_HasEnableSubcommand(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	pluginCmd, _, err := cmd.Find([]string{"plugin"})
-	require.NoError(t, err)
-
-	found := false
-	for _, sub := range pluginCmd.Commands() {
-		if sub.Name() == "enable" {
-			found = true
-			break
-		}
+	for _, name := range []string{"list", "enable", "disable", "search"} {
+		assert.True(t, subcommands[name], "plugin command should have '%s' subcommand", name)
 	}
-
-	assert.True(t, found, "plugin command should have 'enable' subcommand")
-}
-
-func TestPluginCommand_HasDisableSubcommand(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	pluginCmd, _, err := cmd.Find([]string{"plugin"})
-	require.NoError(t, err)
-
-	found := false
-	for _, sub := range pluginCmd.Commands() {
-		if sub.Name() == "disable" {
-			found = true
-			break
-		}
-	}
-
-	assert.True(t, found, "plugin command should have 'disable' subcommand")
 }
 
 func TestPluginListCommand_HasLsAlias(t *testing.T) {
@@ -906,19 +873,19 @@ func TestPluginCommands_StorageFlag(t *testing.T) {
 	}
 }
 
-func TestPluginListCommand_OperationsFlag_Recognized(t *testing.T) {
+func TestPluginListCommand_FlagsRecognized(t *testing.T) {
 	cmd := cli.NewRootCommand()
-	pluginCmd, _, err := cmd.Find([]string{"plugin", "list"})
+	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
 	require.NoError(t, err)
 
-	found := false
-	pluginCmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "operations" {
-			found = true
-		}
+	flags := make(map[string]bool)
+	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		flags[flag.Name] = true
 	})
 
-	assert.True(t, found, "plugin list command should have --operations flag")
+	for _, name := range []string{"operations", "details", "step-types", "validators"} {
+		assert.True(t, flags[name], "plugin list command should have --%s flag", name)
+	}
 }
 
 func TestPluginListCommand_OperationsFlag_NoPlugins(t *testing.T) {
@@ -1357,22 +1324,6 @@ func TestPluginRemoveCommand_FailsForNotInstalledPlugin(t *testing.T) {
 	assert.Error(t, err, "removing a plugin that is not installed should fail")
 }
 
-func TestPluginCommand_HasSearchSubcommand(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	pluginCmd, _, err := cmd.Find([]string{"plugin"})
-	require.NoError(t, err)
-
-	found := false
-	for _, sub := range pluginCmd.Commands() {
-		if sub.Name() == "search" {
-			found = true
-			break
-		}
-	}
-
-	assert.True(t, found, "plugin command should have 'search' subcommand")
-}
-
 // newMockGitHubSearchServer creates a httptest server that serves GitHub Search API responses.
 func newMockGitHubSearchServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -1614,48 +1565,6 @@ func TestPluginUpdateCommand_NotInstalled(t *testing.T) {
 	assert.Contains(t, err.Error(), "not installed", "error should indicate plugin is not installed")
 }
 
-func TestPluginListCommand_DetailsFlag_Recognized(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
-	require.NoError(t, err)
-
-	found := false
-	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "details" {
-			found = true
-		}
-	})
-	assert.True(t, found, "plugin list command should have --details flag")
-}
-
-func TestPluginListCommand_StepTypesFlag_Recognized(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
-	require.NoError(t, err)
-
-	found := false
-	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "step-types" {
-			found = true
-		}
-	})
-	assert.True(t, found, "plugin list command should have --step-types flag")
-}
-
-func TestPluginListCommand_ValidatorsFlag_Recognized(t *testing.T) {
-	cmd := cli.NewRootCommand()
-	listCmd, _, err := cmd.Find([]string{"plugin", "list"})
-	require.NoError(t, err)
-
-	found := false
-	listCmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "validators" {
-			found = true
-		}
-	})
-	assert.True(t, found, "plugin list command should have --validators flag")
-}
-
 func TestPluginListCommand_MutuallyExclusiveFlags(t *testing.T) {
 	tmpDir := setupTestDir(t)
 	t.Setenv("XDG_DATA_HOME", tmpDir)
@@ -1728,4 +1637,53 @@ func TestPluginSearchCommand_QueryWithJSON(t *testing.T) {
 	var results interface{}
 	err = json.Unmarshal([]byte(output), &results)
 	assert.NoError(t, err, "JSON search results should be valid")
+}
+
+// Functional smoke tests for T011: NFR-001
+// Verify zero behavioral change after C070 transport layer extraction
+
+func TestPluginListCommand_FunctionalSmoke_ExitsZero(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_PLUGINS_PATH", "")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "list", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "awf plugin list should exit 0")
+	assert.NotEmpty(t, out.String(), "awf plugin list should produce output")
+}
+
+func TestPluginInstallCommand_FunctionalSmoke_HelpRendersCorrectly(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	installCmd, _, err := cmd.Find([]string{"plugin", "install"})
+	require.NoError(t, err, "plugin install subcommand should exist")
+
+	assert.NotEmpty(t, installCmd.Short, "install command should have short help")
+	assert.NotEmpty(t, installCmd.Long, "install command should have long help")
+	assert.NotEmpty(t, installCmd.UsageString(), "install command should have usage string")
+}
+
+func TestPluginUpdateCommand_FunctionalSmoke_HelpRendersCorrectly(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	updateCmd, _, err := cmd.Find([]string{"plugin", "update"})
+	require.NoError(t, err, "plugin update subcommand should exist")
+
+	assert.NotEmpty(t, updateCmd.Short, "update command should have short help")
+	assert.NotEmpty(t, updateCmd.Long, "update command should have long help")
+	assert.NotEmpty(t, updateCmd.UsageString(), "update command should have usage string")
+}
+
+func TestPluginRemoveCommand_FunctionalSmoke_HelpRendersCorrectly(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	removeCmd, _, err := cmd.Find([]string{"plugin", "remove"})
+	require.NoError(t, err, "plugin remove subcommand should exist")
+
+	assert.NotEmpty(t, removeCmd.Short, "remove command should have short help")
+	assert.NotEmpty(t, removeCmd.Long, "remove command should have long help")
+	assert.NotEmpty(t, removeCmd.UsageString(), "remove command should have usage string")
 }

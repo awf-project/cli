@@ -32,9 +32,15 @@ go doc ./internal/interfaces/cli
 go doc ./internal/interfaces/cli/ui
 
 # View public packages
+go doc ./pkg/expression
+go doc ./pkg/httpx
 go doc ./pkg/interpolation
-go doc ./pkg/validation
+go doc ./pkg/output
+go doc ./pkg/plugin/sdk
+go doc ./pkg/registry
 go doc ./pkg/retry
+go doc ./pkg/stringutil
+go doc ./pkg/validation
 ```
 
 ### Using `go doc` with Patterns
@@ -291,12 +297,18 @@ All key packages now have documentation:
 - `internal/interfaces/cli` - CLI commands and structure
 - `internal/interfaces/cli/ui` - Output formatting and prompts
 
-### Public Packages (3 packages)
+### Public Packages (9 packages)
+- `pkg/expression` - Expression evaluation utilities
+- `pkg/httpx` - HTTP client helpers (HTTPDoer interface, size-limited reads)
 - `pkg/interpolation` - Template variable substitution
-- `pkg/validation` - Input validation rules
+- `pkg/output` - Output formatting utilities
+- `pkg/plugin/sdk` - Plugin SDK (Serve, BasePlugin, helpers)
+- `pkg/registry` - Shared registry transport (GitHub Releases API, semantic versioning, download utilities)
 - `pkg/retry` - Backoff strategies
+- `pkg/stringutil` - String manipulation utilities
+- `pkg/validation` - Input validation rules
 
-**Total: 21 documented packages covering 100% of public APIs.**
+**Total: 27 documented packages covering 100% of public APIs.**
 
 ## See Also
 

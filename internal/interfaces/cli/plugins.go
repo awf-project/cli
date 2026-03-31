@@ -134,6 +134,41 @@ func findFirstExistingDir(paths []string) string {
 	return ""
 }
 
+// findPluginDir locates an installed plugin by name across all search paths.
+// Tries the exact name first, then the short name (without "awf-plugin-" prefix)
+// to handle the mismatch between manifest names and install directory names.
+// Returns the full path to the plugin directory, or empty string if not found.
+func findPluginDir(paths []string, name string) string {
+	candidates := []string{name}
+	if short := extractPluginName(name); short != name {
+		candidates = append(candidates, short)
+	}
+
+	for _, dir := range findExistingDirs(paths) {
+		for _, candidate := range candidates {
+			pluginDir := filepath.Join(dir, candidate)
+			if info, err := os.Stat(pluginDir); err == nil && info.IsDir() {
+				return pluginDir
+			}
+		}
+	}
+	return ""
+}
+
+// resolvePluginStateName returns the name used in the state store for a plugin.
+// Tries the exact name first, then the short name (without "awf-plugin-" prefix).
+func resolvePluginStateName(getName func(string) map[string]any, name string) string {
+	if data := getName(name); data != nil {
+		return name
+	}
+	if short := extractPluginName(name); short != name {
+		if data := getName(short); data != nil {
+			return short
+		}
+	}
+	return name
+}
+
 // registerBuiltins registers the built-in operation providers into the plugin service.
 // Uses version as the synthesized manifest version for each built-in entry.
 func registerBuiltins(svc *application.PluginService, version string) {
