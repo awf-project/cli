@@ -206,7 +206,7 @@ See [Package Documentation Guide](../reference/package-documentation.md) for det
 
 ### Public Packages
 
-**`pkg/registry/`** - Shared transport layer for GitHub Releases (versioning, downloads, checksum verification). Used by the plugin system and forthcoming workflow pack system.
+**`pkg/registry/`** - Shared transport layer for GitHub Releases (versioning, downloads, checksum verification). Used by the plugin system and workflow pack system.
 
 **`pkg/interpolation/`** - Variable interpolation (safe to import externally)
 

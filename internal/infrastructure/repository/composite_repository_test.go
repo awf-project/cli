@@ -286,3 +286,140 @@ states:
 		assert.Contains(t, names, "test-wf")
 	})
 }
+
+func TestCompositeRepository_SetPackPaths(t *testing.T) {
+	repo := NewCompositeRepository(nil)
+
+	t.Run("configures pack paths", func(t *testing.T) {
+		localDir := "/tmp/local/packs"
+		globalDir := "/tmp/global/packs"
+
+		repo.SetPackPaths(localDir, globalDir)
+
+		assert.Equal(t, localDir, repo.packLocalDir)
+		assert.Equal(t, globalDir, repo.packGlobalDir)
+	})
+}
+
+func TestCompositeRepository_LoadPack(t *testing.T) {
+	tmpDir := t.TempDir()
+	localPacksDir := filepath.Join(tmpDir, ".awf", "workflow-packs")
+	globalPacksDir := filepath.Join(tmpDir, "global", "workflow-packs")
+
+	require.NoError(t, os.MkdirAll(localPacksDir, 0o755))
+	require.NoError(t, os.MkdirAll(globalPacksDir, 0o755))
+
+	repo := NewCompositeRepository(nil)
+	repo.SetPackPaths(localPacksDir, globalPacksDir)
+
+	ctx := context.Background()
+
+	testWorkflow := `name: test-workflow
+version: "1.0.0"
+description: Test workflow in pack
+states:
+  initial: start
+  start:
+    type: terminal
+`
+
+	t.Run("loads workflow from local pack directory", func(t *testing.T) {
+		packDir := filepath.Join(localPacksDir, "testpack", "workflows")
+		require.NoError(t, os.MkdirAll(packDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(packDir, "hello.yaml"), []byte(testWorkflow), 0o644))
+
+		wf, err := repo.LoadPack(ctx, "testpack", "hello")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, wf)
+		assert.Equal(t, "test-workflow", wf.Name)
+		assert.Equal(t, "Test workflow in pack", wf.Description)
+	})
+
+	t.Run("falls back to global pack directory when not in local", func(t *testing.T) {
+		globalPackDir := filepath.Join(globalPacksDir, "globalpack", "workflows")
+		require.NoError(t, os.MkdirAll(globalPackDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(globalPackDir, "helper.yaml"), []byte(testWorkflow), 0o644))
+
+		wf, err := repo.LoadPack(ctx, "globalpack", "helper")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, wf)
+		assert.Equal(t, "test-workflow", wf.Name)
+	})
+
+	t.Run("local pack takes precedence over global", func(t *testing.T) {
+		packName := "priority-pack"
+		localPackDir := filepath.Join(localPacksDir, packName, "workflows")
+		globalPackDir := filepath.Join(globalPacksDir, packName, "workflows")
+
+		require.NoError(t, os.MkdirAll(localPackDir, 0o755))
+		require.NoError(t, os.MkdirAll(globalPackDir, 0o755))
+
+		localWf := `name: test-workflow
+version: "1.0.0"
+description: Local version
+states:
+  initial: start
+  start:
+    type: terminal
+`
+		globalWf := `name: test-workflow
+version: "2.0.0"
+description: Global version
+states:
+  initial: start
+  start:
+    type: terminal
+`
+		require.NoError(t, os.WriteFile(filepath.Join(localPackDir, "workflow.yaml"), []byte(localWf), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(globalPackDir, "workflow.yaml"), []byte(globalWf), 0o644))
+
+		wf, err := repo.LoadPack(ctx, packName, "workflow")
+
+		require.NoError(t, err)
+		require.NotNil(t, wf)
+		assert.Equal(t, "Local version", wf.Description)
+		assert.Equal(t, "1.0.0", wf.Version)
+	})
+
+	t.Run("returns error for non-existent workflow in pack", func(t *testing.T) {
+		packDir := filepath.Join(localPacksDir, "emptypack", "workflows")
+		require.NoError(t, os.MkdirAll(packDir, 0o755))
+
+		wf, err := repo.LoadPack(ctx, "emptypack", "nonexistent")
+
+		assert.Error(t, err)
+		assert.Nil(t, wf)
+
+		var se *domerrors.StructuredError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, domerrors.ErrorCodeUserInputMissingFile, se.Code)
+	})
+
+	t.Run("returns error for non-existent pack", func(t *testing.T) {
+		wf, err := repo.LoadPack(ctx, "nonexistent-pack", "any-workflow")
+
+		assert.Error(t, err)
+		assert.Nil(t, wf)
+
+		var se *domerrors.StructuredError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, domerrors.ErrorCodeUserInputMissingFile, se.Code)
+	})
+
+	t.Run("handles both local and global pack directories being empty", func(t *testing.T) {
+		localEmpty := filepath.Join(localPacksDir, "empty-pack", "workflows")
+		globalEmpty := filepath.Join(globalPacksDir, "empty-pack", "workflows")
+		require.NoError(t, os.MkdirAll(localEmpty, 0o755))
+		require.NoError(t, os.MkdirAll(globalEmpty, 0o755))
+
+		wf, err := repo.LoadPack(ctx, "empty-pack", "workflow")
+
+		assert.Error(t, err)
+		assert.Nil(t, wf)
+		var se *domerrors.StructuredError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, domerrors.ErrorCodeUserInputMissingFile, se.Code)
+	})
+}

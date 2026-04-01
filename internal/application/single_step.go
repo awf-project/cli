@@ -28,6 +28,7 @@ type SingleStepResult struct {
 // ExecuteSingleStep executes a single step from a workflow in isolation.
 // It bypasses the state machine and directly runs the specified step.
 // Mocked states can be provided to simulate dependencies on previous steps.
+// Supports pack workflows via namespace syntax (pack/workflow).
 func (s *ExecutionService) ExecuteSingleStep(
 	ctx context.Context,
 	workflowName string,
@@ -36,7 +37,26 @@ func (s *ExecutionService) ExecuteSingleStep(
 	mocks map[string]string,
 ) (*SingleStepResult, error) {
 	// Load workflow
-	wf, err := s.workflowSvc.GetWorkflow(ctx, workflowName)
+	var wf *workflow.Workflow
+	var err error
+
+	// Check if this is a pack workflow (contains "/" in the name)
+	if strings.Contains(workflowName, "/") {
+		// Use PackWorkflowLoader if available for pack workflows
+		if s.packWorkflowLoader != nil {
+			parts := strings.SplitN(workflowName, "/", 2)
+			if len(parts) == 2 {
+				wf, _, err = s.packWorkflowLoader(ctx, parts[0], parts[1])
+			}
+		}
+		if wf == nil && err == nil {
+			// Fallback: try standard workflow load (will likely fail with clear error)
+			wf, err = s.workflowSvc.GetWorkflow(ctx, workflowName)
+		}
+	} else {
+		// Regular local workflow
+		wf, err = s.workflowSvc.GetWorkflow(ctx, workflowName)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load workflow: %w", err)
 	}

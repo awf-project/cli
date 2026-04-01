@@ -43,6 +43,7 @@ Learn how to use AWF effectively:
 - [Retry Configuration](user-guide/retry.md) - Automatic retry with backoff strategies, delay capping, and exit code filtering
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types
+- [Workflow Packs](user-guide/commands.md#awf-workflow) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 

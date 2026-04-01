@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -21,6 +22,18 @@ var (
 	ErrSubWorkflowNotFound = errors.New("sub-workflow not found")
 )
 
+// SplitCallWorkflowName splits a call_workflow target into pack and workflow components.
+// Returns ("", name) for unnamespaced references, (pack, workflow) for namespaced ones.
+// Note: duplicates parseWorkflowNamespace in internal/interfaces/cli/pack_resolver.go
+// — cross-layer import (application→interfaces) is forbidden by go-arch-lint.
+func SplitCallWorkflowName(name string) (packName, workflowName string) {
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "", name
+}
+
 // executeCallWorkflowStep executes a call_workflow step that invokes another workflow as a sub-workflow.
 //
 // The method performs the following steps:
@@ -34,8 +47,6 @@ var (
 //  8. Maps sub-workflow outputs to parent step state
 //  9. Pops call stack
 //  10. Returns next step based on success/failure
-//
-// This is a stub implementation for TDD - returns "not implemented" error.
 //
 //nolint:gocognit // Complexity 43: subworkflow execution handles input mapping, nested workflow loading, execution, output capture, error propagation. Subworkflow orchestration requires this.
 func (s *ExecutionService) executeCallWorkflowStep(
@@ -65,10 +76,29 @@ func (s *ExecutionService) executeCallWorkflowStep(
 			step.Name, ErrCircularWorkflowCall, config.Workflow, execCtx.CallStack)
 	}
 
-	// 3. Load sub-workflow
-	_, err := s.workflowSvc.GetWorkflow(ctx, config.Workflow)
-	if err != nil {
-		return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, err)
+	// 3. Load sub-workflow — route namespaced references through the pack workflow loader.
+	packName, workflowTarget := SplitCallWorkflowName(config.Workflow)
+	var loadErr error
+	switch {
+	case packName != "":
+		// Namespaced (e.g. "other-pack/helper"): must use pack loader.
+		if s.packWorkflowLoader == nil {
+			return "", fmt.Errorf("step %s: pack workflow loader not configured for namespaced call %q", step.Name, config.Workflow)
+		}
+		if _, _, loadErr = s.packWorkflowLoader(ctx, packName, workflowTarget); loadErr != nil {
+			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
+		}
+	case s.awfPaths[AWFPackNameKey] != "" && s.packWorkflowLoader != nil:
+		// Unnamespaced within a pack context: try current pack first, fall back to standard.
+		if _, _, loadErr = s.packWorkflowLoader(ctx, s.awfPaths[AWFPackNameKey], workflowTarget); loadErr != nil {
+			if _, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
+				return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
+			}
+		}
+	default:
+		if _, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
+			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
+		}
 	}
 
 	// 4. Push current workflow to call stack

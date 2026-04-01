@@ -220,8 +220,18 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Merge config inputs with CLI inputs (CLI wins)
 	inputs = mergeInputs(projectCfg.Inputs, inputs)
 
+	// Parse namespace to check if this is a pack workflow
+	packName, workflowBase := parseWorkflowNamespace(workflowName)
+	var wf *workflow.Workflow
+
 	// Load workflow once for input collection check and later execution
-	wf, err := repo.Load(ctx, workflowName)
+	if packName != "" {
+		// Pack workflow: resolve from installed pack
+		wf, _, err = resolvePackWorkflow(ctx, packName, workflowBase, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
+	} else {
+		// Local workflow: use regular repository
+		wf, err = repo.Load(ctx, workflowName)
+	}
 	if err != nil {
 		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
@@ -275,7 +285,18 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
-	execSvc.SetAWFPaths(buildAWFPaths())
+
+	// Set AWF paths with pack context if applicable
+	if packName != "" {
+		execSvc.SetAWFPaths(buildPackAWFPaths(packName))
+	} else {
+		execSvc.SetAWFPaths(buildAWFPaths())
+	}
+
+	// Setup PackWorkflowLoader for C072 pack workflow resolution in subworkflow calls
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
+		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
+	})
 
 	// Setup audit trail writer (F071)
 	if auditWriter, auditCleanup, auditErr := buildAuditWriter(logger); auditErr != nil {
@@ -974,7 +995,19 @@ func runSingleStep(
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
-	execSvc.SetAWFPaths(buildAWFPaths())
+
+	// Parse namespace to set up pack context if applicable
+	packName, _ := parseWorkflowNamespace(workflowName)
+	if packName != "" {
+		execSvc.SetAWFPaths(buildPackAWFPaths(packName))
+	} else {
+		execSvc.SetAWFPaths(buildAWFPaths())
+	}
+
+	// Setup PackWorkflowLoader for C072 pack workflow resolution in subworkflow calls
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
+		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
+	})
 
 	// Setup operation providers gated by plugin enable/disable state
 	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)

@@ -20,6 +20,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// PackWorkflowLoader loads a workflow from an installed pack.
+// Returns the loaded workflow, the resolved pack directory, and an error.
+// Note: duplicates resolvePackWorkflow in internal/interfaces/cli/pack_resolver.go
+// — cross-layer import (application→interfaces) is forbidden by go-arch-lint.
+type PackWorkflowLoader func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error)
+
 // ConversationExecutor defines the interface for executing multi-turn conversations.
 // This interface allows for dependency injection and testing with mocks.
 type ConversationExecutor interface {
@@ -34,27 +40,28 @@ type ConversationExecutor interface {
 
 // ExecutionService orchestrates workflow execution.
 type ExecutionService struct {
-	workflowSvc       *WorkflowService
-	executor          ports.CommandExecutor
-	parallelExecutor  ports.ParallelExecutor
-	store             ports.StateStore
-	logger            ports.Logger
-	resolver          interpolation.Resolver
-	evaluator         ports.ExpressionEvaluator
-	hookExecutor      *HookExecutor
-	loopExecutor      *LoopExecutor
-	stdoutWriter      io.Writer
-	stderrWriter      io.Writer
-	historySvc        *HistoryService
-	templateSvc       *TemplateService
-	operationProvider ports.OperationProvider
-	agentRegistry     ports.AgentRegistry
-	pluginSvc         *PluginService
-	stepTypeProvider  ports.StepTypeProvider
-	conversationMgr   ConversationExecutor
-	outputLimiter     *OutputLimiter
-	awfPaths          map[string]string
-	auditTrailWriter  ports.AuditTrailWriter
+	workflowSvc        *WorkflowService
+	executor           ports.CommandExecutor
+	parallelExecutor   ports.ParallelExecutor
+	store              ports.StateStore
+	logger             ports.Logger
+	resolver           interpolation.Resolver
+	evaluator          ports.ExpressionEvaluator
+	hookExecutor       *HookExecutor
+	loopExecutor       *LoopExecutor
+	stdoutWriter       io.Writer
+	stderrWriter       io.Writer
+	historySvc         *HistoryService
+	templateSvc        *TemplateService
+	operationProvider  ports.OperationProvider
+	agentRegistry      ports.AgentRegistry
+	pluginSvc          *PluginService
+	stepTypeProvider   ports.StepTypeProvider
+	conversationMgr    ConversationExecutor
+	outputLimiter      *OutputLimiter
+	awfPaths           map[string]string
+	auditTrailWriter   ports.AuditTrailWriter
+	packWorkflowLoader PackWorkflowLoader
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -117,6 +124,13 @@ func (s *ExecutionService) SetPluginService(svc *PluginService) {
 // When nil, unknown step types fall through to the default command executor (backward compatible).
 func (s *ExecutionService) SetStepTypeProvider(provider ports.StepTypeProvider) {
 	s.stepTypeProvider = provider
+}
+
+// SetPackWorkflowLoader configures the pack workflow loader for C072 namespaced call_workflow resolution.
+// When set, namespaced call_workflow references (e.g. "pack/workflow") route through this loader.
+// When nil, namespaced references return an error (backward compatible for unnamespaced workflows).
+func (s *ExecutionService) SetPackWorkflowLoader(loader PackWorkflowLoader) {
+	s.packWorkflowLoader = loader
 }
 
 func (s *ExecutionService) resolveAuditUser() string {

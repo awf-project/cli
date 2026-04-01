@@ -1622,3 +1622,255 @@ func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 	assert.True(t, hasFailingCall, "call_failing step should be recorded")
 	assert.True(t, hasRecoveryCall, "recover step should be recorded")
 }
+
+// ===== T008: Workflow Pack Namespace Parsing and Resolution =====
+
+func TestSplitCallWorkflowName_Unnamespaced(t *testing.T) {
+	packName, workflowName := application.SplitCallWorkflowName("my-workflow")
+
+	assert.Equal(t, "", packName)
+	assert.Equal(t, "my-workflow", workflowName)
+}
+
+func TestSplitCallWorkflowName_Namespaced(t *testing.T) {
+	packName, workflowName := application.SplitCallWorkflowName("speckit/specify")
+
+	assert.Equal(t, "speckit", packName)
+	assert.Equal(t, "specify", workflowName)
+}
+
+func TestSplitCallWorkflowName_MultipleSlashes(t *testing.T) {
+	packName, workflowName := application.SplitCallWorkflowName("pack/workflow/extra")
+
+	assert.Equal(t, "pack", packName)
+	assert.Equal(t, "workflow/extra", workflowName)
+}
+
+func TestSplitCallWorkflowName_EmptyString(t *testing.T) {
+	packName, workflowName := application.SplitCallWorkflowName("")
+
+	assert.Equal(t, "", packName)
+	assert.Equal(t, "", workflowName)
+}
+
+func TestSplitCallWorkflowName_TrailingSlash(t *testing.T) {
+	packName, workflowName := application.SplitCallWorkflowName("pack/")
+
+	assert.Equal(t, "pack", packName)
+	assert.Equal(t, "", workflowName)
+}
+
+func TestSetPackWorkflowLoader(t *testing.T) {
+	execSvc, _ := NewTestHarness(t).Build()
+
+	called := false
+	loader := func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		called = true
+		return &workflow.Workflow{Name: workflowName}, "/pack/root", nil
+	}
+
+	execSvc.SetPackWorkflowLoader(loader)
+
+	testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, _, err := loader(testCtx, "test", "workflow")
+	assert.NoError(t, err)
+	assert.True(t, called)
+}
+
+func TestExecuteCallWorkflowStep_NamespacedWorkflow_WithLoader(t *testing.T) {
+	// Child workflow in "utils" pack
+	childWf := &workflow.Workflow{
+		Name:    "helper",
+		Initial: "work",
+		Inputs: []workflow.Input{
+			{Name: "value", Type: "string"},
+		},
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo {{.inputs.value}}",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	// Parent workflow calling namespaced child
+	parentWf := &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Inputs: []workflow.Input{
+			{Name: "msg", Type: "string"},
+		},
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name: "call",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "utils/helper",
+					Inputs: map[string]string{
+						"value": "{{.inputs.msg}}",
+					},
+					Outputs: map[string]string{
+						"work": "result",
+					},
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		WithWorkflow("utils/helper", childWf).
+		Build()
+
+	loaderCalled := false
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		loaderCalled = true
+		assert.Equal(t, "utils", packName)
+		assert.Equal(t, "helper", workflowName)
+		return childWf, "/pack/utils", nil
+	})
+
+	ctx, err := execSvc.Run(context.Background(), "parent", map[string]any{
+		"msg": "test",
+	})
+
+	require.NoError(t, err)
+	assert.True(t, loaderCalled, "pack workflow loader should be called")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
+
+func TestExecuteCallWorkflowStep_NamespacedWorkflow_NoLoader(t *testing.T) {
+	parentWf := &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name: "call",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "utils/helper",
+				},
+				OnFailure: "error",
+			},
+			"error": {
+				Name: "error",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		Build()
+
+	// Don't set pack workflow loader
+
+	_, err := execSvc.Run(context.Background(), "parent", nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pack workflow loader not configured")
+}
+
+func TestExecuteCallWorkflowStep_NamespacedWorkflow_LoaderError(t *testing.T) {
+	parentWf := &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name: "call",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "missing-pack/workflow",
+				},
+				OnFailure: "error",
+			},
+			"error": {
+				Name: "error",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		Build()
+
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		return nil, "", fmt.Errorf("pack not found")
+	})
+
+	_, err := execSvc.Run(context.Background(), "parent", nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "load sub-workflow")
+	assert.Contains(t, err.Error(), "pack not found")
+}
+
+func TestExecuteCallWorkflowStep_UnnamespacedWorkflow_WithLoader(t *testing.T) {
+	// When loader is set but workflow is unnamespaced, standard resolution applies
+	childWf := &workflow.Workflow{
+		Name:    "local-child",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {
+				Name:      "work",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo ok",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	parentWf := &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name: "call",
+				Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{
+					Workflow: "local-child",
+				},
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		WithWorkflow("local-child", childWf).
+		Build()
+
+	loaderCalled := false
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		loaderCalled = true
+		return nil, "", fmt.Errorf("should not be called for unnamespaced workflows")
+	})
+
+	ctx, err := execSvc.Run(context.Background(), "parent", nil)
+
+	require.NoError(t, err)
+	assert.False(t, loaderCalled, "loader should not be called for unnamespaced workflows")
+	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+}
