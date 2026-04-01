@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Synthesize inline on_failure objects into anonymous terminal steps at YAML parse time via normalizeOnFailure() and synthesizeInlineErrorTerminal() in infrastructure layer; domain Step.OnFailure remains string type with zero changes to existing consumers
 - Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
 - All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
 - When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
@@ -239,6 +238,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Keep thin wrapper functions in original location for backward compatibility; delegate completely to extracted packages to maintain single source of truth
 - Verify pkg/ package extractions are complete by confirming orphaned imports are removed and make lint passes with zero violations
 - Extract duplicate interface types across packages when structurally identical; avoid declaring the same type signature in multiple infrastructure files
+- Extract shared configuration keys as named constants in the application layer (e.g., AWFPackNameKey); import and use throughout codebase rather than duplicating string literals
 
 ## Common Pitfalls
 

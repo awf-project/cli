@@ -8,7 +8,8 @@ title: "CLI Commands"
 |---------|-------------|
 | `awf init` | Initialize AWF in current directory |
 | `awf init --global` | Initialize global prompts and scripts directories |
-| `awf run <workflow>` | Execute a workflow |
+| `awf run <workflow>` | Execute a local workflow |
+| `awf run <pack/workflow>` | Execute a workflow from an installed pack |
 | `awf resume [workflow-id]` | Resume an interrupted workflow |
 | `awf list` | List available workflows |
 | `awf list prompts` | List available prompt files |
@@ -189,6 +190,31 @@ awf run deploy --step deploy_step --mock states.build.Output="build-123"
 # View workflow help with input parameters
 awf run deploy --help
 ```
+
+### Running Pack Workflows
+
+Installed workflow packs provide namespaced workflows accessible via `pack/workflow` syntax:
+
+```bash
+# Run a workflow from an installed pack
+awf run speckit/specify --input file=main.go
+
+# Pack workflows resolve prompts and scripts from the pack's embedded files
+# User overrides in .awf/prompts/<pack>/ and .awf/scripts/<pack>/ take precedence
+
+# Dry-run a pack workflow
+awf run speckit/specify --dry-run
+
+# Local workflows (no namespace) are unaffected
+awf run my-local-workflow
+```
+
+**Resolution order for pack resources:**
+1. `.awf/prompts/<pack>/...` — user override (highest priority)
+2. `.awf/workflow-packs/<pack>/prompts/...` — pack embedded
+3. `~/.config/awf/prompts/...` — global XDG (lowest priority)
+
+---
 
 ### Interactive Input Collection
 

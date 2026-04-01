@@ -295,36 +295,63 @@ When using `{{.awf.prompts_dir}}` or `{{.awf.scripts_dir}}`, AWF implements **lo
 - **In `command` fields** — `command: "source {{.awf.scripts_dir}}/helpers.sh && deploy"`
 - **In `dir` fields** — `dir: "{{.awf.scripts_dir}}"`
 
-Resolution process:
+##### Local Workflows (2-tier)
 
-1. **Local override preferred** — If a file exists in the workflow's local directory (`<workflow_dir>/prompts/` or `<workflow_dir>/scripts/`), it is used
-2. **Global fallback** — If no local file exists, the global XDG directory is used
-3. **Example**: Any reference to `{{.awf.scripts_dir}}/deploy.sh` checks for:
-   - `<workflow_dir>/scripts/deploy.sh` (local override)
-   - Then `~/.config/awf/scripts/deploy.sh` (global fallback)
+For local workflows (no pack context), resolution is 2-tier:
 
-This allows teams to maintain shared scripts and templates globally while letting projects override them locally:
+1. **Local override** — `<workflow_dir>/prompts/` or `<workflow_dir>/scripts/`
+2. **Global fallback** — `~/.config/awf/prompts/` or `~/.config/awf/scripts/`
+
+**Example**: `{{.awf.scripts_dir}}/deploy.sh` checks:
+- `<workflow_dir>/scripts/deploy.sh` (local override)
+- Then `~/.config/awf/scripts/deploy.sh` (global fallback)
+
+##### Pack Workflows (3-tier)
+
+When executing a workflow from an installed pack (e.g., `awf run speckit/specify`), resolution extends to 3 tiers:
+
+1. **User override** (highest priority) — `.awf/prompts/<pack>/...` or `.awf/scripts/<pack>/...`
+2. **Pack embedded** — `<pack_root>/prompts/...` or `<pack_root>/scripts/...`
+3. **Global XDG** (lowest priority) — `~/.config/awf/prompts/...` or `~/.config/awf/scripts/...`
+
+**Example**: Pack `speckit` references `{{.awf.prompts_dir}}/specify/system-prompt.md`:
+```
+1. .awf/prompts/speckit/specify/system-prompt.md        ← user override (checked first)
+2. .awf/workflow-packs/speckit/prompts/specify/...       ← pack embedded
+3. ~/.config/awf/prompts/specify/...                     ← global fallback
+```
+
+No new template variables are introduced. `{{.awf.prompts_dir}}` and `{{.awf.scripts_dir}}` are context-aware — they automatically resolve based on whether the workflow is local or from an installed pack.
+
+##### Override Example
 
 ```yaml
-# Project structure
+# Project structure with pack override
 my-project/
 ├── .awf/
 │   ├── workflows/
 │   │   └── deploy.yaml
-│   └── scripts/
-│       └── deploy.sh        # Local override — takes precedence
+│   ├── prompts/
+│   │   └── speckit/              # User overrides for speckit pack
+│   │       └── specify/
+│   │           └── system-prompt.md
+│   ├── scripts/
+│   │   └── deploy.sh            # Local override for local workflows
+│   └── workflow-packs/
+│       └── speckit/              # Installed pack
+│           ├── manifest.yaml
+│           ├── workflows/
+│           ├── prompts/          # Pack-embedded prompts (overridden above)
+│           └── scripts/
 └── ...
 
 # ~/.config/awf/scripts/deploy.sh exists globally but is superseded
 
-# Example workflow that demonstrates the resolution
+# Local workflow: uses 2-tier resolution
 states:
   deploy:
     type: step
-    # Both approaches use the same resolution:
     script_file: "{{.awf.scripts_dir}}/deploy.sh"    # Uses local scripts/deploy.sh if present
-    # OR
-    command: "source {{.awf.scripts_dir}}/deploy.sh" # Same resolution as above
     on_success: done
 ```
 

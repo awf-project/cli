@@ -1337,6 +1337,38 @@ aggregate_results:
   on_success: done
 ```
 
+### Pack Workflow Resolution
+
+When a `call_workflow` is executed within an installed pack, workflow name resolution follows these rules:
+
+| Syntax | Resolution |
+|--------|------------|
+| `workflow: helper` | Resolves relative to the current pack's `workflows/` directory first, then falls back to local workflows |
+| `workflow: other-pack/helper` | Resolves to the `helper` workflow in the `other-pack` installed pack |
+| `workflow: my-local-wf` | If no pack context, resolves as a local workflow (existing behavior) |
+
+```yaml
+# Inside pack "speckit", this resolves to speckit's own workflows/ directory first
+analyze:
+  type: call_workflow
+  call_workflow:
+    workflow: analyze-helper
+    inputs:
+      file: "{{.inputs.target}}"
+  on_success: done
+
+# Cross-pack reference: resolves to another installed pack
+validate:
+  type: call_workflow
+  call_workflow:
+    workflow: linter/check-syntax
+    inputs:
+      source: "{{.states.analyze.Output}}"
+  on_success: done
+```
+
+For local workflows (no pack context), `call_workflow` resolution is unchanged.
+
 ### Nested Sub-Workflows
 
 Sub-workflows can call other sub-workflows. AWF tracks the call stack to detect circular references:

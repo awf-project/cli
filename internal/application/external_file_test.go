@@ -567,3 +567,529 @@ func TestResolveLocalOverGlobal(t *testing.T) {
 		})
 	}
 }
+
+// T005: 3-tier pack path resolution tests
+
+func TestResolvePackPathTiers_Tier1_UserOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tier1Dir := filepath.Join(tmpDir, ".awf", "prompts", "speckit")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+
+	tier1File := filepath.Join(tier1Dir, "example.txt")
+	require.NoError(t, os.WriteFile(tier1File, []byte("tier 1 - user override"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+
+	resolved := resolvePackPathTiers("example.txt", "prompts_dir", "speckit", sourceDir)
+
+	assert.Equal(t, tier1File, resolved, "should resolve to tier 1 user override")
+}
+
+func TestResolvePackPathTiers_Tier2_PackEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	packRoot := filepath.Join(tmpDir, "packs", "speckit")
+	tier2Dir := filepath.Join(packRoot, "prompts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+
+	tier2File := filepath.Join(tier2Dir, "example.txt")
+	require.NoError(t, os.WriteFile(tier2File, []byte("tier 2 - pack embedded"), 0o644))
+
+	sourceDir := filepath.Join(packRoot, "workflows", "spec.yaml")
+
+	resolved := resolvePackPathTiers("example.txt", "prompts_dir", "speckit", sourceDir)
+
+	assert.Equal(t, tier2File, resolved, "should resolve to tier 2 pack embedded")
+}
+
+func TestResolvePackPathTiers_Tier1PrecedeseTier2(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tier1Dir := filepath.Join(tmpDir, ".awf", "prompts", "speckit")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+	tier1File := filepath.Join(tier1Dir, "example.txt")
+	require.NoError(t, os.WriteFile(tier1File, []byte("tier 1"), 0o644))
+
+	packRoot := filepath.Join(tmpDir, "packs", "speckit")
+	tier2Dir := filepath.Join(packRoot, "prompts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+	tier2File := filepath.Join(tier2Dir, "example.txt")
+	require.NoError(t, os.WriteFile(tier2File, []byte("tier 2"), 0o644))
+
+	sourceDir := filepath.Join(packRoot, "workflows", "spec.yaml")
+
+	resolved := resolvePackPathTiers("example.txt", "prompts_dir", "speckit", sourceDir)
+
+	assert.Equal(t, tier1File, resolved, "tier 1 should take precedence over tier 2")
+}
+
+func TestResolvePackPathTiers_NoTierExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+
+	resolved := resolvePackPathTiers("missing.txt", "prompts_dir", "speckit", sourceDir)
+
+	assert.Equal(t, "", resolved, "should return empty string when no tiers exist")
+}
+
+func TestResolvePackPathTiers_NestedPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tier1Dir := filepath.Join(tmpDir, ".awf", "scripts", "mypack")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+
+	nestedPath := filepath.Join(tier1Dir, "ci", "build.sh")
+	require.NoError(t, os.MkdirAll(filepath.Dir(nestedPath), 0o755))
+	require.NoError(t, os.WriteFile(nestedPath, []byte("build script"), 0o755))
+
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+
+	resolved := resolvePackPathTiers("ci/build.sh", "scripts_dir", "mypack", sourceDir)
+
+	assert.Equal(t, nestedPath, resolved, "should resolve nested paths correctly")
+}
+
+func TestExtractFilePathSuffix_SimpleFile(t *testing.T) {
+	suffix := extractFilePathSuffix("script.sh arg1 arg2")
+	assert.Equal(t, "script.sh", suffix)
+}
+
+func TestExtractFilePathSuffix_PathWithDirs(t *testing.T) {
+	suffix := extractFilePathSuffix("subdir/script.sh | other")
+	assert.Equal(t, "subdir/script.sh", suffix)
+}
+
+func TestExtractFilePathSuffix_QuoteBoundary(t *testing.T) {
+	suffix := extractFilePathSuffix(`script.sh" args`)
+	assert.Equal(t, "script.sh", suffix)
+}
+
+func TestExtractFilePathSuffix_PipeBoundary(t *testing.T) {
+	suffix := extractFilePathSuffix("script.sh | cat file")
+	assert.Equal(t, "script.sh", suffix)
+}
+
+func TestExtractFilePathSuffix_AmpersandBoundary(t *testing.T) {
+	suffix := extractFilePathSuffix("script.sh & other_cmd")
+	assert.Equal(t, "script.sh", suffix)
+}
+
+func TestExtractFilePathSuffix_EmptyString(t *testing.T) {
+	suffix := extractFilePathSuffix("")
+	assert.Equal(t, "", suffix)
+}
+
+func TestExtractFilePathSuffix_NoDelimiter(t *testing.T) {
+	suffix := extractFilePathSuffix("script.sh")
+	assert.Equal(t, "script.sh", suffix)
+}
+
+func TestReplaceAWFPathsInString_SingleReplacement(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	localFile := filepath.Join(localDir, "test.sh")
+	require.NoError(t, os.WriteFile(localFile, []byte("#!/bin/bash"), 0o755))
+
+	globalDir := "/global/scripts"
+	cmdStr := globalDir + "/test.sh arg1"
+
+	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+
+	assert.Equal(t, localFile+" arg1", result, "should replace single occurrence")
+}
+
+func TestReplaceAWFPathsInString_MultipleReplacements(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	file1 := filepath.Join(localDir, "script1.sh")
+	file2 := filepath.Join(localDir, "script2.sh")
+	require.NoError(t, os.WriteFile(file1, []byte("#!/bin/bash"), 0o755))
+	require.NoError(t, os.WriteFile(file2, []byte("#!/bin/bash"), 0o755))
+
+	globalDir := "/global/scripts"
+	cmdStr := globalDir + "/script1.sh && " + globalDir + "/script2.sh"
+
+	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+
+	expected := file1 + " && " + file2
+	assert.Equal(t, expected, result, "should replace all occurrences")
+}
+
+func TestReplaceAWFPathsInString_SkipMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	existingFile := filepath.Join(localDir, "exists.sh")
+	require.NoError(t, os.WriteFile(existingFile, []byte("#!/bin/bash"), 0o755))
+
+	globalDir := "/global/scripts"
+	cmdStr := globalDir + "/missing.sh && " + globalDir + "/exists.sh"
+
+	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+
+	expected := globalDir + "/missing.sh && " + existingFile
+	assert.Equal(t, expected, result, "should keep unresolvable paths unchanged and replace resolvable ones")
+}
+
+func TestReplaceAWFPathsInString_NoOccurrences(t *testing.T) {
+	cmdStr := "echo hello world"
+	globalDir := "/global/scripts"
+	localDir := "/local/scripts"
+
+	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+
+	assert.Equal(t, cmdStr, result, "should return unchanged when no matches")
+}
+
+func TestReplaceAWFPathsInString_PartialMatch(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	// /global/scripts is not followed by separator
+	cmdStr := "/global/scripts-version/file.sh"
+	result := replaceAWFPathsInString(cmdStr, "/global/scripts", localDir)
+
+	assert.Equal(t, cmdStr, result, "should not replace partial matches")
+}
+
+func TestResolveCommandAWFPaths_LocalWorkflowResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	localFile := filepath.Join(localDir, "test.sh")
+	require.NoError(t, os.WriteFile(localFile, []byte("#!/bin/bash"), 0o755))
+
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/test.sh arg1"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, localFile+" arg1", result, "should resolve to local path")
+}
+
+func TestResolveCommandAWFPaths_EmptyCommand(t *testing.T) {
+	sourceDir := "/some/workflow.yaml"
+	awfMap := map[string]string{
+		"scripts_dir": "/global/scripts",
+	}
+
+	result := resolveCommandAWFPaths("", sourceDir, awfMap)
+
+	assert.Equal(t, "", result, "should return empty string for empty command")
+}
+
+func TestResolveCommandAWFPaths_EmptyAWFMap(t *testing.T) {
+	cmd := "echo hello"
+	sourceDir := "/some/workflow.yaml"
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, map[string]string{})
+
+	assert.Equal(t, cmd, result, "should return command unchanged with empty awfMap")
+}
+
+func TestResolveCommandAWFPaths_DirectoryField(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+	globalDir := "/global/scripts"
+
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+	}
+
+	result := resolveCommandAWFPaths(globalDir, sourceDir, awfMap)
+
+	assert.Equal(t, localDir, result, "should resolve directory field to local path")
+}
+
+func TestResolveCommandAWFPaths_MultiplePrompts(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prompts := filepath.Join(tmpDir, "prompts")
+	require.NoError(t, os.MkdirAll(prompts, 0o755))
+
+	file := filepath.Join(prompts, "system.md")
+	require.NoError(t, os.WriteFile(file, []byte("prompt"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, "workflow.yaml")
+	globalDir := "/global/prompts"
+
+	cmd := globalDir + "/system.md"
+	awfMap := map[string]string{
+		"prompts_dir": globalDir,
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, file, result, "should resolve prompts_dir correctly")
+}
+
+// T006: Pack context tests for resolveCommandAWFPaths with 3-tier resolution
+func TestResolveCommandAWFPaths_PackContext_Tier1UserOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup project structure with user override in tier 1
+	tier1Dir := filepath.Join(tmpDir, ".awf", "scripts", "mypack")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+
+	tier1File := filepath.Join(tier1Dir, "deploy.sh")
+	require.NoError(t, os.WriteFile(tier1File, []byte("#!/bin/bash\necho 'local override'"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, "workflows", "myworkflow.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/deploy.sh"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, tier1File, result, "should resolve from tier 1 user override")
+}
+
+func TestResolveCommandAWFPaths_PackContext_Tier2PackEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup pack structure with tier 2 embedded file
+	packRoot := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack")
+	tier2Dir := filepath.Join(packRoot, "scripts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+
+	tier2File := filepath.Join(tier2Dir, "test.sh")
+	require.NoError(t, os.WriteFile(tier2File, []byte("#!/bin/bash\necho 'pack embedded'"), 0o644))
+
+	sourceDir := filepath.Join(packRoot, "workflows", "myworkflow.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/test.sh"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, tier2File, result, "should resolve from tier 2 pack embedded")
+}
+
+func TestResolveCommandAWFPaths_PackContext_Tier1PrecedesTier2(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup both tier 1 and tier 2 with same file
+	tier1Dir := filepath.Join(tmpDir, ".awf", "scripts", "mypack")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+	tier1File := filepath.Join(tier1Dir, "deploy.sh")
+	require.NoError(t, os.WriteFile(tier1File, []byte("tier1"), 0o644))
+
+	tier2Dir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "scripts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+	tier2File := filepath.Join(tier2Dir, "deploy.sh")
+	require.NoError(t, os.WriteFile(tier2File, []byte("tier2"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "workflows", "wf.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/deploy.sh"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, tier1File, result, "tier 1 should take precedence over tier 2")
+}
+
+func TestResolveCommandAWFPaths_PackContext_NoTierExists(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	sourceDir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "workflows", "wf.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/nonexistent.sh"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, cmd, result, "should return original path when no tiers exist")
+}
+
+func TestResolveCommandAWFPaths_LocalWorkflow_NoPackContext(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup local workflow structure (no pack)
+	localDir := filepath.Join(tmpDir, "scripts")
+	require.NoError(t, os.MkdirAll(localDir, 0o755))
+
+	localFile := filepath.Join(localDir, "setup.sh")
+	require.NoError(t, os.WriteFile(localFile, []byte("#!/bin/bash\necho 'local'"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, "myworkflow.yaml")
+	globalDir := "/global/scripts"
+
+	cmd := globalDir + "/setup.sh"
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, localFile, result, "local workflows should use 2-tier resolution")
+}
+
+func TestResolveCommandAWFPaths_PackContext_PromptsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup pack structure with prompts_dir
+	tier1Dir := filepath.Join(tmpDir, ".awf", "prompts", "speckit")
+	require.NoError(t, os.MkdirAll(tier1Dir, 0o755))
+
+	promptFile := filepath.Join(tier1Dir, "system.md")
+	require.NoError(t, os.WriteFile(promptFile, []byte("# System Prompt"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, "workflows", "specify.yaml")
+	globalDir := "/global/prompts"
+
+	cmd := globalDir + "/system.md"
+	awfMap := map[string]string{
+		"prompts_dir": globalDir,
+		"pack_name":   "speckit",
+	}
+
+	result := resolveCommandAWFPaths(cmd, sourceDir, awfMap)
+
+	assert.Equal(t, promptFile, result, "should resolve prompts_dir with pack context")
+}
+
+func TestResolveCommandAWFPaths_PackContext_DirectoryField(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup pack structure
+	tier2Dir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "scripts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+
+	sourceDir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "workflows", "wf.yaml")
+	globalDir := "/global/scripts"
+
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	result := resolveCommandAWFPaths(globalDir, sourceDir, awfMap)
+
+	assert.Equal(t, tier2Dir, result, "should resolve directory field with 3-tier resolution")
+}
+
+func TestResolveCommandAWFPaths_PackContext_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup pack with multiple script files
+	tier2Dir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "scripts")
+	require.NoError(t, os.MkdirAll(tier2Dir, 0o755))
+
+	file1 := filepath.Join(tier2Dir, "build.sh")
+	file2 := filepath.Join(tier2Dir, "deploy.sh")
+	require.NoError(t, os.WriteFile(file1, []byte("build"), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte("deploy"), 0o644))
+
+	sourceDir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "workflows", "wf.yaml")
+	globalDir := "/global/scripts"
+
+	awfMap := map[string]string{
+		"scripts_dir": globalDir,
+		"pack_name":   "mypack",
+	}
+
+	// Test first file
+	cmd1 := globalDir + "/build.sh"
+	result1 := resolveCommandAWFPaths(cmd1, sourceDir, awfMap)
+	assert.Equal(t, file1, result1, "should resolve first file")
+
+	// Test second file
+	cmd2 := globalDir + "/deploy.sh"
+	result2 := resolveCommandAWFPaths(cmd2, sourceDir, awfMap)
+	assert.Equal(t, file2, result2, "should resolve second file")
+}
+
+func TestFindPackLocalDir_Tier1_UserOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup tier 1 user override
+	tier1 := filepath.Join(tmpDir, ".awf", "scripts", "mypack")
+	require.NoError(t, os.MkdirAll(tier1, 0o755))
+
+	sourceDir := filepath.Join(tmpDir, "workflows", "wf.yaml")
+
+	result := findPackLocalDir(sourceDir, "scripts", "mypack")
+
+	assert.Equal(t, tier1, result, "should find tier 1 user override directory")
+}
+
+func TestFindPackLocalDir_Tier2_PackEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup tier 2 pack embedded (no tier 1)
+	tier2 := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "scripts")
+	require.NoError(t, os.MkdirAll(tier2, 0o755))
+
+	sourceDir := filepath.Join(tmpDir, ".awf", "workflow-packs", "mypack", "workflows", "wf.yaml")
+
+	result := findPackLocalDir(sourceDir, "scripts", "mypack")
+
+	assert.Equal(t, tier2, result, "should find tier 2 pack embedded directory")
+}
+
+func TestFindPackLocalDir_ParentDirectorySearch(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Setup tier 1 at project root level
+	tier1 := filepath.Join(tmpDir, ".awf", "scripts", "mypack")
+	require.NoError(t, os.MkdirAll(tier1, 0o755))
+
+	// Source is nested deeper
+	sourceDir := filepath.Join(tmpDir, "subdir", "workflows", "wf.yaml")
+
+	result := findPackLocalDir(sourceDir, "scripts", "mypack")
+
+	assert.Equal(t, tier1, result, "should find tier 1 by walking up parent directories")
+}
+
+func TestFindPackLocalDir_Fallback(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	sourceDir := filepath.Join(tmpDir, "workflows", "wf.yaml")
+
+	result := findPackLocalDir(sourceDir, "scripts", "mypack")
+
+	// Fallback returns filepath.Join(filepath.Dir(sourceDir), localSubdir)
+	// sourceDir parent is tmpDir/workflows, so fallback is tmpDir/workflows/scripts
+	expected := filepath.Join(tmpDir, "workflows", "scripts")
+	assert.Equal(t, expected, result, "should return fallback path when no tiers exist")
+}

@@ -12,15 +12,24 @@ import (
 	"github.com/awf-project/cli/pkg/interpolation"
 )
 
-const maxExternalFileSize = 1024 * 1024
+const (
+	maxExternalFileSize = 1024 * 1024
+	// AWFPackNameKey is the awfMap key used to inject pack context into path resolution.
+	// When set, resolveLocalOverGlobal and resolveCommandAWFPaths apply 3-tier pack resolution.
+	AWFPackNameKey = "pack_name"
+)
 
 // allowedAWFPathKeys lists the AWF map keys eligible for local-over-global path resolution.
 // Only scripts_dir and prompts_dir can have workflow-local overrides.
 var allowedAWFPathKeys = []string{"scripts_dir", "prompts_dir"}
 
-// resolveLocalOverGlobal prefers a workflow-local file over the global XDG path when the
-// interpolated path falls under scripts_dir or prompts_dir. Returns the original path otherwise.
+// resolveLocalOverGlobal provides 2-tier or 3-tier path resolution depending on context:
+// - For local workflows (no pack context): checks .awf/<type>/ then falls back to global XDG
+// - For pack workflows (pack_name in awfMap): checks .awf/<type>/<pack>/ → <pack_root>/<type>/ → global XDG
+// Signature unchanged for backward compatibility; pack context is injected via awfMap["pack_name"].
 func resolveLocalOverGlobal(interpolatedPath, sourceDir string, awfMap map[string]string) string {
+	packName := awfMap[AWFPackNameKey]
+
 	for _, key := range allowedAWFPathKeys {
 		globalDir, ok := awfMap[key]
 		if !ok || globalDir == "" {
@@ -32,8 +41,19 @@ func resolveLocalOverGlobal(interpolatedPath, sourceDir string, awfMap map[strin
 			continue
 		}
 
-		// Derive local subdir name from map key: "scripts_dir" → "scripts"
-		// Resolve against parent of sourceDir: .awf/workflows/ → .awf/scripts/
+		// For pack workflows, implement 3-tier resolution:
+		// 1. User override in .awf/<type>/<pack>/suffix
+		// 2. Pack embedded in <pack_root>/<type>/suffix
+		// 3. Global XDG (fallback, same as local workflows)
+		if packName != "" {
+			if path := resolvePackPathTiers(suffix, key, packName, sourceDir); path != "" {
+				return path
+			}
+		}
+
+		// For local workflows or when pack tiers don't exist, fall back to local-over-global (2-tier):
+		// 1. .awf/<type>/suffix
+		// 2. Global XDG
 		localSubdir := strings.TrimSuffix(key, "_dir")
 		localPath := filepath.Join(filepath.Dir(sourceDir), localSubdir, suffix)
 
@@ -43,6 +63,77 @@ func resolveLocalOverGlobal(interpolatedPath, sourceDir string, awfMap map[strin
 	}
 
 	return interpolatedPath
+}
+
+// resolvePackPathTiers implements 3-tier resolution for pack workflows:
+// Tier 1: .awf/<type>/<pack>/suffix (user override, found by searching parent directories)
+// Tier 2: <pack_root>/<type>/suffix (embedded in pack)
+// Tier 3: handled by caller (global XDG fallback)
+// Returns the resolved path if found, empty string if no tiers resolve.
+func resolvePackPathTiers(suffix, dirKey, packName, sourceDir string) string {
+	// Derive <type> from dirKey: "scripts_dir" → "scripts"
+	dirType := strings.TrimSuffix(dirKey, "_dir")
+
+	// Tier 1: Check .awf/<type>/<pack>/<suffix> (user override, found by searching parent directories)
+	sourceDir = filepath.Clean(sourceDir)
+	currentDir := filepath.Dir(sourceDir)
+	for {
+		tier1Path := filepath.Join(currentDir, ".awf", dirType, packName, suffix)
+		if _, err := os.Stat(tier1Path); err == nil {
+			return tier1Path
+		}
+
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			break
+		}
+		currentDir = parentDir
+	}
+
+	// Tier 2: Check <pack_root>/<type>/<suffix> (embedded in pack)
+	// Derive pack root from sourceDir: assuming format is .../workflows/<file>
+	sourceDirParent := filepath.Dir(sourceDir)
+	if filepath.Base(sourceDirParent) == "workflows" {
+		packRoot := filepath.Dir(sourceDirParent)
+		tier2Path := filepath.Join(packRoot, dirType, suffix)
+		if _, err := os.Stat(tier2Path); err == nil {
+			return tier2Path
+		}
+	}
+
+	return ""
+}
+
+// findPackLocalDir finds the appropriate local directory for pack resources by trying
+// the 3-tier resolution chain: tier 1 (user override), tier 2 (pack embedded), or fallback.
+func findPackLocalDir(sourceDir, localSubdir, packName string) string {
+	// Tier 1: Check .awf/<type>/<pack>/ (user override)
+	currentDir := filepath.Dir(sourceDir)
+	for {
+		tier1Dir := filepath.Join(currentDir, ".awf", localSubdir, packName)
+		if _, err := os.Stat(tier1Dir); err == nil {
+			return tier1Dir
+		}
+
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			break
+		}
+		currentDir = parentDir
+	}
+
+	// Tier 2: Check <pack_root>/<type>/ (embedded in pack)
+	sourceDirParent := filepath.Dir(sourceDir)
+	if filepath.Base(sourceDirParent) == "workflows" {
+		packRoot := filepath.Dir(sourceDirParent)
+		tier2Dir := filepath.Join(packRoot, localSubdir)
+		if _, err := os.Stat(tier2Dir); err == nil {
+			return tier2Dir
+		}
+	}
+
+	// Fallback: use source dir parent, will be caught by replaceAWFPathsInString
+	return filepath.Join(filepath.Dir(sourceDir), localSubdir)
 }
 
 // extractFilePathSuffix extracts the filename/path component after a directory prefix in a string.
@@ -59,14 +150,14 @@ func extractFilePathSuffix(remainingStr string) string {
 }
 
 // resolveCommandAWFPaths replaces global AWF paths with local equivalents within a command/dir string.
-// For each AWF path variable that appears, checks if a local .awf/<type>/ equivalent exists
-// and replaces the global path with the local path if it does.
-// This handles FR-001/FR-002 for command and dir fields where AWF variables are interpolated.
+// For pack workflows, applies 3-tier resolution; for local workflows, applies 2-tier.
+// Signature unchanged; pack context injected via awfMap["pack_name"].
 func resolveCommandAWFPaths(cmd, sourceDir string, awfMap map[string]string) string {
 	if cmd == "" || len(awfMap) == 0 {
 		return cmd
 	}
 
+	packName := awfMap[AWFPackNameKey]
 	result := cmd
 
 	for _, key := range allowedAWFPathKeys {
@@ -76,7 +167,15 @@ func resolveCommandAWFPaths(cmd, sourceDir string, awfMap map[string]string) str
 		}
 
 		localSubdir := strings.TrimSuffix(key, "_dir")
-		localDir := filepath.Join(filepath.Dir(sourceDir), localSubdir)
+
+		// For pack workflows, resolve via 3-tier chain; for local workflows, use standard 2-tier
+		var localDir string
+		if packName != "" {
+			localDir = findPackLocalDir(sourceDir, localSubdir, packName)
+		} else {
+			// For local workflows, use standard 2-tier resolution
+			localDir = filepath.Join(filepath.Dir(sourceDir), localSubdir)
+		}
 
 		// Handle case where entire string is just the global directory (e.g., Dir field)
 		if result == globalDir {

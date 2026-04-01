@@ -20,8 +20,10 @@ type SourcedPath struct {
 // CompositeRepository aggregates multiple YAMLRepository instances with priority
 // Earlier paths take precedence over later ones for workflows with the same name
 type CompositeRepository struct {
-	paths []SourcedPath
-	repos map[Source]*YAMLRepository
+	paths         []SourcedPath
+	repos         map[Source]*YAMLRepository
+	packLocalDir  string
+	packGlobalDir string
 }
 
 func NewCompositeRepository(paths []SourcedPath) *CompositeRepository {
@@ -138,4 +140,44 @@ func (r *CompositeRepository) Exists(ctx context.Context, name string) (bool, er
 func (r *CompositeRepository) pathExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// SetPackPaths configures the local and global workflow pack base directories.
+// localPacksDir is typically .awf/workflow-packs/ and globalPacksDir is the XDG data equivalent.
+func (r *CompositeRepository) SetPackPaths(localPacksDir, globalPacksDir string) {
+	r.packLocalDir = localPacksDir
+	r.packGlobalDir = globalPacksDir
+}
+
+// LoadPack loads a workflow from an installed pack directory.
+// It searches the local pack directory first, then falls back to global.
+func (r *CompositeRepository) LoadPack(ctx context.Context, packName, workflowName string) (*workflow.Workflow, error) {
+	searchDirs := []string{r.packLocalDir, r.packGlobalDir}
+
+	for _, baseDir := range searchDirs {
+		if baseDir == "" {
+			continue
+		}
+		packWorkflowsDir := filepath.Join(baseDir, packName, "workflows")
+		if !r.pathExists(packWorkflowsDir) {
+			continue
+		}
+		repo := NewYAMLRepository(packWorkflowsDir)
+		wf, err := repo.Load(ctx, workflowName)
+		if err != nil {
+			var se *domerrors.StructuredError
+			if errors.As(err, &se) && se.Code == domerrors.ErrorCodeUserInputMissingFile {
+				continue
+			}
+			return nil, err
+		}
+		return wf, nil
+	}
+
+	return nil, domerrors.NewUserError(
+		domerrors.ErrorCodeUserInputMissingFile,
+		fmt.Sprintf("workflow %q not found in pack %q", workflowName, packName),
+		map[string]any{"pack": packName, "workflow": workflowName},
+		nil,
+	)
 }

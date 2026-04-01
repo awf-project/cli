@@ -205,7 +205,7 @@ Implements domain ports with concrete technologies.
 - `xdg/` - XDG directory discovery
 
 **Shared Packages (`pkg/`):**
-- `pkg/registry/` - Shared GitHub Releases transport (versioning, downloads, checksum verification) used by plugin system and forthcoming workflow pack system
+- `pkg/registry/` - Shared GitHub Releases transport (versioning, downloads, checksum verification) used by plugin system and workflow pack system
 - `pkg/httpx/` - HTTP client abstractions (`HTTPDoer` interface, size-limited reads)
 - `pkg/plugin/sdk/` - Plugin author SDK (`Serve()`, `BasePlugin`, input helpers)
 
