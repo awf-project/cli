@@ -126,8 +126,12 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf workflow list` | List installed workflow packs |
+| `awf workflow info <name>` | Display detailed pack information |
 | `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow update [name]` | Update an installed workflow pack |
 | `awf workflow remove <pack>` | Remove an installed workflow pack |
+| `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf version` | Show version information |
 | `awf completion <shell>` | Generate shell autocompletion |
 

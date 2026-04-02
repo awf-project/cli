@@ -28,9 +28,9 @@ type PackInfo struct {
 // PackState represents the persisted state of an installed workflow pack.
 // Stored in workflow-packs/<name>/state.json.
 type PackState struct {
-	Name       string         // Pack directory name
-	Enabled    bool           // Whether pack is enabled
-	SourceData map[string]any // PackSource data for updates/tracking
+	Name       string         `json:"name"`
+	Enabled    bool           `json:"enabled"`
+	SourceData map[string]any `json:"source_data"`
 }
 
 // SourceDataFromPackSource converts a PackSource to a map[string]any for persistence.

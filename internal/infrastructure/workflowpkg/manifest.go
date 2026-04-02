@@ -38,23 +38,6 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// ValidateWorkflowFiles checks every entry in m.Workflows has a corresponding .yaml file in packDir/workflows/.
-func (m *Manifest) ValidateWorkflowFiles(packDir string) error {
-	workflowsDir := filepath.Join(packDir, "workflows")
-	if _, err := os.Stat(workflowsDir); err != nil {
-		return fmt.Errorf("manifest: workflows directory does not exist: %w", err)
-	}
-
-	for _, workflow := range m.Workflows {
-		workflowFile := filepath.Join(workflowsDir, workflow+".yaml")
-		if _, err := os.Stat(workflowFile); err != nil {
-			return fmt.Errorf("manifest: workflow file %q not found", workflow+".yaml")
-		}
-	}
-
-	return nil
-}
-
 // Validate checks manifest fields against spec rules:
 //   - name matches ^[a-z][a-z0-9-]*$
 //   - version is valid semver

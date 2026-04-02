@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/awf-project/cli/pkg/httpx"
 )
@@ -125,6 +126,23 @@ func extractTarEntry(header *tar.Header, filePath string, reader *tar.Reader) er
 	}
 
 	return nil
+}
+
+// ExtractChecksumForAsset parses a checksum file and returns the SHA-256 hex string
+// for the given assetName. The checksum file format is:
+//
+//	<hex>  <filename>
+//
+// Each line contains a checksum followed by two spaces and the filename.
+// Returns empty string if the asset is not found.
+func ExtractChecksumForAsset(content, assetName string) string {
+	for _, line := range strings.Split(strings.TrimSpace(content), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 && parts[1] == assetName {
+			return parts[0]
+		}
+	}
+	return ""
 }
 
 func extractTarFile(header *tar.Header, filePath string, reader *tar.Reader) error {

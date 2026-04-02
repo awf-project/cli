@@ -138,9 +138,23 @@ func workflowHelpFunc(cfg *Config) func(*cobra.Command, []string) {
 
 		workflowName := positionalArgs[0]
 
-		// Load workflow from repository
-		repo := NewWorkflowRepository()
-		wf, err := repo.Load(context.Background(), workflowName)
+		// Load workflow from repository (supports pack/workflow namespace)
+		packName, baseName := parseWorkflowNamespace(workflowName)
+		var repo *repository.CompositeRepository
+		if packName != "" {
+			packDir := findPackDir(packName)
+			if packDir != "" {
+				workflowsDir := filepath.Join(packDir, "workflows")
+				repo = repository.NewCompositeRepository([]repository.SourcedPath{
+					{Path: workflowsDir, Source: repository.SourceLocal},
+				})
+			}
+		}
+		if repo == nil {
+			repo = NewWorkflowRepository()
+			baseName = workflowName
+		}
+		wf, err := repo.Load(context.Background(), baseName)
 		if err != nil {
 			// Error loading workflow - show error and default help
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: workflow '%s' not found: %v\n\n", workflowName, err)

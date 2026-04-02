@@ -224,3 +224,65 @@ workflows:
 	assert.Equal(t, "multi-workflow", packs[0].Name)
 	assert.Len(t, packs[0].Workflows, 3)
 }
+
+// TestLoadPackState_HappyPath tests loading a valid state.json file.
+func TestLoadPackState_HappyPath(t *testing.T) {
+	packDir := t.TempDir()
+
+	stateJSON := []byte(`{
+  "name": "speckit",
+  "enabled": true,
+  "source_data": {
+    "repository": "owner/speckit",
+    "version": "1.0.0",
+    "installed_at": "2026-04-01T10:00:00Z",
+    "updated_at": "2026-04-01T11:00:00Z"
+  }
+}`)
+
+	require.NoError(t, os.WriteFile(filepath.Join(packDir, "state.json"), stateJSON, 0o644))
+
+	loader := workflowpkg.NewPackLoader()
+	state, err := loader.LoadPackState(packDir)
+
+	require.NoError(t, err, "LoadPackState should not return error for valid state.json")
+	require.NotNil(t, state, "LoadPackState should return non-nil PackState")
+	assert.Equal(t, "speckit", state.Name)
+	assert.True(t, state.Enabled)
+	assert.NotNil(t, state.SourceData)
+	assert.Equal(t, "owner/speckit", state.SourceData["repository"])
+	assert.Equal(t, "1.0.0", state.SourceData["version"])
+}
+
+// TestLoadPackState_MissingFile tests error when state.json is missing.
+func TestLoadPackState_MissingFile(t *testing.T) {
+	packDir := t.TempDir()
+
+	loader := workflowpkg.NewPackLoader()
+	state, err := loader.LoadPackState(packDir)
+
+	assert.Error(t, err)
+	assert.Nil(t, state)
+}
+
+// TestLoadPackState_InvalidJSON tests error when state.json contains invalid JSON.
+func TestLoadPackState_InvalidJSON(t *testing.T) {
+	packDir := t.TempDir()
+
+	invalidJSON := []byte(`{
+  "name": "speckit",
+  "enabled": true,
+  "source_data": {
+    "repository": "owner/speckit"
+    "version": "1.0.0"
+  }
+}`)
+
+	require.NoError(t, os.WriteFile(filepath.Join(packDir, "state.json"), invalidJSON, 0o644))
+
+	loader := workflowpkg.NewPackLoader()
+	state, err := loader.LoadPackState(packDir)
+
+	assert.Error(t, err)
+	assert.Nil(t, state)
+}

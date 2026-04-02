@@ -2,6 +2,7 @@ package workflowpkg
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func (l *PackLoader) DiscoverPacks(ctx context.Context, packsDir string) ([]Pack
 
 		// Try to read manifest (1MB cap)
 		manifestPath := filepath.Join(packDir, "manifest.yaml")
-		manifestData, err := readFileLimited(manifestPath, maxManifestSize)
+		manifestData, err := readFileLimited(manifestPath, MaxManifestSize)
 		if err != nil {
 			// Skip packs without manifest.yaml or oversized manifests
 			continue
@@ -86,4 +87,22 @@ func (l *PackLoader) DiscoverPacks(ctx context.Context, packsDir string) ([]Pack
 	}
 
 	return packs, nil
+}
+
+// LoadPackState reads state.json from packDir and returns the persisted PackState.
+// Returns error for missing file or invalid JSON.
+func (l *PackLoader) LoadPackState(packDir string) (*PackState, error) {
+	stateFile := filepath.Join(packDir, "state.json")
+
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var state PackState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("load state: %w", err)
+	}
+
+	return &state, nil
 }

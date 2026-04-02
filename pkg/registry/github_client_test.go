@@ -318,7 +318,7 @@ func TestResolveVersion_NoMatchingVersions(t *testing.T) {
 	_, err := client.ResolveVersion(testContext(t), "owner/repo", ">=2.0.0", false)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no matching")
+	assert.Contains(t, err.Error(), "no releases match constraint")
 }
 
 func TestResolveVersion_InvalidConstraint(t *testing.T) {
@@ -346,7 +346,7 @@ func TestResolveVersion_NoReleases(t *testing.T) {
 	_, err := client.ResolveVersion(testContext(t), "owner/repo", "", false)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no matching")
+	assert.Contains(t, err.Error(), "no releases found")
 }
 
 func TestResolveVersion_SkipsInvalidTags(t *testing.T) {

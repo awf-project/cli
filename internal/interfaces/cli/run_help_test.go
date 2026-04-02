@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -947,4 +949,152 @@ func TestRenderWorkflowHelp_Scenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+// workflowHelpFunc Tests
+//
+// These tests exercise the full help-function dispatch: pack namespace resolution,
+// CompositeRepository construction for pack workflows, and fallback to the standard
+// repository for local workflows.
+
+// packWorkflowYAML is a minimal but complete workflow used across help-func tests.
+const packWorkflowYAML = `name: mywf
+description: "Test workflow"
+inputs:
+  - name: greeting
+    type: string
+    required: true
+    description: "The greeting message"
+states:
+  initial: start
+  start:
+    type: step
+    command: echo hello
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`
+
+// setupPackWorkflow builds the temp project structure required by findPackDir:
+//
+//	<tmpDir>/.awf/workflow-packs/<packName>/workflows/<wfName>.yaml
+//
+// It changes the working directory to tmpDir so the relative
+// ".awf/workflow-packs" lookup inside workflowPackSearchDirs succeeds.
+// The original directory is restored via t.Cleanup.
+func setupPackWorkflow(t *testing.T, packName, wfName, content string) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	origWD, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { os.Chdir(origWD) }) //nolint:errcheck // cleanup restores test environment
+
+	require.NoError(t, os.Chdir(tmpDir))
+
+	wfDir := filepath.Join(tmpDir, ".awf", "workflow-packs", packName, "workflows")
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, wfName+".yaml"), []byte(content), 0o644))
+
+	return tmpDir
+}
+
+// invokeHelpFunc parses positional args into cmd then calls the help function,
+// returning the combined stdout/stderr output.
+func invokeHelpFunc(t *testing.T, cfg *Config, args []string) string {
+	t.Helper()
+
+	cmd := &cobra.Command{
+		Use:  "run",
+		Long: "Execute a workflow by name.",
+		Args: cobra.ArbitraryArgs,
+	}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// ParseFlags sets cmd.Flags().Args() to the non-flag positional arguments,
+	// which is what workflowHelpFunc reads internally.
+	require.NoError(t, cmd.ParseFlags(args))
+
+	helpFn := workflowHelpFunc(cfg)
+	helpFn(cmd, nil)
+
+	return buf.String()
+}
+
+// TestWorkflowHelpFunc_PackWorkflow verifies that a pack-namespaced argument
+// (e.g. "testpack/mywf") loads the workflow from the pack's workflows directory
+// and renders its description and inputs in the help output.
+func TestWorkflowHelpFunc_PackWorkflow(t *testing.T) {
+	setupPackWorkflow(t, "testpack", "mywf", packWorkflowYAML)
+
+	output := invokeHelpFunc(t, &Config{NoColor: true}, []string{"testpack/mywf"})
+
+	assert.Contains(t, output, "Test workflow", "description should appear in pack help")
+	assert.Contains(t, output, "greeting", "input name should appear in pack help")
+	assert.Contains(t, output, "The greeting message", "input description should appear in pack help")
+}
+
+// TestWorkflowHelpFunc_StandardWorkflow verifies that a plain workflow name
+// (no slash) resolves through NewWorkflowRepository using AWF_WORKFLOWS_PATH.
+func TestWorkflowHelpFunc_StandardWorkflow(t *testing.T) {
+	tmpDir := t.TempDir()
+	workflowsDir := filepath.Join(tmpDir, "workflows")
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+
+	localWF := `name: test
+description: "Local workflow"
+inputs:
+  - name: target
+    type: string
+    required: true
+    description: "Deployment target"
+states:
+  initial: done
+  done:
+    type: terminal
+    status: success
+`
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte(localWF), 0o644))
+
+	// AWF_WORKFLOWS_PATH controls BuildWorkflowPaths → NewWorkflowRepository.
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowsDir)
+
+	output := invokeHelpFunc(t, &Config{NoColor: true}, []string{"test"})
+
+	assert.Contains(t, output, "Local workflow", "description should appear in standard help")
+	assert.Contains(t, output, "target", "input name should appear in standard help")
+	assert.Contains(t, output, "Deployment target", "input description should appear in standard help")
+}
+
+// TestWorkflowHelpFunc_PackNotFound verifies that an unknown pack namespace
+// falls back to NewWorkflowRepository and reports the workflow-not-found error.
+func TestWorkflowHelpFunc_PackNotFound(t *testing.T) {
+	// Chdir to an isolated empty dir so no packs are discovered.
+	tmpDir := t.TempDir()
+	origWD, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { os.Chdir(origWD) }) //nolint:errcheck // cleanup restores test environment
+	require.NoError(t, os.Chdir(tmpDir))
+
+	// Point AWF_WORKFLOWS_PATH to an empty dir so no local workflow is found either.
+	emptyWorkflows := filepath.Join(tmpDir, "workflows")
+	require.NoError(t, os.MkdirAll(emptyWorkflows, 0o755))
+	t.Setenv("AWF_WORKFLOWS_PATH", emptyWorkflows)
+
+	output := invokeHelpFunc(t, &Config{NoColor: true}, []string{"nonexistent/workflow"})
+
+	// The help function writes the error to stderr (captured in buf via SetErr).
+	assert.Contains(t, output, "not found", "missing workflow should produce not-found error")
+}
+
+// TestWorkflowHelpFunc_NoArgs verifies that calling help with no positional
+// arguments renders the default cobra Long description.
+func TestWorkflowHelpFunc_NoArgs(t *testing.T) {
+	output := invokeHelpFunc(t, &Config{NoColor: true}, []string{})
+
+	assert.Contains(t, output, "Execute a workflow by name.", "default Long text should appear when no args given")
 }

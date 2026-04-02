@@ -81,6 +81,15 @@ type WorkflowInfo struct {
 	Description string `json:"description,omitempty"`
 }
 
+// WorkflowPackInfo represents a workflow pack for pack listing.
+type WorkflowPackInfo struct {
+	Name      string   `json:"name"`
+	Version   string   `json:"version,omitempty"`
+	Source    string   `json:"source,omitempty"`
+	Enabled   bool     `json:"enabled"`
+	Workflows []string `json:"workflows,omitempty"`
+}
+
 // StepInfo is the JSON structure for step status.
 type StepInfo struct {
 	Name        string `json:"name"`
@@ -451,6 +460,23 @@ func (w *OutputWriter) WritePrompts(prompts []PromptInfo) error {
 	}
 }
 
+// WriteWorkflowPacks outputs workflow pack list.
+func (w *OutputWriter) WriteWorkflowPacks(packs []WorkflowPackInfo) error {
+	switch w.format {
+	case FormatJSON:
+		return w.writeJSON(packs)
+	case FormatTable:
+		return w.writeWorkflowPacksBorderedTable(packs)
+	case FormatQuiet:
+		for i := range packs {
+			_, _ = fmt.Fprintln(w.out, packs[i].Name)
+		}
+		return nil
+	default: // text
+		return w.writeWorkflowPacksTable(packs)
+	}
+}
+
 // WritePlugins outputs plugin list.
 func (w *OutputWriter) WritePlugins(plugins []PluginInfo) error {
 	switch w.format {
@@ -669,6 +695,68 @@ func (w *OutputWriter) writePluginsBorderedTable(plugins []PluginInfo) error {
 	for i := range plugins {
 		r := pluginRow(&plugins[i])
 		table.row(r.name, r.pluginType, r.version, r.status, r.enabled, r.caps, r.source)
+	}
+	table.separator()
+
+	return nil
+}
+
+func workflowPackRow(p *WorkflowPackInfo) (name, version, enabled, source, workflows string) {
+	name = p.Name
+	version = p.Version
+	if version == "" {
+		version = "-"
+	}
+	if p.Enabled {
+		enabled = "yes"
+	} else {
+		enabled = "no"
+	}
+	source = p.Source
+	if source == "" {
+		source = "-"
+	}
+	workflows = strings.Join(p.Workflows, ", ")
+	if workflows == "" {
+		workflows = "-"
+	}
+	return name, version, enabled, source, workflows
+}
+
+func (w *OutputWriter) writeWorkflowPacksTable(packs []WorkflowPackInfo) error {
+	if len(packs) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No workflow packs installed.")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(w.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "NAME\tVERSION\tENABLED\tSOURCE\tWORKFLOWS")
+
+	for i := range packs {
+		n, v, e, s, wfs := workflowPackRow(&packs[i])
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", n, v, e, s, wfs)
+	}
+
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flushing table: %w", err)
+	}
+	return nil
+}
+
+func (w *OutputWriter) writeWorkflowPacksBorderedTable(packs []WorkflowPackInfo) error {
+	if len(packs) == 0 {
+		_, _ = fmt.Fprintln(w.out, "No workflow packs installed.")
+		return nil
+	}
+
+	table := newTableWriter(w.out, 20, 10, 8, 30, 40)
+	table.separator()
+	table.row("NAME", "VERSION", "ENABLED", "SOURCE", "WORKFLOWS")
+	table.separator()
+
+	for i := range packs {
+		n, v, e, s, wfs := workflowPackRow(&packs[i])
+		table.row(n, v, e, s, wfs)
 	}
 	table.separator()
 
