@@ -456,7 +456,7 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 	ctx := context.Background()
 
 	// Build a GitHub release client; redirect API calls to GITHUB_API_URL when set (testing).
-	doer := newAPIBaseURLDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
+	doer := registry.NewGitHubAPIDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
 	githubClient := registry.NewGitHubReleaseClient(doer)
 
 	ownerRepo := owner + "/" + repo
@@ -483,12 +483,12 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 		return fmt.Errorf("no checksum file found in release %s", release.TagName)
 	}
 
-	checksumContent, err := downloadTextFile(ctx, checksumURL)
+	checksumData, err := registry.Download(ctx, http.DefaultClient, checksumURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to download checksum file: %w", err)
 	}
 
-	checksum := extractChecksumForAsset(checksumContent, asset.Name)
+	checksum := registry.ExtractChecksumForAsset(string(checksumData), asset.Name)
 	if checksum == "" {
 		return fmt.Errorf("checksum for %q not found in checksum file", asset.Name)
 	}
@@ -522,44 +522,6 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Plugin %q installed successfully (version %s)\n", pluginName, release.TagName)
 	return nil
-}
-
-// apiBaseURLDoer rewrites GitHub API request URLs to a custom base URL.
-// This enables test isolation via GITHUB_API_URL without modifying GitHubReleaseClient.
-type apiBaseURLDoer struct {
-	inner   *http.Client
-	apiBase string // custom base URL, e.g. "http://localhost:1234"
-}
-
-// newAPIBaseURLDoer creates a doer that redirects https://api.github.com requests
-// to apiBase when apiBase is non-empty. Falls back to standard http.Client behavior.
-func newAPIBaseURLDoer(apiBase string, inner *http.Client) *apiBaseURLDoer {
-	return &apiBaseURLDoer{inner: inner, apiBase: apiBase}
-}
-
-func (d *apiBaseURLDoer) Do(req *http.Request) (*http.Response, error) {
-	if d.apiBase != "" && req.URL != nil && req.URL.Host == "api.github.com" {
-		base, err := url.Parse(d.apiBase)
-		if err != nil {
-			return nil, fmt.Errorf("invalid GITHUB_API_URL: %w", err)
-		}
-		cloned := req.Clone(req.Context())
-		cloned.URL.Scheme = base.Scheme
-		cloned.URL.Host = base.Host
-		cloned.Host = base.Host
-		req = cloned
-	}
-	return d.inner.Do(req) //nolint:wrapcheck,gosec // Delegating to inner client; URL rewritten from validated GITHUB_API_URL
-}
-
-// httpGetWithContext performs an HTTP GET with context propagation.
-// URL is constructed from validated user input (owner/repo) or test fixtures.
-func httpGetWithContext(ctx context.Context, rawURL string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody) //nolint:gosec // G107: URL from validated user input or test fixture
-	if err != nil {
-		return nil, err
-	}
-	return http.DefaultClient.Do(req) //nolint:gosec // G704: URL already validated by caller (ValidateOwnerRepo or known test fixture)
 }
 
 // selectRelease picks the best matching release from a list.
@@ -607,42 +569,6 @@ func findChecksumURL(assets []registry.Asset) string {
 		name := strings.ToLower(a.Name)
 		if strings.HasSuffix(name, "checksums.txt") || name == "sha256sums" || strings.HasSuffix(name, "sha256sums.txt") {
 			return a.DownloadURL
-		}
-	}
-	return ""
-}
-
-// downloadTextFile fetches a URL and returns the body as a string.
-func downloadTextFile(ctx context.Context, fileURL string) (string, error) {
-	resp, err := httpGetWithContext(ctx, fileURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to download checksum file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download checksum file: HTTP %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1*1024*1024))
-	if err != nil {
-		return "", fmt.Errorf("failed to read checksum file: %w", err)
-	}
-	return string(data), nil
-}
-
-// extractChecksumForAsset parses a checksum file and returns the SHA-256 hex string
-// for the given assetName. The checksum file format is:
-//
-//	<hex>  <filename>
-//
-// Each line contains a checksum followed by two spaces and the filename.
-// Returns empty string if the asset is not found.
-func extractChecksumForAsset(content, assetName string) string {
-	for _, line := range strings.Split(strings.TrimSpace(content), "\n") {
-		parts := strings.Fields(line)
-		if len(parts) >= 2 && parts[1] == assetName {
-			return parts[0]
 		}
 	}
 	return ""
@@ -744,7 +670,7 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	}
 
 	// Fetch latest release from GitHub.
-	doer := newAPIBaseURLDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
+	doer := registry.NewGitHubAPIDoer(os.Getenv("GITHUB_API_URL"), http.DefaultClient)
 	githubClient := registry.NewGitHubReleaseClient(doer)
 
 	releases, err := githubClient.ListReleases(ctx, source.Repository)
@@ -780,12 +706,12 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 		return fmt.Errorf("no checksum file found in release %s", release.TagName)
 	}
 
-	checksumContent, err := downloadTextFile(ctx, checksumURL)
+	checksumData, err := registry.Download(ctx, http.DefaultClient, checksumURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to download checksum file: %w", err)
 	}
 
-	checksum := extractChecksumForAsset(checksumContent, asset.Name)
+	checksum := registry.ExtractChecksumForAsset(string(checksumData), asset.Name)
 	if checksum == "" {
 		return fmt.Errorf("checksum for %q not found in checksum file", asset.Name)
 	}
@@ -951,7 +877,11 @@ func runPluginSearch(cmd *cobra.Command, cfg *Config, query string) error {
 
 	apiURL := fmt.Sprintf("%s/search/repositories?q=%s&sort=stars&order=desc", baseURL, searchQuery)
 
-	resp, err := httpGetWithContext(ctx, apiURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody) //nolint:gosec // G107: URL from validated env var or hardcoded base
+	if err != nil {
+		return fmt.Errorf("failed to search plugins: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: URL constructed from safe base + escaped query
 	if err != nil {
 		return fmt.Errorf("failed to search plugins: %w", err)
 	}

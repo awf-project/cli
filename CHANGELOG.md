@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-01
+
 ### Added
 
+- **C073**: `awf workflow list` displays installed packs with name, version, source, and public workflow names; `(local)` pseudo-entry shows `.awf/workflows/` discovery; `awf workflow info <pack>` shows manifest details, per-workflow descriptions, plugin install status, and embedded README; `awf workflow update <pack>` downloads newer versions from GitHub Releases with atomic replace preserving user overrides in `.awf/prompts/<pack>/` and `.awf/scripts/<pack>/`; `awf workflow update --all` checks and updates all installed packs
+- **C073**: `awf list` extended with pack workflows displayed as `pack/workflow` namespace prefix and `pack` source label
+- **C073**: Plugin dependency warnings during `awf workflow install` and `awf workflow info` — non-blocking stderr warnings with actionable install commands when packs declare plugin dependencies
+- **C073**: `awf workflow search [query]` discovers workflow packs on GitHub via `awf-workflow` topic, with optional keyword filter and JSON output
+- **C072**: `awf run pack/workflow` namespace syntax — 3-tier path resolution (user override → pack embedded → global XDG) for workflow execution; `pack_name` available in `{{.awf.pack_name}}`; `call_workflow` supports pack-aware references via `SplitCallWorkflowName()`
 - **C071**: Workflow pack format and installation — `awf workflow install owner/repo[@version]` downloads packs from GitHub Releases with SHA-256 checksum verification, manifest validation (`name`, `version`, `awf_version` constraint, workflow file existence), and atomic installation to `.awf/workflow-packs/<name>/`; `--global` installs to `~/.local/share/awf/workflow-packs/`; `awf workflow remove <pack>` deletes installed packs; `state.json` tracks source metadata; plugin dependency warnings emitted during install
 
 ### Changed
 
+- **C073**: Extracted duplicated GitHub helpers (checksum parsing, API base URL doer, text download) from `workflow_cmd.go` and `plugin_cmd.go` into `pkg/registry/` — `ExtractChecksumForAsset()`, `NewGitHubAPIDoer()`, and `Download()` replace inline implementations
 - **C070**: Extracted transport layer from `internal/infrastructure/pluginmgr/` into shared `pkg/registry/` package — version parsing, GitHub Releases client, and download/checksum/extraction utilities are now reusable across plugin and workflow pack systems; zero behavioral change to existing plugin commands
 
 ## [0.5.0] - 2026-03-30
@@ -122,5 +130,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/awf-project/cli/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/awf-project/cli/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/awf-project/cli/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/awf-project/cli/compare/v0.4.1...v0.5.0

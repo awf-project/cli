@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"sort"
@@ -121,6 +122,10 @@ func (c *GitHubReleaseClient) ResolveVersion(ctx context.Context, ownerRepo, con
 		}
 	}
 
+	if len(releases) == 0 {
+		return Version{}, fmt.Errorf("no releases found")
+	}
+
 	var candidates []Version
 	for _, release := range releases {
 		if release.Prerelease && !includePrerelease {
@@ -141,7 +146,10 @@ func (c *GitHubReleaseClient) ResolveVersion(ctx context.Context, ownerRepo, con
 	}
 
 	if len(candidates) == 0 {
-		return Version{}, fmt.Errorf("no matching versions found for constraint %q", constraintStr)
+		if constraintStr == "" {
+			return Version{}, fmt.Errorf("no stable releases found (use --pre-release to include pre-releases)")
+		}
+		return Version{}, fmt.Errorf("no releases match constraint %q", constraintStr)
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -178,6 +186,34 @@ func FindPlatformAsset(assets []Asset, goos, goarch string) (Asset, error) {
 		return Asset{}, fmt.Errorf("no matching asset found for %s %s. Available: %s", goos, goarch, strings.Join(availablePlatforms, ", "))
 	}
 	return Asset{}, fmt.Errorf("no matching asset found for %s %s", goos, goarch)
+}
+
+// GitHubAPIDoer wraps an HTTP client to redirect api.github.com requests to a custom base URL.
+// This enables test isolation via GITHUB_API_URL without modifying GitHubReleaseClient.
+type GitHubAPIDoer struct {
+	inner   httpx.HTTPDoer
+	apiBase string
+}
+
+// NewGitHubAPIDoer creates a doer that redirects https://api.github.com requests
+// to apiBase when apiBase is non-empty. Falls back to standard http.Client behavior.
+func NewGitHubAPIDoer(apiBase string, inner httpx.HTTPDoer) *GitHubAPIDoer {
+	return &GitHubAPIDoer{inner: inner, apiBase: apiBase}
+}
+
+func (d *GitHubAPIDoer) Do(req *http.Request) (*http.Response, error) {
+	if d.apiBase != "" && req.URL != nil && req.URL.Host == "api.github.com" {
+		base, err := url.Parse(d.apiBase)
+		if err != nil {
+			return nil, fmt.Errorf("invalid GITHUB_API_URL: %w", err)
+		}
+		cloned := req.Clone(req.Context())
+		cloned.URL.Scheme = base.Scheme
+		cloned.URL.Host = base.Host
+		cloned.Host = base.Host
+		req = cloned
+	}
+	return d.inner.Do(req) //nolint:wrapcheck // delegating to inner client; URL rewritten from validated GITHUB_API_URL
 }
 
 // buildGitHubHeaders sets HTTP headers for GitHub API requests on req.

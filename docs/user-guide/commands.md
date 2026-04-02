@@ -25,8 +25,12 @@ title: "CLI Commands"
 | `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
 | `awf plugin disable <name>` | Disable a plugin |
+| `awf workflow list` | List installed workflow packs |
+| `awf workflow info <name>` | Display detailed pack information |
 | `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow update [name]` | Update an installed workflow pack |
 | `awf workflow remove <name>` | Remove an installed workflow pack |
+| `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf config show` | Display project configuration |
 | `awf version` | Show version info |
 | `awf completion <shell>` | Generate shell autocompletion |
@@ -433,11 +437,15 @@ awf resume abc123-def456 --input max_tokens=5000
 
 ## awf list
 
-List available workflows.
+List available workflows, including pack workflows.
 
 ```bash
 awf list [flags]
 ```
+
+### Description
+
+Displays all workflows from local (`.awf/workflows/`), global (`~/.config/awf/workflows/`), and installed pack directories. Pack workflows appear with `pack/workflow` namespace prefix and `pack` source label.
 
 ### Subcommands
 
@@ -448,7 +456,7 @@ awf list [flags]
 ### Examples
 
 ```bash
-# List all workflows
+# List all workflows (local, global, and pack)
 awf list
 
 # JSON output
@@ -1096,8 +1104,153 @@ awf workflow <subcommand> [flags]
 
 | Subcommand | Description |
 |------------|-------------|
+| `list` | List installed workflow packs with version, source, and workflows |
+| `info <name>` | Display detailed information about an installed pack |
 | `install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `update [name]` | Update an installed workflow pack to the latest version |
 | `remove <name>` | Remove an installed workflow pack |
+| `search [query]` | Search for available workflow packs on GitHub |
+
+---
+
+## awf workflow list
+
+List all installed workflow packs with their version, source, and available workflows.
+
+```bash
+awf workflow list
+```
+
+### Aliases
+
+`awf workflow ls`
+
+### Description
+
+Discovers packs from local (`.awf/workflow-packs/`) and global (`~/.local/share/awf/workflow-packs/`) directories, deduplicating by name (local takes precedence). Includes a `(local)` pseudo-entry when `.awf/workflows/` contains local workflow files.
+
+### Examples
+
+```bash
+# List all installed packs
+awf workflow list
+
+# Using alias
+awf wf ls
+```
+
+### Output
+
+Each pack entry shows:
+- **Name** — Pack identifier
+- **Version** — Semantic version from manifest
+- **Source** — GitHub `owner/repo` or `local`
+- **Workflows** — Public workflow names defined in the pack
+
+The `(local)` entry shows the count of workflow files in `.awf/workflows/`.
+
+---
+
+## awf workflow info
+
+Display detailed information about an installed workflow pack.
+
+```bash
+awf workflow info <pack-name>
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pack-name` | Name of the installed workflow pack |
+
+### Description
+
+Shows manifest fields (name, version, description, author, license), workflow list, plugin install status with actionable install commands, and embedded README content. Searches local then global workflow-packs directories.
+
+Plugin dependency warnings are emitted to stderr when the pack declares required plugins.
+
+### Examples
+
+```bash
+# Show pack details
+awf workflow info speckit
+
+# Using workflow alias
+awf wf info speckit
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `pack "<name>" not found` | Pack name not found in local or global directories |
+
+---
+
+## awf workflow update
+
+Update an installed workflow pack to the latest version from GitHub Releases.
+
+```bash
+awf workflow update [pack-name] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pack-name` | Name of the pack to update (optional with `--all`) |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Update all installed workflow packs |
+
+### Description
+
+Loads the pack's `state.json` to find the source repository, fetches the latest release via `GitHubReleaseClient`, compares versions, and performs an atomic replacement using forced reinstall. User overrides in `.awf/prompts/<pack>/` and `.awf/scripts/<pack>/` are preserved (they live outside the pack directory).
+
+After a successful update, `state.json` is written with the new version and an `updated_at` timestamp.
+
+### Examples
+
+```bash
+# Update a specific pack
+awf workflow update speckit
+
+# Update all installed packs
+awf workflow update --all
+```
+
+### Output
+
+```
+# When newer version exists
+Updated speckit to version 1.3.0
+
+# When already at latest
+speckit is already at the latest version (1.2.0)
+
+# When updating all
+Updated 2 pack(s).
+
+# When all are current
+All packs are at their latest versions.
+
+# When no packs installed
+No installed workflow packs to update.
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `pack name required (or use --all)` | Neither pack name nor `--all` provided |
+| `cannot specify a pack name with --all` | Both pack name and `--all` provided |
+| `workflow pack "<name>" not found` | Pack not found in local or global directories |
 
 ---
 
@@ -1210,6 +1363,51 @@ The command automatically detects whether the pack is installed locally or globa
 | Error | Cause |
 |-------|-------|
 | `pack "<name>" is not installed` | Pack name not found in local or global directories |
+
+---
+
+## awf workflow search
+
+Search for available AWF workflow packs on GitHub.
+
+```bash
+awf workflow search [query] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `query` | Optional keyword to filter results |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output` | Output format (`json`) |
+
+### Description
+
+Discovers AWF workflow packs on GitHub by searching repositories tagged with the `awf-workflow` topic. Without a query, lists the full catalog sorted by stars. Results show the repository name, star count, and description.
+
+### Examples
+
+```bash
+# List all available workflow packs
+awf workflow search
+
+# Search by keyword
+awf workflow search speckit
+
+# JSON output for scripting
+awf workflow search --output=json
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `GitHub API rate limit exceeded` | Too many unauthenticated requests; set `GITHUB_TOKEN` for higher limits |
 
 ---
 

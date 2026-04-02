@@ -16,8 +16,8 @@ import (
 
 const ManifestFileName = "manifest.yaml"
 
-// maxManifestSize caps manifest.yaml reads at 1MB to prevent OOM from malicious packs.
-const maxManifestSize = 1 << 20
+// MaxManifestSize caps manifest.yaml reads at 1MB to prevent OOM from malicious packs.
+const MaxManifestSize = 1 << 20
 
 // readFileLimited reads a file up to maxBytes. Returns error if the file exceeds the limit.
 func readFileLimited(path string, maxBytes int64) ([]byte, error) {
@@ -113,7 +113,7 @@ func (pi *PackInstaller) Install(ctx context.Context, url, checksum, targetDir s
 
 	// Load and validate manifest (1MB cap to prevent OOM from malicious packs)
 	manifestPath := filepath.Join(tempDir, ManifestFileName)
-	manifestData, readErr := readFileLimited(manifestPath, maxManifestSize)
+	manifestData, readErr := readFileLimited(manifestPath, MaxManifestSize)
 	if readErr != nil {
 		return fmt.Errorf("read manifest: %w", readErr)
 	}

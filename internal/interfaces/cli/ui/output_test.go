@@ -1679,3 +1679,187 @@ func TestOutputWriter_WriteValidators_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "No validators found")
 }
+
+func TestWriteWorkflowPacks_Text(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{
+			Name:      "core-pack",
+			Version:   "1.2.0",
+			Source:    "github.com/awf-project/core-pack",
+			Enabled:   true,
+			Workflows: []string{"deploy", "test", "lint"},
+		},
+		{
+			Name:      "(local)",
+			Version:   "",
+			Source:    "",
+			Enabled:   true,
+			Workflows: []string{"my-workflow"},
+		},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "VERSION")
+	assert.Contains(t, output, "ENABLED")
+	assert.Contains(t, output, "SOURCE")
+	assert.Contains(t, output, "WORKFLOWS")
+	assert.Contains(t, output, "core-pack")
+	assert.Contains(t, output, "1.2.0")
+	assert.Contains(t, output, "yes")
+	assert.Contains(t, output, "github.com/awf-project/core-pack")
+	assert.Contains(t, output, "deploy, test, lint")
+	assert.Contains(t, output, "(local)")
+	// Local pseudo-entry has no version or source — shown as "-"
+	assert.Contains(t, output, "-")
+}
+
+func TestWriteWorkflowPacks_Text_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	err := w.WriteWorkflowPacks([]ui.WorkflowPackInfo{})
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "No workflow packs installed.")
+}
+
+func TestWriteWorkflowPacks_JSON(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{
+			Name:      "infra-pack",
+			Version:   "2.0.0",
+			Source:    "github.com/awf-project/infra-pack",
+			Enabled:   true,
+			Workflows: []string{"deploy", "rollback"},
+		},
+		{
+			Name:    "dev-pack",
+			Version: "0.5.0",
+			Source:  "github.com/awf-project/dev-pack",
+			Enabled: false,
+		},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	var got []ui.WorkflowPackInfo
+	err = json.Unmarshal(buf.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Len(t, got, 2)
+	assert.Equal(t, "infra-pack", got[0].Name)
+	assert.Equal(t, "2.0.0", got[0].Version)
+	assert.Equal(t, "github.com/awf-project/infra-pack", got[0].Source)
+	assert.True(t, got[0].Enabled)
+	assert.Equal(t, []string{"deploy", "rollback"}, got[0].Workflows)
+	assert.Equal(t, "dev-pack", got[1].Name)
+	assert.False(t, got[1].Enabled)
+}
+
+func TestWriteWorkflowPacks_JSON_Empty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatJSON, true, false)
+
+	err := w.WriteWorkflowPacks([]ui.WorkflowPackInfo{})
+	require.NoError(t, err)
+
+	raw := strings.TrimSpace(buf.String())
+	// Empty slice serializes to [] or null — both are valid empty JSON arrays
+	assert.True(t, raw == "[]" || raw == "null", "expected [] or null, got %s", raw)
+}
+
+func TestWriteWorkflowPacks_Quiet(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatQuiet, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{Name: "pack-a", Version: "1.0.0", Enabled: true},
+		{Name: "pack-b", Version: "2.0.0", Enabled: false},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	assert.Equal(t, "pack-a\npack-b\n", buf.String())
+}
+
+func TestWriteWorkflowPacks_Table(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatTable, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{
+			Name:      "ops-pack",
+			Version:   "3.1.0",
+			Source:    "github.com/awf-project/ops-pack",
+			Enabled:   true,
+			Workflows: []string{"monitor", "alert"},
+		},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Bordered table uses ASCII separators
+	assert.Contains(t, output, "+")
+	assert.Contains(t, output, "|")
+	assert.Contains(t, output, "NAME")
+	assert.Contains(t, output, "VERSION")
+	assert.Contains(t, output, "ENABLED")
+	assert.Contains(t, output, "SOURCE")
+	assert.Contains(t, output, "WORKFLOWS")
+	assert.Contains(t, output, "ops-pack")
+}
+
+func TestWriteWorkflowPacks_DisabledPack(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{
+			Name:    "disabled-pack",
+			Version: "1.0.0",
+			Source:  "github.com/awf-project/disabled-pack",
+			Enabled: false,
+		},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "no")
+}
+
+func TestWriteWorkflowPacks_EmptyFields(t *testing.T) {
+	buf := new(bytes.Buffer)
+	w := ui.NewOutputWriter(buf, buf, ui.FormatText, true, false)
+
+	packs := []ui.WorkflowPackInfo{
+		{
+			Name:      "sparse-pack",
+			Version:   "",
+			Source:    "",
+			Enabled:   true,
+			Workflows: nil,
+		},
+	}
+
+	err := w.WriteWorkflowPacks(packs)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "sparse-pack")
+	// Empty version, source, and workflows should render as "-"
+	assert.Contains(t, output, "-")
+}

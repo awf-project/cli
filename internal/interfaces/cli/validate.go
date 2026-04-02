@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,9 +20,11 @@ import (
 func newValidateCommand(cfg *Config) *cobra.Command {
 	var skipPlugins bool
 	var validatorTimeout time.Duration
+	var packFlag string
+	var dirFlag string
 
 	cmd := &cobra.Command{
-		Use:   "validate <workflow>",
+		Use:   "validate [workflow]",
 		Short: "Validate a workflow definition",
 		Long: `Validate a workflow YAML file without executing it.
 
@@ -31,17 +34,33 @@ Checks for:
   - Valid state references
   - No cycles in state transitions (if detectable)
 
+Use --pack to validate all workflows in an installed pack.
+Use --dir to validate all .yaml files in a directory.
+
 Examples:
   awf validate my-workflow
-  awf validate analyze-code --verbose`,
-		Args: cobra.ExactArgs(1),
+  awf validate analyze-code --verbose
+  awf validate --pack hello
+  awf validate --dir ./workflows/`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, cfg, args[0], skipPlugins, validatorTimeout)
+			switch {
+			case packFlag != "":
+				return runValidatePack(cmd, cfg, packFlag, skipPlugins, validatorTimeout)
+			case dirFlag != "":
+				return runValidateDir(cmd, cfg, dirFlag, skipPlugins, validatorTimeout)
+			case len(args) == 1:
+				return runValidate(cmd, cfg, args[0], skipPlugins, validatorTimeout)
+			default:
+				return fmt.Errorf("provide a workflow name, --pack, or --dir")
+			}
 		},
 	}
 
 	cmd.Flags().BoolVar(&skipPlugins, "skip-plugins", false, "Skip plugin validators")
 	cmd.Flags().DurationVar(&validatorTimeout, "validator-timeout", 5*time.Second, "Timeout for each plugin validator")
+	cmd.Flags().StringVar(&packFlag, "pack", "", "Validate all workflows in an installed pack")
+	cmd.Flags().StringVar(&dirFlag, "dir", "", "Validate all .yaml workflow files in a directory")
 
 	return cmd
 }
@@ -52,8 +71,22 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 	// Create output writer
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Initialize repository
-	repo := NewWorkflowRepository()
+	// Detect pack/workflow namespace syntax
+	packName, baseName := parseWorkflowNamespace(workflowName)
+	var repo *repository.CompositeRepository
+	if packName != "" {
+		packDir := findPackDir(packName)
+		if packDir == "" {
+			return writeErrorAndExit(writer, fmt.Errorf("workflow pack %q not found", packName), ExitUser)
+		}
+		workflowsDir := filepath.Join(packDir, "workflows")
+		repo = repository.NewCompositeRepository([]repository.SourcedPath{
+			{Path: workflowsDir, Source: repository.SourceLocal},
+		})
+		workflowName = baseName
+	} else {
+		repo = NewWorkflowRepository()
+	}
 
 	// Create validator
 	validator := expression.NewExprValidator()
@@ -236,6 +269,71 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 	}
 
 	return nil
+}
+
+// runValidateDir validates all .yaml workflow files in a directory.
+func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, skipPlugins bool, validatorTimeout time.Duration) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read directory %s: %w", dir, err)
+	}
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".yaml"))
+		}
+	}
+
+	if len(names) == 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "No .yaml files found in %s\n", dir)
+		return nil
+	}
+
+	repo := repository.NewCompositeRepository([]repository.SourcedPath{
+		{Path: absDir, Source: repository.SourceLocal},
+	})
+	validator := expression.NewExprValidator()
+	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
+
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	var failed int
+	for _, name := range names {
+		if err := svc.ValidateWorkflow(context.Background(), name); err != nil {
+			formatter.Error(fmt.Sprintf("  FAIL  %s: %s", name, err))
+			failed++
+		} else {
+			formatter.Success(fmt.Sprintf("  OK    %s", name))
+		}
+	}
+
+	if failed > 0 {
+		return fmt.Errorf("%d of %d workflow(s) failed validation", failed, len(names))
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "\nAll %d workflow(s) valid\n", len(names))
+	return nil
+}
+
+// runValidatePack validates all workflows in an installed pack.
+func runValidatePack(cmd *cobra.Command, cfg *Config, packName string, skipPlugins bool, validatorTimeout time.Duration) error {
+	packDir := findPackDir(packName)
+	if packDir == "" {
+		return fmt.Errorf("workflow pack %q not found", packName)
+	}
+
+	workflowsDir := filepath.Join(packDir, "workflows")
+	return runValidateDir(cmd, cfg, workflowsDir, skipPlugins, validatorTimeout)
 }
 
 // collectDisabledPluginWarnings checks operation steps for disabled plugin references.

@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +49,9 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
-	if len(infos) == 0 {
+	packWorkflows, _ := collectPackWorkflows(ctx) //nolint:errcheck // pack discovery errors don't block workflow listing
+
+	if len(infos) == 0 && len(packWorkflows) == 0 {
 		// For JSON/quiet, output empty result
 		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 			return writer.WriteWorkflows([]ui.WorkflowInfo{})
@@ -92,6 +95,8 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 
 		workflows = append(workflows, wfInfo)
 	}
+
+	workflows = append(workflows, packWorkflows...)
 
 	if err := writer.WriteWorkflows(workflows); err != nil {
 		return fmt.Errorf("failed to write output: %w", err)
@@ -168,22 +173,6 @@ func runListPrompts(cmd *cobra.Command, cfg *Config) error {
 	return writer.WritePrompts(prompts)
 }
 
-// collectPromptsFromPaths walks multiple prompt directories and returns deduplicated prompts.
-// Earlier paths take precedence (local wins over global for same-named prompts).
-// shouldProcessEntry determines if a directory entry should be processed.
-// Returns (process=true, skipDir=false) for files to process.
-// Returns (process=false, skipDir=false) to skip the entry.
-// Returns (process=false, skipDir=true) to skip entire directory subtrees.
-func shouldProcessEntry(d fs.DirEntry, err error) (process, skipDir bool) {
-	if err != nil {
-		return false, false // Skip entries with errors
-	}
-	if d.IsDir() {
-		return false, false // Skip directories themselves
-	}
-	return true, false // Process regular files
-}
-
 // buildPromptInfo constructs a PromptInfo from a file entry.
 // Returns nil if the entry should be skipped (e.g., already seen, errors).
 func buildPromptInfo(path string, d fs.DirEntry, basePath, source string, seen map[string]struct{}) (*ui.PromptInfo, error) {
@@ -221,6 +210,44 @@ func buildPromptInfo(path string, d fs.DirEntry, basePath, source string, seen m
 	}, nil
 }
 
+// collectPackWorkflows loads workflow entries from installed workflow packs.
+// Returns pack/workflow entries with "pack" source label for merging into awf list output.
+func collectPackWorkflows(ctx context.Context) ([]ui.WorkflowInfo, error) {
+	loader := workflowpkg.NewPackLoader()
+	packMap := discoverAllPacks(ctx, loader)
+
+	var workflows []ui.WorkflowInfo
+
+	for packName, packDir := range packMap {
+		// Load pack state to check if enabled
+		state, stateErr := loader.LoadPackState(packDir)
+		if stateErr != nil || !state.Enabled {
+			continue
+		}
+
+		// Load manifest for workflow list and version
+		manifestData, readErr := readManifestData(packDir)
+		if readErr != nil {
+			continue
+		}
+		manifest, parseErr := workflowpkg.ParseManifest(manifestData)
+		if parseErr != nil {
+			continue
+		}
+
+		for _, wf := range manifest.Workflows {
+			workflows = append(workflows, ui.WorkflowInfo{
+				Name:        packName + "/" + wf,
+				Source:      "pack",
+				Version:     manifest.Version,
+				Description: loadWorkflowDescription(packDir, wf),
+			})
+		}
+	}
+
+	return workflows, nil
+}
+
 func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, error) {
 	if len(paths) == 0 {
 		return []ui.PromptInfo{}, nil
@@ -241,9 +268,7 @@ func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, e
 
 		// Walk directory tree
 		err = filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
-			// Check if we should process this entry
-			process, _ := shouldProcessEntry(d, err)
-			if !process {
+			if err != nil || d.IsDir() {
 				return nil
 			}
 

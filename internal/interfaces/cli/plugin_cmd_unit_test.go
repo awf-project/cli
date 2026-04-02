@@ -1,10 +1,7 @@
 package cli
 
 import (
-	"context"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -119,7 +116,7 @@ func TestExtractChecksumForAsset_ExactMatch(t *testing.T) {
 	content := `abc123def456  plugin-linux
 def789ghi012  plugin-darwin`
 
-	checksum := extractChecksumForAsset(content, "plugin-linux")
+	checksum := registry.ExtractChecksumForAsset(content, "plugin-linux")
 
 	assert.Equal(t, "abc123def456", checksum)
 }
@@ -128,7 +125,7 @@ func TestExtractChecksumForAsset_NotFound_ReturnsEmpty(t *testing.T) {
 	content := `abc123def456  plugin-linux
 def789ghi012  plugin-darwin`
 
-	checksum := extractChecksumForAsset(content, "plugin-windows")
+	checksum := registry.ExtractChecksumForAsset(content, "plugin-windows")
 
 	assert.Empty(t, checksum)
 }
@@ -137,7 +134,7 @@ func TestExtractChecksumForAsset_MalformedLine_Skipped(t *testing.T) {
 	content := `malformed line without two parts
 abc123def456  plugin-linux`
 
-	checksum := extractChecksumForAsset(content, "plugin-linux")
+	checksum := registry.ExtractChecksumForAsset(content, "plugin-linux")
 
 	assert.Equal(t, "abc123def456", checksum)
 }
@@ -158,12 +155,8 @@ func TestExtractPluginName_WithoutAWFPrefix(t *testing.T) {
 	assert.Equal(t, "custom-plugin-name", name)
 }
 
-func newTestAPIBaseURLDoer() *apiBaseURLDoer {
-	return newAPIBaseURLDoer("http://localhost:9999", &http.Client{Timeout: 1 * time.Second})
-}
-
 func TestAPIBaseURLDoer_RewritesGitHubURL(t *testing.T) {
-	doer := newTestAPIBaseURLDoer()
+	doer := registry.NewGitHubAPIDoer("http://localhost:9999", &http.Client{Timeout: 1 * time.Second})
 
 	req, err := http.NewRequestWithContext(t.Context(), "GET", "https://api.github.com/repos/owner/repo", http.NoBody)
 	require.NoError(t, err)
@@ -174,7 +167,7 @@ func TestAPIBaseURLDoer_RewritesGitHubURL(t *testing.T) {
 }
 
 func TestAPIBaseURLDoer_PassthroughNonGitHubURL(t *testing.T) {
-	doer := newTestAPIBaseURLDoer()
+	doer := registry.NewGitHubAPIDoer("http://localhost:9999", &http.Client{Timeout: 1 * time.Second})
 
 	// Use a non-routable address to guarantee connection failure without hitting a real server.
 	req, err := http.NewRequestWithContext(t.Context(), "GET", "http://192.0.2.1/some/path", http.NoBody)
@@ -186,7 +179,7 @@ func TestAPIBaseURLDoer_PassthroughNonGitHubURL(t *testing.T) {
 }
 
 func TestAPIBaseURLDoer_InvalidAPIBase_ReturnsError(t *testing.T) {
-	doer := newAPIBaseURLDoer("://invalid", &http.Client{})
+	doer := registry.NewGitHubAPIDoer("://invalid", &http.Client{})
 
 	req, err := http.NewRequestWithContext(t.Context(), "GET", "https://api.github.com/repos/owner/repo", http.NoBody)
 	require.NoError(t, err)
@@ -195,51 +188,4 @@ func TestAPIBaseURLDoer_InvalidAPIBase_ReturnsError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid GITHUB_API_URL")
-}
-
-func TestDownloadTextFile_Success(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "abc123  file1\ndef456  file2")
-	}))
-	defer server.Close()
-
-	content, err := downloadTextFile(context.Background(), server.URL)
-
-	require.NoError(t, err)
-	assert.Contains(t, content, "abc123")
-	assert.Contains(t, content, "file1")
-}
-
-func TestDownloadTextFile_HTTPError_ReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	_, err := downloadTextFile(context.Background(), server.URL)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "HTTP 404")
-}
-
-func TestDownloadTextFile_InvalidURL_ReturnsError(t *testing.T) {
-	_, err := downloadTextFile(context.Background(), "not a valid url")
-
-	assert.Error(t, err)
-}
-
-func TestDownloadTextFile_ContextCancelled_ReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := downloadTextFile(ctx, server.URL)
-
-	assert.Error(t, err)
 }
