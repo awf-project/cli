@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Use boolean struct fields on domain entities to signal optional infrastructure behaviors (e.g., IsScriptFile bool); default to false to preserve backward compatibility
-- All port interface methods performing blocking operations must accept context.Context as first parameter for cancellation propagation through layers
 - When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
 - In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
 - Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
@@ -239,10 +237,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Verify pkg/ package extractions are complete by confirming orphaned imports are removed and make lint passes with zero violations
 - Extract duplicate interface types across packages when structurally identical; avoid declaring the same type signature in multiple infrastructure files
 - Extract shared configuration keys as named constants in the application layer (e.g., AWFPackNameKey); import and use throughout codebase rather than duplicating string literals
+- Wire optional dependencies via Set*() calls in consistent order; SetConversationManager must follow SetAgentRegistry to ensure agent registry is available before conversation manager initialization
+- Initialize ApproximationTokenizer immediately before NewConversationManager in interfaces layer; token counting must be ready before conversation context is established
 
 ## Common Pitfalls
 
-- Never check if maps are nil before calling len(); Go defines len() as zero for nil maps
 - Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
 - Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
 - Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
@@ -283,10 +282,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Always validate user-provided pack and workflow names from YAML input; use filepath.Clean and verify no path traversal patterns before filepath.Join operations
 - Never rely on single-error checks in file operations; handle os.IsPermission and os.IsTimeout separately from os.IsNotExist to avoid silent failures
 - Never panic on nil input in public infrastructure functions; return explicit error type to enable proper error handling by callers
+- Never wire optional infrastructure in runDryRun or runInteractive execution paths; these preview modes must remain infrastructure-free to avoid polluting dry-run output
 
 ## Test Conventions
 
-- Use HTTPDoer interface in pkg/httpx tests to mock HTTP behavior (timeouts, DNS errors, connection failures) without requiring adapters or *http.Client modifications
 - Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 - Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 - Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
@@ -306,6 +305,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Write integration tests covering all command lifecycle paths (success, errors, state transitions) before marking implementation complete; include platform detection edge cases
 - Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
+- When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
 
 ## Review Standards
 

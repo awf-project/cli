@@ -162,9 +162,9 @@ func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestDryRun_ConversationConfiguration(t *testing.T) {
@@ -231,9 +231,9 @@ func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
@@ -259,9 +259,9 @@ func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestTokenCounting_InputOutputTracking(t *testing.T) {
@@ -287,9 +287,9 @@ func TestTokenCounting_InputOutputTracking(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestStopCondition_ExpressionEvaluation(t *testing.T) {
@@ -315,9 +315,9 @@ func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
@@ -343,9 +343,9 @@ func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestInjectContext_ContinueConversation(t *testing.T) {
@@ -371,9 +371,9 @@ func TestInjectContext_ContinueConversation(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestStateInterpolation_ConversationAccess(t *testing.T) {
@@ -399,9 +399,9 @@ func TestStateInterpolation_ConversationAccess(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Conversation manager not configured — expect error until feature is fully wired
+	// Then: Should fail due to missing API credentials, not wiring error
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestParallelConversations_ConcurrentExecution(t *testing.T) {
@@ -427,7 +427,7 @@ func TestParallelConversations_ConcurrentExecution(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Workflow errors expected — either missing inputs or conversation manager not configured
+	// Then: Workflow errors expected — provider error since manager is now wired
 	require.Error(t, err)
 }
 
@@ -512,9 +512,9 @@ func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail because conversation manager is not configured in CLI test setup
-	require.Error(t, err, "Should fail without conversation manager configured")
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	// Then: Should fail due to missing API credentials, not wiring error
+	require.Error(t, err, "Should fail without API credentials")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestDiagramGeneration_ConversationSteps(t *testing.T) {
@@ -656,9 +656,9 @@ func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail because conversation manager is not configured in test setup
-	require.Error(t, err, "Should fail without conversation manager configured")
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	// Then: Should fail due to missing API credentials, not wiring error
+	require.Error(t, err, "Should fail without API credentials")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
@@ -683,9 +683,9 @@ func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail because conversation manager is not configured in test setup
-	require.Error(t, err, "Should fail without conversation manager configured")
-	assert.Contains(t, err.Error(), "conversation manager not configured")
+	// Then: Should fail due to missing API credentials, not wiring error
+	require.Error(t, err, "Should fail without API credentials")
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
 }
 
 func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
@@ -708,7 +708,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:      true,
 			expectedStop:    "condition",
 			stepName:        "review",
-			wantErrContains: "conversation manager not configured",
+			wantErrContains: "agent",
 		},
 		{
 			name:            "multiturn_conversation",
@@ -717,7 +717,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:      true,
 			expectedStop:    "max_turns",
 			stepName:        "first_turn",
-			wantErrContains: "conversation manager not configured",
+			wantErrContains: "agent",
 		},
 		{
 			name:            "context_window_management",
@@ -726,7 +726,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:      true,
 			expectedStop:    "condition",
 			stepName:        "review",
-			wantErrContains: "conversation manager not configured",
+			wantErrContains: "agent",
 		},
 		{
 			name:            "max_turns_limit",
@@ -735,7 +735,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:      true,
 			expectedStop:    "max_turns",
 			stepName:        "single_turn",
-			wantErrContains: "conversation manager not configured",
+			wantErrContains: "agent",
 		},
 		{
 			name:         "parallel_conversations",
@@ -744,7 +744,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:   true,
 			expectedStop: "",
 			stepName:     "parallel_conversations",
-			// Parallel conversation steps fail with "conversation manager not configured",
+			// Parallel conversation steps fail with provider error,
 			// which triggers on_failure -> error terminal state. The outer error reflects
 			// the terminal state name rather than the underlying step error.
 			wantErrContains: "workflow reached terminal failure state",
@@ -756,7 +756,7 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			shouldPass:      false, // Expected to fail at handle_failure step
 			expectedStop:    "",
 			stepName:        "conversation_with_retry",
-			wantErrContains: "conversation manager not configured",
+			wantErrContains: "agent",
 		},
 	}
 
@@ -784,10 +784,10 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			cmd.SetArgs(args)
 
 			err := cmd.Execute()
-			_ = buf.String() // output not used — conversation manager not configured
+			_ = buf.String() // output not used — provider API error expected
 
-			// All conversation workflows fail because conversation manager is not configured in test setup
-			require.Error(t, err, "Workflow %s should fail without conversation manager", tc.workflow)
+			// All conversation workflows fail because API credentials are not available in test setup
+			require.Error(t, err, "Workflow %s should fail without API credentials", tc.workflow)
 			assert.Contains(t, err.Error(), tc.wantErrContains,
 				"Workflow %s should fail with expected error", tc.workflow)
 		})
