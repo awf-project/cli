@@ -10,18 +10,19 @@ contributors: ["Alex"]
 
 Last week was a blast! I had many great discussions about AWF and AI in general at Symfony Live. 
 These conversations convinced me that the AWF ecosystem definitely needs a way to share workflows. 
-Although I’m still exploring the best approach, these "packs" will hopefully help spread the word about AWF.
 
 That’s why I’ve been working on [__workflow packs__](https://awf-project.ai/cli/docs/user-guide/workflow-packs/), building on the plugin concept. 
 A workflow pack is a set of workflows, prompts, and scripts that can be installed like a plugin via dedicated commands.
 The only thing you need to be mindful of is what these workflows actually do on your machine,
 given the security implications of AWF’s execution.
 
+Although I’m still exploring the best approach, these "packs" will hopefully help spread the word about AWF.
+
 I also experimented with [translating SpecKit into an AWF workflow](https://github.com/awf-project/awf-workflow-speckit). 
 This journey gave me several ideas on how to improve the agent component. 
 Consequently, __agents will be the main focus of the next release__.
 
-## Why should you use AWF
+## Why should you use AWF?
 
 I want to clarify my position on this, especially since my recent conversations were so insightful.
 
