@@ -16,6 +16,11 @@ func TestListCommand_NoWorkflows(t *testing.T) {
 	// Use temp directory for XDG to isolate from global workflows
 	tmpDir := setupTestDir(t)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", "")
+	t.Setenv("HOME", tmpDir)
+	// Change to temp dir so .awf/workflows resolves to empty dir, not project root
+	t.Chdir(tmpDir)
 
 	cmd := cli.NewRootCommand()
 

@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-04-01
+## [0.6.0] - 2026-04-05
+
+### Fixed
+
+- **B013**: Wire `ConversationManager` into `ExecutionService` — conversation mode workflows (`mode: conversation`) were always failing with `"conversation manager not configured"` because the manager was never instantiated in the CLI layer; all conversation features (session resume, `continue_from`, `inject_context`, stop conditions) now function end-to-end
 
 ### Added
 
