@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **F076**: `awf upgrade` self-update command — checks latest release on GitHub, downloads platform-specific binary, verifies SHA256 checksum, and atomically replaces the current executable; `--check` reports available updates without installing; `--version v0.5.0` installs a specific version; `--force` upgrades even if already on latest or running a dev build; heuristic warning when binary appears managed by a package manager (homebrew, apt, snap, nix); cross-filesystem fallback (copy + chmod) when `os.Rename` fails; `GITHUB_TOKEN` env var supported for rate-limited environments
+
 ### Fixed
 
 - **B014**: Resolve `provider` field through interpolation engine in agent steps — `provider: "{{.inputs.agent}}"` was passed as a literal string to the registry instead of being resolved; now interpolated before lookup in both `executeAgentStep` and `ExecuteConversation` paths; resolution errors include step name context

@@ -44,6 +44,7 @@ Learn how to use AWF effectively:
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types
 - [Workflow Packs](user-guide/workflow-packs.md) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
+- [Upgrading AWF](user-guide/upgrade.md) - Self-update command with version checking, checksum verification, and atomic binary replacement
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 
