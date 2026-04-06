@@ -327,7 +327,7 @@ func TestConversationManager_initializeConversationState(t *testing.T) {
 			}
 			execCtx := workflow.NewExecutionContext("test-wf", "test")
 
-			state, prompt, err := mgr.initializeConversationState(tt.step, &workflow.ConversationConfig{}, execCtx, tt.buildContext)
+			state, prompt, err := mgr.initializeConversationState(tt.step, tt.step.Agent.Provider, &workflow.ConversationConfig{}, execCtx, tt.buildContext)
 
 			if tt.expectError {
 				assert.Error(t, err)

@@ -2010,8 +2010,12 @@ func (s *ExecutionService) executeAgentStep(
 		return "", fmt.Errorf("step %s: resolve prompt: %w", step.Name, err)
 	}
 
-	// Get provider from registry
-	provider, err := s.agentRegistry.Get(step.Agent.Provider)
+	resolvedProvider, err := s.resolver.Resolve(step.Agent.Provider, intCtx)
+	if err != nil {
+		return "", fmt.Errorf("step %s: resolve provider: %w", step.Name, err)
+	}
+
+	provider, err := s.agentRegistry.Get(resolvedProvider)
 	if err != nil {
 		return "", fmt.Errorf("step %s: %w", step.Name, err)
 	}
@@ -2022,13 +2026,13 @@ func (s *ExecutionService) executeAgentStep(
 			s.logger.Warn("dangerouslySkipPermissions enabled",
 				"workflow", execCtx.WorkflowName,
 				"step", step.Name,
-				"provider", step.Agent.Provider,
+				"provider", resolvedProvider,
 				"timestamp", time.Now().Format(time.RFC3339))
 		}
 	}
 
 	// Execute the agent
-	s.logger.Debug("executing agent step", "step", step.Name, "provider", step.Agent.Provider)
+	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
 	result, execErr := provider.Execute(stepCtx, resolvedPrompt, step.Agent.Options)
 
 	// Record step state

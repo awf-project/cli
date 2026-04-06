@@ -34,6 +34,36 @@ states:
 awf run workflow --input code="$(cat main.py)"
 ```
 
+### Dynamic Provider Selection
+
+The `provider` field supports template interpolation, enabling dynamic provider selection based on workflow inputs or state:
+
+```yaml
+inputs:
+  - name: model_source
+    type: string
+    default: claude
+
+states:
+  initial: process
+
+  process:
+    type: agent
+    provider: "{{.inputs.model_source}}"
+    prompt: "Process: {{.inputs.data}}"
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+```bash
+awf run workflow --input model_source=gemini --input data="..."
+awf run workflow --input model_source=codex --input data="..."
+```
+
+This enables workflows to support multiple AI backends without duplicating step definitions.
+
 ## Supported Providers
 
 ### Claude (Anthropic)

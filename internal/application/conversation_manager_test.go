@@ -2169,3 +2169,114 @@ func TestConversationManager_InjectContext_TemplateInterpolation(t *testing.T) {
 	assert.Contains(t, secondTurnPrompt, "Results: all tests passed, task: review",
 		"inject_context should interpolate both states.* and inputs.* namespaces (FR-007)")
 }
+
+// TestConversationManager_ProviderInterpolation tests that the provider field
+// is correctly interpolated before registry lookup in conversation mode.
+func TestConversationManager_ProviderInterpolation(t *testing.T) {
+	tests := []struct {
+		name             string
+		providerExpr     string
+		resolveMap       map[string]string
+		registeredNames  []string
+		expectError      bool
+		expectedErrorMsg string
+	}{
+		{
+			name:             "literal provider name",
+			providerExpr:     "claude",
+			resolveMap:       map[string]string{"claude": "claude"},
+			registeredNames:  []string{"claude"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "interpolated provider from inputs",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "claude"},
+			registeredNames:  []string{"claude"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "interpolated provider different value",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "gemini"},
+			registeredNames:  []string{"gemini"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "invalid template expression",
+			providerExpr:     "{{invalid",
+			resolveMap:       map[string]string{},
+			registeredNames:  []string{},
+			expectError:      true,
+			expectedErrorMsg: "resolve provider",
+		},
+		{
+			name:             "resolved provider name not in registry",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "unknown"},
+			registeredNames:  []string{"claude"},
+			expectError:      true,
+			expectedErrorMsg: "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			evaluator := newMockExpressionEvaluator()
+			configResolver := newConfigurableResolver(tt.resolveMap)
+			tokenizer := newMockTokenizer()
+
+			registry := mocks.NewMockAgentRegistry()
+			for _, name := range tt.registeredNames {
+				provider := mocks.NewMockAgentProvider(name)
+				_ = registry.Register(provider)
+			}
+
+			manager := application.NewConversationManager(
+				logger,
+				evaluator,
+				configResolver,
+				tokenizer,
+				registry,
+			)
+
+			step := &workflow.Step{
+				Name: "converse",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider: tt.providerExpr,
+					Mode:     "conversation",
+				},
+			}
+
+			config := &workflow.ConversationConfig{
+				MaxTurns: 1,
+			}
+
+			execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+			execCtx.States = make(map[string]workflow.StepState)
+
+			buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
+				ctx := interpolation.NewContext()
+				ctx.Inputs["agent"] = "claude"
+				return ctx
+			}
+
+			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+
+			if tt.expectError {
+				require.Error(t, err, "should return error")
+				if tt.expectedErrorMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrorMsg, "error should contain expected message")
+				}
+			} else {
+				require.NoError(t, err, "should not return error")
+				require.NotNil(t, result)
+			}
+		})
+	}
+}

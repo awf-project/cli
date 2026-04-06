@@ -557,6 +557,14 @@ command: curl -H "Authorization: Bearer {{.env.API_KEY}}" https://api.example.co
 
 ## Interpolation in Different Contexts
 
+### Agent Provider
+
+```yaml
+provider: "{{.inputs.agent}}"
+```
+
+Resolves the provider name before registry lookup. Works in both `type: agent` (single-shot) and `mode: conversation` steps.
+
 ### Commands
 
 ```yaml

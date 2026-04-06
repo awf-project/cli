@@ -70,7 +70,7 @@ states:
 |--------|------|----------|---------|-------------|
 | `type` | string | Yes | — | Must be `agent` |
 | `mode` | string | No | `step` | Set to `conversation` to enable multi-turn mode |
-| `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
+| `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible`. Supports dynamic interpolation: `{{.inputs.agent}}` |
 | `system_prompt` | string | No | — | System message for the entire conversation (preserved during truncation) |
 | `initial_prompt` | string | Yes | — | Initial user message to start the conversation |
 | `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context-mid-conversation)) |

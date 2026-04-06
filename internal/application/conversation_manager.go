@@ -62,6 +62,7 @@ func (m *ConversationManager) validateConversationInputs(
 // loads prior conversation state from the referenced predecessor step.
 func (m *ConversationManager) initializeConversationState(
 	step *workflow.Step,
+	resolvedProvider string,
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
@@ -80,8 +81,8 @@ func (m *ConversationManager) initializeConversationState(
 			return nil, "", fmt.Errorf("continue_from: step %q has no session ID or conversation history to resume", config.ContinueFrom)
 		}
 		// openai_compatible uses Turns for session resume, not SessionID
-		if step.Agent.Provider == "openai_compatible" && len(prior.Turns) == 0 {
-			return nil, "", fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", config.ContinueFrom, step.Agent.Provider)
+		if resolvedProvider == "openai_compatible" && len(prior.Turns) == 0 {
+			return nil, "", fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", config.ContinueFrom, resolvedProvider)
 		}
 		// Clone prior state for the new step
 		state = &workflow.ConversationState{
@@ -104,7 +105,7 @@ func (m *ConversationManager) initializeConversationState(
 	intCtx := buildContext(execCtx)
 	resolvedPrompt, err := m.resolver.Resolve(initialPrompt, intCtx)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("step %s: resolve prompt: %w", step.Name, err)
 	}
 
 	return state, resolvedPrompt, nil
@@ -201,12 +202,18 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, err
 	}
 
-	provider, err := m.agentRegistry.Get(step.Agent.Provider)
+	intCtx := buildContext(execCtx)
+	resolvedProvider, err := m.resolver.Resolve(step.Agent.Provider, intCtx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("step %s: resolve provider: %w", step.Name, err)
 	}
 
-	state, resolvedPrompt, err := m.initializeConversationState(step, config, execCtx, buildContext)
+	provider, err := m.agentRegistry.Get(resolvedProvider)
+	if err != nil {
+		return nil, fmt.Errorf("step %s: %w", step.Name, err)
+	}
+
+	state, resolvedPrompt, err := m.initializeConversationState(step, resolvedProvider, config, execCtx, buildContext)
 	if err != nil {
 		return nil, err
 	}
