@@ -32,6 +32,9 @@ title: "CLI Commands"
 | `awf workflow remove <name>` | Remove an installed workflow pack |
 | `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf config show` | Display project configuration |
+| `awf upgrade` | Upgrade AWF to the latest version |
+| `awf upgrade --check` | Check for available updates without installing |
+| `awf upgrade --version <tag>` | Install a specific version |
 | `awf version` | Show version info |
 | `awf completion <shell>` | Generate shell autocompletion |
 

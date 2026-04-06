@@ -242,8 +242,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- Combine consecutive function parameters of the same type into single type declaration (e.g., user, errorMsg string instead of user string, errorMsg string)
-- Avoid package names that conflict with Go standard library packages (plugin, httputil, sql); rename packages to prevent revive var-naming lint violations
 - Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
 - Always provide fallback execution paths for optional infrastructure features; when flags are false or conditions unmet, fall back to standard behavior
 - For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
@@ -283,6 +281,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Never rely on single-error checks in file operations; handle os.IsPermission and os.IsTimeout separately from os.IsNotExist to avoid silent failures
 - Never panic on nil input in public infrastructure functions; return explicit error type to enable proper error handling by callers
 - Never wire optional infrastructure in runDryRun or runInteractive execution paths; these preview modes must remain infrastructure-free to avoid polluting dry-run output
+- Use EvalSymlinks + atomic rename for production binary replacement; include cross-FS fallback to handle moves across partitions
+- Warn when binary is in package-manager paths; allow --force override rather than blocking to enable advanced workflows
 
 ## Test Conventions
 

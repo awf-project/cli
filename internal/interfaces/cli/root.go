@@ -96,6 +96,7 @@ Examples:
 	cmd.AddCommand(newConfigCommand(cfg))
 	cmd.AddCommand(newDiagramCommand(cfg))
 	cmd.AddCommand(newErrorCommand(cfg))
+	cmd.AddCommand(newUpgradeCommand(cfg))
 
 	return cmd
 }

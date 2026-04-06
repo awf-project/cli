@@ -240,6 +240,9 @@ components:
   infra-workflowpkg:
     in: infrastructure/workflowpkg
 
+  infra-updater:
+    in: infrastructure/updater
+
   infra-xdg:
     in: infrastructure/xdg
 
@@ -471,6 +474,12 @@ deps:
       - go-stdlib
       - yaml
 
+  infra-updater:
+    mayDependOn:
+      - domain-errors
+    canUse:
+      - go-stdlib
+
   infra-xdg:
     canUse:
       - go-stdlib
@@ -500,6 +509,7 @@ deps:
       - infra-repository
       - infra-store
       - infra-tokenizer
+      - infra-updater
       - infra-workflowpkg
       - infra-xdg
       - interfaces-cli-ui

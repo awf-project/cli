@@ -85,6 +85,27 @@ const (
 	ErrorCodeSystemIOPermissionDenied ErrorCode = "SYSTEM.IO.PERMISSION_DENIED"
 )
 
+// Error code constants for USER.UPGRADE category (exit code 1).
+const (
+	// ErrorCodeUserUpgradeVersionNotFound indicates the requested version was not found in releases.
+	ErrorCodeUserUpgradeVersionNotFound ErrorCode = "USER.UPGRADE.VERSION_NOT_FOUND"
+
+	// ErrorCodeUserUpgradeAlreadyLatest indicates the binary is already up to date.
+	ErrorCodeUserUpgradeAlreadyLatest ErrorCode = "USER.UPGRADE.ALREADY_LATEST"
+)
+
+// Error code constants for SYSTEM.UPGRADE category (exit code 4).
+const (
+	// ErrorCodeSystemUpgradeChecksumMismatch indicates SHA256 checksum verification failed.
+	ErrorCodeSystemUpgradeChecksumMismatch ErrorCode = "SYSTEM.UPGRADE.CHECKSUM_MISMATCH"
+
+	// ErrorCodeSystemUpgradeBinaryReplaceFailed indicates the binary replacement failed.
+	ErrorCodeSystemUpgradeBinaryReplaceFailed ErrorCode = "SYSTEM.UPGRADE.BINARY_REPLACE_FAILED"
+
+	// ErrorCodeSystemUpgradeDownloadFailed indicates the release download failed.
+	ErrorCodeSystemUpgradeDownloadFailed ErrorCode = "SYSTEM.UPGRADE.DOWNLOAD_FAILED"
+)
+
 // Category extracts the top-level category from the error code.
 // Returns empty string if the code format is invalid.
 //

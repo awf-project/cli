@@ -153,6 +153,8 @@ func TestErrorCodeConstants_AllValid(t *testing.T) {
 		errors.ErrorCodeUserInputMissingFile,
 		errors.ErrorCodeUserInputInvalidFormat,
 		errors.ErrorCodeUserInputValidationFailed,
+		errors.ErrorCodeUserUpgradeVersionNotFound,
+		errors.ErrorCodeUserUpgradeAlreadyLatest,
 		// WORKFLOW category
 		errors.ErrorCodeWorkflowParseYAMLSyntax,
 		errors.ErrorCodeWorkflowParseUnknownField,
@@ -168,6 +170,9 @@ func TestErrorCodeConstants_AllValid(t *testing.T) {
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
 		errors.ErrorCodeSystemIOPermissionDenied,
+		errors.ErrorCodeSystemUpgradeChecksumMismatch,
+		errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+		errors.ErrorCodeSystemUpgradeDownloadFailed,
 	}
 
 	for _, code := range allCodes {
@@ -183,6 +188,8 @@ func TestErrorCodeConstants_UniqueValues(t *testing.T) {
 		errors.ErrorCodeUserInputMissingFile,
 		errors.ErrorCodeUserInputInvalidFormat,
 		errors.ErrorCodeUserInputValidationFailed,
+		errors.ErrorCodeUserUpgradeVersionNotFound,
+		errors.ErrorCodeUserUpgradeAlreadyLatest,
 		errors.ErrorCodeWorkflowParseYAMLSyntax,
 		errors.ErrorCodeWorkflowParseUnknownField,
 		errors.ErrorCodeWorkflowValidationCycleDetected,
@@ -195,6 +202,9 @@ func TestErrorCodeConstants_UniqueValues(t *testing.T) {
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
 		errors.ErrorCodeSystemIOPermissionDenied,
+		errors.ErrorCodeSystemUpgradeChecksumMismatch,
+		errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+		errors.ErrorCodeSystemUpgradeDownloadFailed,
 	}
 
 	seen := make(map[string]bool)
@@ -605,6 +615,8 @@ func TestErrorCode_ExitCode_AllConstants(t *testing.T) {
 		errors.ErrorCodeUserInputMissingFile,
 		errors.ErrorCodeUserInputInvalidFormat,
 		errors.ErrorCodeUserInputValidationFailed,
+		errors.ErrorCodeUserUpgradeVersionNotFound,
+		errors.ErrorCodeUserUpgradeAlreadyLatest,
 	}
 	for _, code := range userCodes {
 		t.Run(string(code), func(t *testing.T) {
@@ -643,6 +655,9 @@ func TestErrorCode_ExitCode_AllConstants(t *testing.T) {
 		errors.ErrorCodeSystemIOReadFailed,
 		errors.ErrorCodeSystemIOWriteFailed,
 		errors.ErrorCodeSystemIOPermissionDenied,
+		errors.ErrorCodeSystemUpgradeChecksumMismatch,
+		errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+		errors.ErrorCodeSystemUpgradeDownloadFailed,
 	}
 	for _, code := range systemCodes {
 		t.Run(string(code), func(t *testing.T) {
@@ -697,6 +712,115 @@ func TestErrorCode_ExitCode_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestErrorCodeConstants_UPGRADE_Category(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     errors.ErrorCode
+		expected string
+	}{
+		{
+			name:     "ErrorCodeUserUpgradeVersionNotFound",
+			code:     errors.ErrorCodeUserUpgradeVersionNotFound,
+			expected: "USER.UPGRADE.VERSION_NOT_FOUND",
+		},
+		{
+			name:     "ErrorCodeUserUpgradeAlreadyLatest",
+			code:     errors.ErrorCodeUserUpgradeAlreadyLatest,
+			expected: "USER.UPGRADE.ALREADY_LATEST",
+		},
+		{
+			name:     "ErrorCodeSystemUpgradeChecksumMismatch",
+			code:     errors.ErrorCodeSystemUpgradeChecksumMismatch,
+			expected: "SYSTEM.UPGRADE.CHECKSUM_MISMATCH",
+		},
+		{
+			name:     "ErrorCodeSystemUpgradeBinaryReplaceFailed",
+			code:     errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+			expected: "SYSTEM.UPGRADE.BINARY_REPLACE_FAILED",
+		},
+		{
+			name:     "ErrorCodeSystemUpgradeDownloadFailed",
+			code:     errors.ErrorCodeSystemUpgradeDownloadFailed,
+			expected: "SYSTEM.UPGRADE.DOWNLOAD_FAILED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NotEmpty(t, string(tt.code))
+			assert.Equal(t, tt.expected, string(tt.code))
+		})
+	}
+}
+
+func TestErrorCode_UPGRADE_Methods(t *testing.T) {
+	tests := []struct {
+		name           string
+		code           errors.ErrorCode
+		expectCategory string
+		expectSubcat   string
+		expectSpecific string
+		expectValid    bool
+		expectExitCode int
+	}{
+		{
+			name:           "USER.UPGRADE.VERSION_NOT_FOUND",
+			code:           errors.ErrorCodeUserUpgradeVersionNotFound,
+			expectCategory: "USER",
+			expectSubcat:   "UPGRADE",
+			expectSpecific: "VERSION_NOT_FOUND",
+			expectValid:    true,
+			expectExitCode: 1,
+		},
+		{
+			name:           "USER.UPGRADE.ALREADY_LATEST",
+			code:           errors.ErrorCodeUserUpgradeAlreadyLatest,
+			expectCategory: "USER",
+			expectSubcat:   "UPGRADE",
+			expectSpecific: "ALREADY_LATEST",
+			expectValid:    true,
+			expectExitCode: 1,
+		},
+		{
+			name:           "SYSTEM.UPGRADE.CHECKSUM_MISMATCH",
+			code:           errors.ErrorCodeSystemUpgradeChecksumMismatch,
+			expectCategory: "SYSTEM",
+			expectSubcat:   "UPGRADE",
+			expectSpecific: "CHECKSUM_MISMATCH",
+			expectValid:    true,
+			expectExitCode: 4,
+		},
+		{
+			name:           "SYSTEM.UPGRADE.BINARY_REPLACE_FAILED",
+			code:           errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+			expectCategory: "SYSTEM",
+			expectSubcat:   "UPGRADE",
+			expectSpecific: "BINARY_REPLACE_FAILED",
+			expectValid:    true,
+			expectExitCode: 4,
+		},
+		{
+			name:           "SYSTEM.UPGRADE.DOWNLOAD_FAILED",
+			code:           errors.ErrorCodeSystemUpgradeDownloadFailed,
+			expectCategory: "SYSTEM",
+			expectSubcat:   "UPGRADE",
+			expectSpecific: "DOWNLOAD_FAILED",
+			expectValid:    true,
+			expectExitCode: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectCategory, tt.code.Category())
+			assert.Equal(t, tt.expectSubcat, tt.code.Subcategory())
+			assert.Equal(t, tt.expectSpecific, tt.code.Specific())
+			assert.Equal(t, tt.expectValid, tt.code.IsValid())
+			assert.Equal(t, tt.expectExitCode, tt.code.ExitCode())
+		})
+	}
+}
+
 func TestErrorCode_Taxonomy_Coverage(t *testing.T) {
 	// Verify taxonomy covers all categories from spec
 	categories := map[string][]errors.ErrorCode{
@@ -704,6 +828,8 @@ func TestErrorCode_Taxonomy_Coverage(t *testing.T) {
 			errors.ErrorCodeUserInputMissingFile,
 			errors.ErrorCodeUserInputInvalidFormat,
 			errors.ErrorCodeUserInputValidationFailed,
+			errors.ErrorCodeUserUpgradeVersionNotFound,
+			errors.ErrorCodeUserUpgradeAlreadyLatest,
 		},
 		"WORKFLOW": {
 			errors.ErrorCodeWorkflowParseYAMLSyntax,
@@ -721,6 +847,9 @@ func TestErrorCode_Taxonomy_Coverage(t *testing.T) {
 			errors.ErrorCodeSystemIOReadFailed,
 			errors.ErrorCodeSystemIOWriteFailed,
 			errors.ErrorCodeSystemIOPermissionDenied,
+			errors.ErrorCodeSystemUpgradeChecksumMismatch,
+			errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+			errors.ErrorCodeSystemUpgradeDownloadFailed,
 		},
 	}
 
@@ -755,6 +884,14 @@ func TestErrorCode_Taxonomy_Subcategories(t *testing.T) {
 				errors.ErrorCodeUserInputMissingFile,
 				errors.ErrorCodeUserInputInvalidFormat,
 				errors.ErrorCodeUserInputValidationFailed,
+			},
+		},
+		{
+			category:    "USER",
+			subcategory: "UPGRADE",
+			codes: []errors.ErrorCode{
+				errors.ErrorCodeUserUpgradeVersionNotFound,
+				errors.ErrorCodeUserUpgradeAlreadyLatest,
 			},
 		},
 		{
@@ -796,6 +933,15 @@ func TestErrorCode_Taxonomy_Subcategories(t *testing.T) {
 				errors.ErrorCodeSystemIOReadFailed,
 				errors.ErrorCodeSystemIOWriteFailed,
 				errors.ErrorCodeSystemIOPermissionDenied,
+			},
+		},
+		{
+			category:    "SYSTEM",
+			subcategory: "UPGRADE",
+			codes: []errors.ErrorCode{
+				errors.ErrorCodeSystemUpgradeChecksumMismatch,
+				errors.ErrorCodeSystemUpgradeBinaryReplaceFailed,
+				errors.ErrorCodeSystemUpgradeDownloadFailed,
 			},
 		},
 	}
