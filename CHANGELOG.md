@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **B014**: Resolve `provider` field through interpolation engine in agent steps — `provider: "{{.inputs.agent}}"` was passed as a literal string to the registry instead of being resolved; now interpolated before lookup in both `executeAgentStep` and `ExecuteConversation` paths; resolution errors include step name context
+
 ## [0.6.0] - 2026-04-05
 
 ### Fixed

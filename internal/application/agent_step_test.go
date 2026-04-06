@@ -3,6 +3,8 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1278,4 +1281,163 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, workflow.StatusFailed, state.Status)
 	assert.Contains(t, state.Error, "network connection failed")
+}
+
+// configurableResolver is a test resolver that maps template expressions to resolved values.
+// Used for testing interpolation behavior with specific mappings.
+// For unmapped templates (not in mapping), it passes through as-is if not a template expression,
+// otherwise returns an error.
+type configurableResolver struct {
+	mapping map[string]string
+}
+
+func newConfigurableResolver(mapping map[string]string) *configurableResolver {
+	return &configurableResolver{mapping: mapping}
+}
+
+func (c *configurableResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	// Check if this exact template is in our mapping
+	if resolved, ok := c.mapping[template]; ok {
+		return resolved, nil
+	}
+	// If not in mapping and doesn't look like a template, pass through
+	// (this allows non-templated strings like "Test prompt" to work)
+	if !strings.Contains(template, "{{") && !strings.Contains(template, "}}") {
+		return template, nil
+	}
+	// If it looks like a template but isn't in mapping, return error
+	return "", fmt.Errorf("template parse error: %s", template)
+}
+
+// TestExecutionService_AgentStep_ProviderInterpolation tests that the provider field
+// is correctly interpolated before registry lookup.
+func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
+	tests := []struct {
+		name             string
+		providerExpr     string
+		resolveMap       map[string]string
+		registeredNames  []string
+		expectError      bool
+		expectedErrorMsg string
+	}{
+		{
+			name:             "literal provider name",
+			providerExpr:     "claude",
+			resolveMap:       map[string]string{"claude": "claude"}, // pass-through
+			registeredNames:  []string{"claude"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "interpolated provider from inputs",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "claude"},
+			registeredNames:  []string{"claude"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "interpolated provider different value",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "gemini"},
+			registeredNames:  []string{"gemini"},
+			expectError:      false,
+			expectedErrorMsg: "",
+		},
+		{
+			name:             "invalid template expression",
+			providerExpr:     "{{invalid",
+			resolveMap:       map[string]string{},
+			registeredNames:  []string{},
+			expectError:      true,
+			expectedErrorMsg: "resolve provider",
+		},
+		{
+			name:             "resolved provider name not in registry",
+			providerExpr:     "{{inputs.agent}}",
+			resolveMap:       map[string]string{"{{inputs.agent}}": "unknown"},
+			registeredNames:  []string{"claude"},
+			expectError:      true,
+			expectedErrorMsg: "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newMockRepository()
+			repo.workflows["provider-interp"] = &workflow.Workflow{
+				Name:    "provider-interp",
+				Initial: "ask",
+				Inputs: []workflow.Input{
+					{Name: "agent", Type: "string", Default: "claude"},
+				},
+				Steps: map[string]*workflow.Step{
+					"ask": {
+						Name: "ask",
+						Type: workflow.StepTypeAgent,
+						Agent: &workflow.AgentConfig{
+							Provider: tt.providerExpr,
+							Prompt:   "Test prompt",
+						},
+						OnSuccess: "done",
+					},
+					"done": {
+						Name: "done",
+						Type: workflow.StepTypeTerminal,
+					},
+				},
+			}
+
+			configResolver := newConfigurableResolver(tt.resolveMap)
+
+			registry := mocks.NewMockAgentRegistry()
+			for _, name := range tt.registeredNames {
+				provider := mocks.NewMockAgentProvider(name)
+				provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+					return &workflow.AgentResult{
+						Provider:    name,
+						Output:      "Result from " + name,
+						Response:    map[string]any{},
+						Tokens:      50,
+						Error:       nil,
+						StartedAt:   time.Now(),
+						CompletedAt: time.Now(),
+					}, nil
+				})
+				_ = registry.Register(provider)
+			}
+
+			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+			execSvc := application.NewExecutionService(
+				wfSvc,
+				newMockExecutor(),
+				newMockParallelExecutor(),
+				newMockStateStore(),
+				&mockLogger{},
+				configResolver,
+				nil,
+			)
+			execSvc.SetAgentRegistry(registry)
+
+			// Provide input for interpolation
+			ctx, err := execSvc.Run(context.Background(), "provider-interp", map[string]any{
+				"agent": "claude",
+			})
+
+			if tt.expectError {
+				require.Error(t, err, "should return error")
+				if tt.expectedErrorMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrorMsg, "error should contain expected message")
+				}
+				assert.Equal(t, workflow.StatusFailed, ctx.Status)
+			} else {
+				require.NoError(t, err, "should not return error")
+				assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+
+				state, ok := ctx.GetStepState("ask")
+				require.True(t, ok, "step state should be recorded")
+				assert.Equal(t, workflow.StatusCompleted, state.Status)
+			}
+		})
+	}
 }

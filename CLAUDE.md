@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- When documenting code duplication across layers in comments, include explicit file path cross-references to prevent maintenance divergence (e.g., `// Note: Parallel definitions in pkg/interpolation/reference.go`)
 - In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
 - Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
 - Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
@@ -239,6 +238,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract shared configuration keys as named constants in the application layer (e.g., AWFPackNameKey); import and use throughout codebase rather than duplicating string literals
 - Wire optional dependencies via Set*() calls in consistent order; SetConversationManager must follow SetAgentRegistry to ensure agent registry is available before conversation manager initialization
 - Initialize ApproximationTokenizer immediately before NewConversationManager in interfaces layer; token counting must be ready before conversation context is established
+- Resolve user-provided interpolated variables before registry or dependency lookups to enable dynamic selection at runtime; apply identical resolution logic across all related code paths
 
 ## Common Pitfalls
 
