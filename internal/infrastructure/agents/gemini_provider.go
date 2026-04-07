@@ -51,15 +51,16 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
 
-	// Note: -p/--prompt is deprecated, use positional argument instead
-	args := []string{prompt}
+	args := []string{"-p", prompt}
 
-	// Apply options (only those supported by Gemini CLI)
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)
 	}
 	if outputFormat, ok := getStringOption(options, "output_format"); ok {
 		args = append([]string{"--output-format", outputFormat}, args...)
+	}
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
 	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
@@ -118,9 +119,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 
 	var args []string
 	if workingState.SessionID != "" {
-		args = []string{"--resume", workingState.SessionID, prompt}
+		args = []string{"--resume", workingState.SessionID, "-p", prompt}
 	} else {
-		args = []string{prompt}
+		args = []string{"-p", prompt}
 		// First turn only: pass system prompt if provided
 		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
 			args = append([]string{"--system-prompt", sysPrompt}, args...)
@@ -132,6 +133,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 	if outputFormat, ok := getStringOption(options, "output_format"); ok {
 		args = append([]string{"--output-format", outputFormat}, args...)
+	}
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
 	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)

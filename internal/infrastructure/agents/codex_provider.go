@@ -64,6 +64,9 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
 		args = append(args, "--quiet")
 	}
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		args = append(args, "--yolo")
+	}
 
 	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
 	completedAt := time.Now()
@@ -145,6 +148,9 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	}
 	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
 		args = append(args, "--quiet")
+	}
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		args = append(args, "--yolo")
 	}
 
 	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)

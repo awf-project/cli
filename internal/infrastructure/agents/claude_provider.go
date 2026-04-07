@@ -69,15 +69,13 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	if outputFormat, ok := getStringOption(options, "output_format"); ok && outputFormat == "json" {
 		args = append(args, "--output-format", "json")
 	}
-	if allowedTools, ok := getStringOption(options, "allowedTools"); ok && allowedTools != "" {
+	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
 		args = append(args, "--allowedTools", allowedTools)
 	}
-	if skipPerms, ok := getBoolOption(options, "dangerouslySkipPermissions"); ok && skipPerms {
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append(args, "--dangerously-skip-permissions")
-		p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
-			"timestamp", time.Now().Format(time.RFC3339),
-			"workflow", getWorkflowID(options),
-			"step", getStepName(options))
+		p.logger.Info("[SECURITY AUDIT] dangerously_skip_permissions enabled",
+			"timestamp", time.Now().Format(time.RFC3339))
 	}
 	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
 	completedAt := time.Now()
@@ -163,15 +161,13 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		}
 	}
 
-	if allowedTools, ok := getStringOption(options, "allowedTools"); ok && allowedTools != "" {
+	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
 		args = append(args, "--allowedTools", allowedTools)
 	}
-	if skipPerms, ok := getBoolOption(options, "dangerouslySkipPermissions"); ok && skipPerms {
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append(args, "--dangerously-skip-permissions")
-		p.logger.Info("[SECURITY AUDIT] dangerouslySkipPermissions enabled",
-			"timestamp", time.Now().Format(time.RFC3339),
-			"workflow", getWorkflowID(options),
-			"step", getStepName(options))
+		p.logger.Info("[SECURITY AUDIT] dangerously_skip_permissions enabled",
+			"timestamp", time.Now().Format(time.RFC3339))
 	}
 
 	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)

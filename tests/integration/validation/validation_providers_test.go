@@ -55,7 +55,7 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 		{
 			name:    "bool_option_dangerous_skip",
 			prompt:  "Test prompt",
-			options: map[string]any{"dangerouslySkipPermissions": true},
+			options: map[string]any{"dangerously_skip_permissions": true},
 		},
 		{
 			name:   "multiple_options",
@@ -348,7 +348,7 @@ func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
 		{
 			name: "wrong_type_bool_string",
 			options: map[string]any{
-				"dangerouslySkipPermissions": "true", // Should be bool
+				"dangerously_skip_permissions": "true", // Should be bool
 			},
 		},
 	}

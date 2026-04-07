@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- In global init, create each directory resource independently; never early-exit when one resource already exists (enables recovery from partial initialization failures)
 - Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
 - Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
 - Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
@@ -239,11 +238,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Wire optional dependencies via Set*() calls in consistent order; SetConversationManager must follow SetAgentRegistry to ensure agent registry is available before conversation manager initialization
 - Initialize ApproximationTokenizer immediately before NewConversationManager in interfaces layer; token counting must be ready before conversation context is established
 - Resolve user-provided interpolated variables before registry or dependency lookups to enable dynamic selection at runtime; apply identical resolution logic across all related code paths
+- Implement per-provider flag mapping without shared abstraction when CLI syntax diverges fundamentally; document divergence (Claude: --flag-name, Gemini: --flag-name=value, Codex: --flag-name) inline
 
 ## Common Pitfalls
 
-- Avoid implicit environment dependencies in tests; mock system calls (os.User, shell detection, file permissions) to ensure execution is deterministic regardless of test runner environment
-- Always provide fallback execution paths for optional infrastructure features; when flags are false or conditions unmet, fall back to standard behavior
 - For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
 - Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
 - Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
@@ -283,6 +281,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Never wire optional infrastructure in runDryRun or runInteractive execution paths; these preview modes must remain infrastructure-free to avoid polluting dry-run output
 - Use EvalSymlinks + atomic rename for production binary replacement; include cross-FS fallback to handle moves across partitions
 - Warn when binary is in package-manager paths; allow --force override rather than blocking to enable advanced workflows
+- Delete dead helper functions immediately when their call sites are removed; verify zero references via grep before committing to prevent stale code
+- Enforce consistent configuration option key naming across all providers using type-safe accessor helpers (getBoolOption, getStringOption); verify no camelCase remnants via grep before final validation
 
 ## Test Conventions
 
