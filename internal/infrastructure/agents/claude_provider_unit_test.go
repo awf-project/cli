@@ -46,7 +46,7 @@ func TestClaudeProvider_Execute_Success(t *testing.T) {
 		{
 			name:       "prompt with allowed tools",
 			prompt:     "test",
-			options:    map[string]any{"allowedTools": "bash,read"},
+			options:    map[string]any{"allowed_tools": "bash,read"},
 			mockStdout: []byte("ok"),
 			wantOutput: "ok",
 		},
@@ -374,14 +374,14 @@ func TestClaudeProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 		{
 			name:         "with allowed tools",
 			prompt:       "test",
-			options:      map[string]any{"allowedTools": "bash,read"},
+			options:      map[string]any{"allowed_tools": "bash,read"},
 			mockOutput:   []byte("ok"),
 			wantContains: []string{"-p", "test", "--allowedTools", "bash,read"},
 		},
 		{
 			name:         "with dangerous skip permissions",
 			prompt:       "test",
-			options:      map[string]any{"dangerouslySkipPermissions": true},
+			options:      map[string]any{"dangerously_skip_permissions": true},
 			mockOutput:   []byte("ok"),
 			wantContains: []string{"-p", "test", "--dangerously-skip-permissions"},
 		},
@@ -821,9 +821,7 @@ func TestClaudeProvider_Execute_MultipleOptions(t *testing.T) {
 	options := map[string]any{
 		"model":         "sonnet",
 		"output_format": "text",
-		"allowedTools":  "bash",
-		"workflowID":    "test-workflow",
-		"stepName":      "test-step",
+		"allowed_tools": "bash",
 	}
 
 	result, err := provider.Execute(context.Background(), "test", options)
@@ -837,6 +835,299 @@ func TestClaudeProvider_Execute_MultipleOptions(t *testing.T) {
 	assert.Equal(t, "claude", calls[0].Name)
 	assert.Contains(t, calls[0].Args, "--model")
 	assert.Contains(t, calls[0].Args, "sonnet")
+}
+
+func TestClaudeProvider_ExecuteConversation_CLIArgumentConstruction(t *testing.T) {
+	tests := []struct {
+		name         string
+		prompt       string
+		options      map[string]any
+		mockOutput   []byte
+		wantContains []string
+	}{
+		{
+			name:         "basic conversation prompt",
+			prompt:       "Hello",
+			options:      nil,
+			mockOutput:   []byte("Hi there!"),
+			wantContains: []string{"-p", "Hello", "--output-format", "json"},
+		},
+		{
+			name:         "with model",
+			prompt:       "test",
+			options:      map[string]any{"model": "opus"},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"-p", "test", "--model", "opus", "--output-format", "json"},
+		},
+		{
+			name:         "with allowed tools",
+			prompt:       "test",
+			options:      map[string]any{"allowed_tools": "bash,read"},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"-p", "test", "--allowedTools", "bash,read", "--output-format", "json"},
+		},
+		{
+			name:         "with dangerous skip permissions",
+			prompt:       "test",
+			options:      map[string]any{"dangerously_skip_permissions": true},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"-p", "test", "--dangerously-skip-permissions", "--output-format", "json"},
+		},
+		{
+			name:   "with all options",
+			prompt: "test",
+			options: map[string]any{
+				"model":                        "sonnet",
+				"allowed_tools":                "bash",
+				"dangerously_skip_permissions": true,
+			},
+			mockOutput: []byte("response"),
+			wantContains: []string{
+				"-p", "test",
+				"--model", "sonnet",
+				"--allowedTools", "bash",
+				"--dangerously-skip-permissions",
+				"--output-format", "json",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockOutput, nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			state := workflow.NewConversationState("You are helpful")
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "claude", calls[0].Name)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, calls[0].Args, want)
+			}
+		})
+	}
+}
+
+func TestClaudeProvider_Execute_AllowedToolsOption(t *testing.T) {
+	tests := []struct {
+		name         string
+		options      map[string]any
+		wantContains []string
+	}{
+		{
+			name:         "without allowed_tools",
+			options:      nil,
+			wantContains: []string{"-p", "prompt"},
+		},
+		{
+			name:         "with allowed_tools",
+			options:      map[string]any{"allowed_tools": "bash,cat,grep"},
+			wantContains: []string{"-p", "prompt", "--allowedTools", "bash,cat,grep"},
+		},
+		{
+			name:         "with empty allowed_tools",
+			options:      map[string]any{"allowed_tools": ""},
+			wantContains: []string{"-p", "prompt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			result, err := provider.Execute(context.Background(), "prompt", tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, calls[0].Args, want)
+			}
+		})
+	}
+}
+
+func TestClaudeProvider_Execute_DangerouslySkipPermissionsOption(t *testing.T) {
+	tests := []struct {
+		name         string
+		options      map[string]any
+		wantContains []string
+	}{
+		{
+			name:         "without dangerously_skip_permissions",
+			options:      nil,
+			wantContains: []string{"-p", "prompt"},
+		},
+		{
+			name:         "with dangerously_skip_permissions true",
+			options:      map[string]any{"dangerously_skip_permissions": true},
+			wantContains: []string{"-p", "prompt", "--dangerously-skip-permissions"},
+		},
+		{
+			name:         "with dangerously_skip_permissions false",
+			options:      map[string]any{"dangerously_skip_permissions": false},
+			wantContains: []string{"-p", "prompt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			result, err := provider.Execute(context.Background(), "prompt", tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, calls[0].Args, want)
+			}
+		})
+	}
+}
+
+func TestClaudeProvider_ExecuteConversation_AllowedToolsOption(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "without allowed_tools",
+			options: nil,
+			wantErr: false,
+		},
+		{
+			name:    "with allowed_tools",
+			options: map[string]any{"allowed_tools": "bash,cat"},
+			wantErr: false,
+		},
+		{
+			name:    "with empty allowed_tools",
+			options: map[string]any{"allowed_tools": ""},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			state := workflow.NewConversationState("You are helpful")
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, "claude", result.Provider)
+			}
+		})
+	}
+}
+
+func TestClaudeProvider_ExecuteConversation_DangerouslySkipPermissionsOption(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "without dangerously_skip_permissions",
+			options: nil,
+			wantErr: false,
+		},
+		{
+			name:    "with dangerously_skip_permissions true",
+			options: map[string]any{"dangerously_skip_permissions": true},
+			wantErr: false,
+		},
+		{
+			name:    "with dangerously_skip_permissions false",
+			options: map[string]any{"dangerously_skip_permissions": false},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			state := workflow.NewConversationState("You are helpful")
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, "claude", result.Provider)
+			}
+		})
+	}
+}
+
+func TestClaudeProvider_OldCamelCaseKeysIgnored(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]any
+	}{
+		{
+			name:    "old allowedTools key is ignored",
+			options: map[string]any{"allowedTools": "bash"},
+		},
+		{
+			name:    "old dangerouslySkipPermissions key is ignored",
+			options: map[string]any{"dangerouslySkipPermissions": true},
+		},
+		{
+			name: "both old keys are ignored",
+			options: map[string]any{
+				"allowedTools":               "bash",
+				"dangerouslySkipPermissions": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+			result, err := provider.Execute(context.Background(), "test", tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+
+			assert.NotContains(t, calls[0].Args, "--dangerously-skip-permissions")
+		})
+	}
 }
 
 // Compile-time verification that test uses correct imports

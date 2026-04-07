@@ -2020,10 +2020,10 @@ func (s *ExecutionService) executeAgentStep(
 		return "", fmt.Errorf("step %s: %w", step.Name, err)
 	}
 
-	// Audit log if dangerouslySkipPermissions is enabled
+	// Audit log if dangerously_skip_permissions is enabled
 	if step.Agent.Options != nil {
-		if skipPerms, ok := step.Agent.Options["dangerouslySkipPermissions"].(bool); ok && skipPerms {
-			s.logger.Warn("dangerouslySkipPermissions enabled",
+		if skipPerms, ok := step.Agent.Options["dangerously_skip_permissions"].(bool); ok && skipPerms {
+			s.logger.Warn("dangerously_skip_permissions enabled",
 				"workflow", execCtx.WorkflowName,
 				"step", step.Name,
 				"provider", resolvedProvider,

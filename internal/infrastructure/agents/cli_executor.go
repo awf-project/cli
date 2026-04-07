@@ -49,16 +49,6 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 		return []byte{}, []byte{}, fmt.Errorf("CLI start failed for '%s': %w", name, startErr)
 	}
 
-	// Ensure complete cleanup after completion (kills orphaned subagents recursively)
-	// This runs AFTER cmd.Wait() returns, cleaning up any descendants still running
-	defer func() {
-		if cmd.Process != nil {
-			pid := cmd.Process.Pid
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-			killDescendants(pid)
-		}
-	}()
-
 	execErr := cmd.Wait()
 
 	stdoutBytes := stdoutBuf.Bytes()
@@ -72,6 +62,11 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	}
 
 	if ctx.Err() != nil {
+		// Context cancelled or timed out: kill orphaned descendants that cmd.Cancel may have missed
+		if cmd.Process != nil {
+			pid := cmd.Process.Pid
+			killDescendants(pid)
+		}
 		return stdoutBytes, stderrBytes, fmt.Errorf("CLI execution cancelled for '%s': %w", name, ctx.Err())
 	}
 

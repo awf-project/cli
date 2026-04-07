@@ -129,6 +129,20 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 			mockStdout:  []byte("code"),
 			wantCLIArgs: []string{"--prompt", "simple"},
 		},
+		{
+			name:        "dangerously_skip_permissions true maps to --yolo",
+			prompt:      "test",
+			options:     map[string]any{"dangerously_skip_permissions": true},
+			mockStdout:  []byte("code"),
+			wantCLIArgs: []string{"--prompt", "test", "--yolo"},
+		},
+		{
+			name:        "dangerously_skip_permissions false omits --yolo",
+			prompt:      "test",
+			options:     map[string]any{"dangerously_skip_permissions": false},
+			mockStdout:  []byte("code"),
+			wantCLIArgs: []string{"--prompt", "test"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -765,6 +779,16 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 			name:        "multiple options",
 			options:     map[string]any{"model": "codex-002", "language": "go", "quiet": true},
 			wantCLIArgs: []string{"--prompt", "test", "--model", "codex-002", "--language", "go", "--quiet"},
+		},
+		{
+			name:        "dangerously_skip_permissions true maps to --yolo",
+			options:     map[string]any{"dangerously_skip_permissions": true},
+			wantCLIArgs: []string{"--prompt", "test", "--yolo"},
+		},
+		{
+			name:        "dangerously_skip_permissions false omits --yolo",
+			options:     map[string]any{"dangerously_skip_permissions": false},
+			wantCLIArgs: []string{"--prompt", "test"},
 		},
 	}
 

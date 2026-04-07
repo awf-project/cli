@@ -83,20 +83,6 @@ func validateState(state *workflow.ConversationState) error {
 	return nil
 }
 
-func getWorkflowID(options map[string]any) string {
-	if id, ok := getStringOption(options, "workflowID"); ok {
-		return id
-	}
-	return "unknown"
-}
-
-func getStepName(options map[string]any) string {
-	if name, ok := getStringOption(options, "stepName"); ok {
-		return name
-	}
-	return "unknown"
-}
-
 func estimateInputTokens(turns []workflow.Turn, excludeLastN int) int {
 	inputTokens := 0
 	limit := len(turns) - excludeLastN

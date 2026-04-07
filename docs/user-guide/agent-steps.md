@@ -83,6 +83,8 @@ analyze:
 
 **Provider-Specific Options:**
 - `model`: Claude model identifier (alias like `sonnet` or full name like `claude-sonnet-4-20250514`)
+- `allowed_tools`: Comma-separated list of tools to allow (e.g., `"bash,read"` → `--allowedTools bash,read`)
+- `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--dangerously-skip-permissions`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments. Emits a security audit log.
 
 ### Codex (OpenAI)
 
@@ -101,6 +103,7 @@ generate:
 - `model`: Codex model identifier
 - `language`: Target programming language
 - `quiet`: Suppress progress output (boolean)
+- `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--yolo`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments.
 
 ### Gemini (Google)
 
@@ -116,6 +119,10 @@ summarize:
   timeout: 60
   on_success: next
 ```
+
+**Provider-Specific Options:**
+- `model`: Gemini model identifier
+- `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--approval-mode=yolo`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments.
 
 ### OpenCode
 

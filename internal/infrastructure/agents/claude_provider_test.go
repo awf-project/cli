@@ -444,7 +444,7 @@ func TestClaudeProvider_ExecuteConversation_WithAllowedTools_Integration(t *test
 	state := workflow.NewConversationState("You are a helpful assistant.")
 	prompt := "What files are in the current directory?"
 	options := map[string]any{
-		"allowedTools": "bash,read,write",
+		"allowed_tools": "bash,read,write",
 	}
 
 	result, err := provider.ExecuteConversation(ctx, state, prompt, options)

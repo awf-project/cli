@@ -328,12 +328,11 @@ func TestGeminiProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name:       "basic prompt",
-			prompt:     "test prompt",
-			options:    nil,
-			mockOutput: []byte("ok"),
-			// GeminiProvider uses positional prompt (no -p flag)
-			wantContains: []string{"test prompt"},
+			name:         "basic prompt",
+			prompt:       "test prompt",
+			options:      nil,
+			mockOutput:   []byte("ok"),
+			wantContains: []string{"-p", "test prompt"},
 		},
 		{
 			name:         "with model",
@@ -802,6 +801,167 @@ func TestGeminiProvider_ValidateGeminiOptions_ModelValidation(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantErr)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGeminiProvider_Execute_DangerouslySkipPermissions(t *testing.T) {
+	tests := []struct {
+		name         string
+		options      map[string]any
+		mockOutput   []byte
+		wantContains []string
+		wantNotIn    []string
+	}{
+		{
+			name:         "skip permissions enabled",
+			options:      map[string]any{"dangerously_skip_permissions": true},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"--approval-mode=yolo"},
+		},
+		{
+			name:       "skip permissions disabled",
+			options:    map[string]any{"dangerously_skip_permissions": false},
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+		{
+			name:       "skip permissions not provided",
+			options:    nil,
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+		{
+			name:         "skip permissions with model",
+			options:      map[string]any{"dangerously_skip_permissions": true, "model": "gemini-pro"},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-pro"},
+		},
+		{
+			name:         "skip permissions with output format",
+			options:      map[string]any{"dangerously_skip_permissions": true, "output_format": "json"},
+			mockOutput:   []byte(`{"result":"ok"}`),
+			wantContains: []string{"--approval-mode=yolo", "--output-format", "json"},
+		},
+		{
+			name:         "skip permissions with all options",
+			options:      map[string]any{"dangerously_skip_permissions": true, "model": "gemini-ultra", "output_format": "json"},
+			mockOutput:   []byte(`{"result":"ok"}`),
+			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-ultra", "--output-format", "json"},
+		},
+		{
+			name:       "skip permissions as string value",
+			options:    map[string]any{"dangerously_skip_permissions": "yes"},
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+		{
+			name:       "skip permissions as empty object",
+			options:    map[string]any{"dangerously_skip_permissions": struct{}{}},
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockOutput, nil)
+			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+			result, err := provider.Execute(context.Background(), "test prompt", tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "gemini", calls[0].Name)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, calls[0].Args, want, "expected arg %q not found in %v", want, calls[0].Args)
+			}
+
+			for _, notWant := range tt.wantNotIn {
+				assert.NotContains(t, calls[0].Args, notWant, "unexpected arg %q found in %v", notWant, calls[0].Args)
+			}
+		})
+	}
+}
+
+func TestGeminiProvider_ExecuteConversation_DangerouslySkipPermissions(t *testing.T) {
+	tests := []struct {
+		name         string
+		options      map[string]any
+		mockOutput   []byte
+		sessionID    string
+		wantContains []string
+		wantNotIn    []string
+	}{
+		{
+			name:         "skip permissions enabled",
+			options:      map[string]any{"dangerously_skip_permissions": true},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"--approval-mode=yolo"},
+		},
+		{
+			name:       "skip permissions disabled",
+			options:    map[string]any{"dangerously_skip_permissions": false},
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+		{
+			name:       "skip permissions not provided",
+			options:    nil,
+			mockOutput: []byte("response"),
+			wantNotIn:  []string{"--approval-mode=yolo"},
+		},
+		{
+			name:         "skip permissions with system prompt",
+			options:      map[string]any{"dangerously_skip_permissions": true, "system_prompt": "You are helpful"},
+			mockOutput:   []byte("response"),
+			wantContains: []string{"--approval-mode=yolo", "--system-prompt", "You are helpful"},
+		},
+		{
+			name:         "skip permissions with model and format",
+			options:      map[string]any{"dangerously_skip_permissions": true, "model": "gemini-pro", "output_format": "json"},
+			mockOutput:   []byte(`{"result":"ok"}`),
+			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-pro", "--output-format", "json"},
+		},
+		{
+			name:         "skip permissions with existing session",
+			options:      map[string]any{"dangerously_skip_permissions": true},
+			mockOutput:   []byte("response"),
+			sessionID:    "session-123",
+			wantContains: []string{"--approval-mode=yolo", "--resume"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockOutput, nil)
+			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+			state := workflow.NewConversationState("You are helpful")
+			state.SessionID = tt.sessionID
+
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "gemini", calls[0].Name)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, calls[0].Args, want, "expected arg %q not found in %v", want, calls[0].Args)
+			}
+
+			for _, notWant := range tt.wantNotIn {
+				assert.NotContains(t, calls[0].Args, notWant, "unexpected arg %q found in %v", notWant, calls[0].Args)
 			}
 		})
 	}
