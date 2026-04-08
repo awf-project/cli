@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -29,7 +30,7 @@ func (m *mockAgentProvider) Name() string {
 	return m.name
 }
 
-func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	return nil, nil // Not used in conversation manager tests
 }
 
@@ -38,6 +39,7 @@ func (m *mockAgentProvider) ExecuteConversation(
 	state *workflow.ConversationState,
 	prompt string,
 	options map[string]any,
+	stdout, stderr io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if m.err != nil {
 		return nil, m.err
@@ -433,7 +435,7 @@ func TestConversationManager_executeTurn(t *testing.T) {
 				cancel() // Cancel immediately
 			}
 
-			result, err := mgr.executeTurn(ctx, provider, tt.state, tt.prompt, tt.options)
+			result, err := mgr.executeTurn(ctx, provider, tt.state, tt.prompt, tt.options, nil, nil)
 
 			if tt.expectError {
 				assert.Error(t, err)

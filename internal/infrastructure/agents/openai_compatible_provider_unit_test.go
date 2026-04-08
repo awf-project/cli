@@ -80,7 +80,7 @@ func TestOpenAICompatibleProvider_Execute_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			// Real implementation must not error and must return AgentResult
 			assert.NoError(t, err, "should execute successfully")
@@ -127,7 +127,7 @@ func TestOpenAICompatibleProvider_Execute_EmptyPrompt(t *testing.T) {
 			}
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), tt.prompt, options)
+			result, err := provider.Execute(context.Background(), tt.prompt, options, nil, nil)
 			require.Error(t, err, "should return error for empty prompt")
 			assert.Contains(t, err.Error(), tt.wantErr)
 			assert.Nil(t, result)
@@ -214,7 +214,7 @@ func TestOpenAICompatibleProvider_Validate(t *testing.T) {
 			t.Setenv("OPENAI_MODEL", "")
 
 			provider := NewOpenAICompatibleProvider()
-			_, err := provider.Execute(context.Background(), "test prompt", tt.options)
+			_, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.Error(t, err, "should return error for invalid options")
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -277,7 +277,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_Success(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 			state := tt.stateSetup()
 
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err, "should execute conversation successfully")
 			require.NotNil(t, result, "should return ConversationResult")
@@ -296,7 +296,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_Success(t *testing.T) {
 func TestOpenAICompatibleProvider_ExecuteConversation_NilState(t *testing.T) {
 	provider := NewOpenAICompatibleProvider()
 
-	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation state cannot be nil")
 	assert.Nil(t, result)
@@ -325,7 +325,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_EmptyPrompt(t *testing.T) 
 			provider := NewOpenAICompatibleProvider()
 			state := workflow.NewConversationState("system")
 
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, nil, nil, nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 			assert.Nil(t, result)
@@ -349,7 +349,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_StatePreservation(t *testi
 	initialTotalTurns := initialState.TotalTurns
 	initialTotalTokens := initialState.TotalTokens
 
-	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil)
+	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil, nil, nil)
 
 	require.NoError(t, err, "should execute without error")
 	require.NotNil(t, result, "should return result")
@@ -390,7 +390,7 @@ func TestOpenAICompatibleProvider_APIKeyNeverInErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), "test", tt.options)
+			result, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 			if err != nil {
 				errMsg := err.Error()
 				assert.NotContains(t, errMsg, tt.apiKey, "API key should never appear in error message")
@@ -497,7 +497,7 @@ func TestOpenAICompatibleProvider_ValidationErrors(t *testing.T) {
 
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), "test prompt", tt.options)
+			result, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 			assert.Nil(t, result)
@@ -578,7 +578,7 @@ func TestOpenAICompatibleProvider_MaxCompletionTokensMigration(t *testing.T) {
 			t.Setenv("OPENAI_MODEL", "")
 
 			provider := NewOpenAICompatibleProvider()
-			_, err := provider.Execute(context.Background(), "test prompt", tt.options)
+			_, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 
 			if tt.wantErr {
 				require.Error(t, err, "expected error for %s", tt.name)
@@ -672,7 +672,7 @@ func TestOpenAICompatibleProvider_Execute_TokenTracking(t *testing.T) {
 			"model":    "llama",
 		}
 
-		result, err := provider.Execute(context.Background(), "test", options)
+		result, err := provider.Execute(context.Background(), "test", options, nil, nil)
 
 		require.NoError(t, err, "should execute without error")
 		require.NotNil(t, result, "should return result")
@@ -687,7 +687,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_TokenTracking(t *testing.T
 		provider := NewOpenAICompatibleProvider()
 		state := workflow.NewConversationState("You are helpful")
 
-		result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+		result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 		require.NoError(t, err, "should execute without error")
 		require.NotNil(t, result, "should return result")
@@ -731,7 +731,7 @@ func TestOpenAICompatibleProvider_BaseURLNormalization(t *testing.T) {
 				"model":    "llama",
 			}
 
-			result, err := provider.Execute(context.Background(), "test", options)
+			result, err := provider.Execute(context.Background(), "test", options, nil, nil)
 
 			// Should normalize URL regardless of trailing slash — no error expected.
 			assert.NoError(t, err)
@@ -809,7 +809,7 @@ func TestOpenAICompatibleProvider_Execute_WithOptionsMap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), "test prompt", tt.options)
+			result, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 		})
@@ -827,7 +827,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_WithHistory(t *testing.T) 
 	state.TotalTurns = 2
 	state.TotalTokens = 30
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "Tell me more", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Tell me more", nil, nil, nil)
 
 	require.NoError(t, err, "should execute without error")
 	require.NotNil(t, result, "should return result")
@@ -871,7 +871,7 @@ func TestOpenAICompatibleProvider_Execute_JSONOutputFormat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.Execute(context.Background(), "Return valid JSON", tt.options)
+			result, err := provider.Execute(context.Background(), "Return valid JSON", tt.options, nil, nil)
 
 			if tt.shouldFail {
 				// Should fail because mock server returns plain text, not json
@@ -905,7 +905,7 @@ func TestOpenAICompatibleProvider_Execute_JSONParsing_InvalidJSON(t *testing.T) 
 
 		// The mock server returns plain text "This is a mock response..."
 		// When output_format is "json", parseJSONResponse should fail on non-JSON
-		result, err := provider.Execute(context.Background(), "Return invalid json: {broken", options)
+		result, err := provider.Execute(context.Background(), "Return invalid json: {broken", options, nil, nil)
 
 		// parseJSONResponse should return an error when response is not valid JSON
 		require.Error(t, err, "should error when response cannot be parsed as json")
@@ -922,7 +922,7 @@ func TestOpenAICompatibleProvider_Execute_NoJSONOutputFormat(t *testing.T) {
 			"model":    "llama",
 		}
 
-		result, err := provider.Execute(context.Background(), "test prompt", options)
+		result, err := provider.Execute(context.Background(), "test prompt", options, nil, nil)
 
 		require.NoError(t, err, "should execute without error")
 		require.NotNil(t, result, "should return AgentResult")
@@ -945,7 +945,7 @@ func TestOpenAICompatibleProvider_Execute_JSONOutputFormat_TextOnly(t *testing.T
 
 		// The mock server returns plain text "This is a mock response..."
 		// When output_format is "json", parseJSONResponse must fail
-		result, err := provider.Execute(context.Background(), "What is 2+2?", options)
+		result, err := provider.Execute(context.Background(), "What is 2+2?", options, nil, nil)
 
 		// parseJSONResponse should fail on non-json text
 		require.Error(t, err, "should error when response is not json")
@@ -1044,7 +1044,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_MessageArrayStructure(t *t
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 			state := tt.setup()
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 			tt.validate(t, result, err)
 		})
 	}
@@ -1108,7 +1108,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_TokenFieldsPopulated(t *te
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 			state := tt.setup()
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options, nil, nil)
 
 			require.NoError(t, err, "should execute without error")
 			tt.validate(t, result)
@@ -1131,7 +1131,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_StateUpdateValidation(t *t
 	result, err := provider.ExecuteConversation(context.Background(), state, "How are you?", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "llama",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1161,7 +1161,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_ResponseOutput(t *testing.
 	result, err := provider.ExecuteConversation(context.Background(), state, "What is 2+2?", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "llama",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1212,7 +1212,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_SystemPromptHandling(t *te
 			provider := NewOpenAICompatibleProvider()
 			state := workflow.NewConversationState("system")
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			require.NoError(t, err, "should execute regardless of system_prompt presence")
 			require.NotNil(t, result)
@@ -1270,7 +1270,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_ErrorPropagation(t *testin
 		t.Run(tt.name, func(t *testing.T) {
 			provider := NewOpenAICompatibleProvider()
 
-			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options, nil, nil)
 
 			require.Error(t, err, "should return error for invalid options")
 			assert.Nil(t, result, "should not return result on error")
@@ -1288,7 +1288,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_TimestampTracking(t *testi
 	result, err := provider.ExecuteConversation(context.Background(), state, "test", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "llama",
-	})
+	}, nil, nil)
 	endAfter := time.Now()
 
 	require.NoError(t, err)
@@ -1362,7 +1362,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_401Unauthorized_Execute(t *te
 			result, err := provider.Execute(context.Background(), "test prompt", map[string]any{
 				"base_url": "http://localhost:11434/v1",
 				"model":    "test-model",
-			})
+			}, nil, nil)
 
 			require.Error(t, err, "should return error for 401 status")
 			assert.Nil(t, result, "should not return result on error")
@@ -1401,7 +1401,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_429RateLimited_Execute(t *tes
 			result, err := provider.Execute(context.Background(), "test prompt", map[string]any{
 				"base_url": "http://localhost:11434/v1",
 				"model":    "test-model",
-			})
+			}, nil, nil)
 
 			require.Error(t, err, "should return error for 429 status")
 			assert.Nil(t, result, "should not return result on error")
@@ -1446,7 +1446,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_5xxServerError_Execute(t *tes
 			result, err := provider.Execute(context.Background(), "test prompt", map[string]any{
 				"base_url": "http://localhost:11434/v1",
 				"model":    "test-model",
-			})
+			}, nil, nil)
 
 			require.Error(t, err, "should return error for 5xx status")
 			assert.Nil(t, result, "should not return result on error")
@@ -1487,7 +1487,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_400BadRequest_Execute(t *test
 			result, err := provider.Execute(context.Background(), "test prompt", map[string]any{
 				"base_url": "http://localhost:11434/v1",
 				"model":    "test-model",
-			})
+			}, nil, nil)
 
 			require.Error(t, err, "should return error for 4xx status")
 			assert.Nil(t, result, "should not return result on error")
@@ -1505,7 +1505,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_401Unauthorized_ExecuteConver
 	result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for 401 status")
 	assert.Nil(t, result, "should not return result on error")
@@ -1521,7 +1521,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_429RateLimited_ExecuteConvers
 	result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for 429 status")
 	assert.Nil(t, result, "should not return result on error")
@@ -1537,7 +1537,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_5xxServerError_ExecuteConvers
 	result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for 5xx status")
 	assert.Nil(t, result, "should not return result on error")
@@ -1577,7 +1577,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_APIKeyNeverInError(t *testing
 				"base_url": "http://localhost:11434/v1",
 				"model":    "test-model",
 				"api_key":  tt.apiKey,
-			})
+			}, nil, nil)
 
 			require.Error(t, err, "should return error for error status")
 			assert.Nil(t, result, "should not return result on error")
@@ -1599,7 +1599,7 @@ func TestOpenAICompatibleProvider_ContextDeadlineExceeded_Execute(t *testing.T) 
 	result, err := provider.Execute(ctx, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for canceled context")
 	assert.Nil(t, result, "should not return result on error")
@@ -1617,7 +1617,7 @@ func TestOpenAICompatibleProvider_ContextDeadlineExceeded_ExecuteConversation(t 
 	result, err := provider.ExecuteConversation(ctx, state, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for canceled context")
 	assert.Nil(t, result, "should not return result on error")
@@ -1632,7 +1632,7 @@ func TestOpenAICompatibleProvider_HTTPErrorMapping_UnexpectedStatus_Execute(t *t
 	result, err := provider.Execute(context.Background(), "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err, "should return error for unexpected status")
 	assert.Nil(t, result, "should not return result on error")

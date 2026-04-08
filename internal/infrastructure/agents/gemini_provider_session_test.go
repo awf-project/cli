@@ -101,7 +101,7 @@ func TestGeminiProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 			state := workflow.NewConversationState("system")
 			state.SessionID = tt.sessionID
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "write a poem", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "write a poem", nil, nil, nil)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -156,7 +156,7 @@ func TestGeminiProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -174,7 +174,7 @@ func TestGeminiProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T
 	state := workflow.NewConversationState("")
 	options := map[string]any{"system_prompt": "You are a helpful assistant"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Generate a hello world", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Generate a hello world", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
@@ -192,7 +192,7 @@ func TestGeminiProvider_ExecuteConversation_NoSystemPromptOnResumeTurn(t *testin
 	state.SessionID = "existing-session-id"
 	options := map[string]any{"system_prompt": "You are a helpful assistant"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
@@ -226,7 +226,7 @@ func TestGeminiProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
 
 			require.NoError(t, err, "extraction failure must not cause error (graceful fallback)")
 			require.NotNil(t, result)
@@ -242,7 +242,7 @@ func TestGeminiProvider_ExecuteConversation_EmptyOutputHandling(t *testing.T) {
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
-	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -253,7 +253,7 @@ func TestGeminiProvider_ExecuteConversation_InvalidPrompt(t *testing.T) {
 	provider := NewGeminiProvider()
 	state := workflow.NewConversationState("")
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "   ", nil)
+	_, err := provider.ExecuteConversation(context.Background(), state, "   ", nil, nil, nil)
 
 	assert.Error(t, err)
 }
@@ -261,7 +261,7 @@ func TestGeminiProvider_ExecuteConversation_InvalidPrompt(t *testing.T) {
 func TestGeminiProvider_ExecuteConversation_NilState(t *testing.T) {
 	provider := NewGeminiProvider()
 
-	_, err := provider.ExecuteConversation(context.Background(), nil, "test", nil)
+	_, err := provider.ExecuteConversation(context.Background(), nil, "test", nil, nil, nil)
 
 	assert.Error(t, err)
 }

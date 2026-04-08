@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 // CodexProvider implements AgentProvider for Codex CLI.
-// Invokes: codex --prompt "prompt" --quiet
+// Invokes: codex exec --json "prompt"
 type CodexProvider struct {
 	logger   ports.Logger
 	executor ports.CLIExecutor
@@ -38,22 +39,18 @@ func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
 	return p
 }
 
-func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	if err := validateCodexOptions(options); err != nil {
-		return nil, err
-	}
-
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("codex provider: %w", err)
 	}
 
-	args := []string{"--prompt", prompt}
+	args := []string{"exec", "--json", prompt}
 
 	if language, ok := getStringOption(options, "language"); ok {
 		args = append(args, "--language", language)
@@ -61,23 +58,20 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
-	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
-		args = append(args, "--quiet")
-	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append(args, "--yolo")
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "codex", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "codex",
@@ -90,7 +84,7 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	return result, nil
 }
 
-func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
 	if state == nil {
@@ -99,10 +93,6 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateCodexConversationOptions(options); err != nil {
-		return nil, err
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -129,9 +119,9 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 
 	var args []string
 	if isResume {
-		args = []string{"resume", workingState.SessionID, "--prompt", prompt}
+		args = []string{"resume", workingState.SessionID, "--json", prompt}
 	} else {
-		args = []string{"--prompt", prompt}
+		args = []string{"exec", "--json", prompt}
 		// First turn only (no session yet): pass system prompt if provided
 		if workingState.SessionID == "" {
 			if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
@@ -146,23 +136,20 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 	if language, ok := getStringOption(options, "language"); ok {
 		args = append(args, "--language", language)
 	}
-	if quiet, ok := getBoolOption(options, "quiet"); ok && quiet {
-		args = append(args, "--quiet")
-	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append(args, "--yolo")
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "codex", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "codex", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("codex execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	if outputStr == "" {
 		outputStr = " "
@@ -209,13 +196,5 @@ func (p *CodexProvider) Validate() error {
 	if err != nil {
 		return fmt.Errorf("codex CLI not found in PATH: %w", err)
 	}
-	return nil
-}
-
-func validateCodexOptions(_ map[string]any) error {
-	return nil
-}
-
-func validateCodexConversationOptions(_ map[string]any) error {
 	return nil
 }

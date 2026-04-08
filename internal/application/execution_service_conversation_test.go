@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
@@ -239,7 +240,7 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this" {
 			return &workflow.AgentResult{
 				Provider: "claude",
@@ -303,7 +304,7 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Execute this task" {
 			return &workflow.AgentResult{
 				Provider: "claude",

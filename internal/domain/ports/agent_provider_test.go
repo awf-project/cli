@@ -3,6 +3,7 @@ package ports_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -16,8 +17,8 @@ import (
 // mockAgentProvider is a test implementation of AgentProvider interface
 type mockAgentProvider struct {
 	name                      string
-	executeFunc               func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
-	executeConversationFunc   func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	executeFunc               func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error)
+	executeConversationFunc   func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)
 	validateFunc              func() error
 	executeCalled             int
 	executeConversationCalled int
@@ -26,13 +27,13 @@ type mockAgentProvider struct {
 func newMockAgentProvider(name string) *mockAgentProvider {
 	return &mockAgentProvider{
 		name: name,
-		executeFunc: func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+		executeFunc: func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 			result := workflow.NewAgentResult(name)
 			result.Output = "mock output"
 			result.CompletedAt = time.Now()
 			return result, nil
 		},
-		executeConversationFunc: func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+		executeConversationFunc: func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 			return nil, errors.New("not implemented")
 		},
 		validateFunc: func() error {
@@ -41,14 +42,14 @@ func newMockAgentProvider(name string) *mockAgentProvider {
 	}
 }
 
-func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	m.executeCalled++
-	return m.executeFunc(ctx, prompt, options)
+	return m.executeFunc(ctx, prompt, options, stdout, stderr)
 }
 
-func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	m.executeConversationCalled++
-	return m.executeConversationFunc(ctx, state, prompt, options)
+	return m.executeConversationFunc(ctx, state, prompt, options, stdout, stderr)
 }
 
 func (m *mockAgentProvider) Name() string {
@@ -116,7 +117,7 @@ func TestAgentProvider_Execute_HappyPath(t *testing.T) {
 		"max_tokens": 4096,
 	}
 
-	result, err := provider.Execute(ctx, prompt, options)
+	result, err := provider.Execute(ctx, prompt, options, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -173,7 +174,7 @@ func TestAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 	prompt := ""
 	options := map[string]any{}
 
-	result, err := provider.Execute(ctx, prompt, options)
+	result, err := provider.Execute(ctx, prompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -187,7 +188,7 @@ func TestAgentProvider_Execute_NilOptions(t *testing.T) {
 	ctx := context.Background()
 	prompt := "test prompt"
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -202,7 +203,7 @@ func TestAgentProvider_Execute_LargePrompt(t *testing.T) {
 	largePrompt := string(make([]byte, 10240))
 	options := map[string]any{}
 
-	result, err := provider.Execute(ctx, largePrompt, options)
+	result, err := provider.Execute(ctx, largePrompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -213,7 +214,7 @@ func TestAgentProvider_Execute_LargePrompt(t *testing.T) {
 
 func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -228,7 +229,7 @@ func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	result, err := provider.Execute(ctx, "test", nil)
+	result, err := provider.Execute(ctx, "test", nil, nil, nil)
 
 	if err == nil {
 		t.Error("expected error from cancelled context")
@@ -241,11 +242,11 @@ func TestAgentProvider_Execute_ContextCancellation(t *testing.T) {
 func TestAgentProvider_Execute_ExecutionError(t *testing.T) {
 	provider := newMockAgentProvider("claude")
 	expectedErr := errors.New("execution failed")
-	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return nil, expectedErr
 	}
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	if err == nil {
 		t.Error("expected error, got nil")
@@ -261,7 +262,7 @@ func TestAgentProvider_Execute_ExecutionError(t *testing.T) {
 func TestAgentProvider_Execute_PartialResult(t *testing.T) {
 	provider := newMockAgentProvider("claude")
 	expectedErr := errors.New("partial execution")
-	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.executeFunc = func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		// Return partial result with error
 		result := workflow.NewAgentResult("claude")
 		result.Output = "partial output"
@@ -270,7 +271,7 @@ func TestAgentProvider_Execute_PartialResult(t *testing.T) {
 		return result, expectedErr
 	}
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -465,7 +466,7 @@ func TestAgentProvider_FullWorkflow(t *testing.T) {
 		}
 
 		// Execute provider
-		result, err := provider.Execute(context.Background(), "test prompt", nil)
+		result, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
 		if err != nil {
 			t.Errorf("execution failed for %s: %v", name, err)
 		}
@@ -485,7 +486,7 @@ func TestAgentProvider_FullWorkflow(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_HappyPath tests normal conversation execution
 func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.Output = "Assistant response"
 		result.TokensInput = 100
@@ -503,7 +504,7 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 		"max_tokens": 4096,
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -533,7 +534,7 @@ func TestAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_WithConversationHistory tests execution with existing turns
 func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.State = state
 		result.Output = "Response based on history"
@@ -551,7 +552,7 @@ func TestAgentProvider_ExecuteConversation_WithConversationHistory(t *testing.T)
 	prompt := "Tell me more about it"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -612,7 +613,7 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := newMockAgentProvider("claude")
 			var capturedOptions map[string]any
-			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 				capturedOptions = options
 				result := workflow.NewConversationResult("claude")
 				result.Output = "Response"
@@ -624,7 +625,7 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 			state := workflow.NewConversationState("System prompt")
 			prompt := "Test prompt"
 
-			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
+			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options, nil, nil)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -645,7 +646,7 @@ func TestAgentProvider_ExecuteConversation_WithOptions(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_EmptyPrompt tests conversation with empty prompt
 func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		if prompt == "" {
 			return nil, errors.New("prompt cannot be empty")
 		}
@@ -659,7 +660,7 @@ func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 	prompt := ""
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected error for empty prompt")
@@ -675,7 +676,7 @@ func TestAgentProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_NilState tests conversation with nil state
 func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		if state == nil {
 			return nil, errors.New("conversation state cannot be nil")
 		}
@@ -689,7 +690,7 @@ func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected error for nil conversation state")
@@ -702,7 +703,7 @@ func TestAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_EmptyState tests conversation with empty state (no turns)
 func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.Output = "First response"
 		result.State = state
@@ -715,7 +716,7 @@ func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 	prompt := "Hello"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -730,7 +731,7 @@ func TestAgentProvider_ExecuteConversation_EmptyState(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_LargeConversationHistory tests with many turns
 func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.State = state
 		result.Output = "Response to turn 100"
@@ -753,7 +754,7 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 	prompt := "100th question"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -768,7 +769,7 @@ func TestAgentProvider_ExecuteConversation_LargeConversationHistory(t *testing.T
 // TestAgentProvider_ExecuteConversation_LongPrompt tests with very long prompt
 func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.Output = "Response to long prompt"
 		result.CompletedAt = time.Now()
@@ -786,7 +787,7 @@ func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, longPrompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, longPrompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -799,7 +800,7 @@ func TestAgentProvider_ExecuteConversation_LongPrompt(t *testing.T) {
 func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
 	provider := newMockAgentProvider("claude")
 	expectedError := errors.New("provider execution failed")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		return nil, expectedError
 	}
 
@@ -808,7 +809,7 @@ func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected error from provider")
@@ -824,7 +825,7 @@ func TestAgentProvider_ExecuteConversation_ProviderError(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_ContextCanceled tests canceled context
 func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		// Check for context cancellation
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -841,7 +842,7 @@ func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected error for canceled context")
@@ -857,7 +858,7 @@ func TestAgentProvider_ExecuteConversation_ContextCanceled(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_ContextTimeout tests timeout
 func TestAgentProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		// Simulate work that respects context
 		select {
 		case <-ctx.Done():
@@ -876,7 +877,7 @@ func TestAgentProvider_ExecuteConversation_ContextTimeout(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected timeout error")
@@ -922,7 +923,7 @@ func TestAgentProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := newMockAgentProvider("claude")
-			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 				// Validate options
 				if maxTokens, ok := options["max_tokens"].(int); ok && maxTokens < 0 {
 					return nil, errors.New("max_tokens must be non-negative")
@@ -942,7 +943,7 @@ func TestAgentProvider_ExecuteConversation_InvalidOptions(t *testing.T) {
 			state := workflow.NewConversationState("System prompt")
 			prompt := "What is Go?"
 
-			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
+			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options, nil, nil)
 
 			if err == nil {
 				t.Errorf("expected error for %s", tt.name)
@@ -964,7 +965,7 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 	for _, name := range providers {
 		t.Run(name, func(t *testing.T) {
 			provider := newMockAgentProvider(name)
-			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+			provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 				result := workflow.NewConversationResult(name)
 				result.Output = "Response from " + name
 				result.CompletedAt = time.Now()
@@ -976,7 +977,7 @@ func TestAgentProvider_ExecuteConversation_MultipleProviders(t *testing.T) {
 			prompt := "Test"
 			options := map[string]any{}
 
-			result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+			result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 			if err != nil {
 				t.Errorf("unexpected error for %s: %v", name, err)
 			}
@@ -995,7 +996,7 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 	registry := newMockAgentRegistry()
 
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.Output = "Response"
 		result.CompletedAt = time.Now()
@@ -1011,7 +1012,7 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
-	result, err := retrieved.ExecuteConversation(ctx, state, "Test", nil)
+	result, err := retrieved.ExecuteConversation(ctx, state, "Test", nil, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1026,7 +1027,7 @@ func TestAgentProvider_ExecuteConversation_WithRegistry(t *testing.T) {
 // TestAgentProvider_ExecuteConversation_TokenCounting tests token usage tracking
 func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	provider := newMockAgentProvider("claude")
-	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.executeConversationFunc = func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.Output = "Response"
 		result.TokensInput = 250
@@ -1042,7 +1043,7 @@ func TestAgentProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1073,7 +1074,7 @@ func TestAgentProvider_ExecuteConversation_NotImplementedError(t *testing.T) {
 	prompt := "What is Go?"
 	options := map[string]any{}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	if err == nil {
 		t.Error("expected 'not implemented' error from stub")

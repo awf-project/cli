@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func (m *MockProvider) WithValidateError(err error) *MockProvider {
 }
 
 // Execute implements ports.AgentProvider.
-func (m *MockProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *MockProvider) Execute(ctx context.Context, prompt string, options map[string]any, _, _ io.Writer) (*workflow.AgentResult, error) {
 	m.mu.Lock()
 	m.calls = append(m.calls, MockCall{
 		Method:  "Execute",
@@ -120,7 +121,7 @@ func (m *MockProvider) Execute(ctx context.Context, prompt string, options map[s
 }
 
 // ExecuteConversation implements ports.AgentProvider.
-func (m *MockProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *MockProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, _, _ io.Writer) (*workflow.ConversationResult, error) {
 	m.mu.Lock()
 	m.calls = append(m.calls, MockCall{
 		Method:  "ExecuteConversation",

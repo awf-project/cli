@@ -39,7 +39,7 @@ func TestClaudeProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 			state := workflow.NewConversationState("system")
 			state.SessionID = tt.sessionID
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -88,7 +88,7 @@ func TestClaudeProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -106,7 +106,7 @@ func TestClaudeProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T
 	state := workflow.NewConversationState("")
 	options := map[string]any{"system_prompt": "You are a code reviewer"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Review this", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Review this", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
@@ -124,7 +124,7 @@ func TestClaudeProvider_ExecuteConversation_NoSystemPromptOnResumeTurn(t *testin
 	state.SessionID = "existing_session_id"
 	options := map[string]any{"system_prompt": "You are a code reviewer"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
@@ -138,7 +138,7 @@ func TestClaudeProvider_ExecuteConversation_GracefulFallback_NonJSON(t *testing.
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
-	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 	require.NoError(t, err, "extraction failure must not cause error")
 	require.NotNil(t, result)
@@ -152,11 +152,11 @@ func TestClaudeProvider_ExecuteConversation_ForceJSONOutputFormat(t *testing.T) 
 
 	state := workflow.NewConversationState("system")
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	_, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
 	require.Len(t, calls, 1)
 	assert.Contains(t, calls[0].Args, "--output-format")
-	assert.Contains(t, calls[0].Args, "json")
+	assert.Contains(t, calls[0].Args, "stream-json")
 }

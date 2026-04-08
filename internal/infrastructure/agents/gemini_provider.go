@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"slices"
 	"strings"
@@ -36,7 +37,7 @@ func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider 
 	return p
 }
 
-func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
 	if strings.TrimSpace(prompt) == "" {
@@ -57,13 +58,16 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		args = append([]string{"--model", model}, args...)
 	}
 	if outputFormat, ok := getStringOption(options, "output_format"); ok {
+		if outputFormat == "json" {
+			outputFormat = "stream-json"
+		}
 		args = append([]string{"--output-format", outputFormat}, args...)
 	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "gemini", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
@@ -71,9 +75,9 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	}
 
 	// Combine stdout and stderr like CombinedOutput()
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "gemini",
@@ -91,7 +95,7 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	return result, nil
 }
 
-func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
 	if state == nil {
@@ -132,22 +136,25 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		args = append([]string{"--model", model}, args...)
 	}
 	if outputFormat, ok := getStringOption(options, "output_format"); ok {
+		if outputFormat == "json" {
+			outputFormat = "stream-json"
+		}
 		args = append([]string{"--output-format", outputFormat}, args...)
 	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "gemini", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "gemini", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	if outputStr == "" {
 		outputStr = " "

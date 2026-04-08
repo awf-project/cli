@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 
@@ -28,14 +29,14 @@ func TestAgentRegistry_InterfaceCompliance(t *testing.T) {
 	var _ ports.AgentRegistry = (*AgentRegistry)(nil)
 }
 
-func (m *mockProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *mockProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	return &workflow.AgentResult{
 		Provider: m.name,
 		Output:   "mock output",
 	}, nil
 }
 
-func (m *mockProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *mockProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	return nil, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -1176,7 +1177,7 @@ func (m *MockAgentRegistry) Clear() {
 // Usage:
 //
 //	provider := testutil.NewMockAgentProvider("test-agent")
-//	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+//	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 //		return &workflow.AgentResult{
 //			Provider: "test-agent",
 //			Output:   "mock response",
@@ -1187,8 +1188,8 @@ func (m *MockAgentRegistry) Clear() {
 type MockAgentProvider struct {
 	mu               sync.RWMutex
 	name             string
-	executeFunc      func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
-	conversationFunc func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	executeFunc      func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error)
+	conversationFunc func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)
 	validateFunc     func() error
 }
 
@@ -1202,12 +1203,12 @@ func NewMockAgentProvider(name string) *MockAgentProvider {
 // Execute invokes the agent with the given prompt and options.
 // Thread-safe for concurrent access.
 // Returns a stub result if no executeFunc is configured.
-func (m *MockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *MockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx, prompt, options)
+		return m.executeFunc(ctx, prompt, options, stdout, stderr)
 	}
 
 	// Default stub behavior
@@ -1221,12 +1222,12 @@ func (m *MockAgentProvider) Execute(ctx context.Context, prompt string, options 
 // ExecuteConversation invokes the agent with conversation history for multi-turn interactions.
 // Thread-safe for concurrent access.
 // Returns a stub result if no conversationFunc is configured.
-func (m *MockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *MockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.conversationFunc != nil {
-		return m.conversationFunc(ctx, state, prompt, options)
+		return m.conversationFunc(ctx, state, prompt, options, stdout, stderr)
 	}
 
 	// Default stub behavior
@@ -1262,7 +1263,7 @@ func (m *MockAgentProvider) Validate() error {
 
 // SetExecuteFunc sets the callback function for Execute method (test helper).
 // Thread-safe for concurrent access.
-func (m *MockAgentProvider) SetExecuteFunc(f func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)) {
+func (m *MockAgentProvider) SetExecuteFunc(f func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1271,7 +1272,7 @@ func (m *MockAgentProvider) SetExecuteFunc(f func(ctx context.Context, prompt st
 
 // SetConversationFunc sets the callback function for ExecuteConversation method (test helper).
 // Thread-safe for concurrent access.
-func (m *MockAgentProvider) SetConversationFunc(f func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)) {
+func (m *MockAgentProvider) SetConversationFunc(f func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1305,7 +1306,7 @@ func (m *MockAgentProvider) Clear() {
 //
 //	executor := testutil.NewMockCLIExecutor()
 //	executor.SetOutput([]byte("output"), []byte(""))
-//	stdout, stderr, err := executor.Run(ctx, "claude", "--version")
+//	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--version")
 type MockCLIExecutor struct {
 	mu      sync.Mutex
 	stdout  []byte
@@ -1328,7 +1329,7 @@ func NewMockCLIExecutor() *MockCLIExecutor {
 }
 
 // Run executes a binary and returns the configured output.
-func (m *MockCLIExecutor) Run(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error) {
+func (m *MockCLIExecutor) Run(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -61,7 +61,7 @@ func TestOpenAICompatibleProvider_SingleTurnHappyPath_Integration(t *testing.T) 
 	result, err := provider.Execute(ctx, "What is 2+2?", map[string]any{
 		"base_url": server.URL,
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -123,7 +123,7 @@ func TestOpenAICompatibleProvider_SingleTurnWithOptions_Integration(t *testing.T
 		"model":       "gpt-3.5-turbo",
 		"temperature": 1.5,
 		"max_tokens":  100,
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -207,7 +207,7 @@ func TestOpenAICompatibleProvider_Conversation_Integration(t *testing.T) {
 		"base_url":      server.URL,
 		"model":         "test-model",
 		"system_prompt": "You are a helpful assistant.",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -260,7 +260,7 @@ func TestOpenAICompatibleProvider_HTTP401Unauthorized_Integration(t *testing.T) 
 		"base_url": server.URL,
 		"model":    "test-model",
 		"api_key":  "sk-secret-key-value-1234",
-	})
+	}, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication failed")
@@ -296,7 +296,7 @@ func TestOpenAICompatibleProvider_HTTP429RateLimit_Integration(t *testing.T) {
 	_, err := provider.Execute(ctx, "Test prompt", map[string]any{
 		"base_url": server.URL,
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limited")
@@ -329,7 +329,7 @@ func TestOpenAICompatibleProvider_HTTP500ServerError_Integration(t *testing.T) {
 	_, err := provider.Execute(ctx, "Test prompt", map[string]any{
 		"base_url": server.URL,
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "server error")
@@ -387,7 +387,7 @@ func TestOpenAICompatibleProvider_RequestBodyValidation_Integration(t *testing.T
 		"temperature": 0.7,
 		"max_tokens":  1024,
 		"top_p":       0.9,
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 
@@ -446,7 +446,7 @@ func TestOpenAICompatibleProvider_JSONOutput_Integration(t *testing.T) {
 		"base_url":      server.URL,
 		"model":         "test-model",
 		"output_format": "json",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -507,7 +507,7 @@ func TestOpenAICompatibleProvider_BaseURLNormalization_Integration(t *testing.T)
 	_, err := provider.Execute(ctx, "Test", map[string]any{
 		"base_url": baseURLWithSlash,
 		"model":    "test-model",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 	assert.True(t, handlerCalled, "handler should be called with normalized URL")
@@ -573,7 +573,7 @@ func TestOpenAICompatibleProvider_ConversationWithSystemPrompt_Integration(t *te
 		"base_url":      server.URL,
 		"model":         "test-model",
 		"system_prompt": "You are an expert assistant.",
-	})
+	}, nil, nil)
 
 	require.NoError(t, err)
 

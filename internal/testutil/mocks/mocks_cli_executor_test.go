@@ -101,7 +101,7 @@ func TestMockCLIExecutor_Run_HappyPath(t *testing.T) {
 			tt.setupFunc(executor)
 			ctx := context.Background()
 
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.NoError(t, err, "Run should not error for configured output")
 			assert.Equal(t, tt.wantStdout, string(stdout), "Stdout should match configured value")
@@ -168,7 +168,7 @@ func TestMockCLIExecutor_Run_ErrorInjection(t *testing.T) {
 			tt.setupFunc(executor)
 			ctx := context.Background()
 
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "Run should return error when error is configured")
 			assert.EqualError(t, err, tt.wantErr.Error(), "Run should return the configured error")
@@ -217,7 +217,7 @@ func TestMockCLIExecutor_Run_ContextCancellation(t *testing.T) {
 			tt.setupFunc(executor)
 			ctx := tt.ctxFunc()
 
-			stdout, stderr, err := executor.Run(ctx, "claude", "--version")
+			stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--version")
 
 			assert.Error(t, err, "Run should return error for context issues")
 			assert.ErrorIs(t, err, tt.wantErr, "Error should match expected context error")
@@ -238,7 +238,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				executor := mocks.NewMockCLIExecutor()
 				ctx := context.Background()
 
-				stdout, stderr, err := executor.Run(ctx, "tool", "arg")
+				stdout, stderr, err := executor.Run(ctx, "tool", nil, nil, "arg")
 
 				assert.NoError(t, err, "Run without output config should not error")
 				assert.Nil(t, stdout, "Stdout should be nil without config")
@@ -253,7 +253,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				executor.SetOutput([]byte("ok"), []byte(""))
 				ctx := context.Background()
 
-				stdout, stderr, err := executor.Run(ctx, "", "arg")
+				stdout, stderr, err := executor.Run(ctx, "", nil, nil, "arg")
 
 				assert.NoError(t, err, "Run should handle empty binary name")
 				assert.Equal(t, "ok", string(stdout))
@@ -272,7 +272,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 
 				// Note: passing nil context is undefined behavior in production
 				// but mock should handle it gracefully
-				stdout, stderr, err := executor.Run(context.Background(), "tool", "arg")
+				stdout, stderr, err := executor.Run(context.Background(), "tool", nil, nil, "arg")
 
 				assert.NoError(t, err, "Mock should handle nil context")
 				assert.Equal(t, "output", string(stdout))
@@ -290,7 +290,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				executor.SetOutput(largeOutput, []byte(""))
 				ctx := context.Background()
 
-				stdout, stderr, err := executor.Run(ctx, "generator", "data")
+				stdout, stderr, err := executor.Run(ctx, "generator", nil, nil, "data")
 
 				assert.NoError(t, err, "Run should handle large output")
 				assert.Len(t, stdout, 1024*1024, "Large output should be preserved")
@@ -305,7 +305,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				ctx := context.Background()
 
 				unicodeArgs := []string{"--prompt", "你好世界", "--emoji", "😀🎉"}
-				stdout, stderr, err := executor.Run(ctx, "tool", unicodeArgs...)
+				stdout, stderr, err := executor.Run(ctx, "tool", nil, nil, unicodeArgs...)
 
 				assert.NoError(t, err)
 				assert.Equal(t, "success", string(stdout))
@@ -323,7 +323,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				ctx := context.Background()
 
 				specialBinary := "tool-v2.0_beta"
-				stdout, stderr, err := executor.Run(ctx, specialBinary, "--test")
+				stdout, stderr, err := executor.Run(ctx, specialBinary, nil, nil, "--test")
 
 				assert.NoError(t, err)
 				assert.Equal(t, "ok", string(stdout))
@@ -345,7 +345,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 					args[i] = fmt.Sprintf("arg%d", i)
 				}
 
-				stdout, stderr, err := executor.Run(ctx, "tool", args...)
+				stdout, stderr, err := executor.Run(ctx, "tool", nil, nil, args...)
 
 				assert.NoError(t, err)
 				assert.Equal(t, "done", string(stdout))
@@ -363,7 +363,7 @@ func TestMockCLIExecutor_Run_EdgeCases(t *testing.T) {
 				executor.SetOutput(binaryData, []byte(""))
 				ctx := context.Background()
 
-				stdout, stderr, err := executor.Run(ctx, "binary-tool")
+				stdout, stderr, err := executor.Run(ctx, "binary-tool", nil, nil)
 
 				assert.NoError(t, err)
 				assert.Equal(t, binaryData, stdout, "Binary data with null bytes should be preserved")
@@ -392,7 +392,7 @@ func TestMockCLIExecutor_CallRecording(t *testing.T) {
 	}
 
 	for _, cmd := range commands {
-		_, _, _ = executor.Run(ctx, cmd.binary, cmd.args...)
+		_, _, _ = executor.Run(ctx, cmd.binary, nil, nil, cmd.args...)
 	}
 
 	calls := executor.GetCalls()
@@ -410,7 +410,7 @@ func TestMockCLIExecutor_CallRecording_MultipleExecutionsOfSameCommand(t *testin
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		_, _, err := executor.Run(ctx, "claude", "--version")
+		_, _, err := executor.Run(ctx, "claude", nil, nil, "--version")
 		assert.NoError(t, err, "Execution %d should succeed", i)
 	}
 
@@ -427,7 +427,7 @@ func TestMockCLIExecutor_GetCalls_IsolatedCopy(t *testing.T) {
 	executor.SetOutput([]byte("ok"), []byte(""))
 	ctx := context.Background()
 
-	_, _, _ = executor.Run(ctx, "tool", "arg1", "arg2")
+	_, _, _ = executor.Run(ctx, "tool", nil, nil, "arg1", "arg2")
 
 	calls1 := executor.GetCalls()
 	calls2 := executor.GetCalls()
@@ -445,7 +445,7 @@ func TestMockCLIExecutor_SetOutput(t *testing.T) {
 	ctx := context.Background()
 
 	executor.SetOutput([]byte("stdout content"), []byte("stderr content"))
-	stdout, stderr, err := executor.Run(ctx, "tool")
+	stdout, stderr, err := executor.Run(ctx, "tool", nil, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "stdout content", string(stdout))
@@ -458,7 +458,7 @@ func TestMockCLIExecutor_SetOutput_Overwrites(t *testing.T) {
 
 	executor.SetOutput([]byte("first"), []byte(""))
 	executor.SetOutput([]byte("second"), []byte(""))
-	stdout, stderr, err := executor.Run(ctx, "tool")
+	stdout, stderr, err := executor.Run(ctx, "tool", nil, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "second", string(stdout), "Second SetOutput should overwrite first")
@@ -471,7 +471,7 @@ func TestMockCLIExecutor_SetError(t *testing.T) {
 	expectedErr := errors.New("test error")
 
 	executor.SetError(expectedErr)
-	stdout, stderr, err := executor.Run(ctx, "tool")
+	stdout, stderr, err := executor.Run(ctx, "tool", nil, nil)
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
@@ -485,7 +485,7 @@ func TestMockCLIExecutor_SetError_Overwrites(t *testing.T) {
 
 	executor.SetError(errors.New("first error"))
 	executor.SetError(errors.New("second error"))
-	_, _, err := executor.Run(ctx, "tool")
+	_, _, err := executor.Run(ctx, "tool", nil, nil)
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "second error", "Second SetError should overwrite first")
@@ -497,7 +497,7 @@ func TestMockCLIExecutor_SetError_TakesPrecedenceOverOutput(t *testing.T) {
 
 	executor.SetOutput([]byte("stdout"), []byte("stderr"))
 	executor.SetError(errors.New("execution failed"))
-	stdout, stderr, err := executor.Run(ctx, "tool")
+	stdout, stderr, err := executor.Run(ctx, "tool", nil, nil)
 
 	assert.Error(t, err, "Error should take precedence over output")
 	assert.EqualError(t, err, "execution failed")
@@ -513,7 +513,7 @@ func TestMockCLIExecutor_Clear(t *testing.T) {
 
 	// Execute some commands
 	for i := 0; i < 3; i++ {
-		_, _, _ = executor.Run(ctx, fmt.Sprintf("cmd-%d", i))
+		_, _, _ = executor.Run(ctx, fmt.Sprintf("cmd-%d", i), nil, nil)
 	}
 
 	// Verify state before clear
@@ -525,7 +525,7 @@ func TestMockCLIExecutor_Clear(t *testing.T) {
 	calls = executor.GetCalls()
 	assert.Empty(t, calls, "Clear should remove all recorded calls")
 
-	stdout, stderr, err := executor.Run(ctx, "new-cmd")
+	stdout, stderr, err := executor.Run(ctx, "new-cmd", nil, nil)
 	assert.NoError(t, err, "Clear should reset error configuration")
 	assert.Nil(t, stdout, "Clear should reset output configuration")
 	assert.Nil(t, stderr, "Clear should reset stderr configuration")
@@ -545,7 +545,7 @@ func TestMockCLIExecutor_ConcurrentRun(t *testing.T) {
 			defer wg.Done()
 			binary := fmt.Sprintf("tool-%d", id)
 			args := []string{fmt.Sprintf("arg-%d", id)}
-			stdout, stderr, err := executor.Run(ctx, binary, args...)
+			stdout, stderr, err := executor.Run(ctx, binary, nil, nil, args...)
 			assert.NoError(t, err)
 			assert.Equal(t, "output", string(stdout))
 			assert.Empty(t, stderr)
@@ -572,7 +572,7 @@ func TestMockCLIExecutor_ConcurrentReadWrite(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				_, _, _ = executor.Run(ctx, fmt.Sprintf("reader-%d", id), fmt.Sprintf("iter-%d", j))
+				_, _, _ = executor.Run(ctx, fmt.Sprintf("reader-%d", id), nil, nil, fmt.Sprintf("iter-%d", j))
 			}
 		}(i)
 	}
@@ -626,7 +626,7 @@ func TestMockCLIExecutor_ConcurrentClear(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
 			defer wg.Done()
-			_, _, _ = executor.Run(ctx, fmt.Sprintf("tool-%d", id))
+			_, _, _ = executor.Run(ctx, fmt.Sprintf("tool-%d", id), nil, nil)
 		}(i)
 	}
 
@@ -641,7 +641,7 @@ func TestMockCLIExecutor_ClaudeProviderScenario(t *testing.T) {
 	jsonResponse := `{"output": "Hello, world!", "tokens": 100}`
 	executor.SetOutput([]byte(jsonResponse), []byte(""))
 
-	stdout, stderr, err := executor.Run(ctx, "claude", "--model", "opus", "--prompt", "Say hello")
+	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--model", "opus", "--prompt", "Say hello")
 
 	assert.NoError(t, err)
 	assert.Equal(t, jsonResponse, string(stdout))
@@ -659,7 +659,7 @@ func TestMockCLIExecutor_GeminiProviderScenario(t *testing.T) {
 
 	executor.SetOutput([]byte(`{"result": "Analysis complete"}`), []byte(""))
 
-	stdout, stderr, err := executor.Run(ctx, "gemini",
+	stdout, stderr, err := executor.Run(ctx, "gemini", nil, nil,
 		"--temperature", "0.5",
 		"--max-tokens", "2000",
 		"--format", "json",
@@ -682,7 +682,7 @@ func TestMockCLIExecutor_ProviderErrorScenario(t *testing.T) {
 	// Simulate CLI error (e.g., API key invalid)
 	executor.SetError(errors.New("exit status 1: API key invalid"))
 
-	stdout, stderr, err := executor.Run(ctx, "claude", "--prompt", "test")
+	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--prompt", "test")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API key invalid")
@@ -701,7 +701,7 @@ func TestMockCLIExecutor_ProviderTimeoutScenario(t *testing.T) {
 	// Simulate timeout
 	executor.SetError(context.DeadlineExceeded)
 
-	stdout, stderr, err := executor.Run(ctx, "codex", "--prompt", "long running task")
+	stdout, stderr, err := executor.Run(ctx, "codex", nil, nil, "--prompt", "long running task")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)

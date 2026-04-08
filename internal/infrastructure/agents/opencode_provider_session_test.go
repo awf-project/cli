@@ -93,7 +93,7 @@ func TestOpenCodeProvider_ExecuteConversation_FirstTurn(t *testing.T) {
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 	state := workflow.NewConversationState("You are a code generator")
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "Create a Hello World program", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Create a Hello World program", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -124,7 +124,7 @@ func TestOpenCodeProvider_ExecuteConversation_Resume(t *testing.T) {
 	}
 	state.TotalTurns = 3
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "Add more features", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Add more features", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -148,7 +148,7 @@ func TestOpenCodeProvider_ExecuteConversation_SystemPrompt(t *testing.T) {
 		"system_prompt": "You are a specialized code generator",
 	}
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "Generate test code", options)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Generate test code", options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -188,7 +188,7 @@ func TestOpenCodeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 			state := workflow.NewConversationState("System prompt")
 			state.SessionID = "previous-session-id"
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -225,7 +225,7 @@ func TestOpenCodeProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, nil)
+			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Nil(t, result)
@@ -243,7 +243,7 @@ func TestOpenCodeProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -257,7 +257,7 @@ func TestOpenCodeProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 	state := workflow.NewConversationState("")
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)

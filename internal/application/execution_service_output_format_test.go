@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
@@ -50,7 +51,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_StripsFencesAndParsesJSON(
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Mock agent returns JSON wrapped in markdown code fences
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```json\n{\"name\":\"alice\",\"count\":3}\n```",
@@ -115,7 +116,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_NoFences_ParsesDirectly(t 
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns raw JSON without fences
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   `{"status":"ok","value":42}`,
@@ -183,7 +184,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_InvalidJSON_FailsStep(t *t
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns malformed JSON
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```json\n{invalid json here\n```",
@@ -243,7 +244,7 @@ func TestExecutionService_AgentStep_OutputFormat_Text_StripsFencesOnly(t *testin
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns text in bash code fence
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```bash\necho hello world\n```",
@@ -303,7 +304,7 @@ func TestExecutionService_AgentStep_OutputFormat_None_BackwardCompatibility(t *t
 
 	// Agent returns output with code fences
 	rawOutput := "```json\n{\"data\":\"value\"}\n```"
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   rawOutput,
@@ -362,7 +363,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ArrayParsing(t *testing.T)
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns JSON array
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   `["item1","item2","item3"]`,
@@ -429,7 +430,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_LargeOutput(t *testing.T) 
 	}
 	largeJSON := `{"data":"` + string(largeValue) + `"}`
 
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```json\n" + largeJSON + "\n```",
@@ -494,7 +495,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ConversationMode(t *testin
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Mock conversation agent returns JSON wrapped in code fences
-	claude.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	claude.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
 			Provider:     "claude",
 			State:        state,
@@ -566,7 +567,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_NestedFences(t *testing.T)
 
 	// Agent returns JSON containing code fences in a string field
 	// Note: JSON strings use literal characters, not escape sequences
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```json\n{\"code\":\"```\\necho hello\\n```\",\"type\":\"bash\"}\n```",
@@ -635,7 +636,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_MultiStepInterpolation(t *
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Step 1: Agent returns JSON with name and count
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   "```json\n{\"name\":\"alice\",\"count\":3}\n```",
@@ -741,7 +742,7 @@ func TestExecutionService_AgentStep_OutputFormat_Text_DifferentLanguageTags(t *t
 			claude := mocks.NewMockAgentProvider("claude")
 
 			output := "```" + tt.langTag + "\n" + tt.content + "\n```"
-			claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+			claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 				return &workflow.AgentResult{
 					Provider: "claude",
 					Output:   output,
@@ -828,7 +829,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_EmptyOutput(t *testing.T) 
 			registry := mocks.NewMockAgentRegistry()
 			claude := mocks.NewMockAgentProvider("claude")
 
-			claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+			claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 				return &workflow.AgentResult{
 					Provider: "claude",
 					Output:   tt.output,

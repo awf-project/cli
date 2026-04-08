@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **F078**: CLI provider invocation flags updated to match current binary APIs — Claude and Gemini `output_format: json` now maps to `--output-format stream-json` (was `--output-format json`); Codex invocation changed from `codex --prompt "<prompt>" --quiet` to `codex exec --json "<prompt>"`; `quiet` option removed from Codex (silently ignored); Codex conversation resume changed from `codex resume <id> --prompt "<prompt>"` to `codex resume <id> --json "<prompt>"`; workflows using `output_format: json` require no YAML changes (mapping is automatic); workflows using `quiet: true` for Codex should remove the option (no-op)
 - **F077**: Option keys normalized to snake_case — `allowedTools` renamed to `allowed_tools`, `dangerouslySkipPermissions` renamed to `dangerously_skip_permissions` in workflow YAML; old camelCase keys are silently ignored (Go map miss); `dangerously_skip_permissions` fails closed (permissions not skipped), `allowed_tools` fails open (no tool restriction applied); update existing workflow files to use the new snake_case keys
 
 ### Added
 
+- **F078**: OpenCode `--model` flag support — `model` option in workflow YAML now passed as `--model <value>` to OpenCode CLI in both `Execute` and `ExecuteConversation`; OpenCode always passes `--format json` for structured output
 - **F077**: `dangerously_skip_permissions` support for Gemini (`--approval-mode=yolo`) and Codex (`--yolo`) providers — unified permission bypass key works across all three agent providers (Claude, Gemini, Codex)
 - **F076**: `awf upgrade` self-update command — checks latest release on GitHub, downloads platform-specific binary, verifies SHA256 checksum, and atomically replaces the current executable; `--check` reports available updates without installing; `--version v0.5.0` installs a specific version; `--force` upgrades even if already on latest or running a dev build; heuristic warning when binary appears managed by a package manager (homebrew, apt, snap, nix); cross-filesystem fallback (copy + chmod) when `os.Rename` fails; `GITHUB_TOKEN` env var supported for rate-limited environments
 
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **F078**: Dead validation helpers `validatePrompt()`, `validateContext()`, `validateState()` removed from agent helpers — all were no-ops or unreachable after provider refactoring
 - **F077**: Dead helper functions `getWorkflowID()` and `getStepName()` removed from agent helpers — keys `workflowID`/`stepName` were never injected by any caller; `workflow` and `step` fields removed from Claude provider audit log (redundant with execution service context)
 
 ## [0.6.0] - 2026-04-05

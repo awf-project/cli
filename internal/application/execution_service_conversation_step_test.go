@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -322,7 +323,7 @@ func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T)
 	execCtx.Status = workflow.StatusRunning
 	// Mock manager that checks context
 	mockConvMgr := &mockConversationManagerWithContextT009{
-		executeFunc: func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc) (*workflow.ConversationResult, error) {
+		executeFunc: func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error) {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -531,6 +532,7 @@ func (m *mockConversationManagerT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if m.err != nil {
 		return nil, m.err
@@ -540,7 +542,7 @@ func (m *mockConversationManagerT009) ExecuteConversation(
 
 // mockConversationManagerWithContextT009 allows testing context cancellation.
 type mockConversationManagerWithContextT009 struct {
-	executeFunc func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc) (*workflow.ConversationResult, error)
+	executeFunc func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error)
 }
 
 func (m *mockConversationManagerWithContextT009) ExecuteConversation(
@@ -549,8 +551,9 @@ func (m *mockConversationManagerWithContextT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
-	return m.executeFunc(ctx, step, config, execCtx, buildContext)
+	return m.executeFunc(ctx, step, config, execCtx, buildContext, stdoutW, stderrW)
 }
 
 // mockConversationManagerWithBuildContextT009 captures buildContext calls for verification.
@@ -565,6 +568,7 @@ func (m *mockConversationManagerWithBuildContextT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if m.onExecute != nil {
 		m.onExecute(buildContext, execCtx)

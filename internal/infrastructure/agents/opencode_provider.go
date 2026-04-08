@@ -5,17 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
 
 // OpenCodeProvider implements AgentProvider for OpenCode CLI.
 // Invokes: opencode run "prompt"
 type OpenCodeProvider struct {
+	logger   ports.Logger
 	executor ports.CLIExecutor
 }
 
@@ -23,6 +26,7 @@ type OpenCodeProvider struct {
 // If no executor is provided, ExecCLIExecutor is used by default.
 func NewOpenCodeProvider() *OpenCodeProvider {
 	return &OpenCodeProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 }
@@ -30,6 +34,7 @@ func NewOpenCodeProvider() *OpenCodeProvider {
 // NewOpenCodeProviderWithOptions creates a new OpenCodeProvider with functional options.
 func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodeProvider {
 	p := &OpenCodeProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 	for _, opt := range opts {
@@ -39,7 +44,7 @@ func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodePro
 }
 
 // Execute invokes the OpenCode CLI with the given prompt and options.
-func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
 	if strings.TrimSpace(prompt) == "" {
@@ -56,6 +61,18 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 
 	args := []string{"run", prompt}
 
+	// Always pass --format json for structured output
+	args = append(args, "--format", "json")
+
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		// OpenCode has no equivalent flag; log at debug level so operators are aware the option was present but ignored.
+		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
+	}
+
 	if options != nil {
 		if framework, ok := options["framework"].(string); ok {
 			args = append(args, "--framework", framework)
@@ -68,7 +85,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		}
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "opencode", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
@@ -76,9 +93,9 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	}
 
 	// Combine stdout and stderr like CombinedOutput()
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:    "opencode",
@@ -101,7 +118,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 }
 
 // ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
-func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
 	if state == nil {
@@ -129,6 +146,18 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 
 	args := []string{"run", prompt}
 
+	// Always pass --format json for structured output
+	args = append(args, "--format", "json")
+
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		// OpenCode has no equivalent flag; log at debug level so operators are aware the option was present but ignored.
+		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
+	}
+
 	// Resume from previous session if available
 	if workingState.SessionID != "" {
 		args = append(args, "-s", workingState.SessionID)
@@ -151,16 +180,16 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 		}
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "opencode", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("opencode execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := strings.TrimSpace(string(output))
 	if outputStr == "" {
 		outputStr = " "

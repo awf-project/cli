@@ -43,6 +43,12 @@ func WithOpenCodeExecutor(executor ports.CLIExecutor) OpenCodeProviderOption {
 	}
 }
 
+func WithOpenCodeLogger(l ports.Logger) OpenCodeProviderOption {
+	return func(p *OpenCodeProvider) {
+		p.logger = l
+	}
+}
+
 type OpenAICompatibleProviderOption func(*OpenAICompatibleProvider)
 
 func WithHTTPClient(client *httpx.Client) OpenAICompatibleProviderOption {

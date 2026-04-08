@@ -3,6 +3,7 @@ package mocks_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -426,8 +427,8 @@ func TestMockAgentRegistry_ThreadSafety_ConcurrentClear(t *testing.T) {
 // mockAgentProvider is a minimal test implementation of ports.AgentProvider
 type mockAgentProvider struct {
 	name             string
-	executeFunc      func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
-	conversationFunc func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	executeFunc      func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error)
+	conversationFunc func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)
 	validateFunc     func() error
 }
 
@@ -435,9 +436,9 @@ func (m *mockAgentProvider) Name() string {
 	return m.name
 }
 
-func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx, prompt, options)
+		return m.executeFunc(ctx, prompt, options, stdout, stderr)
 	}
 	return &workflow.AgentResult{
 		Provider:    m.name,
@@ -447,9 +448,9 @@ func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options 
 	}, nil
 }
 
-func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	if m.conversationFunc != nil {
-		return m.conversationFunc(ctx, state, prompt, options)
+		return m.conversationFunc(ctx, state, prompt, options, stdout, stderr)
 	}
 	return &workflow.ConversationResult{
 		Provider:    m.name,
@@ -483,7 +484,7 @@ func TestMockAgentProvider_NewMockAgentProvider(t *testing.T) {
 
 	// Verify it's usable immediately with default stub behavior
 	ctx := context.Background()
-	result, err := provider.Execute(ctx, "test prompt", nil)
+	result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 	require.NoError(t, err, "Execute should not error with default stub behavior")
 	assert.NotNil(t, result, "Execute should return non-nil result")
 	assert.Equal(t, "test-agent", result.Provider, "Result provider should match mock name")
@@ -520,7 +521,7 @@ func TestMockAgentProvider_Execute_HappyPath(t *testing.T) {
 			name:         "execute with custom function - simple response",
 			providerName: "gemini",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return &workflow.AgentResult{
 						Provider: "gemini",
 						Output:   "Custom response",
@@ -538,7 +539,7 @@ func TestMockAgentProvider_Execute_HappyPath(t *testing.T) {
 			name:         "execute with custom function - echo prompt",
 			providerName: "test-agent",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return &workflow.AgentResult{
 						Provider: "test-agent",
 						Output:   fmt.Sprintf("You asked: %s", prompt),
@@ -556,7 +557,7 @@ func TestMockAgentProvider_Execute_HappyPath(t *testing.T) {
 			name:         "execute with custom function - reads options",
 			providerName: "codex",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					temp := options["temperature"].(float64)
 					return &workflow.AgentResult{
 						Provider: "codex",
@@ -579,7 +580,7 @@ func TestMockAgentProvider_Execute_HappyPath(t *testing.T) {
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -624,7 +625,7 @@ func TestMockAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 			name:         "execute conversation with custom function - simple response",
 			providerName: "gemini",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 					return &workflow.ConversationResult{
 						Provider: "gemini",
 						State:    state,
@@ -648,7 +649,7 @@ func TestMockAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 			name:         "execute conversation with stateful response",
 			providerName: "test-agent",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 					turnCount := len(state.Turns)
 					return &workflow.ConversationResult{
 						Provider: "test-agent",
@@ -678,7 +679,7 @@ func TestMockAgentProvider_ExecuteConversation_HappyPath(t *testing.T) {
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			result, err := provider.ExecuteConversation(ctx, tt.initialState, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(ctx, tt.initialState, tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -800,7 +801,7 @@ func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
 	ctx := context.Background()
 
 	// Set first function
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "test-agent",
 			Output:   "First response",
@@ -808,7 +809,7 @@ func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
 		}, nil
 	})
 
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "test-agent",
 			Output:   "Second response",
@@ -816,7 +817,7 @@ func TestMockAgentProvider_SetExecuteFunc_OverwritesPrevious(t *testing.T) {
 		}, nil
 	})
 
-	result, err := provider.Execute(ctx, "test", nil)
+	result, err := provider.Execute(ctx, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Second response", result.Output, "Should use the second function")
@@ -833,7 +834,7 @@ func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) 
 	}
 
 	// Set first function
-	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
 			Provider: "test-agent",
 			State:    state,
@@ -841,7 +842,7 @@ func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) 
 		}, nil
 	})
 
-	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
 			Provider: "test-agent",
 			State:    state,
@@ -849,7 +850,7 @@ func TestMockAgentProvider_SetConversationFunc_OverwritesPrevious(t *testing.T) 
 		}, nil
 	})
 
-	result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Second conversation", result.Output, "Should use the second function")
@@ -875,7 +876,7 @@ func TestMockAgentProvider_SetValidateFunc_OverwritesPrevious(t *testing.T) {
 
 func TestMockAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 	provider := mocks.NewMockAgentProvider("test-agent")
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "test-agent",
 			Output:   fmt.Sprintf("Prompt length: %d", len(prompt)),
@@ -884,7 +885,7 @@ func TestMockAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "", nil)
+	result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Prompt length: 0", result.Output, "Should handle empty prompt")
@@ -892,7 +893,7 @@ func TestMockAgentProvider_Execute_EmptyPrompt(t *testing.T) {
 
 func TestMockAgentProvider_Execute_NilOptions(t *testing.T) {
 	provider := mocks.NewMockAgentProvider("test-agent")
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		optionsNil := options == nil
 		return &workflow.AgentResult{
 			Provider: "test-agent",
@@ -902,7 +903,7 @@ func TestMockAgentProvider_Execute_NilOptions(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "test", nil)
+	result, err := provider.Execute(ctx, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Options nil: true", result.Output, "Should handle nil options")
@@ -910,7 +911,7 @@ func TestMockAgentProvider_Execute_NilOptions(t *testing.T) {
 
 func TestMockAgentProvider_Execute_EmptyOptions(t *testing.T) {
 	provider := mocks.NewMockAgentProvider("test-agent")
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "test-agent",
 			Output:   fmt.Sprintf("Options count: %d", len(options)),
@@ -919,7 +920,7 @@ func TestMockAgentProvider_Execute_EmptyOptions(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "test", map[string]any{})
+	result, err := provider.Execute(ctx, "test", map[string]any{}, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Options count: 0", result.Output, "Should handle empty options map")
@@ -927,7 +928,7 @@ func TestMockAgentProvider_Execute_EmptyOptions(t *testing.T) {
 
 func TestMockAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	provider := mocks.NewMockAgentProvider("test-agent")
-	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		stateNil := state == nil
 		return &workflow.ConversationResult{
 			Provider: "test-agent",
@@ -937,7 +938,7 @@ func TestMockAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	result, err := provider.ExecuteConversation(ctx, nil, "test", nil)
+	result, err := provider.ExecuteConversation(ctx, nil, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "State nil: true", result.Output, "Should handle nil state")
@@ -946,7 +947,7 @@ func TestMockAgentProvider_ExecuteConversation_NilState(t *testing.T) {
 
 func TestMockAgentProvider_ExecuteConversation_EmptyTurns(t *testing.T) {
 	provider := mocks.NewMockAgentProvider("test-agent")
-	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		return &workflow.ConversationResult{
 			Provider: "test-agent",
 			State:    state,
@@ -960,7 +961,7 @@ func TestMockAgentProvider_ExecuteConversation_EmptyTurns(t *testing.T) {
 		TotalTokens: 0,
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Turn count: 0", result.Output, "Should handle empty turns")
@@ -978,7 +979,7 @@ func TestMockAgentProvider_Execute_CustomError(t *testing.T) {
 		{
 			name: "execute returns custom error",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return nil, fmt.Errorf("agent execution failed: API timeout")
 				})
 			},
@@ -987,7 +988,7 @@ func TestMockAgentProvider_Execute_CustomError(t *testing.T) {
 		{
 			name: "execute returns error with nil result",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return nil, fmt.Errorf("authentication failed")
 				})
 			},
@@ -996,7 +997,7 @@ func TestMockAgentProvider_Execute_CustomError(t *testing.T) {
 		{
 			name: "execute returns error based on prompt",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				p.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					if prompt == "" {
 						return nil, fmt.Errorf("prompt cannot be empty")
 					}
@@ -1013,7 +1014,7 @@ func TestMockAgentProvider_Execute_CustomError(t *testing.T) {
 			tt.setupFunc(provider)
 			ctx := context.Background()
 
-			result, err := provider.Execute(ctx, "", nil)
+			result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 			require.Error(t, err)
 			assert.Nil(t, result, "Result should be nil when error occurs")
@@ -1031,7 +1032,7 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 		{
 			name: "conversation returns custom error",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 					return nil, fmt.Errorf("conversation failed: rate limit exceeded")
 				})
 			},
@@ -1040,7 +1041,7 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 		{
 			name: "conversation returns error with nil result",
 			setupFunc: func(p *mocks.MockAgentProvider) {
-				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+				p.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 					return nil, fmt.Errorf("invalid conversation state")
 				})
 			},
@@ -1059,7 +1060,7 @@ func TestMockAgentProvider_ExecuteConversation_CustomError(t *testing.T) {
 				TotalTokens: 0,
 			}
 
-			result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+			result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 			require.Error(t, err)
 			assert.Nil(t, result, "Result should be nil when error occurs")
@@ -1088,7 +1089,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecute(t *testing.T) {
 	var callCount int
 	var mu sync.Mutex
 
-	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		mu.Lock()
 		callCount++
 		mu.Unlock()
@@ -1109,7 +1110,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecute(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			prompt := fmt.Sprintf("prompt-%d", id)
-			result, err := provider.Execute(ctx, prompt, nil)
+			result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 			assert.NoError(t, err, "Concurrent Execute should not error")
 			assert.NotNil(t, result, "Concurrent Execute should return result")
 		}(i)
@@ -1127,7 +1128,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecuteConversation(t *testing
 	var callCount int
 	var mu sync.Mutex
 
-	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	provider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		mu.Lock()
 		callCount++
 		mu.Unlock()
@@ -1152,7 +1153,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentExecuteConversation(t *testing
 				TotalTurns:  0,
 				TotalTokens: 0,
 			}
-			result, err := provider.ExecuteConversation(ctx, state, fmt.Sprintf("prompt-%d", id), nil)
+			result, err := provider.ExecuteConversation(ctx, state, fmt.Sprintf("prompt-%d", id), nil, nil, nil)
 			assert.NoError(t, err, "Concurrent ExecuteConversation should not error")
 			assert.NotNil(t, result, "Concurrent ExecuteConversation should return result")
 		}(i)
@@ -1179,7 +1180,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentSetAndExecute(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < 5; j++ {
-				_, _ = provider.Execute(ctx, fmt.Sprintf("prompt-%d-%d", id, j), nil)
+				_, _ = provider.Execute(ctx, fmt.Sprintf("prompt-%d-%d", id, j), nil, nil, nil)
 				_ = provider.Name()
 				_ = provider.Validate()
 			}
@@ -1190,7 +1191,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentSetAndExecute(t *testing.T) {
 	for i := 0; i < numWriters; i++ {
 		go func(id int) {
 			defer wg.Done()
-			provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+			provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 				return &workflow.AgentResult{
 					Provider: "test-agent",
 					Output:   fmt.Sprintf("Writer-%d: %s", id, prompt),
@@ -1202,7 +1203,7 @@ func TestMockAgentProvider_ThreadSafety_ConcurrentSetAndExecute(t *testing.T) {
 
 	wg.Wait()
 
-	result, err := provider.Execute(ctx, "final-test", nil)
+	result, err := provider.Execute(ctx, "final-test", nil, nil, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -1240,20 +1241,20 @@ func TestMockAgentProvider_ThreadSafety_MixedOperations(t *testing.T) {
 			defer wg.Done()
 			switch id % 5 {
 			case 0:
-				_, _ = provider.Execute(ctx, fmt.Sprintf("prompt-%d", id), nil)
+				_, _ = provider.Execute(ctx, fmt.Sprintf("prompt-%d", id), nil, nil, nil)
 			case 1:
 				state := &workflow.ConversationState{
 					Turns:       []workflow.Turn{},
 					TotalTurns:  0,
 					TotalTokens: 0,
 				}
-				_, _ = provider.ExecuteConversation(ctx, state, fmt.Sprintf("prompt-%d", id), nil)
+				_, _ = provider.ExecuteConversation(ctx, state, fmt.Sprintf("prompt-%d", id), nil, nil, nil)
 			case 2:
 				_ = provider.Name()
 			case 3:
 				_ = provider.Validate()
 			case 4:
-				provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return &workflow.AgentResult{Provider: "test-agent", Output: "ok"}, nil
 				})
 			}

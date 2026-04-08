@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Apply bug fixes uniformly across all components implementing the same pattern; verify path resolution consistency across all executors when fixing one
 - Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
 - Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
 - Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
@@ -239,6 +238,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Initialize ApproximationTokenizer immediately before NewConversationManager in interfaces layer; token counting must be ready before conversation context is established
 - Resolve user-provided interpolated variables before registry or dependency lookups to enable dynamic selection at runtime; apply identical resolution logic across all related code paths
 - Implement per-provider flag mapping without shared abstraction when CLI syntax diverges fundamentally; document divergence (Claude: --flag-name, Gemini: --flag-name=value, Codex: --flag-name) inline
+- Synchronize provider CLI flag changes across both implementation files and central options configuration (options.go); verify declarations and validation rules align
 
 ## Common Pitfalls
 
@@ -306,6 +306,3 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 - When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
-
-## Review Standards
-

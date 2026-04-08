@@ -53,7 +53,7 @@ func TestMockProvider_Execute_DefaultResponse(t *testing.T) {
 	mock := NewMockProvider("claude")
 	ctx := context.Background()
 
-	result, err := mock.Execute(ctx, "What is 2+2?", nil)
+	result, err := mock.Execute(ctx, "What is 2+2?", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "claude", result.Provider)
@@ -71,7 +71,7 @@ func TestMockProvider_Execute_PatternMatch(t *testing.T) {
 	mock := NewMockProvider("claude").WithResponse("2+2", expected)
 	ctx := context.Background()
 
-	result, err := mock.Execute(ctx, "What is 2+2?", nil)
+	result, err := mock.Execute(ctx, "What is 2+2?", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "The answer is 4", result.Output)
@@ -89,11 +89,11 @@ func TestMockProvider_Execute_MultiplePatterns(t *testing.T) {
 	ctx := context.Background()
 
 	// First pattern
-	r1, _ := mock.Execute(ctx, "calculate 5+5", nil)
+	r1, _ := mock.Execute(ctx, "calculate 5+5", nil, nil, nil)
 	assert.Equal(t, "math answer", r1.Output)
 
 	// Second pattern
-	r2, _ := mock.Execute(ctx, "review this code", nil)
+	r2, _ := mock.Execute(ctx, "review this code", nil, nil, nil)
 	assert.Equal(t, "code review", r2.Output)
 
 	assert.Equal(t, 2, mock.CallCount())
@@ -106,7 +106,7 @@ func TestMockProvider_Execute_ContextCancellation(t *testing.T) {
 	// Cancel immediately
 	cancel()
 
-	result, err := mock.Execute(ctx, "test", nil)
+	result, err := mock.Execute(ctx, "test", nil, nil, nil)
 
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, context.Canceled)
@@ -117,8 +117,8 @@ func TestMockProvider_Execute_RecordsCalls(t *testing.T) {
 	ctx := context.Background()
 	opts := map[string]any{"model": "sonnet"}
 
-	_, _ = mock.Execute(ctx, "prompt 1", nil)
-	_, _ = mock.Execute(ctx, "prompt 2", opts)
+	_, _ = mock.Execute(ctx, "prompt 1", nil, nil, nil)
+	_, _ = mock.Execute(ctx, "prompt 2", opts, nil, nil)
 
 	calls := mock.Calls()
 	require.Len(t, calls, 2)
@@ -137,7 +137,7 @@ func TestMockProvider_ExecuteConversation_DefaultResponse(t *testing.T) {
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are helpful")
 
-	result, err := mock.ExecuteConversation(ctx, state, "Hello", nil)
+	result, err := mock.ExecuteConversation(ctx, state, "Hello", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "mock conversation response", result.Output)
@@ -154,7 +154,7 @@ func TestMockProvider_ExecuteConversation_PatternMatch(t *testing.T) {
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a reviewer")
 
-	result, err := mock.ExecuteConversation(ctx, state, "Please review this", nil)
+	result, err := mock.ExecuteConversation(ctx, state, "Please review this", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Code looks good. APPROVED", result.Output)
@@ -165,7 +165,7 @@ func TestMockProvider_ExecuteConversation_NilState(t *testing.T) {
 	mock := NewMockProvider("claude")
 	ctx := context.Background()
 
-	result, err := mock.ExecuteConversation(ctx, nil, "Hello", nil)
+	result, err := mock.ExecuteConversation(ctx, nil, "Hello", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, result.State)
@@ -176,7 +176,7 @@ func TestMockProvider_Reset(t *testing.T) {
 	mock := NewMockProvider("claude")
 	ctx := context.Background()
 
-	_, _ = mock.Execute(ctx, "test", nil)
+	_, _ = mock.Execute(ctx, "test", nil, nil, nil)
 	assert.Equal(t, 1, mock.CallCount())
 
 	mock.Reset()
@@ -189,9 +189,9 @@ func TestMockProvider_CallCounters(t *testing.T) {
 	ctx := context.Background()
 	state := workflow.NewConversationState("")
 
-	_, _ = mock.Execute(ctx, "exec 1", nil)
-	_, _ = mock.Execute(ctx, "exec 2", nil)
-	_, _ = mock.ExecuteConversation(ctx, state, "conv 1", nil)
+	_, _ = mock.Execute(ctx, "exec 1", nil, nil, nil)
+	_, _ = mock.Execute(ctx, "exec 2", nil, nil, nil)
+	_, _ = mock.ExecuteConversation(ctx, state, "conv 1", nil, nil, nil)
 
 	assert.Equal(t, 3, mock.CallCount())
 	assert.Equal(t, 2, mock.ExecuteCallCount())
@@ -207,7 +207,7 @@ func TestMockProvider_WithDefaultResponse(t *testing.T) {
 	mock := NewMockProvider("claude").WithDefaultResponse(defaultResult)
 	ctx := context.Background()
 
-	result, err := mock.Execute(ctx, "any prompt", nil)
+	result, err := mock.Execute(ctx, "any prompt", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "default output", result.Output)
@@ -222,7 +222,7 @@ func TestMockProvider_ConcurrentCalls(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			_, _ = mock.Execute(ctx, "concurrent test", nil)
+			_, _ = mock.Execute(ctx, "concurrent test", nil, nil, nil)
 			done <- true
 		}()
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -83,7 +84,7 @@ func (p *OpenAICompatibleProvider) Validate() error {
 	return nil
 }
 
-func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, options map[string]any, _, _ io.Writer) (*workflow.AgentResult, error) {
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
@@ -133,7 +134,7 @@ func (p *OpenAICompatibleProvider) parseJSONResponse(output string) (map[string]
 	return parsed, nil
 }
 
-func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, _, _ io.Writer) (*workflow.ConversationResult, error) {
 	if state == nil {
 		return nil, fmt.Errorf("openai_compatible: conversation state cannot be nil")
 	}

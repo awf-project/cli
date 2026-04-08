@@ -35,6 +35,7 @@ type ConversationExecutor interface {
 		config *workflow.ConversationConfig,
 		execCtx *workflow.ExecutionContext,
 		buildContext ContextBuilderFunc,
+		stdoutW, stderrW io.Writer,
 	) (*workflow.ConversationResult, error)
 }
 
@@ -2033,7 +2034,7 @@ func (s *ExecutionService) executeAgentStep(
 
 	// Execute the agent
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
-	result, execErr := provider.Execute(stepCtx, resolvedPrompt, step.Agent.Options)
+	result, execErr := provider.Execute(stepCtx, resolvedPrompt, step.Agent.Options, s.stdoutWriter, s.stderrWriter)
 
 	// Record step state
 	state := workflow.StepState{
@@ -2179,6 +2180,8 @@ func (s *ExecutionService) executeConversationStep(
 		step.Agent.Conversation,
 		execCtx,
 		buildContext,
+		s.stdoutWriter,
+		s.stderrWriter,
 	)
 
 	// 6. Map ConversationResult to StepState

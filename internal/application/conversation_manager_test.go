@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
@@ -79,11 +80,11 @@ func newMockConversationProvider(name string) *mockConversationProvider {
 	}
 }
 
-func (m *mockConversationProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (m *mockConversationProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	return nil, errors.New("single execution not supported, use ExecuteConversation")
 }
 
-func (m *mockConversationProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (m *mockConversationProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	if m.execError != nil {
 		return nil, m.execError
 	}
@@ -156,7 +157,7 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -198,7 +199,7 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -241,7 +242,7 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -285,7 +286,7 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -329,7 +330,7 @@ func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -371,7 +372,7 @@ func TestConversationManager_MaxTurns_Reached(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -413,7 +414,7 @@ func TestConversationManager_MaxTurns_One(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -456,7 +457,7 @@ func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -498,7 +499,7 @@ func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -540,7 +541,7 @@ func TestConversationManager_Strategy_None(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -559,7 +560,7 @@ func TestConversationManager_PassesSystemPromptInOptions(t *testing.T) {
 	var capturedOptions map[string]any
 	mockProvider := mocks.NewMockAgentProvider("claude")
 
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		capturedOptions = options
 		result := workflow.NewConversationResult("claude")
 		result.State = state
@@ -598,7 +599,7 @@ func TestConversationManager_PassesSystemPromptInOptions(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -616,7 +617,7 @@ func TestConversationManager_OmitsSystemPromptWhenEmpty(t *testing.T) {
 	var capturedOptions map[string]any
 	mockProvider := mocks.NewMockAgentProvider("claude")
 
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		capturedOptions = options
 		result := workflow.NewConversationResult("claude")
 		result.State = state
@@ -655,7 +656,7 @@ func TestConversationManager_OmitsSystemPromptWhenEmpty(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -674,7 +675,7 @@ func TestConversationManager_PreservesExistingOptions(t *testing.T) {
 	var capturedOptions map[string]any
 	mockProvider := mocks.NewMockAgentProvider("claude")
 
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		capturedOptions = options
 		result := workflow.NewConversationResult("claude")
 		result.State = state
@@ -717,7 +718,7 @@ func TestConversationManager_PreservesExistingOptions(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -766,7 +767,7 @@ func TestConversationManager_Interpolation_Inputs(t *testing.T) {
 		return ctx
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -822,7 +823,7 @@ func TestConversationManager_Interpolation_States(t *testing.T) {
 		return ctx
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -865,7 +866,7 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect provider not found error
 	require.Error(t, err)
@@ -912,7 +913,7 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -955,7 +956,7 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -998,7 +999,7 @@ func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect template resolution error
 	require.Error(t, err)
@@ -1043,7 +1044,7 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -1088,7 +1089,7 @@ func TestConversationManager_Error_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	result, err := manager.ExecuteConversation(ctx, step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(ctx, step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect context cancellation error
 	require.Error(t, err)
@@ -1135,7 +1136,7 @@ func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) 
 
 	// Call ExecuteConversation which uses validateConversationInputs internally
 	// This verifies the refactored validation is working correctly
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 	// Validation passes (step and config are valid)
 	// Execution may fail due to stub implementation, but that's expected in RED phase
 	// The key test is that we don't get a validation error about nil inputs
@@ -1171,7 +1172,7 @@ func TestConversationManager_ValidateConversationInputs_NilStep(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), nil, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), nil, config, execCtx, buildContext, nil, nil)
 
 	// Should fail validation immediately
 	require.Error(t, err)
@@ -1209,7 +1210,7 @@ func TestConversationManager_ValidateConversationInputs_NilAgentConfig(t *testin
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// Should fail validation immediately
 	require.Error(t, err)
@@ -1244,7 +1245,7 @@ func TestConversationManager_ValidateConversationInputs_NilConfig(t *testing.T) 
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext, nil, nil)
 
 	// Should fail validation immediately
 	require.Error(t, err)
@@ -1270,7 +1271,7 @@ func TestConversationManager_ValidateConversationInputs_AllNil(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), nil, nil, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), nil, nil, execCtx, buildContext, nil, nil)
 
 	// Should fail validation immediately
 	require.Error(t, err)
@@ -1312,7 +1313,7 @@ func TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderNa
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// Validation passes (step and config are not nil), but should fail at provider lookup
 	require.Error(t, err)
@@ -1349,7 +1350,7 @@ func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect nil config error
 	require.Error(t, err)
@@ -1392,7 +1393,7 @@ func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -1435,7 +1436,7 @@ func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// GREEN PHASE: expect successful execution
 	require.NoError(t, err)
@@ -1453,7 +1454,7 @@ func TestConversationManager_ContinueFrom_SessionID(t *testing.T) {
 
 	var capturedInitialSessionID string
 	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		// Capture initial SessionID before provider modifies it
 		capturedInitialSessionID = state.SessionID
 		result := workflow.NewConversationResult("claude")
@@ -1499,7 +1500,7 @@ func TestConversationManager_ContinueFrom_SessionID(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1518,7 +1519,7 @@ func TestConversationManager_ContinueFrom_Turns(t *testing.T) {
 
 	var capturedInitialTurnCount int
 	mockProvider := mocks.NewMockAgentProvider("openai_compatible")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		// Capture initial turn count before provider adds new turns
 		capturedInitialTurnCount = len(state.Turns)
 		result := workflow.NewConversationResult("openai_compatible")
@@ -1569,7 +1570,7 @@ func TestConversationManager_ContinueFrom_Turns(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1611,7 +1612,7 @@ func TestConversationManager_ContinueFrom_StepNotFound(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nonexistent")
@@ -1655,7 +1656,7 @@ func TestConversationManager_ContinueFrom_NilConversationState(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no conversation state")
@@ -1702,7 +1703,7 @@ func TestConversationManager_ContinueFrom_EmptySessionAndTurns(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no session")
@@ -1751,7 +1752,7 @@ func TestConversationManager_ContinueFrom_TurnsRequired_HTTPProvider(t *testing.
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no conversation turns")
@@ -1769,7 +1770,7 @@ func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
 	var step3InitialTurnCount int
 
 	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		// Capture initial turn count before provider adds new turns
 		switch prompt {
 		case "step2-prompt":
@@ -1803,7 +1804,7 @@ func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
 	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
 		return interpolation.NewContext()
 	}
-	result1, err := manager.ExecuteConversation(context.Background(), step1, config1, execCtx, buildContext)
+	result1, err := manager.ExecuteConversation(context.Background(), step1, config1, execCtx, buildContext, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	execCtx.SetStepState("step1", workflow.StepState{
@@ -1825,7 +1826,7 @@ func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
 		MaxTurns:     1,
 		ContinueFrom: "step1",
 	}
-	result2, err := manager.ExecuteConversation(context.Background(), step2, config2, execCtx, buildContext)
+	result2, err := manager.ExecuteConversation(context.Background(), step2, config2, execCtx, buildContext, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	// Step2 should receive step1's 2 turns (user + assistant)
@@ -1849,7 +1850,7 @@ func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
 		MaxTurns:     1,
 		ContinueFrom: "step2",
 	}
-	result3, err := manager.ExecuteConversation(context.Background(), step3, config3, execCtx, buildContext)
+	result3, err := manager.ExecuteConversation(context.Background(), step3, config3, execCtx, buildContext, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result3)
 
@@ -1872,7 +1873,7 @@ func TestConversationManager_InjectContext_AppendedOnSecondTurn(t *testing.T) {
 	var capturedPrompts []string
 	mockProvider := mocks.NewMockAgentProvider("claude")
 
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		capturedPrompts = append(capturedPrompts, prompt)
 		result := workflow.NewConversationResult("claude")
 		result.State = state
@@ -1908,7 +1909,7 @@ func TestConversationManager_InjectContext_AppendedOnSecondTurn(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1937,7 +1938,7 @@ func TestConversationManager_InjectContext_ExcludedFromFirstTurn(t *testing.T) {
 	var capturedPrompts []string
 	mockProvider := mocks.NewMockAgentProvider("claude")
 
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		capturedPrompts = append(capturedPrompts, prompt)
 		result := workflow.NewConversationResult("claude")
 		result.State = state
@@ -1973,7 +1974,7 @@ func TestConversationManager_InjectContext_ExcludedFromFirstTurn(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -2005,7 +2006,7 @@ func TestConversationManager_InjectContext_EmptyIsNoOp(t *testing.T) {
 			var capturedPrompts []string
 			mockProvider := mocks.NewMockAgentProvider("claude")
 
-			mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+			mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 				capturedPrompts = append(capturedPrompts, prompt)
 				result := workflow.NewConversationResult("claude")
 				result.State = state
@@ -2041,7 +2042,7 @@ func TestConversationManager_InjectContext_EmptyIsNoOp(t *testing.T) {
 				return interpolation.NewContext()
 			}
 
-			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -2063,7 +2064,7 @@ func TestConversationManager_InjectContext_InterpolationError(t *testing.T) {
 	registry := mocks.NewMockAgentRegistry()
 
 	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		result := workflow.NewConversationResult("claude")
 		result.State = state
 		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
@@ -2098,7 +2099,7 @@ func TestConversationManager_InjectContext_InterpolationError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	// First turn succeeds (no injection). Second turn fails on inject_context interpolation.
 	require.Error(t, err)
@@ -2119,7 +2120,7 @@ func TestConversationManager_InjectContext_TemplateInterpolation(t *testing.T) {
 	var secondTurnPrompt string
 	callCount := 0
 	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 		callCount++
 		if callCount == 2 {
 			secondTurnPrompt = prompt
@@ -2162,7 +2163,7 @@ func TestConversationManager_InjectContext_TemplateInterpolation(t *testing.T) {
 		return ctx
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -2266,7 +2267,7 @@ func TestConversationManager_ProviderInterpolation(t *testing.T) {
 				return ctx
 			}
 
-			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext)
+			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
 
 			if tt.expectError {
 				require.Error(t, err, "should return error")
