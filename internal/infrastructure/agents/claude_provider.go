@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"slices"
 	"strings"
@@ -16,7 +17,7 @@ import (
 )
 
 // ClaudeProvider implements AgentProvider for Claude CLI.
-// Invokes: claude -p "prompt" --output-format json
+// Invokes: claude -p "prompt" --output-format stream-json
 type ClaudeProvider struct {
 	logger   ports.Logger
 	executor ports.CLIExecutor
@@ -46,7 +47,7 @@ func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider 
 	return p
 }
 
-func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 	startedAt := time.Now()
 
 	if strings.TrimSpace(prompt) == "" {
@@ -66,8 +67,11 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
-	if outputFormat, ok := getStringOption(options, "output_format"); ok && outputFormat == "json" {
-		args = append(args, "--output-format", "json")
+	if outputFormat, ok := getStringOption(options, "output_format"); ok {
+		if outputFormat == "json" {
+			outputFormat = "stream-json"
+		}
+		args = append(args, "--output-format", outputFormat)
 	}
 	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
 		args = append(args, "--allowedTools", allowedTools)
@@ -77,16 +81,16 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		p.logger.Info("[SECURITY AUDIT] dangerously_skip_permissions enabled",
 			"timestamp", time.Now().Format(time.RFC3339))
 	}
-	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "claude", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 	outputStr := string(output)
 	result := &workflow.AgentResult{
 		Provider:        "claude",
@@ -113,7 +117,7 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 // ExecuteConversation invokes the Claude CLI with conversation history for multi-turn interactions.
 //
 //nolint:gocognit // Complexity 31: conversation executor manages multi-turn state, context windows, token limits, retries, streaming. Conversation orchestration requires this.
-func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error) {
+func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
 	startedAt := time.Now()
 
 	if state == nil {
@@ -145,8 +149,8 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		args = append(args, "--model", model)
 	}
 
-	// Force JSON output for session ID extraction on all conversation turns
-	args = append(args, "--output-format", "json")
+	// Force stream-json output for session ID extraction on all conversation turns
+	args = append(args, "--output-format", "stream-json")
 
 	// Resume from previous session if available
 	if workingState.SessionID != "" {
@@ -170,19 +174,19 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 			"timestamp", time.Now().Format(time.RFC3339))
 	}
 
-	stdout, stderr, err := p.executor.Run(ctx, "claude", args...)
+	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "claude", stdout, stderr, args...)
 	completedAt := time.Now()
 
 	if err != nil {
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
-	output := make([]byte, 0, len(stdout)+len(stderr))
-	output = append(output, stdout...)
-	output = append(output, stderr...)
+	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
+	output = append(output, stdoutBytes...)
+	output = append(output, stderrBytes...)
 
 	// Extract text content from JSON wrapper
-	// Claude's --output-format json wraps response in JSON: {"session_id":"...", "result":"actual text", ...}
+	// Claude's --output-format stream-json wraps response in JSON: {"session_id":"...", "result":"actual text", ...}
 	// We need the clean text for the assistant turn, not the raw JSON.
 	// On extraction failure, gracefully fall back to raw output string.
 	rawOutputStr := string(output)

@@ -73,7 +73,7 @@ func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 			// Verify executor is functional by executing
 			if mockExec != nil {
 				ctx := context.Background()
-				result, err := provider.Execute(ctx, "test prompt", nil)
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 				if tt.expectError {
 					assert.Error(t, err)
@@ -131,7 +131,7 @@ func TestGeminiProvider_NewWithOptions_HappyPath(t *testing.T) {
 			// Verify executor is functional
 			if mockExec != nil {
 				ctx := context.Background()
-				result, err := provider.Execute(ctx, "test prompt", nil)
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
 			}
@@ -184,7 +184,7 @@ func TestCodexProvider_NewWithOptions_HappyPath(t *testing.T) {
 			// Verify executor is functional
 			if mockExec != nil {
 				ctx := context.Background()
-				result, err := provider.Execute(ctx, "test prompt", nil)
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
 			}
@@ -237,7 +237,7 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 			// Verify executor is functional
 			if mockExec != nil {
 				ctx := context.Background()
-				result, err := provider.Execute(ctx, "test prompt", nil)
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
 			}
@@ -294,7 +294,7 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 
 		// Verify the last executor was used
 		ctx := context.Background()
-		result, err := provider.Execute(ctx, "test", nil)
+		result, err := provider.Execute(ctx, "test", nil, nil, nil)
 		require.NoError(t, err)
 		assert.Contains(t, result.Output, "mock2")
 	})
@@ -327,7 +327,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "test prompt", nil)
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -341,7 +341,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "test prompt", nil)
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -355,7 +355,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "test prompt", nil)
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -369,7 +369,7 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "test prompt", nil)
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -385,7 +385,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "What is 2+2?", nil)
+		result, err := provider.Execute(ctx, "What is 2+2?", nil, nil, nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -410,7 +410,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "Explain Go interfaces", nil)
+		result, err := provider.Execute(ctx, "Explain Go interfaces", nil, nil, nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -431,7 +431,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "Write a function", nil)
+		result, err := provider.Execute(ctx, "Write a function", nil, nil, nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -451,7 +451,7 @@ func TestProviderOptions_Integration(t *testing.T) {
 		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 		ctx := context.Background()
 
-		result, err := provider.Execute(ctx, "Generate code", nil)
+		result, err := provider.Execute(ctx, "Generate code", nil, nil, nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -479,11 +479,11 @@ func TestProviderOptions_Integration(t *testing.T) {
 		ctx := context.Background()
 
 		// Execute both
-		claudeResult, err := claudeProvider.Execute(ctx, "prompt1", nil)
+		claudeResult, err := claudeProvider.Execute(ctx, "prompt1", nil, nil, nil)
 		require.NoError(t, err)
 		assert.Contains(t, claudeResult.Output, "Claude specific")
 
-		geminiResult, err := geminiProvider.Execute(ctx, "prompt2", nil)
+		geminiResult, err := geminiProvider.Execute(ctx, "prompt2", nil, nil, nil)
 		require.NoError(t, err)
 		assert.Contains(t, geminiResult.Output, "Gemini specific")
 

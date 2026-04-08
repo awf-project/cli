@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"io"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
@@ -11,13 +12,15 @@ import (
 // to this unified interface.
 type AgentProvider interface {
 	// Execute invokes the agent with the given prompt and options.
+	// When stdout/stderr writers are non-nil, agent output is streamed to them in real-time.
 	// Returns AgentResult containing output, parsed response, token usage, and any errors.
-	Execute(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error)
+	Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error)
 
 	// ExecuteConversation invokes the agent with conversation history for multi-turn interactions.
+	// When stdout/stderr writers are non-nil, agent output is streamed to them in real-time.
 	// The state parameter contains the conversation history (turns) to send to the agent.
 	// Returns ConversationResult containing the updated conversation state, final output, and token usage.
-	ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any) (*workflow.ConversationResult, error)
+	ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)
 
 	// Name returns the provider identifier (e.g., "claude", "codex", "gemini").
 	Name() string

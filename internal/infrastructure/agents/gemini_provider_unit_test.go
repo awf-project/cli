@@ -63,7 +63,7 @@ func TestGeminiProvider_Execute_Success(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -113,7 +113,7 @@ func TestGeminiProvider_Execute_JSONParsing(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -176,7 +176,7 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr != "" {
 				assert.Error(t, err)
@@ -224,7 +224,7 @@ func TestGeminiProvider_Execute_ContextErrors(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			ctx := tt.ctxFunc()
-			result, err := provider.Execute(ctx, "test prompt", nil)
+			result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -262,7 +262,7 @@ func TestGeminiProvider_Execute_CLIErrors(t *testing.T) {
 			mockExec.SetError(tt.mockErr)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test prompt", nil)
+			result, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -310,7 +310,7 @@ func TestGeminiProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			mockExec.SetOutput(tt.stdout, tt.stderr)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -346,14 +346,14 @@ func TestGeminiProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 			prompt:       "test",
 			options:      map[string]any{"output_format": "json"},
 			mockOutput:   []byte(`{"result":"ok"}`),
-			wantContains: []string{"--output-format", "json", "test"},
+			wantContains: []string{"--output-format", "stream-json", "test"},
 		},
 		{
 			name:         "with multiple options",
 			prompt:       "test",
 			options:      map[string]any{"model": "gemini-ultra", "output_format": "json"},
 			mockOutput:   []byte("ok"),
-			wantContains: []string{"--model", "gemini-ultra", "--output-format", "json", "test"},
+			wantContains: []string{"--model", "gemini-ultra", "--output-format", "stream-json", "test"},
 		},
 	}
 
@@ -363,7 +363,7 @@ func TestGeminiProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			_, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			_, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 			require.NoError(t, err)
 
 			calls := mockExec.GetCalls()
@@ -440,7 +440,7 @@ func TestGeminiProvider_ExecuteConversation_Success(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := tt.stateSetup()
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -508,7 +508,7 @@ func TestGeminiProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -552,7 +552,7 @@ func TestGeminiProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 
 			state := workflow.NewConversationState("system")
 			ctx := tt.ctxFunc()
-			result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+			result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -586,7 +586,7 @@ func TestGeminiProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -614,7 +614,7 @@ func TestGeminiProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 	initialTotalTurns := initialState.TotalTurns
 	initialTotalTokens := initialState.TotalTokens
 
-	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil)
+	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -636,7 +636,7 @@ func TestGeminiProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 	state := workflow.NewConversationState("You are helpful")
-	result, err := provider.ExecuteConversation(context.Background(), state, "Hello", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Hello", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -676,7 +676,7 @@ func TestGeminiProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -717,7 +717,7 @@ func TestGeminiProvider_Execute_EmptyState(t *testing.T) {
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 	state := &workflow.ConversationState{}
-	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -729,7 +729,7 @@ func TestGeminiProvider_Execute_OptionsNil(t *testing.T) {
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -746,7 +746,7 @@ func TestGeminiProvider_Execute_MultipleOptions(t *testing.T) {
 		"output_format": "text",
 	}
 
-	result, err := provider.Execute(context.Background(), "test", options)
+	result, err := provider.Execute(context.Background(), "test", options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -842,13 +842,13 @@ func TestGeminiProvider_Execute_DangerouslySkipPermissions(t *testing.T) {
 			name:         "skip permissions with output format",
 			options:      map[string]any{"dangerously_skip_permissions": true, "output_format": "json"},
 			mockOutput:   []byte(`{"result":"ok"}`),
-			wantContains: []string{"--approval-mode=yolo", "--output-format", "json"},
+			wantContains: []string{"--approval-mode=yolo", "--output-format", "stream-json"},
 		},
 		{
 			name:         "skip permissions with all options",
 			options:      map[string]any{"dangerously_skip_permissions": true, "model": "gemini-ultra", "output_format": "json"},
 			mockOutput:   []byte(`{"result":"ok"}`),
-			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-ultra", "--output-format", "json"},
+			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-ultra", "--output-format", "stream-json"},
 		},
 		{
 			name:       "skip permissions as string value",
@@ -870,7 +870,7 @@ func TestGeminiProvider_Execute_DangerouslySkipPermissions(t *testing.T) {
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test prompt", tt.options)
+			result, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -927,7 +927,7 @@ func TestGeminiProvider_ExecuteConversation_DangerouslySkipPermissions(t *testin
 			name:         "skip permissions with model and format",
 			options:      map[string]any{"dangerously_skip_permissions": true, "model": "gemini-pro", "output_format": "json"},
 			mockOutput:   []byte(`{"result":"ok"}`),
-			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-pro", "--output-format", "json"},
+			wantContains: []string{"--approval-mode=yolo", "--model", "gemini-pro", "--output-format", "stream-json"},
 		},
 		{
 			name:         "skip permissions with existing session",
@@ -947,7 +947,7 @@ func TestGeminiProvider_ExecuteConversation_DangerouslySkipPermissions(t *testin
 			state := workflow.NewConversationState("You are helpful")
 			state.SessionID = tt.sessionID
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -963,6 +963,148 @@ func TestGeminiProvider_ExecuteConversation_DangerouslySkipPermissions(t *testin
 			for _, notWant := range tt.wantNotIn {
 				assert.NotContains(t, calls[0].Args, notWant, "unexpected arg %q found in %v", notWant, calls[0].Args)
 			}
+		})
+	}
+}
+
+// TestGeminiProvider_Execute_OutputFormatMapping_T002
+// T002: Map output_format: json → stream-json in Execute
+// Requirement: System MUST invoke Gemini CLI with `--output-format stream-json`
+// when `output_format` is `json` or `stream-json` in step options
+func TestGeminiProvider_Execute_OutputFormatMapping_T002(t *testing.T) {
+	tests := []struct {
+		name            string
+		inputFormat     string
+		expectedCLIFlag string
+		description     string
+	}{
+		{
+			name:            "json maps to stream-json",
+			inputFormat:     "json",
+			expectedCLIFlag: "stream-json",
+			description:     "when output_format is json, CLI must receive stream-json",
+		},
+		{
+			name:            "stream-json stays as stream-json",
+			inputFormat:     "stream-json",
+			expectedCLIFlag: "stream-json",
+			description:     "when output_format is already stream-json, it should stay unchanged",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("test response"), nil)
+			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+			options := map[string]any{"output_format": tt.inputFormat}
+			result, err := provider.Execute(context.Background(), "test prompt", options, nil, nil)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, "test response", result.Output)
+
+			// Verify the CLI was invoked with the correct output-format flag
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1, "expected exactly one CLI call")
+			require.Equal(t, "gemini", calls[0].Name)
+
+			// Find --output-format flag in args and verify its value
+			foundFlag := false
+			for i, arg := range calls[0].Args {
+				if arg != "--output-format" {
+					continue
+				}
+				require.Less(t, i+1, len(calls[0].Args), "--output-format must have a value")
+				actualValue := calls[0].Args[i+1]
+				assert.Equal(t, tt.expectedCLIFlag, actualValue,
+					"T002: %s - expected CLI flag value %q but got %q",
+					tt.description, tt.expectedCLIFlag, actualValue)
+				foundFlag = true
+				break
+			}
+			assert.True(t, foundFlag, "T002: --output-format flag not found in CLI arguments")
+		})
+	}
+}
+
+// TestGeminiProvider_ExecuteConversation_OutputFormatMapping_T002
+// T002: Map output_format: json → stream-json in ExecuteConversation
+// Requirement: System MUST force `--output-format stream-json` (instead of `json`)
+// in Gemini's ExecuteConversation for session ID extraction
+func TestGeminiProvider_ExecuteConversation_OutputFormatMapping_T002(t *testing.T) {
+	tests := []struct {
+		name            string
+		inputFormat     string
+		expectedCLIFlag string
+		mockOutput      []byte
+		description     string
+		isFirstTurn     bool
+	}{
+		{
+			name:            "first turn: json maps to stream-json",
+			inputFormat:     "json",
+			expectedCLIFlag: "stream-json",
+			mockOutput:      []byte(`{"session_id":"abc123","result":"Assistant response"}`),
+			description:     "first turn: when output_format is json, CLI must receive stream-json",
+			isFirstTurn:     true,
+		},
+		{
+			name:            "first turn: stream-json stays as stream-json",
+			inputFormat:     "stream-json",
+			expectedCLIFlag: "stream-json",
+			mockOutput:      []byte(`{"session_id":"abc123","result":"Assistant response"}`),
+			description:     "first turn: when output_format is already stream-json, it should stay unchanged",
+			isFirstTurn:     true,
+		},
+		{
+			name:            "resume turn: json maps to stream-json",
+			inputFormat:     "json",
+			expectedCLIFlag: "stream-json",
+			mockOutput:      []byte(`{"session_id":"abc123","result":"Continued response"}`),
+			description:     "resume turn: when output_format is json, CLI must receive stream-json",
+			isFirstTurn:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockOutput, nil)
+			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+			state := workflow.NewConversationState("You are helpful")
+			if !tt.isFirstTurn {
+				state.SessionID = "abc123"
+			}
+
+			options := map[string]any{"output_format": tt.inputFormat}
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", options, nil, nil)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			// Verify the CLI was invoked with the correct output-format flag
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1, "expected exactly one CLI call")
+			require.Equal(t, "gemini", calls[0].Name)
+
+			// Find --output-format flag in args and verify its value
+			foundFlag := false
+			for i, arg := range calls[0].Args {
+				if arg != "--output-format" {
+					continue
+				}
+				require.Less(t, i+1, len(calls[0].Args), "--output-format must have a value")
+				actualValue := calls[0].Args[i+1]
+				assert.Equal(t, tt.expectedCLIFlag, actualValue,
+					"T002: %s - expected CLI flag value %q but got %q",
+					tt.description, tt.expectedCLIFlag, actualValue)
+				foundFlag = true
+				break
+			}
+			assert.True(t, foundFlag, "T002: --output-format flag not found in CLI arguments")
 		})
 	}
 }

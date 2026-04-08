@@ -76,19 +76,22 @@ func TestCodexProvider_extractSessionID(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 	tests := []struct {
-		name           string
-		sessionID      string
-		wantResumeFlag bool
+		name            string
+		sessionID       string
+		wantResumeFlag  bool
+		wantExecCommand bool
 	}{
 		{
-			name:           "turn 2+ with session ID uses resume subcommand",
-			sessionID:      "codex-session-abc",
-			wantResumeFlag: true,
+			name:            "turn 2+ with session ID uses resume subcommand",
+			sessionID:       "codex-session-abc",
+			wantResumeFlag:  true,
+			wantExecCommand: false,
 		},
 		{
-			name:           "turn 1 without session ID omits resume",
-			sessionID:      "",
-			wantResumeFlag: false,
+			name:            "turn 1 without session ID uses exec subcommand",
+			sessionID:       "",
+			wantResumeFlag:  false,
+			wantExecCommand: true,
 		},
 	}
 
@@ -101,7 +104,7 @@ func TestCodexProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 			state := workflow.NewConversationState("system")
 			state.SessionID = tt.sessionID
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "write a function", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "write a function", nil, nil, nil)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -109,6 +112,7 @@ func TestCodexProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 			require.Len(t, calls, 1)
 
 			hasResumeSubcommand := false
+			hasExecSubcommand := false
 			for i, arg := range calls[0].Args {
 				if arg == "resume" && i+1 < len(calls[0].Args) {
 					hasResumeSubcommand = true
@@ -116,8 +120,14 @@ func TestCodexProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 						assert.Equal(t, tt.sessionID, calls[0].Args[i+1])
 					}
 				}
+				if arg == "exec" {
+					hasExecSubcommand = true
+				}
 			}
 			assert.Equal(t, tt.wantResumeFlag, hasResumeSubcommand)
+			assert.Equal(t, tt.wantExecCommand, hasExecSubcommand)
+			// Both paths should include --json
+			assert.Contains(t, calls[0].Args, "--json")
 		})
 	}
 }
@@ -156,7 +166,7 @@ func TestCodexProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -174,11 +184,13 @@ func TestCodexProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T)
 	state := workflow.NewConversationState("")
 	options := map[string]any{"system_prompt": "You are a code generator"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Generate a hello world", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Generate a hello world", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
 	require.Len(t, calls, 1)
+	assert.Contains(t, calls[0].Args, "exec")
+	assert.Contains(t, calls[0].Args, "--json")
 	assert.Contains(t, calls[0].Args, "--system-prompt")
 	assert.Contains(t, calls[0].Args, "You are a code generator")
 }
@@ -192,7 +204,7 @@ func TestCodexProvider_ExecuteConversation_NoSystemPromptOnResumeTurn(t *testing
 	state.SessionID = "existing-session-id"
 	options := map[string]any{"system_prompt": "You are a code generator"}
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options)
+	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options, nil, nil)
 	require.NoError(t, err)
 
 	calls := mockExec.GetCalls()
@@ -226,7 +238,7 @@ func TestCodexProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
 
 			require.NoError(t, err, "extraction failure must not cause error (graceful fallback)")
 			require.NotNil(t, result)
@@ -246,7 +258,7 @@ func TestCodexProvider_ExecuteConversation_ResumeFallback_NonPrefixedSessionID(t
 	// isResume = false and the resume subcommand is never added to args.
 	state.SessionID = "previous-session"
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -254,13 +266,18 @@ func TestCodexProvider_ExecuteConversation_ResumeFallback_NonPrefixedSessionID(t
 	require.Len(t, calls, 1)
 
 	hasResumeSubcommand := false
+	hasExecSubcommand := false
 	for _, arg := range calls[0].Args {
 		if arg == "resume" {
 			hasResumeSubcommand = true
-			break
+		}
+		if arg == "exec" {
+			hasExecSubcommand = true
 		}
 	}
 	assert.False(t, hasResumeSubcommand, "resume subcommand must be absent when session ID lacks codex- prefix")
+	assert.True(t, hasExecSubcommand, "exec subcommand must be used when session ID lacks prefix")
+	assert.Contains(t, calls[0].Args, "--json", "--json flag must be present in exec subcommand")
 }
 
 func TestCodexProvider_ExecuteConversation_ResumeFallback_ExtractionFailure(t *testing.T) {
@@ -274,7 +291,7 @@ func TestCodexProvider_ExecuteConversation_ResumeFallback_ExtractionFailure(t *t
 	state := workflow.NewConversationState("system")
 	state.SessionID = "codex-valid-prefix"
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

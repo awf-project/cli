@@ -73,7 +73,7 @@ func TestExecCLIExecutor_Run_SimpleCommands(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			if tt.wantErrNil {
 				require.NoError(t, err, tt.description)
@@ -116,7 +116,7 @@ func TestExecCLIExecutor_Run_CommandWithFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			require.NoError(t, err)
 			assert.NotNil(t, stdout)
@@ -129,7 +129,7 @@ func TestExecCLIExecutor_Run_EmptyCommand(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
 
-	stdout, stderr, err := executor.Run(ctx, "", []string{}...)
+	stdout, stderr, err := executor.Run(ctx, "", nil, nil)
 
 	// Empty binary name should cause an error
 	assert.Error(t, err, "empty binary name should fail")
@@ -141,7 +141,7 @@ func TestExecCLIExecutor_Run_NoArguments(t *testing.T) {
 	executor := NewExecCLIExecutor()
 	ctx := context.Background()
 
-	stdout, stderr, err := executor.Run(ctx, "echo")
+	stdout, stderr, err := executor.Run(ctx, "echo", nil, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
@@ -158,7 +158,7 @@ func TestExecCLIExecutor_Run_ManyArguments(t *testing.T) {
 		args[i] = "arg"
 	}
 
-	stdout, stderr, err := executor.Run(ctx, "echo", args...)
+	stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, args...)
 
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
@@ -171,7 +171,7 @@ func TestExecCLIExecutor_Run_LargeOutput(t *testing.T) {
 	ctx := context.Background()
 
 	// Generate large output
-	stdout, stderr, err := executor.Run(ctx, "seq", "1", "1000")
+	stdout, stderr, err := executor.Run(ctx, "seq", nil, nil, "1", "1000")
 
 	require.NoError(t, err)
 	assert.Greater(t, len(stdout), 100, "should have substantial output")
@@ -202,7 +202,7 @@ func TestExecCLIExecutor_Run_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, "echo", tt.args...)
+			stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, tt.args...)
 
 			require.NoError(t, err)
 			assert.NotNil(t, stdout)
@@ -223,7 +223,7 @@ func TestExecCLIExecutor_Run_NilContext(t *testing.T) {
 	}()
 
 	// If no panic, should return error
-	_, _, err := executor.Run(context.Background(), "echo", "test")
+	_, _, err := executor.Run(context.Background(), "echo", nil, nil, "test")
 	if err != nil {
 		assert.Error(t, err, "nil context should cause error")
 	}
@@ -253,7 +253,7 @@ func TestExecCLIExecutor_Run_BinaryNotFound(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, tt.binary)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil)
 
 			assert.Error(t, err, "non-existent binary should cause error")
 			assert.NotNil(t, stdout)
@@ -294,7 +294,7 @@ func TestExecCLIExecutor_Run_NonZeroExitCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "non-zero exit should cause error")
 			assert.NotNil(t, stdout)
@@ -331,7 +331,7 @@ func TestExecCLIExecutor_Run_CommandTimeout(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
 
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "timeout should cause error")
 			assert.True(t,
@@ -375,7 +375,7 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 				cancel()
 			}()
 
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "cancellation should cause error")
 			assert.True(t,
@@ -409,7 +409,7 @@ func TestExecCLIExecutor_Run_ContextCancellation_TerminatesProcessGroup(t *testi
 	}()
 
 	start := time.Now()
-	stdout, stderr, err := executor.Run(ctx, "sleep", "10")
+	stdout, stderr, err := executor.Run(ctx, "sleep", nil, nil, "10")
 	duration := time.Since(start)
 
 	// Process group kill should complete within 1s (not wait for full 10s)
@@ -441,7 +441,7 @@ func TestExecCLIExecutor_Run_StderrOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+			stdout, stderr, err := executor.Run(ctx, "sh", nil, nil, "-c", tt.command)
 
 			require.NoError(t, err)
 			// Note: os/exec.CombinedOutput merges stderr into stdout
@@ -477,7 +477,7 @@ func TestExecCLIExecutor_Run_InvalidArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := executor.Run(ctx, tt.binary, tt.args...)
+			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			// Most commands will error on invalid args
 			// But we're testing the executor handles it gracefully
@@ -500,7 +500,7 @@ func TestExecCLIExecutor_Run_ConcurrentExecutions(t *testing.T) {
 
 	for i := 0; i < concurrency; i++ {
 		go func(n int) {
-			stdout, stderr, err := executor.Run(ctx, "echo", "concurrent")
+			stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, "concurrent")
 			assert.NoError(t, err)
 			assert.NotNil(t, stdout)
 			assert.NotNil(t, stderr)
@@ -522,7 +522,7 @@ func TestExecCLIExecutor_Run_SimulateClaudeProvider(t *testing.T) {
 	// (using echo as a stand-in for claude CLI)
 	args := []string{"test prompt"}
 
-	stdout, stderr, err := executor.Run(ctx, "echo", args...)
+	stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, args...)
 
 	require.NoError(t, err, "Claude provider simulation should succeed")
 	assert.NotNil(t, stdout)
@@ -537,7 +537,7 @@ func TestExecCLIExecutor_Run_SimulateGeminiProvider(t *testing.T) {
 	// Simulate Gemini provider with JSON output flag
 	args := []string{"--json", "test"}
 
-	stdout, stderr, err := executor.Run(ctx, "echo", args...)
+	stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, args...)
 
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
@@ -552,7 +552,7 @@ func TestExecCLIExecutor_Run_SimulateCodexProvider(t *testing.T) {
 	// Simulate Codex provider with model selection
 	args := []string{"--model", "gpt-4", "prompt"}
 
-	stdout, stderr, err := executor.Run(ctx, "echo", args...)
+	stdout, stderr, err := executor.Run(ctx, "echo", nil, nil, args...)
 
 	require.NoError(t, err)
 	assert.NotNil(t, stdout)
@@ -614,7 +614,7 @@ func TestRun_SetsProcessGroup(t *testing.T) {
 			}()
 
 			// Execute command that spawns child processes
-			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+			stdout, stderr, err := executor.Run(ctx, "sh", nil, nil, "-c", tt.command)
 
 			assert.Error(t, err, tt.description)
 			assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled")
@@ -662,7 +662,7 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 				cancel()
 			}()
 
-			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+			stdout, stderr, err := executor.Run(ctx, "sh", nil, nil, "-c", tt.command)
 
 			assert.NotNil(t, stdout, "stdout should not be nil")
 			assert.NotNil(t, stderr, "stderr should not be nil")
@@ -715,7 +715,7 @@ func TestRun_SetsProcessGroup_ErrorHandling(t *testing.T) {
 			executor := NewExecCLIExecutor()
 			ctx := context.Background()
 
-			stdout, stderr, err := executor.Run(ctx, "sh", "-c", tt.command)
+			stdout, stderr, err := executor.Run(ctx, "sh", nil, nil, "-c", tt.command)
 
 			assert.NotNil(t, stdout, "stdout should not be nil")
 			assert.NotNil(t, stderr, "stderr should not be nil")

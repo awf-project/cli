@@ -1,7 +1,6 @@
 package agents
 
 import (
-	"context"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -297,123 +296,6 @@ func TestGetBoolOption(t *testing.T) {
 			value, ok := getBoolOption(tt.options, tt.key)
 			assert.Equal(t, tt.wantValue, value)
 			assert.Equal(t, tt.wantOK, ok)
-		})
-	}
-}
-
-func TestValidatePrompt(t *testing.T) {
-	tests := []struct {
-		name    string
-		prompt  string
-		wantErr bool
-	}{
-		{
-			name:    "valid_prompt",
-			prompt:  "Test prompt",
-			wantErr: false,
-		},
-		{
-			name:    "empty_prompt",
-			prompt:  "",
-			wantErr: true,
-		},
-		{
-			name:    "whitespace_only",
-			prompt:  "   \t\n",
-			wantErr: true,
-		},
-		{
-			name:    "prompt_with_whitespace",
-			prompt:  "  Test  ",
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validatePrompt(tt.prompt)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "prompt")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidateContext(t *testing.T) {
-	tests := []struct {
-		name         string
-		ctx          context.Context
-		providerName string
-		wantErr      bool
-	}{
-		{
-			name:         "valid_context",
-			ctx:          context.Background(),
-			providerName: "claude",
-			wantErr:      false,
-		},
-		{
-			name: "cancelled_context",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			}(),
-			providerName: "claude",
-			wantErr:      true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateContext(tt.ctx, tt.providerName)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.providerName)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidateState(t *testing.T) {
-	tests := []struct {
-		name    string
-		state   *workflow.ConversationState
-		wantErr bool
-	}{
-		{
-			name:    "nil_state",
-			state:   nil,
-			wantErr: true,
-		},
-		{
-			name:    "valid_empty_state",
-			state:   &workflow.ConversationState{},
-			wantErr: false,
-		},
-		{
-			name: "valid_state_with_turns",
-			state: &workflow.ConversationState{
-				Turns: []workflow.Turn{{Role: "user", Content: "Hello"}},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateState(tt.state)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "state")
-			} else {
-				assert.NoError(t, err)
-			}
 		})
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +25,7 @@ func NewExecCLIExecutor() *ExecCLIExecutor {
 	return &ExecCLIExecutor{}
 }
 
-func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error) {
+func (e *ExecCLIExecutor) Run(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Process group management for clean termination
@@ -42,8 +43,16 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, args ...string) 
 	cmd.WaitDelay = 100 * time.Millisecond
 
 	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	if stdoutW != nil {
+		cmd.Stdout = io.MultiWriter(&stdoutBuf, stdoutW)
+	} else {
+		cmd.Stdout = &stdoutBuf
+	}
+	if stderrW != nil {
+		cmd.Stderr = io.MultiWriter(&stderrBuf, stderrW)
+	} else {
+		cmd.Stderr = &stderrBuf
+	}
 
 	if startErr := cmd.Start(); startErr != nil {
 		return []byte{}, []byte{}, fmt.Errorf("CLI start failed for '%s': %w", name, startErr)

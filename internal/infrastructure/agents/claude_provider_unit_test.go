@@ -70,7 +70,7 @@ func TestClaudeProvider_Execute_Success(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -134,7 +134,7 @@ func TestClaudeProvider_Execute_JSONParsing(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", tt.options)
+			result, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -199,7 +199,7 @@ func TestClaudeProvider_Execute_ValidationErrors(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr != "" {
 				assert.Error(t, err)
@@ -247,7 +247,7 @@ func TestClaudeProvider_Execute_ContextErrors(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			ctx := tt.ctxFunc()
-			result, err := provider.Execute(ctx, "test prompt", nil)
+			result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -285,7 +285,7 @@ func TestClaudeProvider_Execute_CLIErrors(t *testing.T) {
 			mockExec.SetError(tt.mockErr)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test prompt", nil)
+			result, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -333,7 +333,7 @@ func TestClaudeProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			mockExec.SetOutput(tt.stdout, tt.stderr)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -369,7 +369,7 @@ func TestClaudeProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 			prompt:       "test",
 			options:      map[string]any{"output_format": "json"},
 			mockOutput:   []byte(`{"result":"ok"}`),
-			wantContains: []string{"-p", "test", "--output-format", "json"},
+			wantContains: []string{"-p", "test", "--output-format", "stream-json"},
 		},
 		{
 			name:         "with allowed tools",
@@ -393,7 +393,7 @@ func TestClaudeProvider_Execute_CLIArgumentConstruction(t *testing.T) {
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			_, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			_, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 			require.NoError(t, err)
 
 			calls := mockExec.GetCalls()
@@ -470,7 +470,7 @@ func TestClaudeProvider_ExecuteConversation_Success(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := tt.stateSetup()
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -531,7 +531,7 @@ func TestClaudeProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -575,7 +575,7 @@ func TestClaudeProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 
 			state := workflow.NewConversationState("system")
 			ctx := tt.ctxFunc()
-			result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+			result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -609,7 +609,7 @@ func TestClaudeProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -637,7 +637,7 @@ func TestClaudeProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 	initialTotalTurns := initialState.TotalTurns
 	initialTotalTokens := initialState.TotalTokens
 
-	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil)
+	result, err := provider.ExecuteConversation(context.Background(), initialState, "How are you?", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -659,7 +659,7 @@ func TestClaudeProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := workflow.NewConversationState("You are helpful")
-	result, err := provider.ExecuteConversation(context.Background(), state, "Hello", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Hello", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -699,7 +699,7 @@ func TestClaudeProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -765,7 +765,7 @@ func TestClaudeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -794,7 +794,7 @@ func TestClaudeProvider_Execute_EmptyState(t *testing.T) {
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := &workflow.ConversationState{}
-	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -806,7 +806,7 @@ func TestClaudeProvider_Execute_OptionsNil(t *testing.T) {
 	mockExec.SetOutput([]byte("response"), nil)
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -824,7 +824,7 @@ func TestClaudeProvider_Execute_MultipleOptions(t *testing.T) {
 		"allowed_tools": "bash",
 	}
 
-	result, err := provider.Execute(context.Background(), "test", options)
+	result, err := provider.Execute(context.Background(), "test", options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -850,28 +850,28 @@ func TestClaudeProvider_ExecuteConversation_CLIArgumentConstruction(t *testing.T
 			prompt:       "Hello",
 			options:      nil,
 			mockOutput:   []byte("Hi there!"),
-			wantContains: []string{"-p", "Hello", "--output-format", "json"},
+			wantContains: []string{"-p", "Hello", "--output-format", "stream-json"},
 		},
 		{
 			name:         "with model",
 			prompt:       "test",
 			options:      map[string]any{"model": "opus"},
 			mockOutput:   []byte("response"),
-			wantContains: []string{"-p", "test", "--model", "opus", "--output-format", "json"},
+			wantContains: []string{"-p", "test", "--model", "opus", "--output-format", "stream-json"},
 		},
 		{
 			name:         "with allowed tools",
 			prompt:       "test",
 			options:      map[string]any{"allowed_tools": "bash,read"},
 			mockOutput:   []byte("response"),
-			wantContains: []string{"-p", "test", "--allowedTools", "bash,read", "--output-format", "json"},
+			wantContains: []string{"-p", "test", "--allowedTools", "bash,read", "--output-format", "stream-json"},
 		},
 		{
 			name:         "with dangerous skip permissions",
 			prompt:       "test",
 			options:      map[string]any{"dangerously_skip_permissions": true},
 			mockOutput:   []byte("response"),
-			wantContains: []string{"-p", "test", "--dangerously-skip-permissions", "--output-format", "json"},
+			wantContains: []string{"-p", "test", "--dangerously-skip-permissions", "--output-format", "stream-json"},
 		},
 		{
 			name:   "with all options",
@@ -887,7 +887,7 @@ func TestClaudeProvider_ExecuteConversation_CLIArgumentConstruction(t *testing.T
 				"--model", "sonnet",
 				"--allowedTools", "bash",
 				"--dangerously-skip-permissions",
-				"--output-format", "json",
+				"--output-format", "stream-json",
 			},
 		},
 	}
@@ -899,7 +899,7 @@ func TestClaudeProvider_ExecuteConversation_CLIArgumentConstruction(t *testing.T
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("You are helpful")
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -944,7 +944,7 @@ func TestClaudeProvider_Execute_AllowedToolsOption(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "prompt", tt.options)
+			result, err := provider.Execute(context.Background(), "prompt", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -988,7 +988,7 @@ func TestClaudeProvider_Execute_DangerouslySkipPermissionsOption(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "prompt", tt.options)
+			result, err := provider.Execute(context.Background(), "prompt", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -1033,7 +1033,7 @@ func TestClaudeProvider_ExecuteConversation_AllowedToolsOption(t *testing.T) {
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("You are helpful")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1076,7 +1076,7 @@ func TestClaudeProvider_ExecuteConversation_DangerouslySkipPermissionsOption(t *
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("You are helpful")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options, nil, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1117,7 +1117,7 @@ func TestClaudeProvider_OldCamelCaseKeysIgnored(t *testing.T) {
 			mockExec.SetOutput([]byte("response"), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", tt.options)
+			result, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)

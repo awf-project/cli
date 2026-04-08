@@ -6,6 +6,7 @@ package execution_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,7 +74,7 @@ states:
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider:    "claude",
 			Output:      "Resolved provider executed",
@@ -177,7 +178,7 @@ states:
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider:    "claude",
 			Output:      "OK",

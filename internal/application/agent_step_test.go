@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -186,7 +187,7 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -265,7 +266,7 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -348,7 +349,7 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Analyze the prepared data" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -431,7 +432,7 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -501,7 +502,7 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -574,7 +575,7 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return nil, context.Canceled
 	})
 	_ = registry.Register(claude)
@@ -644,7 +645,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	registry := mocks.NewMockAgentRegistry()
 
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Analyze sentiment" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -667,7 +668,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	_ = registry.Register(claude)
 
 	gemini := mocks.NewMockAgentProvider("gemini")
-	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Extract keywords" {
 			return &workflow.AgentResult{
 				Provider:    "gemini",
@@ -750,7 +751,7 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
 	// Note: mock resolver doesn't interpolate, so prompt stays as-is
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Explain {{inputs.topic}} in simple terms" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -829,7 +830,7 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	registry := mocks.NewMockAgentRegistry()
 
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Analyze this code" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -852,7 +853,7 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	_ = registry.Register(claude)
 
 	gemini := mocks.NewMockAgentProvider("gemini")
-	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	gemini.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Review the analysis" {
 			return &workflow.AgentResult{
 				Provider:    "gemini",
@@ -1004,7 +1005,7 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -1073,7 +1074,7 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -1252,7 +1253,7 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return nil, errors.New("network connection failed")
 	})
 	_ = registry.Register(claude)
@@ -1393,7 +1394,7 @@ func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
 			registry := mocks.NewMockAgentRegistry()
 			for _, name := range tt.registeredNames {
 				provider := mocks.NewMockAgentProvider(name)
-				provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+				provider.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 					return &workflow.AgentResult{
 						Provider:    name,
 						Output:      "Result from " + name,

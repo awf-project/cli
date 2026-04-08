@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func TestExecutionService_AgentStep_DangerouslySkipPermissions_AuditLog(t *testi
 
 			registry := testmocks.NewMockAgentRegistry()
 			provider := testmocks.NewMockAgentProvider("claude")
-			provider.SetExecuteFunc(func(_ context.Context, _ string, _ map[string]any) (*workflow.AgentResult, error) {
+			provider.SetExecuteFunc(func(_ context.Context, _ string, _ map[string]any, _, _ io.Writer) (*workflow.AgentResult, error) {
 				return &workflow.AgentResult{
 					Provider:    "claude",
 					Output:      "ok",

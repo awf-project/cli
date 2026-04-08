@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // CLIExecutor defines the contract for executing external CLI binaries.
 // Unlike CommandExecutor (shell execution via detected shell), this executes
@@ -13,6 +16,10 @@ type CLIExecutor interface {
 	// Run executes a binary with given arguments.
 	// Returns stdout and stderr as byte slices, plus any execution error.
 	//
+	// When stdoutW or stderrW are non-nil, output is tee'd to these writers
+	// in real-time (streaming mode) while also being captured in the returned
+	// byte slices. When nil, output is only captured (buffer mode).
+	//
 	// The context allows cancellation and timeout control.
 	// If the context is cancelled, the execution should be terminated.
 	//
@@ -20,5 +27,5 @@ type CLIExecutor interface {
 	// - Binary not found: error != nil
 	// - Non-zero exit code: error != nil (error should contain exit code info)
 	// - Context cancelled/timeout: error will be context.Canceled or context.DeadlineExceeded
-	Run(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error)
+	Run(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error)
 }

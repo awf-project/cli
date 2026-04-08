@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -60,7 +61,7 @@ func TestExecutionService_buildInterpolationContext_MapsJSONFieldToStepStateData
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns JSON that will be parsed into StepState.JSON
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   `{"name":"alice","count":42}`,
@@ -189,7 +190,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldNestedObjectAccess(
 	claude := mocks.NewMockAgentProvider("claude")
 
 	// Agent returns nested JSON structure
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   `{"user":{"name":"bob","address":{"city":"NYC","zip":"10001"}}}`,
@@ -279,7 +280,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldFromMultipleSteps(t
 	claude := mocks.NewMockAgentProvider("claude")
 
 	callCount := 0
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		callCount++
 		if callCount == 1 {
 			// First call returns user data
@@ -367,7 +368,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldWithBothResponseAnd
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
 
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		return &workflow.AgentResult{
 			Provider: "claude",
 			Output:   `{"source":"output_format"}`,

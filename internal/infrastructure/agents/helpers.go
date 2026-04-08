@@ -1,7 +1,6 @@
 package agents
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -60,27 +59,6 @@ func getBoolOption(options map[string]any, key string) (value, found bool) {
 	}
 	val, ok := options[key].(bool)
 	return val, ok
-}
-
-func validatePrompt(prompt string) error {
-	if strings.TrimSpace(prompt) == "" {
-		return fmt.Errorf("prompt cannot be empty")
-	}
-	return nil
-}
-
-func validateContext(ctx context.Context, providerName string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("%s provider: %w", providerName, err)
-	}
-	return nil
-}
-
-func validateState(state *workflow.ConversationState) error {
-	if state == nil {
-		return fmt.Errorf("conversation state cannot be nil")
-	}
-	return nil
 }
 
 func estimateInputTokens(turns []workflow.Turn, excludeLastN int) int {

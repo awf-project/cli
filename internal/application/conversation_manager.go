@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -118,6 +119,7 @@ func (m *ConversationManager) executeTurn(
 	state *workflow.ConversationState,
 	prompt string,
 	options map[string]any,
+	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	select {
 	case <-ctx.Done():
@@ -125,7 +127,7 @@ func (m *ConversationManager) executeTurn(
 	default:
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, stdoutW, stderrW)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +199,7 @@ func (m *ConversationManager) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if err := m.validateConversationInputs(step, config); err != nil {
 		return nil, err
@@ -233,7 +236,7 @@ func (m *ConversationManager) ExecuteConversation(
 
 	var lastResult *workflow.ConversationResult
 	for turnCount := 0; turnCount < maxTurns; turnCount++ {
-		result, err := m.executeTurn(ctx, provider, state, resolvedPrompt, options)
+		result, err := m.executeTurn(ctx, provider, state, resolvedPrompt, options, stdoutW, stderrW)
 		if err != nil {
 			return nil, err
 		}

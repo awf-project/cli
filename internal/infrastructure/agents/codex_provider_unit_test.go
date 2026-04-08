@@ -63,7 +63,7 @@ func TestCodexProvider_Execute_Success(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -92,56 +92,56 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 			prompt:      "test",
 			options:     map[string]any{"model": "gpt-4o"},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test", "--model", "gpt-4o"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--model", "gpt-4o"},
 		},
 		{
 			name:        "language option",
 			prompt:      "test",
 			options:     map[string]any{"language": "python"},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test", "--language", "python"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--language", "python"},
 		},
 		{
 			name:        "quiet option true",
 			prompt:      "test",
 			options:     map[string]any{"quiet": true},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test", "--quiet"},
+			wantCLIArgs: []string{"exec", "--json", "test"},
 		},
 		{
 			name:        "quiet option false",
 			prompt:      "test",
 			options:     map[string]any{"quiet": false},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test"},
+			wantCLIArgs: []string{"exec", "--json", "test"},
 		},
 		{
 			name:        "multiple options",
 			prompt:      "complex task",
 			options:     map[string]any{"language": "go", "quiet": true},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "complex task", "--language", "go", "--quiet"},
+			wantCLIArgs: []string{"exec", "--json", "complex task", "--language", "go"},
 		},
 		{
 			name:        "no options",
 			prompt:      "simple",
 			options:     nil,
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "simple"},
+			wantCLIArgs: []string{"exec", "--json", "simple"},
 		},
 		{
 			name:        "dangerously_skip_permissions true maps to --yolo",
 			prompt:      "test",
 			options:     map[string]any{"dangerously_skip_permissions": true},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test", "--yolo"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--yolo"},
 		},
 		{
 			name:        "dangerously_skip_permissions false omits --yolo",
 			prompt:      "test",
 			options:     map[string]any{"dangerously_skip_permissions": false},
 			mockStdout:  []byte("code"),
-			wantCLIArgs: []string{"--prompt", "test"},
+			wantCLIArgs: []string{"exec", "--json", "test"},
 		},
 	}
 
@@ -151,7 +151,7 @@ func TestCodexProvider_Execute_WithOptions(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			_, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			_, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			calls := mockExec.GetCalls()
@@ -191,7 +191,7 @@ func TestCodexProvider_Execute_EmptyPrompt(t *testing.T) {
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, nil)
+			result, err := provider.Execute(context.Background(), tt.prompt, nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -236,7 +236,7 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options)
+			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr != "" {
 				assert.Error(t, err)
@@ -284,7 +284,7 @@ func TestCodexProvider_Execute_ContextErrors(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			ctx := tt.ctxFunc()
-			result, err := provider.Execute(ctx, "test prompt", nil)
+			result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -327,7 +327,7 @@ func TestCodexProvider_Execute_CLIErrors(t *testing.T) {
 			mockExec.SetError(tt.mockErr)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -388,7 +388,7 @@ func TestCodexProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			mockExec.SetOutput(tt.stdout, tt.stderr)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -431,7 +431,7 @@ func TestCodexProvider_Execute_TokenEstimation(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil)
+			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -445,7 +445,7 @@ func TestCodexProvider_Execute_TimestampOrdering(t *testing.T) {
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -459,7 +459,7 @@ func TestCodexProvider_Execute_ProviderName(t *testing.T) {
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-	result, err := provider.Execute(context.Background(), "test", nil)
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -506,7 +506,7 @@ func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -525,7 +525,7 @@ func TestCodexProvider_ExecuteConversation_NilState(t *testing.T) {
 	mockExec.SetOutput([]byte("code"), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
-	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation state cannot be nil")
@@ -557,7 +557,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
 
-			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -576,7 +576,7 @@ func TestCodexProvider_ExecuteConversation_WithHistory(t *testing.T) {
 	state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "first question"))
 	state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "first answer"))
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "second question", nil)
+	result, err := provider.ExecuteConversation(context.Background(), state, "second question", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -598,7 +598,7 @@ func TestCodexProvider_ExecuteConversation_StatePreservation(t *testing.T) {
 	originalState := workflow.NewConversationState("")
 	originalState.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "initial"))
 
-	result, err := provider.ExecuteConversation(context.Background(), originalState, "test", nil)
+	result, err := provider.ExecuteConversation(context.Background(), originalState, "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -618,7 +618,7 @@ func TestCodexProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	state := workflow.NewConversationState("")
 	state.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, "previous")) // 8 chars = 2 tokens
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "current", nil) // 7 chars = 1 token (will be added to input)
+	result, err := provider.ExecuteConversation(context.Background(), state, "current", nil, nil, nil) // 7 chars = 1 token (will be added to input)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -662,7 +662,7 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			if tt.wantErr != "" {
 				assert.Error(t, err)
@@ -711,7 +711,7 @@ func TestCodexProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 			state := workflow.NewConversationState("")
 
 			ctx := tt.ctxFunc()
-			result, err := provider.ExecuteConversation(ctx, state, "test", nil)
+			result, err := provider.ExecuteConversation(ctx, state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -745,7 +745,7 @@ func TestCodexProvider_ExecuteConversation_CLIErrors(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -763,32 +763,32 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 		{
 			name:        "model option",
 			options:     map[string]any{"model": "codex-002"},
-			wantCLIArgs: []string{"--prompt", "test", "--model", "codex-002"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--model", "codex-002"},
 		},
 		{
 			name:        "language option",
 			options:     map[string]any{"language": "python"},
-			wantCLIArgs: []string{"--prompt", "test", "--language", "python"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--language", "python"},
 		},
 		{
 			name:        "quiet option",
 			options:     map[string]any{"quiet": true},
-			wantCLIArgs: []string{"--prompt", "test", "--quiet"},
+			wantCLIArgs: []string{"exec", "--json", "test"},
 		},
 		{
 			name:        "multiple options",
 			options:     map[string]any{"model": "codex-002", "language": "go", "quiet": true},
-			wantCLIArgs: []string{"--prompt", "test", "--model", "codex-002", "--language", "go", "--quiet"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--model", "codex-002", "--language", "go"},
 		},
 		{
 			name:        "dangerously_skip_permissions true maps to --yolo",
 			options:     map[string]any{"dangerously_skip_permissions": true},
-			wantCLIArgs: []string{"--prompt", "test", "--yolo"},
+			wantCLIArgs: []string{"exec", "--json", "test", "--yolo"},
 		},
 		{
 			name:        "dangerously_skip_permissions false omits --yolo",
 			options:     map[string]any{"dangerously_skip_permissions": false},
-			wantCLIArgs: []string{"--prompt", "test"},
+			wantCLIArgs: []string{"exec", "--json", "test"},
 		},
 	}
 
@@ -799,7 +799,7 @@ func TestCodexProvider_ExecuteConversation_OptionsCLIArgumentConstruction(t *tes
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 			state := workflow.NewConversationState("")
 
-			_, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options)
+			_, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			calls := mockExec.GetCalls()
@@ -833,7 +833,144 @@ func TestCodexProvider_NewCodexProvider_DefaultExecutor(t *testing.T) {
 	provider := NewCodexProvider()
 	assert.NotNil(t, provider)
 	assert.NotNil(t, provider.executor)
-	// Default executor should be ExecCLIExecutor
 	_, ok := provider.executor.(*ExecCLIExecutor)
 	assert.True(t, ok, "default executor should be ExecCLIExecutor")
+}
+
+// T008: Explicit tests for `exec --json` arg structure assertion
+func TestCodexProvider_Execute_ExecJSONStructure(t *testing.T) {
+	tests := []struct {
+		name        string
+		prompt      string
+		options     map[string]any
+		mockStdout  []byte
+		wantCLIArgs []string
+	}{
+		{
+			name:        "basic exec --json structure",
+			prompt:      "hello",
+			options:     nil,
+			mockStdout:  []byte("output"),
+			wantCLIArgs: []string{"exec", "--json", "hello"},
+		},
+		{
+			name:        "exec --json with model",
+			prompt:      "code",
+			options:     map[string]any{"model": "gpt-4"},
+			mockStdout:  []byte("result"),
+			wantCLIArgs: []string{"exec", "--json", "code", "--model", "gpt-4"},
+		},
+		{
+			name:        "exec --json with language",
+			prompt:      "write go",
+			options:     map[string]any{"language": "go"},
+			mockStdout:  []byte("code"),
+			wantCLIArgs: []string{"exec", "--json", "write go", "--language", "go"},
+		},
+		{
+			name:        "quiet true does NOT add --quiet flag",
+			prompt:      "test",
+			options:     map[string]any{"quiet": true},
+			mockStdout:  []byte("output"),
+			wantCLIArgs: []string{"exec", "--json", "test"},
+		},
+		{
+			name:        "quiet false does NOT add --quiet flag",
+			prompt:      "test",
+			options:     map[string]any{"quiet": false},
+			mockStdout:  []byte("output"),
+			wantCLIArgs: []string{"exec", "--json", "test"},
+		},
+		{
+			name:        "quiet is silently ignored with other options",
+			prompt:      "test",
+			options:     map[string]any{"quiet": true, "language": "python"},
+			mockStdout:  []byte("code"),
+			wantCLIArgs: []string{"exec", "--json", "test", "--language", "python"},
+		},
+		{
+			name:        "dangerously_skip_permissions adds --yolo",
+			prompt:      "test",
+			options:     map[string]any{"dangerously_skip_permissions": true},
+			mockStdout:  []byte("output"),
+			wantCLIArgs: []string{"exec", "--json", "test", "--yolo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockStdout, nil)
+			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+			_, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
+
+			require.NoError(t, err)
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1, "executor should be called once")
+			assert.Equal(t, "codex", calls[0].Name)
+			assert.Equal(t, tt.wantCLIArgs, calls[0].Args, "args must match exactly")
+		})
+	}
+}
+
+// T008: Verify --json flag is first arg after exec subcommand
+func TestCodexProvider_Execute_JSONFlagPosition(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("result"), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	_, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
+
+	require.NoError(t, err)
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	args := calls[0].Args
+
+	require.Len(t, args, 3, "should have 3 args: exec, --json, prompt")
+	assert.Equal(t, "exec", args[0])
+	assert.Equal(t, "--json", args[1])
+	assert.Equal(t, "test prompt", args[2])
+}
+
+// T008: ExecuteConversation uses exec --json on first turn
+func TestCodexProvider_ExecuteConversation_FirstTurnExecJSON(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("response"), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	state := workflow.NewConversationState("")
+	_, err := provider.ExecuteConversation(context.Background(), state, "first prompt", nil, nil, nil)
+
+	require.NoError(t, err)
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	args := calls[0].Args
+
+	require.Len(t, args, 3, "first turn should have exec, --json, prompt")
+	assert.Equal(t, "exec", args[0], "first arg should be exec subcommand")
+	assert.Equal(t, "--json", args[1], "second arg should be --json flag")
+	assert.Equal(t, "first prompt", args[2], "third arg should be prompt")
+}
+
+// T008: ExecuteConversation uses resume subcommand on resume turn
+func TestCodexProvider_ExecuteConversation_ResumeJSONStructure(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("response"), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	state := workflow.NewConversationState("")
+	state.SessionID = "codex-abc123def456"
+	_, err := provider.ExecuteConversation(context.Background(), state, "follow up", nil, nil, nil)
+
+	require.NoError(t, err)
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	args := calls[0].Args
+
+	require.Len(t, args, 4, "resume turn should have resume, sessionID, --json, prompt")
+	assert.Equal(t, "resume", args[0], "first arg should be resume subcommand")
+	assert.Equal(t, "codex-abc123def456", args[1], "second arg should be session ID")
+	assert.Equal(t, "--json", args[2], "third arg should be --json flag")
+	assert.Equal(t, "follow up", args[3], "fourth arg should be prompt")
 }

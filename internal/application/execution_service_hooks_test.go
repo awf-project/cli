@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -63,7 +64,7 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 
 	registry := testmocks.NewMockAgentRegistry()
 	claude := testmocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Summarize this text" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -145,7 +146,7 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 
 	registry := testmocks.NewMockAgentRegistry()
 	claude := testmocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Analyze the data" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
@@ -232,7 +233,7 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 
 	registry := testmocks.NewMockAgentRegistry()
 	claude := testmocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any) (*workflow.AgentResult, error) {
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, params map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
 		if prompt == "Process the input" {
 			return &workflow.AgentResult{
 				Provider:    "claude",
