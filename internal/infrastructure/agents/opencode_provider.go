@@ -61,8 +61,10 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 
 	args := []string{"run", prompt}
 
-	// Always pass --format json for structured output
-	args = append(args, "--format", "json")
+	// Map user-provided output_format to opencode --format flag.
+	// opencode supports: default (formatted text) | json (NDJSON events).
+	// Absent → json (structured output, live streaming compatible).
+	args = append(args, "--format", resolveOpenCodeFormat(options))
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
@@ -146,8 +148,8 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 
 	args := []string{"run", prompt}
 
-	// Always pass --format json for structured output
-	args = append(args, "--format", "json")
+	// Map user-provided output_format to opencode --format flag (same logic as Execute).
+	args = append(args, "--format", resolveOpenCodeFormat(options))
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
@@ -238,6 +240,29 @@ func (p *OpenCodeProvider) Validate() error {
 		return fmt.Errorf("opencode CLI not found in PATH: %w", err)
 	}
 	return nil
+}
+
+// resolveOpenCodeFormat maps the user-provided output_format option to the
+// matching opencode CLI --format value. opencode supports:
+//   - "default": formatted human-readable output
+//   - "json": NDJSON events (required by session ID extraction and
+//     compatible with --output=streaming for live events)
+//
+// Mapping:
+//   - output_format: "text"|"default" → "default"
+//   - output_format: "json"           → "json"
+//   - absent or any other value       → "json" (default, preserves prior behavior)
+func resolveOpenCodeFormat(options map[string]any) string {
+	format, ok := getStringOption(options, "output_format")
+	if !ok {
+		return "json"
+	}
+	switch format {
+	case "text", "default":
+		return "default"
+	default:
+		return "json"
+	}
 }
 
 // validateOpenCodeOptions validates provider-specific options.

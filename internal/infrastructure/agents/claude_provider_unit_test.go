@@ -97,31 +97,29 @@ func TestClaudeProvider_Execute_JSONParsing(t *testing.T) {
 		errMsg     string
 	}{
 		{
-			name:       "valid json response",
-			mockStdout: []byte(`{"result":"ok","count":42}`),
+			name:       "valid NDJSON result event",
+			mockStdout: []byte(`{"type":"system","subtype":"init"}` + "\n" + `{"type":"result","subtype":"success","result":"ok","session_id":"s1"}`),
 			options:    map[string]any{"output_format": "json"},
 			wantJSON:   true,
 			wantErr:    false,
 		},
 		{
-			name:       "malformed json response",
+			name:       "malformed NDJSON yields nil Response (graceful)",
 			mockStdout: []byte(`{"result":"incomplete`),
 			options:    map[string]any{"output_format": "json"},
 			wantJSON:   false,
-			wantErr:    true,
-			errMsg:     "failed to parse JSON output",
+			wantErr:    false,
 		},
 		{
-			name:       "non-json response with json format",
+			name:       "non-json response with json format yields nil Response (graceful)",
 			mockStdout: []byte("plain text response"),
 			options:    map[string]any{"output_format": "json"},
 			wantJSON:   false,
-			wantErr:    true,
-			errMsg:     "failed to parse JSON output",
+			wantErr:    false,
 		},
 		{
-			name:       "json response without format option",
-			mockStdout: []byte(`{"result":"ok"}`),
+			name:       "no explicit format option does not populate Response",
+			mockStdout: []byte(`{"type":"result","subtype":"success","result":"ok","session_id":"s2"}`),
 			options:    nil,
 			wantJSON:   false,
 			wantErr:    false,
@@ -677,18 +675,18 @@ func TestClaudeProvider_ExecuteConversation_JSONParsing(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "valid json",
-			mockStdout: []byte(`{"result":"ok"}`),
+			name:       "valid NDJSON result event populates Response",
+			mockStdout: []byte(`{"type":"result","subtype":"success","result":"ok","session_id":"s1"}`),
 			options:    map[string]any{"output_format": "json"},
 			wantJSON:   true,
 			wantErr:    false,
 		},
 		{
-			name:       "malformed json",
+			name:       "malformed NDJSON yields nil Response without error (graceful)",
 			mockStdout: []byte(`{"result":"incomplete`),
 			options:    map[string]any{"output_format": "json"},
 			wantJSON:   false,
-			wantErr:    true,
+			wantErr:    false,
 		},
 	}
 
