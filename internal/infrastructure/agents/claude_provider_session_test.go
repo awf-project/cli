@@ -33,7 +33,7 @@ func TestClaudeProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte(`{"session_id":"sess_new","result":"response"}`), nil)
+			mockExec.SetOutput([]byte(`{"type":"result","subtype":"success","session_id":"sess_new","result":"response"}`), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
@@ -68,14 +68,14 @@ func TestClaudeProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 		wantOutputText string
 	}{
 		{
-			name:           "session ID extracted from JSON output",
-			mockOutput:     []byte(`{"session_id":"sess_extracted_123","result":"actual response text"}`),
+			name:           "session ID extracted from NDJSON result event",
+			mockOutput:     []byte(`{"type":"system","subtype":"init"}` + "\n" + `{"type":"result","subtype":"success","session_id":"sess_extracted_123","result":"actual response text"}`),
 			wantSessionID:  "sess_extracted_123",
 			wantOutputText: "actual response text",
 		},
 		{
 			name:           "no session_id field yields empty SessionID",
-			mockOutput:     []byte(`{"result":"response without session"}`),
+			mockOutput:     []byte(`{"type":"result","subtype":"success","result":"response without session"}`),
 			wantSessionID:  "",
 			wantOutputText: "response without session",
 		},
@@ -100,7 +100,7 @@ func TestClaudeProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 
 func TestClaudeProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"session_id":"sess_1","result":"ok"}`), nil)
+	mockExec.SetOutput([]byte(`{"type":"result","subtype":"success","session_id":"sess_1","result":"ok"}`), nil)
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := workflow.NewConversationState("")
@@ -117,7 +117,7 @@ func TestClaudeProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T
 
 func TestClaudeProvider_ExecuteConversation_NoSystemPromptOnResumeTurn(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"session_id":"sess_resume","result":"ok"}`), nil)
+	mockExec.SetOutput([]byte(`{"type":"result","subtype":"success","session_id":"sess_resume","result":"ok"}`), nil)
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := workflow.NewConversationState("")
@@ -147,7 +147,7 @@ func TestClaudeProvider_ExecuteConversation_GracefulFallback_NonJSON(t *testing.
 
 func TestClaudeProvider_ExecuteConversation_ForceJSONOutputFormat(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"session_id":"sess_1","result":"ok"}`), nil)
+	mockExec.SetOutput([]byte(`{"type":"result","subtype":"success","session_id":"sess_1","result":"ok"}`), nil)
 	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")

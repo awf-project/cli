@@ -67,12 +67,23 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
-	if outputFormat, ok := getStringOption(options, "output_format"); ok {
-		if outputFormat == "json" {
-			outputFormat = "stream-json"
-		}
-		args = append(args, "--output-format", outputFormat)
+
+	// Claude CLI text mode (default with -p) buffers the full response until
+	// process exit, so streaming output via --output=streaming would show nothing
+	// progressively. Force stream-json (NDJSON events) unless the user explicitly
+	// set output_format: text. stream-json requires --verbose in -p mode.
+	userFormat, userFormatSet := getStringOption(options, "output_format")
+	forcedStreamJSON := false
+	switch {
+	case !userFormatSet:
+		args = append(args, "--output-format", "stream-json", "--verbose")
+		forcedStreamJSON = true
+	case userFormat == "json", userFormat == "stream-json":
+		args = append(args, "--output-format", "stream-json", "--verbose")
+	default:
+		args = append(args, "--output-format", userFormat)
 	}
+
 	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
 		args = append(args, "--allowedTools", allowedTools)
 	}
@@ -91,7 +102,18 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
 	output = append(output, stdoutBytes...)
 	output = append(output, stderrBytes...)
-	outputStr := string(output)
+	rawOutputStr := string(output)
+
+	// When we forced stream-json internally (user did not request it), extract
+	// the clean final text from the NDJSON "result" event so downstream steps
+	// reading states.X.output see text, not raw NDJSON.
+	outputStr := rawOutputStr
+	if forcedStreamJSON {
+		if extracted := p.extractTextFromJSON(rawOutputStr); extracted != "" {
+			outputStr = extracted
+		}
+	}
+
 	result := &workflow.AgentResult{
 		Provider:        "claude",
 		Output:          outputStr,
@@ -101,12 +123,9 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		TokensEstimated: true,
 	}
 
-	if options != nil {
-		if format, ok := options["output_format"].(string); ok && format == "json" {
-			var jsonResp map[string]any
-			if err := json.Unmarshal(output, &jsonResp); err != nil {
-				return nil, fmt.Errorf("failed to parse JSON output: %w", err)
-			}
+	// Populate Response only when user explicitly requested structured output.
+	if userFormatSet && (userFormat == "json" || userFormat == "stream-json") {
+		if jsonResp := p.extractResultEvent(rawOutputStr); jsonResp != nil {
 			result.Response = jsonResp
 		}
 	}
@@ -149,8 +168,9 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 		args = append(args, "--model", model)
 	}
 
-	// Force stream-json output for session ID extraction on all conversation turns
-	args = append(args, "--output-format", "stream-json")
+	// Force stream-json output for session ID extraction on all conversation turns.
+	// stream-json requires --verbose when combined with --print (-p).
+	args = append(args, "--output-format", "stream-json", "--verbose")
 
 	// Resume from previous session if available
 	if workingState.SessionID != "" {
@@ -232,11 +252,9 @@ func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 
 	if userRequestedJSON {
-		var jsonResp map[string]any
-		if err := json.Unmarshal(output, &jsonResp); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON output: %w", err)
+		if jsonResp := p.extractResultEvent(rawOutputStr); jsonResp != nil {
+			result.Response = jsonResp
 		}
-		result.Response = jsonResp
 	}
 
 	return result, nil
@@ -273,68 +291,66 @@ func isValidClaudeModel(model string) bool {
 	return slices.Contains(aliases, model) || strings.HasPrefix(model, "claude-")
 }
 
+// extractResultEvent scans NDJSON stream-json output and returns the final
+// {"type":"result", ...} event as a parsed map, or nil if absent. Each line of
+// claude's stream-json is a standalone JSON object (system, assistant, result,
+// etc.); the "result" event is the authoritative final summary.
+func (p *ClaudeProvider) extractResultEvent(output string) map[string]any {
+	if output == "" {
+		return nil
+	}
+	var found map[string]any
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var evt map[string]any
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+		if t, ok := evt["type"].(string); ok && t == "result" {
+			found = evt
+		}
+	}
+	return found
+}
+
 func (p *ClaudeProvider) extractSessionID(output string) (string, error) {
 	if output == "" {
 		return "", errors.New("empty output")
 	}
-
-	var data map[string]any
-	if err := json.Unmarshal([]byte(output), &data); err != nil {
-		return "", fmt.Errorf("output is not valid JSON: %w", err)
+	evt := p.extractResultEvent(output)
+	if evt == nil {
+		return "", errors.New("result event not found")
 	}
-
-	sessionIDVal, ok := data["session_id"]
-	if !ok {
-		return "", errors.New("session_id field not found")
+	sessionIDVal, ok := evt["session_id"]
+	if !ok || sessionIDVal == nil {
+		return "", errors.New("session_id missing")
 	}
-
-	// Handle null value
-	if sessionIDVal == nil {
-		return "", errors.New("session_id is null")
-	}
-
-	// Extract string value
-	if str, ok := sessionIDVal.(string); ok {
+	if str, ok := sessionIDVal.(string); ok && str != "" {
 		return str, nil
 	}
-
 	return "", errors.New("session_id is not a string")
 }
 
 func (p *ClaudeProvider) extractTextFromJSON(output string) string {
-	if output == "" {
+	evt := p.extractResultEvent(output)
+	if evt == nil {
 		return ""
 	}
-
-	var data map[string]any
-	if err := json.Unmarshal([]byte(output), &data); err != nil {
+	result, ok := evt["result"]
+	if !ok || result == nil {
 		return ""
 	}
-
-	result, ok := data["result"]
-	if !ok {
-		return ""
-	}
-
-	// Handle null value
-	if result == nil {
-		return ""
-	}
-
-	// Handle string values
 	if str, ok := result.(string); ok {
 		return str
 	}
-
-	// Handle numeric values - convert to string
 	if num, ok := result.(float64); ok {
-		// Check if it's an integer
 		if num == float64(int64(num)) {
 			return fmt.Sprintf("%.0f", num)
 		}
 		return fmt.Sprint(num)
 	}
-
-	// Unexpected types (boolean, array, object, etc.) - return empty string
 	return ""
 }

@@ -12,31 +12,46 @@ import (
 
 // F078 Tests: Fix CLI Provider Invocations (output_format mapping and ExecuteConversation session handling)
 
-// T001: Execute maps output_format: json to stream-json
+// T001: Execute maps output_format and forces stream-json by default for live streaming
 func TestClaudeProvider_Execute_OutputFormatMapping(t *testing.T) {
+	// NDJSON result event used so extractTextFromJSON can populate clean output
+	ndjson := []byte(`{"type":"system","subtype":"init"}
+{"type":"result","subtype":"success","result":"test output","session_id":"sess-1"}`)
+
 	tests := []struct {
 		name           string
 		options        map[string]any
 		mockOutput     []byte
 		wantFormatFlag string
+		wantVerbose    bool
 	}{
 		{
-			name:           "json format mapped to stream-json",
+			name:           "json format mapped to stream-json with --verbose",
 			options:        map[string]any{"output_format": "json"},
-			mockOutput:     []byte(`{"result":"test output"}`),
+			mockOutput:     ndjson,
 			wantFormatFlag: "stream-json",
+			wantVerbose:    true,
 		},
 		{
-			name:           "stream-json format passed through",
+			name:           "stream-json format passed through with --verbose",
 			options:        map[string]any{"output_format": "stream-json"},
-			mockOutput:     []byte("test output"),
+			mockOutput:     ndjson,
 			wantFormatFlag: "stream-json",
+			wantVerbose:    true,
 		},
 		{
-			name:           "no output format specified",
+			name:           "no output format specified forces stream-json for live streaming",
 			options:        map[string]any{},
+			mockOutput:     ndjson,
+			wantFormatFlag: "stream-json",
+			wantVerbose:    true,
+		},
+		{
+			name:           "explicit text format is respected (no stream-json override)",
+			options:        map[string]any{"output_format": "text"},
 			mockOutput:     []byte("test output"),
-			wantFormatFlag: "",
+			wantFormatFlag: "text",
+			wantVerbose:    false,
 		},
 	}
 
@@ -54,26 +69,24 @@ func TestClaudeProvider_Execute_OutputFormatMapping(t *testing.T) {
 			require.Len(t, calls, 1)
 			call := calls[0]
 
-			if tt.wantFormatFlag != "" {
-				// Find --output-format flag in args
-				found := false
-				for i, arg := range call.Args {
-					if arg == "--output-format" && i+1 < len(call.Args) {
-						assert.Equal(t, tt.wantFormatFlag, call.Args[i+1])
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "expected --output-format flag not found in args: %v", call.Args)
-			} else {
-				// Ensure no --output-format flag
-				for i, arg := range call.Args {
-					if arg == "--output-format" {
-						t.Errorf("unexpected --output-format flag in args: %v", call.Args)
-					}
-					_ = i
+			found := false
+			for i, arg := range call.Args {
+				if arg == "--output-format" && i+1 < len(call.Args) {
+					assert.Equal(t, tt.wantFormatFlag, call.Args[i+1])
+					found = true
+					break
 				}
 			}
+			assert.True(t, found, "expected --output-format flag not found in args: %v", call.Args)
+
+			hasVerbose := false
+			for _, arg := range call.Args {
+				if arg == "--verbose" {
+					hasVerbose = true
+					break
+				}
+			}
+			assert.Equal(t, tt.wantVerbose, hasVerbose, "--verbose presence mismatch in args: %v", call.Args)
 		})
 	}
 }
@@ -103,7 +116,8 @@ func TestClaudeProvider_ExecuteConversation_ForcesStreamJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte(`{"session_id":"sess-456","result":"response text"}`), nil)
+			mockExec.SetOutput([]byte(`{"type":"system","subtype":"init","session_id":"sess-456"}
+{"type":"result","subtype":"success","result":"response text","session_id":"sess-456"}`), nil)
 			provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 			_, err := provider.ExecuteConversation(context.Background(), tt.state, "user prompt", map[string]any{}, nil, nil)
@@ -141,7 +155,7 @@ func TestClaudeProvider_ExecuteConversation_ForcesStreamJSON(t *testing.T) {
 	}
 }
 
-// extractSessionID works with stream-json output format
+// extractSessionID works with stream-json NDJSON output (one JSON object per line)
 func TestClaudeProvider_ExtractSessionID_StreamJSON(t *testing.T) {
 	provider := NewClaudeProvider()
 
@@ -152,25 +166,35 @@ func TestClaudeProvider_ExtractSessionID_StreamJSON(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:      "valid stream-json with session_id",
-			output:    `{"session_id":"sess-abc123","result":"text","cost_usd":0.001}`,
+			name: "valid NDJSON with session_id in result event",
+			output: `{"type":"system","subtype":"init","session_id":"sess-abc123"}
+{"type":"result","subtype":"success","result":"text","session_id":"sess-abc123","cost_usd":0.001}`,
 			wantID:    "sess-abc123",
 			wantError: false,
 		},
 		{
-			name:      "valid stream-json with different field order",
-			output:    `{"result":"text","session_id":"sess-xyz789","cost_usd":0.002}`,
+			name: "valid NDJSON with multiple events before result",
+			output: `{"type":"system","subtype":"init"}
+{"type":"assistant","message":{}}
+{"type":"result","subtype":"success","result":"text","session_id":"sess-xyz789"}`,
 			wantID:    "sess-xyz789",
 			wantError: false,
 		},
 		{
-			name:      "missing session_id field",
-			output:    `{"result":"text","cost_usd":0.001}`,
+			name:      "result event missing session_id",
+			output:    `{"type":"result","subtype":"success","result":"text"}`,
 			wantID:    "",
 			wantError: true,
 		},
 		{
-			name:      "invalid JSON",
+			name: "no result event in stream",
+			output: `{"type":"system","subtype":"init"}
+{"type":"assistant","message":{}}`,
+			wantID:    "",
+			wantError: true,
+		},
+		{
+			name:      "all invalid JSON lines",
 			output:    `not valid json`,
 			wantID:    "",
 			wantError: true,
@@ -198,7 +222,7 @@ func TestClaudeProvider_ExtractSessionID_StreamJSON(t *testing.T) {
 	}
 }
 
-// extractTextFromJSON works with stream-json output
+// extractTextFromJSON works with stream-json NDJSON output
 func TestClaudeProvider_ExtractTextFromJSON_StreamJSON(t *testing.T) {
 	provider := NewClaudeProvider()
 
@@ -208,18 +232,19 @@ func TestClaudeProvider_ExtractTextFromJSON_StreamJSON(t *testing.T) {
 		wantText string
 	}{
 		{
-			name:     "valid stream-json with result field",
-			output:   `{"session_id":"sess-123","result":"Hello, this is the response","cost_usd":0.001}`,
+			name: "valid NDJSON with result event",
+			output: `{"type":"system","subtype":"init"}
+{"type":"result","subtype":"success","result":"Hello, this is the response","session_id":"sess-123"}`,
 			wantText: "Hello, this is the response",
 		},
 		{
-			name:     "stream-json with multiline result",
-			output:   `{"session_id":"sess-456","result":"Line 1\nLine 2\nLine 3"}`,
+			name:     "NDJSON with multiline result",
+			output:   `{"type":"result","subtype":"success","result":"Line 1\nLine 2\nLine 3","session_id":"sess-456"}`,
 			wantText: "Line 1\nLine 2\nLine 3",
 		},
 		{
-			name:     "stream-json with empty result",
-			output:   `{"session_id":"sess-789","result":""}`,
+			name:     "NDJSON with empty result",
+			output:   `{"type":"result","subtype":"success","result":"","session_id":"sess-789"}`,
 			wantText: "",
 		},
 		{
@@ -228,13 +253,13 @@ func TestClaudeProvider_ExtractTextFromJSON_StreamJSON(t *testing.T) {
 			wantText: "",
 		},
 		{
-			name:     "invalid JSON (graceful fallback)",
+			name:     "invalid JSON lines (graceful fallback)",
 			output:   `{"result": invalid}`,
 			wantText: "",
 		},
 		{
-			name:     "missing result field (graceful fallback)",
-			output:   `{"session_id":"sess-999","cost_usd":0.001}`,
+			name:     "no result event in stream",
+			output:   `{"type":"system","subtype":"init","session_id":"sess-999"}`,
 			wantText: "",
 		},
 	}
