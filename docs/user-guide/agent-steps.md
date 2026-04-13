@@ -95,12 +95,14 @@ generate:
   type: agent
   provider: codex
   prompt: "Generate a function to: {{.inputs.requirement}}"
+  options:
+    model: gpt-4o
   timeout: 60
   on_success: next
 ```
 
 **Provider-Specific Options:**
-- `model`: Codex model identifier
+- `model`: Codex model identifier — validated against OpenAI models (see [Model Validation](#model-validation) below)
 - `language`: Target programming language
 - `quiet`: Suppress progress output (boolean)
 - `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--yolo`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments.
@@ -115,13 +117,13 @@ summarize:
   provider: gemini
   prompt: "Summarize: {{.inputs.text}}"
   options:
-    model: gemini-pro
+    model: gemini-2.0-flash
   timeout: 60
   on_success: next
 ```
 
 **Provider-Specific Options:**
-- `model`: Gemini model identifier
+- `model`: Gemini model identifier — validated to start with `gemini-` prefix (see [Model Validation](#model-validation) below)
 - `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--approval-mode=yolo`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments.
 
 ### OpenCode
@@ -173,6 +175,86 @@ analyze:
 - **OpenAI**: `base_url: https://api.openai.com/v1`, `model: gpt-4o`
 - **Groq**: `base_url: https://api.groq.com/openai/v1`, `model: mixtral-8x7b-32768`
 - **vLLM**: `base_url: http://localhost:8000/v1`, `model: your-model`
+
+## Model Validation
+
+AWF validates the `model` field for certain providers to catch typos and invalid models at workflow validation time:
+
+### Claude
+
+Claude model validation accepts:
+- **Aliases**: `sonnet`, `opus`, `haiku` (resolved to current recommended versions)
+- **Full names**: Any model starting with `claude-` (e.g., `claude-3-opus-20250219`)
+
+**Examples:**
+```yaml
+options:
+  model: sonnet                          # Alias (valid)
+  model: claude-opus-4-1-20250805        # Full name (valid)
+  model: gpt-4                           # Invalid - rejected at validation
+```
+
+### Gemini
+
+Gemini model validation requires the `gemini-` prefix. This allows you to use any Gemini model without waiting for AWF CLI updates:
+
+- **Prefix**: Must start with `gemini-`
+- **Examples**: `gemini-pro`, `gemini-2.0-flash`, `gemini-1.5-pro-latest`
+
+**Examples:**
+```yaml
+options:
+  model: gemini-2.0-flash                # Valid - new models automatically supported
+  model: gemini-pro                      # Valid - legacy models still work
+  model: gpt-4                           # Invalid - rejects non-Gemini models
+  model: gemini-                         # Valid at validation (provider CLI rejects at runtime)
+```
+
+**Error message example:**
+```
+step validation error: model must start with "gemini-"
+```
+
+### Codex
+
+Codex model validation accepts OpenAI model prefixes:
+
+- **`gpt-` prefix**: Models like `gpt-4o`, `gpt-3.5-turbo`
+- **`codex-` prefix**: Forward compatibility for future Codex-branded models
+- **`o-` series**: OpenAI's reasoning models (e.g., `o1`, `o3-mini`) — must have a digit after the `o`
+
+**Examples:**
+```yaml
+options:
+  model: gpt-4o                          # Valid - current OpenAI model
+  model: gpt-3.5-turbo                   # Valid - legacy OpenAI model
+  model: o1                              # Valid - o-series reasoning model
+  model: o3-mini                         # Valid - o-series with suffix
+  model: codex-mini                      # Valid - forward compatibility
+  model: code-davinci                    # Invalid - rejects old Codex models
+  model: toto                            # Invalid - no recognized prefix
+```
+
+**Error message example:**
+```
+step validation error: model must start with "gpt-", "codex-", or match o-series pattern (e.g., o1, o3-mini)
+```
+
+### OpenCode & OpenAI-Compatible
+
+No model validation for `opencode` or `openai_compatible` providers — these use arbitrary backend models.
+
+### When Validation Occurs
+
+Model validation runs during:
+- `awf validate <workflow>` — Catch errors before execution
+- `awf run <workflow>` — Catches errors at startup before execution begins
+- `--dry-run` — Validates without execution
+
+**Error handling:**
+- Validation errors are reported with clear guidance on expected format
+- Workflow stops immediately on validation failure (exit code 2)
+- No need for downstream CLI error handling — wrong models are caught early
 
 ## Prompt Templates
 

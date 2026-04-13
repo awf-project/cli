@@ -189,6 +189,87 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 		options map[string]any
 		wantErr string
 	}{
+		// Valid models (should not error)
+		{
+			name:    "valid model: gpt-4o",
+			prompt:  "test",
+			options: map[string]any{"model": "gpt-4o"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: gpt-3.5-turbo",
+			prompt:  "test",
+			options: map[string]any{"model": "gpt-3.5-turbo"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: codex-mini",
+			prompt:  "test",
+			options: map[string]any{"model": "codex-mini"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: o1",
+			prompt:  "test",
+			options: map[string]any{"model": "o1"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: o3",
+			prompt:  "test",
+			options: map[string]any{"model": "o3"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: o4-mini",
+			prompt:  "test",
+			options: map[string]any{"model": "o4-mini"},
+			wantErr: "",
+		},
+		// Invalid models (should error)
+		{
+			name:    "invalid model: claude-3-opus (wrong provider)",
+			prompt:  "test",
+			options: map[string]any{"model": "claude-3-opus"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: gemini-pro (wrong provider)",
+			prompt:  "test",
+			options: map[string]any{"model": "gemini-pro"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: empty string",
+			prompt:  "test",
+			options: map[string]any{"model": ""},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: toto (random string)",
+			prompt:  "test",
+			options: map[string]any{"model": "toto"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: o (single character, no digit)",
+			prompt:  "test",
+			options: map[string]any{"model": "o"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: ollama (starts with o but not o-series)",
+			prompt:  "test",
+			options: map[string]any{"model": "ollama"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: oracle (starts with o but not o-series)",
+			prompt:  "test",
+			options: map[string]any{"model": "oracle"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		// Options that are silently ignored (no validation error)
 		{
 			name:    "max_tokens is silently ignored (no validation error)",
 			prompt:  "test",
@@ -617,6 +698,44 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 		options map[string]any
 		wantErr string
 	}{
+		// Valid models (should not error)
+		{
+			name:    "valid model: gpt-4o",
+			options: map[string]any{"model": "gpt-4o"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: gpt-3.5-turbo",
+			options: map[string]any{"model": "gpt-3.5-turbo"},
+			wantErr: "",
+		},
+		{
+			name:    "valid model: o1",
+			options: map[string]any{"model": "o1"},
+			wantErr: "",
+		},
+		// Invalid models (should error)
+		{
+			name:    "invalid model: claude-3-opus",
+			options: map[string]any{"model": "claude-3-opus"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: gemini-pro",
+			options: map[string]any{"model": "gemini-pro"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: toto",
+			options: map[string]any{"model": "toto"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		{
+			name:    "invalid model: ollama",
+			options: map[string]any{"model": "ollama"},
+			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
+		},
+		// Options that are silently ignored (no validation error)
 		{
 			name:    "temperature is silently ignored (no validation error)",
 			options: map[string]any{"temperature": 2.5},

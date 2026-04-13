@@ -53,7 +53,7 @@ func TestC065_Claude_SilentlyIgnoresDeadOptions(t *testing.T) {
 				t.Skip("Claude CLI not installed, skipping")
 			}
 
-			_, err := provider.Execute(ctx, "test prompt", tt.options)
+			_, err := provider.Execute(ctx, "test prompt", tt.options, nil, nil)
 
 			// Should not error — options are silently ignored, not validated
 			require.NoError(t, err, "Claude should silently ignore dead options without validation error")
@@ -78,8 +78,8 @@ func TestC065_Codex_PassesModelNotMaxTokensOrTemperature(t *testing.T) {
 		},
 		{
 			name:             "model flag passed, temperature NOT passed",
-			options:          map[string]any{"model": "code-davinci", "temperature": 0.7},
-			shouldContain:    []string{"--model", "code-davinci"},
+			options:          map[string]any{"model": "gpt-4o", "temperature": 0.7},
+			shouldContain:    []string{"--model", "gpt-4o"},
 			shouldNotContain: []string{"--temperature"},
 		},
 		{
@@ -89,10 +89,10 @@ func TestC065_Codex_PassesModelNotMaxTokensOrTemperature(t *testing.T) {
 			shouldNotContain: []string{"--model"},
 		},
 		{
-			name:             "language still passed, dead options ignored",
+			name:             "unknown options silently dropped",
 			options:          map[string]any{"language": "python", "max_tokens": 100, "temperature": 0.5},
-			shouldContain:    []string{"--language", "python"},
-			shouldNotContain: []string{"--max-tokens", "--temperature"},
+			shouldContain:    []string{},
+			shouldNotContain: []string{"--language", "--max-tokens", "--temperature"},
 		},
 	}
 
@@ -102,7 +102,7 @@ func TestC065_Codex_PassesModelNotMaxTokensOrTemperature(t *testing.T) {
 			mockExec.SetOutput([]byte("code"), nil)
 			provider := agents.NewCodexProviderWithOptions(agents.WithCodexExecutor(mockExec))
 
-			_, err := provider.Execute(context.Background(), "test", tt.options)
+			_, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			calls := mockExec.GetCalls()
@@ -156,7 +156,7 @@ func TestC065_CodexConversation_RemovesDeadFlags(t *testing.T) {
 				Turns: []workflow.Turn{},
 			}
 
-			_, err := provider.ExecuteConversation(context.Background(), state, "user prompt", tt.options)
+			_, err := provider.ExecuteConversation(context.Background(), state, "user prompt", tt.options, nil, nil)
 
 			require.NoError(t, err)
 			calls := mockExec.GetCalls()
@@ -202,7 +202,7 @@ func TestC065_Gemini_SilentlyIgnoresTemperature(t *testing.T) {
 				t.Skip("Gemini CLI not installed, skipping")
 			}
 
-			_, err := provider.Execute(ctx, "test prompt", tt.options)
+			_, err := provider.Execute(ctx, "test prompt", tt.options, nil, nil)
 
 			// Should not error — temperature is silently ignored
 			require.NoError(t, err, "Gemini should silently ignore temperature without validation error")
@@ -223,7 +223,7 @@ func TestC065_OpenAICompatible_MaxCompletionTokensFieldName(t *testing.T) {
 			"max_completion_tokens": 1024,
 		}
 
-		_, err := provider.Execute(context.Background(), "test prompt", options)
+		_, err := provider.Execute(context.Background(), "test prompt", options, nil, nil)
 
 		// Error expected since we don't have real HTTP connection, but the key point is
 		// that the option was parsed correctly (no validation error on the option itself)
@@ -241,7 +241,7 @@ func TestC065_OpenAICompatible_MaxCompletionTokensFieldName(t *testing.T) {
 			"max_tokens": 2048,
 		}
 
-		_, err := provider.Execute(context.Background(), "test prompt", options)
+		_, err := provider.Execute(context.Background(), "test prompt", options, nil, nil)
 
 		// Error expected since HTTP unavailable, but option should be accepted without validation error
 		if err == nil || !slices.Contains([]string{"connection refused", "no such host"}, err.Error()) {
@@ -277,7 +277,7 @@ func TestC065_OpenAICompatible_NegativeMaxCompletionTokensRejected(t *testing.T)
 		t.Run(tt.name, func(t *testing.T) {
 			provider := agents.NewOpenAICompatibleProvider()
 
-			_, err := provider.Execute(context.Background(), "test", tt.options)
+			_, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 
 			if tt.wantErr {
 				require.Error(t, err, "Execute should error with negative value")
@@ -302,7 +302,7 @@ func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 			"max_tokens":  2048,
 		}
 
-		_, err := claude.Execute(context.Background(), "test", deadOptions)
+		_, err := claude.Execute(context.Background(), "test", deadOptions, nil, nil)
 		require.NoError(t, err, "Claude should not validate dead options")
 	})
 
@@ -312,7 +312,7 @@ func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 			t.Skip("Gemini not installed")
 		}
 
-		_, err := gemini.Execute(context.Background(), "test", map[string]any{"temperature": 0.5})
+		_, err := gemini.Execute(context.Background(), "test", map[string]any{"temperature": 0.5}, nil, nil)
 		require.NoError(t, err, "Gemini should not validate temperature")
 	})
 
@@ -324,7 +324,7 @@ func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 		_, err := codex.Execute(context.Background(), "test", map[string]any{
 			"max_tokens":  512,
 			"temperature": 0.6,
-		})
+		}, nil, nil)
 		require.NoError(t, err, "Codex should not validate dead options")
 	})
 
@@ -340,7 +340,7 @@ func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 		_, err := codex.ExecuteConversation(context.Background(), state, "test", map[string]any{
 			"max_tokens":  512,
 			"temperature": 0.6,
-		})
+		}, nil, nil)
 		require.NoError(t, err, "Codex ExecuteConversation should not validate dead options")
 	})
 }
@@ -353,7 +353,7 @@ func TestC065_Codex_ModelParity(t *testing.T) {
 		mockExec.SetOutput([]byte("code"), nil)
 		provider := agents.NewCodexProviderWithOptions(agents.WithCodexExecutor(mockExec))
 
-		_, err := provider.Execute(context.Background(), "test", map[string]any{"model": "gpt-4o"})
+		_, err := provider.Execute(context.Background(), "test", map[string]any{"model": "gpt-4o"}, nil, nil)
 
 		require.NoError(t, err)
 		calls := mockExec.GetCalls()
@@ -373,7 +373,7 @@ func TestC065_Codex_ModelParity(t *testing.T) {
 			Turns: []workflow.Turn{},
 		}
 
-		_, err := provider.ExecuteConversation(context.Background(), state, "test", map[string]any{"model": "gpt-4o"})
+		_, err := provider.ExecuteConversation(context.Background(), state, "test", map[string]any{"model": "gpt-4o"}, nil, nil)
 
 		require.NoError(t, err)
 		calls := mockExec.GetCalls()

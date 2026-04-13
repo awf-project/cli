@@ -145,10 +145,58 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 			wantErr: "prompt cannot be empty",
 		},
 		{
-			name:    "arbitrary model name accepted (no allowlist)",
+			name:    "valid gemini prefix model accepted",
+			prompt:  "test",
+			options: map[string]any{"model": "gemini-pro"},
+			wantErr: "",
+		},
+		{
+			name:    "valid gemini model: gemini-pro-vision",
+			prompt:  "test",
+			options: map[string]any{"model": "gemini-pro-vision"},
+			wantErr: "",
+		},
+		{
+			name:    "valid gemini model: gemini-ultra",
+			prompt:  "test",
+			options: map[string]any{"model": "gemini-ultra"},
+			wantErr: "",
+		},
+		{
+			name:    "valid gemini model: gemini-2.0-flash",
 			prompt:  "test",
 			options: map[string]any{"model": "gemini-2.0-flash"},
 			wantErr: "",
+		},
+		{
+			name:    "valid gemini model: gemini-1.5-pro-latest",
+			prompt:  "test",
+			options: map[string]any{"model": "gemini-1.5-pro-latest"},
+			wantErr: "",
+		},
+		{
+			name:    "invalid model: gpt-4 (wrong provider)",
+			prompt:  "test",
+			options: map[string]any{"model": "gpt-4"},
+			wantErr: "must start with",
+		},
+		{
+			name:    "invalid model: claude-3-opus (wrong provider)",
+			prompt:  "test",
+			options: map[string]any{"model": "claude-3-opus"},
+			wantErr: "must start with",
+		},
+		{
+			name:    "invalid model: empty string",
+			prompt:  "test",
+			options: map[string]any{"model": ""},
+			wantErr: "must start with",
+		},
+		{
+			name:    "invalid model: single word",
+			prompt:  "test",
+			options: map[string]any{"model": "toto"},
+			wantErr: "must start with",
 		},
 	}
 
@@ -161,7 +209,7 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
 			if tt.wantErr != "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
 				assert.Nil(t, result)
 			} else {

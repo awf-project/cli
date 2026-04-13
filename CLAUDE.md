@@ -242,7 +242,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- For executable temp files, use os.CreateTemp() with mode 0o700, write content, and defer cleanup; prevents permission issues and resource leaks
 - Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
 - Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
 - Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
@@ -283,6 +282,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Warn when binary is in package-manager paths; allow --force override rather than blocking to enable advanced workflows
 - Delete dead helper functions immediately when their call sites are removed; verify zero references via grep before committing to prevent stale code
 - Enforce consistent configuration option key naming across all providers using type-safe accessor helpers (getBoolOption, getStringOption); verify no camelCase remnants via grep before final validation
+- When implementing validation constraints (e.g., model name prefixes), grep all test files for old values; update integration tests outside immediate scope before marking work complete
 
 ## Test Conventions
 
