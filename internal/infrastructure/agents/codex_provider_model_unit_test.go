@@ -32,9 +32,9 @@ func TestCodexProvider_Execute_ModelFlag(t *testing.T) {
 			wantCLIArgs: []string{"exec", "--json", "test prompt"},
 		},
 		{
-			name:        "model with language option",
+			name:        "model with unknown language option (ignored)",
 			options:     map[string]any{"model": "code-davinci", "language": "python"},
-			wantCLIArgs: []string{"exec", "--json", "test prompt", "--language", "python", "--model", "code-davinci"},
+			wantCLIArgs: []string{"exec", "--json", "test prompt", "--model", "code-davinci"},
 		},
 		{
 			name:        "model with quiet option",
@@ -236,7 +236,7 @@ func TestCodexProvider_Execute_ModelPriority(t *testing.T) {
 	args := calls[0].Args
 
 	assert.True(t, slices.Contains(args, "--model"), "--model should be passed when provided")
-	assert.True(t, slices.Contains(args, "--language"), "--language should be passed when provided")
+	assert.False(t, slices.Contains(args, "--language"), "--language is not supported by codex CLI")
 	assert.False(t, slices.Contains(args, "--quiet"), "--quiet should NOT be passed (removed from Codex CLI)")
 	assert.False(t, slices.Contains(args, "--max-tokens"), "--max-tokens should NOT be passed")
 	assert.False(t, slices.Contains(args, "--temperature"), "--temperature should NOT be passed")
@@ -273,5 +273,5 @@ func TestCodexProvider_ExecuteConversation_NoUnsupportedFlags(t *testing.T) {
 
 	// Verify supported flags ARE present
 	assert.True(t, slices.Contains(args, "--model"), "--model should be passed when provided")
-	assert.True(t, slices.Contains(args, "--language"), "--language should be passed when provided")
+	assert.False(t, slices.Contains(args, "--language"), "--language is not supported by codex CLI")
 }

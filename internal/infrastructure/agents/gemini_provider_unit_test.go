@@ -145,27 +145,9 @@ func TestGeminiProvider_Execute_ValidationErrors(t *testing.T) {
 			wantErr: "prompt cannot be empty",
 		},
 		{
-			name:    "invalid model name",
+			name:    "arbitrary model name accepted (no allowlist)",
 			prompt:  "test",
-			options: map[string]any{"model": "invalid-model"},
-			wantErr: "unknown model",
-		},
-		{
-			name:    "valid gemini-pro model",
-			prompt:  "test",
-			options: map[string]any{"model": "gemini-pro"},
-			wantErr: "",
-		},
-		{
-			name:    "valid gemini-pro-vision model",
-			prompt:  "test",
-			options: map[string]any{"model": "gemini-pro-vision"},
-			wantErr: "",
-		},
-		{
-			name:    "valid gemini-ultra model",
-			prompt:  "test",
-			options: map[string]any{"model": "gemini-ultra"},
+			options: map[string]any{"model": "gemini-2.0-flash"},
 			wantErr: "",
 		},
 	}
@@ -493,13 +475,6 @@ func TestGeminiProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			prompt:  "   \t\n  ",
 			wantErr: "prompt cannot be empty",
 		},
-		{
-			name:    "invalid model",
-			state:   workflow.NewConversationState("system"),
-			prompt:  "test",
-			options: map[string]any{"model": "invalid-model"},
-			wantErr: "unknown model",
-		},
 	}
 
 	for _, tt := range tests {
@@ -645,53 +620,6 @@ func TestGeminiProvider_ExecuteConversation_TokenCounting(t *testing.T) {
 	assert.True(t, result.TokensEstimated)
 }
 
-func TestGeminiProvider_ExecuteConversation_JSONParsing(t *testing.T) {
-	tests := []struct {
-		name       string
-		mockStdout []byte
-		options    map[string]any
-		wantJSON   bool
-		wantErr    bool
-	}{
-		{
-			name:       "valid json",
-			mockStdout: []byte(`{"result":"ok"}`),
-			options:    map[string]any{"output_format": "json"},
-			wantJSON:   true,
-			wantErr:    false,
-		},
-		{
-			name:       "malformed json",
-			mockStdout: []byte(`{"result":"incomplete`),
-			options:    map[string]any{"output_format": "json"},
-			wantJSON:   false,
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput(tt.mockStdout, nil)
-			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
-
-			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				if tt.wantJSON {
-					assert.NotNil(t, result.Response)
-				}
-			}
-		})
-	}
-}
-
 func TestGeminiProvider_Name(t *testing.T) {
 	provider := NewGeminiProvider()
 	assert.Equal(t, "gemini", provider.Name())
@@ -757,53 +685,6 @@ func TestGeminiProvider_Execute_MultipleOptions(t *testing.T) {
 	assert.Equal(t, "gemini", calls[0].Name)
 	assert.Contains(t, calls[0].Args, "--model")
 	assert.Contains(t, calls[0].Args, "gemini-pro")
-}
-
-func TestGeminiProvider_ValidateGeminiOptions_ModelValidation(t *testing.T) {
-	tests := []struct {
-		name    string
-		options map[string]any
-		wantErr string
-	}{
-		{
-			name:    "valid gemini-pro",
-			options: map[string]any{"model": "gemini-pro"},
-			wantErr: "",
-		},
-		{
-			name:    "valid gemini-pro-vision",
-			options: map[string]any{"model": "gemini-pro-vision"},
-			wantErr: "",
-		},
-		{
-			name:    "valid gemini-ultra",
-			options: map[string]any{"model": "gemini-ultra"},
-			wantErr: "",
-		},
-		{
-			name:    "invalid model",
-			options: map[string]any{"model": "gpt-4"},
-			wantErr: "unknown model",
-		},
-		{
-			name:    "invalid model typo",
-			options: map[string]any{"model": "gemini-pro-typo"},
-			wantErr: "unknown model",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateGeminiOptions(tt.options)
-
-			if tt.wantErr != "" {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
 }
 
 func TestGeminiProvider_Execute_DangerouslySkipPermissions(t *testing.T) {
@@ -918,10 +799,13 @@ func TestGeminiProvider_ExecuteConversation_DangerouslySkipPermissions(t *testin
 			wantNotIn:  []string{"--approval-mode=yolo"},
 		},
 		{
-			name:         "skip permissions with system prompt",
-			options:      map[string]any{"dangerously_skip_permissions": true, "system_prompt": "You are helpful"},
-			mockOutput:   []byte("response"),
-			wantContains: []string{"--approval-mode=yolo", "--system-prompt", "You are helpful"},
+			name:       "skip permissions with system prompt",
+			options:    map[string]any{"dangerously_skip_permissions": true, "system_prompt": "You are helpful"},
+			mockOutput: []byte("response"),
+			// Gemini CLI has no --system-prompt flag; system prompt is inlined
+			// into the first-turn message. Verify the flag is absent and yolo still applies.
+			wantContains: []string{"--approval-mode=yolo"},
+			wantNotIn:    []string{"--system-prompt"},
 		},
 		{
 			name:         "skip permissions with model and format",

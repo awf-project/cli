@@ -15,7 +15,7 @@ import (
 // T005: ExecuteConversation first turn uses `exec --json` subcommand
 func TestCodexProvider_ExecuteConversation_T005_FirstTurnExecSubcommand(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("Session: codex-sess-123\nGenerated code"), nil)
+	mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"codex-sess-123"}`+"\n"+`{"type":"message","content":"Generated code"}`), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
@@ -38,7 +38,7 @@ func TestCodexProvider_ExecuteConversation_T005_FirstTurnExecSubcommand(t *testi
 // T005: ExecuteConversation resume turn uses `resume <sessionID> --json` subcommand
 func TestCodexProvider_ExecuteConversation_T005_ResumeTurnResumeSubcommand(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("Session: codex-sess-456\nContinued response"), nil)
+	mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"codex-sess-456"}`+"\n"+`{"type":"message","content":"Continued response"}`), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
@@ -60,10 +60,10 @@ func TestCodexProvider_ExecuteConversation_T005_ResumeTurnResumeSubcommand(t *te
 	assert.Equal(t, "add error handling", call.Args[3], "prompt should follow --json")
 }
 
-// T005: ExecuteConversation correctly handles non-codex-prefixed session IDs (fallback to exec)
+// T005: ExecuteConversation uses resume for any non-empty session ID (no prefix required)
 func TestCodexProvider_ExecuteConversation_T005_NonCodexPrefixedSessionIDFallback(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("Session: codex-new\nResponse"), nil)
+	mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"new-thread-id"}`+"\n"+`{"type":"message","content":"Response"}`), nil)
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
@@ -77,9 +77,10 @@ func TestCodexProvider_ExecuteConversation_T005_NonCodexPrefixedSessionIDFallbac
 	require.Len(t, calls, 1)
 	call := calls[0]
 
-	assert.Equal(t, "exec", call.Args[0], "non-codex-prefixed ID should fall back to exec")
-	assert.Equal(t, "--json", call.Args[1])
-	assert.Equal(t, "continue", call.Args[2])
+	assert.Equal(t, "resume", call.Args[0], "any non-empty session ID triggers resume subcommand")
+	assert.Equal(t, "non-codex-prefixed-id", call.Args[1], "session ID passed after resume")
+	assert.Equal(t, "--json", call.Args[2])
+	assert.Equal(t, "continue", call.Args[3])
 }
 
 // T005: Quiet flag is NOT passed (replaced by --json on exec/resume)
@@ -105,7 +106,7 @@ func TestCodexProvider_ExecuteConversation_T005_QuietFlagRemoved(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte("Session: codex-sess\nResponse"), nil)
+			mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"codex-sess"}`+"\n"+`{"type":"message","content":"Response"}`), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
@@ -182,49 +183,50 @@ func TestCodexProvider_Execute_T005_ExecSubcommand(t *testing.T) {
 	}
 }
 
-// T005: Options (model, language, dangerously_skip_permissions) work with exec/resume subcommands
+// T005: Supported options (model, dangerously_skip_permissions) work with exec/resume subcommands.
+// `language` is intentionally NOT supported — the codex CLI has no --language flag.
 func TestCodexProvider_ExecuteConversation_T005_OptionsWithSubcommands(t *testing.T) {
 	tests := []struct {
-		name             string
-		sessionID        string
-		options          map[string]any
-		expectedSubcmd   string
-		shouldHaveOption bool
+		name           string
+		sessionID      string
+		options        map[string]any
+		expectedSubcmd string
+		expectedFlag   string
 	}{
 		{
-			name:             "first turn with model",
-			sessionID:        "",
-			options:          map[string]any{"model": "gpt-4o"},
-			expectedSubcmd:   "exec",
-			shouldHaveOption: true,
+			name:           "first turn with model",
+			sessionID:      "",
+			options:        map[string]any{"model": "gpt-4o"},
+			expectedSubcmd: "exec",
+			expectedFlag:   "--model",
 		},
 		{
-			name:             "resume turn with language",
-			sessionID:        "codex-sess-abc",
-			options:          map[string]any{"language": "python"},
-			expectedSubcmd:   "resume",
-			shouldHaveOption: true,
+			name:           "resume turn with model",
+			sessionID:      "codex-sess-abc",
+			options:        map[string]any{"model": "gpt-4o"},
+			expectedSubcmd: "resume",
+			expectedFlag:   "--model",
 		},
 		{
-			name:             "first turn with yolo",
-			sessionID:        "",
-			options:          map[string]any{"dangerously_skip_permissions": true},
-			expectedSubcmd:   "exec",
-			shouldHaveOption: true,
+			name:           "first turn with dangerously_skip_permissions",
+			sessionID:      "",
+			options:        map[string]any{"dangerously_skip_permissions": true},
+			expectedSubcmd: "exec",
+			expectedFlag:   "--dangerously-bypass-approvals-and-sandbox",
 		},
 		{
-			name:             "resume turn with yolo",
-			sessionID:        "codex-sess-xyz",
-			options:          map[string]any{"dangerously_skip_permissions": true},
-			expectedSubcmd:   "resume",
-			shouldHaveOption: true,
+			name:           "resume turn with dangerously_skip_permissions",
+			sessionID:      "codex-sess-xyz",
+			options:        map[string]any{"dangerously_skip_permissions": true},
+			expectedSubcmd: "resume",
+			expectedFlag:   "--dangerously-bypass-approvals-and-sandbox",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte("Session: codex-result\nResponse"), nil)
+			mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"codex-result"}`+"\n"+`{"type":"message","content":"Response"}`), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
@@ -237,22 +239,14 @@ func TestCodexProvider_ExecuteConversation_T005_OptionsWithSubcommands(t *testin
 			call := calls[0]
 
 			assert.Equal(t, tt.expectedSubcmd, call.Args[0])
-			// Verify options are passed when shouldHaveOption is true
-			if tt.shouldHaveOption {
-				optionPresent := false
-				for _, arg := range call.Args {
-					if arg == "--model" || arg == "--language" || arg == "--yolo" {
-						optionPresent = true
-						break
-					}
-				}
-				assert.True(t, optionPresent, "option should be in args")
-			}
+			assert.Contains(t, call.Args, tt.expectedFlag, "expected flag should be in args")
+			assert.NotContains(t, call.Args, "--language", "--language is not supported")
+			assert.NotContains(t, call.Args, "--yolo", "--yolo is not supported")
 		})
 	}
 }
 
-// T005: Session ID extraction works with new output format
+// T005: Session ID extraction works with NDJSON output format
 func TestCodexProvider_ExecuteConversation_T005_SessionIDExtraction(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -260,18 +254,18 @@ func TestCodexProvider_ExecuteConversation_T005_SessionIDExtraction(t *testing.T
 		wantSessionID string
 	}{
 		{
-			name:          "session extracted from Session: line",
-			mockOutput:    []byte("Session: codex-abc-123\nGenerated code"),
+			name:          "session extracted from thread.started NDJSON event",
+			mockOutput:    []byte(`{"type":"thread.started","thread_id":"codex-abc-123"}` + "\n" + `{"type":"message","content":"Generated code"}`),
 			wantSessionID: "codex-abc-123",
 		},
 		{
-			name:          "malformed output - empty session ID",
-			mockOutput:    []byte("Session:\nNo ID"),
+			name:          "malformed JSON - empty session ID",
+			mockOutput:    []byte(`{"type":"thread.started","thread_id":`),
 			wantSessionID: "",
 		},
 		{
-			name:          "no session line - extraction fails gracefully",
-			mockOutput:    []byte("Just output\nNo session info"),
+			name:          "no thread.started event - extraction fails gracefully",
+			mockOutput:    []byte(`{"type":"message","content":"Just output"}`),
 			wantSessionID: "",
 		},
 	}
@@ -291,69 +285,80 @@ func TestCodexProvider_ExecuteConversation_T005_SessionIDExtraction(t *testing.T
 	}
 }
 
-// T005: System prompt only passed on first turn (exec), not on resume
+// T005: System prompt is inlined in the first-turn message (codex CLI has no
+// --system-prompt flag). On resume turns it must NOT be re-sent.
 func TestCodexProvider_ExecuteConversation_T005_SystemPromptHandling(t *testing.T) {
+	const systemPrompt = "You are a code generator"
+	const userPrompt = "test"
+
 	tests := []struct {
-		name                 string
-		sessionID            string
-		hasSystemPrompt      bool
-		expectedSubcmd       string
-		shouldHavePromptFlag bool
+		name            string
+		sessionID       string
+		hasSystemPrompt bool
+		expectedSubcmd  string
+		shouldInline    bool
 	}{
 		{
-			name:                 "first turn with system prompt",
-			sessionID:            "",
-			hasSystemPrompt:      true,
-			expectedSubcmd:       "exec",
-			shouldHavePromptFlag: true,
+			name:            "first turn with system prompt",
+			sessionID:       "",
+			hasSystemPrompt: true,
+			expectedSubcmd:  "exec",
+			shouldInline:    true,
 		},
 		{
-			name:                 "first turn without system prompt",
-			sessionID:            "",
-			hasSystemPrompt:      false,
-			expectedSubcmd:       "exec",
-			shouldHavePromptFlag: false,
+			name:            "first turn without system prompt",
+			sessionID:       "",
+			hasSystemPrompt: false,
+			expectedSubcmd:  "exec",
+			shouldInline:    false,
 		},
 		{
-			name:                 "resume turn with system prompt (should ignore)",
-			sessionID:            "codex-sess-abc",
-			hasSystemPrompt:      true,
-			expectedSubcmd:       "resume",
-			shouldHavePromptFlag: false,
+			name:            "resume turn with system prompt (should ignore)",
+			sessionID:       "codex-sess-abc",
+			hasSystemPrompt: true,
+			expectedSubcmd:  "resume",
+			shouldInline:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte("Session: codex-new\nResponse"), nil)
+			mockExec.SetOutput([]byte(`{"type":"thread.started","thread_id":"codex-new"}`+"\n"+`{"type":"message","content":"Response"}`), nil)
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
 			state.SessionID = tt.sessionID
 			options := map[string]any{}
 			if tt.hasSystemPrompt {
-				options["system_prompt"] = "You are a code generator"
+				options["system_prompt"] = systemPrompt
 			}
 
-			_, err := provider.ExecuteConversation(context.Background(), state, "test", options, nil, nil)
+			_, err := provider.ExecuteConversation(context.Background(), state, userPrompt, options, nil, nil)
 			require.NoError(t, err)
 
 			calls := mockExec.GetCalls()
 			require.Len(t, calls, 1)
-			call := calls[0]
+			args := calls[0].Args
 
-			assert.Equal(t, tt.expectedSubcmd, call.Args[0])
+			assert.Equal(t, tt.expectedSubcmd, args[0])
+			assert.NotContains(t, args, "--system-prompt", "codex has no --system-prompt flag")
 
-			// Check for --system-prompt flag
-			hasPromptFlag := false
-			for _, arg := range call.Args {
-				if arg == "--system-prompt" {
-					hasPromptFlag = true
-					break
-				}
+			var promptArg string
+			switch args[0] {
+			case "exec":
+				promptArg = args[2]
+			case "resume":
+				promptArg = args[3]
 			}
-			assert.Equal(t, tt.shouldHavePromptFlag, hasPromptFlag)
+
+			if tt.shouldInline {
+				assert.Contains(t, promptArg, systemPrompt, "system prompt should be inlined in first-turn message")
+				assert.Contains(t, promptArg, userPrompt, "user prompt should remain in first-turn message")
+			} else {
+				assert.NotContains(t, promptArg, systemPrompt, "system prompt must not be in message")
+				assert.Equal(t, userPrompt, promptArg, "message should be just the user prompt")
+			}
 		})
 	}
 }

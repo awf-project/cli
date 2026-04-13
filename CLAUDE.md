@@ -306,3 +306,6 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 - When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
+
+## Review Standards
+

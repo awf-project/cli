@@ -11,141 +11,116 @@ import (
 )
 
 // T008: Gemini session resume implementation
-// Tests for extractSessionID() and session resume logic in ExecuteConversation
+// Tests for session resume logic in ExecuteConversation
 
-func TestGeminiProvider_extractSessionID(t *testing.T) {
+func TestGeminiProvider_ExecuteConversation_ForcesStreamJsonFormat(t *testing.T) {
 	tests := []struct {
-		name          string
-		output        string
-		wantSessionID string
+		name              string
+		userProvidedOpt   map[string]any
+		shouldHaveFormat  bool
+		expectedFormatVal string
 	}{
 		{
-			name:          "session ID from 'Session: <id>' format",
-			output:        "Session: gemini-session-abc123\nGenerated response",
-			wantSessionID: "gemini-session-abc123",
+			name:              "no format option provided - stream-json forced",
+			userProvidedOpt:   nil,
+			shouldHaveFormat:  true,
+			expectedFormatVal: "stream-json",
 		},
 		{
-			name:          "session ID with complex alphanumeric",
-			output:        "Session: sess_f47ac10b58cc4372a5670e02b2c3d479\n...",
-			wantSessionID: "sess_f47ac10b58cc4372a5670e02b2c3d479",
+			name:              "user provides json format - converted to stream-json",
+			userProvidedOpt:   map[string]any{"output_format": "json"},
+			shouldHaveFormat:  true,
+			expectedFormatVal: "stream-json",
 		},
 		{
-			name:          "session ID as numeric",
-			output:        "Session: 9876543210\nResponse content",
-			wantSessionID: "9876543210",
+			name:              "user provides stream-json - stays as stream-json",
+			userProvidedOpt:   map[string]any{"output_format": "stream-json"},
+			shouldHaveFormat:  true,
+			expectedFormatVal: "stream-json",
 		},
 		{
-			name:          "no Session line returns empty",
-			output:        "No session info\nJust text output",
-			wantSessionID: "",
-		},
-		{
-			name:          "malformed Session line returns empty",
-			output:        "Session:\nNo ID provided",
-			wantSessionID: "",
-		},
-		{
-			name:          "empty output returns empty",
-			output:        "",
-			wantSessionID: "",
-		},
-		{
-			name:          "Session line with trailing whitespace",
-			output:        "Session: gemini-sess-123  \nMore content",
-			wantSessionID: "gemini-sess-123",
-		},
-		{
-			name:          "multiple Session lines uses first",
-			output:        "Session: first-id\nSession: second-id\nResponse",
-			wantSessionID: "first-id",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := extractSessionIDFromLines(tt.output)
-			assert.Equal(t, tt.wantSessionID, got)
-			if tt.wantSessionID == "" {
-				assert.Error(t, err, "extraction failure should return error")
-			} else {
-				assert.NoError(t, err, "successful extraction should not error")
-			}
-		})
-	}
-}
-
-func TestGeminiProvider_ExecuteConversation_ResumeFlag(t *testing.T) {
-	tests := []struct {
-		name           string
-		sessionID      string
-		wantResumeFlag bool
-	}{
-		{
-			name:           "turn 2+ with session ID uses resume flag",
-			sessionID:      "gemini-session-abc",
-			wantResumeFlag: true,
-		},
-		{
-			name:           "turn 1 without session ID omits resume",
-			sessionID:      "",
-			wantResumeFlag: false,
+			name:              "with other options - format still forced",
+			userProvidedOpt:   map[string]any{"model": "gemini-pro", "dangerously_skip_permissions": true},
+			shouldHaveFormat:  true,
+			expectedFormatVal: "stream-json",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput([]byte("Session: gemini-new-session\nGenerated response"), nil)
+			mockExec.SetOutput([]byte(`{"type":"init","session_id":"gemini-test-123"}`+"\nResponse text"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			state.SessionID = tt.sessionID
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.userProvidedOpt, nil, nil)
 
-			result, err := provider.ExecuteConversation(context.Background(), state, "write a poem", nil, nil, nil)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
 			calls := mockExec.GetCalls()
 			require.Len(t, calls, 1)
 
-			hasResumeFlag := false
+			found := false
 			for i, arg := range calls[0].Args {
-				if arg == "--resume" && i+1 < len(calls[0].Args) {
-					hasResumeFlag = true
-					if tt.wantResumeFlag {
-						assert.Equal(t, tt.sessionID, calls[0].Args[i+1])
-					}
+				if arg == "--output-format" && i+1 < len(calls[0].Args) {
+					found = true
+					assert.Equal(t, tt.expectedFormatVal, calls[0].Args[i+1])
 				}
 			}
-			assert.Equal(t, tt.wantResumeFlag, hasResumeFlag)
+			assert.True(t, found, "expected --output-format flag in args")
 		})
 	}
 }
 
-func TestGeminiProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
+func TestGeminiProvider_ExecuteConversation_ExtractsSessionID(t *testing.T) {
 	tests := []struct {
-		name           string
-		mockOutput     []byte
-		wantSessionID  string
-		wantOutputText string
+		name             string
+		mockOutput       []byte
+		wantSessionID    string
+		expectExtraction bool
 	}{
 		{
-			name:           "session ID extracted from output",
-			mockOutput:     []byte("Session: gemini-extracted-123\nThis is a generated poem"),
-			wantSessionID:  "gemini-extracted-123",
-			wantOutputText: "Session: gemini-extracted-123\nThis is a generated poem",
+			name:             "valid init event with session_id",
+			mockOutput:       []byte(`{"type":"init","session_id":"031da63a-73be-42f5-ae0d-890aae0b6323"}` + "\nAssistant response"),
+			wantSessionID:    "031da63a-73be-42f5-ae0d-890aae0b6323",
+			expectExtraction: true,
 		},
 		{
-			name:           "no session line yields empty SessionID",
-			mockOutput:     []byte("Text output without session info"),
-			wantSessionID:  "",
-			wantOutputText: "Text output without session info",
+			name:             "init event with other fields",
+			mockOutput:       []byte(`{"type":"init","timestamp":"2026-04-07T21:55:36.994Z","session_id":"abc-def-123","model":"gemini-pro"}` + "\nResponse"),
+			wantSessionID:    "abc-def-123",
+			expectExtraction: true,
 		},
 		{
-			name:           "empty session in line yields empty",
-			mockOutput:     []byte("Session: \nsome text"),
-			wantSessionID:  "",
-			wantOutputText: "Session: \nsome text",
+			name:             "init event without session_id field",
+			mockOutput:       []byte(`{"type":"init","model":"gemini-pro"}` + "\nResponse"),
+			wantSessionID:    "",
+			expectExtraction: false,
+		},
+		{
+			name:             "no init event in output",
+			mockOutput:       []byte("Just plain text response without JSON"),
+			wantSessionID:    "",
+			expectExtraction: false,
+		},
+		{
+			name:             "empty output",
+			mockOutput:       []byte(""),
+			wantSessionID:    "",
+			expectExtraction: false,
+		},
+		{
+			name:             "init event with null session_id",
+			mockOutput:       []byte(`{"type":"init","session_id":null}` + "\nResponse"),
+			wantSessionID:    "",
+			expectExtraction: false,
+		},
+		{
+			name:             "session_id in non-init event is ignored",
+			mockOutput:       []byte(`{"type":"response","session_id":"wrong-id"}` + "\nResponse"),
+			wantSessionID:    "",
+			expectExtraction: false,
 		},
 	}
 
@@ -156,89 +131,107 @@ func TestGeminiProvider_ExecuteConversation_SessionIDExtracted(t *testing.T) {
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			assert.Equal(t, tt.wantSessionID, result.State.SessionID)
-			assert.Equal(t, tt.wantOutputText, result.Output)
+			require.NotNil(t, result.State)
+
+			if tt.expectExtraction {
+				assert.Equal(t, tt.wantSessionID, result.State.SessionID, "session ID should be extracted from output")
+			} else {
+				assert.Empty(t, result.State.SessionID, "session ID should be empty when extraction fails")
+			}
 		})
 	}
 }
 
-func TestGeminiProvider_ExecuteConversation_SystemPromptOnFirstTurn(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("Session: gemini-1\nGenerated response"), nil)
-	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
-
-	state := workflow.NewConversationState("")
-	options := map[string]any{"system_prompt": "You are a helpful assistant"}
-
-	_, err := provider.ExecuteConversation(context.Background(), state, "Generate a hello world", options, nil, nil)
-	require.NoError(t, err)
-
-	calls := mockExec.GetCalls()
-	require.Len(t, calls, 1)
-	assert.Contains(t, calls[0].Args, "--system-prompt")
-	assert.Contains(t, calls[0].Args, "You are a helpful assistant")
-}
-
-func TestGeminiProvider_ExecuteConversation_NoSystemPromptOnResumeTurn(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("Session: gemini-resume\nContinued response"), nil)
-	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
-
-	state := workflow.NewConversationState("")
-	state.SessionID = "existing-session-id"
-	options := map[string]any{"system_prompt": "You are a helpful assistant"}
-
-	_, err := provider.ExecuteConversation(context.Background(), state, "Continue", options, nil, nil)
-	require.NoError(t, err)
-
-	calls := mockExec.GetCalls()
-	require.Len(t, calls, 1)
-	assert.NotContains(t, calls[0].Args, "--system-prompt")
-}
-
-func TestGeminiProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
+func TestGeminiProvider_ExecuteConversation_ResumeUsesRealSessionID(t *testing.T) {
 	tests := []struct {
-		name       string
-		mockOutput []byte
+		name           string
+		priorSessionID string
+		wantResumeFlag bool
+		expectedID     string
 	}{
 		{
-			name:       "malformed output no extraction error",
-			mockOutput: []byte("Response without session identifier line"),
+			name:           "resume turn with real session UUID",
+			priorSessionID: "031da63a-73be-42f5-ae0d-890aae0b6323",
+			wantResumeFlag: true,
+			expectedID:     "031da63a-73be-42f5-ae0d-890aae0b6323",
 		},
 		{
-			name:       "empty output no extraction error",
-			mockOutput: []byte(""),
+			name:           "first turn without session ID omits resume",
+			priorSessionID: "",
+			wantResumeFlag: false,
+			expectedID:     "",
 		},
 		{
-			name:       "invalid session format no error",
-			mockOutput: []byte("Session:\nNo ID following colon"),
+			name:           "resume with numeric string ID",
+			priorSessionID: "12345",
+			wantResumeFlag: true,
+			expectedID:     "12345",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput(tt.mockOutput, nil)
+			mockExec.SetOutput([]byte(`{"type":"init","session_id":"new-session-456"}`+"\nResponse"), nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 			state := workflow.NewConversationState("system")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
+			state.SessionID = tt.priorSessionID
 
-			require.NoError(t, err, "extraction failure must not cause error (graceful fallback)")
+			result, err := provider.ExecuteConversation(context.Background(), state, "continue prompt", nil, nil, nil)
+
+			require.NoError(t, err)
 			require.NotNil(t, result)
-			assert.Empty(t, result.State.SessionID, "SessionID should be empty when extraction fails")
-			assert.NotEmpty(t, result.Output, "output should still be populated")
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+
+			found := false
+			for i, arg := range calls[0].Args {
+				if arg == "--resume" {
+					found = true
+					if tt.wantResumeFlag {
+						require.Greater(t, len(calls[0].Args), i+1, "resume flag should have value")
+						assert.Equal(t, tt.expectedID, calls[0].Args[i+1])
+					}
+				}
+			}
+			assert.Equal(t, tt.wantResumeFlag, found, "resume flag presence matches expectation")
 		})
 	}
 }
 
-func TestGeminiProvider_ExecuteConversation_EmptyOutputHandling(t *testing.T) {
+func TestGeminiProvider_ExecuteConversation_UpdatesStateWithExtractedID(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(""), nil)
+	extractedID := "extracted-session-xyz"
+	mockExec.SetOutput([]byte(`{"type":"init","session_id":"`+extractedID+`"}`+"\nGenerated response text"), nil)
+	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+	state := workflow.NewConversationState("system")
+	initialID := ""
+	state.SessionID = initialID
+
+	result, err := provider.ExecuteConversation(context.Background(), state, "create poem", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.State)
+
+	assert.NotEqual(t, initialID, result.State.SessionID, "session ID should be updated from extraction")
+	assert.Equal(t, extractedID, result.State.SessionID)
+}
+
+func TestGeminiProvider_ExecuteConversation_NDJSONOutputPreserved(t *testing.T) {
+	ndjsonOutput := `{"type":"init","session_id":"session-abc"}
+{"type":"response","text":"Hello world"}
+{"type":"status","code":"complete"}`
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjsonOutput), nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
 	state := workflow.NewConversationState("system")
@@ -246,22 +239,39 @@ func TestGeminiProvider_ExecuteConversation_EmptyOutputHandling(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.NotEmpty(t, result.Output, "output should be normalized to at least space when empty")
+
+	assert.Equal(t, ndjsonOutput, result.Output, "raw NDJSON output should be preserved in result")
 }
 
-func TestGeminiProvider_ExecuteConversation_InvalidPrompt(t *testing.T) {
-	provider := NewGeminiProvider()
-	state := workflow.NewConversationState("")
+func TestGeminiProvider_ExecuteConversation_ConversationStateUpdated(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"init","session_id":"session-123"}`+"\nBot: Hello back"), nil)
+	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-	_, err := provider.ExecuteConversation(context.Background(), state, "   ", nil, nil, nil)
+	state := workflow.NewConversationState("system")
+	prompt := "User: Hello"
 
-	assert.Error(t, err)
+	result, err := provider.ExecuteConversation(context.Background(), state, prompt, nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.State)
+
+	assert.Greater(t, len(result.State.Turns), 0, "conversation should have at least assistant turn")
+	assert.Equal(t, workflow.TurnRoleAssistant, result.State.Turns[len(result.State.Turns)-1].Role, "last turn should be assistant")
 }
 
-func TestGeminiProvider_ExecuteConversation_NilState(t *testing.T) {
-	provider := NewGeminiProvider()
+func TestGeminiProvider_ExecuteConversation_HandlesExtractionFailureGracefully(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("No JSON output at all - malformed response"), nil)
+	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-	_, err := provider.ExecuteConversation(context.Background(), nil, "test", nil, nil, nil)
+	state := workflow.NewConversationState("system")
+	state.SessionID = "prior-session"
 
-	assert.Error(t, err)
+	result, err := provider.ExecuteConversation(context.Background(), state, "prompt", nil, nil, nil)
+
+	require.NoError(t, err, "execution should not fail when extraction fails")
+	require.NotNil(t, result)
+	assert.Empty(t, result.State.SessionID, "session ID should be cleared when extraction fails")
 }

@@ -44,19 +44,19 @@ func TestCodexProvider_Execute_ExecJsonArgsStructure(t *testing.T) {
 			wantArgTwo:  "test prompt",
 		},
 		{
-			name:        "with language",
+			name:        "with unknown language option (ignored)",
 			prompt:      "generate code",
 			options:     map[string]any{"language": "python"},
-			wantArgLen:  5,
+			wantArgLen:  3,
 			wantArgZero: "exec",
 			wantArgOne:  "--json",
 			wantArgTwo:  "generate code",
 		},
 		{
-			name:        "with model and language",
+			name:        "with model and unknown language (language ignored)",
 			prompt:      "write function",
 			options:     map[string]any{"model": "gpt-4o", "language": "go"},
-			wantArgLen:  7,
+			wantArgLen:  5,
 			wantArgZero: "exec",
 			wantArgOne:  "--json",
 			wantArgTwo:  "write function",
@@ -179,7 +179,7 @@ func TestCodexProvider_Execute_CLIExecutionFailure(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_FirstTurnExecJson(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"session_id":"codex-abc123","result":"response"}`), nil)
+	mockExec.SetOutput([]byte("{\"type\":\"thread.started\",\"thread_id\":\"abc123\"}\n{\"type\":\"message\",\"content\":\"response\"}\n"), nil)
 
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 	state := workflow.NewConversationState("conv-1")
@@ -200,11 +200,11 @@ func TestCodexProvider_ExecuteConversation_FirstTurnExecJson(t *testing.T) {
 
 func TestCodexProvider_ExecuteConversation_ResumeTurnResumeCommand(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"session_id":"codex-xyz789","result":"continued"}`), nil)
+	mockExec.SetOutput([]byte("{\"type\":\"thread.started\",\"thread_id\":\"xyz789\"}\n{\"type\":\"message\",\"content\":\"continued\"}\n"), nil)
 
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 	state := workflow.NewConversationState("conv-1")
-	state.SessionID = "codex-xyz789"
+	state.SessionID = "xyz789"
 
 	result, err := provider.ExecuteConversation(context.Background(), state, "continue", map[string]any{}, nil, nil)
 
@@ -215,7 +215,7 @@ func TestCodexProvider_ExecuteConversation_ResumeTurnResumeCommand(t *testing.T)
 	require.Len(t, calls, 1)
 	args := calls[0].Args
 	assert.Equal(t, "resume", args[0], "resume turn should use 'resume' subcommand")
-	assert.Equal(t, "codex-xyz789", args[1], "should have session ID as arg[1]")
+	assert.Equal(t, "xyz789", args[1], "should have session ID as arg[1]")
 	assert.Equal(t, "--json", args[2], "should have --json flag after session ID")
 	assert.Contains(t, strings.Join(args, " "), "continue", "should contain prompt")
 }

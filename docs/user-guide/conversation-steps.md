@@ -243,7 +243,7 @@ stop_condition: "response contains 'Summary:' || tokens_used > 90000"
 
 ## Continuing a Conversation from a Previous Step
 
-The `continue_from` field resumes a prior step's conversation session. For CLI providers (Claude, Gemini, Codex, OpenCode), this hands off the session ID — the provider resumes the existing session natively. For `openai_compatible`, it loads the full conversation turn history as message context.
+The `continue_from` field resumes a prior step's conversation session. For CLI providers (Claude, Gemini, Codex, OpenCode), AWF extracts the real session/thread ID from the first turn's output and passes it to the provider's native resume flag on subsequent turns. For `openai_compatible`, it loads the full conversation turn history as message context.
 
 ```yaml
 states:
@@ -278,8 +278,10 @@ states:
 ```
 
 **How it works:**
-- Step `add_requirements` resumes the session from `refine_code` using the stored `SessionID`
-- The provider receives the resume flag (e.g., `-r` for Claude) and continues the existing conversation
+- Step `refine_code` executes and extracts a session ID from CLI output (real UUID/thread ID, not a fabricated sentinel)
+- Step `add_requirements` resumes the session from `refine_code` using `continue_from: refine_code`
+- AWF passes the provider the resume flag with the extracted ID (e.g., `-r <session_id>` for Claude, `--resume <uuid>` for Gemini, `resume <thread_id>` for Codex, `-s <id>` for OpenCode)
+- The provider continues the existing conversation with full context from the prior step
 - Each step stores its own `SessionID` — chains of 3+ steps work (B from A, C from B)
 - Provider mismatch between source and target is allowed but may produce errors if incompatible
 
@@ -528,12 +530,15 @@ error:
 
 **Problem**: Agent doesn't maintain history across turns with CLI providers
 
-**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF passes only the current turn's prompt via `-p` (not serialized history). With session resume support (F073), providers use native `--resume` flags to maintain context across turns. Without session resume, each turn starts fresh with no context from previous turns. This means:
-- Each turn starts a fresh CLI process
-- Context continuity relies on native session resume via provider-specific flags (`-r`, `resume`, `--resume`, `-s`)
-- If session ID extraction fails, the provider falls back to stateless mode (each turn independent)
+**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF passes only the current turn's prompt via `-p` (not serialized history). With session resume support (F073) and improved session ID extraction (F079), providers use native `--resume` flags to maintain context across turns:
+- Each turn starts a fresh CLI process with provider-specific resume flags
+- **Claude** uses `-r <session_id>` to resume
+- **Gemini** uses `--resume <session_id>` (real UUID from `type: "init"` JSON event)
+- **Codex** uses `resume <thread_id>` (real ID from `type: "thread.started"` JSON event)
+- **OpenCode** uses `-s <session_id>` (real ID from `type: "step_start"` JSON event, falls back to `-c` if extraction fails)
+- Session IDs are extracted from CLI output after the first turn and used on subsequent turns
 
-**Solution**: CLI providers now support session resume natively. If you need HTTP-based multi-turn conversation with full message history, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
+**Solution**: CLI providers now support session resume natively and reliably (as of F079). If you need HTTP-based multi-turn conversation with full message history, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
 
 ```yaml
 refine:
@@ -600,7 +605,7 @@ In this example, the agent receives only the review prompt on turn 1. On turns 2
 All providers support conversation mode with context continuity:
 
 - **`openai_compatible`** maintains full conversation history via the Chat Completions API (messages array).
-- **CLI providers** (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags (`-r`, `resume`, `--resume`, `-s`) to maintain context across turns. Session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully.
+- **CLI providers** (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags (`-r`, `resume`, `--resume`, `-s`) to maintain context across turns. Session IDs are extracted from provider-specific JSON events in CLI output after the first turn and passed on subsequent turns. Extraction is reliable as of F079 and uses real provider session/thread IDs; if extraction fails (rare), the provider falls back gracefully to stateless mode or fallback flags (e.g., OpenCode `-c` for "continue last session").
 
 ### Current Implementation
 

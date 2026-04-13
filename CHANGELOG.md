@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **F079**: Stored `ConversationState.SessionID` values from prior runs are invalidated for Gemini and Codex — old sentinel values (`"latest"`, `"last"`, `codex-*` prefixed IDs) do not match any real session and cause resume to skip (safe fallback to stateless mode); no migration needed, conversations restart cleanly on first run after upgrade
 - **F078**: CLI provider invocation flags updated to match current binary APIs — Claude and Gemini `output_format: json` now maps to `--output-format stream-json` (was `--output-format json`); Codex invocation changed from `codex --prompt "<prompt>" --quiet` to `codex exec --json "<prompt>"`; `quiet` option removed from Codex (silently ignored); Codex conversation resume changed from `codex resume <id> --prompt "<prompt>"` to `codex resume <id> --json "<prompt>"`; workflows using `output_format: json` require no YAML changes (mapping is automatic); workflows using `quiet: true` for Codex should remove the option (no-op)
 - **F077**: Option keys normalized to snake_case — `allowedTools` renamed to `allowed_tools`, `dangerouslySkipPermissions` renamed to `dangerously_skip_permissions` in workflow YAML; old camelCase keys are silently ignored (Go map miss); `dangerously_skip_permissions` fails closed (permissions not skipped), `allowed_tools` fails open (no tool restriction applied); update existing workflow files to use the new snake_case keys
 
@@ -20,10 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **F079**: Fix session resume for Gemini, Codex, and OpenCode CLI providers — replaced dead `extractSessionIDFromLines` text pattern extraction (searched for `"Session: <id>"` which no provider emits) with per-provider JSON extraction matching real provider output (`session_id` from Gemini `type: "init"`, `thread_id` from Codex `type: "thread.started"`, `sessionID` from OpenCode `type: "step_start"`); force `--output-format stream-json` for Gemini in `ExecuteConversation`; remove fabricated `codex-` prefix logic; OpenCode falls back to `-c` (continue last session) when JSON extraction fails; multi-turn conversation resume now works correctly for all 4 CLI providers
 - **B014**: Resolve `provider` field through interpolation engine in agent steps — `provider: "{{.inputs.agent}}"` was passed as a literal string to the registry instead of being resolved; now interpolated before lookup in both `executeAgentStep` and `ExecuteConversation` paths; resolution errors include step name context
 
 ### Removed
 
+- **F079**: Dead `extractSessionIDFromLines` helper removed from agent helpers — searched for text pattern `"Session: <id>"` that no CLI provider emits; replaced by per-provider JSON extraction methods; fabricated `codex-` prefix detection and stripping logic removed from Codex provider
 - **F078**: Dead validation helpers `validatePrompt()`, `validateContext()`, `validateState()` removed from agent helpers — all were no-ops or unreachable after provider refactoring
 - **F077**: Dead helper functions `getWorkflowID()` and `getStepName()` removed from agent helpers — keys `workflowID`/`stepName` were never injected by any caller; `workflow` and `step` fields removed from Claude provider audit log (redundant with execution service context)
 
