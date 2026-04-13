@@ -283,6 +283,7 @@ See [Workflow Syntax](../user-guide/workflow-syntax.md#parallel-state) for paral
 
 ## See Also
 
+- [Agent Model Validation](../user-guide/agent-steps.md#model-validation) - Provider-specific model name validation (Claude, Gemini, Codex)
 - [Workflow Syntax](../user-guide/workflow-syntax.md) - Input definition syntax
 - [Variable Interpolation](interpolation.md) - Using input values
 - [Exit Codes](exit-codes.md) - Error codes

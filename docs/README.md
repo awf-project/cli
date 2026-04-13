@@ -31,6 +31,7 @@ Learn how to use AWF effectively:
 - [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents via CLI (Claude, Codex, Gemini) or HTTP APIs (OpenAI, Ollama, vLLM, Groq)
   - [Output Formatting](user-guide/agent-steps.md#output-formatting) - Automatic code fence stripping and JSON validation (`output_format: json|text`)
   - [External Prompt Files](user-guide/agent-steps.md#external-prompt-files) - Load prompts from Markdown files with template interpolation
+  - [Model Validation](user-guide/agent-steps.md#model-validation) - Provider-specific model name validation (Claude, Gemini, Codex)
 - [Conversation Mode](user-guide/conversation-steps.md) - Multi-turn conversations with native session resume for CLI providers and context window management
 - [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -46,6 +47,7 @@ func (p *CodexProvider) newBase() *baseCLIProvider {
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
+		validateOptions:       validateCodexOptions,
 	})
 }
 
@@ -98,24 +100,21 @@ func (p *CodexProvider) buildConversationArgs(state *workflow.ConversationState,
 	return args, nil
 }
 
-// buildCodexFirstTurnPrompt combines an optional system prompt with the user
-// prompt for the first turn. Codex CLI has no --system-prompt flag, so the
-// system context must be embedded directly in the message.
+// buildCodexFirstTurnPrompt prepends an optional system prompt for the first turn.
+// Codex CLI has no --system-prompt flag, so the system context must be embedded in the message.
 func buildCodexFirstTurnPrompt(userPrompt string, options map[string]any) string {
-	systemPrompt, ok := options["system_prompt"].(string)
-	if !ok || systemPrompt == "" {
-		return userPrompt
+	if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+		return sysPrompt + "\n\n" + userPrompt
 	}
-	return systemPrompt + "\n\n" + userPrompt
+	return userPrompt
 }
 
-// appendCodexOptions appends supported Codex CLI flags derived from the options map.
-// Unknown options are silently ignored to match Codex CLI behavior.
+// appendCodexOptions appends Codex CLI flags from options; unknown keys are silently ignored.
 func appendCodexOptions(args []string, options map[string]any) []string {
-	if model, ok := options["model"].(string); ok && model != "" {
+	if model, ok := getStringOption(options, "model"); ok && model != "" {
 		args = append(args, "--model", model)
 	}
-	if skip, ok := options["dangerously_skip_permissions"].(bool); ok && skip {
+	if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skip {
 		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
 	}
 	return args
@@ -141,4 +140,26 @@ func (p *CodexProvider) extractSessionID(output string) (string, error) {
 		return str, nil
 	}
 	return "", errors.New("thread_id is not a non-empty string")
+}
+
+func validateCodexOptions(options map[string]any) error {
+	if options == nil {
+		return nil
+	}
+
+	if model, ok := getStringOption(options, "model"); ok {
+		if !isValidCodexModel(model) {
+			return fmt.Errorf("invalid model format: %s (must start with 'gpt-', 'codex-', or be an o-series model like 'o1', 'o3', 'o4-mini')", model)
+		}
+	}
+
+	return nil
+}
+
+func isValidCodexModel(model string) bool {
+	if strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "codex-") {
+		return true
+	}
+	// o-series: "o" followed by a digit (e.g., o1, o3, o4-mini); rejects "ollama", "oracle"
+	return len(model) >= 2 && model[0] == 'o' && model[1] >= '0' && model[1] <= '9'
 }

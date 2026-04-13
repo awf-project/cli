@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -42,7 +43,26 @@ func (p *GeminiProvider) newBase() *baseCLIProvider {
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
+		validateOptions:       validateGeminiOptions,
 	})
+}
+
+func validateGeminiOptions(options map[string]any) error {
+	if options == nil {
+		return nil
+	}
+
+	if model, ok := getStringOption(options, "model"); ok {
+		if !isValidGeminiModel(model) {
+			return fmt.Errorf("invalid model format: %s (must start with 'gemini-')", model)
+		}
+	}
+
+	return nil
+}
+
+func isValidGeminiModel(model string) bool {
+	return strings.HasPrefix(model, "gemini-")
 }
 
 func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
