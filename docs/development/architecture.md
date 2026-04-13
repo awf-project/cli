@@ -189,7 +189,7 @@ Implements domain ports with concrete technologies.
 **Location:** `internal/infrastructure/`
 
 **Adapters:**
-- `agents/` - AI agent providers (Claude, Gemini, Codex, OpenCode, OpenAI-Compatible) implementing `AgentProvider`
+- `agents/` - AI agent providers (Claude, Gemini, Codex, OpenCode, OpenAI-Compatible) implementing `AgentProvider`; CLI-based providers delegate to a shared `baseCLIProvider` with per-provider hooks (arg building, session ID extraction, output transformation, option validation)
 - `config/` - Configuration file loading
 - `diagram/` - Workflow diagram generation (DOT/Graphviz)
 - `errors/` - Error formatting adapters implementing `ErrorFormatter`

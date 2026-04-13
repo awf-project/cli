@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -19,6 +18,7 @@ import (
 // ClaudeProvider implements AgentProvider for Claude CLI.
 // Invokes: claude -p "prompt" --output-format stream-json
 type ClaudeProvider struct {
+	base     *baseCLIProvider
 	logger   ports.Logger
 	executor ports.CLIExecutor
 }
@@ -30,10 +30,12 @@ func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
 	} else {
 		log = logger.NopLogger{}
 	}
-	return &ClaudeProvider{
+	p := &ClaudeProvider{
 		logger:   log,
 		executor: NewExecCLIExecutor(),
 	}
+	p.base = p.newBase()
+	return p
 }
 
 func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider {
@@ -44,88 +46,40 @@ func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider 
 	for _, opt := range opts {
 		opt(p)
 	}
+	p.base = p.newBase()
 	return p
 }
 
+func (p *ClaudeProvider) newBase() *baseCLIProvider {
+	return newBaseCLIProvider("claude", "claude", p.executor, p.logger, cliProviderHooks{
+		buildExecuteArgs:      p.buildExecuteArgs,
+		buildConversationArgs: p.buildConversationArgs,
+		extractSessionID:      p.extractSessionID,
+		extractTextContent:    p.extractTextFromJSON,
+		validateOptions:       validateClaudeOptions,
+	})
+}
+
 func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-	startedAt := time.Now()
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateOptions(options); err != nil {
+	result, rawOutput, err := p.base.execute(ctx, prompt, options, stdout, stderr)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("claude provider: %w", err)
-	}
-
-	args := []string{"-p", prompt}
-
-	if model, ok := getStringOption(options, "model"); ok {
-		args = append(args, "--model", model)
-	}
-
-	// Claude CLI text mode (default with -p) buffers the full response until
-	// process exit, so streaming output via --output=streaming would show nothing
-	// progressively. Force stream-json (NDJSON events) unless the user explicitly
-	// set output_format: text. stream-json requires --verbose in -p mode.
 	userFormat, userFormatSet := getStringOption(options, "output_format")
-	forcedStreamJSON := false
-	switch {
-	case !userFormatSet:
-		args = append(args, "--output-format", "stream-json", "--verbose")
-		forcedStreamJSON = true
-	case userFormat == "json", userFormat == "stream-json":
-		args = append(args, "--output-format", "stream-json", "--verbose")
-	default:
-		args = append(args, "--output-format", userFormat)
-	}
 
-	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
-		args = append(args, "--allowedTools", allowedTools)
-	}
-	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		args = append(args, "--dangerously-skip-permissions")
-		p.logger.Info("[SECURITY AUDIT] dangerously_skip_permissions enabled",
-			"timestamp", time.Now().Format(time.RFC3339))
-	}
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "claude", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("claude execution failed: %w", err)
-	}
-
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	rawOutputStr := string(output)
-
-	// When we forced stream-json internally (user did not request it), extract
-	// the clean final text from the NDJSON "result" event so downstream steps
-	// reading states.X.output see text, not raw NDJSON.
-	outputStr := rawOutputStr
-	if forcedStreamJSON {
-		if extracted := p.extractTextFromJSON(rawOutputStr); extracted != "" {
-			outputStr = extracted
+	// When stream-json was forced internally (user didn't set output_format),
+	// extract clean text from the NDJSON result event for downstream steps.
+	if !userFormatSet {
+		if extracted := p.extractTextFromJSON(rawOutput); extracted != "" {
+			result.Output = extracted
+			result.Tokens = estimateTokens(extracted)
 		}
-	}
-
-	result := &workflow.AgentResult{
-		Provider:        "claude",
-		Output:          outputStr,
-		StartedAt:       startedAt,
-		CompletedAt:     completedAt,
-		Tokens:          estimateTokens(outputStr),
-		TokensEstimated: true,
 	}
 
 	// Populate Response only when user explicitly requested structured output.
 	if userFormatSet && (userFormat == "json" || userFormat == "stream-json") {
-		if jsonResp := p.extractResultEvent(rawOutputStr); jsonResp != nil {
+		if jsonResp := p.extractResultEvent(rawOutput); jsonResp != nil {
 			result.Response = jsonResp
 		}
 	}
@@ -134,125 +88,17 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 }
 
 // ExecuteConversation invokes the Claude CLI with conversation history for multi-turn interactions.
-//
-//nolint:gocognit // Complexity 31: conversation executor manages multi-turn state, context windows, token limits, retries, streaming. Conversation orchestration requires this.
 func (p *ClaudeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-	startedAt := time.Now()
-
-	if state == nil {
-		return nil, errors.New("conversation state cannot be nil")
-	}
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateOptions(options); err != nil {
+	result, rawOutput, err := p.base.executeConversation(ctx, state, prompt, options, stdout, stderr)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("claude provider: %w", err)
-	}
-
-	workingState := cloneState(state)
-
-	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	if err := workingState.AddTurn(userTurn); err != nil {
-		return nil, fmt.Errorf("failed to add user turn: %w", err)
-	}
-
-	args := []string{"-p", prompt}
-
-	if model, ok := getStringOption(options, "model"); ok {
-		args = append(args, "--model", model)
-	}
-
-	// Force stream-json output for session ID extraction on all conversation turns.
-	// stream-json requires --verbose when combined with --print (-p).
-	args = append(args, "--output-format", "stream-json", "--verbose")
-
-	// Resume from previous session if available
-	if workingState.SessionID != "" {
-		args = append(args, "-r", workingState.SessionID)
-	} else {
-		// First turn only: pass system prompt if provided
-		// Note: system_prompt is always present in options (set by ConversationManager)
-		// but only consumed here on turn 1 when SessionID is empty.
-		// On turns 2+, the provider retains the system prompt from the resumed session.
-		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			args = append(args, "--system-prompt", sysPrompt)
-		}
-	}
-
-	if allowedTools, ok := getStringOption(options, "allowed_tools"); ok && allowedTools != "" {
-		args = append(args, "--allowedTools", allowedTools)
-	}
-	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		args = append(args, "--dangerously-skip-permissions")
-		p.logger.Info("[SECURITY AUDIT] dangerously_skip_permissions enabled",
-			"timestamp", time.Now().Format(time.RFC3339))
-	}
-
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "claude", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("claude execution failed: %w", err)
-	}
-
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-
-	// Extract text content from JSON wrapper
-	// Claude's --output-format stream-json wraps response in JSON: {"session_id":"...", "result":"actual text", ...}
-	// We need the clean text for the assistant turn, not the raw JSON.
-	// On extraction failure, gracefully fall back to raw output string.
-	rawOutputStr := string(output)
-	outputStr := p.extractTextFromJSON(rawOutputStr)
-	if outputStr == "" {
-		// Extraction failed (either non-JSON or missing result field) — use raw output
-		outputStr = strings.TrimSpace(rawOutputStr)
-	}
-
-	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateTokens(outputStr)
-	if err := workingState.AddTurn(assistantTurn); err != nil {
-		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
-	}
-
-	// Extract session ID for future turns (uses raw output, not extracted text)
-	if sessionID, err := p.extractSessionID(rawOutputStr); err != nil {
-		p.logger.Debug("session ID extraction failed, continuing stateless", "error", err)
-	} else if sessionID != "" {
-		workingState.SessionID = sessionID
-	}
-
-	inputTokens := estimateInputTokens(workingState.Turns, 1)
-
-	result := &workflow.ConversationResult{
-		Provider:        "claude",
-		State:           workingState,
-		Output:          outputStr,
-		TokensInput:     inputTokens,
-		TokensOutput:    assistantTurn.Tokens,
-		TokensTotal:     inputTokens + assistantTurn.Tokens,
-		TokensEstimated: true,
-		StartedAt:       startedAt,
-		CompletedAt:     completedAt,
-	}
-
-	// Populate result.Response only when user explicitly requested output_format: json.
-	// When --output-format json is forced internally for session resume, the full JSON wrapper
-	// (containing session_id, cost_usd, etc.) must NOT leak into workflow state.
-	userRequestedJSON := false
-	if userFormat, ok := getStringOption(options, "output_format"); ok && userFormat == "json" {
-		userRequestedJSON = true
-	}
-
-	if userRequestedJSON {
-		if jsonResp := p.extractResultEvent(rawOutputStr); jsonResp != nil {
+	// Populate Response only when user explicitly requested output_format: json.
+	// The JSON wrapper (session_id, cost_usd, etc.) must NOT leak into workflow state.
+	userFormat, userFormatSet := getStringOption(options, "output_format")
+	if userFormatSet && userFormat == "json" {
+		if jsonResp := p.extractResultEvent(rawOutput); jsonResp != nil {
 			result.Response = jsonResp
 		}
 	}
@@ -272,7 +118,69 @@ func (p *ClaudeProvider) Validate() error {
 	return nil
 }
 
-func validateOptions(options map[string]any) error {
+// buildExecuteArgs constructs CLI arguments for a single-turn Execute call.
+func (p *ClaudeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
+	args := []string{"-p", prompt}
+
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+
+	// Force stream-json (NDJSON events) unless the user explicitly set output_format: text.
+	// stream-json requires --verbose in -p mode for live streaming.
+	userFormat, userFormatSet := getStringOption(options, "output_format")
+	switch {
+	case !userFormatSet, userFormat == "json", userFormat == "stream-json":
+		args = append(args, "--output-format", "stream-json", "--verbose")
+	default:
+		args = append(args, "--output-format", userFormat)
+	}
+
+	if tools, ok := getStringOption(options, "allowed_tools"); ok && tools != "" {
+		args = append(args, "--allowedTools", tools)
+	}
+
+	if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skip {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
+	return args, nil
+}
+
+// buildConversationArgs constructs CLI arguments for a multi-turn ExecuteConversation call.
+func (p *ClaudeProvider) buildConversationArgs(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error) {
+	args := []string{"-p", prompt}
+
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
+	}
+
+	// Force stream-json output for session ID extraction on all conversation turns.
+	// stream-json requires --verbose when combined with --print (-p).
+	args = append(args, "--output-format", "stream-json", "--verbose")
+
+	if state != nil && state.SessionID != "" {
+		args = append(args, "-r", state.SessionID)
+	} else {
+		// First turn only: pass system prompt if provided.
+		// On turns 2+, the provider retains the system prompt from the resumed session.
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			args = append(args, "--system-prompt", sysPrompt)
+		}
+	}
+
+	if tools, ok := getStringOption(options, "allowed_tools"); ok && tools != "" {
+		args = append(args, "--allowedTools", tools)
+	}
+
+	if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skip {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
+	return args, nil
+}
+
+func validateClaudeOptions(options map[string]any) error {
 	if options == nil {
 		return nil
 	}

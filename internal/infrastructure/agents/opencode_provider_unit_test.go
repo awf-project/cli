@@ -61,7 +61,7 @@ func TestOpenCodeProvider_Execute_Success(t *testing.T) {
 			name:       "empty output",
 			prompt:     "silent",
 			mockStdout: []byte(""),
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 

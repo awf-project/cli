@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
-	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -16,13 +14,16 @@ import (
 // GeminiProvider implements AgentProvider for Gemini CLI.
 // Invokes: gemini -p "prompt"
 type GeminiProvider struct {
+	base     *baseCLIProvider
 	executor ports.CLIExecutor
 }
 
 func NewGeminiProvider() *GeminiProvider {
-	return &GeminiProvider{
+	p := &GeminiProvider{
 		executor: NewExecCLIExecutor(),
 	}
+	p.base = p.newBase()
+	return p
 }
 
 func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider {
@@ -32,20 +33,52 @@ func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider 
 	for _, opt := range opts {
 		opt(p)
 	}
+	p.base = p.newBase()
 	return p
 }
 
+func (p *GeminiProvider) newBase() *baseCLIProvider {
+	return newBaseCLIProvider("gemini", "gemini", p.executor, nil, cliProviderHooks{
+		buildExecuteArgs:      p.buildExecuteArgs,
+		buildConversationArgs: p.buildConversationArgs,
+		extractSessionID:      p.extractSessionID,
+	})
+}
+
 func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-	startedAt := time.Now()
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
+	result, rawOutput, err := p.base.execute(ctx, prompt, options, stdout, stderr)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("gemini provider: %w", err)
+	if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
+		result.Response = jsonResp
 	}
 
+	return result, nil
+}
+
+func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
+	result, _, err := p.base.executeConversation(ctx, state, prompt, options, stdout, stderr)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p *GeminiProvider) Name() string {
+	return "gemini"
+}
+
+func (p *GeminiProvider) Validate() error {
+	_, err := exec.LookPath("gemini")
+	if err != nil {
+		return fmt.Errorf("gemini CLI not found in PATH: %w", err)
+	}
+	return nil
+}
+
+func (p *GeminiProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"-p", prompt}
 
 	if model, ok := getStringOption(options, "model"); ok {
@@ -61,64 +94,17 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "gemini", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("gemini execution failed: %w", err)
-	}
-
-	// Combine stdout and stderr like CombinedOutput()
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	outputStr := string(output)
-	result := &workflow.AgentResult{
-		Provider:    "gemini",
-		Output:      outputStr,
-		StartedAt:   startedAt,
-		CompletedAt: completedAt,
-		Tokens:      estimateTokens(outputStr),
-	}
-
-	// Try to parse JSON response if output looks like JSON
-	if jsonResp := tryParseJSONResponse(outputStr); jsonResp != nil {
-		result.Response = jsonResp
-	}
-
-	return result, nil
+	return args, nil
 }
 
-func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-	startedAt := time.Now()
-
-	if state == nil {
-		return nil, errors.New("conversation state cannot be nil")
-	}
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("gemini provider: %w", err)
-	}
-
-	workingState := cloneState(state)
-
-	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	if err := workingState.AddTurn(userTurn); err != nil {
-		return nil, fmt.Errorf("failed to add user turn: %w", err)
-	}
-
+func (p *GeminiProvider) buildConversationArgs(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error) {
 	// Gemini CLI has no --system-prompt flag; inline the system prompt into
-	// the first turn's message so it reaches the model. Subsequent turns
-	// rely on --resume and must not re-send the system prompt.
-	effectivePrompt := prompt
+	// the first turn's message. Subsequent turns rely on --resume.
 	var args []string
-	if workingState.SessionID != "" {
-		args = []string{"--resume", workingState.SessionID, "-p", effectivePrompt}
+	if state != nil && state.SessionID != "" {
+		args = []string{"--resume", state.SessionID, "-p", prompt}
 	} else {
+		effectivePrompt := prompt
 		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
 			effectivePrompt = sysPrompt + "\n\n" + prompt
 		}
@@ -134,61 +120,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
 
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "gemini", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("gemini execution failed: %w", err)
-	}
-
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	outputStr := string(output)
-	if outputStr == "" {
-		outputStr = " "
-	}
-
-	// Extract session ID for future resume turns; continue stateless on failure.
-	if sessionID, err := p.extractSessionID(outputStr); err == nil {
-		workingState.SessionID = sessionID
-	} else {
-		workingState.SessionID = ""
-	}
-
-	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateTokens(outputStr)
-	if err := workingState.AddTurn(assistantTurn); err != nil {
-		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
-	}
-
-	inputTokens := estimateInputTokens(workingState.Turns, 1)
-
-	result := &workflow.ConversationResult{
-		Provider:        "gemini",
-		State:           workingState,
-		Output:          outputStr,
-		TokensInput:     inputTokens,
-		TokensOutput:    assistantTurn.Tokens,
-		TokensTotal:     inputTokens + assistantTurn.Tokens,
-		TokensEstimated: true,
-		StartedAt:       startedAt,
-		CompletedAt:     completedAt,
-	}
-
-	return result, nil
-}
-
-func (p *GeminiProvider) Name() string {
-	return "gemini"
-}
-
-func (p *GeminiProvider) Validate() error {
-	_, err := exec.LookPath("gemini")
-	if err != nil {
-		return fmt.Errorf("gemini CLI not found in PATH: %w", err)
-	}
-	return nil
+	return args, nil
 }
 
 func (p *GeminiProvider) extractInitEvent(output string) map[string]any {
