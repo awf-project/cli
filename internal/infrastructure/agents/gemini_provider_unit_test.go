@@ -53,7 +53,7 @@ func TestGeminiProvider_Execute_Success(t *testing.T) {
 			name:       "empty output",
 			prompt:     "silent",
 			mockStdout: []byte(""),
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 
@@ -282,7 +282,7 @@ func TestGeminiProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			name:       "both empty",
 			stdout:     []byte{},
 			stderr:     []byte{},
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 

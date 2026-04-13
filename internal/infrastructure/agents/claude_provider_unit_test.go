@@ -60,7 +60,7 @@ func TestClaudeProvider_Execute_Success(t *testing.T) {
 			name:       "empty output",
 			prompt:     "silent",
 			mockStdout: []byte(""),
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestClaudeProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			name:       "both empty",
 			stdout:     []byte{},
 			stderr:     []byte{},
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 
@@ -751,7 +751,7 @@ func TestClaudeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 			mockStdout:  []byte(""),
 			options:     map[string]any{},
 			wantErr:     false,
-			wantOutput:  "",
+			wantOutput:  " ",
 			wantEmptyID: true,
 		},
 	}

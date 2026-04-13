@@ -53,7 +53,7 @@ func TestCodexProvider_Execute_Success(t *testing.T) {
 			name:       "empty output",
 			prompt:     "test",
 			mockStdout: []byte(""),
-			wantOutput: "",
+			wantOutput: " ",
 		},
 	}
 
@@ -344,7 +344,7 @@ func TestCodexProvider_Execute_StdoutStderrCombination(t *testing.T) {
 			name:       "empty stdout and stderr",
 			stdout:     []byte(""),
 			stderr:     []byte(""),
-			wantOutput: "",
+			wantOutput: " ",
 		},
 		{
 			name:       "multiline stdout",

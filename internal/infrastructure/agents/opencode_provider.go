@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
-	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -17,6 +15,7 @@ import (
 // OpenCodeProvider implements AgentProvider for OpenCode CLI.
 // Invokes: opencode run "prompt"
 type OpenCodeProvider struct {
+	base     *baseCLIProvider
 	logger   ports.Logger
 	executor ports.CLIExecutor
 }
@@ -24,10 +23,12 @@ type OpenCodeProvider struct {
 // NewOpenCodeProvider creates a new OpenCodeProvider.
 // If no executor is provided, ExecCLIExecutor is used by default.
 func NewOpenCodeProvider() *OpenCodeProvider {
-	return &OpenCodeProvider{
+	p := &OpenCodeProvider{
 		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
+	p.base = p.newBase()
+	return p
 }
 
 // NewOpenCodeProviderWithOptions creates a new OpenCodeProvider with functional options.
@@ -39,30 +40,46 @@ func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodePro
 	for _, opt := range opts {
 		opt(p)
 	}
+	p.base = p.newBase()
 	return p
+}
+
+func (p *OpenCodeProvider) newBase() *baseCLIProvider {
+	return newBaseCLIProvider("opencode", "opencode", p.executor, p.logger, cliProviderHooks{
+		buildExecuteArgs:      p.buildExecuteArgs,
+		buildConversationArgs: p.buildConversationArgs,
+		extractSessionID:      p.extractSessionID,
+		validateOptions:       validateOpenCodeOptions,
+	})
 }
 
 // Execute invokes the OpenCode CLI with the given prompt and options.
 func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-	startedAt := time.Now()
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateOpenCodeOptions(options); err != nil {
+	result, rawOutput, err := p.base.execute(ctx, prompt, options, stdout, stderr)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("opencode provider: %w", err)
+	if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
+		result.Response = jsonResp
 	}
 
-	args := []string{"run", prompt}
+	return result, nil
+}
 
-	// Map user-provided output_format to opencode --format flag.
-	// opencode supports: default (formatted text) | json (NDJSON events).
-	// Absent → json (structured output, live streaming compatible).
+// ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
+func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
+	result, _, err := p.base.executeConversation(ctx, state, prompt, options, stdout, stderr)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// buildExecuteArgs constructs CLI arguments for a single-turn Execute call.
+// opencode CLI syntax: opencode run "prompt" --format <json|default> [--model X] [--framework F] [--verbose] [--output DIR]
+func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
+	args := []string{"run", prompt}
 	args = append(args, "--format", resolveOpenCodeFormat(options))
 
 	if model, ok := getStringOption(options, "model"); ok {
@@ -75,32 +92,41 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	}
 
 	args = applyOpenCodeCLIOptions(args, options)
+	return args, nil
+}
 
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("opencode execution failed: %w", err)
+// buildConversationArgs constructs CLI arguments for a multi-turn ExecuteConversation call.
+// Applies session resume (-s sessionID) or continuation fallback (-c) when prior turns exist,
+// and inlines system_prompt into the first turn's message (opencode CLI has no --system-prompt flag).
+func (p *OpenCodeProvider) buildConversationArgs(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error) {
+	effectivePrompt := prompt
+	if len(state.Turns) == 0 {
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			effectivePrompt = sysPrompt + "\n\n" + prompt
+		}
 	}
 
-	// Combine stdout and stderr like CombinedOutput()
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	outputStr := string(output)
-	result := &workflow.AgentResult{
-		Provider:    "opencode",
-		Output:      outputStr,
-		StartedAt:   startedAt,
-		CompletedAt: completedAt,
-		Tokens:      estimateTokens(outputStr),
+	args := []string{"run", effectivePrompt}
+	args = append(args, "--format", resolveOpenCodeFormat(options))
+
+	if model, ok := getStringOption(options, "model"); ok {
+		args = append(args, "--model", model)
 	}
 
-	if jsonResp := tryParseJSONResponse(outputStr); jsonResp != nil {
-		result.Response = jsonResp
+	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
+		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
 	}
 
-	return result, nil
+	switch {
+	case state.SessionID != "":
+		args = append(args, "-s", state.SessionID)
+	case len(state.Turns) > 0:
+		// Prior turns exist but session ID was lost (extraction failed); use -c to continue last session.
+		args = append(args, "-c")
+	}
+
+	args = applyOpenCodeCLIOptions(args, options)
+	return args, nil
 }
 
 // applyOpenCodeCLIOptions appends shared OpenCode flag mappings (framework,
@@ -119,113 +145,6 @@ func applyOpenCodeCLIOptions(args []string, options map[string]any) []string {
 		args = append(args, "--output", outputDir)
 	}
 	return args
-}
-
-// ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
-func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-	startedAt := time.Now()
-
-	if state == nil {
-		return nil, errors.New("conversation state cannot be nil")
-	}
-
-	if strings.TrimSpace(prompt) == "" {
-		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateOpenCodeOptions(options); err != nil {
-		return nil, err
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("opencode provider: %w", err)
-	}
-
-	workingState := cloneState(state)
-
-	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	if err := workingState.AddTurn(userTurn); err != nil {
-		return nil, fmt.Errorf("failed to add user turn: %w", err)
-	}
-
-	// OpenCode CLI has no --system-prompt flag; inline the system prompt
-	// into the first turn's message so it reaches the model. Subsequent turns
-	// rely on session resume and must not re-send the system prompt.
-	effectivePrompt := prompt
-	if len(state.Turns) == 0 {
-		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			effectivePrompt = sysPrompt + "\n\n" + prompt
-		}
-	}
-
-	args := []string{"run", effectivePrompt}
-
-	// Map user-provided output_format to opencode --format flag (same logic as Execute).
-	args = append(args, "--format", resolveOpenCodeFormat(options))
-
-	if model, ok := getStringOption(options, "model"); ok {
-		args = append(args, "--model", model)
-	}
-
-	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		// OpenCode has no equivalent flag; log at debug level so operators are aware the option was present but ignored.
-		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
-	}
-
-	// Resume from previous session if available
-	switch {
-	case workingState.SessionID != "":
-		args = append(args, "-s", workingState.SessionID)
-	case len(state.Turns) > 0:
-		// Prior turns exist but session ID was lost (extraction failed) - use -c to continue last session
-		args = append(args, "-c")
-	}
-
-	args = applyOpenCodeCLIOptions(args, options)
-
-	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
-	completedAt := time.Now()
-
-	if err != nil {
-		return nil, fmt.Errorf("opencode execution failed: %w", err)
-	}
-
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	outputStr := string(output)
-	if outputStr == "" {
-		outputStr = " "
-	}
-
-	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateTokens(outputStr)
-	if err := workingState.AddTurn(assistantTurn); err != nil {
-		return nil, fmt.Errorf("failed to add assistant turn: %w", err)
-	}
-
-	// Extract session ID for future turns - gracefully fall back to empty SessionID on error
-	if sessionID, err := p.extractSessionID(outputStr); err == nil && sessionID != "" {
-		workingState.SessionID = sessionID
-	} else {
-		workingState.SessionID = ""
-	}
-
-	inputTokens := estimateInputTokens(workingState.Turns, 1)
-
-	result := &workflow.ConversationResult{
-		Provider:        "opencode",
-		State:           workingState,
-		Output:          outputStr,
-		TokensInput:     inputTokens,
-		TokensOutput:    assistantTurn.Tokens,
-		TokensTotal:     inputTokens + assistantTurn.Tokens,
-		TokensEstimated: true,
-		StartedAt:       startedAt,
-		CompletedAt:     completedAt,
-	}
-
-	return result, nil
 }
 
 // Name returns the provider identifier.

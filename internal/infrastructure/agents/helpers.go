@@ -36,22 +36,6 @@ func getStringOption(options map[string]any, key string) (string, bool) {
 	return val, ok
 }
 
-func getIntOption(options map[string]any, key string) (int, bool) {
-	if options == nil {
-		return 0, false
-	}
-	val, ok := options[key].(int)
-	return val, ok
-}
-
-func getFloatOption(options map[string]any, key string) (float64, bool) {
-	if options == nil {
-		return 0, false
-	}
-	val, ok := options[key].(float64)
-	return val, ok
-}
-
 func getBoolOption(options map[string]any, key string) (value, found bool) {
 	if options == nil {
 		return false, false

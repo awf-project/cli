@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Never modify production code in test-only fixes; bugs discovered during testing must be documented in Bug Escalation Protocol (.specify/implementation/ISSUE/bug/) before implementing fixes
 - Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
 - Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
 - Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
@@ -239,6 +238,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Resolve user-provided interpolated variables before registry or dependency lookups to enable dynamic selection at runtime; apply identical resolution logic across all related code paths
 - Implement per-provider flag mapping without shared abstraction when CLI syntax diverges fundamentally; document divergence (Claude: --flag-name, Gemini: --flag-name=value, Codex: --flag-name) inline
 - Synchronize provider CLI flag changes across both implementation files and central options configuration (options.go); verify declarations and validation rules align
+- When extracting shared infrastructure behavior across multiple provider implementations, apply the delegation pattern uniformly; partial refactoring creates inconsistent ownership
 
 ## Common Pitfalls
 
@@ -287,7 +287,6 @@ func TestWorkflowValidation(t *testing.T) {
 ## Test Conventions
 
 - Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
-- Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
 - Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
 - Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 - Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
@@ -306,6 +305,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract repeated test assertion patterns (>5 duplicates) into table-driven or closure-based helpers to eliminate code duplication
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 - When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
+- Create separate test files for delegation patterns (*_delegation_test.go) to validate shared behavior independently from provider-specific unit tests
 
 ## Review Standards
 
