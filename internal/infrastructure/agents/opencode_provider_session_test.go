@@ -10,84 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// T009: OpenCode ExecuteConversation with session resume
-// Tests for ExecuteConversation() and extractSessionID() methods
+// T006: OpenCode ExecuteConversation with session resume
+// Tests for ExecuteConversation() with JSON extraction and -c fallback
 
-func TestOpenCodeProvider_extractSessionID(t *testing.T) {
-	tests := []struct {
-		name    string
-		output  string
-		wantID  string
-		wantErr bool
-	}{
-		{
-			name:    "valid session line",
-			output:  "Building code...\nSession: opencode-session-abc123\nDone",
-			wantID:  "opencode-session-abc123",
-			wantErr: false,
-		},
-		{
-			name:    "session id with hex characters",
-			output:  "Starting execution\nSession: 5f8a2b1c9e3d4f6a\nExecution complete",
-			wantID:  "5f8a2b1c9e3d4f6a",
-			wantErr: false,
-		},
-		{
-			name:    "session id at beginning",
-			output:  "Session: first-session-id\nOther output",
-			wantID:  "first-session-id",
-			wantErr: false,
-		},
-		{
-			name:    "session id at end",
-			output:  "Some output\nFinal line\nSession: last-session-id",
-			wantID:  "last-session-id",
-			wantErr: false,
-		},
-		{
-			name:    "no session line found",
-			output:  "Code generated successfully\nNo session info",
-			wantID:  "",
-			wantErr: true,
-		},
-		{
-			name:    "empty output",
-			output:  "",
-			wantID:  "",
-			wantErr: true,
-		},
-		{
-			name:    "session keyword but no colon",
-			output:  "Session opencode-123\nOther text",
-			wantID:  "",
-			wantErr: true,
-		},
-		{
-			name:    "malformed session line missing id",
-			output:  "Session: \nOther output",
-			wantID:  "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			id, err := extractSessionIDFromLines(tt.output)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Empty(t, id)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.wantID, id)
-			}
-		})
-	}
-}
-
-func TestOpenCodeProvider_ExecuteConversation_FirstTurn(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_FirstTurn_HappyPath(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockOutput := []byte("Generated code structure\nSession: sess-123456\nReady for next turn")
+	// NDJSON format: step_start event with sessionID, followed by step_end with content
+	mockOutput := []byte(`{"type":"step_start","sessionID":"ses_abc123","timestamp":1234567890}` + "\n" +
+		`{"type":"step_end","output":"Generated code structure"}`)
 	mockExec.SetOutput(mockOutput, nil)
 
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
@@ -100,23 +30,23 @@ func TestOpenCodeProvider_ExecuteConversation_FirstTurn(t *testing.T) {
 	assert.Equal(t, "opencode", result.Provider)
 	assert.NotEmpty(t, result.Output)
 	assert.NotNil(t, result.State)
-	// Session ID should be extracted from first turn output
-	assert.Equal(t, "sess-123456", result.State.SessionID)
+	assert.Equal(t, "ses_abc123", result.State.SessionID, "session ID should be extracted from step_start event")
 	assert.True(t, result.TokensEstimated)
 	assert.False(t, result.StartedAt.IsZero())
 	assert.False(t, result.CompletedAt.IsZero())
+	assert.GreaterOrEqual(t, result.State.TotalTurns, 2, "should have at least user and assistant turns")
 }
 
-func TestOpenCodeProvider_ExecuteConversation_Resume(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_Resume_WithSessionID(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	resumeOutput := []byte("Continued from session\nSession: sess-123456\nAdditional code generated")
-	mockExec.SetOutput(resumeOutput, nil)
+	mockOutput := []byte(`{"type":"step_start","sessionID":"ses_xyz789","timestamp":1234567890}` + "\n" +
+		`{"type":"step_end","output":"Continued from session"}`)
+	mockExec.SetOutput(mockOutput, nil)
 
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
-	// Setup state with existing session
 	state := workflow.NewConversationState("You are a code generator")
-	state.SessionID = "sess-123456"
+	state.SessionID = "ses_xyz789"
 	state.Turns = []workflow.Turn{
 		*workflow.NewTurn(workflow.TurnRoleSystem, "You are a code generator"),
 		*workflow.NewTurn(workflow.TurnRoleUser, "Create a Hello World program"),
@@ -130,19 +60,47 @@ func TestOpenCodeProvider_ExecuteConversation_Resume(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, "opencode", result.Provider)
 	assert.NotEmpty(t, result.Output)
-	assert.NotNil(t, result.State)
 	// Session ID should be preserved or updated from output
-	assert.NotEmpty(t, result.State.SessionID)
-	assert.GreaterOrEqual(t, result.State.TotalTurns, 5)
+	assert.Equal(t, "ses_xyz789", result.State.SessionID)
+	assert.GreaterOrEqual(t, result.State.TotalTurns, 4, "should accumulate turns across calls")
 }
 
-func TestOpenCodeProvider_ExecuteConversation_SystemPrompt(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_ContinueFallback(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
-	mockOutput := []byte("Generated with system context\nSession: sess-abc789\nDone")
+	mockOutput := []byte(`{"type":"step_start","sessionID":"ses_new123","timestamp":1234567890}` + "\n" +
+		`{"type":"step_end","output":"Continued"}`)
 	mockExec.SetOutput(mockOutput, nil)
 
 	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
-	state := workflow.NewConversationState("Custom system prompt")
+
+	// State with prior turns but no SessionID (extraction failed on previous turn)
+	state := workflow.NewConversationState("")
+	state.Turns = []workflow.Turn{
+		*workflow.NewTurn(workflow.TurnRoleUser, "first prompt"),
+		*workflow.NewTurn(workflow.TurnRoleAssistant, "first response"),
+	}
+	state.TotalTurns = 2
+
+	result, err := provider.ExecuteConversation(context.Background(), state, "continue", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1, "should have executed one command")
+	assert.Contains(t, calls[0].Args, "-c", "-c fallback should be present when prior turns exist but no SessionID")
+	assert.NotContains(t, calls[0].Args, "-s", "-s should not be present without SessionID")
+}
+
+func TestOpenCodeProvider_ExecuteConversation_FirstTurnWithSystemPrompt(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockOutput := []byte(`{"type":"step_start","sessionID":"ses_sys999","timestamp":1234567890}` + "\n" +
+		`{"type":"step_end","output":"Generated with system context"}`)
+	mockExec.SetOutput(mockOutput, nil)
+
+	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
+	// Empty state means no system turn yet, so system_prompt option will be passed to CLI
+	state := workflow.NewConversationState("")
 
 	options := map[string]any{
 		"system_prompt": "You are a specialized code generator",
@@ -152,30 +110,45 @@ func TestOpenCodeProvider_ExecuteConversation_SystemPrompt(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "opencode", result.Provider)
-	assert.NotEmpty(t, result.State.SessionID)
+	assert.Equal(t, "ses_sys999", result.State.SessionID)
+
+	// OpenCode CLI has no --system-prompt flag; the system prompt is inlined
+	// into the first turn's message instead. Verify it is prepended to the prompt.
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	assert.NotContains(t, calls[0].Args, "--system-prompt", "opencode has no --system-prompt flag")
+	assert.NotContains(t, calls[0].Args, "-c", "-c should not be used when there are no prior turns")
+	require.GreaterOrEqual(t, len(calls[0].Args), 2, "expected run <prompt> ... args")
+	assert.Equal(t, "run", calls[0].Args[0])
+	assert.Contains(t, calls[0].Args[1], "You are a specialized code generator", "system prompt should be inlined in first-turn message")
+	assert.Contains(t, calls[0].Args[1], "Generate test code", "user prompt should remain in first-turn message")
 }
 
-func TestOpenCodeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name       string
 		mockOutput []byte
-		wantErr    bool
+		expectErr  string // error message substring to check
 	}{
 		{
-			name:       "no session in output",
-			mockOutput: []byte("Code generated successfully\nNo session information available"),
-			wantErr:    false,
+			name:       "malformed JSON returns empty sessionID",
+			mockOutput: []byte("plain text output with no JSON"),
+			expectErr:  "",
 		},
 		{
-			name:       "malformed session line",
-			mockOutput: []byte("Starting...\nSession \nCode output here"),
-			wantErr:    false,
+			name:       "missing sessionID field",
+			mockOutput: []byte(`{"type":"step_start","timestamp":1234567890}`),
+			expectErr:  "",
+		},
+		{
+			name:       "sessionID is null",
+			mockOutput: []byte(`{"type":"step_start","sessionID":null}`),
+			expectErr:  "",
 		},
 		{
 			name:       "empty output",
 			mockOutput: []byte(""),
-			wantErr:    false,
+			expectErr:  "",
 		},
 	}
 
@@ -186,23 +159,19 @@ func TestOpenCodeProvider_ExecuteConversation_GracefulFallback(t *testing.T) {
 
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 			state := workflow.NewConversationState("System prompt")
-			state.SessionID = "previous-session-id"
 
 			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
 
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				// Extraction failed, SessionID should be empty for stateless fallback
-				assert.Empty(t, result.State.SessionID)
-			}
+			// Extraction failures should not cause ExecuteConversation to error
+			// They should gracefully fall back to empty SessionID
+			require.NoError(t, err, "ExecuteConversation should succeed even with bad extraction")
+			require.NotNil(t, result)
+			assert.Empty(t, result.State.SessionID, "SessionID should be empty when extraction fails")
 		})
 	}
 }
 
-func TestOpenCodeProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_InputValidation(t *testing.T) {
 	provider := NewOpenCodeProvider()
 	state := workflow.NewConversationState("")
 
@@ -221,19 +190,24 @@ func TestOpenCodeProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			prompt: "   \n  \t  ",
 			state:  state,
 		},
+		{
+			name:   "nil state",
+			prompt: "valid prompt",
+			state:  nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, nil, nil, nil)
 
-			assert.Error(t, err)
+			assert.Error(t, err, "should validate inputs")
 			assert.Nil(t, result)
 		})
 	}
 }
 
-func TestOpenCodeProvider_ExecuteConversation_ContextErrors(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("output"), nil)
 
@@ -249,7 +223,7 @@ func TestOpenCodeProvider_ExecuteConversation_ContextErrors(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestOpenCodeProvider_ExecuteConversation_CLIErrors(t *testing.T) {
+func TestOpenCodeProvider_ExecuteConversation_CLIExecutionFailure(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte(""), nil)
 	mockExec.SetError(assert.AnError)

@@ -2,7 +2,6 @@ package agents
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -88,16 +87,21 @@ func tryParseJSONResponse(output string) map[string]any {
 	return jsonResp
 }
 
-// extractSessionIDFromLines scans output line-by-line for a "Session: <id>" line.
-// Returns empty string and error if not found (caller falls back to stateless).
-func extractSessionIDFromLines(output string) (string, error) {
-	for line := range strings.SplitSeq(output, "\n") {
-		if id, ok := strings.CutPrefix(line, "Session: "); ok {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				return id, nil
-			}
+// findFirstNDJSONEvent scans NDJSON output and returns the first parsed event
+// whose "type" field equals eventType. Returns nil if no match is found.
+func findFirstNDJSONEvent(output, eventType string) map[string]any {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var evt map[string]any
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+		if t, ok := evt["type"].(string); ok && t == eventType {
+			return evt
 		}
 	}
-	return "", fmt.Errorf("session_id not found in output")
+	return nil
 }

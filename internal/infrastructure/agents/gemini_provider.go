@@ -2,12 +2,10 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
-	"slices"
 	"strings"
 	"time"
 
@@ -42,10 +40,6 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
-	}
-
-	if err := validateGeminiOptions(options); err != nil {
-		return nil, err
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -106,10 +100,6 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		return nil, errors.New("prompt cannot be empty")
 	}
 
-	if err := validateGeminiOptions(options); err != nil {
-		return nil, err
-	}
-
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("gemini provider: %w", err)
 	}
@@ -121,26 +111,25 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
+	// Gemini CLI has no --system-prompt flag; inline the system prompt into
+	// the first turn's message so it reaches the model. Subsequent turns
+	// rely on --resume and must not re-send the system prompt.
+	effectivePrompt := prompt
 	var args []string
 	if workingState.SessionID != "" {
-		args = []string{"--resume", workingState.SessionID, "-p", prompt}
+		args = []string{"--resume", workingState.SessionID, "-p", effectivePrompt}
 	} else {
-		args = []string{"-p", prompt}
-		// First turn only: pass system prompt if provided
 		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			args = append([]string{"--system-prompt", sysPrompt}, args...)
+			effectivePrompt = sysPrompt + "\n\n" + prompt
 		}
+		args = []string{"-p", effectivePrompt}
 	}
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)
 	}
-	if outputFormat, ok := getStringOption(options, "output_format"); ok {
-		if outputFormat == "json" {
-			outputFormat = "stream-json"
-		}
-		args = append([]string{"--output-format", outputFormat}, args...)
-	}
+	// Force stream-json unconditionally for reliable session ID extraction.
+	args = append([]string{"--output-format", "stream-json"}, args...)
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
@@ -161,7 +150,7 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 	}
 
 	// Extract session ID for future resume turns; continue stateless on failure.
-	if sessionID, extractErr := extractSessionIDFromLines(outputStr); extractErr == nil {
+	if sessionID, err := p.extractSessionID(outputStr); err == nil {
 		workingState.SessionID = sessionID
 	} else {
 		workingState.SessionID = ""
@@ -187,22 +176,9 @@ func (p *GeminiProvider) ExecuteConversation(ctx context.Context, state *workflo
 		CompletedAt:     completedAt,
 	}
 
-	if options != nil {
-		if format, ok := options["output_format"].(string); ok && format == "json" {
-			var jsonResp map[string]any
-			if err := json.Unmarshal(output, &jsonResp); err != nil {
-				return nil, fmt.Errorf("failed to parse JSON output: %w", err)
-			}
-			result.Response = jsonResp
-		}
-	}
-
 	return result, nil
 }
 
-// extractSessionID parses a session identifier from Gemini CLI output.
-// Looks for a "Session: <id>" line and returns the trimmed ID.
-// Returns empty string and error if not found (caller falls back to stateless).
 func (p *GeminiProvider) Name() string {
 	return "gemini"
 }
@@ -215,18 +191,28 @@ func (p *GeminiProvider) Validate() error {
 	return nil
 }
 
-// validateGeminiOptions validates provider-specific options.
-func validateGeminiOptions(options map[string]any) error {
-	if options == nil {
-		return nil
-	}
+func (p *GeminiProvider) extractInitEvent(output string) map[string]any {
+	return findFirstNDJSONEvent(output, "init")
+}
 
-	if model, ok := getStringOption(options, "model"); ok {
-		validModels := []string{"gemini-pro", "gemini-pro-vision", "gemini-ultra"}
-		if !slices.Contains(validModels, model) {
-			return fmt.Errorf("unknown model: %s", model)
-		}
+func (p *GeminiProvider) extractSessionID(output string) (string, error) {
+	if output == "" {
+		return "", errors.New("empty output")
 	}
-
-	return nil
+	evt := p.extractInitEvent(output)
+	if evt == nil {
+		return "", errors.New("init event not found")
+	}
+	sessionIDVal, ok := evt["session_id"]
+	if !ok || sessionIDVal == nil {
+		return "", errors.New("session_id missing")
+	}
+	str, ok := sessionIDVal.(string)
+	if !ok {
+		return "", errors.New("session_id is not a string")
+	}
+	if str == "" {
+		return "", errors.New("session_id is empty")
+	}
+	return str, nil
 }

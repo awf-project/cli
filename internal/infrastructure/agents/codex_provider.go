@@ -52,14 +52,11 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 
 	args := []string{"exec", "--json", prompt}
 
-	if language, ok := getStringOption(options, "language"); ok {
-		args = append(args, "--language", language)
-	}
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		args = append(args, "--yolo")
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
 	}
 
 	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "codex", stdout, stderr, args...)
@@ -106,38 +103,25 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	// Only session IDs with the "codex-" prefix (issued by the Codex CLI) use the
-	// resume subcommand. Unknown-format IDs skip resume but still suppress system
-	// prompt (the session is ongoing, even if not resumable by subcommand).
-	isResume := strings.HasPrefix(workingState.SessionID, "codex-")
-	if !isResume && workingState.SessionID != "" {
-		// NFR-002: log only a prefix of the session ID to avoid leaking full value.
-		prefixLen := min(10, len(workingState.SessionID))
-		p.logger.Debug("session ID does not have codex- prefix, skipping resume",
-			"session_id_prefix", workingState.SessionID[:prefixLen])
-	}
-
+	// Codex CLI has no --system-prompt flag; inline the system prompt into
+	// the first turn's message so it reaches the model. Subsequent turns
+	// rely on `resume <thread_id>` and must not re-send the system prompt.
+	effectivePrompt := prompt
 	var args []string
-	if isResume {
-		args = []string{"resume", workingState.SessionID, "--json", prompt}
+	if workingState.SessionID != "" {
+		args = []string{"resume", workingState.SessionID, "--json", effectivePrompt}
 	} else {
-		args = []string{"exec", "--json", prompt}
-		// First turn only (no session yet): pass system prompt if provided
-		if workingState.SessionID == "" {
-			if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-				args = append(args, "--system-prompt", sysPrompt)
-			}
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			effectivePrompt = sysPrompt + "\n\n" + prompt
 		}
+		args = []string{"exec", "--json", effectivePrompt}
 	}
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
 	}
-	if language, ok := getStringOption(options, "language"); ok {
-		args = append(args, "--language", language)
-	}
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		args = append(args, "--yolo")
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
 	}
 
 	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "codex", stdout, stderr, args...)
@@ -155,8 +139,8 @@ func (p *CodexProvider) ExecuteConversation(ctx context.Context, state *workflow
 		outputStr = " "
 	}
 
-	// Extract session ID for future resume turns; log and continue if not found.
-	if sessionID, extractErr := extractSessionIDFromLines(outputStr); extractErr == nil {
+	// Extract session ID for future resume turns; continue if not found.
+	if sessionID, err := p.extractSessionID(outputStr); err == nil {
 		workingState.SessionID = sessionID
 	} else {
 		workingState.SessionID = ""
@@ -197,4 +181,26 @@ func (p *CodexProvider) Validate() error {
 		return fmt.Errorf("codex CLI not found in PATH: %w", err)
 	}
 	return nil
+}
+
+func (p *CodexProvider) extractThreadStartedEvent(output string) map[string]any {
+	return findFirstNDJSONEvent(output, "thread.started")
+}
+
+func (p *CodexProvider) extractSessionID(output string) (string, error) {
+	if output == "" {
+		return "", errors.New("empty output")
+	}
+	evt := p.extractThreadStartedEvent(output)
+	if evt == nil {
+		return "", errors.New("thread.started event not found")
+	}
+	threadIDVal, ok := evt["thread_id"]
+	if !ok || threadIDVal == nil {
+		return "", errors.New("thread_id missing")
+	}
+	if str, ok := threadIDVal.(string); ok && str != "" {
+		return str, nil
+	}
+	return "", errors.New("thread_id is not a non-empty string")
 }

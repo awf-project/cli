@@ -2,7 +2,6 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -75,17 +74,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
 	}
 
-	if options != nil {
-		if framework, ok := options["framework"].(string); ok {
-			args = append(args, "--framework", framework)
-		}
-		if verbose, ok := options["verbose"].(bool); ok && verbose {
-			args = append(args, "--verbose")
-		}
-		if outputDir, ok := options["output_dir"].(string); ok {
-			args = append(args, "--output", outputDir)
-		}
-	}
+	args = applyOpenCodeCLIOptions(args, options)
 
 	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
 	completedAt := time.Now()
@@ -107,16 +96,29 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		Tokens:      estimateTokens(outputStr),
 	}
 
-	// Try to parse JSON response if output looks like JSON
-	trimmedOutput := strings.TrimSpace(outputStr)
-	if strings.HasPrefix(trimmedOutput, "{") && strings.HasSuffix(trimmedOutput, "}") {
-		var jsonResp map[string]any
-		if err := json.Unmarshal([]byte(trimmedOutput), &jsonResp); err == nil {
-			result.Response = jsonResp
-		}
+	if jsonResp := tryParseJSONResponse(outputStr); jsonResp != nil {
+		result.Response = jsonResp
 	}
 
 	return result, nil
+}
+
+// applyOpenCodeCLIOptions appends shared OpenCode flag mappings (framework,
+// verbose, output_dir) to an existing argv slice.
+func applyOpenCodeCLIOptions(args []string, options map[string]any) []string {
+	if options == nil {
+		return args
+	}
+	if framework, ok := options["framework"].(string); ok {
+		args = append(args, "--framework", framework)
+	}
+	if verbose, ok := options["verbose"].(bool); ok && verbose {
+		args = append(args, "--verbose")
+	}
+	if outputDir, ok := options["output_dir"].(string); ok {
+		args = append(args, "--output", outputDir)
+	}
+	return args
 }
 
 // ExecuteConversation invokes the OpenCode CLI with conversation history for multi-turn interactions.
@@ -146,7 +148,17 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 		return nil, fmt.Errorf("failed to add user turn: %w", err)
 	}
 
-	args := []string{"run", prompt}
+	// OpenCode CLI has no --system-prompt flag; inline the system prompt
+	// into the first turn's message so it reaches the model. Subsequent turns
+	// rely on session resume and must not re-send the system prompt.
+	effectivePrompt := prompt
+	if len(state.Turns) == 0 {
+		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+			effectivePrompt = sysPrompt + "\n\n" + prompt
+		}
+	}
+
+	args := []string{"run", effectivePrompt}
 
 	// Map user-provided output_format to opencode --format flag (same logic as Execute).
 	args = append(args, "--format", resolveOpenCodeFormat(options))
@@ -161,26 +173,15 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 	}
 
 	// Resume from previous session if available
-	if workingState.SessionID != "" {
+	switch {
+	case workingState.SessionID != "":
 		args = append(args, "-s", workingState.SessionID)
-	} else {
-		// First turn only: pass system prompt if provided
-		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			args = append(args, "--system-prompt", sysPrompt)
-		}
+	case len(state.Turns) > 0:
+		// Prior turns exist but session ID was lost (extraction failed) - use -c to continue last session
+		args = append(args, "-c")
 	}
 
-	if options != nil {
-		if framework, ok := options["framework"].(string); ok {
-			args = append(args, "--framework", framework)
-		}
-		if verbose, ok := options["verbose"].(bool); ok && verbose {
-			args = append(args, "--verbose")
-		}
-		if outputDir, ok := options["output_dir"].(string); ok {
-			args = append(args, "--output", outputDir)
-		}
-	}
+	args = applyOpenCodeCLIOptions(args, options)
 
 	stdoutBytes, stderrBytes, err := p.executor.Run(ctx, "opencode", stdout, stderr, args...)
 	completedAt := time.Now()
@@ -192,7 +193,7 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
 	output = append(output, stdoutBytes...)
 	output = append(output, stderrBytes...)
-	outputStr := strings.TrimSpace(string(output))
+	outputStr := string(output)
 	if outputStr == "" {
 		outputStr = " "
 	}
@@ -204,10 +205,9 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 	}
 
 	// Extract session ID for future turns - gracefully fall back to empty SessionID on error
-	if sessionID, err := extractSessionIDFromLines(outputStr); err == nil && sessionID != "" {
+	if sessionID, err := p.extractSessionID(outputStr); err == nil && sessionID != "" {
 		workingState.SessionID = sessionID
 	} else {
-		// If extraction fails, clear SessionID for stateless fallback
 		workingState.SessionID = ""
 	}
 
@@ -284,4 +284,26 @@ func validateOpenCodeOptions(options map[string]any) error {
 	}
 
 	return nil
+}
+
+func (p *OpenCodeProvider) extractStepStartEvent(output string) (map[string]any, error) {
+	evt := findFirstNDJSONEvent(output, "step_start")
+	if evt == nil {
+		return nil, errors.New("no step_start event found in output")
+	}
+	return evt, nil
+}
+
+func (p *OpenCodeProvider) extractSessionID(output string) (string, error) {
+	event, err := p.extractStepStartEvent(output)
+	if err != nil {
+		return "", err
+	}
+
+	sessionID, ok := event["sessionID"].(string)
+	if !ok || sessionID == "" {
+		return "", errors.New("sessionID not found or not a string in step_start event")
+	}
+
+	return sessionID, nil
 }
