@@ -453,7 +453,8 @@ func TestOpenCodeProvider_Execute_JSONDetection(t *testing.T) {
 			mockExec.SetOutput(tt.mockOutput, nil)
 			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
+			// F082: Response auto-detection only runs under explicit output_format: json.
+			result, err := provider.Execute(context.Background(), "test prompt", map[string]any{"output_format": "json"}, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)

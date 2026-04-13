@@ -221,10 +221,10 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, err
 	}
 
-	options := step.Agent.Options
-	if options == nil {
-		options = make(map[string]any)
-	}
+	// Clone options to preserve FR-009 immutability of step.Agent.Options,
+	// and inject output_format so baseCLIProvider can route display filtering
+	// identically between executeAgentStep and conversation mode (F082).
+	options := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
 	if step.Agent.SystemPrompt != "" {
 		options["system_prompt"] = step.Agent.SystemPrompt
 	}

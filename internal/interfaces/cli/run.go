@@ -721,12 +721,20 @@ func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionCo
 	}
 }
 
+func displayValueOf(state *workflow.StepState) string {
+	if state.DisplayOutput != "" {
+		return state.DisplayOutput
+	}
+	return state.Output
+}
+
 func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
 	allStates := execCtx.GetAllStepStates()
 	for name, state := range allStates {
-		if state.Output != "" {
+		displayOutput := displayValueOf(&state)
+		if displayOutput != "" {
 			formatter.Printf("\n--- [%s] stdout ---\n", name)
-			formatter.Printf("%s", state.Output)
+			formatter.Printf("%s", displayOutput)
 		}
 		if state.Stderr != "" {
 			formatter.Printf("\n--- [%s] stderr ---\n", name)

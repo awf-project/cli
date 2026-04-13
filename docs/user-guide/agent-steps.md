@@ -540,6 +540,11 @@ process_response:
 
 ## Output Formatting
 
+The `output_format` field serves two purposes:
+
+1. **Post-processing**: Strips markdown code fences and optionally validates JSON (F065)
+2. **Display filtering**: Controls how agent responses appear on terminal during streaming and buffered execution (F082)
+
 When an agent wraps its output in markdown code fences (common with many LLMs), use `output_format` to automatically strip the fences and optionally validate the content:
 
 ```yaml
@@ -644,6 +649,61 @@ analyze:
   prompt: "Analyze this code"
   on_success: next
 ```
+
+### Streaming Output Display
+
+The `output_format` field also controls how agent responses appear on the terminal when running with `awf run --output streaming` or `--output buffered`:
+
+| `output_format` | Streaming Display | Buffered Display | Raw Storage |
+|---|---|---|---|
+| `text` (or omitted) | Human-readable filtered text | Filtered text in summary | Raw NDJSON |
+| `json` | Raw NDJSON (unfiltered) | Raw NDJSON (unfiltered) | Raw NDJSON |
+
+#### Streaming Mode (`--output streaming`)
+
+When running with streaming output, agent responses display incrementally as they're generated:
+
+```bash
+# Raw NDJSON appears on terminal (hard to read)
+awf run code-review --output streaming
+# Output: {"type":"content_block_delta",...}{"type":"content_block_delta",...}
+
+# Human-readable text with default output_format
+awf run code-review --output streaming  # output_format: text (or omitted)
+# Output: The code has several issues...
+```
+
+**Filtering behavior:**
+- `output_format: text` or omitted — Extracted text content displayed (filtered NDJSON)
+- `output_format: json` — Raw NDJSON passed through unchanged
+
+#### Buffered Mode (`--output buffered`)
+
+When running with buffered output, the post-execution summary displays filtered text:
+
+```bash
+awf run code-review --output buffered
+
+# With output_format: text (or omitted):
+# Output of "analyze" step:
+# The code has several issues...
+
+# With output_format: json:
+# Output of "analyze" step:
+# {"type":"content_block_delta",...}
+```
+
+#### Silent Mode (`--output silent`)
+
+Silent mode suppresses all display regardless of `output_format`:
+
+```bash
+awf run code-review --output silent
+# No output displayed (silent mode is absolute)
+# state.Output still contains raw NDJSON for template interpolation
+```
+
+**Note:** `state.Output` always contains the raw NDJSON regardless of display filtering. Filtering only affects terminal display, not data storage.
 
 ### Error Handling
 

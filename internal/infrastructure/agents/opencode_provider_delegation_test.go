@@ -93,7 +93,7 @@ func TestOpenCodeProvider_buildExecuteArgs_HappyPath(t *testing.T) {
 			options: map[string]any{"output_format": "text"},
 			wantArgs: []string{
 				"run", "test prompt",
-				"--format", "default",
+				"--format", "json",
 			},
 			wantErr: false,
 		},

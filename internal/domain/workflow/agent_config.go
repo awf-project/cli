@@ -136,6 +136,7 @@ func (c *AgentConfig) GetEffectivePrompt() string {
 type AgentResult struct {
 	Provider        string         // provider name used
 	Output          string         // raw output from agent CLI
+	DisplayOutput   string         // filtered human-readable output for display (empty when output_format=json or no parser)
 	Response        map[string]any // parsed JSON response (if applicable)
 	Tokens          int            // token usage (if reported by provider)
 	TokensEstimated bool           // true if Tokens is an estimation, false if actual count

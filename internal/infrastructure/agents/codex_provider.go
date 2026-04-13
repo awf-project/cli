@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,14 +49,27 @@ func (p *CodexProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateCodexOptions,
+		parseStreamLine:       p.parseCodexStreamLine,
 	})
 }
 
 func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-	result, _, err := p.base.execute(ctx, prompt, options, stdout, stderr)
+	result, rawOutput, err := p.base.execute(ctx, prompt, options, stdout, stderr)
 	if err != nil {
 		return nil, err
 	}
+
+	// Codex CLI is always invoked with `exec --json` (NDJSON). For text intent,
+	// aggregate assistant message content for state.Output so downstream
+	// interpolation ({{states.step.Output}}) is human-readable (F082).
+	userFormat, _ := getStringOption(options, "output_format")
+	if userFormat != "json" && userFormat != "stream-json" {
+		if extracted := extractDisplayText(rawOutput, p.parseCodexStreamLine); extracted != "" {
+			result.Output = extracted
+			result.Tokens = estimateTokens(extracted)
+		}
+	}
+
 	return result, nil
 }
 
@@ -162,4 +176,33 @@ func isValidCodexModel(model string) bool {
 	}
 	// o-series: "o" followed by a digit (e.g., o1, o3, o4-mini); rejects "ollama", "oracle"
 	return len(model) >= 2 && model[0] == 'o' && model[1] >= '0' && model[1] <= '9'
+}
+
+// parseCodexStreamLine extracts displayable assistant text from Codex CLI's JSON
+// output (`codex exec --json`). Codex emits one JSON object per line with top-level
+// types including:
+//   - "thread.started"   — {thread_id} (ignored; session consumed separately)
+//   - "turn.started"     — (ignored)
+//   - "item.completed"   — {item:{item_type,text}} (surface assistant_message.text)
+//   - "turn.completed"   — (ignored)
+//   - "error"            — {message} (ignored; stderr path already shows it)
+//
+// Only `item.completed` with `item.item_type=="assistant_message"` is surfaced so
+// the live display shows the final reply text. Reasoning items, tool calls, and
+// status events are skipped.
+func (p *CodexProvider) parseCodexStreamLine(line []byte) string {
+	var evt struct {
+		Type string `json:"type"`
+		Item struct {
+			ItemType string `json:"item_type"`
+			Text     string `json:"text"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(line, &evt); err != nil {
+		return ""
+	}
+	if evt.Type != "item.completed" || evt.Item.ItemType != "assistant_message" {
+		return ""
+	}
+	return evt.Item.Text
 }

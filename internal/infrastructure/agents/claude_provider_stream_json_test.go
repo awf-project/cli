@@ -47,11 +47,14 @@ func TestClaudeProvider_Execute_OutputFormatMapping(t *testing.T) {
 			wantVerbose:    true,
 		},
 		{
-			name:           "explicit text format is respected (no stream-json override)",
+			// F082: Claude CLI is always invoked with stream-json; the text vs
+			// json distinction is handled by the application-layer display filter,
+			// not by toggling Claude's --output-format flag.
+			name:           "explicit text format also maps to stream-json (F082)",
 			options:        map[string]any{"output_format": "text"},
-			mockOutput:     []byte("test output"),
-			wantFormatFlag: "text",
-			wantVerbose:    false,
+			mockOutput:     ndjson,
+			wantFormatFlag: "stream-json",
+			wantVerbose:    true,
 		},
 	}
 

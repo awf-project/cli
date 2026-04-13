@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -50,6 +51,7 @@ func (p *OpenCodeProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateOpenCodeOptions,
+		parseStreamLine:       p.parseOpencodeStreamLine,
 	})
 }
 
@@ -60,8 +62,19 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		return nil, err
 	}
 
-	if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
-		result.Response = jsonResp
+	// OpenCode CLI is always invoked with --format json (NDJSON). For text intent,
+	// aggregate assistant text parts for state.Output; for json intent, expose the
+	// parsed result via Response (F082).
+	userFormat, _ := getStringOption(options, "output_format")
+	if userFormat == "json" || userFormat == "stream-json" {
+		if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
+			result.Response = jsonResp
+		}
+	} else {
+		if extracted := extractDisplayText(rawOutput, p.parseOpencodeStreamLine); extracted != "" {
+			result.Output = extracted
+			result.Tokens = estimateTokens(extracted)
+		}
 	}
 
 	return result, nil
@@ -80,7 +93,11 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 // opencode CLI syntax: opencode run "prompt" --format <json|default> [--model X] [--framework F] [--verbose] [--output DIR]
 func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"run", prompt}
-	args = append(args, "--format", resolveOpenCodeFormat(options))
+	// Always request NDJSON: session ID extraction, display filter, and raw
+	// display (output_format: json) all consume stream-json events. For
+	// output_format: text, the F082 display filter extracts assistant text
+	// from the "text" events (consistent with Claude's stream-json approach).
+	args = append(args, "--format", "json")
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
@@ -107,7 +124,11 @@ func (p *OpenCodeProvider) buildConversationArgs(state *workflow.ConversationSta
 	}
 
 	args := []string{"run", effectivePrompt}
-	args = append(args, "--format", resolveOpenCodeFormat(options))
+	// Always request NDJSON: session ID extraction, display filter, and raw
+	// display (output_format: json) all consume stream-json events. For
+	// output_format: text, the F082 display filter extracts assistant text
+	// from the "text" events (consistent with Claude's stream-json approach).
+	args = append(args, "--format", "json")
 
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append(args, "--model", model)
@@ -161,29 +182,6 @@ func (p *OpenCodeProvider) Validate() error {
 	return nil
 }
 
-// resolveOpenCodeFormat maps the user-provided output_format option to the
-// matching opencode CLI --format value. opencode supports:
-//   - "default": formatted human-readable output
-//   - "json": NDJSON events (required by session ID extraction and
-//     compatible with --output=streaming for live events)
-//
-// Mapping:
-//   - output_format: "text"|"default" → "default"
-//   - output_format: "json"           → "json"
-//   - absent or any other value       → "json" (default, preserves prior behavior)
-func resolveOpenCodeFormat(options map[string]any) string {
-	format, ok := getStringOption(options, "output_format")
-	if !ok {
-		return "json"
-	}
-	switch format {
-	case "text", "default":
-		return "default"
-	default:
-		return "json"
-	}
-}
-
 // validateOpenCodeOptions validates provider-specific options.
 func validateOpenCodeOptions(options map[string]any) error {
 	if options == nil {
@@ -225,4 +223,29 @@ func (p *OpenCodeProvider) extractSessionID(output string) (string, error) {
 	}
 
 	return sessionID, nil
+}
+
+// parseOpencodeStreamLine extracts displayable assistant text from OpenCode CLI's
+// stream-json output. OpenCode CLI (`opencode run --format json`) emits one JSON
+// object per line with these top-level types:
+//   - "step_start"  — {sessionID, part} (ignored; session ID consumed separately)
+//   - "text"        — {part:{text}} (surface the text field)
+//   - "step_finish" — {sessionID, part:{tokens, cost}} (ignored)
+//
+// Only "text" events are surfaced to the live display. All other events (step
+// metadata, tool use, reasoning blocks) are skipped.
+func (p *OpenCodeProvider) parseOpencodeStreamLine(line []byte) string {
+	var evt struct {
+		Type string `json:"type"`
+		Part struct {
+			Text string `json:"text"`
+		} `json:"part"`
+	}
+	if err := json.Unmarshal(line, &evt); err != nil {
+		return ""
+	}
+	if evt.Type != "text" {
+		return ""
+	}
+	return evt.Part.Text
 }

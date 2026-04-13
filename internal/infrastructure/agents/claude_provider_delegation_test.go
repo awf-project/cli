@@ -321,9 +321,12 @@ func TestClaudeProvider_OutputFormatMapping(t *testing.T) {
 		inputFmt string
 		expected string
 	}{
+		// Claude CLI is always invoked with stream-json regardless of the
+		// user-facing output_format; the F082 display filter and application
+		// layer decide text vs json at a higher level.
 		{"json maps to stream-json", "json", "stream-json"},
 		{"stream-json stays stream-json", "stream-json", "stream-json"},
-		{"text stays text", "text", "text"},
+		{"text also maps to stream-json (F082)", "text", "stream-json"},
 	}
 
 	for _, tt := range tests {
