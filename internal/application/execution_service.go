@@ -2034,7 +2034,8 @@ func (s *ExecutionService) executeAgentStep(
 
 	// Execute the agent
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
-	result, execErr := provider.Execute(stepCtx, resolvedPrompt, step.Agent.Options, s.stdoutWriter, s.stderrWriter)
+	opts := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
+	result, execErr := provider.Execute(stepCtx, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
 
 	// Record step state
 	state := workflow.StepState{
@@ -2047,6 +2048,7 @@ func (s *ExecutionService) executeAgentStep(
 	// Populate state from result
 	if result != nil {
 		state.Output = result.Output
+		state.DisplayOutput = result.DisplayOutput
 		// AC5: JSON auto-parsed to states.step_name.Response
 		state.Response = result.Response
 		// AC6: Token usage in states.step_name.tokens_used
@@ -2194,6 +2196,7 @@ func (s *ExecutionService) executeConversationStep(
 
 	if result != nil {
 		state.Output = result.Output
+		state.DisplayOutput = result.DisplayOutput
 		state.Response = result.Response
 		state.TokensUsed = result.TokensTotal
 		state.Conversation = result.State
@@ -2224,6 +2227,26 @@ func (s *ExecutionService) executeConversationStep(
 
 	// 10. Resolve next step using transitions or OnSuccess
 	return s.resolveNextStep(step, intCtx, true)
+}
+
+// cloneAndInjectOutputFormat shallow-clones opts and injects output_format as string.
+// The original map is never mutated (FR-009). Precedence: an explicit
+// options["output_format"] set by the user wins (display-only intent); otherwise
+// the top-level step.Agent.OutputFormat is injected; otherwise defaults to text.
+// This keeps F065 post-processing (top-level) decoupled from F082 display intent (options).
+func cloneAndInjectOutputFormat(opts map[string]any, format workflow.OutputFormat) map[string]any {
+	cloned := make(map[string]any, len(opts)+2)
+	for k, v := range opts {
+		cloned[k] = v
+	}
+	if _, userSet := cloned["output_format"]; userSet {
+		return cloned
+	}
+	if format == workflow.OutputFormatNone {
+		format = workflow.OutputFormatText
+	}
+	cloned["output_format"] = string(format)
+	return cloned
 }
 
 // resolveOperationInputs resolves all string values in operation inputs via interpolation.

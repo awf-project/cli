@@ -45,6 +45,9 @@ type StepState struct {
 
 	// C069: Structured output from custom step types, accessible via {{states.step_name.Data.key}}
 	Data map[string]any
+
+	// F082: Filtered human-readable output for display; not persisted (derivable from Output).
+	DisplayOutput string `json:"-"`
 }
 
 // LoopContext holds the current loop iteration state.

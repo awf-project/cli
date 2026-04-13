@@ -1,6 +1,7 @@
 package interpolation_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -206,6 +207,43 @@ func TestTemplateResolver_StepStateDataData(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestStepStateData_DisplayOutputNotResolvable guards F082 FR-008: the UI-only
+// DisplayOutput field on domain workflow.StepState MUST NOT be exposed to template
+// interpolation. If a future change adds a DisplayOutput field to StepStateData or
+// copies it into Data/Response, this test breaks — by design.
+//
+// Two assertions:
+//  1. Structural: interpolation.StepStateData has no DisplayOutput field (reflection).
+//  2. Behavioral: `{{.states.step.DisplayOutput}}` resolves to `<no value>`, not the
+//     filtered text that may live on the domain StepState.
+func TestStepStateData_DisplayOutputNotResolvable(t *testing.T) {
+	// Structural guard.
+	typ := reflect.TypeOf(interpolation.StepStateData{})
+	_, found := typ.FieldByName("DisplayOutput")
+	assert.False(t, found,
+		"interpolation.StepStateData must NOT expose DisplayOutput — it is a UI-only field (F082 FR-008)")
+
+	// Behavioral guard: AWF's TemplateResolver rejects unknown reference fields hard,
+	// so any template referencing DisplayOutput must fail to resolve.
+	resolver := interpolation.NewTemplateResolver()
+	ctx := interpolation.NewContext()
+	ctx.States = map[string]interpolation.StepStateData{
+		"agent_step": {
+			Output: `{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}`,
+		},
+	}
+
+	_, err := resolver.Resolve("{{.states.agent_step.DisplayOutput}}", ctx)
+	require.Error(t, err, "DisplayOutput must not resolve through the interpolation layer")
+	assert.Contains(t, err.Error(), "DisplayOutput",
+		"error must reference the rejected field name")
+
+	// Sanity: raw Output still resolves.
+	got, err := resolver.Resolve("{{.states.agent_step.Output}}", ctx)
+	require.NoError(t, err)
+	assert.Contains(t, got, "text_delta")
 }
 
 func TestStepStateData_DataFieldType(t *testing.T) {

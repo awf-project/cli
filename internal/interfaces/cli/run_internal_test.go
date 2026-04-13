@@ -97,9 +97,10 @@ func TestShowExecutionDetails(t *testing.T) {
 
 func TestShowStepOutputs(t *testing.T) {
 	tests := []struct {
-		name    string
-		execCtx *workflow.ExecutionContext
-		wantOut []string
+		name       string
+		execCtx    *workflow.ExecutionContext
+		wantOut    []string
+		notWantOut []string
 	}{
 		{
 			name: "step with stdout only",
@@ -141,6 +142,65 @@ func TestShowStepOutputs(t *testing.T) {
 			}(),
 			wantOut: []string{"clean"},
 		},
+		{
+			name: "prefers DisplayOutput over Output when non-empty",
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-4", "wf")
+				ctx.States["agent-step"] = workflow.StepState{
+					Name:          "agent-step",
+					Status:        workflow.StatusCompleted,
+					DisplayOutput: "Filtered text content",
+					Output:        `{"raw":"ndjson","line":1}`,
+				}
+				return ctx
+			}(),
+			wantOut:    []string{"agent-step", "stdout", "Filtered text content"},
+			notWantOut: []string{`{"raw":"ndjson"}`},
+		},
+		{
+			name: "falls back to Output when DisplayOutput empty",
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-5", "wf")
+				ctx.States["plain-step"] = workflow.StepState{
+					Name:          "plain-step",
+					Status:        workflow.StatusCompleted,
+					DisplayOutput: "",
+					Output:        "Raw text output",
+				}
+				return ctx
+			}(),
+			wantOut: []string{"plain-step", "stdout", "Raw text output"},
+		},
+		{
+			name: "success feedback when both DisplayOutput and Output empty",
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-6", "wf")
+				ctx.States["silent-agent"] = workflow.StepState{
+					Name:          "silent-agent",
+					Status:        workflow.StatusCompleted,
+					DisplayOutput: "",
+					Output:        "",
+					Stderr:        "",
+				}
+				return ctx
+			}(),
+			wantOut: []string{"silent-agent"},
+		},
+		{
+			name: "uses Output for success feedback detection, not DisplayOutput",
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-7", "wf")
+				ctx.States["output-step"] = workflow.StepState{
+					Name:          "output-step",
+					Status:        workflow.StatusCompleted,
+					DisplayOutput: "",
+					Output:        "some raw output",
+					Stderr:        "",
+				}
+				return ctx
+			}(),
+			wantOut: []string{"output-step", "stdout", "some raw output"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -152,8 +212,58 @@ func TestShowStepOutputs(t *testing.T) {
 
 			output := buf.String()
 			for _, want := range tt.wantOut {
-				assert.Contains(t, output, want)
+				assert.Contains(t, output, want, "output should contain %q", want)
 			}
+			for _, notWant := range tt.notWantOut {
+				assert.NotContains(t, output, notWant, "output should not contain %q", notWant)
+			}
+		})
+	}
+}
+
+func TestDisplayValueOf(t *testing.T) {
+	tests := []struct {
+		name           string
+		displayOutput  string
+		output         string
+		expectedResult string
+	}{
+		{
+			name:           "prefers DisplayOutput when non-empty",
+			displayOutput:  "Filtered text content",
+			output:         `{"raw":"json"}`,
+			expectedResult: "Filtered text content",
+		},
+		{
+			name:           "falls back to Output when DisplayOutput empty",
+			displayOutput:  "",
+			output:         "Raw output content",
+			expectedResult: "Raw output content",
+		},
+		{
+			name:           "both empty returns empty string",
+			displayOutput:  "",
+			output:         "",
+			expectedResult: "",
+		},
+		{
+			name:           "DisplayOutput takes precedence over Output",
+			displayOutput:  "Display text",
+			output:         "Raw text should be ignored",
+			expectedResult: "Display text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := &workflow.StepState{
+				DisplayOutput: tt.displayOutput,
+				Output:        tt.output,
+			}
+
+			result := displayValueOf(state)
+
+			assert.Equal(t, tt.expectedResult, result)
 		})
 	}
 }

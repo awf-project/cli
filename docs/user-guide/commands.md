@@ -163,8 +163,10 @@ awf run <workflow> [flags]
 | Mode | Description |
 |------|-------------|
 | `silent` | No command output displayed (default) |
-| `streaming` | Real-time output with [OUT]/[ERR] prefixes |
-| `buffered` | Show output after each step completes |
+| `streaming` | Real-time output with [OUT]/[ERR] prefixes; for agent steps, displays human-readable text (or raw NDJSON if `output_format: json`) |
+| `buffered` | Show output after each step completes; for agent steps, displays filtered text in post-execution summary (or raw NDJSON if `output_format: json`) |
+
+**Note:** For agent steps, the `output_format` field controls display filtering: `text` or omitted (default) shows human-readable output; `json` shows raw NDJSON. See [Output Formatting](agent-steps.md#streaming-output-display) for details.
 
 ### Examples
 

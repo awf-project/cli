@@ -272,14 +272,14 @@ func TestGeminiProvider_Migration_ExecuteConversation_CLIError(t *testing.T) {
 }
 
 // TestGeminiProvider_Migration_BuildExecuteArgs validates hook method exists
-// and constructs the -p <prompt> argument pair.
+// and forces stream-json NDJSON for consistent F082 display/text extraction.
 func TestGeminiProvider_Migration_BuildExecuteArgs(t *testing.T) {
 	provider := NewGeminiProvider()
 
 	args, err := provider.buildExecuteArgs("test prompt", nil)
 
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"-p", "test prompt"}, args)
+	assert.Equal(t, []string{"--output-format", "stream-json", "-p", "test prompt"}, args)
 }
 
 // TestGeminiProvider_Migration_BuildConversationArgs validates conversation args hook:
@@ -414,14 +414,15 @@ func TestGeminiProvider_Migration_Execute_OutputWithStderr(t *testing.T) {
 	assert.Equal(t, "stdout contentstderr content", result.Output)
 }
 
-// TestGeminiProvider_Migration_Execute_JSONResponse validates JSON response parsing.
+// TestGeminiProvider_Migration_Execute_JSONResponse validates JSON response parsing
+// when the caller explicitly requests output_format: json (F082 intent routing).
 func TestGeminiProvider_Migration_Execute_JSONResponse(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	jsonOutput := []byte(`{"result":"success","data":{"value":42}}`)
 	mockExec.SetOutput(jsonOutput, nil)
 	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+	result, err := provider.Execute(context.Background(), "test", map[string]any{"output_format": "json"}, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

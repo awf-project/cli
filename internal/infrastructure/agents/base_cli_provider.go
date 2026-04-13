@@ -14,13 +14,14 @@ import (
 )
 
 // cliProviderHooks captures provider-specific behavior as function values.
-// Optional hooks (extractTextContent, validateOptions) may be nil.
+// Optional hooks (extractTextContent, validateOptions, parseStreamLine) may be nil.
 type cliProviderHooks struct {
 	buildExecuteArgs      func(prompt string, options map[string]any) ([]string, error)
 	buildConversationArgs func(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error)
 	extractSessionID      func(output string) (string, error)
 	extractTextContent    func(output string) string
 	validateOptions       func(options map[string]any) error
+	parseStreamLine       LineExtractor
 }
 
 // baseCLIProvider encapsulates the shared Execute and ExecuteConversation
@@ -54,6 +55,19 @@ func combineOutput(stdoutBytes, stderrBytes []byte) string {
 	return string(output)
 }
 
+func wantsRawDisplay(options map[string]any) bool {
+	v, ok := getStringOption(options, "output_format")
+	return ok && v == "json"
+}
+
+func (b *baseCLIProvider) applyStreamFilter(stdout io.Writer, rawDisplay bool) (io.Writer, *StreamFilterWriter) {
+	if b.hooks.parseStreamLine != nil && !rawDisplay && stdout != nil {
+		f := NewStreamFilterWriter(stdout, b.hooks.parseStreamLine)
+		return f, f
+	}
+	return stdout, nil
+}
+
 // execute runs the provider-specific CLI command and returns the AgentResult,
 // the raw output string (for Response field population by callers), and any error.
 func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, string, error) {
@@ -78,8 +92,13 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		return nil, "", err
 	}
 
-	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, stdout, stderr, args...)
+	rawDisplay := wantsRawDisplay(options)
+	wrappedStdout, filter := b.applyStreamFilter(stdout, rawDisplay)
+	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
+	if filter != nil {
+		_ = filter.Flush()
+	}
 
 	if err != nil {
 		return nil, "", fmt.Errorf("%s execution failed: %w", b.name, err)
@@ -92,9 +111,15 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		outputStr = " "
 	}
 
+	var displayOutput string
+	if !rawDisplay {
+		displayOutput = extractDisplayText(rawOutput, b.hooks.parseStreamLine)
+	}
+
 	result := &workflow.AgentResult{
 		Provider:        b.name,
 		Output:          outputStr,
+		DisplayOutput:   displayOutput,
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
 		Tokens:          estimateTokens(outputStr),
@@ -141,8 +166,13 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 		return nil, "", fmt.Errorf("failed to add user turn: %w", addErr)
 	}
 
-	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, stdout, stderr, args...)
+	rawDisplay := wantsRawDisplay(options)
+	wrappedStdout, filter := b.applyStreamFilter(stdout, rawDisplay)
+	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
+	if filter != nil {
+		_ = filter.Flush()
+	}
 
 	if err != nil {
 		return nil, "", fmt.Errorf("%s execution failed: %w", b.name, err)
@@ -176,10 +206,16 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 
 	inputTokens := estimateInputTokens(workingState.Turns, 1)
 
+	var displayOutput string
+	if !rawDisplay {
+		displayOutput = extractDisplayText(rawOutput, b.hooks.parseStreamLine)
+	}
+
 	result := &workflow.ConversationResult{
 		Provider:        b.name,
 		State:           workingState,
 		Output:          outputStr,
+		DisplayOutput:   displayOutput,
 		TokensInput:     inputTokens,
 		TokensOutput:    assistantTurn.Tokens,
 		TokensTotal:     inputTokens + assistantTurn.Tokens,

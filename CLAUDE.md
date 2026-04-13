@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Document discovered runtime bugs in .specify/implementation/ISSUE/bug/ directory before implementation; prevents scope creep and enables separate tracking from test fixes
-- Own timeout responsibility in application layer via context.WithTimeout; infrastructure adapters must respect context cancellation without enforcing additional timeouts
 - Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
 - Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
 - Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
@@ -239,6 +237,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Implement per-provider flag mapping without shared abstraction when CLI syntax diverges fundamentally; document divergence (Claude: --flag-name, Gemini: --flag-name=value, Codex: --flag-name) inline
 - Synchronize provider CLI flag changes across both implementation files and central options configuration (options.go); verify declarations and validation rules align
 - When extracting shared infrastructure behavior across multiple provider implementations, apply the delegation pattern uniformly; partial refactoring creates inconsistent ownership
+
+- When wiring optional transformations across multiple execution paths (ExecuteConversation, runWorkflow, etc.), apply consistently to all paths; missing stubs in any path indicates incomplete cross-layer wiring
+
+- When adding hook fields to shared infrastructure types, implement (with stubs acceptable for future providers) across all concrete providers in the same layer; missing implementations in any provider blocks deployment
 
 ## Common Pitfalls
 
@@ -286,8 +288,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Test Conventions
 
-- Write unit tests for prompt file validation, interpolation, and YAML mapping before integration tests; use table-driven tests for path resolution scenarios
-- Never use switch statements to populate table-driven test variables; declare all fields in struct literals to prevent silent zero-value failures from missed case names
 - Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 - Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
@@ -306,6 +306,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 - When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
 - Create separate test files for delegation patterns (*_delegation_test.go) to validate shared behavior independently from provider-specific unit tests
+
+- When adding fields to internal state types (DisplayOutput, cache fields, etc.), write explicit tests verifying the field is NOT resolvable in template interpolation context; prevents accidental exposure of implementation details
+
+- Add BenchmarkXX functions for new I/O processing components; measure throughput, memory allocation, and verify capacity constraints (1MB buffer, etc.) are respected
 
 ## Review Standards
 

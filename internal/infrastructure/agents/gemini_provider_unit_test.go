@@ -113,7 +113,10 @@ func TestGeminiProvider_Execute_JSONParsing(t *testing.T) {
 			mockExec.SetOutput(tt.mockStdout, nil)
 			provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
 
-			result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+			// F082: Response is only populated when caller explicitly asks for
+			// output_format: json. Auto-detection from raw output no longer happens
+			// in text intent (default).
+			result, err := provider.Execute(context.Background(), "test", map[string]any{"output_format": "json"}, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)

@@ -326,6 +326,32 @@ func TestStepState_JSONField_NumberTypes(t *testing.T) {
 	assert.Equal(t, float64(1e10), jsonObj["large"])
 }
 
+// Component: T001
+// Feature: F082
+func TestStepState_DisplayOutput_AbsentFromMarshaledJSON(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "agent-step",
+		Status:        workflow.StatusCompleted,
+		Output:        `{"type":"result","text":"hello"}`,
+		DisplayOutput: "hello",
+	}
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(data, &raw)
+	require.NoError(t, err)
+
+	assert.NotContains(t, raw, "DisplayOutput", "DisplayOutput must not appear in marshaled JSON")
+
+	var decoded workflow.StepState
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Empty(t, decoded.DisplayOutput, "DisplayOutput must be empty after round-trip JSON deserialization")
+}
+
 func TestStepState_JSONField_ArrayTypes(t *testing.T) {
 	state := workflow.StepState{
 		Name:   "arrays",
@@ -352,4 +378,277 @@ func TestStepState_JSONField_ArrayTypes(t *testing.T) {
 	assert.Equal(t, float64(42), mixedArr[1])
 	assert.Equal(t, true, mixedArr[2])
 	assert.Nil(t, mixedArr[3])
+}
+
+// Component: T001
+// Feature: F082
+// AgentResult DisplayOutput tests
+
+func TestAgentResult_DisplayOutput_HappyPath(t *testing.T) {
+	result := workflow.NewAgentResult("claude")
+	result.Output = `{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}`
+	result.DisplayOutput = "hello"
+
+	assert.Equal(t, "hello", result.DisplayOutput)
+	assert.NotEmpty(t, result.Output)
+	assert.NotEqual(t, result.Output, result.DisplayOutput)
+}
+
+func TestAgentResult_DisplayOutput_EmptyWhenNoParser(t *testing.T) {
+	result := workflow.NewAgentResult("claude")
+	result.Output = `raw ndjson`
+	result.DisplayOutput = ""
+
+	assert.Empty(t, result.DisplayOutput)
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestAgentResult_DisplayOutput_JSONPassthrough(t *testing.T) {
+	result := workflow.NewAgentResult("claude")
+	result.Output = `{"data": "raw"}`
+	result.DisplayOutput = ""
+
+	assert.Empty(t, result.DisplayOutput, "DisplayOutput should be empty for output_format: json")
+	assert.Equal(t, `{"data": "raw"}`, result.Output)
+}
+
+func TestAgentResult_DisplayOutput_MultilineText(t *testing.T) {
+	result := workflow.NewAgentResult("claude")
+	result.Output = `line1\nline2\nline3`
+	result.DisplayOutput = "line1\nline2\nline3"
+
+	assert.Contains(t, result.DisplayOutput, "line1")
+	assert.Contains(t, result.DisplayOutput, "line3")
+}
+
+func TestAgentResult_DisplayOutput_Preserved(t *testing.T) {
+	tests := []struct {
+		name          string
+		displayOutput string
+	}{
+		{name: "short text", displayOutput: "test"},
+		{name: "long text", displayOutput: "a very long response from the agent with multiple lines and content"},
+		{name: "empty", displayOutput: ""},
+		{name: "special chars", displayOutput: "Hello 世界 🚀"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := workflow.NewAgentResult("claude")
+			result.DisplayOutput = tt.displayOutput
+
+			assert.Equal(t, tt.displayOutput, result.DisplayOutput)
+		})
+	}
+}
+
+// Component: T001
+// Feature: F082
+// ConversationResult DisplayOutput tests
+
+func TestConversationResult_DisplayOutput_HappyPath(t *testing.T) {
+	result := workflow.NewConversationResult("claude")
+	result.Output = `{"type":"content_block_delta"}`
+	result.DisplayOutput = "extracted text from conversation"
+
+	assert.Equal(t, "extracted text from conversation", result.DisplayOutput)
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestConversationResult_DisplayOutput_EmptyByDefault(t *testing.T) {
+	result := workflow.NewConversationResult("claude")
+	result.Output = "raw response"
+
+	assert.Empty(t, result.DisplayOutput, "DisplayOutput should be empty on creation")
+	assert.NotEmpty(t, result.Output)
+}
+
+func TestConversationResult_DisplayOutput_CanBeSetToAnyValue(t *testing.T) {
+	result := workflow.NewConversationResult("gemini")
+	testText := "Multi-line\nconversation\nresponse"
+	result.DisplayOutput = testText
+
+	assert.Equal(t, testText, result.DisplayOutput)
+}
+
+func TestConversationResult_DisplayOutput_IndependentFromOutput(t *testing.T) {
+	result := workflow.NewConversationResult("claude")
+	result.Output = `{"ndjson": "format"}`
+	result.DisplayOutput = "filtered text"
+
+	assert.NotEqual(t, result.Output, result.DisplayOutput)
+	assert.Contains(t, result.Output, "ndjson")
+	assert.NotContains(t, result.DisplayOutput, "ndjson")
+}
+
+// Component: T001
+// Feature: F082
+// StepState DisplayOutput serialization tests
+
+func TestStepState_DisplayOutput_EmptyAfterCreation(t *testing.T) {
+	state := workflow.StepState{
+		Name:   "agent-step",
+		Status: workflow.StatusCompleted,
+	}
+
+	assert.Empty(t, state.DisplayOutput)
+}
+
+func TestStepState_DisplayOutput_CanBePopulated(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "agent-step",
+		Status:        workflow.StatusCompleted,
+		Output:        `{"text":"raw"}`,
+		DisplayOutput: "filtered text",
+	}
+
+	assert.Equal(t, "filtered text", state.DisplayOutput)
+	assert.NotEqual(t, state.Output, state.DisplayOutput)
+}
+
+func TestStepState_DisplayOutput_PreservedInMemory(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "test",
+		Status:        workflow.StatusRunning,
+		DisplayOutput: "test display content",
+	}
+
+	assert.Equal(t, "test display content", state.DisplayOutput)
+}
+
+func TestStepState_DisplayOutput_NotPersisted_RoundTrip(t *testing.T) {
+	original := workflow.StepState{
+		Name:          "test-step",
+		Status:        workflow.StatusCompleted,
+		Output:        "raw output",
+		DisplayOutput: "display output that should not persist",
+	}
+
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decoded workflow.StepState
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Empty(t, decoded.DisplayOutput, "DisplayOutput must be empty after round-trip (json:\"-\")")
+	assert.Equal(t, "raw output", decoded.Output, "Output must be preserved")
+}
+
+func TestStepState_DisplayOutput_ExcludedFromJSONKeys(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "step",
+		Status:        workflow.StatusCompleted,
+		Output:        "raw",
+		DisplayOutput: "display",
+		Response:      map[string]any{"key": "value"},
+	}
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(data, &raw)
+	require.NoError(t, err)
+
+	assert.NotContains(t, raw, "DisplayOutput", "DisplayOutput must be excluded from JSON")
+	assert.Contains(t, raw, "Output", "Output must be included in JSON")
+	assert.Contains(t, raw, "Response", "Response must be included in JSON")
+}
+
+func TestStepState_DisplayOutput_WithOtherFields(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "complex-step",
+		Status:        workflow.StatusCompleted,
+		Output:        "raw output content",
+		DisplayOutput: "display content",
+		Stderr:        "error logs",
+		ExitCode:      0,
+		Response: map[string]any{
+			"result": "success",
+		},
+	}
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	var decoded workflow.StepState
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Empty(t, decoded.DisplayOutput, "DisplayOutput must not persist")
+	assert.Equal(t, "raw output content", decoded.Output, "Output must persist")
+	assert.Equal(t, "error logs", decoded.Stderr, "Stderr must persist")
+	assert.Equal(t, 0, decoded.ExitCode, "ExitCode must persist")
+	assert.NotNil(t, decoded.Response)
+}
+
+func TestStepState_DisplayOutput_InExecutionContext(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-workflow")
+
+	state := workflow.StepState{
+		Name:          "agent-step",
+		Status:        workflow.StatusCompleted,
+		Output:        `raw ndjson`,
+		DisplayOutput: "human readable text",
+	}
+
+	ctx.SetStepState("agent-step", state)
+
+	retrieved, ok := ctx.GetStepState("agent-step")
+	require.True(t, ok)
+
+	assert.Equal(t, "human readable text", retrieved.DisplayOutput)
+	assert.Equal(t, `raw ndjson`, retrieved.Output)
+}
+
+func TestStepState_DisplayOutput_LargeContent(t *testing.T) {
+	largeDisplay := ""
+	for i := 0; i < 1000; i++ {
+		largeDisplay += "line\n"
+	}
+
+	state := workflow.StepState{
+		Name:          "large-step",
+		Status:        workflow.StatusCompleted,
+		DisplayOutput: largeDisplay,
+	}
+
+	assert.NotEmpty(t, state.DisplayOutput)
+	assert.True(t, len(state.DisplayOutput) > 1000)
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	var decoded workflow.StepState
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Empty(t, decoded.DisplayOutput)
+}
+
+func TestStepState_DisplayOutput_WithConversationState(t *testing.T) {
+	state := workflow.StepState{
+		Name:          "conversation-step",
+		Status:        workflow.StatusCompleted,
+		Output:        `conversation raw`,
+		DisplayOutput: "conversation display",
+		Conversation: &workflow.ConversationState{
+			TotalTurns:  2,
+			TotalTokens: 100,
+		},
+	}
+
+	assert.Equal(t, "conversation display", state.DisplayOutput)
+	assert.NotNil(t, state.Conversation)
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+
+	var decoded workflow.StepState
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Empty(t, decoded.DisplayOutput, "DisplayOutput excluded from JSON")
+	assert.NotNil(t, decoded.Conversation, "Conversation state must persist")
 }

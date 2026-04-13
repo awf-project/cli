@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -57,6 +58,7 @@ func (p *ClaudeProvider) newBase() *baseCLIProvider {
 		extractSessionID:      p.extractSessionID,
 		extractTextContent:    p.extractTextFromJSON,
 		validateOptions:       validateClaudeOptions,
+		parseStreamLine:       p.parseClaudeStreamLine,
 	})
 }
 
@@ -66,21 +68,21 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 		return nil, err
 	}
 
-	userFormat, userFormatSet := getStringOption(options, "output_format")
+	userFormat, _ := getStringOption(options, "output_format")
 
-	// When stream-json was forced internally (user didn't set output_format),
-	// extract clean text from the NDJSON result event for downstream steps.
-	if !userFormatSet {
+	// Claude CLI is always invoked with --output-format stream-json (NDJSON).
+	// For text intent (default or explicit), extract the clean assistant text
+	// from the result event so {{states.step.Output}} is human-readable.
+	// For json intent, keep rawOutput in state.Output and populate Response
+	// with the parsed result event.
+	if userFormat == "json" || userFormat == "stream-json" {
+		if jsonResp := p.extractResultEvent(rawOutput); jsonResp != nil {
+			result.Response = jsonResp
+		}
+	} else {
 		if extracted := p.extractTextFromJSON(rawOutput); extracted != "" {
 			result.Output = extracted
 			result.Tokens = estimateTokens(extracted)
-		}
-	}
-
-	// Populate Response only when user explicitly requested structured output.
-	if userFormatSet && (userFormat == "json" || userFormat == "stream-json") {
-		if jsonResp := p.extractResultEvent(rawOutput); jsonResp != nil {
-			result.Response = jsonResp
 		}
 	}
 
@@ -126,15 +128,12 @@ func (p *ClaudeProvider) buildExecuteArgs(prompt string, options map[string]any)
 		args = append(args, "--model", model)
 	}
 
-	// Force stream-json (NDJSON events) unless the user explicitly set output_format: text.
+	// Always force stream-json NDJSON at the CLI level so the F082 display filter
+	// and text extraction have a consistent wire format. The user-facing
+	// output_format (text vs json) is resolved in the application layer and the
+	// display filter — not by toggling the Claude CLI's --output-format flag.
 	// stream-json requires --verbose in -p mode for live streaming.
-	userFormat, userFormatSet := getStringOption(options, "output_format")
-	switch {
-	case !userFormatSet, userFormat == "json", userFormat == "stream-json":
-		args = append(args, "--output-format", "stream-json", "--verbose")
-	default:
-		args = append(args, "--output-format", userFormat)
-	}
+	args = append(args, "--output-format", "stream-json", "--verbose")
 
 	if tools, ok := getStringOption(options, "allowed_tools"); ok && tools != "" {
 		args = append(args, "--allowedTools", tools)
@@ -261,4 +260,48 @@ func (p *ClaudeProvider) extractTextFromJSON(output string) string {
 		return fmt.Sprint(num)
 	}
 	return ""
+}
+
+// parseClaudeStreamLine extracts displayable text from Claude CLI's NDJSON stream-json
+// output. Claude CLI (claude -p --output-format stream-json --verbose) emits one JSON
+// object per line with these top-level event types:
+//   - "system"           — session/hook metadata (ignored)
+//   - "assistant"        — assistant turn, with message.content[] blocks ({type,text})
+//   - "rate_limit_event" — throttling notice (ignored)
+//   - "result"           — final aggregated result with .result string (ignored here;
+//     consumed by extractResultEvent for AgentResult.Output)
+//
+// We surface only "assistant" text blocks so the user sees the live reply. Tool-use
+// blocks, thinking blocks, and everything else are skipped to keep the stream readable.
+func (p *ClaudeProvider) parseClaudeStreamLine(line []byte) string {
+	// Escape literal null bytes before unmarshaling: Go's json package rejects
+	// bare 0x00 in string values even though they round-trip as \u0000.
+	line = bytes.ReplaceAll(line, []byte{0x00}, []byte(`\u0000`))
+
+	var evt struct {
+		Type    string `json:"type"`
+		Message *struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(line, &evt); err != nil {
+		return ""
+	}
+	if evt.Type != "assistant" || evt.Message == nil {
+		return ""
+	}
+
+	var out strings.Builder
+	for _, block := range evt.Message.Content {
+		if block.Type == "text" && block.Text != "" {
+			if out.Len() > 0 {
+				out.WriteByte('\n')
+			}
+			out.WriteString(block.Text)
+		}
+	}
+	return out.String()
 }

@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,7 @@ func (p *GeminiProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateGeminiOptions,
+		parseStreamLine:       p.parseGeminiStreamLine,
 	})
 }
 
@@ -71,8 +73,19 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		return nil, err
 	}
 
-	if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
-		result.Response = jsonResp
+	// Gemini CLI is always invoked with --output-format stream-json.
+	// For text intent (default), aggregate assistant content for state.Output;
+	// for json intent, keep raw NDJSON and expose parsed result in Response.
+	userFormat, _ := getStringOption(options, "output_format")
+	if userFormat == "json" || userFormat == "stream-json" {
+		if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
+			result.Response = jsonResp
+		}
+	} else {
+		if extracted := extractDisplayText(rawOutput, p.parseGeminiStreamLine); extracted != "" {
+			result.Output = extracted
+			result.Tokens = estimateTokens(extracted)
+		}
 	}
 
 	return result, nil
@@ -104,12 +117,9 @@ func (p *GeminiProvider) buildExecuteArgs(prompt string, options map[string]any)
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)
 	}
-	if outputFormat, ok := getStringOption(options, "output_format"); ok {
-		if outputFormat == "json" {
-			outputFormat = "stream-json"
-		}
-		args = append([]string{"--output-format", outputFormat}, args...)
-	}
+	// Always force stream-json NDJSON at the CLI level so the F082 display filter
+	// and text extraction have a consistent wire format (F082, aligned with Claude).
+	args = append([]string{"--output-format", "stream-json"}, args...)
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
@@ -167,4 +177,27 @@ func (p *GeminiProvider) extractSessionID(output string) (string, error) {
 		return "", errors.New("session_id is empty")
 	}
 	return str, nil
+}
+
+// parseGeminiStreamLine extracts displayable assistant text from Gemini CLI's
+// stream-json output. Gemini CLI (`gemini --output-format stream-json -p`) emits
+// one JSON object per line with these top-level types:
+//   - "init"    — {session_id, model} (ignored)
+//   - "message" — {role, content, delta?} (surface role=="assistant")
+//   - "result"  — {status, stats} (ignored)
+//
+// Only assistant messages are surfaced. User echoes and metadata are skipped.
+func (p *GeminiProvider) parseGeminiStreamLine(line []byte) string {
+	var evt struct {
+		Type    string `json:"type"`
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(line, &evt); err != nil {
+		return ""
+	}
+	if evt.Type != "message" || evt.Role != "assistant" {
+		return ""
+	}
+	return evt.Content
 }

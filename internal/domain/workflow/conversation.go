@@ -221,6 +221,7 @@ type ConversationResult struct {
 	Provider        string             // provider name used
 	State           *ConversationState // final conversation state
 	Output          string             // final assistant response (last turn)
+	DisplayOutput   string             // filtered human-readable output for display (empty when output_format=json or no parser)
 	Response        map[string]any     // parsed JSON response from last turn (if applicable)
 	TokensInput     int                // total input tokens across all turns
 	TokensOutput    int                // total output tokens across all turns

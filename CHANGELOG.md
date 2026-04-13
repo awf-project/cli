@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **F082**: Human-readable streaming output for agent steps — when running with `awf run --output streaming`, agent responses now display as clean text instead of raw NDJSON; `output_format` field controls filtering (text/none formats filter NDJSON, `json` format passes through raw); buffered mode (`--output buffered`) displays filtered text in post-execution summary; raw NDJSON always preserved in `state.Output` for template interpolation; `--output silent` remains silent regardless of `output_format`; per-provider extractors implemented for Claude (parses `content_block_delta` events) with stubs for Gemini/Codex/OpenCode
 - **F081**: Model validation by prefix/pattern for Gemini and Codex providers — Gemini validates that `model` starts with `gemini-` (enables use of any Gemini model without CLI updates); Codex validates `model` against prefixes `gpt-`, `codex-`, or o-series pattern (`o` followed by digit, e.g., `o1`, `o3-mini`); validation errors include format guidance to guide correction
 - **F078**: OpenCode `--model` flag support — `model` option in workflow YAML now passed as `--model <value>` to OpenCode CLI in both `Execute` and `ExecuteConversation`; OpenCode always passes `--format json` for structured output
 - **F077**: `dangerously_skip_permissions` support for Gemini (`--approval-mode=yolo`) and Codex (`--yolo`) providers — unified permission bypass key works across all three agent providers (Claude, Gemini, Codex)
