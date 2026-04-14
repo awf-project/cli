@@ -19,16 +19,12 @@ states:
     system_prompt: |
       You are a helpful assistant. Provide clear and concise responses.
       Say "COMPLETE" when the task is finished.
-    initial_prompt: |
+    prompt: |
       Please help with this task:
       {{inputs.task}}
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 5
-      max_context_tokens: 50000
-      strategy: sliding_window
-      stop_condition: "response contains 'COMPLETE'"
+    conversation: {}
     timeout: 60
     on_success: done
     on_failure: error

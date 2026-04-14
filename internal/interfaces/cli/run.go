@@ -26,7 +26,6 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/store"
-	"github.com/awf-project/cli/internal/infrastructure/tokenizer"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/pkg/httpx"
@@ -300,8 +299,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
-	convTokenizer := tokenizer.NewApproximationTokenizer()
-	convMgr := application.NewConversationManager(logger, exprEvaluator, resolver, convTokenizer, agentRegistry)
+	convMgr := application.NewConversationManager(logger, resolver, agentRegistry)
+	convMgr.SetUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout))
 	execSvc.SetConversationManager(convMgr)
 
 	// Set AWF paths with pack context if applicable
@@ -1021,8 +1020,8 @@ func runSingleStep(
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
-	convTokenizer := tokenizer.NewApproximationTokenizer()
-	convMgr := application.NewConversationManager(logger, exprEvaluator, resolver, convTokenizer, agentRegistry)
+	convMgr := application.NewConversationManager(logger, resolver, agentRegistry)
+	convMgr.SetUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout))
 	execSvc.SetConversationManager(convMgr)
 
 	// Parse namespace to set up pack context if applicable

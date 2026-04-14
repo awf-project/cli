@@ -288,27 +288,17 @@
 //
 // ## Conversation Mode Agent
 //
-// Multi-turn agent conversation:
+// Interactive multi-turn agent conversation. The user drives the loop by
+// providing input at each turn and ends the session with "exit" or "quit".
 //
 //	conversationStep := &workflow.Step{
 //	    Name: "chat",
 //	    Type: workflow.StepTypeAgent,
 //	    Agent: &workflow.AgentConfig{
-//	        Provider:      "claude",
-//	        Mode:          "conversation",
-//	        SystemPrompt:  "You are a helpful coding assistant.",
-//	        InitialPrompt: "Help me debug this code: {{inputs.code}}",
-//	        Conversation: &workflow.ConversationConfig{
-//	            MaxTurns: 10,
-//	            StopConditions: []string{
-//	                "{{conversation.last_message}} contains 'DONE'",
-//	            },
-//	            ContextWindow: &workflow.ContextWindowConfig{
-//	                Strategy:     "truncate_middle",
-//	                MaxTokens:    4000,
-//	                ReserveRatio: 0.1,
-//	            },
-//	        },
+//	        Provider:     "claude",
+//	        Mode:         "conversation",
+//	        SystemPrompt: "You are a helpful coding assistant.",
+//	        Prompt:       "Help me debug this code: {{inputs.code}}",
 //	    },
 //	    OnSuccess: "end",
 //	}

@@ -227,13 +227,10 @@ func TestDryRunExecutor_AgentStep_WithConversationMode(t *testing.T) {
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Start conversation",
-					OutputFormat:  workflow.OutputFormatJSON,
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 3,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					OutputFormat: workflow.OutputFormatJSON,
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},

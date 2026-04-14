@@ -17,14 +17,10 @@ states:
     provider: claude
     mode: conversation
     system_prompt: "You are a reliable assistant. Complete tasks thoroughly."
-    initial_prompt: "Execute: {{inputs.task}}"
+    prompt: "Execute: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 5
-      max_context_tokens: 40000
-      strategy: sliding_window
-      stop_condition: "response contains 'SUCCESS'"
+    conversation: {}
     timeout: 45
     retry:
       max_attempts: 3
@@ -43,12 +39,10 @@ states:
     provider: gemini
     mode: conversation
     system_prompt: "Process with caution."
-    initial_prompt: "Continue from: {{states.conversation_with_retry.Output}}"
+    prompt: "Continue from: {{states.conversation_with_retry.Output}}"
     options:
       model: gemini-pro
-    conversation:
-      max_turns: 3
-      strategy: sliding_window
+    conversation: {}
     timeout: 30
     on_success: done
     on_failure: handle_failure

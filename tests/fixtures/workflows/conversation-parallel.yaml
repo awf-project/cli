@@ -27,14 +27,10 @@ states:
     provider: claude
     mode: conversation
     system_prompt: "You are a research assistant specializing in technical analysis."
-    initial_prompt: "Research: {{inputs.task}}"
+    prompt: "Research: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 5
-      max_context_tokens: 60000
-      strategy: sliding_window
-      stop_condition: "response contains 'RESEARCH COMPLETE'"
+    conversation: {}
     timeout: 90
     on_success: done
 
@@ -43,14 +39,10 @@ states:
     provider: gemini
     mode: conversation
     system_prompt: "You are a research assistant focusing on practical applications."
-    initial_prompt: "Investigate: {{inputs.task}}"
+    prompt: "Investigate: {{inputs.task}}"
     options:
       model: gemini-pro
-    conversation:
-      max_turns: 5
-      max_context_tokens: 50000
-      strategy: sliding_window
-      stop_condition: "turn_count >= 4"
+    conversation: {}
     timeout: 90
     on_success: done
 
@@ -59,11 +51,8 @@ states:
     provider: codex
     mode: conversation
     system_prompt: "You are a research assistant emphasizing code examples."
-    initial_prompt: "Analyze: {{inputs.task}}"
-    conversation:
-      max_turns: 6
-      strategy: sliding_window
-      stop_condition: "response contains 'ANALYSIS DONE'"
+    prompt: "Analyze: {{inputs.task}}"
+    conversation: {}
     timeout: 90
     on_success: done
 
@@ -72,7 +61,7 @@ states:
     provider: claude
     mode: conversation
     system_prompt: "You are a synthesis expert. Combine insights from multiple sources."
-    initial_prompt: |
+    prompt: |
       Synthesize these research findings:
 
       Claude findings: {{states.claude_convo.output}}
@@ -82,10 +71,7 @@ states:
       Codex findings: {{states.codex_convo.output}}
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 3
-      strategy: sliding_window
-      stop_condition: "response contains 'SYNTHESIS COMPLETE'"
+    conversation: {}
     timeout: 60
     on_success: done
     on_failure: error

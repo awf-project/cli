@@ -727,7 +727,6 @@ func TestStepState_ConversationFields_NilByDefault(t *testing.T) {
 
 	assert.Nil(t, state.Conversation, "Conversation should be nil for non-conversation steps")
 	assert.Equal(t, 0, state.TokensUsed, "TokensUsed should default to 0")
-	assert.Nil(t, state.ContextWindowState, "ContextWindowState should be nil by default")
 }
 
 func TestStepState_ConversationFields_SetConversation(t *testing.T) {
@@ -754,33 +753,7 @@ func TestStepState_ConversationFields_SetConversation(t *testing.T) {
 	assert.Equal(t, 15, state.TokensUsed)
 }
 
-func TestStepState_ConversationFields_SetContextWindowState(t *testing.T) {
-	// Happy path: Set context window state on StepState
-	state := workflow.StepState{
-		Name:   "agent-step",
-		Status: workflow.StatusCompleted,
-	}
-
-	contextWindow := &workflow.ContextWindowState{
-		Strategy:        workflow.StrategySlidingWindow,
-		TruncationCount: 2,
-		TurnsDropped:    5,
-		TokensDropped:   1200,
-		LastTruncatedAt: 8,
-	}
-
-	state.ContextWindowState = contextWindow
-
-	assert.NotNil(t, state.ContextWindowState)
-	assert.Equal(t, workflow.StrategySlidingWindow, state.ContextWindowState.Strategy)
-	assert.Equal(t, 2, state.ContextWindowState.TruncationCount)
-	assert.Equal(t, 5, state.ContextWindowState.TurnsDropped)
-	assert.Equal(t, 1200, state.ContextWindowState.TokensDropped)
-	assert.Equal(t, 8, state.ContextWindowState.LastTruncatedAt)
-}
-
 func TestStepState_ConversationFields_CompleteConversationMode(t *testing.T) {
-	// Happy path: Full conversation mode step with all fields populated
 	state := workflow.StepState{
 		Name:        "refine-code",
 		Status:      workflow.StatusCompleted,
@@ -801,30 +774,20 @@ func TestStepState_ConversationFields_CompleteConversationMode(t *testing.T) {
 			},
 			TotalTurns:  5,
 			TotalTokens: 1970,
-			StoppedBy:   workflow.StopReasonCondition,
+			StoppedBy:   workflow.StopReasonUserExit,
 		},
 		TokensUsed: 17000,
-		ContextWindowState: &workflow.ContextWindowState{
-			Strategy:        workflow.StrategySlidingWindow,
-			TruncationCount: 1,
-			TurnsDropped:    2,
-			TokensDropped:   300,
-			LastTruncatedAt: 3,
-		},
 	}
 
 	assert.Equal(t, "refine-code", state.Name)
 	assert.Equal(t, workflow.StatusCompleted, state.Status)
 	assert.NotNil(t, state.Conversation)
 	assert.Equal(t, 5, state.Conversation.TotalTurns)
-	assert.Equal(t, workflow.StopReasonCondition, state.Conversation.StoppedBy)
+	assert.Equal(t, workflow.StopReasonUserExit, state.Conversation.StoppedBy)
 	assert.Equal(t, 17000, state.TokensUsed)
-	assert.NotNil(t, state.ContextWindowState)
-	assert.Equal(t, 1, state.ContextWindowState.TruncationCount)
 }
 
 func TestStepState_ConversationFields_JSONSerialization(t *testing.T) {
-	// Edge case: Verify conversation fields serialize/deserialize correctly
 	original := workflow.StepState{
 		Name:   "agent-step",
 		Status: workflow.StatusCompleted,
@@ -836,16 +799,9 @@ func TestStepState_ConversationFields_JSONSerialization(t *testing.T) {
 			},
 			TotalTurns:  2,
 			TotalTokens: 15,
-			StoppedBy:   workflow.StopReasonMaxTurns,
+			StoppedBy:   workflow.StopReasonError,
 		},
 		TokensUsed: 15,
-		ContextWindowState: &workflow.ContextWindowState{
-			Strategy:        workflow.StrategySlidingWindow,
-			TruncationCount: 0,
-			TurnsDropped:    0,
-			TokensDropped:   0,
-			LastTruncatedAt: 0,
-		},
 	}
 
 	data, err := json.Marshal(original)
@@ -859,8 +815,6 @@ func TestStepState_ConversationFields_JSONSerialization(t *testing.T) {
 	assert.NotNil(t, decoded.Conversation)
 	assert.Equal(t, 2, decoded.Conversation.TotalTurns)
 	assert.Equal(t, 15, decoded.TokensUsed)
-	assert.NotNil(t, decoded.ContextWindowState)
-	assert.Equal(t, workflow.StrategySlidingWindow, decoded.ContextWindowState.Strategy)
 }
 
 func TestStepState_ConversationFields_ExecutionContextIntegration(t *testing.T) {
@@ -910,7 +864,6 @@ func TestStepState_ConversationFields_NilConversationSerialization(t *testing.T)
 
 	assert.Nil(t, decoded.Conversation)
 	assert.Equal(t, 0, decoded.TokensUsed)
-	assert.Nil(t, decoded.ContextWindowState)
 }
 
 func TestStepState_ConversationFields_LargeTokenCounts(t *testing.T) {
@@ -923,7 +876,7 @@ func TestStepState_ConversationFields_LargeTokenCounts(t *testing.T) {
 			Turns:       make([]workflow.Turn, 100), // Many turns
 			TotalTurns:  100,
 			TotalTokens: 150000,
-			StoppedBy:   workflow.StopReasonMaxTokens,
+			StoppedBy:   workflow.StopReasonError,
 		},
 	}
 
@@ -950,39 +903,9 @@ func TestStepState_ConversationFields_EmptyConversation(t *testing.T) {
 	assert.Equal(t, 0, state.TokensUsed)
 }
 
-func TestStepState_ConversationFields_MultipleStrategies(t *testing.T) {
-	// Edge case: Test different context window strategies
-	strategies := []workflow.ContextWindowStrategy{
-		workflow.StrategyNone,
-		workflow.StrategySlidingWindow,
-		workflow.StrategySummarize,
-		workflow.StrategyTruncateMiddle,
-	}
-
-	for _, strategy := range strategies {
-		t.Run(string(strategy), func(t *testing.T) {
-			state := workflow.StepState{
-				Name: "strategy-test",
-				ContextWindowState: &workflow.ContextWindowState{
-					Strategy:        strategy,
-					TruncationCount: 1,
-					TurnsDropped:    3,
-					TokensDropped:   500,
-				},
-			}
-
-			assert.NotNil(t, state.ContextWindowState)
-			assert.Equal(t, strategy, state.ContextWindowState.Strategy)
-		})
-	}
-}
-
 func TestStepState_ConversationFields_StopReasons(t *testing.T) {
-	// Edge case: Test all stop reasons
 	stopReasons := []workflow.StopReason{
-		workflow.StopReasonCondition,
-		workflow.StopReasonMaxTurns,
-		workflow.StopReasonMaxTokens,
+		workflow.StopReasonUserExit,
 		workflow.StopReasonError,
 	}
 
@@ -1042,41 +965,6 @@ func TestStepState_ConversationFields_MixedStepsInContext(t *testing.T) {
 	require.True(t, ok)
 	assert.NotNil(t, agent.Conversation)
 	assert.Equal(t, 10, agent.TokensUsed)
-}
-
-func TestStepState_ConversationFields_ContextWindowNoTruncation(t *testing.T) {
-	// Edge case: ContextWindowState with no truncation applied
-	state := workflow.StepState{
-		Name: "no-truncation",
-		ContextWindowState: &workflow.ContextWindowState{
-			Strategy:        workflow.StrategySlidingWindow,
-			TruncationCount: 0,
-			TurnsDropped:    0,
-			TokensDropped:   0,
-			LastTruncatedAt: 0,
-		},
-	}
-
-	assert.NotNil(t, state.ContextWindowState)
-	assert.Equal(t, 0, state.ContextWindowState.TruncationCount)
-}
-
-func TestStepState_ConversationFields_MaxTruncation(t *testing.T) {
-	// Edge case: Heavy truncation scenario
-	state := workflow.StepState{
-		Name: "heavy-truncation",
-		ContextWindowState: &workflow.ContextWindowState{
-			Strategy:        workflow.StrategySlidingWindow,
-			TruncationCount: 50,
-			TurnsDropped:    200,
-			TokensDropped:   50000,
-			LastTruncatedAt: 250,
-		},
-	}
-
-	assert.Equal(t, 50, state.ContextWindowState.TruncationCount)
-	assert.Equal(t, 200, state.ContextWindowState.TurnsDropped)
-	assert.Equal(t, 50000, state.ContextWindowState.TokensDropped)
 }
 
 func TestStepState_ConversationFields_FailedConversation(t *testing.T) {

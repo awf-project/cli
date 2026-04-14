@@ -26,16 +26,15 @@ var validOutputFormats = map[OutputFormat]bool{
 
 // AgentConfig holds configuration for invoking an AI agent.
 type AgentConfig struct {
-	Provider      string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, openai_compatible
-	Prompt        string              `yaml:"prompt"`         // prompt template with {{inputs.*}} and {{states.*}} (single mode) or initial prompt (conversation mode)
-	PromptFile    string              `yaml:"prompt_file"`    // path to external prompt template file (mutually exclusive with Prompt)
-	Options       map[string]any      `yaml:"options"`        // provider-specific options (model, temperature, max_tokens, etc.)
-	Timeout       int                 `yaml:"timeout"`        // seconds, 0 = use DefaultAgentTimeout
-	Mode          string              `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
-	SystemPrompt  string              `yaml:"system_prompt"`  // system prompt preserved across conversation (conversation mode only)
-	InitialPrompt string              `yaml:"initial_prompt"` // first user message in conversation mode (overrides Prompt if set)
-	Conversation  *ConversationConfig `yaml:"conversation"`   // conversation-specific configuration (conversation mode only)
-	OutputFormat  OutputFormat        `yaml:"output_format"`  // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
+	Provider     string              `yaml:"provider"`      // agent provider: claude, codex, gemini, opencode, openai_compatible
+	Prompt       string              `yaml:"prompt"`        // prompt template with {{inputs.*}} and {{states.*}} (single mode) or first user message (conversation mode)
+	PromptFile   string              `yaml:"prompt_file"`   // path to external prompt template file (mutually exclusive with Prompt)
+	Options      map[string]any      `yaml:"options"`       // provider-specific options (model, temperature, max_tokens, etc.)
+	Timeout      int                 `yaml:"timeout"`       // seconds, 0 = use DefaultAgentTimeout
+	Mode         string              `yaml:"mode"`          // execution mode: "single" (default) or "conversation"
+	SystemPrompt string              `yaml:"system_prompt"` // system prompt preserved across conversation (conversation mode only)
+	Conversation *ConversationConfig `yaml:"conversation"`  // conversation-specific configuration (conversation mode only)
+	OutputFormat OutputFormat        `yaml:"output_format"` // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
 }
 
 // Validate checks if the agent configuration is valid.
@@ -63,11 +62,6 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 		return errors.New("mode must be 'single' or 'conversation'")
 	}
 
-	// Reject inject_context outside conversation mode
-	if c.Mode != "conversation" && c.Conversation != nil && strings.TrimSpace(c.Conversation.InjectContext) != "" {
-		return errors.New("inject_context requires conversation mode")
-	}
-
 	// Normalize and validate output_format
 	c.OutputFormat = OutputFormat(strings.TrimSpace(strings.ToLower(string(c.OutputFormat))))
 	if !validOutputFormats[c.OutputFormat] {
@@ -85,13 +79,12 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 		if c.PromptFile != "" {
 			return errors.New("prompt_file is not supported in conversation mode")
 		}
-		// In conversation mode, require either InitialPrompt or Prompt
-		if c.InitialPrompt == "" && c.Prompt == "" {
-			return errors.New("initial_prompt or prompt is required in conversation mode")
+		if c.Prompt == "" {
+			return errors.New("prompt is required in conversation mode")
 		}
 		// Validate ConversationConfig if present
 		if c.Conversation != nil {
-			if err := c.Conversation.Validate(validator); err != nil {
+			if err := c.Conversation.Validate(); err != nil {
 				return err
 			}
 		}
@@ -122,13 +115,8 @@ func (c *AgentConfig) IsConversationMode() bool {
 	return c.Mode == "conversation"
 }
 
-// GetEffectivePrompt returns the appropriate prompt based on the mode.
-// In conversation mode, returns InitialPrompt if set, otherwise Prompt.
-// In single mode, returns Prompt.
+// GetEffectivePrompt returns the prompt for this agent step.
 func (c *AgentConfig) GetEffectivePrompt() string {
-	if c.IsConversationMode() && c.InitialPrompt != "" {
-		return c.InitialPrompt
-	}
 	return c.Prompt
 }
 

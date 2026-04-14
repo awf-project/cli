@@ -469,15 +469,14 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 		return nil
 	}
 	return &workflow.AgentConfig{
-		Provider:      y.Provider,
-		Prompt:        y.Prompt,
-		PromptFile:    y.PromptFile,
-		Options:       y.Options,
-		Mode:          y.Mode,
-		SystemPrompt:  y.SystemPrompt,
-		InitialPrompt: y.InitialPrompt,
-		Conversation:  mapConversationConfig(y.Conversation),
-		OutputFormat:  workflow.OutputFormat(y.OutputFormat),
+		Provider:     y.Provider,
+		Prompt:       y.Prompt,
+		PromptFile:   y.PromptFile,
+		Options:      y.Options,
+		Mode:         y.Mode,
+		SystemPrompt: y.SystemPrompt,
+		Conversation: mapConversationConfig(y.Conversation),
+		OutputFormat: workflow.OutputFormat(y.OutputFormat),
 		// Timeout is handled separately via step.Timeout
 	}
 }
@@ -487,27 +486,8 @@ func mapConversationConfig(y *yamlConversationConfig) *workflow.ConversationConf
 	if y == nil {
 		return nil
 	}
-
-	// Parse strategy string to domain ContextWindowStrategy
-	var strategy workflow.ContextWindowStrategy
-	switch y.Strategy {
-	case "sliding_window":
-		strategy = workflow.StrategySlidingWindow
-	case "summarize":
-		strategy = workflow.StrategySummarize
-	case "truncate_middle":
-		strategy = workflow.StrategyTruncateMiddle
-	default:
-		strategy = workflow.StrategyNone
-	}
-
 	return &workflow.ConversationConfig{
-		MaxTurns:         y.MaxTurns,
-		MaxContextTokens: y.MaxContextTokens,
-		Strategy:         strategy,
-		StopCondition:    y.StopCondition,
-		ContinueFrom:     y.ContinueFrom,
-		InjectContext:    y.InjectContext,
+		ContinueFrom: y.ContinueFrom,
 	}
 }
 

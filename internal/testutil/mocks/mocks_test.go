@@ -4958,3 +4958,286 @@ func TestMockAuditTrailWriter_ClearResetsIsClosed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, writer.GetEvents(), 1)
 }
+
+// Feature: F083 Interactive Conversation Mode
+// Component: T002 MockUserInputReader
+
+// TestMockUserInputReader_ReadInput_HappyPath verifies sequential response delivery.
+func TestMockUserInputReader_ReadInput_HappyPath(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello", "world")
+	ctx := context.Background()
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", input1)
+
+	input2, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "world", input2)
+}
+
+// TestMockUserInputReader_ReadInput_EmptyStringSignalsExit verifies empty string terminates conversation.
+func TestMockUserInputReader_ReadInput_EmptyStringSignalsExit(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("message", "")
+	ctx := context.Background()
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "message", input1)
+
+	input2, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input2)
+}
+
+// TestMockUserInputReader_ReadInput_ExhaustedResponses verifies empty string returned after all responses consumed.
+func TestMockUserInputReader_ReadInput_ExhaustedResponses(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("only")
+	ctx := context.Background()
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "only", input1)
+
+	input2, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input2)
+
+	input3, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input3)
+}
+
+// TestMockUserInputReader_ReadInput_NoResponses verifies mock with no responses returns empty string.
+func TestMockUserInputReader_ReadInput_NoResponses(t *testing.T) {
+	reader := mocks.NewMockUserInputReader()
+	ctx := context.Background()
+
+	input, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input)
+}
+
+// TestMockUserInputReader_ReadInput_ReturnsConfiguredError verifies error configuration takes effect.
+func TestMockUserInputReader_ReadInput_ReturnsConfiguredError(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+	ctx := context.Background()
+
+	customErr := errors.New("read failed")
+	reader.SetReadError(customErr)
+
+	_, err := reader.ReadInput(ctx)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customErr))
+}
+
+// TestMockUserInputReader_ReadInput_RespectsCancelledContext verifies context cancellation is respected.
+func TestMockUserInputReader_ReadInput_RespectsCancelledContext(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := reader.ReadInput(ctx)
+	require.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+// TestMockUserInputReader_ReadInput_ContextCancelledBeforeResponse verifies cancellation checked before returning response.
+func TestMockUserInputReader_ReadInput_ContextCancelledBeforeResponse(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := reader.ReadInput(ctx)
+	require.Error(t, err)
+}
+
+// TestMockUserInputReader_GetCallCount verifies call tracking.
+func TestMockUserInputReader_GetCallCount(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("a", "b", "c")
+	ctx := context.Background()
+
+	assert.Equal(t, 0, reader.GetCallCount())
+
+	reader.ReadInput(ctx)
+	assert.Equal(t, 1, reader.GetCallCount())
+
+	reader.ReadInput(ctx)
+	assert.Equal(t, 2, reader.GetCallCount())
+
+	reader.ReadInput(ctx)
+	assert.Equal(t, 3, reader.GetCallCount())
+}
+
+// TestMockUserInputReader_GetCallCount_WithError verifies call count increments even when error is returned.
+func TestMockUserInputReader_GetCallCount_WithError(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+	ctx := context.Background()
+
+	reader.SetReadError(errors.New("error"))
+
+	reader.ReadInput(ctx)
+	assert.Equal(t, 1, reader.GetCallCount())
+}
+
+// TestMockUserInputReader_SetReadError verifies error configuration overrides responses.
+func TestMockUserInputReader_SetReadError(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello", "world")
+	ctx := context.Background()
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", input1)
+
+	customErr := errors.New("simulated error")
+	reader.SetReadError(customErr)
+
+	_, err = reader.ReadInput(ctx)
+	require.Error(t, err)
+	assert.Equal(t, customErr, err)
+}
+
+// TestMockUserInputReader_SetResponses_ResetsIndex verifies SetResponses resets sequence position.
+func TestMockUserInputReader_SetResponses_ResetsIndex(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("a", "b")
+	ctx := context.Background()
+
+	reader.ReadInput(ctx)
+	reader.ReadInput(ctx)
+
+	reader.SetResponses("x", "y", "z")
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "x", input1)
+
+	input2, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "y", input2)
+}
+
+// TestMockUserInputReader_AddResponse verifies appending responses to sequence.
+func TestMockUserInputReader_AddResponse(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("a")
+	ctx := context.Background()
+
+	input1, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "a", input1)
+
+	reader.AddResponse("b")
+
+	input2, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "b", input2)
+}
+
+// TestMockUserInputReader_AddResponse_ToEmpty verifies appending to empty response list.
+func TestMockUserInputReader_AddResponse_ToEmpty(t *testing.T) {
+	reader := mocks.NewMockUserInputReader()
+	ctx := context.Background()
+
+	reader.AddResponse("first")
+
+	input, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "first", input)
+}
+
+// TestMockUserInputReader_Clear verifies all state is reset.
+func TestMockUserInputReader_Clear(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("a", "b")
+	ctx := context.Background()
+
+	reader.ReadInput(ctx)
+	reader.SetReadError(errors.New("error"))
+
+	reader.Clear()
+
+	input, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input)
+
+	assert.Equal(t, 0, reader.GetCallCount())
+}
+
+// TestMockUserInputReader_Clear_ResetsError verifies error state is cleared.
+func TestMockUserInputReader_Clear_ResetsError(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+	ctx := context.Background()
+
+	reader.SetReadError(errors.New("error"))
+	reader.Clear()
+
+	input, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input)
+}
+
+// TestMockUserInputReader_ConversationFlowWithEmptyInput verifies realistic conversation loop pattern.
+func TestMockUserInputReader_ConversationFlowWithEmptyInput(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("What is Go?", "Tell me more", "")
+	ctx := context.Background()
+
+	turns := []string{}
+	for {
+		input, err := reader.ReadInput(ctx)
+		require.NoError(t, err)
+
+		if input == "" {
+			break
+		}
+		turns = append(turns, input)
+	}
+
+	assert.Equal(t, []string{"What is Go?", "Tell me more"}, turns)
+	assert.Equal(t, 3, reader.GetCallCount())
+}
+
+// TestMockUserInputReader_ErrorTakesPrecedenceOverResponses verifies error checking before response delivery.
+func TestMockUserInputReader_ErrorTakesPrecedenceOverResponses(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello", "world")
+	ctx := context.Background()
+
+	reader.ReadInput(ctx)
+
+	customErr := errors.New("priority error")
+	reader.SetReadError(customErr)
+
+	_, err := reader.ReadInput(ctx)
+	require.Error(t, err)
+	assert.Equal(t, customErr, err)
+}
+
+// TestMockUserInputReader_ContextErrorTakesPrecedence verifies context error checked before configured error.
+func TestMockUserInputReader_ContextErrorTakesPrecedence(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("hello")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	customErr := errors.New("this should not be returned")
+	reader.SetReadError(customErr)
+
+	_, err := reader.ReadInput(ctx)
+	require.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+// TestMockUserInputReader_MultipleClears verifies Clear can be called multiple times.
+func TestMockUserInputReader_MultipleClears(t *testing.T) {
+	reader := mocks.NewMockUserInputReader("initial")
+	ctx := context.Background()
+
+	reader.ReadInput(ctx)
+	reader.Clear()
+
+	reader.SetResponses("second")
+	reader.ReadInput(ctx)
+	reader.Clear()
+
+	input, err := reader.ReadInput(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", input)
+	assert.Equal(t, 0, reader.GetCallCount())
+}

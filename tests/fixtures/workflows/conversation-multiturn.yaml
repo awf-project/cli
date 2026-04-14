@@ -18,14 +18,11 @@ states:
     mode: conversation
     system_prompt: |
       You are a helpful assistant. Provide clear responses.
-    initial_prompt: |
+    prompt: |
       {{inputs.initial_request}}
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 3
-      max_context_tokens: 80000
-      strategy: sliding_window
+    conversation: {}
     timeout: 60
     on_success: second_turn
     on_failure: error
@@ -37,8 +34,6 @@ states:
     prompt: |
       Can you elaborate on that response?
     conversation:
-      max_turns: 2
-      stop_condition: "turn_count >= 5"
       continue_from: first_turn
     timeout: 60
     on_success: done

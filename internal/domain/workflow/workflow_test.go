@@ -385,7 +385,7 @@ func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
 						Name: "step1", Type: workflow.StepTypeAgent,
 						Agent: &workflow.AgentConfig{
 							Provider: "claude", Prompt: "test",
-							Conversation: &workflow.ConversationConfig{MaxTurns: 5},
+							Conversation: &workflow.ConversationConfig{},
 						},
 						OnSuccess: "step2",
 					},
@@ -394,7 +394,6 @@ func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
 						Agent: &workflow.AgentConfig{
 							Provider: "claude", Prompt: "test",
 							Conversation: &workflow.ConversationConfig{
-								MaxTurns:     3,
 								ContinueFrom: "step1",
 							},
 						},
@@ -416,7 +415,6 @@ func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
 						Agent: &workflow.AgentConfig{
 							Provider: "claude", Prompt: "test",
 							Conversation: &workflow.ConversationConfig{
-								MaxTurns:     3,
 								ContinueFrom: "nonexistent",
 							},
 						},
@@ -438,7 +436,7 @@ func TestWorkflow_Validate_ContinueFrom(t *testing.T) {
 						Name: "step1", Type: workflow.StepTypeAgent,
 						Agent: &workflow.AgentConfig{
 							Provider: "claude", Prompt: "test",
-							Conversation: &workflow.ConversationConfig{MaxTurns: 5},
+							Conversation: &workflow.ConversationConfig{},
 						},
 						OnSuccess: "done",
 					},

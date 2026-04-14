@@ -1,627 +1,338 @@
 ---
-title: "Agent Conversation Mode"
+title: "Conversation Mode & Session Tracking"
 ---
 
-Enable multi-turn conversations with AI agents, featuring automatic context window management, token counting, and stop conditions.
+AWF supports two distinct conversation-related features on agent steps:
 
-## Overview
+1. **Interactive conversation mode** (`mode: conversation`) — a live, user-driven chat loop where the user types messages at each turn and ends the session with `exit`, `quit`, or an empty line.
+2. **Cross-step session tracking** (`conversation:` sub-struct on any agent step) — opts a single-turn agent step into session tracking so another step can resume its conversation via `continue_from`.
 
-While [agent steps](agent-steps.md) invoke agents once per step, **conversation mode** maintains conversation history across multiple turns within a single step. This allows iterative refinement, clarification loops, and complex reasoning without chaining multiple workflow steps.
+These two features are independent. You can use either, both, or neither.
 
-**Key features:**
-- **Automatic turn management** - Maintain conversation history without explicit state passing
-- **Context window handling** - Automatically truncate old turns when reaching token limits
-- **Stop conditions** - Exit conversation early when a condition is met
-- **Token tracking** - Monitor input/output token usage across turns
-- **System prompt preservation** - Protect system instructions during truncation
+## When to Use Which
 
-## When to Use
+| You want to... | Use |
+|---|---|
+| Chat with an agent from a terminal, one question at a time, until you decide to stop | `mode: conversation` |
+| Run a single-turn agent call whose session a later step will resume | `mode: single` + `conversation: {}` |
+| Run a single-turn agent call that resumes a prior step's session | `mode: single` + `conversation: {continue_from: prior_step}` |
+| Run a plain one-shot agent call with no session at all | plain agent step, no `conversation:` sub-struct |
 
-Use conversation mode when:
-- **Iterative refinement** — Multiple rounds of feedback on generated content
-- **Clarification loops** — Agent asks questions, workflow provides answers
-- **Complex reasoning** — Chain-of-thought across multiple turns
-- **Interactive workflows** — Step-by-step problem solving with the agent
+## Interactive Conversation Mode
 
-For simple single-turn interactions, use standard [agent steps](agent-steps.md) instead.
+`mode: conversation` spawns an interactive loop: the agent replies, AWF prints a `> ` prompt, you type your next message, repeat. The session ends when you submit an empty line, `exit`, or `quit`.
 
-## Basic Syntax
+### Example
 
 ```yaml
-name: code-review-conversation
+name: interactive-clarify
 version: "1.0.0"
 
 inputs:
-  - name: code
+  - name: topic
     type: string
-    required: true
+    default: "explain Go channels"
 
 states:
-  initial: refine_code
+  initial: chat
 
-  refine_code:
+  chat:
     type: agent
     provider: claude
     mode: conversation
     system_prompt: |
-      You are a code reviewer. Iterate on the code until it meets quality standards.
-      Say "APPROVED" when done.
-    initial_prompt: |
-      Review this code:
-      {{.inputs.code}}
-    options:
-      model: claude-sonnet-4-20250514
-    conversation:
-      max_turns: 10
-      max_context_tokens: 100000
-      strategy: sliding_window
-      stop_condition: "response contains 'APPROVED'"
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-## Configuration
-
-### Step-Level Options
-
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `type` | string | Yes | — | Must be `agent` |
-| `mode` | string | No | `step` | Set to `conversation` to enable multi-turn mode |
-| `provider` | string | Yes | — | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible`. Supports dynamic interpolation: `{{.inputs.agent}}` |
-| `system_prompt` | string | No | — | System message for the entire conversation (preserved during truncation) |
-| `initial_prompt` | string | Yes | — | Initial user message to start the conversation |
-| `prompt` | string | No | — | Used when injecting context mid-conversation (see [Injecting Context](#injecting-context-mid-conversation)) |
-| `options` | object | No | — | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
-| `timeout` | duration | No | `300s` | Timeout for each turn |
-| `on_success` | string | Yes | — | Next state on successful completion |
-| `on_failure` | string | No | — | Next state on error |
-
-### Conversation Configuration
-
-```yaml
-conversation:
-  max_turns: 10                    # Maximum number of turns (default: 10)
-  max_context_tokens: 100000       # Token budget for conversation (default: model limit)
-  strategy: sliding_window         # Context window strategy (only sliding_window supported)
-  stop_condition: "expression"     # Exit condition (optional)
-```
-
-#### max_turns
-
-Maximum number of conversation turns before automatic termination.
-
-```yaml
-conversation:
-  max_turns: 5  # Conversation stops after 5 turns
-```
-
-Useful for preventing runaway conversations and controlling costs.
-
-#### max_context_tokens
-
-Token budget for the entire conversation. When approaching this limit, context window strategy applies.
-
-```yaml
-conversation:
-  max_context_tokens: 100000  # Limit total tokens to 100k
-```
-
-Prevents exceeding model token limits. When exceeded, old turns are dropped using the configured strategy.
-
-#### strategy
-
-Context window strategy when token limit is reached:
-
-- **`sliding_window`** - Drop oldest turns, preserving system prompt and most recent context. If omitted, no context management is applied.
-
-```yaml
-strategy: sliding_window
-# Conversation with 5 turns reaches token limit
-# Drop: Turn 1, Keep: System prompt, Turn 2, Turn 3, Turn 4, Turn 5
-```
-
-Future strategies: `summarize` (compress old turns), `truncate_middle` (keep first and last turns). These strategies are validated but not yet implemented — using them will produce a validation error suggesting `sliding_window` instead.
-
-#### stop_condition
-
-Expression to evaluate after each turn. When true, conversation exits.
-
-```yaml
-stop_condition: "response contains 'APPROVED'"
-```
-
-**Expression Syntax**: Supports comparison operators and string functions:
-- `response contains 'text'` — Check if response contains substring
-- `response matches 'regex'` — Match against regex pattern
-- `turn_count >= 5` — Check number of turns
-- `tokens_used > 50000` — Check token consumption
-
-See [Stop Condition Expressions](#stop-condition-expressions) for examples.
-
-## Accessing Conversation State
-
-Conversation state is stored in the step state and accessible in subsequent steps:
-
-```yaml
-analyze_conversation:
-  type: agent
-  provider: claude
-  mode: conversation
-  initial_prompt: "Start conversation"
-  on_success: review_conversation
-
-review_conversation:
-  type: step
-  command: |
-    echo "Conversation lasted {{.states.analyze_conversation.conversation.total_turns}} turns"
-    echo "Total tokens: {{.states.analyze_conversation.conversation.total_tokens}}"
-  on_success: done
-```
-
-### Conversation State Structure
-
-> **Note:** The `role` field is read-only execution metadata assigned by AWF during execution. `system_prompt` maps to `system`, `initial_prompt`/`prompt` to `user`, and CLI responses to `assistant`. You do not write roles in workflow YAML — they appear only in the runtime state output.
-
-```yaml
-states:
-  analyze_conversation:
-    output: "Final response text"
-    conversation:
-      turns:
-        - role: system
-          content: "You are a code reviewer..."
-          tokens: 50
-        - role: user
-          content: "Review this code..."
-          tokens: 500
-        - role: assistant
-          content: "I found these issues..."
-          tokens: 800
-        - role: user
-          content: "Fix the issues"
-          tokens: 20
-        - role: assistant
-          content: "Here's the fixed code... APPROVED"
-          tokens: 600
-      total_turns: 5
-      total_tokens: 1970
-      stopped_by: "condition"  # or "max_turns", "max_tokens"
-```
-
-## Stop Condition Expressions
-
-Exit conversations early with programmatic conditions.
-
-### String Matching
-
-```yaml
-# Exit when response contains exact text
-stop_condition: "response contains 'DONE'"
-
-# Exit when response matches pattern
-stop_condition: "response matches 'APPROVED|COMPLETE'"
-
-# Case-insensitive matching
-stop_condition: "response contains 'done' || response contains 'finished'"
-```
-
-### Token-Based Conditions
-
-```yaml
-# Exit when token count reaches threshold
-stop_condition: "tokens_used > 80000"
-
-# Exit when approaching context limit
-stop_condition: "tokens_used > max_context_tokens * 0.9"
-```
-
-### Turn-Based Conditions
-
-```yaml
-# Exit after specific number of turns
-stop_condition: "turn_count >= 5"
-
-# Complex: exit after 5 turns OR if done
-stop_condition: "turn_count >= 5 || response contains 'APPROVED'"
-```
-
-### Advanced Examples
-
-```yaml
-# Code review: approve after syntax fixes
-stop_condition: "response contains 'All issues fixed' && turn_count >= 2"
-
-# Research loop: gather enough sources
-stop_condition: "response contains 'sufficient sources' || turn_count >= 10"
-
-# Conversation: stop on topic completion or token budget
-stop_condition: "response contains 'Summary:' || tokens_used > 90000"
-```
-
-## Continuing a Conversation from a Previous Step
-
-The `continue_from` field resumes a prior step's conversation session. For CLI providers (Claude, Gemini, Codex, OpenCode), AWF extracts the real session/thread ID from the first turn's output and passes it to the provider's native resume flag on subsequent turns. For `openai_compatible`, it loads the full conversation turn history as message context.
-
-```yaml
-states:
-  initial: refine_code
-
-  refine_code:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: "You are a code reviewer."
-    initial_prompt: |
-      Review this code:
-      {{.inputs.code}}
-    conversation:
-      max_turns: 5
-    on_success: add_requirements
-
-  add_requirements:
-    type: agent
-    provider: claude
-    mode: conversation
+      You are a concise technical assistant. Ask one clarifying question at a time.
     prompt: |
-      Also consider these requirements:
-      {{.inputs.additional_requirements}}
-    conversation:
-      max_turns: 3
-      continue_from: refine_code
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-**How it works:**
-- Step `refine_code` executes and extracts a session ID from CLI output (real UUID/thread ID, not a fabricated sentinel)
-- Step `add_requirements` resumes the session from `refine_code` using `continue_from: refine_code`
-- AWF passes the provider the resume flag with the extracted ID (e.g., `-r <session_id>` for Claude, `--resume <uuid>` for Gemini, `resume <thread_id>` for Codex, `-s <id>` for OpenCode)
-- The provider continues the existing conversation with full context from the prior step
-- Each step stores its own `SessionID` — chains of 3+ steps work (B from A, C from B)
-- Provider mismatch between source and target is allowed but may produce errors if incompatible
-
-## Examples
-
-### Iterative Code Review
-
-```yaml
-name: iterative-code-review
-version: "1.0.0"
-
-inputs:
-  - name: code
-    type: string
-    required: true
-  - name: requirements
-    type: string
-    required: true
-
-states:
-  initial: review
-
-  review:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: |
-      You are an expert code reviewer. Help improve the code quality step by step.
-      After each suggestion, wait for the user's response or revision.
-      Say "Code review complete!" when satisfied.
-    initial_prompt: |
-      Review this code and suggest the first improvement:
-
-      {{.inputs.code}}
-
-      Requirements to consider:
-      {{.inputs.requirements}}
+      {{.inputs.topic}}
     options:
-      model: claude-sonnet-4-20250514
-    conversation:
-      max_turns: 10
-      max_context_tokens: 100000
-      strategy: sliding_window
-      stop_condition: "response contains 'Code review complete!'"
+      model: claude-haiku-4-5
+    timeout: 600
     on_success: done
 
   done:
     type: terminal
+    status: success
 ```
 
-### Multi-Stage Problem Solving
-
-```yaml
-name: problem-solver
-version: "1.0.0"
-
-inputs:
-  - name: problem
-    type: string
-    required: true
-
-states:
-  initial: analyze
-
-  analyze:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: |
-      You are a problem-solving expert. Work through problems systematically.
-      Use the following stages:
-      1. ANALYZE: Break down the problem
-      2. PLAN: Outline approach
-      3. IMPLEMENT: Provide solution
-      4. VERIFY: Check solution
-
-      End with "COMPLETE" when done.
-    initial_prompt: |
-      {{.inputs.problem}}
-    conversation:
-      max_turns: 8
-      max_context_tokens: 50000
-      stop_condition: "response contains 'COMPLETE'"
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-### Document Refinement Loop
-
-```yaml
-name: document-refinement
-version: "1.0.0"
-
-inputs:
-  - name: document
-    type: string
-    required: true
-
-states:
-  initial: refine
-
-  refine:
-    type: agent
-    provider: claude
-    mode: conversation
-    system_prompt: |
-      You are a professional editor. Improve the document iteratively.
-      Respond with the refined version and ask what specific improvements to focus on next.
-    initial_prompt: |
-      {{.inputs.document}}
-    conversation:
-      max_turns: 5
-      max_context_tokens: 80000
-      stop_condition: "turn_count >= 3"
-    on_success: summary
-
-  summary:
-    type: step
-    command: |
-      echo "Refinement complete."
-      echo "Turns: {{.states.refine.conversation.total_turns}}"
-      echo "Tokens: {{.states.refine.conversation.total_tokens}}"
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-## Best Practices
-
-### 1. Set Reasonable Turn Limits
-
-Always set `max_turns` to prevent runaway conversations:
-
-```yaml
-conversation:
-  max_turns: 10  # Prevent infinite loops
-```
-
-### 2. Define Clear Stop Conditions
-
-Use specific, unambiguous conditions:
-
-```yaml
-# ✅ Good: Specific completion signal
-stop_condition: "response contains 'APPROVED'"
-
-# ❌ Vague: Could match unintended text
-stop_condition: "response contains 'done'"
-```
-
-### 3. Monitor Token Usage
-
-Set appropriate `max_context_tokens`:
-
-```yaml
-conversation:
-  max_context_tokens: 100000  # Model limit for Claude 3 Sonnet
-```
-
-Check token usage in subsequent steps:
-
-```yaml
-log_tokens:
-  type: step
-  command: echo "Tokens used: {{.states.analyze.conversation.total_tokens}}"
-  on_success: done
-```
-
-### 4. Use System Prompt Effectively
-
-System prompt guides the agent's behavior across all turns. For CLI providers, the `--system-prompt` flag is passed on the first conversation turn. On resumed turns (2+), the provider retains the system prompt from the session.
-
-```yaml
-system_prompt: |
-  You are a code reviewer.
-  Focus on security, performance, and readability.
-  Keep responses concise.
-  Use JSON format for structured feedback.
-```
-
-### 5. Test Stop Conditions
-
-Verify stop conditions work as expected:
+Run it:
 
 ```bash
-awf run workflow --dry-run
-# Review the prompt and stop condition
+awf run interactive-clarify
 ```
 
-### 6. Handle Errors Gracefully
+You'll see the agent's first reply, then a `> ` prompt where you can type. When you're done, press Enter on an empty line or type `exit`.
 
-Add error handling for conversation failures:
+### Required and Optional Fields
 
-```yaml
-refine:
-  type: agent
-  mode: conversation
-  initial_prompt: "Review this code"
-  on_success: done
-  on_failure: error
-  timeout: 120
+| Field | Required | Description |
+|---|---|---|
+| `provider` | Yes | Agent provider (`claude`, `gemini`, `codex`, `opencode`, `openai_compatible`) |
+| `mode` | Yes | Must be `conversation` |
+| `prompt` | Yes | First user message — sent automatically as turn 1 |
+| `system_prompt` | No | System message preserved for the whole session |
+| `options` | No | Provider-specific options (model, allowed_tools, etc.) |
+| `timeout` | No | Per-turn timeout in seconds (default: 300) |
 
-error:
-  type: terminal
-  status: failure
+### Terminal Requirement
+
+`mode: conversation` reads from `os.Stdin`. It requires a TTY or piped stdin. In CI/headless runs, pipe an empty input to exit immediately after turn 1:
+
+```bash
+echo "" | awf run interactive-clarify
 ```
 
-## Troubleshooting
+For fully non-interactive workflows, prefer [cross-step session tracking](#cross-step-session-tracking) below.
 
-### Conversation Runs Longer Than Expected
+### Exit Signals
 
-**Problem**: Conversation continues past expected point
+The conversation ends when:
+- The user submits an **empty line**
+- The user types `exit` or `quit` (case-insensitive)
+- `stdin` returns EOF (e.g., a closed pipe)
+- The step timeout fires
 
-**Solutions**:
-- Review stop condition: `awf run workflow --dry-run`
-- Lower `max_turns` if using as fallback
-- Make stop condition more specific (avoid ambiguous phrases)
-- Check provider CLI is matching expected output
+The step completes with `stopped_by: user_exit` in the recorded state.
 
-### Token Count Exceeds Limit
+## Cross-Step Session Tracking
 
-**Problem**: Context window strategy truncates important turns
+For automated workflows, you rarely want an interactive loop. You want step A to establish a conversation with an agent, and step B (later in the workflow) to resume that same session with additional context — without a human in the loop.
 
-**Solutions**:
-- Increase `max_context_tokens` if model supports it
-- Reduce initial prompt size
-- Use shorter system prompt
-- Lower `max_turns` to reduce conversation length
+This is what the `conversation:` sub-struct on a **single-mode** agent step provides.
 
-### Conversation Fails After First Turn
-
-**Problem**: Error "prompt cannot be empty" on second turn
-
-**Solution**: This was a bug in versions prior to F051 (fixed in v0.1.0+). The implementation incorrectly set prompts to empty strings for subsequent conversation turns.
-
-**Workaround** (if on older version):
-- Upgrade to latest version with `go install github.com/awf-project/cli/cmd/awf@latest`
-- Or use single-turn agent steps with explicit state chaining instead
-
-**Fixed in**: F051 (See CHANGELOG.md for details)
-
-### CLI Providers Execute Turns Independently
-
-**Problem**: Agent doesn't maintain history across turns with CLI providers
-
-**Explanation**: CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) execute each conversation turn as an independent process invocation. AWF passes only the current turn's prompt via `-p` (not serialized history). With session resume support (F073) and improved session ID extraction (F079), providers use native `--resume` flags to maintain context across turns:
-- Each turn starts a fresh CLI process with provider-specific resume flags
-- **Claude** uses `-r <session_id>` to resume
-- **Gemini** uses `--resume <session_id>` (real UUID from `type: "init"` JSON event)
-- **Codex** uses `resume <thread_id>` (real ID from `type: "thread.started"` JSON event)
-- **OpenCode** uses `-s <session_id>` (real ID from `type: "step_start"` JSON event, falls back to `-c` if extraction fails)
-- Session IDs are extracted from CLI output after the first turn and used on subsequent turns
-
-**Solution**: CLI providers now support session resume natively and reliably (as of F079). If you need HTTP-based multi-turn conversation with full message history, use the `openai_compatible` provider, which sends the complete message history via the Chat Completions API:
+### Example: Seed and Recall
 
 ```yaml
-refine:
-  type: agent
-  provider: openai_compatible
-  mode: conversation
-  options:
-    base_url: https://api.openai.com/v1
-    model: gpt-4
-  initial_prompt: "Review this code"
-  conversation:
-    max_turns: 10
-    strategy: sliding_window
-  on_success: done
-```
+name: session-resume-demo
+version: "1.0.0"
 
-## Injecting Context Mid-Conversation
-
-The `inject_context` field enriches ongoing conversations with additional context after the first turn. This is useful for passing results from other steps or static reference material without cluttering `initial_prompt`.
-
-### How It Works
-
-- **Turn 1**: Only `initial_prompt` (or `prompt`) is sent — `inject_context` is excluded
-- **Turn 2+**: The interpolated `inject_context` content is appended to the user prompt, separated by two newlines
-- **Per-turn interpolation**: Template variables are re-evaluated each turn, so `{{.states.*}}` references reflect the latest available state
-
-### Example: Injecting Step Results
-
-```yaml
 states:
-  initial: run_tests
+  initial: seed
 
-  run_tests:
-    type: step
-    command: "make test"
-    on_success: review
+  seed:
+    type: agent
+    provider: claude
+    system_prompt: "You are a memory test assistant."
+    prompt: |
+      Remember this secret: the magic word is BANANA42.
+      Reply with exactly: "stored".
+    conversation: {}              # opt into session tracking
+    options:
+      model: claude-haiku-4-5
+    on_success: recall
 
-  review:
+  recall:
+    type: agent
+    provider: claude
+    prompt: |
+      What was the magic word I told you to remember?
+    conversation:
+      continue_from: seed         # resume seed's session
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+```
+
+Both steps run as `mode: single` (the default — no `mode:` line needed). There is no interactive loop. Each step runs exactly one agent turn.
+
+- `seed` has `conversation: {}`. This marks the step as session-tracked: AWF calls `provider.ExecuteConversation` (instead of `provider.Execute`), the provider runs one turn, and the session ID returned by the CLI is captured into `state.conversation.session_id`.
+- `recall` has `conversation: {continue_from: seed}`. AWF clones the conversation state from `seed` (session ID + turn history) and passes it to the provider, which resumes the session via its native flag (`claude -r <id>`, `gemini --resume <id>`, `codex resume <id>`, `opencode -s <id>`).
+
+### Why the Empty `conversation: {}`?
+
+The presence of the `conversation:` sub-struct — even empty — is the marker that opts the step into session tracking. Without it, a single-mode agent step uses `provider.Execute` and produces no session state, so no other step can ever resume it.
+
+Think of `conversation:` as a **flag** meaning *"track this step's session"*, not as "enable multi-turn mode". The field name is historical; its F083 meaning is session metadata.
+
+### ContinueFrom Rules
+
+`continue_from` references another step by name. At runtime, AWF enforces:
+
+1. The referenced step must have **already executed** in the current run (forward references fail).
+2. Its `state.conversation` must be non-nil — i.e., it must itself have been session-tracked (either `mode: conversation` or `mode: single` + `conversation: {}`).
+3. The conversation state must have a non-empty `session_id` **or** at least one recorded turn.
+4. For `provider: openai_compatible` (HTTP-based), at least one recorded turn is required since there is no server-side session.
+
+Violating any of these produces a clear error: `continue_from: step "X" has no session ID or conversation history to resume`.
+
+### Cross-Provider Session Chains
+
+Each provider has its own session identifier format and CLI flag. A session established by Claude cannot be resumed by Gemini. Keep `provider` consistent across the seed and recall steps — or use distinct seed/recall pairs per provider, as in [`test-resume.yaml`](https://github.com/awf-project/cli/blob/main/.awf/workflows/test-resume.yaml).
+
+### Session Tracking vs. State Passing
+
+AWF has always supported chaining agent steps via template interpolation:
+
+```yaml
+step2:
+  type: agent
+  prompt: |
+    Based on: {{.states.step1.Output}}
+    Now answer: ...
+```
+
+This is **state passing** — step2 gets step1's textual output but the agent has no memory of step1's conversation. Every step is stateless from the provider's perspective.
+
+Session tracking is different: the provider itself retains the conversation (via its CLI's session store), so step2 resumes as if the agent never stopped. Benefits:
+
+- Large prior context doesn't need to be re-sent in the prompt (token savings)
+- The agent can reference earlier parts of the session implicitly
+- System prompt and tool state are retained by the provider
+
+Downsides:
+- Coupled to the provider's session store (opaque, may expire)
+- Only works within a single workflow run (sessions aren't persisted across runs)
+- Fails gracefully to stateless if session ID extraction fails
+
+Use state passing for simple chaining; use session tracking when the agent needs semantic continuity.
+
+## Common Configuration
+
+### Fields Removed in F083
+
+If you're upgrading from an earlier AWF version, these fields no longer exist:
+
+| Removed Field | Replacement |
+|---|---|
+| `initial_prompt` | Use `prompt` — it serves as the first user message |
+| `conversation.max_turns` | The user drives turn count in interactive mode; `mode: single` is always one turn |
+| `conversation.max_context_tokens` | Removed — context window management is deferred to the provider |
+| `conversation.strategy` | Removed — no automatic truncation |
+| `conversation.stop_condition` | Removed — user types `exit`/`quit` to stop interactive mode |
+| `conversation.inject_context` | Removed — compose prompts with standard `{{.states.*}}` interpolation |
+
+Workflows using any of these fields will silently ignore them (YAML lenient mode), which may produce unexpected behavior. **Remove them explicitly.**
+
+## Observability
+
+Both conversation features populate `state.conversation` on the step state with:
+
+| Field | Description |
+|---|---|
+| `session_id` | Provider-assigned session identifier (empty if extraction failed) |
+| `turns` | List of user and assistant messages recorded during the step |
+| `total_turns` | Turn counter |
+| `total_tokens` | Estimated token usage across the session |
+| `stopped_by` | `user_exit` (user typed exit/quit/empty line) or `error` |
+
+These fields are visible in `awf history <workflow-id>` output and in the step state files under `storage/states/`.
+
+## Complete Examples
+
+### Interactive Clarification Loop
+
+A runnable example of `mode: conversation`. Paste into a file, run with `awf run <filename>`, answer the prompts, and type `exit` when done.
+
+```yaml
+name: clarify
+version: "1.0.0"
+description: Interactive specification clarification session
+
+inputs:
+  - name: topic
+    type: string
+    default: "explain Go channels in one sentence"
+
+states:
+  initial: chat
+
+  chat:
     type: agent
     provider: claude
     mode: conversation
-    initial_prompt: "Review the codebase for quality issues"
-    conversation:
-      max_turns: 5
-      inject_context: |
-        Test results from the previous step:
-        {{.states.run_tests.output}}
-      stop_condition: "response contains 'APPROVED'"
+    system_prompt: |
+      You are a concise technical assistant. Ask one clarifying question
+      at a time and wait for the user's answer before continuing. When
+      the user types "exit", produce a final summary.
+    prompt: |
+      {{.inputs.topic}}
+    options:
+      model: claude-haiku-4-5
+    timeout: 600
     on_success: done
+
+  done:
+    type: terminal
+    status: success
 ```
 
-In this example, the agent receives only the review prompt on turn 1. On turns 2 through 5, each user prompt also includes the interpolated test results.
+### Cross-Step Session Resume Across Providers
 
-### Edge Cases
+A non-interactive example exercising session tracking across Claude, Gemini, and OpenCode. Each provider gets a seed step (establishes a session with a secret) and a recall step (resumes the session and retrieves the secret).
 
-- **Empty or whitespace-only**: Treated as no injection — nothing appended
-- **Missing state references**: Template resolves to empty string (no error)
-- **With `continue_from`**: Both work together — `continue_from` resumes the session, `inject_context` enriches subsequent turns
+```yaml
+name: session-resume-demo
+version: "1.0.0"
+description: Cross-step session resume across Claude, Gemini, and OpenCode
 
-## Limitations
+states:
+  initial: claude_seed
 
-### Provider Compatibility
+  claude_seed:
+    type: agent
+    provider: claude
+    system_prompt: "You are a memory test assistant. Answer briefly."
+    prompt: |
+      Remember this secret: the magic word is BANANA42.
+      Reply with exactly: "stored".
+    conversation: {}
+    options:
+      dangerously_skip_permissions: true
+    timeout: 60
+    on_success: claude_recall
 
-All providers support conversation mode with context continuity:
+  claude_recall:
+    type: agent
+    provider: claude
+    prompt: "What is the magic word I told you to remember?"
+    conversation:
+      continue_from: claude_seed
+    options:
+      dangerously_skip_permissions: true
+    timeout: 60
+    on_success: gemini_seed
 
-- **`openai_compatible`** maintains full conversation history via the Chat Completions API (messages array).
-- **CLI providers** (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags (`-r`, `resume`, `--resume`, `-s`) to maintain context across turns. Session IDs are extracted from provider-specific JSON events in CLI output after the first turn and passed on subsequent turns. Extraction is reliable as of F079 and uses real provider session/thread IDs; if extraction fails (rare), the provider falls back gracefully to stateless mode or fallback flags (e.g., OpenCode `-c` for "continue last session").
+  gemini_seed:
+    type: agent
+    provider: gemini
+    system_prompt: "You are a memory test assistant. Answer briefly."
+    prompt: |
+      Remember this secret: the magic word is MANGO17.
+      Reply with exactly: "stored".
+    conversation: {}
+    options:
+      dangerously_skip_permissions: true
+    timeout: 60
+    on_success: gemini_recall
 
-### Current Implementation
+  gemini_recall:
+    type: agent
+    provider: gemini
+    prompt: "What is the magic word I told you to remember?"
+    conversation:
+      continue_from: gemini_seed
+    options:
+      dangerously_skip_permissions: true
+    timeout: 60
+    on_success: verify
 
-- Only `sliding_window` strategy implemented (dropping oldest turns); `summarize` and `truncate_middle` are rejected at validation
-- Stop conditions limited to string/token/turn expressions
-- No branching conversations (single linear path)
+  verify:
+    type: step
+    command: |
+      echo "claude expected BANANA42 -> {{.states.claude_recall.Output}}"
+      echo "gemini expected MANGO17  -> {{.states.gemini_recall.Output}}"
+    continue_on_error: true
+    on_success: done
 
-### Future Enhancements
+  done:
+    type: terminal
+    status: success
+```
 
-- `summarize` strategy (LLM-based compression of old turns)
-- `truncate_middle` strategy (keep first and last turns)
-- Conversation branching (explore multiple paths)
+Run with `awf run session-resume-demo`. Each agent step runs exactly one turn; the recall steps prove the provider retained the seed step's session by recalling the secret without being re-told.
 
 ## See Also
 
-- [Agent Steps Guide](agent-steps.md) - Standard single-turn agent invocation
-- [Workflow Syntax Reference](workflow-syntax.md#agent-state) - Complete agent step options
-- [Template Variables](../reference/interpolation.md) - Available variables in prompts
-- [Examples](examples.md) - More workflow examples
+- [Agent Steps](agent-steps.md) — complete reference for `type: agent`, including provider options, output formats, and single-turn usage
+- [Workflow Syntax](workflow-syntax.md) — full YAML reference

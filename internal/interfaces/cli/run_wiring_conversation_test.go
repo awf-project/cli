@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestRunCommand_WiresConversationManager verifies ConversationManager is instantiated
-// and injected for all conversation workflow scenarios and execution paths.
+// TestRunCommand_WiresConversationManager verifies ConversationManager and UserInputReader
+// are instantiated and injected for all conversation workflow scenarios and execution paths.
 func TestRunCommand_WiresConversationManager(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -28,14 +28,12 @@ version: "1.0.0"
 states:
   initial: chat
   chat:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Hello"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Hello"
-      max_turns: 3
-      strategy: sliding_window
     on_success: done
   done:
     type: terminal
@@ -50,23 +48,22 @@ version: "1.0.0"
 states:
   initial: chat
   chat:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Hello"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Hello"
-      max_turns: 2
     on_success: done
   done:
     type: terminal
 `,
 		},
 		{
-			name:   "multi-turn with input",
-			wfName: "test-multiturn.yaml",
-			args:   []string{"run", "test-multiturn", "--input", "task=analyze the code"},
-			wfYAML: `name: test-multiturn
+			name:   "with system prompt",
+			wfName: "test-system-prompt.yaml",
+			args:   []string{"run", "test-system-prompt", "--input", "task=analyze the code"},
+			wfYAML: `name: test-system-prompt
 version: "1.0.0"
 inputs:
   - name: task
@@ -75,14 +72,13 @@ inputs:
 states:
   initial: discuss
   discuss:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    system_prompt: "You are a helpful code reviewer"
+    prompt: "Task: {{inputs.task}}"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Task: {{inputs.task}}"
-      max_turns: 5
-      strategy: sliding_window
     on_success: done
   done:
     type: terminal
@@ -97,67 +93,22 @@ version: "1.0.0"
 states:
   initial: first_chat
   first_chat:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Start conversation"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Start conversation"
-      max_turns: 2
     on_success: second_chat
   second_chat:
-    type: step
-    agent:
-      provider: claude
-      model: sonnet
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Continue discussion"
     conversation:
-      initial_prompt: "Continue discussion"
       continue_from: first_chat
-      max_turns: 2
-    on_success: done
-  done:
-    type: terminal
-`,
-		},
-		{
-			name:   "inject_context enrichment",
-			wfName: "test-inject-context.yaml",
-			args:   []string{"run", "test-inject-context"},
-			wfYAML: `name: test-inject-context
-version: "1.0.0"
-states:
-  initial: chat_with_context
-  chat_with_context:
-    type: step
-    agent:
-      provider: claude
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Help me with this task"
-      max_turns: 3
-      inject_context: "Additional context: focus on performance"
-    on_success: done
-  done:
-    type: terminal
-`,
-		},
-		{
-			name:   "stop_condition evaluation",
-			wfName: "test-stop-condition.yaml",
-			args:   []string{"run", "test-stop-condition"},
-			wfYAML: `name: test-stop-condition
-version: "1.0.0"
-states:
-  initial: conditional_chat
-  conditional_chat:
-    type: step
-    agent:
-      provider: claude
-      model: sonnet
-    conversation:
-      initial_prompt: "Answer briefly"
-      max_turns: 10
-      stop_condition: "len(states.conditional_chat.conversation.turns) > 2"
     on_success: done
   done:
     type: terminal
@@ -179,22 +130,20 @@ states:
       - chat_2
     on_success: done
   chat_1:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "First conversation"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "First conversation"
-      max_turns: 2
     on_success: done
   chat_2:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Second conversation"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Second conversation"
-      max_turns: 2
     on_success: done
   done:
     type: terminal
@@ -209,19 +158,38 @@ version: "1.0.0"
 states:
   initial: chat_step
   chat_step:
-    type: step
-    agent:
-      provider: claude
+    type: agent
+    provider: claude
+    mode: conversation
+    prompt: "Hello from single step"
+    options:
       model: sonnet
-    conversation:
-      initial_prompt: "Hello from single step"
-      max_turns: 2
     on_success: done
   done:
     type: terminal
 `,
 		},
 	}
+
+	// Force PATH to an empty directory so the claude binary cannot be found.
+	// These tests only verify ConversationManager/UserInputReader wiring — they
+	// should never actually invoke the provider CLI. Without this guard, each
+	// subtest would make a real API call to Anthropic, adding 5–10s per case
+	// and leaking through to the interactive stdin loop if the call succeeds.
+	t.Setenv("PATH", t.TempDir())
+
+	// Redirect os.Stdin to /dev/null as a defensive second layer in case the
+	// stdin reader is reached before the provider fails fast.
+	origStdin := os.Stdin
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatalf("open /dev/null: %v", err)
+	}
+	os.Stdin = devNull
+	t.Cleanup(func() {
+		os.Stdin = origStdin
+		_ = devNull.Close()
+	})
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -241,9 +209,13 @@ states:
 			fullOutput := out.String() + errOut.String()
 			assert.NotContains(t, fullOutput, "conversation manager not configured",
 				"ConversationManager should be wired in %s path", tc.name)
+			assert.NotContains(t, fullOutput, "conversation mode requires a UserInputReader",
+				"UserInputReader should be wired in %s path", tc.name)
 			if err != nil {
 				assert.NotContains(t, err.Error(), "conversation manager not configured",
 					"ConversationManager must be wired in %s execution path", tc.name)
+				assert.NotContains(t, err.Error(), "conversation mode requires a UserInputReader",
+					"UserInputReader must be wired in %s execution path", tc.name)
 			}
 		})
 	}

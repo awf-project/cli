@@ -1,6 +1,9 @@
 package application
 
-import "github.com/awf-project/cli/internal/domain/ports"
+import (
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/interpolation"
+)
 
 // mockLogger implements ports.Logger for testing.
 // This is a shared test helper for application package tests.
@@ -28,4 +31,21 @@ func (m *mockLogger) Error(msg string, fields ...any) {
 
 func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
+}
+
+// newMockLogger creates a new mockLogger instance
+func newMockLogger() *mockLogger {
+	return &mockLogger{}
+}
+
+// mockResolver provides simple passthrough resolution for testing
+type mockResolver struct{}
+
+func (m *mockResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	return template, nil
+}
+
+// newMockResolver creates a new mockResolver instance
+func newMockResolver() *mockResolver {
+	return &mockResolver{}
 }

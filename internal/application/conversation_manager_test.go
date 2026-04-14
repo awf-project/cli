@@ -7,148 +7,155 @@ import (
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// mockTokenizer implements ports.Tokenizer for testing
-type mockTokenizer struct {
-	counts     map[string]int
-	err        error
-	isEstimate bool
-	modelName  string
+// mockAgentProvider for conversation testing
+type mockAgentProvider struct {
+	name              string
+	conversationError error
+	conversationFunc  func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error)
 }
 
-func newMockTokenizer() *mockTokenizer {
-	return &mockTokenizer{
-		counts:     make(map[string]int),
-		isEstimate: false,
-		modelName:  "test-tokenizer",
+func newMockAgentProvider(name string) *mockAgentProvider {
+	return &mockAgentProvider{
+		name: name,
+		conversationFunc: func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
+			result := workflow.NewConversationResult(name)
+			result.State = state
+			state.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "Agent response to: "+prompt))
+			return result, nil
+		},
 	}
 }
 
-func (m *mockTokenizer) CountTokens(text string) (int, error) {
-	if m.err != nil {
-		return 0, m.err
+func (m *mockAgentProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
+	return nil, errors.New("single execution not supported in conversation mode")
+}
+
+func (m *mockAgentProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
+	if m.conversationError != nil {
+		return nil, m.conversationError
 	}
-	if count, ok := m.counts[text]; ok {
-		return count, nil
+	if m.conversationFunc != nil {
+		return m.conversationFunc(ctx, state, prompt, options, stdout, stderr)
 	}
-	// Default approximation: ~4 chars per token
-	return len(text) / 4, nil
+	return nil, errors.New("provider not configured")
 }
 
-func (m *mockTokenizer) CountTurnsTokens(turns []string) (int, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	total := 0
-	for _, turn := range turns {
-		count, err := m.CountTokens(turn)
-		if err != nil {
-			return 0, err
-		}
-		total += count
-	}
-	return total, nil
-}
-
-func (m *mockTokenizer) IsEstimate() bool {
-	return m.isEstimate
-}
-
-func (m *mockTokenizer) ModelName() string {
-	return m.modelName
-}
-
-// mockConversationProvider implements ports.AgentProvider with conversation support
-type mockConversationProvider struct {
-	name          string
-	conversations map[string]*workflow.ConversationResult
-	execError     error
-	validateOK    bool
-}
-
-func newMockConversationProvider(name string) *mockConversationProvider {
-	return &mockConversationProvider{
-		name:          name,
-		conversations: make(map[string]*workflow.ConversationResult),
-		validateOK:    true,
-	}
-}
-
-func (m *mockConversationProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-	return nil, errors.New("single execution not supported, use ExecuteConversation")
-}
-
-func (m *mockConversationProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-	if m.execError != nil {
-		return nil, m.execError
-	}
-	if result, ok := m.conversations[prompt]; ok {
-		return result, nil
-	}
-	// Default result - stub, not implemented
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockConversationProvider) Name() string {
+func (m *mockAgentProvider) Name() string {
 	return m.name
 }
 
-func (m *mockConversationProvider) Validate() error {
-	if !m.validateOK {
-		return errors.New("provider validation failed")
-	}
+func (m *mockAgentProvider) Validate() error {
 	return nil
 }
 
+// mockAgentRegistry for testing
+type mockAgentRegistry struct {
+	providers map[string]ports.AgentProvider
+	err       error
+}
+
+func newMockAgentRegistry() *mockAgentRegistry {
+	return &mockAgentRegistry{
+		providers: make(map[string]ports.AgentProvider),
+	}
+}
+
+func (m *mockAgentRegistry) Register(provider ports.AgentProvider) error {
+	m.providers[provider.Name()] = provider
+	return nil
+}
+
+func (m *mockAgentRegistry) Get(name string) (ports.AgentProvider, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if p, ok := m.providers[name]; ok {
+		return p, nil
+	}
+	return nil, errors.New("provider not found: " + name)
+}
+
+func (m *mockAgentRegistry) List() []string {
+	return nil
+}
+
+func (m *mockAgentRegistry) Has(name string) bool {
+	_, ok := m.providers[name]
+	return ok
+}
+
+// mockUserInputReader for testing
+type mockUserInputReader struct {
+	inputs []string
+	index  int
+	err    error
+}
+
+func newMockUserInputReader(inputs ...string) *mockUserInputReader {
+	return &mockUserInputReader{
+		inputs: inputs,
+		index:  0,
+	}
+}
+
+func (m *mockUserInputReader) ReadInput(ctx context.Context) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	if m.index >= len(m.inputs) {
+		return "", nil
+	}
+	input := m.inputs[m.index]
+	m.index++
+	return input, nil
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
 func TestNewConversationManager(t *testing.T) {
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
 
 	assert.NotNil(t, manager)
 }
 
-func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
+func TestConversationManager_ExecuteConversation_MultiTurn(t *testing.T) {
+	// Arrange: conversation with 2 user messages + 1 empty to exit
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	provider := newMockAgentProvider("claude")
+	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	userInput := newMockUserInputReader(
+		"Follow-up question", // Turn 2 user input
+		"Another question",   // Turn 3 user input
+		"",                   // Empty ends conversation
+	)
+	manager.SetUserInputReader(userInput)
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Hello, how are you?",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -157,40 +164,46 @@ func TestConversationManager_SingleTurn_HappyPath(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, workflow.StopReasonUserExit, result.State.StoppedBy)
+	// Total turns: initial prompt, follow-up, another question = 3 or more turns
+	assert.GreaterOrEqual(t, len(result.State.Turns), 3)
 }
 
-func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_NoUserInputReader(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	provider := newMockAgentProvider("claude")
+	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	// Do NOT set UserInputReader
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Let's discuss AI",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -199,41 +212,31 @@ func TestConversationManager_MultiTurn_HappyPath(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "UserInputReader")
 }
 
-func TestConversationManager_WithSystemPrompt(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_NilStep(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:     "claude",
-			Prompt:       "What is 2+2?",
-			SystemPrompt: "You are a helpful math tutor.",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         3,
-		MaxContextTokens: 2000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -242,41 +245,38 @@ func TestConversationManager_WithSystemPrompt(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		nil,
+		&workflow.ConversationConfig{},
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
 }
 
-func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_NilConfig(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	evaluator.boolResults[`response contains "DONE"`] = true
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Process data",
+			Prompt:   "Hello",
 		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         10,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-		StopCondition:    `response contains "DONE"`,
 	}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
@@ -286,578 +286,40 @@ func TestConversationManager_StopCondition_ResponseContains(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		nil,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
 }
 
-func TestConversationManager_StopCondition_TurnCount(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_ProviderNotFound(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	evaluator.boolResults[`turn_count >= 3`] = true
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Iterate",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         10,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-		StopCondition:    `turn_count >= 3`,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_MaxTurns_Reached(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Keep chatting",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         3,
-		MaxContextTokens: 10000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_MaxTurns_One(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Single question",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_MaxTokens_Exceeded(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	tokenizer.counts["Very long response"] = 3000
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Generate long text",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         10,
-		MaxContextTokens: 2000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_Strategy_SlidingWindow(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Long conversation",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         20,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_Strategy_None(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "No truncation",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 0, // no limit
-		Strategy:         workflow.StrategyNone,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-// T003: Pass system_prompt through options map in conversation_manager.go
-
-func TestConversationManager_PassesSystemPromptInOptions(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedOptions map[string]any
-	mockProvider := mocks.NewMockAgentProvider("claude")
-
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		capturedOptions = options
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(assistantTurn)
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "response"
-		return result, nil
-	})
-
-	_ = registry.Register(mockProvider)
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:     "claude",
-			Prompt:       "Hello world",
-			SystemPrompt: "You are a helpful assistant",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, capturedOptions, "options map should be captured in provider call")
-	assert.Equal(t, "You are a helpful assistant", capturedOptions["system_prompt"])
-}
-
-func TestConversationManager_OmitsSystemPromptWhenEmpty(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedOptions map[string]any
-	mockProvider := mocks.NewMockAgentProvider("claude")
-
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		capturedOptions = options
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(assistantTurn)
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "response"
-		return result, nil
-	})
-
-	_ = registry.Register(mockProvider)
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:     "claude",
-			Prompt:       "Hello world",
-			SystemPrompt: "", // empty system prompt
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, capturedOptions, "options map should exist")
-	_, exists := capturedOptions["system_prompt"]
-	assert.False(t, exists, "system_prompt should not be in options when empty")
-}
-
-func TestConversationManager_PreservesExistingOptions(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedOptions map[string]any
-	mockProvider := mocks.NewMockAgentProvider("claude")
-
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		capturedOptions = options
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(assistantTurn)
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "response"
-		return result, nil
-	})
-
-	_ = registry.Register(mockProvider)
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:     "claude",
-			Prompt:       "Hello world",
-			SystemPrompt: "You are helpful",
-			Options: map[string]any{
-				"temperature": 0.7,
-				"max_tokens":  100,
-			},
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, capturedOptions, "options map should be captured")
-	assert.Equal(t, "You are helpful", capturedOptions["system_prompt"])
-	assert.Equal(t, 0.7, capturedOptions["temperature"])
-	assert.Equal(t, 100, capturedOptions["max_tokens"])
-}
-
-func TestConversationManager_Interpolation_Inputs(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["Explain {{inputs.topic}}"] = "Explain quantum computing"
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Explain {{inputs.topic}}",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.Inputs["topic"] = "quantum computing"
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		ctx := interpolation.NewContext()
-		ctx.Inputs = ec.Inputs
-		return ctx
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_Interpolation_States(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["Review: {{states.analyze.output}}"] = "Review: Data is clean"
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Review: {{states.analyze.output}}",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = map[string]workflow.StepState{
-		"analyze": {
-			Name:   "analyze",
-			Output: "Data is clean",
-			Status: workflow.StatusCompleted,
-		},
-	}
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		ctx := interpolation.NewContext()
-		for name, state := range ec.States {
-			ctx.States[name] = interpolation.StepStateData{
-				Output: state.Output,
-				Status: string(state.Status),
-			}
-		}
-		return ctx
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-	// Don't register any providers
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "nonexistent",
-			Prompt:   "Test",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -866,45 +328,47 @@ func TestConversationManager_Error_ProviderNotFound(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect provider not found error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	// Assert
+	assert.Error(t, err)
 	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_UserInputReaderFails(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	provider := newMockConversationProvider("claude")
-	provider.execError = errors.New("API rate limit exceeded")
+	provider := newMockAgentProvider("claude")
 	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+
+	failingReader := newMockUserInputReader()
+	failingReader.err = errors.New("stdin read failed")
+	manager.SetUserInputReader(failingReader)
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Test",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -913,41 +377,44 @@ func TestConversationManager_Error_ProviderExecutionError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	_, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "stdin read failed")
 }
 
-func TestConversationManager_Error_TokenizerError(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_ProviderExecutionFails(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	tokenizer.err = errors.New("tokenizer service unavailable")
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	failingProvider := newMockAgentProvider("claude")
+	failingProvider.conversationError = errors.New("provider error")
+	_ = registry.Register(failingProvider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Test",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -956,86 +423,43 @@ func TestConversationManager_Error_TokenizerError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
+	// Act
+	_, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "provider error")
 }
 
-func TestConversationManager_Error_TemplateResolutionError(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_ContextCancellation(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.err = errors.New("undefined variable: missing_var")
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "{{missing_var}}",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect template resolution error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "variable")
-	assert.Nil(t, result)
-}
-
-func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	evaluator.err = errors.New("syntax error in expression")
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	provider := newMockAgentProvider("claude")
+	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	step := &workflow.Step{
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Test",
+			Prompt:   "Hello",
 		},
 	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-		StopCondition:    "invalid expression syntax",
-	}
+	config := &workflow.ConversationConfig{}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
 	execCtx.States = make(map[string]workflow.StepState)
@@ -1044,87 +468,48 @@ func TestConversationManager_Error_StopConditionEvaluationError(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_Error_ContextCancellation(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Long running task",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         10,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
+	// Create and immediately cancel context
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel()
 
-	result, err := manager.ExecuteConversation(ctx, step, config, execCtx, buildContext, nil, nil)
+	// Act
+	_, err := manager.ExecuteConversation(
+		ctx,
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	// GREEN PHASE: expect context cancellation error
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
-	assert.Nil(t, result)
+	// Assert
+	assert.Error(t, err)
+	// Either error should be context.Canceled or wrapped context.Canceled
 }
 
-// TestConversationManager_ValidateConversationInputs_HappyPath tests the
-// validateConversationInputs helper method with valid inputs.
-func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_ContinueFromStepNotFound(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// Register mock provider so validation can proceed past provider lookup
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	provider := newMockAgentProvider("claude")
+	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
 	step := &workflow.Step{
-		Name: "chat",
+		Name: "follow_up",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
-			Prompt:   "Test",
+			Prompt:   "Continue",
 		},
 	}
-
 	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
+		ContinueFrom: "nonexistent_step",
 	}
 
 	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
@@ -1134,1150 +519,73 @@ func TestConversationManager_ValidateConversationInputs_HappyPath(t *testing.T) 
 		return interpolation.NewContext()
 	}
 
-	// Call ExecuteConversation which uses validateConversationInputs internally
-	// This verifies the refactored validation is working correctly
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-	// Validation passes (step and config are valid)
-	// Execution may fail due to stub implementation, but that's expected in RED phase
-	// The key test is that we don't get a validation error about nil inputs
-	if err != nil {
-		assert.NotContains(t, err.Error(), "nil")
-		assert.NotContains(t, err.Error(), "config is nil")
-	}
-	// Result may be nil in RED phase due to incomplete implementation
-	_ = result
-}
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-// TestConversationManager_ValidateConversationInputs_NilStep tests validation
-// with nil step - should fail early with validation error.
-func TestConversationManager_ValidateConversationInputs_NilStep(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), nil, config, execCtx, buildContext, nil, nil)
-
-	// Should fail validation immediately
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nil")
+	// Assert
+	assert.Error(t, err)
 	assert.Nil(t, result)
-}
-
-// TestConversationManager_ValidateConversationInputs_NilAgentConfig tests
-// validation with nil agent config - should fail early.
-func TestConversationManager_ValidateConversationInputs_NilAgentConfig(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name:  "chat",
-		Type:  workflow.StepTypeAgent,
-		Agent: nil, // Nil agent config
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// Should fail validation immediately
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nil")
-	assert.Nil(t, result)
-}
-
-// TestConversationManager_ValidateConversationInputs_NilConfig tests validation
-// with nil config - should fail early.
-func TestConversationManager_ValidateConversationInputs_NilConfig(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Test",
-		},
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext, nil, nil)
-
-	// Should fail validation immediately
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "config")
-	assert.Nil(t, result)
-}
-
-// TestConversationManager_ValidateConversationInputs_AllNil tests validation
-// with all nil inputs - should fail with appropriate error.
-func TestConversationManager_ValidateConversationInputs_AllNil(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), nil, nil, execCtx, buildContext, nil, nil)
-
-	// Should fail validation immediately
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nil")
-	assert.Nil(t, result)
-}
-
-// TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderName
-// tests validation with empty provider name (valid step/config structure but
-// invalid provider).
-func TestConversationManager_ValidateConversationInputs_EdgeCase_EmptyProviderName(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "", // Empty provider name
-			Prompt:   "Test",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         5,
-		MaxContextTokens: 1000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// Validation passes (step and config are not nil), but should fail at provider lookup
-	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
-	assert.Nil(t, result)
 }
 
-func TestConversationManager_EdgeCase_NilConfig(t *testing.T) {
+func TestConversationManager_ExecuteConversation_Error_ContinueFromNoConversationState(t *testing.T) {
+	// Arrange
 	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
 	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
+	registry := newMockAgentRegistry()
 
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
+	provider := newMockAgentProvider("claude")
+	_ = registry.Register(provider)
 
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
+	manager := application.NewConversationManager(logger, resolver, registry)
+	manager.SetUserInputReader(newMockUserInputReader())
 
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Test",
+	// Create prior step state WITHOUT conversation state
+	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
+	execCtx.States = map[string]workflow.StepState{
+		"prior_step": {
+			Name:   "prior_step",
+			Status: workflow.StatusCompleted,
+			// Conversation is nil
 		},
 	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
 
 	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
 		return interpolation.NewContext()
 	}
 
-	result, err := manager.ExecuteConversation(context.Background(), step, nil, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect nil config error
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "config")
-	assert.Nil(t, result)
-}
-
-func TestConversationManager_EdgeCase_EmptyInitialPrompt(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
 	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "", // Empty prompt
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-func TestConversationManager_EdgeCase_EmptySystemPrompt(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	// GREEN PHASE: Register mock provider
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:     "claude",
-			Prompt:       "Test prompt",
-			SystemPrompt: "", // Empty system prompt
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:         1,
-		MaxContextTokens: 5000,
-		Strategy:         workflow.StrategySlidingWindow,
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// GREEN PHASE: expect successful execution
-	require.NoError(t, err)
-	require.NotNil(t, result)
-}
-
-// T003: Continue From Tests — Load prior conversation state from predecessor step
-
-func TestConversationManager_ContinueFrom_SessionID(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedInitialSessionID string
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		// Capture initial SessionID before provider modifies it
-		capturedInitialSessionID = state.SessionID
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		result.State.SessionID = "new-session-456" // Provider issues new session for this step (FR-006)
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "response"))
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "response"
-		return result, nil
-	})
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "step2",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Continue the work",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "step1",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.SetStepState("step1", workflow.StepState{
-		Name:   "step1",
-		Status: workflow.StatusCompleted,
-		Conversation: &workflow.ConversationState{
-			SessionID:   "session-abc-123",
-			Turns:       []workflow.Turn{{Role: workflow.TurnRoleUser, Content: "hello"}},
-			TotalTurns:  1,
-			TotalTokens: 50,
-		},
-	})
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	// Verify predecessor's SessionID was passed to the provider
-	assert.Equal(t, "session-abc-123", capturedInitialSessionID)
-	// Verify result has new SessionID assigned by provider (FR-006)
-	assert.Equal(t, "new-session-456", result.State.SessionID)
-}
-
-func TestConversationManager_ContinueFrom_Turns(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedInitialTurnCount int
-	mockProvider := mocks.NewMockAgentProvider("openai_compatible")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		// Capture initial turn count before provider adds new turns
-		capturedInitialTurnCount = len(state.Turns)
-		result := workflow.NewConversationResult("openai_compatible")
-		result.State = state
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "refined response"))
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "refined response"
-		return result, nil
-	})
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "refine",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "openai_compatible",
-			Prompt:   "Refine the analysis",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "analyze",
-	}
-
-	priorTurns := []workflow.Turn{
-		{Role: workflow.TurnRoleUser, Content: "Analyze this data"},
-		{Role: workflow.TurnRoleAssistant, Content: "Analysis complete"},
-		{Role: workflow.TurnRoleUser, Content: "More detail"},
-		{Role: workflow.TurnRoleAssistant, Content: "Detailed analysis"},
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.SetStepState("analyze", workflow.StepState{
-		Name:   "analyze",
-		Status: workflow.StatusCompleted,
-		Conversation: &workflow.ConversationState{
-			Turns:       priorTurns,
-			TotalTurns:  4,
-			TotalTokens: 200,
-		},
-	})
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	// Verify predecessor's turns were passed to the provider
-	assert.Equal(t, 4, capturedInitialTurnCount)
-	// Verify result has original turns plus new turns added by provider
-	assert.Equal(t, 6, len(result.State.Turns))
-	assert.Equal(t, "Analyze this data", result.State.Turns[0].Content)
-}
-
-func TestConversationManager_ContinueFrom_StepNotFound(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "step2",
+		Name: "follow_up",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
 			Provider: "claude",
 			Prompt:   "Continue",
 		},
 	}
-
 	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "nonexistent",
+		ContinueFrom: "prior_step",
 	}
 
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
+	// Act
+	result, err := manager.ExecuteConversation(
+		context.Background(),
+		step,
+		config,
+		execCtx,
+		buildContext,
+		io.Discard,
+		io.Discard,
+	)
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nonexistent")
+	// Assert
+	assert.Error(t, err)
 	assert.Nil(t, result)
-}
-
-func TestConversationManager_ContinueFrom_NilConversationState(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "step2",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Continue",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "step1",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.SetStepState("step1", workflow.StepState{
-		Name:         "step1",
-		Status:       workflow.StatusCompleted,
-		Conversation: nil,
-	})
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no conversation state")
-	assert.Nil(t, result)
-}
-
-func TestConversationManager_ContinueFrom_EmptySessionAndTurns(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "step2",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Continue",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "step1",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.SetStepState("step1", workflow.StepState{
-		Name:   "step1",
-		Status: workflow.StatusCompleted,
-		Conversation: &workflow.ConversationState{
-			SessionID: "",
-			Turns:     []workflow.Turn{},
-		},
-	})
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no session")
-	assert.Nil(t, result)
-}
-
-func TestConversationManager_ContinueFrom_TurnsRequired_HTTPProvider(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	mockProvider := mocks.NewMockAgentProvider("openai_compatible")
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "refine",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "openai_compatible",
-			Prompt:   "Refine the analysis",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "analyze",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.SetStepState("analyze", workflow.StepState{
-		Name:   "analyze",
-		Status: workflow.StatusCompleted,
-		Conversation: &workflow.ConversationState{
-			SessionID:   "session-from-cli-provider",
-			Turns:       []workflow.Turn{},
-			TotalTurns:  3,
-			TotalTokens: 150,
-		},
-	})
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no conversation turns")
-	assert.Nil(t, result)
-}
-
-func TestConversationManager_ContinueFrom_ThreeStepChain(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newMockResolver()
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var step2InitialTurnCount int
-	var step3InitialTurnCount int
-
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		// Capture initial turn count before provider adds new turns
-		switch prompt {
-		case "step2-prompt":
-			step2InitialTurnCount = len(state.Turns)
-		case "step3-prompt":
-			step3InitialTurnCount = len(state.Turns)
-		}
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleAssistant, "response"))
-		result.State.StoppedBy = workflow.StopReasonMaxTurns
-		result.Output = "response"
-		return result, nil
-	})
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	// Step 1: Initial conversation
-	step1 := &workflow.Step{
-		Name: "step1",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "step1-prompt",
-		},
-	}
-	config1 := &workflow.ConversationConfig{MaxTurns: 1}
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-	result1, err := manager.ExecuteConversation(context.Background(), step1, config1, execCtx, buildContext, nil, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result1)
-	execCtx.SetStepState("step1", workflow.StepState{
-		Name:         "step1",
-		Status:       workflow.StatusCompleted,
-		Conversation: result1.State,
-	})
-
-	// Step 2: Continue from step1
-	step2 := &workflow.Step{
-		Name: "step2",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "step2-prompt",
-		},
-	}
-	config2 := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "step1",
-	}
-	result2, err := manager.ExecuteConversation(context.Background(), step2, config2, execCtx, buildContext, nil, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result2)
-	// Step2 should receive step1's 2 turns (user + assistant)
-	assert.Equal(t, 2, step2InitialTurnCount)
-	execCtx.SetStepState("step2", workflow.StepState{
-		Name:         "step2",
-		Status:       workflow.StatusCompleted,
-		Conversation: result2.State,
-	})
-
-	// Step 3: Continue from step2 (not step1) — NFR-003 O(1) behavior
-	step3 := &workflow.Step{
-		Name: "step3",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "step3-prompt",
-		},
-	}
-	config3 := &workflow.ConversationConfig{
-		MaxTurns:     1,
-		ContinueFrom: "step2",
-	}
-	result3, err := manager.ExecuteConversation(context.Background(), step3, config3, execCtx, buildContext, nil, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result3)
-
-	// Verify step3 loaded step2's state which has 4 turns (2 from step1 + 2 from step2)
-	// This proves O(1) per-hop: step3 doesn't recursively load step1
-	assert.Equal(t, 4, step3InitialTurnCount)
-}
-
-// T004: Implement inject_context appending on turn 2+
-
-func TestConversationManager_InjectContext_AppendedOnSecondTurn(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["What is AI?"] = "What is AI?"
-	resolver.results["Additional context from step1"] = "Additional context from step1"
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedPrompts []string
-	mockProvider := mocks.NewMockAgentProvider("claude")
-
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		capturedPrompts = append(capturedPrompts, prompt)
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(assistantTurn)
-		result.Output = "response"
-		return result, nil
-	})
-
-	_ = registry.Register(mockProvider)
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "What is AI?",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:      3,
-		InjectContext: "Additional context from step1",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Len(t, capturedPrompts, 3, "should have 3 turn prompts")
-
-	// Turn 1: no inject_context
-	assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should not contain inject_context")
-
-	// Turn 2+: inject_context appended with \n\n separator
-	expectedPrompt2 := "What is AI?\n\nAdditional context from step1"
-	assert.Equal(t, expectedPrompt2, capturedPrompts[1], "turn 2 should have inject_context appended with \\n\\n separator")
-
-	expectedPrompt3 := "What is AI?\n\nAdditional context from step1"
-	assert.Equal(t, expectedPrompt3, capturedPrompts[2], "turn 3 should have inject_context appended with \\n\\n separator")
-}
-
-func TestConversationManager_InjectContext_ExcludedFromFirstTurn(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["What is AI?"] = "What is AI?"
-	resolver.results["Additional context from step1"] = "Additional context from step1"
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var capturedPrompts []string
-	mockProvider := mocks.NewMockAgentProvider("claude")
-
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		capturedPrompts = append(capturedPrompts, prompt)
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		_ = result.State.AddTurn(assistantTurn)
-		result.Output = "response"
-		return result, nil
-	})
-
-	_ = registry.Register(mockProvider)
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "What is AI?",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:      1,
-		InjectContext: "Additional context from step1",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Len(t, capturedPrompts, 1, "should have 1 turn prompt")
-
-	assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should not contain inject_context")
-}
-
-// T006: empty/whitespace inject_context must be a no-op (FR-005)
-
-func TestConversationManager_InjectContext_EmptyIsNoOp(t *testing.T) {
-	tests := []struct {
-		name          string
-		injectContext string
-	}{
-		{"empty string", ""},
-		{"whitespace only", "   \t\n  "},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger := &mockLogger{}
-			evaluator := newMockExpressionEvaluator()
-			resolver := newConfigurableMockResolver()
-			resolver.results["What is AI?"] = "What is AI?"
-			tokenizer := newMockTokenizer()
-			registry := mocks.NewMockAgentRegistry()
-
-			var capturedPrompts []string
-			mockProvider := mocks.NewMockAgentProvider("claude")
-
-			mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-				capturedPrompts = append(capturedPrompts, prompt)
-				result := workflow.NewConversationResult("claude")
-				result.State = state
-				assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-				assistantTurn.Tokens = 10
-				_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-				_ = result.State.AddTurn(assistantTurn)
-				result.Output = "response"
-				return result, nil
-			})
-
-			_ = registry.Register(mockProvider)
-			manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-			step := &workflow.Step{
-				Name: "chat",
-				Type: workflow.StepTypeAgent,
-				Agent: &workflow.AgentConfig{
-					Provider: "claude",
-					Prompt:   "What is AI?",
-				},
-			}
-
-			config := &workflow.ConversationConfig{
-				MaxTurns:      2,
-				InjectContext: tt.injectContext,
-			}
-
-			execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-			execCtx.States = make(map[string]workflow.StepState)
-
-			buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-				return interpolation.NewContext()
-			}
-
-			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			require.Len(t, capturedPrompts, 2, "should have 2 turn prompts")
-
-			assert.Equal(t, "What is AI?", capturedPrompts[0], "turn 1 should be unchanged")
-			assert.Equal(t, "What is AI?", capturedPrompts[1], "turn 2 should not have empty inject_context appended")
-		})
-	}
-}
-
-func TestConversationManager_InjectContext_InterpolationError(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["Continue the work"] = "Continue the work"
-	resolver.templateErrors["{{.states.bad_template"] = errors.New("template parse error: unexpected end of input")
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(assistantTurn)
-		result.Output = "response"
-		return result, nil
-	})
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Continue the work",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:      3,
-		InjectContext: "{{.states.bad_template",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-	execCtx.States = make(map[string]workflow.StepState)
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		return interpolation.NewContext()
-	}
-
-	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	// First turn succeeds (no injection). Second turn fails on inject_context interpolation.
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "inject_context:", "Error should be wrapped with field name (FR-006)")
-	assert.Contains(t, err.Error(), "template parse error")
-}
-
-// F075: InjectContext per-turn template interpolation — verify states.* and inputs.* namespaces
-func TestConversationManager_InjectContext_TemplateInterpolation(t *testing.T) {
-	logger := &mockLogger{}
-	evaluator := newMockExpressionEvaluator()
-	resolver := newConfigurableMockResolver()
-	resolver.results["Analyze this"] = "Analyze this"
-	resolver.results["Results: {{.states.run_tests.output}}, task: {{.inputs.task}}"] = "Results: all tests passed, task: review"
-	tokenizer := newMockTokenizer()
-	registry := mocks.NewMockAgentRegistry()
-
-	var secondTurnPrompt string
-	callCount := 0
-	mockProvider := mocks.NewMockAgentProvider("claude")
-	mockProvider.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.ConversationResult, error) {
-		callCount++
-		if callCount == 2 {
-			secondTurnPrompt = prompt
-		}
-		result := workflow.NewConversationResult("claude")
-		result.State = state
-		_ = result.State.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, prompt))
-		assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, "response")
-		assistantTurn.Tokens = 10
-		_ = result.State.AddTurn(assistantTurn)
-		result.Output = "response"
-		return result, nil
-	})
-	_ = registry.Register(mockProvider)
-
-	manager := application.NewConversationManager(logger, evaluator, resolver, tokenizer, registry)
-
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider: "claude",
-			Prompt:   "Analyze this",
-		},
-	}
-
-	config := &workflow.ConversationConfig{
-		MaxTurns:      3,
-		InjectContext: "Results: {{.states.run_tests.output}}, task: {{.inputs.task}}",
-	}
-
-	execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-
-	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-		ctx := interpolation.NewContext()
-		ctx.States["run_tests"] = interpolation.StepStateData{
-			Output: "all tests passed",
-		}
-		ctx.Inputs["task"] = "review"
-		return ctx
-	}
-
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Contains(t, secondTurnPrompt, "Results: all tests passed, task: review",
-		"inject_context should interpolate both states.* and inputs.* namespaces (FR-007)")
-}
-
-// TestConversationManager_ProviderInterpolation tests that the provider field
-// is correctly interpolated before registry lookup in conversation mode.
-func TestConversationManager_ProviderInterpolation(t *testing.T) {
-	tests := []struct {
-		name             string
-		providerExpr     string
-		resolveMap       map[string]string
-		registeredNames  []string
-		expectError      bool
-		expectedErrorMsg string
-	}{
-		{
-			name:             "literal provider name",
-			providerExpr:     "claude",
-			resolveMap:       map[string]string{"claude": "claude"},
-			registeredNames:  []string{"claude"},
-			expectError:      false,
-			expectedErrorMsg: "",
-		},
-		{
-			name:             "interpolated provider from inputs",
-			providerExpr:     "{{inputs.agent}}",
-			resolveMap:       map[string]string{"{{inputs.agent}}": "claude"},
-			registeredNames:  []string{"claude"},
-			expectError:      false,
-			expectedErrorMsg: "",
-		},
-		{
-			name:             "interpolated provider different value",
-			providerExpr:     "{{inputs.agent}}",
-			resolveMap:       map[string]string{"{{inputs.agent}}": "gemini"},
-			registeredNames:  []string{"gemini"},
-			expectError:      false,
-			expectedErrorMsg: "",
-		},
-		{
-			name:             "invalid template expression",
-			providerExpr:     "{{invalid",
-			resolveMap:       map[string]string{},
-			registeredNames:  []string{},
-			expectError:      true,
-			expectedErrorMsg: "resolve provider",
-		},
-		{
-			name:             "resolved provider name not in registry",
-			providerExpr:     "{{inputs.agent}}",
-			resolveMap:       map[string]string{"{{inputs.agent}}": "unknown"},
-			registeredNames:  []string{"claude"},
-			expectError:      true,
-			expectedErrorMsg: "not found",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger := &mockLogger{}
-			evaluator := newMockExpressionEvaluator()
-			configResolver := newConfigurableResolver(tt.resolveMap)
-			tokenizer := newMockTokenizer()
-
-			registry := mocks.NewMockAgentRegistry()
-			for _, name := range tt.registeredNames {
-				provider := mocks.NewMockAgentProvider(name)
-				_ = registry.Register(provider)
-			}
-
-			manager := application.NewConversationManager(
-				logger,
-				evaluator,
-				configResolver,
-				tokenizer,
-				registry,
-			)
-
-			step := &workflow.Step{
-				Name: "converse",
-				Type: workflow.StepTypeAgent,
-				Agent: &workflow.AgentConfig{
-					Provider: tt.providerExpr,
-					Mode:     "conversation",
-				},
-			}
-
-			config := &workflow.ConversationConfig{
-				MaxTurns: 1,
-			}
-
-			execCtx := workflow.NewExecutionContext("test-id", "test-workflow")
-			execCtx.States = make(map[string]workflow.StepState)
-
-			buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
-				ctx := interpolation.NewContext()
-				ctx.Inputs["agent"] = "claude"
-				return ctx
-			}
-
-			result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, nil, nil)
-
-			if tt.expectError {
-				require.Error(t, err, "should return error")
-				if tt.expectedErrorMsg != "" {
-					assert.Contains(t, err.Error(), tt.expectedErrorMsg, "error should contain expected message")
-				}
-			} else {
-				require.NoError(t, err, "should not return error")
-				require.NotNil(t, result)
-			}
-		})
-	}
 }

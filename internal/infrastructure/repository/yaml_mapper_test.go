@@ -633,149 +633,14 @@ func TestMapStep_AgentStep_NoProvider(t *testing.T) {
 	assert.Nil(t, step.Agent)
 }
 
-// Feature: F033 - Agent Conversations
+// Feature: F033/F083 - Agent Conversations
 
 // mapConversationConfig Tests - Happy Path
+// F083: ConversationConfig only retains ContinueFrom. Removed fields
+// (max_turns, max_context_tokens, strategy, stop_condition, inject_context)
+// now produce parse errors via validateConversationConfigRemovedFields.
 
 func TestMapConversationConfig_HappyPath(t *testing.T) {
-	tests := []struct {
-		name       string
-		yamlConfig *yamlConversationConfig
-		want       *workflow.ConversationConfig
-	}{
-		{
-			name: "full conversation config with sliding_window",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 100000,
-				Strategy:         "sliding_window",
-				StopCondition:    "response contains 'APPROVED'",
-				ContinueFrom:     "",
-				InjectContext:    "",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 100000,
-				Strategy:         workflow.StrategySlidingWindow,
-				StopCondition:    "response contains 'APPROVED'",
-				ContinueFrom:     "",
-				InjectContext:    "",
-			},
-		},
-		{
-			name: "conversation config with summarize strategy",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         20,
-				MaxContextTokens: 50000,
-				Strategy:         "summarize",
-				StopCondition:    "response contains 'DONE'",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         20,
-				MaxContextTokens: 50000,
-				Strategy:         workflow.StrategySummarize,
-				StopCondition:    "response contains 'DONE'",
-			},
-		},
-		{
-			name: "conversation config with truncate_middle strategy",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         15,
-				MaxContextTokens: 75000,
-				Strategy:         "truncate_middle",
-				StopCondition:    "states.refine.output == 'complete'",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         15,
-				MaxContextTokens: 75000,
-				Strategy:         workflow.StrategyTruncateMiddle,
-				StopCondition:    "states.refine.output == 'complete'",
-			},
-		},
-		{
-			name: "minimal conversation config with defaults",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns: 5,
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         5,
-				MaxContextTokens: 0,
-				Strategy:         workflow.StrategyNone,
-				StopCondition:    "",
-			},
-		},
-		{
-			name: "conversation config with continue_from",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:      10,
-				ContinueFrom:  "previous_conversation",
-				InjectContext: "Also consider: {{inputs.requirements}}",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:      10,
-				Strategy:      workflow.StrategyNone,
-				ContinueFrom:  "previous_conversation",
-				InjectContext: "Also consider: {{inputs.requirements}}",
-			},
-		},
-		{
-			name: "max conversation turns 100",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         100,
-				MaxContextTokens: 200000,
-				Strategy:         "sliding_window",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         100,
-				MaxContextTokens: 200000,
-				Strategy:         workflow.StrategySlidingWindow,
-			},
-		},
-		{
-			name: "large token limit",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 1000000,
-				Strategy:         "sliding_window",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 1000000,
-				Strategy:         workflow.StrategySlidingWindow,
-			},
-		},
-		{
-			name: "complex stop condition expression",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:      10,
-				StopCondition: "(response contains 'SUCCESS' || response contains 'APPROVED') && states.validate.status == 'passed'",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:      10,
-				Strategy:      workflow.StrategyNone,
-				StopCondition: "(response contains 'SUCCESS' || response contains 'APPROVED') && states.validate.status == 'passed'",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := mapConversationConfig(tt.yamlConfig)
-
-			require.NotNil(t, got)
-			assert.Equal(t, tt.want.MaxTurns, got.MaxTurns)
-			assert.Equal(t, tt.want.MaxContextTokens, got.MaxContextTokens)
-			assert.Equal(t, tt.want.Strategy, got.Strategy)
-			assert.Equal(t, tt.want.StopCondition, got.StopCondition)
-			assert.Equal(t, tt.want.ContinueFrom, got.ContinueFrom)
-			assert.Equal(t, tt.want.InjectContext, got.InjectContext)
-		})
-	}
-}
-
-// mapConversationConfig Tests - Edge Cases
-
-func TestMapConversationConfig_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name       string
 		yamlConfig *yamlConversationConfig
@@ -787,99 +652,19 @@ func TestMapConversationConfig_EdgeCases(t *testing.T) {
 			want:       nil,
 		},
 		{
-			name: "empty strategy defaults to StrategyNone",
+			name: "minimal config with only ContinueFrom",
 			yamlConfig: &yamlConversationConfig{
-				MaxTurns: 10,
-				Strategy: "",
+				ContinueFrom: "previous_step",
 			},
 			want: &workflow.ConversationConfig{
-				MaxTurns: 10,
-				Strategy: workflow.StrategyNone,
+				ContinueFrom: "previous_step",
 			},
 		},
 		{
-			name: "unknown strategy defaults to StrategyNone",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns: 10,
-				Strategy: "unknown_strategy",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns: 10,
-				Strategy: workflow.StrategyNone,
-			},
-		},
-		{
-			name: "zero max_turns",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns: 0,
-				Strategy: "sliding_window",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns: 0,
-				Strategy: workflow.StrategySlidingWindow,
-			},
-		},
-		{
-			name: "zero max_context_tokens",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 0,
-				Strategy:         "sliding_window",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 0,
-				Strategy:         workflow.StrategySlidingWindow,
-			},
-		},
-		{
-			name:       "all fields empty",
+			name:       "empty config returns non-nil with empty ContinueFrom",
 			yamlConfig: &yamlConversationConfig{},
 			want: &workflow.ConversationConfig{
-				MaxTurns:         0,
-				MaxContextTokens: 0,
-				Strategy:         workflow.StrategyNone,
-				StopCondition:    "",
-				ContinueFrom:     "",
-				InjectContext:    "",
-			},
-		},
-		{
-			name: "empty strings for text fields",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns:      10,
-				StopCondition: "",
-				ContinueFrom:  "",
-				InjectContext: "",
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns:      10,
-				Strategy:      workflow.StrategyNone,
-				StopCondition: "",
-				ContinueFrom:  "",
-				InjectContext: "",
-			},
-		},
-		{
-			name: "very long inject_context",
-			yamlConfig: &yamlConversationConfig{
-				MaxTurns: 10,
-				InjectContext: `This is a very long context injection that might include:
-- Multiple lines of instructions
-- Code blocks and examples
-- Template variables like {{inputs.data}} and {{states.prev.output}}
-- Special characters: <>&"'
-- And much more detailed information`,
-			},
-			want: &workflow.ConversationConfig{
-				MaxTurns: 10,
-				Strategy: workflow.StrategyNone,
-				InjectContext: `This is a very long context injection that might include:
-- Multiple lines of instructions
-- Code blocks and examples
-- Template variables like {{inputs.data}} and {{states.prev.output}}
-- Special characters: <>&"'
-- And much more detailed information`,
+				ContinueFrom: "",
 			},
 		},
 	}
@@ -892,14 +677,50 @@ func TestMapConversationConfig_EdgeCases(t *testing.T) {
 				assert.Nil(t, got)
 				return
 			}
+			require.NotNil(t, got)
+			assert.Equal(t, tt.want.ContinueFrom, got.ContinueFrom)
+		})
+	}
+}
+
+// mapConversationConfig Tests - Edge Cases
+// F083: Removed fields produce parse errors; only ContinueFrom is mapped.
+
+func TestMapConversationConfig_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name         string
+		yamlConfig   *yamlConversationConfig
+		wantNil      bool
+		wantContinue string
+	}{
+		{
+			name:    "nil config returns nil",
+			wantNil: true,
+		},
+		{
+			name:       "all fields empty returns config with empty ContinueFrom",
+			yamlConfig: &yamlConversationConfig{},
+		},
+		{
+			name: "only continue_from is mapped",
+			yamlConfig: &yamlConversationConfig{
+				ContinueFrom: "step_one",
+			},
+			wantContinue: "step_one",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mapConversationConfig(tt.yamlConfig)
+
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
 
 			require.NotNil(t, got)
-			assert.Equal(t, tt.want.MaxTurns, got.MaxTurns)
-			assert.Equal(t, tt.want.MaxContextTokens, got.MaxContextTokens)
-			assert.Equal(t, tt.want.Strategy, got.Strategy)
-			assert.Equal(t, tt.want.StopCondition, got.StopCondition)
-			assert.Equal(t, tt.want.ContinueFrom, got.ContinueFrom)
-			assert.Equal(t, tt.want.InjectContext, got.InjectContext)
+			assert.Equal(t, tt.wantContinue, got.ContinueFrom)
 		})
 	}
 }
@@ -913,109 +734,81 @@ func TestMapAgentConfigFlat_ConversationMode_HappyPath(t *testing.T) {
 		want     *workflow.AgentConfig
 	}{
 		{
-			name: "conversation mode with system_prompt and initial_prompt",
+			name: "conversation mode with system_prompt and prompt",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a code reviewer. Iterate until quality standards are met.",
-				InitialPrompt: "Review this code:\n{{inputs.code}}",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a code reviewer. Iterate until quality standards are met.",
+				Prompt:       "Review this code:\n{{inputs.code}}",
 				Options: map[string]any{
 					"model":      "claude-sonnet-4-20250514",
 					"max_tokens": 4096,
 				},
 				Conversation: &yamlConversationConfig{
-					MaxTurns:         10,
-					MaxContextTokens: 100000,
-					Strategy:         "sliding_window",
-					StopCondition:    "response contains 'APPROVED'",
+					ContinueFrom: "",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a code reviewer. Iterate until quality standards are met.",
-				InitialPrompt: "Review this code:\n{{inputs.code}}",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a code reviewer. Iterate until quality standards are met.",
+				Prompt:       "Review this code:\n{{inputs.code}}",
 				Options: map[string]any{
 					"model":      "claude-sonnet-4-20250514",
 					"max_tokens": 4096,
 				},
 				Conversation: &workflow.ConversationConfig{
-					MaxTurns:         10,
-					MaxContextTokens: 100000,
-					Strategy:         workflow.StrategySlidingWindow,
-					StopCondition:    "response contains 'APPROVED'",
+					ContinueFrom: "",
 				},
 			},
 		},
 		{
 			name: "conversation mode with continue_from",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Also consider these requirements:\n{{inputs.additional_requirements}}",
+				Provider: "claude",
+				Mode:     "conversation",
+				Prompt:   "Also consider these requirements:\n{{inputs.additional_requirements}}",
 				Conversation: &yamlConversationConfig{
-					MaxTurns:     5,
 					ContinueFrom: "refine_code",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Also consider these requirements:\n{{inputs.additional_requirements}}",
+				Provider: "claude",
+				Mode:     "conversation",
+				Prompt:   "Also consider these requirements:\n{{inputs.additional_requirements}}",
 				Conversation: &workflow.ConversationConfig{
-					MaxTurns:     5,
 					ContinueFrom: "refine_code",
-					Strategy:     workflow.StrategyNone,
 				},
 			},
 		},
 		{
-			name: "conversation mode with all strategies",
+			name: "conversation mode with prompt only",
 			yamlStep: yamlStep{
 				Provider:     "gemini",
 				Mode:         "conversation",
 				SystemPrompt: "You are an expert assistant.",
 				Prompt:       "Help me with {{inputs.task}}",
-				Conversation: &yamlConversationConfig{
-					MaxTurns:         20,
-					MaxContextTokens: 50000,
-					Strategy:         "summarize",
-					StopCondition:    "response contains 'COMPLETE'",
-					InjectContext:    "Remember to follow best practices.",
-				},
 			},
 			want: &workflow.AgentConfig{
 				Provider:     "gemini",
 				Mode:         "conversation",
 				SystemPrompt: "You are an expert assistant.",
 				Prompt:       "Help me with {{inputs.task}}",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns:         20,
-					MaxContextTokens: 50000,
-					Strategy:         workflow.StrategySummarize,
-					StopCondition:    "response contains 'COMPLETE'",
-					InjectContext:    "Remember to follow best practices.",
-				},
 			},
 		},
 		{
 			name: "conversation mode minimal config",
 			yamlStep: yamlStep{
-				Provider: "codex",
-				Mode:     "conversation",
-				Prompt:   "Generate tests",
-				Conversation: &yamlConversationConfig{
-					MaxTurns: 5,
-				},
+				Provider:     "codex",
+				Mode:         "conversation",
+				Prompt:       "Generate tests",
+				Conversation: &yamlConversationConfig{},
 			},
 			want: &workflow.AgentConfig{
-				Provider: "codex",
-				Mode:     "conversation",
-				Prompt:   "Generate tests",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: 5,
-					Strategy: workflow.StrategyNone,
-				},
+				Provider:     "codex",
+				Mode:         "conversation",
+				Prompt:       "Generate tests",
+				Conversation: &workflow.ConversationConfig{},
 			},
 		},
 	}
@@ -1028,17 +821,11 @@ func TestMapAgentConfigFlat_ConversationMode_HappyPath(t *testing.T) {
 			assert.Equal(t, tt.want.Provider, got.Provider)
 			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.SystemPrompt, got.SystemPrompt)
-			assert.Equal(t, tt.want.InitialPrompt, got.InitialPrompt)
 			assert.Equal(t, tt.want.Prompt, got.Prompt)
 
 			if tt.want.Conversation != nil {
 				require.NotNil(t, got.Conversation)
-				assert.Equal(t, tt.want.Conversation.MaxTurns, got.Conversation.MaxTurns)
-				assert.Equal(t, tt.want.Conversation.MaxContextTokens, got.Conversation.MaxContextTokens)
-				assert.Equal(t, tt.want.Conversation.Strategy, got.Conversation.Strategy)
-				assert.Equal(t, tt.want.Conversation.StopCondition, got.Conversation.StopCondition)
 				assert.Equal(t, tt.want.Conversation.ContinueFrom, got.Conversation.ContinueFrom)
-				assert.Equal(t, tt.want.Conversation.InjectContext, got.Conversation.InjectContext)
 			} else {
 				assert.Nil(t, got.Conversation)
 			}
@@ -1057,27 +844,27 @@ func TestMapAgentConfigFlat_ConversationMode_EdgeCases(t *testing.T) {
 		{
 			name: "conversation mode without conversation config",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are helpful.",
-				InitialPrompt: "Hello",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are helpful.",
+				Prompt:       "Hello",
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are helpful.",
-				InitialPrompt: "Hello",
-				Conversation:  nil,
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are helpful.",
+				Prompt:       "Hello",
+				Conversation: nil,
 			},
 		},
 		{
-			name: "single mode with conversation config (should still map)",
+			name: "single mode with conversation config (only ContinueFrom mapped)",
 			yamlStep: yamlStep{
 				Provider: "claude",
 				Mode:     "single",
 				Prompt:   "Do task",
 				Conversation: &yamlConversationConfig{
-					MaxTurns: 10,
+					ContinueFrom: "prior",
 				},
 			},
 			want: &workflow.AgentConfig{
@@ -1085,8 +872,7 @@ func TestMapAgentConfigFlat_ConversationMode_EdgeCases(t *testing.T) {
 				Mode:     "single",
 				Prompt:   "Do task",
 				Conversation: &workflow.ConversationConfig{
-					MaxTurns: 10,
-					Strategy: workflow.StrategyNone,
+					ContinueFrom: "prior",
 				},
 			},
 		},
@@ -1104,50 +890,6 @@ func TestMapAgentConfigFlat_ConversationMode_EdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name: "conversation mode with empty system_prompt",
-			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "",
-				InitialPrompt: "Start conversation",
-				Conversation: &yamlConversationConfig{
-					MaxTurns: 10,
-				},
-			},
-			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "",
-				InitialPrompt: "Start conversation",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: 10,
-					Strategy: workflow.StrategyNone,
-				},
-			},
-		},
-		{
-			name: "conversation mode with both prompt and initial_prompt",
-			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				Prompt:        "Fallback prompt",
-				InitialPrompt: "Initial message",
-				Conversation: &yamlConversationConfig{
-					MaxTurns: 10,
-				},
-			},
-			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				Prompt:        "Fallback prompt",
-				InitialPrompt: "Initial message",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: 10,
-					Strategy: workflow.StrategyNone,
-				},
-			},
-		},
-		{
 			name: "conversation mode with multiline system_prompt",
 			yamlStep: yamlStep{
 				Provider: "claude",
@@ -1157,14 +899,8 @@ func TestMapAgentConfigFlat_ConversationMode_EdgeCases(t *testing.T) {
 Follow these guidelines:
 1. Check for bugs
 2. Verify coding standards
-3. Suggest improvements
-
-Say "APPROVED" when satisfied.`,
-				InitialPrompt: "Review: {{inputs.code}}",
-				Conversation: &yamlConversationConfig{
-					MaxTurns:      10,
-					StopCondition: "response contains 'APPROVED'",
-				},
+3. Suggest improvements`,
+				Prompt: "Review: {{inputs.code}}",
 			},
 			want: &workflow.AgentConfig{
 				Provider: "claude",
@@ -1174,15 +910,8 @@ Say "APPROVED" when satisfied.`,
 Follow these guidelines:
 1. Check for bugs
 2. Verify coding standards
-3. Suggest improvements
-
-Say "APPROVED" when satisfied.`,
-				InitialPrompt: "Review: {{inputs.code}}",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns:      10,
-					StopCondition: "response contains 'APPROVED'",
-					Strategy:      workflow.StrategyNone,
-				},
+3. Suggest improvements`,
+				Prompt: "Review: {{inputs.code}}",
 			},
 		},
 	}
@@ -1195,15 +924,13 @@ Say "APPROVED" when satisfied.`,
 			assert.Equal(t, tt.want.Provider, got.Provider)
 			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.SystemPrompt, got.SystemPrompt)
-			assert.Equal(t, tt.want.InitialPrompt, got.InitialPrompt)
 			assert.Equal(t, tt.want.Prompt, got.Prompt)
 
 			if tt.want.Conversation == nil {
 				assert.Nil(t, got.Conversation)
 			} else {
 				require.NotNil(t, got.Conversation)
-				assert.Equal(t, tt.want.Conversation.MaxTurns, got.Conversation.MaxTurns)
-				assert.Equal(t, tt.want.Conversation.Strategy, got.Conversation.Strategy)
+				assert.Equal(t, tt.want.Conversation.ContinueFrom, got.Conversation.ContinueFrom)
 			}
 		})
 	}
@@ -1215,26 +942,24 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 	tests := []struct {
 		name     string
 		yamlStep yamlStep
+		wantErr  bool
 		wantStep func(*testing.T, *workflow.Step)
 	}{
 		{
-			name: "full conversation mode step",
+			name: "conversation mode with prompt and continue_from",
 			yamlStep: yamlStep{
-				Type:          "agent",
-				Description:   "Iterative code review",
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a code reviewer.",
-				InitialPrompt: "Review this code:\n{{inputs.code}}",
+				Type:         "agent",
+				Description:  "Iterative code review",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a code reviewer.",
+				Prompt:       "Review this code:\n{{inputs.code}}",
 				Options: map[string]any{
 					"model":      "claude-sonnet-4-20250514",
 					"max_tokens": 4096,
 				},
 				Conversation: &yamlConversationConfig{
-					MaxTurns:         10,
-					MaxContextTokens: 100000,
-					Strategy:         "sliding_window",
-					StopCondition:    "response contains 'APPROVED'",
+					ContinueFrom: "",
 				},
 				Timeout:   "10m",
 				OnSuccess: "deploy",
@@ -1249,26 +974,21 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 				assert.Equal(t, "claude", step.Agent.Provider)
 				assert.Equal(t, "conversation", step.Agent.Mode)
 				assert.Equal(t, "You are a code reviewer.", step.Agent.SystemPrompt)
-				assert.Equal(t, "Review this code:\n{{inputs.code}}", step.Agent.InitialPrompt)
+				assert.Equal(t, "Review this code:\n{{inputs.code}}", step.Agent.Prompt)
 
 				require.NotNil(t, step.Agent.Conversation)
-				assert.Equal(t, 10, step.Agent.Conversation.MaxTurns)
-				assert.Equal(t, 100000, step.Agent.Conversation.MaxContextTokens)
-				assert.Equal(t, workflow.StrategySlidingWindow, step.Agent.Conversation.Strategy)
-				assert.Equal(t, "response contains 'APPROVED'", step.Agent.Conversation.StopCondition)
+				assert.Equal(t, "", step.Agent.Conversation.ContinueFrom)
 			},
 		},
 		{
 			name: "conversation mode with continue_from",
 			yamlStep: yamlStep{
-				Type:          "agent",
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Also consider: {{inputs.requirements}}",
+				Type:     "agent",
+				Provider: "claude",
+				Mode:     "conversation",
+				Prompt:   "Also consider: {{inputs.requirements}}",
 				Conversation: &yamlConversationConfig{
-					MaxTurns:      5,
-					ContinueFrom:  "refine_code",
-					InjectContext: "Focus on performance.",
+					ContinueFrom: "refine_code",
 				},
 			},
 			wantStep: func(t *testing.T, step *workflow.Step) {
@@ -1278,23 +998,17 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 				assert.Equal(t, "conversation", step.Agent.Mode)
 
 				require.NotNil(t, step.Agent.Conversation)
-				assert.Equal(t, 5, step.Agent.Conversation.MaxTurns)
 				assert.Equal(t, "refine_code", step.Agent.Conversation.ContinueFrom)
-				assert.Equal(t, "Focus on performance.", step.Agent.Conversation.InjectContext)
 			},
 		},
 		{
 			name: "conversation mode with hooks and retry",
 			yamlStep: yamlStep{
-				Type:          "agent",
-				Provider:      "gemini",
-				Mode:          "conversation",
-				SystemPrompt:  "You are helpful.",
-				InitialPrompt: "Start task",
-				Conversation: &yamlConversationConfig{
-					MaxTurns: 10,
-					Strategy: "summarize",
-				},
+				Type:         "agent",
+				Provider:     "gemini",
+				Mode:         "conversation",
+				SystemPrompt: "You are helpful.",
+				Prompt:       "Start task",
 				Hooks: &yamlStepHooks{
 					Pre: []yamlHookAction{
 						{Log: "Starting conversation"},
@@ -1313,8 +1027,6 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 
 				require.NotNil(t, step.Agent)
 				assert.Equal(t, "conversation", step.Agent.Mode)
-				require.NotNil(t, step.Agent.Conversation)
-				assert.Equal(t, workflow.StrategySummarize, step.Agent.Conversation.Strategy)
 
 				require.NotNil(t, step.Hooks.Pre)
 				require.NotNil(t, step.Hooks.Post)
@@ -1325,15 +1037,11 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 		{
 			name: "conversation mode with transitions",
 			yamlStep: yamlStep{
-				Type:          "agent",
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "Classify sentiment.",
-				InitialPrompt: "Classify: {{inputs.text}}",
-				Conversation: &yamlConversationConfig{
-					MaxTurns:      3,
-					StopCondition: "response contains 'CLASSIFICATION:'",
-				},
+				Type:         "agent",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "Classify sentiment.",
+				Prompt:       "Classify: {{inputs.text}}",
 				Transitions: []yamlTransition{
 					{When: "states.classify.output contains 'positive'", Goto: "handle_positive"},
 					{When: "states.classify.output contains 'negative'", Goto: "handle_negative"},
@@ -1356,40 +1064,16 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			step, err := mapStep("test.yaml", "test_step", &tt.yamlStep)
 
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
 			require.NoError(t, err)
 			require.NotNil(t, step)
 			assert.Equal(t, "test_step", step.Name)
 
 			tt.wantStep(t, step)
-		})
-	}
-}
-
-func TestMapConversationConfig_StrategyMapping(t *testing.T) {
-	tests := []struct {
-		yamlStrategy   string
-		domainStrategy workflow.ContextWindowStrategy
-	}{
-		{"sliding_window", workflow.StrategySlidingWindow},
-		{"summarize", workflow.StrategySummarize},
-		{"truncate_middle", workflow.StrategyTruncateMiddle},
-		{"", workflow.StrategyNone},
-		{"SLIDING_WINDOW", workflow.StrategyNone}, // case-sensitive
-		{"invalid", workflow.StrategyNone},
-		{"sliding-window", workflow.StrategyNone}, // exact match required
-	}
-
-	for _, tt := range tests {
-		t.Run("strategy_"+tt.yamlStrategy, func(t *testing.T) {
-			yamlConfig := &yamlConversationConfig{
-				MaxTurns: 10,
-				Strategy: tt.yamlStrategy,
-			}
-
-			got := mapConversationConfig(yamlConfig)
-
-			require.NotNil(t, got)
-			assert.Equal(t, tt.domainStrategy, got.Strategy)
 		})
 	}
 }

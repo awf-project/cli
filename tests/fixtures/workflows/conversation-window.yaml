@@ -1,5 +1,5 @@
 # Feature: F033
-# Context window management with different strategies
+# Conversation mode steps with various providers
 name: conversation-window
 version: "1.0.0"
 
@@ -17,13 +17,10 @@ states:
     provider: claude
     mode: conversation
     system_prompt: "You are a helpful assistant. Engage in detailed conversation."
-    initial_prompt: "Let's discuss: {{inputs.task}}"
+    prompt: "Let's discuss: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 20
-      max_context_tokens: 10000
-      strategy: sliding_window
+    conversation: {}
     timeout: 120
     on_success: summarize_test
     on_failure: error
@@ -33,13 +30,10 @@ states:
     provider: gemini
     mode: conversation
     system_prompt: "You are a concise summarizer."
-    initial_prompt: "Summarize previous discussion on {{inputs.task}}"
+    prompt: "Summarize previous discussion on {{inputs.task}}"
     options:
       model: gemini-pro
-    conversation:
-      max_turns: 5
-      max_context_tokens: 50000
-      strategy: sliding_window
+    conversation: {}
     timeout: 60
     on_success: truncate_middle_test
     on_failure: error
@@ -49,11 +43,8 @@ states:
     provider: codex
     mode: conversation
     system_prompt: "You are a technical expert."
-    initial_prompt: "Final analysis of {{inputs.task}}"
-    conversation:
-      max_turns: 10
-      max_context_tokens: 20000
-      strategy: sliding_window
+    prompt: "Final analysis of {{inputs.task}}"
+    conversation: {}
     timeout: 60
     on_success: done
     on_failure: error

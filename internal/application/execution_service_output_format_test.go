@@ -468,15 +468,11 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ConversationMode(t *testin
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					SystemPrompt:  "You are a helpful assistant",
-					InitialPrompt: "Start conversation",
-					OutputFormat:  workflow.OutputFormatJSON,
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns:      5,
-						StopCondition: "response contains 'complete'",
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					SystemPrompt: "You are a helpful assistant",
+					OutputFormat: workflow.OutputFormatJSON,
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -507,10 +503,10 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ConversationMode(t *testin
 	})
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)

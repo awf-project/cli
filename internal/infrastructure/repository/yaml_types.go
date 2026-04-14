@@ -77,10 +77,9 @@ type yamlStep struct {
 	Config map[string]any `yaml:"config"` // plugin-provided step type parameters
 
 	// Agent conversation mode (F033) - extends agent configuration
-	Mode          string                  `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
-	SystemPrompt  string                  `yaml:"system_prompt"`  // system prompt for conversation mode
-	InitialPrompt string                  `yaml:"initial_prompt"` // initial user prompt for conversation mode
-	Conversation  *yamlConversationConfig `yaml:"conversation"`   // conversation-specific configuration
+	Mode         string                  `yaml:"mode"`          // execution mode: "single" (default) or "conversation"
+	SystemPrompt string                  `yaml:"system_prompt"` // system prompt for conversation mode
+	Conversation *yamlConversationConfig `yaml:"conversation"`  // conversation-specific configuration
 }
 
 // yamlTransition is the YAML representation of a conditional transition.
@@ -167,12 +166,6 @@ type yamlTemplateParam struct {
 }
 
 // yamlConversationConfig is the YAML representation of conversation configuration.
-// F033: Agent conversations with context window management.
 type yamlConversationConfig struct {
-	MaxTurns         int    `yaml:"max_turns"`          // maximum number of turns (default 10, max 100)
-	MaxContextTokens int    `yaml:"max_context_tokens"` // maximum tokens in context window (0 = provider default)
-	Strategy         string `yaml:"strategy"`           // context window strategy: sliding_window, summarize, truncate_middle
-	StopCondition    string `yaml:"stop_condition"`     // expression to evaluate for early exit
-	ContinueFrom     string `yaml:"continue_from"`      // step name to continue conversation from
-	InjectContext    string `yaml:"inject_context"`     // additional context to inject mid-conversation
+	ContinueFrom string `yaml:"continue_from"`
 }

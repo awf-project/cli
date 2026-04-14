@@ -497,22 +497,22 @@ func TestAgentResult_ConversationField(t *testing.T) {
 					},
 					TotalTurns:  3,
 					TotalTokens: 23,
-					StoppedBy:   workflow.StopReasonMaxTurns,
+					StoppedBy:   workflow.StopReasonUserExit,
 				},
 			},
 		},
 		{
-			name: "conversation stopped by condition",
+			name: "conversation stopped by error",
 			conversation: &workflow.ConversationResult{
 				Provider: "claude",
 				State: &workflow.ConversationState{
 					Turns: []workflow.Turn{
 						{Role: workflow.TurnRoleUser, Content: "Review", Tokens: 5},
-						{Role: workflow.TurnRoleAssistant, Content: "APPROVED", Tokens: 10},
+						{Role: workflow.TurnRoleAssistant, Content: "Response", Tokens: 10},
 					},
 					TotalTurns:  2,
 					TotalTokens: 15,
-					StoppedBy:   workflow.StopReasonCondition,
+					StoppedBy:   workflow.StopReasonError,
 				},
 			},
 		},
@@ -557,7 +557,7 @@ func TestAgentResult_ConversationField_Integration(t *testing.T) {
 			},
 			TotalTurns:  5,
 			TotalTokens: 1970,
-			StoppedBy:   workflow.StopReasonCondition,
+			StoppedBy:   workflow.StopReasonUserExit,
 		},
 		Output:      "Here's the fixed code... APPROVED",
 		TokensTotal: 1970,
@@ -575,7 +575,7 @@ func TestAgentResult_ConversationField_Integration(t *testing.T) {
 	require.NotNil(t, result.Conversation.State)
 	assert.Equal(t, 5, result.Conversation.State.TotalTurns)
 	assert.Equal(t, 1970, result.Conversation.State.TotalTokens)
-	assert.Equal(t, workflow.StopReasonCondition, result.Conversation.State.StoppedBy)
+	assert.Equal(t, workflow.StopReasonUserExit, result.Conversation.State.StoppedBy)
 	assert.Len(t, result.Conversation.State.Turns, 5)
 	assert.Equal(t, workflow.TurnRoleSystem, result.Conversation.State.Turns[0].Role)
 	assert.Equal(t, workflow.TurnRoleAssistant, result.Conversation.State.Turns[4].Role)

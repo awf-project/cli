@@ -1,5 +1,5 @@
 # Feature: F033
-# Stop conditions testing with various expression types
+# Conversation mode steps with various providers
 name: conversation-stop-condition
 version: "1.0.0"
 
@@ -18,13 +18,10 @@ states:
     mode: conversation
     system_prompt: |
       You are a task executor. Complete the task and respond with "COMPLETE" when done.
-    initial_prompt: "Execute: {{inputs.task}}"
+    prompt: "Execute: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 10
-      strategy: sliding_window
-      stop_condition: "response contains 'COMPLETE'"
+    conversation: {}
     timeout: 60
     on_success: turn_count_limit
     on_failure: error
@@ -34,13 +31,10 @@ states:
     provider: gemini
     mode: conversation
     system_prompt: "Provide brief answers."
-    initial_prompt: "Continue task: {{inputs.task}}"
+    prompt: "Continue task: {{inputs.task}}"
     options:
       model: gemini-pro
-    conversation:
-      max_turns: 5
-      strategy: sliding_window
-      stop_condition: "turn_count >= 3"
+    conversation: {}
     timeout: 60
     on_success: token_budget
     on_failure: error
@@ -50,12 +44,8 @@ states:
     provider: codex
     mode: conversation
     system_prompt: "Be concise."
-    initial_prompt: "Finalize: {{inputs.task}}"
-    conversation:
-      max_turns: 20
-      max_context_tokens: 5000
-      strategy: sliding_window
-      stop_condition: "total_tokens >= 4500"
+    prompt: "Finalize: {{inputs.task}}"
+    conversation: {}
     timeout: 60
     on_success: complex_expression
     on_failure: error
@@ -65,13 +55,10 @@ states:
     provider: claude
     mode: conversation
     system_prompt: "Respond thoughtfully."
-    initial_prompt: "Analyze: {{inputs.task}}"
+    prompt: "Analyze: {{inputs.task}}"
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 15
-      strategy: sliding_window
-      stop_condition: "(turn_count >= 5 && response contains 'DONE') || total_tokens >= 10000"
+    conversation: {}
     timeout: 90
     on_success: done
     on_failure: error

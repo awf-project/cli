@@ -37,6 +37,7 @@ var (
 	_ ports.PluginStore         = (*MockPluginStore)(nil)
 	_ ports.PluginConfig        = (*MockPluginConfig)(nil)
 	_ ports.PluginStateStore    = (*MockPluginStateStore)(nil)
+	_ ports.UserInputReader     = (*MockUserInputReader)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1765,4 +1766,104 @@ func NewMockPluginStateStore() *MockPluginStateStore {
 		MockPluginStore:  store,
 		MockPluginConfig: config,
 	}
+}
+
+// MockUserInputReader is a thread-safe mock implementation of ports.UserInputReader.
+// It uses sync.Mutex to protect concurrent access to the response queue.
+//
+// Usage:
+//
+//	reader := testutil.NewMockUserInputReader("hello", "world", "")
+//	input, err := reader.ReadInput(ctx)
+type MockUserInputReader struct {
+	mu        sync.Mutex
+	responses []string
+	index     int
+	readErr   error
+	callCount int
+}
+
+// NewMockUserInputReader creates a new thread-safe mock input reader.
+// Responses are returned in sequence; empty string signals conversation exit.
+// When all responses are consumed, returns empty string.
+func NewMockUserInputReader(responses ...string) *MockUserInputReader {
+	return &MockUserInputReader{
+		responses: responses,
+	}
+}
+
+// ReadInput returns the next configured response in sequence.
+// Returns configured error if set. Respects context cancellation.
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) ReadInput(ctx context.Context) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check context cancellation first
+	if err := ctx.Err(); err != nil {
+		return "", err //nolint:wrapcheck // tests assert exact context.Canceled identity via assert.Equal
+	}
+
+	// Only track calls when responses have been configured; nil responses (post-Clear state) are no-ops
+	if m.responses != nil {
+		m.callCount++
+	}
+
+	// Return configured error if set
+	if m.readErr != nil {
+		return "", m.readErr
+	}
+
+	// If no responses configured or all consumed, return empty string
+	if m.index >= len(m.responses) {
+		return "", nil
+	}
+
+	resp := m.responses[m.index]
+	m.index++
+	return resp, nil
+}
+
+// SetReadError configures an error to be returned by ReadInput (test helper).
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) SetReadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.readErr = err
+}
+
+// SetResponses replaces the response sequence (test helper).
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) SetResponses(responses ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses = responses
+	m.index = 0
+}
+
+// AddResponse appends a response to the sequence (test helper).
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) AddResponse(response string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses = append(m.responses, response)
+}
+
+// GetCallCount returns the number of ReadInput calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) GetCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.callCount
+}
+
+// Clear removes all responses and resets error configuration (test helper).
+// Thread-safe for concurrent access.
+func (m *MockUserInputReader) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses = nil
+	m.index = 0
+	m.readErr = nil
+	m.callCount = 0
 }

@@ -112,11 +112,11 @@ func TestAgentConfig_PromptFile_ConversationMode_PromptAllowed(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestAgentConfig_PromptFile_ConversationMode_InitialPromptAllowed(t *testing.T) {
+func TestAgentConfig_PromptFile_ConversationMode_PromptRequired(t *testing.T) {
 	config := AgentConfig{
-		Provider:      "claude",
-		InitialPrompt: "Start conversation",
-		Mode:          "conversation",
+		Provider: "claude",
+		Prompt:   "Start conversation",
+		Mode:     "conversation",
 	}
 	err := config.Validate(nil)
 	assert.NoError(t, err)
@@ -280,12 +280,11 @@ func TestAgentConfig_PromptFile_GetEffectivePrompt_DoesNotReturnFile(t *testing.
 
 func TestAgentConfig_PromptFile_ConversationMode_Combinations(t *testing.T) {
 	tests := []struct {
-		name          string
-		prompt        string
-		promptFile    string
-		initialPrompt string
-		wantErr       bool
-		errMsg        string
+		name       string
+		prompt     string
+		promptFile string
+		wantErr    bool
+		errMsg     string
 	}{
 		{
 			name:       "promptFile only",
@@ -294,30 +293,11 @@ func TestAgentConfig_PromptFile_ConversationMode_Combinations(t *testing.T) {
 			errMsg:     "not supported in conversation mode",
 		},
 		{
-			name:          "promptFile with initialPrompt",
-			promptFile:    "prompts/conv.md",
-			initialPrompt: "Start",
-			wantErr:       true,
-			errMsg:        "not supported in conversation mode",
-		},
-		{
 			name:       "promptFile with prompt",
 			promptFile: "prompts/conv.md",
 			prompt:     "Initial",
 			wantErr:    true,
 			errMsg:     "mutually exclusive",
-		},
-		{
-			name:          "promptFile with both prompt and initialPrompt",
-			promptFile:    "prompts/conv.md",
-			prompt:        "Initial",
-			initialPrompt: "Start",
-			wantErr:       true,
-		},
-		{
-			name:          "initialPrompt only (valid)",
-			initialPrompt: "Start conversation",
-			wantErr:       false,
 		},
 		{
 			name:    "prompt only (valid)",
@@ -329,11 +309,10 @@ func TestAgentConfig_PromptFile_ConversationMode_Combinations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				Prompt:        tt.prompt,
-				PromptFile:    tt.promptFile,
-				InitialPrompt: tt.initialPrompt,
+				Provider:   "claude",
+				Mode:       "conversation",
+				Prompt:     tt.prompt,
+				PromptFile: tt.promptFile,
 			}
 			err := config.Validate(nil)
 			if tt.wantErr {

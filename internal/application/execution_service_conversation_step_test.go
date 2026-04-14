@@ -36,13 +36,11 @@ func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) 
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			SystemPrompt:  "You are helpful",
-			InitialPrompt: "Hello",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			SystemPrompt: "You are helpful",
+			Prompt:       "Hello",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -55,7 +53,7 @@ func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) 
 		},
 		TotalTurns:  1,
 		TotalTokens: 50,
-		StoppedBy:   workflow.StopReasonMaxTurns,
+		StoppedBy:   workflow.StopReasonUserExit,
 	}
 	mockConvMgr := &mockConversationManagerT009{
 		result: &workflow.ConversationResult{
@@ -89,7 +87,7 @@ func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) 
 	// Verify conversation state was persisted
 	assert.NotNil(t, state.Conversation)
 	assert.Len(t, state.Conversation.Turns, 2)
-	assert.Equal(t, workflow.StopReasonMaxTurns, state.Conversation.StoppedBy)
+	assert.Equal(t, workflow.StopReasonUserExit, state.Conversation.StoppedBy)
 }
 
 // TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess tests that
@@ -99,16 +97,11 @@ func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			SystemPrompt:  "You are a coder",
-			InitialPrompt: "Write a function",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns:         5,
-				MaxContextTokens: 100000,
-				Strategy:         workflow.StrategySlidingWindow,
-				StopCondition:    "response contains 'DONE'",
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			SystemPrompt: "You are a coder",
+			Prompt:       "Write a function",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -125,7 +118,7 @@ func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
 		},
 		TotalTurns:  3,
 		TotalTokens: 250,
-		StoppedBy:   workflow.StopReasonCondition,
+		StoppedBy:   workflow.StopReasonUserExit,
 	}
 	mockConvMgr := &mockConversationManagerT009{
 		result: &workflow.ConversationResult{
@@ -156,23 +149,21 @@ func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
 	// Verify multi-turn conversation state
 	assert.NotNil(t, state.Conversation)
 	assert.Len(t, state.Conversation.Turns, 6) // 3 user + 3 assistant turns
-	assert.Equal(t, workflow.StopReasonCondition, state.Conversation.StoppedBy)
+	assert.Equal(t, workflow.StopReasonUserExit, state.Conversation.StoppedBy)
 }
 
 // TestExecuteConversationStep_T009_HappyPath_WithInputInterpolation tests that
 // executeConversationStep passes buildContext function to ConversationManager
-// for interpolating InitialPrompt with workflow inputs and step states.
+// for interpolating the prompt with workflow inputs and step states.
 func TestExecuteConversationStep_T009_HappyPath_WithInputInterpolation(t *testing.T) {
 	step := &workflow.Step{
 		Name: "analyze",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Analyze code: {{inputs.code}}",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 2,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Analyze code: {{inputs.code}}",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 
@@ -219,10 +210,10 @@ func TestExecuteConversationStep_T009_EdgeCase_MinimalConfig(t *testing.T) {
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Hello",
-			Conversation:  &workflow.ConversationConfig{}, // Empty config - use defaults
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Hello",
+			Conversation: &workflow.ConversationConfig{}, // Empty config - use defaults
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -259,12 +250,10 @@ func TestExecuteConversationStep_T009_EdgeCase_EmptyOutput(t *testing.T) {
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Say nothing",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Say nothing",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -276,7 +265,7 @@ func TestExecuteConversationStep_T009_EdgeCase_EmptyOutput(t *testing.T) {
 		},
 		TotalTurns:  1,
 		TotalTokens: 5,
-		StoppedBy:   workflow.StopReasonMaxTurns,
+		StoppedBy:   workflow.StopReasonUserExit,
 	}
 	mockConvMgr := &mockConversationManagerT009{
 		result: &workflow.ConversationResult{
@@ -311,12 +300,10 @@ func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T)
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Long task",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 100,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Long task",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -352,12 +339,10 @@ func TestExecuteConversationStep_T009_Error_NoConversationManager(t *testing.T) 
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Hello",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Hello",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -371,34 +356,6 @@ func TestExecuteConversationStep_T009_Error_NoConversationManager(t *testing.T) 
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation manager not configured")
-}
-
-// TestExecuteConversationStep_T009_Error_NilConversationConfig tests that
-// executeConversationStep returns error when step.Agent.Conversation is nil.
-func TestExecuteConversationStep_T009_Error_NilConversationConfig(t *testing.T) {
-	step := &workflow.Step{
-		Name: "chat",
-		Type: workflow.StepTypeAgent,
-		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Hello",
-			Conversation:  nil, // Missing conversation config
-		},
-	}
-	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
-	execCtx.Status = workflow.StatusRunning
-	mockConvMgr := &mockConversationManagerT009{}
-
-	svc := &ExecutionService{
-		conversationMgr: mockConvMgr,
-		logger:          newMockLogger(),
-		resolver:        newMockResolver(),
-	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversation config is nil")
 }
 
 // TestExecuteConversationStep_T009_Error_NilAgentConfig tests that
@@ -431,12 +388,10 @@ func TestExecuteConversationStep_T009_Error_ConversationManagerFailure(t *testin
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Hello",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Hello",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -463,12 +418,10 @@ func TestExecuteConversationStep_T009_Error_ProviderNotFound(t *testing.T) {
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "unknown-provider", // Not registered
-			Mode:          "conversation",
-			InitialPrompt: "Hello",
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "unknown-provider", // Not registered
+			Mode:         "conversation",
+			Prompt:       "Hello",
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")
@@ -495,12 +448,10 @@ func TestExecuteConversationStep_T009_Error_InterpolationFailure(t *testing.T) {
 		Name: "chat",
 		Type: workflow.StepTypeAgent,
 		Agent: &workflow.AgentConfig{
-			Provider:      "claude",
-			Mode:          "conversation",
-			InitialPrompt: "Use {{invalid.reference}}", // Invalid interpolation
-			Conversation: &workflow.ConversationConfig{
-				MaxTurns: 1,
-			},
+			Provider:     "claude",
+			Mode:         "conversation",
+			Prompt:       "Use {{invalid.reference}}", // Invalid interpolation
+			Conversation: &workflow.ConversationConfig{},
 		},
 	}
 	execCtx := workflow.NewExecutionContext("test-wf", "test-workflow")

@@ -12,20 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockExpressionValidator returns an ExpressionCompiler for tests that validates syntax.
-// It checks for unbalanced quotes as a simple syntax validation.
-func mockExpressionValidator(expr string) error {
-	if strings.TrimSpace(expr) == "" {
-		return nil
-	}
-	// Simple check for unbalanced single quotes (mimics real validator behavior)
-	singleQuotes := strings.Count(expr, "'")
-	if singleQuotes%2 != 0 {
-		return errors.New("expression compilation failed: unbalanced quotes")
-	}
-	return nil
-}
-
 // Feature: F033
 
 func TestTurnRole_Constants(t *testing.T) {
@@ -179,253 +165,40 @@ func TestTurn_Validate(t *testing.T) {
 	}
 }
 
-func TestContextWindowStrategy_Constants(t *testing.T) {
-	assert.Equal(t, ContextWindowStrategy(""), StrategyNone)
-	assert.Equal(t, ContextWindowStrategy("sliding_window"), StrategySlidingWindow)
-	assert.Equal(t, ContextWindowStrategy("summarize"), StrategySummarize)
-	assert.Equal(t, ContextWindowStrategy("truncate_middle"), StrategyTruncateMiddle)
-}
-
 func TestConversationConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  ConversationConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
-			name: "valid minimal config",
-			config: ConversationConfig{
-				MaxTurns: 5,
-			},
+			name:    "empty config is valid",
+			config:  ConversationConfig{},
 			wantErr: false,
 		},
 		{
-			name: "valid full config",
+			name: "with continue_from is valid",
 			config: ConversationConfig{
-				MaxTurns:         10,
-				MaxContextTokens: 100000,
-				Strategy:         StrategySlidingWindow,
-				StopCondition:    "response contains 'DONE'",
+				ContinueFrom: "previous_step",
 			},
 			wantErr: false,
-		},
-		{
-			name: "valid with continue_from",
-			config: ConversationConfig{
-				MaxTurns:     5,
-				ContinueFrom: "previous_conversation",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid with inject_context",
-			config: ConversationConfig{
-				MaxTurns:      5,
-				InjectContext: "Additional context here",
-			},
-			wantErr: false,
-		},
-		{
-			name: "zero max_turns (uses default)",
-			config: ConversationConfig{
-				MaxTurns: 0,
-			},
-			wantErr: false,
-		},
-		{
-			name: "negative max_turns",
-			config: ConversationConfig{
-				MaxTurns: -1,
-			},
-			wantErr: true,
-			errMsg:  "max_turns",
-		},
-		{
-			name: "max_turns exceeds limit",
-			config: ConversationConfig{
-				MaxTurns: 101,
-			},
-			wantErr: true,
-			errMsg:  "max_turns",
-		},
-		{
-			name: "negative max_context_tokens",
-			config: ConversationConfig{
-				MaxTurns:         5,
-				MaxContextTokens: -1,
-			},
-			wantErr: true,
-			errMsg:  "max_context_tokens",
-		},
-		{
-			name: "invalid strategy",
-			config: ConversationConfig{
-				MaxTurns: 5,
-				Strategy: ContextWindowStrategy("invalid"),
-			},
-			wantErr: true,
-			errMsg:  "strategy",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
-				}
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestConversationConfig_Validate_Strategies(t *testing.T) {
-	tests := []struct {
-		name     string
-		strategy ContextWindowStrategy
-		wantErr  bool
-		errMsg   string
-	}{
-		{"none (default)", StrategyNone, false, ""},
-		{"sliding_window", StrategySlidingWindow, false, ""},
-		{"summarize", StrategySummarize, true, "not yet implemented"},
-		{"truncate_middle", StrategyTruncateMiddle, true, "not yet implemented"},
-		{"empty string", ContextWindowStrategy(""), false, ""},
-		{"invalid", ContextWindowStrategy("invalid"), true, "invalid"},
-		{"typo", ContextWindowStrategy("sliding_windows"), true, "invalid"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := ConversationConfig{
-				MaxTurns: 5,
-				Strategy: tt.strategy,
-			}
-			err := config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
-				}
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestConversationConfig_Validate_StopConditions(t *testing.T) {
-	tests := []struct {
-		name      string
-		condition string
-		wantErr   bool
-	}{
-		{
-			name:      "simple contains",
-			condition: "response contains 'DONE'",
-			wantErr:   false,
-		},
-		{
-			name:      "turn count comparison",
-			condition: "turn_count >= 5",
-			wantErr:   false,
-		},
-		{
-			name:      "token comparison",
-			condition: "total_tokens > 50000",
-			wantErr:   false,
-		},
-		{
-			name:      "logical AND",
-			condition: "turn_count >= 3 && response contains 'APPROVED'",
-			wantErr:   false,
-		},
-		{
-			name:      "empty condition (no early exit)",
-			condition: "",
-			wantErr:   false,
-		},
-		{
-			name:      "complex expression",
-			condition: "(turn_count >= 5 || total_tokens > 10000) && response contains 'COMPLETE'",
-			wantErr:   false,
-		},
-		{
-			name:      "invalid syntax",
-			condition: "response contains DONE'",
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := ConversationConfig{
-				MaxTurns:      5,
-				StopCondition: tt.condition,
-			}
-			// Use mock validator for stop condition syntax checking
-			err := config.Validate(mockExpressionValidator)
+			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
-		})
-	}
-}
-
-func TestConversationConfig_GetMaxTurns(t *testing.T) {
-	tests := []struct {
-		name     string
-		maxTurns int
-		expected int
-	}{
-		{
-			name:     "zero returns default (10)",
-			maxTurns: 0,
-			expected: 10,
-		},
-		{
-			name:     "positive returns configured value",
-			maxTurns: 5,
-			expected: 5,
-		},
-		{
-			name:     "maximum allowed (100)",
-			maxTurns: 100,
-			expected: 100,
-		},
-		{
-			name:     "exactly default value",
-			maxTurns: 10,
-			expected: 10,
-		},
-		{
-			name:     "minimum (1)",
-			maxTurns: 1,
-			expected: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := ConversationConfig{
-				MaxTurns: tt.maxTurns,
-			}
-			assert.Equal(t, tt.expected, config.GetMaxTurns())
 		})
 	}
 }
 
 func TestStopReason_Constants(t *testing.T) {
-	assert.Equal(t, StopReason("condition"), StopReasonCondition)
-	assert.Equal(t, StopReason("max_turns"), StopReasonMaxTurns)
-	assert.Equal(t, StopReason("max_tokens"), StopReasonMaxTokens)
+	assert.Equal(t, StopReason("user_exit"), StopReasonUserExit)
 	assert.Equal(t, StopReason("error"), StopReasonError)
 }
 
@@ -590,9 +363,7 @@ func TestConversationState_IsStopped(t *testing.T) {
 		stoppedBy StopReason
 		expected  bool
 	}{
-		{"stopped by condition", StopReasonCondition, true},
-		{"stopped by max turns", StopReasonMaxTurns, true},
-		{"stopped by max tokens", StopReasonMaxTokens, true},
+		{"stopped by user exit", StopReasonUserExit, true},
 		{"stopped by error", StopReasonError, true},
 		{"not stopped (empty)", StopReason(""), false},
 	}
@@ -822,22 +593,12 @@ func TestConversationResult_TurnCount(t *testing.T) {
 
 func TestConversationConfig_CompleteExample(t *testing.T) {
 	config := ConversationConfig{
-		MaxTurns:         10,
-		MaxContextTokens: 100000,
-		Strategy:         StrategySlidingWindow,
-		StopCondition:    "response contains 'APPROVED'",
+		ContinueFrom: "previous_step",
 	}
 
-	// Validate structure
-	err := config.Validate(nil)
+	err := config.Validate()
 	require.NoError(t, err)
-
-	// Check field values
-	assert.Equal(t, 10, config.MaxTurns)
-	assert.Equal(t, 100000, config.MaxContextTokens)
-	assert.Equal(t, StrategySlidingWindow, config.Strategy)
-	assert.Equal(t, "response contains 'APPROVED'", config.StopCondition)
-	assert.Equal(t, 10, config.GetMaxTurns())
+	assert.Equal(t, "previous_step", config.ContinueFrom)
 }
 
 func TestConversationResult_ExecutionLifecycle(t *testing.T) {
@@ -885,7 +646,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 	_ = result.State.AddTurn(assistantTurn2)
 
 	// Mark conversation as stopped
-	result.State.StoppedBy = StopReasonCondition
+	result.State.StoppedBy = StopReasonUserExit
 
 	// Capture final output
 	result.Output = "Fixed. APPROVED"
@@ -910,7 +671,7 @@ func TestConversationResult_ExecutionLifecycle(t *testing.T) {
 	assert.True(t, result.HasJSONResponse())
 	assert.GreaterOrEqual(t, result.TurnCount(), 4)
 	assert.True(t, result.State.IsStopped())
-	assert.Equal(t, StopReasonCondition, result.State.StoppedBy)
+	assert.Equal(t, StopReasonUserExit, result.State.StoppedBy)
 	assert.Greater(t, result.TokensTotal, 0)
 }
 
@@ -1000,69 +761,6 @@ func TestConversationResult_TextOnlyResponse(t *testing.T) {
 	assert.Empty(t, result.Response)
 	assert.NotEmpty(t, result.Output)
 	assert.Equal(t, 3, result.TurnCount()) // System + User + Assistant
-}
-
-func TestConversationConfig_MaxTurnsBoundaries(t *testing.T) {
-	tests := []struct {
-		name     string
-		maxTurns int
-		expected int
-		wantErr  bool
-	}{
-		{"minimum valid (1)", 1, 1, false},
-		{"zero (uses default)", 0, 10, false},
-		{"default (10)", 10, 10, false},
-		{"high valid (50)", 50, 50, false},
-		{"maximum valid (100)", 100, 100, false},
-		{"exceeds max (101)", 101, 0, true},
-		{"negative (-1)", -1, 0, true},
-		{"large negative", -9999, 0, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := ConversationConfig{
-				MaxTurns: tt.maxTurns,
-			}
-			err := config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, config.GetMaxTurns())
-			}
-		})
-	}
-}
-
-func TestConversationConfig_MaxContextTokensBoundaries(t *testing.T) {
-	tests := []struct {
-		name             string
-		maxContextTokens int
-		wantErr          bool
-	}{
-		{"zero (provider default)", 0, false},
-		{"small valid (1000)", 1000, false},
-		{"medium valid (100000)", 100000, false},
-		{"large valid (1000000)", 1000000, false},
-		{"negative (-1)", -1, true},
-		{"large negative", -50000, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := ConversationConfig{
-				MaxTurns:         5,
-				MaxContextTokens: tt.maxContextTokens,
-			}
-			err := config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }
 
 func TestConversationState_LargeConversation(t *testing.T) {

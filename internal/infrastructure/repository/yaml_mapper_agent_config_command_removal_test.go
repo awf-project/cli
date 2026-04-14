@@ -58,13 +58,12 @@ func TestMapAgentConfigFlat_NoCommandMapping(t *testing.T) {
 		{
 			name: "agent config with all fields except Command",
 			yamlStep: &yamlStep{
-				Provider:      "claude",
-				Prompt:        "Test prompt",
-				Options:       map[string]any{"temperature": 0.5},
-				Mode:          "conversation",
-				SystemPrompt:  "You are helpful",
-				InitialPrompt: "Hello",
-				OutputFormat:  "json",
+				Provider:     "claude",
+				Prompt:       "Test prompt",
+				Options:      map[string]any{"temperature": 0.5},
+				Mode:         "conversation",
+				SystemPrompt: "You are helpful",
+				OutputFormat: "json",
 			},
 			wantErr: false,
 		},
@@ -202,14 +201,12 @@ func TestMapAgentConfigFlat_IgnoresYAMLStepCommand(t *testing.T) {
 // confirming that Command removal doesn't affect these features.
 func TestAgentConfigMappingWithConversationMode(t *testing.T) {
 	yamlStep := &yamlStep{
-		Provider:      "claude",
-		Prompt:        "Initial prompt",
-		InitialPrompt: "First message",
-		SystemPrompt:  "You are an expert",
-		Mode:          "conversation",
+		Provider:     "claude",
+		Prompt:       "Initial prompt",
+		SystemPrompt: "You are an expert",
+		Mode:         "conversation",
 		Conversation: &yamlConversationConfig{
-			MaxTurns: 10,
-			Strategy: "sliding_window",
+			ContinueFrom: "prior_step",
 		},
 		Options: map[string]any{
 			"model": "claude-sonnet-4-20250514",
@@ -221,7 +218,6 @@ func TestAgentConfigMappingWithConversationMode(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, "claude", result.Provider)
 	assert.Equal(t, "Initial prompt", result.Prompt)
-	assert.Equal(t, "First message", result.InitialPrompt)
 	assert.Equal(t, "You are an expert", result.SystemPrompt)
 	assert.Equal(t, "conversation", result.Mode)
 	assert.NotNil(t, result.Conversation)
@@ -255,20 +251,19 @@ func TestYAMLStep_CommandFieldExists(t *testing.T) {
 // and confirms Command is the only field NOT mapped.
 func TestMapAgentConfigFlat_AllFieldsMappedExceptCommand(t *testing.T) {
 	yamlStep := &yamlStep{
-		Provider:      "openai_compatible",
-		Prompt:        "Analyze code",
-		PromptFile:    "prompt.txt",
-		Mode:          "single",
-		SystemPrompt:  "System message",
-		InitialPrompt: "Initial",
-		OutputFormat:  "json",
+		Provider:     "openai_compatible",
+		Prompt:       "Analyze code",
+		PromptFile:   "prompt.txt",
+		Mode:         "single",
+		SystemPrompt: "System message",
+		OutputFormat: "json",
 		Options: map[string]any{
 			"api_key": "secret",
 			"model":   "gpt-4",
 			"url":     "http://localhost:8000",
 		},
 		Conversation: &yamlConversationConfig{
-			MaxTurns: 5,
+			ContinueFrom: "prior_step",
 		},
 	}
 
@@ -282,10 +277,9 @@ func TestMapAgentConfigFlat_AllFieldsMappedExceptCommand(t *testing.T) {
 	assert.Equal(t, yamlStep.PromptFile, result.PromptFile)
 	assert.Equal(t, yamlStep.Mode, result.Mode)
 	assert.Equal(t, yamlStep.SystemPrompt, result.SystemPrompt)
-	assert.Equal(t, yamlStep.InitialPrompt, result.InitialPrompt)
 	assert.Equal(t, yamlStep.OutputFormat, string(result.OutputFormat))
 	assert.Equal(t, yamlStep.Options, result.Options)
-	assert.Equal(t, yamlStep.Conversation.MaxTurns, result.Conversation.MaxTurns)
+	assert.NotNil(t, result.Conversation)
 
 	// Command is NOT in this list - confirming it's been removed from mapping
 }
