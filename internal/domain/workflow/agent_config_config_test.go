@@ -508,13 +508,12 @@ func TestAgentConfig_NoCommandField_ValidateSucceeds(t *testing.T) {
 		{
 			name: "config with all valid fields",
 			config: AgentConfig{
-				Provider:      "openai_compatible",
-				Prompt:        "Main prompt",
-				Mode:          "single",
-				SystemPrompt:  "System instructions",
-				InitialPrompt: "User greeting",
-				OutputFormat:  OutputFormatText,
-				Timeout:       120,
+				Provider:     "openai_compatible",
+				Prompt:       "Main prompt",
+				Mode:         "single",
+				SystemPrompt: "System instructions",
+				OutputFormat: OutputFormatText,
+				Timeout:      120,
 				Options: map[string]any{
 					"model":       "gpt-4",
 					"temperature": 0.7,
@@ -537,16 +536,15 @@ func TestAgentConfig_Structure_NoCommand(t *testing.T) {
 	// prompt configuration, options, mode, and output handling.
 
 	config := AgentConfig{
-		Provider:      "claude",
-		Prompt:        "Test",
-		PromptFile:    "",
-		Mode:          "",
-		SystemPrompt:  "",
-		InitialPrompt: "",
-		OutputFormat:  "",
-		Options:       nil,
-		Timeout:       0,
-		Conversation:  nil,
+		Provider:     "claude",
+		Prompt:       "Test",
+		PromptFile:   "",
+		Mode:         "",
+		SystemPrompt: "",
+		OutputFormat: "",
+		Options:      nil,
+		Timeout:      0,
+		Conversation: nil,
 	}
 
 	assert.NotNil(t, config)

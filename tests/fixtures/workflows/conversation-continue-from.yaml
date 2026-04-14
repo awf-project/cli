@@ -17,15 +17,12 @@ states:
     mode: conversation
     system_prompt: |
       You are a helpful assistant. Analyze the request and provide insights.
-    initial_prompt: |
+    prompt: |
       Please analyze this:
       {{inputs.task}}
     options:
       model: claude-haiku-4-5
-    conversation:
-      max_turns: 3
-      max_context_tokens: 50000
-      strategy: sliding_window
+    conversation: {}
     timeout: 60
     on_success: refine
     on_failure: error
@@ -37,7 +34,6 @@ states:
     prompt: |
       Now please refine and improve your previous response.
     conversation:
-      max_turns: 2
       continue_from: analyze
     timeout: 60
     on_success: done

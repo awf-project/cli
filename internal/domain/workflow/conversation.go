@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -33,9 +32,9 @@ const (
 
 // Turn represents a single message in a conversation.
 type Turn struct {
-	Role    TurnRole // system, user, or assistant
-	Content string   // message content
-	Tokens  int      // token count for this turn
+	Role    TurnRole
+	Content string
+	Tokens  int
 }
 
 // NewTurn creates a new Turn with the given role and content.
@@ -43,107 +42,42 @@ func NewTurn(role TurnRole, content string) *Turn {
 	return &Turn{
 		Role:    role,
 		Content: content,
-		Tokens:  0, // Will be filled by tokenizer
 	}
 }
 
 // Validate checks if the turn is valid.
 func (t *Turn) Validate() error {
-	// Validate role
 	if t.Role == "" {
 		return errors.New("turn role cannot be empty")
 	}
 	if t.Role != TurnRoleSystem && t.Role != TurnRoleUser && t.Role != TurnRoleAssistant {
 		return errors.New("invalid turn role")
 	}
-
-	// Validate content
 	if t.Content == "" {
 		return errors.New("turn content cannot be empty")
 	}
-
-	// Validate tokens
 	if t.Tokens < 0 {
 		return errors.New("turn tokens cannot be negative")
 	}
-
 	return nil
 }
-
-// ContextWindowStrategy defines the strategy for managing context window limits.
-type ContextWindowStrategy string
-
-const (
-	StrategyNone           ContextWindowStrategy = ""
-	StrategySlidingWindow  ContextWindowStrategy = "sliding_window"
-	StrategySummarize      ContextWindowStrategy = "summarize"
-	StrategyTruncateMiddle ContextWindowStrategy = "truncate_middle"
-)
 
 // ConversationConfig holds configuration for conversation mode execution.
 type ConversationConfig struct {
-	MaxTurns         int                   // maximum number of turns (default 10, max 100)
-	MaxContextTokens int                   // maximum tokens in context window (0 = provider default)
-	Strategy         ContextWindowStrategy // context window management strategy
-	StopCondition    string                // expression to evaluate for early exit
-	ContinueFrom     string                // step name to continue conversation from
-	InjectContext    string                // additional context to inject mid-conversation
+	ContinueFrom string // step name to continue conversation from
 }
 
 // Validate checks if the conversation configuration is valid.
-// The validator parameter is used to check stop condition expression syntax.
-func (c *ConversationConfig) Validate(validator ExpressionCompiler) error {
-	// Validate MaxTurns (0 is allowed and means use default)
-	if c.MaxTurns < 0 {
-		return errors.New("max_turns must be non-negative")
-	}
-	if c.MaxTurns > 100 {
-		return errors.New("max_turns cannot exceed 100")
-	}
-
-	// Validate MaxContextTokens if set
-	if c.MaxContextTokens < 0 {
-		return errors.New("max_context_tokens must be non-negative")
-	}
-
-	// Validate Strategy if set
-	if c.Strategy != "" {
-		switch c.Strategy {
-		case StrategySlidingWindow:
-			// Valid strategies
-		case StrategySummarize, StrategyTruncateMiddle:
-			return fmt.Errorf("strategy %q is not yet implemented; use sliding_window", c.Strategy)
-		default:
-			return errors.New("invalid context window strategy")
-		}
-	}
-
-	// Validate StopCondition if set (compile-time syntax check)
-	if c.StopCondition != "" && validator != nil {
-		if err := validator(c.StopCondition); err != nil {
-			return fmt.Errorf("invalid stop_condition expression: %w", err)
-		}
-	}
-
+func (c *ConversationConfig) Validate() error {
 	return nil
-}
-
-// GetMaxTurns returns the effective max turns with default fallback.
-func (c *ConversationConfig) GetMaxTurns() int {
-	if c.MaxTurns == 0 {
-		return 10 // default
-	}
-	return c.MaxTurns
 }
 
 // StopReason indicates why a conversation stopped.
 type StopReason string
 
 const (
-	StopReasonCondition StopReason = "condition"
-	StopReasonMaxTurns  StopReason = "max_turns"
-	StopReasonMaxTokens StopReason = "max_tokens"
-	StopReasonError     StopReason = "error"
+	StopReasonUserExit StopReason = "user_exit"
+	StopReasonError    StopReason = "error"
 )
 
 // ConversationState represents the state of an ongoing or completed conversation.

@@ -6,6 +6,7 @@ package features_test
 
 import (
 	"context"
+	"io"
 	"slices"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestClaudeSessionResume_MultiTurn(t *testing.T) {
 	state := workflow.NewConversationState("You are a code reviewer")
 	options := map[string]any{"system_prompt": "You are a code reviewer"}
 
-	result, err := provider.ExecuteConversation(context.Background(), state, "Review this code", options)
+	result, err := provider.ExecuteConversation(context.Background(), state, "Review this code", options, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -48,7 +49,7 @@ func TestClaudeSessionResume_MultiTurn(t *testing.T) {
 		nil,
 	)
 
-	result2, err := provider.ExecuteConversation(context.Background(), result.State, "What was issue #1?", options)
+	result2, err := provider.ExecuteConversation(context.Background(), result.State, "What was issue #1?", options, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
@@ -130,14 +131,14 @@ func TestAllProviders_SessionResumeFlags(t *testing.T) {
 			// Turn 1: extract session ID
 			mockExec.SetOutput(tt.turn1Output, nil)
 			state := workflow.NewConversationState("")
-			result, err := provider.ExecuteConversation(context.Background(), state, "Review code", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "Review code", nil, io.Discard, io.Discard)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantID, result.State.SessionID)
 
 			// Turn 2: verify resume args
 			mockExec.Clear()
 			mockExec.SetOutput(tt.turn2Output, nil)
-			_, err = provider.ExecuteConversation(context.Background(), result.State, "Fix issue", nil)
+			_, err = provider.ExecuteConversation(context.Background(), result.State, "Fix issue", nil, io.Discard, io.Discard)
 			require.NoError(t, err)
 
 			calls := mockExec.GetCalls()
@@ -190,7 +191,7 @@ func TestSessionResume_GracefulFallback(t *testing.T) {
 			provider := tt.newProvider(mockExec)
 
 			state := workflow.NewConversationState("")
-			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil)
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, io.Discard, io.Discard)
 
 			require.NoError(t, err, "extraction failure must not cause error")
 			require.NotNil(t, result)
@@ -212,7 +213,7 @@ func TestSessionID_PersistsThroughThreeTurns(t *testing.T) {
 			[]byte(`{"session_id":"sess_persistent","result":"response"}`),
 			nil,
 		)
-		result, err := provider.ExecuteConversation(context.Background(), state, prompt, nil)
+		result, err := provider.ExecuteConversation(context.Background(), state, prompt, nil, io.Discard, io.Discard)
 		require.NoError(t, err)
 
 		assert.Equal(t, "sess_persistent", result.State.SessionID)

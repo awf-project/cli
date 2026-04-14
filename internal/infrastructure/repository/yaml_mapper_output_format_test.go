@@ -339,21 +339,21 @@ func TestMapAgentConfigFlat_OutputFormat_WithConversationMode(t *testing.T) {
 		{
 			name: "conversation mode with json output format",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a data extraction assistant",
-				InitialPrompt: "Extract entities from: {{.inputs.text}}",
-				OutputFormat:  "json",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a data extraction assistant",
+				Prompt:       "Extract entities from: {{.inputs.text}}",
+				OutputFormat: "json",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a data extraction assistant",
-				InitialPrompt: "Extract entities from: {{.inputs.text}}",
-				OutputFormat:  workflow.OutputFormat("json"),
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a data extraction assistant",
+				Prompt:       "Extract entities from: {{.inputs.text}}",
+				OutputFormat: workflow.OutputFormat("json"),
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
@@ -362,21 +362,21 @@ func TestMapAgentConfigFlat_OutputFormat_WithConversationMode(t *testing.T) {
 		{
 			name: "conversation mode with text output format",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a helpful assistant",
-				InitialPrompt: "Help with: {{.inputs.task}}",
-				OutputFormat:  "text",
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a helpful assistant",
+				Prompt:       "Help with: {{.inputs.task}}",
+				OutputFormat: "text",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a helpful assistant",
-				InitialPrompt: "Help with: {{.inputs.task}}",
-				OutputFormat:  workflow.OutputFormat("text"),
+				Provider:     "claude",
+				Mode:         "conversation",
+				SystemPrompt: "You are a helpful assistant",
+				Prompt:       "Help with: {{.inputs.task}}",
+				OutputFormat: workflow.OutputFormat("text"),
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
@@ -413,7 +413,7 @@ func TestMapAgentConfigFlat_OutputFormat_WithConversationMode(t *testing.T) {
 			assert.Equal(t, tt.want.Provider, got.Provider)
 			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.SystemPrompt, got.SystemPrompt)
-			assert.Equal(t, tt.want.InitialPrompt, got.InitialPrompt)
+			assert.Equal(t, tt.want.Prompt, got.Prompt)
 			assert.Equal(t, tt.want.OutputFormat, got.OutputFormat)
 			assert.Equal(t, tt.want.Options, got.Options)
 		})

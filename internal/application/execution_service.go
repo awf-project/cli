@@ -2035,7 +2035,6 @@ func (s *ExecutionService) executeAgentStep(
 	// Execute the agent
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
 	opts := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
-	result, execErr := provider.Execute(stepCtx, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
 
 	// Record step state
 	state := workflow.StepState{
@@ -2045,18 +2044,47 @@ func (s *ExecutionService) executeAgentStep(
 		Attempt:     1,
 	}
 
-	// Populate state from result
-	if result != nil {
-		state.Output = result.Output
-		state.DisplayOutput = result.DisplayOutput
-		// AC5: JSON auto-parsed to states.step_name.Response
-		state.Response = result.Response
-		// AC6: Token usage in states.step_name.tokens_used
-		state.TokensUsed = result.Tokens
+	// When the step declares a conversation sub-struct, route through
+	// provider.ExecuteConversation to enable session tracking and continue_from
+	// resume. This is a single-turn call (no interactive loop) — the loop only
+	// applies when mode == "conversation".
+	var result *workflow.AgentResult
+	var execErr error
+	if step.Agent.Conversation != nil {
+		var convResult *workflow.ConversationResult
+		convResult, execErr = s.executeResumableAgentCall(stepCtx, step, provider, resolvedProvider, resolvedPrompt, opts, execCtx)
+		if convResult != nil {
+			state.Output = convResult.Output
+			state.DisplayOutput = convResult.DisplayOutput
+			state.Response = convResult.Response
+			state.TokensUsed = convResult.TokensTotal
+			state.Conversation = convResult.State
+			result = &workflow.AgentResult{
+				Provider:    convResult.Provider,
+				Output:      convResult.Output,
+				Response:    convResult.Response,
+				Tokens:      convResult.TokensTotal,
+				StartedAt:   convResult.StartedAt,
+				CompletedAt: convResult.CompletedAt,
+			}
+			if formatErr := s.applyOutputFormat(step, &state, execCtx); formatErr != nil {
+				return "", formatErr
+			}
+		}
+	} else {
+		result, execErr = provider.Execute(stepCtx, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
+		if result != nil {
+			state.Output = result.Output
+			state.DisplayOutput = result.DisplayOutput
+			// AC5: JSON auto-parsed to states.step_name.Response
+			state.Response = result.Response
+			// AC6: Token usage in states.step_name.tokens_used
+			state.TokensUsed = result.Tokens
 
-		// F065: Apply output format post-processing
-		if err := s.applyOutputFormat(step, &state, execCtx); err != nil {
-			return "", err
+			// F065: Apply output format post-processing
+			if formatErr := s.applyOutputFormat(step, &state, execCtx); formatErr != nil {
+				return "", formatErr
+			}
 		}
 	}
 
@@ -2132,6 +2160,76 @@ func (s *ExecutionService) executeAgentStep(
 	return s.resolveNextStep(step, intCtx, true)
 }
 
+// executeResumableAgentCall runs a single-turn agent call with conversation
+// state tracking. It is used when a single-mode agent step declares a
+// `conversation:` sub-struct, which opts the step into session tracking —
+// either to establish a new session (continue_from empty) or to resume a
+// prior step's session (continue_from set). Unlike executeConversationStep,
+// this does not enter the interactive user-input loop; it runs exactly one
+// agent turn and returns.
+func (s *ExecutionService) executeResumableAgentCall(
+	ctx context.Context,
+	step *workflow.Step,
+	provider ports.AgentProvider,
+	resolvedProvider string,
+	resolvedPrompt string,
+	opts map[string]any,
+	execCtx *workflow.ExecutionContext,
+) (*workflow.ConversationResult, error) {
+	state, err := s.buildResumableState(step, resolvedProvider, execCtx)
+	if err != nil {
+		return nil, err
+	}
+	// Providers consume system_prompt via the options map (same convention as
+	// ConversationManager). Inject it on fresh sessions only; on resumed
+	// sessions the provider retains the system prompt from the prior turn.
+	if step.Agent.SystemPrompt != "" && state.SessionID == "" {
+		if opts == nil {
+			opts = map[string]any{}
+		}
+		opts["system_prompt"] = step.Agent.SystemPrompt
+	}
+	return provider.ExecuteConversation(ctx, state, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
+}
+
+// buildResumableState constructs the conversation state seed for a resumable
+// agent call. When continue_from is set, it clones the referenced step's
+// conversation state; otherwise it creates a fresh state with the system prompt.
+func (s *ExecutionService) buildResumableState(
+	step *workflow.Step,
+	resolvedProvider string,
+	execCtx *workflow.ExecutionContext,
+) (*workflow.ConversationState, error) {
+	cfg := step.Agent.Conversation
+	if cfg == nil || cfg.ContinueFrom == "" {
+		return workflow.NewConversationState(step.Agent.SystemPrompt), nil
+	}
+
+	priorStepState, ok := execCtx.GetStepState(cfg.ContinueFrom)
+	if !ok {
+		return nil, fmt.Errorf("continue_from: step %q not found in execution context", cfg.ContinueFrom)
+	}
+	if priorStepState.Conversation == nil {
+		return nil, fmt.Errorf("continue_from: step %q has no conversation state", cfg.ContinueFrom)
+	}
+	prior := priorStepState.Conversation
+	if prior.SessionID == "" && len(prior.Turns) == 0 {
+		return nil, fmt.Errorf("continue_from: step %q has no session ID or conversation history to resume", cfg.ContinueFrom)
+	}
+	if resolvedProvider == "openai_compatible" && len(prior.Turns) == 0 {
+		return nil, fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", cfg.ContinueFrom, resolvedProvider)
+	}
+
+	cloned := &workflow.ConversationState{
+		SessionID:   prior.SessionID,
+		Turns:       make([]workflow.Turn, len(prior.Turns)),
+		TotalTurns:  prior.TotalTurns,
+		TotalTokens: prior.TotalTokens,
+	}
+	copy(cloned.Turns, prior.Turns)
+	return cloned, nil
+}
+
 // executeConversationStep orchestrates a multi-turn agent conversation following F033 spec.
 // It delegates to ConversationManager which handles:
 // - Turn iteration with conversation history
@@ -2164,12 +2262,7 @@ func (s *ExecutionService) executeConversationStep(
 		return "", errors.New("agent config is nil")
 	}
 
-	// 3. Validate conversation config exists
-	if step.Agent.Conversation == nil {
-		return "", errors.New("conversation config is nil")
-	}
-
-	// 4. Create buildContext closure for interpolation
+	// 3. Create buildContext closure for interpolation
 	buildContext := func(ec *workflow.ExecutionContext) *interpolation.Context {
 		return s.buildInterpolationContext(ec)
 	}

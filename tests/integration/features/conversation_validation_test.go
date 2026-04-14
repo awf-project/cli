@@ -22,16 +22,6 @@ func TestConversationValidation_RejectsUnimplementedFeatures(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "summarize_strategy_rejected",
-			workflowName: "conversation-invalid-summarize",
-			wantErr:      "not yet implemented",
-		},
-		{
-			name:         "truncate_middle_strategy_rejected",
-			workflowName: "conversation-invalid-truncate-middle",
-			wantErr:      "not yet implemented",
-		},
-		{
 			name:         "continue_from_invalid_step_reference",
 			workflowName: "conversation-invalid-continue-from",
 			wantErr:      "continue_from references unknown step",

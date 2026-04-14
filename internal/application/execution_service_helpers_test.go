@@ -21,15 +21,7 @@ func newTestExecutionService() *ExecutionService {
 }
 
 // mockResolver is a simple resolver that returns templates unchanged
-type mockResolver struct{}
-
-func newMockResolver() *mockResolver {
-	return &mockResolver{}
-}
-
-func (m *mockResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
-	return template, nil
-}
+// (defined in test_helpers.go as a shared test helper)
 
 // mockExecutor is a simple executor for testing
 type mockExecutor struct {

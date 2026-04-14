@@ -731,83 +731,80 @@ handle_json_error:
 
 ## Multi-Turn Conversations
 
-There are two approaches for multi-turn conversations:
+AWF offers three approaches for multi-turn interactions, from stateless to fully session-tracked.
 
-### Chaining Steps (Manual State Passing)
+### 1. State Passing (Chained Steps, Stateless)
 
-For simple multi-turn workflows, chain agent steps with state passing:
-
-```yaml
-name: code-review-conversation
-version: "1.0.0"
-
-inputs:
-  - name: code
-    type: string
-    required: true
-
-states:
-  initial: initial_review
-
-  initial_review:
-    type: agent
-    provider: claude
-    prompt: |
-      Review this code for issues:
-      {{.inputs.code}}
-    on_success: ask_about_performance
-
-  ask_about_performance:
-    type: agent
-    provider: claude
-    prompt: |
-      Based on your previous analysis:
-      {{.states.initial_review.Output}}
-
-      Can you elaborate on performance concerns?
-    on_success: suggest_improvements
-
-  suggest_improvements:
-    type: agent
-    provider: claude
-    prompt: |
-      Based on the previous discussion, suggest 3 specific improvements to:
-      {{.inputs.code}}
-    on_success: done
-
-  done:
-    type: terminal
-```
-
-Each step can reference previous agent outputs and build on the conversation without maintaining session state.
-
-### Conversation Mode (Built-In Multi-Turn)
-
-For iterative refinement within a single step, use **conversation mode** with automatic context window management:
+Chain agent steps via template interpolation. Each agent call is stateless — the provider has no memory of prior steps — but the next prompt carries the prior step's output as text. Cheapest and simplest.
 
 ```yaml
-refine_code:
+initial_review:
   type: agent
   provider: claude
-  mode: conversation
-  system_prompt: "You are a code reviewer. Iterate until code is approved."
-  initial_prompt: |
-    Review this code:
+  prompt: |
+    Review this code for issues:
     {{.inputs.code}}
-  conversation:
-    max_turns: 10
-    max_context_tokens: 100000
-    stop_condition: "response contains 'APPROVED'"
+  on_success: follow_up
+
+follow_up:
+  type: agent
+  provider: claude
+  prompt: |
+    Based on your previous analysis:
+    {{.states.initial_review.Output}}
+
+    Can you elaborate on performance concerns?
   on_success: done
 ```
 
-**Key differences:**
-- **Automatic turn management** — No need to manually chain steps
-- **Context window handling** — Automatically truncates old turns when token limit approached
-- **Stop conditions** — Exit conversation early when specific condition met
-- **Single step** — Simpler workflows for iterative refinement
+Use this when the prior output is small and the agent doesn't need implicit memory of prior conversation turns.
 
-See [Conversation Mode Guide](conversation-steps.md) for detailed documentation, examples, and best practices.
+### 2. Cross-Step Session Tracking
+
+Add a `conversation:` sub-struct to an agent step (still `mode: single`, the default) to have AWF call `provider.ExecuteConversation` — one turn only, but the provider's session ID is captured. A later step with `conversation: {continue_from: prior_step}` clones that session state and resumes the actual provider-side conversation.
+
+```yaml
+seed:
+  type: agent
+  provider: claude
+  system_prompt: "You are a memory test assistant."
+  prompt: |
+    Remember this secret: BANANA42.
+    Reply "stored".
+  conversation: {}            # opt into session tracking
+  on_success: recall
+
+recall:
+  type: agent
+  provider: claude
+  prompt: "What was the secret?"
+  conversation:
+    continue_from: seed       # resume seed's session
+  on_success: done
+```
+
+No interactive loop, no stdin. Each step runs exactly one agent turn. The provider retains the conversation between steps via its native session store (`claude -r`, `gemini --resume`, `codex resume`, `opencode -s`).
+
+Use this when the agent needs implicit memory of earlier turns or when prior context is large and you want to avoid re-sending it in each prompt.
+
+### 3. Interactive Conversation Mode
+
+`mode: conversation` spawns a live user-driven chat loop: the agent replies, AWF prompts for your next message via stdin, and the loop continues until you submit an empty line, `exit`, or `quit`.
+
+```yaml
+chat:
+  type: agent
+  provider: claude
+  mode: conversation
+  system_prompt: "You are a concise technical assistant."
+  prompt: "{{.inputs.topic}}"
+  timeout: 600
+  on_success: done
+```
+
+Requires a TTY. Use this for human-in-the-loop clarification sessions or iterative prompting driven by a user.
+
+See [Conversation Mode & Session Tracking](conversation-steps.md) for the complete reference, including `continue_from` rules, cross-provider limitations, and observability fields.
 
 ## Error Handling
 

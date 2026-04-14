@@ -389,60 +389,78 @@ analyze:
 
 ### Conversation Mode
 
-Enable multi-turn conversations with automatic context management:
+`mode: conversation` runs an **interactive user-driven loop**: the agent replies, AWF prompts for your next message, and the loop continues until you submit an empty line, `exit`, or `quit`. It requires a terminal (or piped stdin).
 
 ```yaml
-refine_code:
+chat:
   type: agent
   provider: claude
   mode: conversation
   system_prompt: |
-    You are a code reviewer. Iterate until code is approved.
-    Say "APPROVED" when done.
-  initial_prompt: |
-    Review this code:
-    {{.inputs.code}}
+    You are a concise technical assistant.
+  prompt: |
+    {{.inputs.topic}}
   options:
-    model: claude-sonnet-4-20250514
-  conversation:
-    max_turns: 10
-    max_context_tokens: 100000
-    strategy: sliding_window
-    stop_condition: "response contains 'APPROVED'"
-  on_success: deploy
-  on_failure: error
+    model: claude-haiku-4-5
+  timeout: 600
+  on_success: done
 ```
+
+For **automated cross-step session resume** (no stdin loop), use `mode: single` (the default) with a `conversation:` sub-struct — see [Session Tracking](#session-tracking) below.
 
 ### Agent Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
-| `mode` | string | No | Set to `conversation` for multi-turn mode |
-| `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation) |
-| `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`) |
-| `system_prompt` | string | No | System message (for conversation mode, preserved across turns) |
-| `initial_prompt` | string | No* | First user message (for conversation mode) |
+| `mode` | string | No | `single` (default) or `conversation` (interactive user-driven loop) |
+| `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation); in `mode: conversation` this serves as the first user message |
+| `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`; not supported in `mode: conversation`) |
+| `system_prompt` | string | No | System message preserved for the whole session |
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
-| `conversation` | object | No | Conversation configuration (required if mode=conversation) |
+| `conversation` | object | No | Session tracking sub-struct. Presence opts the step into session tracking (marker flag); contents: see [Session Tracking](#session-tracking) |
 | `options` | map | No | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
 | `timeout` | int or string | No | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
 | `on_success` | string | No | Next state on success |
 | `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `retry` | object | No | Retry configuration (same as step retry) |
 
-\* Use `prompt` or `prompt_file` for single-turn mode (mutually exclusive), `initial_prompt` for conversation mode. See [Agent Steps - External Prompt Files](agent-steps.md#external-prompt-files) for `prompt_file` details.
+\* Use `prompt` or `prompt_file` (mutually exclusive). `prompt_file` is not allowed in `mode: conversation`.
 
-### Conversation Configuration
+### Session Tracking
+
+The `conversation:` sub-struct opts an agent step into session tracking. Its presence — even empty — switches the step from `provider.Execute` (no session) to `provider.ExecuteConversation` (captures the provider's session ID). This lets **another** step resume the same session later via `continue_from`.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_turns` | int | 10 | Maximum conversation turns |
-| `max_context_tokens` | int | model limit | Token budget for conversation |
-| `strategy` | string | `-` | Context window strategy: `sliding_window`, `summarize` (not yet implemented), `truncate_middle` (not yet implemented). Omitting means no context management is applied |
-| `stop_condition` | string | - | Expression to exit early |
-| `continue_from` | string | - | Step name to continue conversation from — resumes prior step's session |
-| `inject_context` | string | - | Additional context to inject into user prompts on turns 2+. Supports template variables (`{{.states.*}}`, `{{.inputs.*}}`, etc.). Re-interpolated per turn. |
+| `continue_from` | string | - | Step name whose session this step should resume. Target step must have already run and been session-tracked. |
+
+**Three usage patterns:**
+
+```yaml
+# 1. No session tracking (plain one-shot agent call)
+step:
+  type: agent
+  provider: claude
+  prompt: "..."
+
+# 2. Session tracking, fresh session (enables downstream continue_from)
+seed:
+  type: agent
+  provider: claude
+  prompt: "..."
+  conversation: {}
+
+# 3. Session tracking, resumes prior step's session
+recall:
+  type: agent
+  provider: claude
+  prompt: "..."
+  conversation:
+    continue_from: seed
+```
+
+See [Conversation Mode & Session Tracking](conversation-steps.md) for the full reference and cross-provider examples.
 
 ### Available Providers
 
@@ -468,46 +486,50 @@ Agent responses are captured in the step state:
 
 ### Multi-Turn Conversations
 
-**Recommended**: Use conversation mode for iterative workflows:
+Three approaches, from simplest to most stateful:
+
+**1. State passing** — chain agent steps via template interpolation. Each step is stateless; the agent has no memory of prior steps but the next prompt carries the prior output textually.
 
 ```yaml
-review:
+ask_question:
   type: agent
   provider: claude
-  mode: conversation
-  system_prompt: "You are a code reviewer."
-  initial_prompt: "Review: {{.inputs.code}}"
-  conversation:
-    max_turns: 10
-    stop_condition: "response contains 'APPROVED'"
+  prompt: "Initial question here"
+  on_success: follow_up
+
+follow_up:
+  type: agent
+  provider: claude
+  prompt: |
+    Based on your previous response:
+    {{.states.ask_question.Output}}
+
+    Please elaborate on point 3.
   on_success: done
 ```
 
-**Legacy**: Chain multiple agent steps with state passing:
+**2. Cross-step session tracking** — use `conversation: {}` on the seed step and `conversation: {continue_from: seed}` on subsequent steps to have the provider itself retain the session. No stdin, no interactive loop.
 
 ```yaml
-states:
-  initial: ask_question
+seed:
+  type: agent
+  provider: claude
+  prompt: "Analyze this code: {{.inputs.code}}"
+  conversation: {}
+  on_success: refine
 
-  ask_question:
-    type: agent
-    provider: claude
-    prompt: "Initial question here"
-    on_success: follow_up
-
-  follow_up:
-    type: agent
-    provider: claude
-    prompt: |
-      Based on your previous response:
-      {{.states.ask_question.Output}}
-
-      Please elaborate on point 3.
-    on_success: done
-
-  done:
-    type: terminal
+refine:
+  type: agent
+  provider: claude
+  prompt: "Now suggest 3 improvements based on that analysis."
+  conversation:
+    continue_from: seed
+  on_success: done
 ```
+
+**3. Interactive conversation mode** — `mode: conversation` for a live user-driven chat loop (requires stdin).
+
+See [Conversation Mode & Session Tracking](conversation-steps.md) for the complete reference.
 
 **See Also:** [Conversation Mode Guide](conversation-steps.md) for detailed examples and best practices.
 

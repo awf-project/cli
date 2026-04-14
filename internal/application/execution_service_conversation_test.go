@@ -28,16 +28,10 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 				Name: "refine",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					SystemPrompt:  "You are a code reviewer",
-					InitialPrompt: "Review this code",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns:         10,
-						MaxContextTokens: 100000,
-						Strategy:         workflow.StrategySlidingWindow,
-						StopCondition:    "response contains 'APPROVED'",
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					SystemPrompt: "You are a code reviewer",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -56,20 +50,13 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
 
 	// Create a simple evaluator that always returns false (never stops on condition)
-	evaluator := &simpleExpressionEvaluator{}
 
-	convMgr := application.NewConversationManager(
-		&mockLogger{},
-		evaluator,
-		newMockResolver(),
-		tokenizer,
-		mockRegistry,
-	)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
@@ -101,14 +88,10 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 				Name: "analyze",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					SystemPrompt:  "You are a code analyzer",
-					InitialPrompt: "Analyze this code: {{inputs.code}}",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns:      5,
-						StopCondition: "response contains 'DONE'",
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					SystemPrompt: "You are a code analyzer",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -127,10 +110,10 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
@@ -162,12 +145,9 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Start chat",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 3,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				Hooks: workflow.StepHooks{
 					Pre: workflow.Hook{
@@ -194,10 +174,10 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("conv-hooks", wf).
@@ -253,10 +233,9 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 	_ = registry.Register(claude)
 
 	// ConversationManager configured but should NOT be called for single mode
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("single-mode", wf).
@@ -316,10 +295,9 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 	})
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
 
 	execSvc, _ := NewTestHarness(t).
 		WithWorkflow("default-mode", wf).
@@ -350,9 +328,8 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Start",
+					Provider: "claude",
+					Mode:     "conversation",
 					// Minimal conversation config (should use defaults)
 					Conversation: &workflow.ConversationConfig{},
 				},
@@ -373,10 +350,10 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
@@ -405,12 +382,9 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Start conversation",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 5,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -459,12 +433,9 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Start",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 5,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "success",
 				OnFailure: "error_handler",
@@ -484,10 +455,10 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
@@ -527,12 +498,9 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Long running conversation",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 100,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -547,10 +515,10 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
@@ -605,12 +573,9 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 				Name: "chat",
 				Type: workflow.StepTypeAgent,
 				Agent: &workflow.AgentConfig{
-					Provider:      "claude",
-					Mode:          "conversation",
-					InitialPrompt: "Use data: {{inputs.initial_data}} and result: {{states.setup.output}}",
-					Conversation: &workflow.ConversationConfig{
-						MaxTurns: 3,
-					},
+					Provider:     "claude",
+					Mode:         "conversation",
+					Conversation: &workflow.ConversationConfig{},
 				},
 				OnSuccess: "done",
 			},
@@ -625,10 +590,10 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 	claude := mocks.NewMockAgentProvider("claude")
 	_ = registry.Register(claude)
 
-	tokenizer := newMockTokenizer()
 	mockRegistry := mocks.NewMockAgentRegistry()
 	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, &simpleExpressionEvaluator{}, newMockResolver(), tokenizer, mockRegistry)
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
 
 	executor := newMockExecutor()
 	executor.results["echo 'setup complete'"] = &ports.CommandResult{

@@ -21,6 +21,7 @@ package validation_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, io.Discard, io.Discard)
 
 			require.NoError(t, err, "Execute should succeed with type-checked options")
 			require.NotNil(t, result)
@@ -138,7 +139,7 @@ func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.ExecuteConversation(ctx, state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(ctx, state, tt.prompt, tt.options, io.Discard, io.Discard)
 
 			require.NoError(t, err, "ExecuteConversation should succeed with type-checked options")
 			require.NotNil(t, result)
@@ -188,7 +189,7 @@ func TestGeminiProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.ExecuteConversation(ctx, state, tt.prompt, tt.options)
+			result, err := provider.ExecuteConversation(ctx, state, tt.prompt, tt.options, io.Discard, io.Discard)
 
 			// Gemini CLI may fail at runtime (e.g., deprecated model names, non-JSON output).
 			// The test verifies that the provider handles options correctly without panicking.
@@ -234,7 +235,7 @@ func TestClaudeProvider_Execute_EmptyAndNilOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, "What is 2+2?", tt.options)
+			result, err := provider.Execute(ctx, "What is 2+2?", tt.options, io.Discard, io.Discard)
 
 			require.NoError(t, err, "Should handle nil/empty options gracefully")
 			require.NotNil(t, result)
@@ -274,7 +275,7 @@ func TestSharedHelpers_TokenEstimation(t *testing.T) {
 				t.Skipf("%s CLI not installed, skipping", tt.provider.Name())
 			}
 
-			result, err := tt.provider.Execute(ctx, longPrompt, nil)
+			result, err := tt.provider.Execute(ctx, longPrompt, nil, io.Discard, io.Discard)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -308,7 +309,7 @@ func TestConversationState_Cloning(t *testing.T) {
 		TotalTokens: 100,
 	}
 
-	result, err := provider.ExecuteConversation(ctx, initialState, "Second message", nil)
+	result, err := provider.ExecuteConversation(ctx, initialState, "Second message", nil, io.Discard, io.Discard)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -356,7 +357,7 @@ func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Type-checked helpers should ignore wrong types gracefully
-			result, err := provider.Execute(ctx, "Test prompt", tt.options)
+			result, err := provider.Execute(ctx, "Test prompt", tt.options, io.Discard, io.Discard)
 
 			// Should either succeed (ignoring bad options) or return clear error
 			if err != nil {
@@ -380,7 +381,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
 		Turns: []workflow.Turn{},
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, "", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "", nil, io.Discard, io.Discard)
 
 	require.Error(t, err, "Should reject empty prompt")
 	assert.Nil(t, result)
@@ -395,7 +396,7 @@ func TestGeminiProvider_ExecuteConversation_NilState(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := provider.ExecuteConversation(ctx, nil, "Test prompt", nil)
+	result, err := provider.ExecuteConversation(ctx, nil, "Test prompt", nil, io.Discard, io.Discard)
 
 	require.Error(t, err, "Should reject nil state")
 	assert.Nil(t, result)
@@ -430,7 +431,7 @@ func TestAllProviders_ContextCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel() // Cancel immediately
 
-			result, err := tt.provider.Execute(ctx, "Test prompt", nil)
+			result, err := tt.provider.Execute(ctx, "Test prompt", nil, io.Discard, io.Discard)
 
 			require.Error(t, err, "Should fail on cancelled context")
 			assert.Nil(t, result)
@@ -470,7 +471,7 @@ func TestAllProviders_ContextTimeout(t *testing.T) {
 
 			time.Sleep(10 * time.Millisecond) // Ensure timeout
 
-			result, err := tt.provider.Execute(ctx, "Test prompt that will timeout", nil)
+			result, err := tt.provider.Execute(ctx, "Test prompt that will timeout", nil, io.Discard, io.Discard)
 
 			require.Error(t, err, "Should fail on timeout")
 			assert.Nil(t, result)
@@ -490,7 +491,7 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	}
 
 	// Turn 1
-	result1, err := provider.ExecuteConversation(ctx, state, "Write hello world in Go", nil)
+	result1, err := provider.ExecuteConversation(ctx, state, "Write hello world in Go", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	state = result1.State
@@ -500,7 +501,7 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	tokens1 := state.TotalTokens
 
 	// Turn 2
-	result2, err := provider.ExecuteConversation(ctx, state, "Now add error handling", nil)
+	result2, err := provider.ExecuteConversation(ctx, state, "Now add error handling", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	state = result2.State
@@ -510,7 +511,7 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	tokens2 := state.TotalTokens
 
 	// Turn 3
-	result3, err := provider.ExecuteConversation(ctx, state, "Add tests", nil)
+	result3, err := provider.ExecuteConversation(ctx, state, "Add tests", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result3)
 	state = result3.State
@@ -548,7 +549,7 @@ func TestIntegration_JSONParsing_SharedHelper(t *testing.T) {
 				"output_format": "json",
 			}
 
-			result, err := tt.provider.Execute(ctx, tt.prompt, options)
+			result, err := tt.provider.Execute(ctx, tt.prompt, options, io.Discard, io.Discard)
 			// Provider CLI may fail at runtime (e.g., deprecated models, auth issues,
 			// non-JSON output). The test verifies parsing works when execution succeeds.
 			if err != nil {
@@ -579,12 +580,12 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 		ctx := context.Background()
 
 		// Valid model alias
-		result, err := provider.Execute(ctx, "Test", map[string]any{"model": "haiku"})
+		result, err := provider.Execute(ctx, "Test", map[string]any{"model": "haiku"}, io.Discard, io.Discard)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
 		// Invalid model alias should be handled gracefully
-		result2, err := provider.Execute(ctx, "Test", map[string]any{"model": "invalid-model-xyz"})
+		result2, err := provider.Execute(ctx, "Test", map[string]any{"model": "invalid-model-xyz"}, io.Discard, io.Discard)
 		// May succeed or fail depending on provider, but should not panic
 		if err != nil {
 			assert.NotEmpty(t, err.Error())
@@ -604,7 +605,7 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 
 		// Language option should still work
 		result, err := provider.ExecuteConversation(ctx, state, "Write code",
-			map[string]any{"language": "python"})
+			map[string]any{"language": "python"}, io.Discard, io.Discard)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -621,7 +622,7 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 
 		// Valid Gemini model — CLI may fail at runtime (deprecated model names, auth).
 		result, err := provider.ExecuteConversation(ctx, state, "Test",
-			map[string]any{"model": "gemini-pro"})
+			map[string]any{"model": "gemini-pro"}, io.Discard, io.Discard)
 		if err != nil {
 			t.Logf("Gemini CLI execution failed (expected in CI): %v", err)
 			return
@@ -646,7 +647,7 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 			"max_tokens": 1000,
 		}
 
-		result, err := provider.Execute(ctx, "Test task", options)
+		result, err := provider.Execute(ctx, "Test task", options, io.Discard, io.Discard)
 
 		require.NoError(t, err, "Should work with agent-simple fixture options")
 		require.NotNil(t, result)
@@ -666,7 +667,7 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 			"max_tokens": 2000,
 		}
 
-		result, err := provider.ExecuteConversation(ctx, state, "First turn", options)
+		result, err := provider.ExecuteConversation(ctx, state, "First turn", options, io.Discard, io.Discard)
 
 		require.NoError(t, err, "Should work with conversation fixture options")
 		require.NotNil(t, result)
@@ -688,7 +689,7 @@ func TestPerformance_NoRegressionFromHelpers(t *testing.T) {
 	prompt := "What is 2+2?"
 
 	start := time.Now()
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, io.Discard, io.Discard)
 	elapsed := time.Since(start)
 
 	require.NoError(t, err)
@@ -720,7 +721,7 @@ func TestRegression_AllOptionTypesCombined(t *testing.T) {
 	}
 
 	result, err := provider.ExecuteConversation(ctx, state,
-		"Write comprehensive test", options)
+		"Write comprehensive test", options, io.Discard, io.Discard)
 
 	require.NoError(t, err, "Should handle all option types correctly")
 	require.NotNil(t, result)

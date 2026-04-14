@@ -275,8 +275,8 @@ func buildDisplayMatrixWorkflow(provider string, format workflow.OutputFormat) *
 
 type nopLogger struct{}
 
-func (m *nopLogger) Debug(msg string, fields ...any)            {}
-func (m *nopLogger) Info(msg string, fields ...any)             {}
-func (m *nopLogger) Warn(msg string, fields ...any)             {}
-func (m *nopLogger) Error(msg string, fields ...any)            {}
+func (m *nopLogger) Debug(msg string, fields ...any)             {}
+func (m *nopLogger) Info(msg string, fields ...any)              {}
+func (m *nopLogger) Warn(msg string, fields ...any)              {}
+func (m *nopLogger) Error(msg string, fields ...any)             {}
 func (m *nopLogger) WithContext(ctx map[string]any) ports.Logger { return m }

@@ -34,9 +34,8 @@ type StepState struct {
 	Response    map[string]any // parsed JSON response from agent steps
 	JSON        any            // parsed JSON output when output_format: json is specified (map[string]any or []any)
 	// F033: Conversation mode fields
-	Conversation       *ConversationState  // conversation history and state (nil for non-conversation steps)
-	TokensUsed         int                 // total tokens used in conversation mode
-	ContextWindowState *ContextWindowState // context window management state (nil if not applicable)
+	Conversation *ConversationState // conversation history and state (nil for non-conversation steps)
+	TokensUsed   int                // total tokens used in conversation mode
 
 	// C019: Output streaming fields for memory management
 	OutputPath string // Path to temp file if output was streamed (empty if in-memory)

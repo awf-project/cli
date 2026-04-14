@@ -1,4 +1,5 @@
-# Feature: F075 — inject_context field in conversation mode
+# Feature: F075 — inject_context removed in F083
+# This fixture now tests basic conversation mode
 name: conversation-inject-context
 version: "1.0.0"
 
@@ -14,10 +15,8 @@ states:
     type: agent
     provider: claude
     mode: conversation
-    initial_prompt: "{{inputs.task}}"
-    conversation:
-      max_turns: 5
-      inject_context: "Additional context for the conversation"
+    prompt: "{{inputs.task}}"
+    conversation: {}
     on_success: done
     on_failure: error
 

@@ -364,21 +364,19 @@ func TestMapAgentConfigFlat_PromptFile_WithConversationMode(t *testing.T) {
 		{
 			name: "conversation mode with prompt file",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				PromptFile:    "prompts/conversation.md",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a helpful assistant",
-				InitialPrompt: "Hello, I need help with {{.inputs.task}}",
+				Provider:     "claude",
+				PromptFile:   "prompts/conversation.md",
+				Mode:         "conversation",
+				SystemPrompt: "You are a helpful assistant",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				PromptFile:    "prompts/conversation.md",
-				Mode:          "conversation",
-				SystemPrompt:  "You are a helpful assistant",
-				InitialPrompt: "Hello, I need help with {{.inputs.task}}",
+				Provider:     "claude",
+				PromptFile:   "prompts/conversation.md",
+				Mode:         "conversation",
+				SystemPrompt: "You are a helpful assistant",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
@@ -404,21 +402,19 @@ func TestMapAgentConfigFlat_PromptFile_WithConversationMode(t *testing.T) {
 			},
 		},
 		{
-			name: "conversation mode with both initial prompt and prompt file",
+			name: "conversation mode with prompt file and no initial prompt",
 			yamlStep: yamlStep{
-				Provider:      "claude",
-				PromptFile:    "prompts/base.md",
-				InitialPrompt: "Override prompt",
-				Mode:          "conversation",
+				Provider:   "claude",
+				PromptFile: "prompts/base.md",
+				Mode:       "conversation",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
 			},
 			want: &workflow.AgentConfig{
-				Provider:      "claude",
-				PromptFile:    "prompts/base.md",
-				InitialPrompt: "Override prompt",
-				Mode:          "conversation",
+				Provider:   "claude",
+				PromptFile: "prompts/base.md",
+				Mode:       "conversation",
 				Options: map[string]any{
 					"model": "claude-3-5-sonnet-20241022",
 				},
@@ -435,7 +431,6 @@ func TestMapAgentConfigFlat_PromptFile_WithConversationMode(t *testing.T) {
 			assert.Equal(t, tt.want.PromptFile, got.PromptFile)
 			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.SystemPrompt, got.SystemPrompt)
-			assert.Equal(t, tt.want.InitialPrompt, got.InitialPrompt)
 			assert.Equal(t, tt.want.Options, got.Options)
 		})
 	}

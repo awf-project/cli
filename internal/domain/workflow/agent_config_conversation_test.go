@@ -25,15 +25,13 @@ func TestAgentConfig_ConversationField(t *testing.T) {
 		validateConv bool
 	}{
 		{
-			name: "conversation mode with valid config",
+			name: "conversation mode with continue_from config",
 			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Start",
+				Provider: "claude",
+				Mode:     "conversation",
+				Prompt:   "Start",
 				Conversation: &workflow.ConversationConfig{
-					MaxTurns:         10,
-					MaxContextTokens: 100000,
-					Strategy:         workflow.StrategySlidingWindow,
+					ContinueFrom: "previous_step",
 				},
 			},
 			wantErr:      false,
@@ -42,48 +40,20 @@ func TestAgentConfig_ConversationField(t *testing.T) {
 		{
 			name: "conversation mode with nil conversation config",
 			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Start",
-				Conversation:  nil,
+				Provider:     "claude",
+				Mode:         "conversation",
+				Prompt:       "Start",
+				Conversation: nil,
 			},
 			wantErr: false,
 		},
 		{
 			name: "single mode ignores conversation config",
 			config: workflow.AgentConfig{
-				Provider: "claude",
-				Mode:     "single",
-				Prompt:   "Test",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: 10,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "conversation mode with invalid conversation config",
-			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Start",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: -1, // Invalid
-				},
-			},
-			wantErr: true,
-			errMsg:  "max_turns",
-		},
-		{
-			name: "conversation mode with stop condition",
-			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Review code",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns:      5,
-					StopCondition: "response contains 'APPROVED'",
-				},
+				Provider:     "claude",
+				Mode:         "single",
+				Prompt:       "Test",
+				Conversation: &workflow.ConversationConfig{},
 			},
 			wantErr: false,
 		},
@@ -151,11 +121,10 @@ func TestAgentConfig_SystemPrompt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          tt.mode,
-				SystemPrompt:  tt.systemPrompt,
-				InitialPrompt: "Test",
-				Prompt:        "Test",
+				Provider:     "claude",
+				Mode:         tt.mode,
+				SystemPrompt: tt.systemPrompt,
+				Prompt:       "Test",
 			}
 			err := config.Validate(nil)
 			if tt.wantErr {
@@ -168,65 +137,55 @@ func TestAgentConfig_SystemPrompt(t *testing.T) {
 	}
 }
 
-// workflow.AgentConfig InitialPrompt Tests
+// workflow.AgentConfig Prompt Tests (conversation mode)
 
-func TestAgentConfig_InitialPrompt(t *testing.T) {
+func TestAgentConfig_ConversationPrompt(t *testing.T) {
 	tests := []struct {
-		name          string
-		initialPrompt string
-		prompt        string
-		mode          string
-		wantErr       bool
-		errMsg        string
+		name    string
+		prompt  string
+		mode    string
+		wantErr bool
+		errMsg  string
 	}{
 		{
-			name:          "conversation mode with initial prompt",
-			initialPrompt: "Start reviewing",
-			mode:          "conversation",
-			wantErr:       false,
+			name:    "conversation mode with prompt",
+			prompt:  "Start reviewing",
+			mode:    "conversation",
+			wantErr: false,
 		},
 		{
-			name:          "conversation mode with template in initial prompt",
-			initialPrompt: "Review this: {{inputs.code}}",
-			mode:          "conversation",
-			wantErr:       false,
+			name:    "conversation mode with template in prompt",
+			prompt:  "Review this: {{inputs.code}}",
+			mode:    "conversation",
+			wantErr: false,
 		},
 		{
-			name:          "conversation mode prefers initial_prompt over prompt",
-			initialPrompt: "Initial message",
-			prompt:        "Fallback message",
-			mode:          "conversation",
-			wantErr:       false,
+			name:    "conversation mode without prompt fails",
+			prompt:  "",
+			mode:    "conversation",
+			wantErr: true,
+			errMsg:  "prompt is required",
 		},
 		{
-			name:          "conversation mode falls back to prompt",
-			initialPrompt: "",
-			prompt:        "Fallback message",
-			mode:          "conversation",
-			wantErr:       false,
+			name:    "single mode with prompt",
+			prompt:  "Used",
+			mode:    "single",
+			wantErr: false,
 		},
 		{
-			name:          "single mode ignores initial_prompt",
-			initialPrompt: "Ignored",
-			prompt:        "Used",
-			mode:          "single",
-			wantErr:       false,
-		},
-		{
-			name:          "conversation mode with multiline initial prompt",
-			initialPrompt: "Review this code:\n{{inputs.code}}\n\nBe thorough.",
-			mode:          "conversation",
-			wantErr:       false,
+			name:    "conversation mode with multiline prompt",
+			prompt:  "Review this code:\n{{inputs.code}}\n\nBe thorough.",
+			mode:    "conversation",
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          tt.mode,
-				InitialPrompt: tt.initialPrompt,
-				Prompt:        tt.prompt,
+				Provider: "claude",
+				Mode:     tt.mode,
+				Prompt:   tt.prompt,
 			}
 			err := config.Validate(nil)
 			if tt.wantErr {
@@ -314,10 +273,9 @@ func TestAgentConfig_IsConversationMode_AfterValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          tt.mode,
-				Prompt:        "Test",
-				InitialPrompt: "Test",
+				Provider: "claude",
+				Mode:     tt.mode,
+				Prompt:   "Test",
 			}
 			_ = config.Validate(nil) // Normalize mode
 			assert.Equal(t, tt.expected, config.IsConversationMode())
@@ -332,49 +290,24 @@ func TestAgentConfig_GetEffectivePrompt(t *testing.T) {
 		name           string
 		mode           string
 		prompt         string
-		initialPrompt  string
 		expectedPrompt string
 	}{
 		{
 			name:           "single mode uses prompt",
 			mode:           "single",
 			prompt:         "Main prompt",
-			initialPrompt:  "Initial prompt",
 			expectedPrompt: "Main prompt",
 		},
 		{
-			name:           "conversation mode prefers initial_prompt",
+			name:           "conversation mode uses prompt",
 			mode:           "conversation",
-			prompt:         "Fallback prompt",
-			initialPrompt:  "Initial message",
-			expectedPrompt: "Initial message",
+			prompt:         "Conversation prompt",
+			expectedPrompt: "Conversation prompt",
 		},
 		{
-			name:           "conversation mode falls back to prompt",
-			mode:           "conversation",
-			prompt:         "Fallback prompt",
-			initialPrompt:  "",
-			expectedPrompt: "Fallback prompt",
-		},
-		{
-			name:           "single mode ignores initial_prompt",
-			mode:           "single",
-			prompt:         "Main prompt",
-			initialPrompt:  "Ignored",
-			expectedPrompt: "Main prompt",
-		},
-		{
-			name:           "conversation mode with both prompts",
-			mode:           "conversation",
-			prompt:         "Not used",
-			initialPrompt:  "Used this one",
-			expectedPrompt: "Used this one",
-		},
-		{
-			name:           "empty mode defaults to single behavior",
+			name:           "empty mode returns prompt",
 			mode:           "",
 			prompt:         "Main prompt",
-			initialPrompt:  "Initial",
 			expectedPrompt: "Main prompt",
 		},
 	}
@@ -382,10 +315,9 @@ func TestAgentConfig_GetEffectivePrompt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          tt.mode,
-				Prompt:        tt.prompt,
-				InitialPrompt: tt.initialPrompt,
+				Provider: "claude",
+				Mode:     tt.mode,
+				Prompt:   tt.prompt,
 			}
 			_ = config.Validate(nil) // Normalize mode
 			assert.Equal(t, tt.expectedPrompt, config.GetEffectivePrompt())
@@ -400,31 +332,20 @@ func TestAgentConfig_GetEffectivePrompt_EdgeCases(t *testing.T) {
 		expectedPrompt string
 	}{
 		{
-			name: "both prompts empty in conversation mode",
+			name: "empty prompt returns empty",
 			config: workflow.AgentConfig{
-				Mode:          "conversation",
-				Prompt:        "",
-				InitialPrompt: "",
+				Mode:   "conversation",
+				Prompt: "",
 			},
 			expectedPrompt: "",
 		},
 		{
-			name: "whitespace initial_prompt in conversation mode",
+			name: "multiline prompt",
 			config: workflow.AgentConfig{
-				Mode:          "conversation",
-				Prompt:        "Fallback",
-				InitialPrompt: "   ",
+				Mode:   "conversation",
+				Prompt: "Line 1\nLine 2",
 			},
-			expectedPrompt: "   ", // Returns as-is
-		},
-		{
-			name: "multiline prompts",
-			config: workflow.AgentConfig{
-				Mode:          "conversation",
-				Prompt:        "Line 1\nLine 2",
-				InitialPrompt: "Init Line 1\nInit Line 2",
-			},
-			expectedPrompt: "Init Line 1\nInit Line 2",
+			expectedPrompt: "Line 1\nLine 2",
 		},
 	}
 
@@ -440,7 +361,7 @@ func TestAgentConfig_ConversationMode_Complete(t *testing.T) {
 		Provider:     "claude",
 		Mode:         "conversation",
 		SystemPrompt: "You are a helpful code reviewer. Iterate until code meets standards.",
-		InitialPrompt: `Review this code:
+		Prompt: `Review this code:
 {{inputs.code}}
 
 Say "APPROVED" when done.`,
@@ -450,35 +371,25 @@ Say "APPROVED" when done.`,
 		},
 		Timeout: 300,
 		Conversation: &workflow.ConversationConfig{
-			MaxTurns:         10,
-			MaxContextTokens: 100000,
-			Strategy:         workflow.StrategySlidingWindow,
-			StopCondition:    "response contains 'APPROVED'",
+			ContinueFrom: "",
 		},
 	}
 
-	// Validate
 	err := config.Validate(nil)
 	require.NoError(t, err)
 
-	// Verify fields
 	assert.Equal(t, "claude", config.Provider)
 	assert.True(t, config.IsConversationMode())
 	assert.Contains(t, config.SystemPrompt, "code reviewer")
-	assert.Contains(t, config.InitialPrompt, "{{inputs.code}}")
 	assert.Contains(t, config.GetEffectivePrompt(), "Review this code")
 	require.NotNil(t, config.Conversation)
-	assert.Equal(t, 10, config.Conversation.MaxTurns)
-	assert.Equal(t, 100000, config.Conversation.MaxContextTokens)
-	assert.Equal(t, workflow.StrategySlidingWindow, config.Conversation.Strategy)
-	assert.Contains(t, config.Conversation.StopCondition, "APPROVED")
 }
 
 func TestAgentConfig_ConversationMode_MinimalConfig(t *testing.T) {
 	config := workflow.AgentConfig{
-		Provider:      "claude",
-		Mode:          "conversation",
-		InitialPrompt: "Hello",
+		Provider: "claude",
+		Mode:     "conversation",
+		Prompt:   "Hello",
 	}
 
 	err := config.Validate(nil)
@@ -517,7 +428,7 @@ func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 				Provider: "claude",
 				Mode:     "conversation",
 			},
-			wantErr: "initial_prompt or prompt is required",
+			wantErr: "prompt is required in conversation mode",
 		},
 		{
 			name: "invalid mode value",
@@ -528,18 +439,6 @@ func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 			},
 			wantErr: "mode must be 'single' or 'conversation'",
 		},
-		{
-			name: "conversation with invalid config",
-			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Test",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns: -1, // Invalid: negative
-				},
-			},
-			wantErr: "max_turns",
-		},
 	}
 
 	for _, tt := range tests {
@@ -547,69 +446,6 @@ func TestAgentConfig_ConversationMode_Errors(t *testing.T) {
 			err := tt.config.Validate(nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
-		})
-	}
-}
-
-// TestAgentConfig_InjectContextModeValidation validates that inject_context is rejected outside conversation mode
-func TestAgentConfig_InjectContextModeValidation(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  workflow.AgentConfig
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name: "conversation mode with inject_context is valid",
-			config: workflow.AgentConfig{
-				Provider:      "claude",
-				Mode:          "conversation",
-				InitialPrompt: "Start",
-				Conversation: &workflow.ConversationConfig{
-					MaxTurns:      5,
-					InjectContext: "Additional context",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "single mode with inject_context is rejected",
-			config: workflow.AgentConfig{
-				Provider: "claude",
-				Mode:     "single",
-				Prompt:   "Test",
-				Conversation: &workflow.ConversationConfig{
-					InjectContext: "Additional context",
-				},
-			},
-			wantErr: true,
-			errMsg:  "inject_context requires conversation mode",
-		},
-		{
-			name: "empty mode (defaults to single) with inject_context is rejected",
-			config: workflow.AgentConfig{
-				Provider: "claude",
-				Prompt:   "Test",
-				Conversation: &workflow.ConversationConfig{
-					InjectContext: "Additional context",
-				},
-			},
-			wantErr: true,
-			errMsg:  "inject_context requires conversation mode",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
-				}
-			} else {
-				require.NoError(t, err)
-			}
 		})
 	}
 }
