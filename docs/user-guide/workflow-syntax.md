@@ -58,7 +58,7 @@ states:
 | Type | Description |
 |------|-------------|
 | `step` | Execute a command |
-| `agent` | Invoke an AI agent (Claude, Codex, Gemini, etc.) |
+| `agent` | Invoke an AI agent (Claude, Cursor, Codex, Gemini, etc.) |
 | `terminal` | End state with success/failure status |
 | `parallel` | Execute multiple steps concurrently |
 | `for_each` | Iterate over a list of items |
@@ -369,7 +369,7 @@ Error messages include the resolved file path for easy debugging.
 
 ## Agent State
 
-Invoke an AI agent (Claude, Codex, Gemini, OpenCode) with a prompt template.
+Invoke an AI agent (Claude, Cursor, Codex, Gemini, OpenCode) with a prompt template.
 
 ### Basic Agent Step
 
@@ -412,7 +412,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
+| `provider` | string | Yes | Agent provider: `claude`, `cursor`, `codex`, `gemini`, `opencode`, `openai_compatible` |
 | `mode` | string | No | `single` (default) or `conversation` (interactive user-driven loop) |
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation); in `mode: conversation` this serves as the first user message |
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`; not supported in `mode: conversation`) |
@@ -472,7 +472,7 @@ See [Conversation Mode & Session Tracking](conversation-steps.md) for the full r
 | `opencode` | `opencode` CLI | Multi-turn (session resume via `-s`) | OpenCode CLI |
 | `openai_compatible` | HTTP API | Full multi-turn (messages array) | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
 
-> **Conversation mode and providers:** All providers support multi-turn conversations. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags to maintain context across turns — session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully. `openai_compatible` maintains full conversation history via the Chat Completions API messages array.
+> **Conversation mode and providers:** All providers support multi-turn conversations. CLI-based providers (`claude`, `cursor`, `codex`, `gemini`, `opencode`) use native session resume flags to maintain context across turns — session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully. `openai_compatible` maintains full conversation history via the Chat Completions API messages array.
 
 ### Agent Output
 

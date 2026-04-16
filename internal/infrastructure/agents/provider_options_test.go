@@ -245,6 +245,57 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	}
 }
 
+func TestCursorProvider_NewWithOptions_HappyPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(*mocks.MockCLIExecutor)
+		options   []CursorProviderOption
+	}{
+		{
+			name: "no options uses default executor",
+			setupMock: func(m *mocks.MockCLIExecutor) {
+				m.SetOutput([]byte(`{"type":"result","result":"cursor output"}`), []byte(""))
+			},
+			options: nil,
+		},
+		{
+			name: "with custom executor option",
+			setupMock: func(m *mocks.MockCLIExecutor) {
+				m.SetOutput([]byte(`{"type":"result","result":"custom cursor output"}`), []byte(""))
+			},
+			options: []CursorProviderOption{
+				WithCursorExecutor(mocks.NewMockCLIExecutor()),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mockExec *mocks.MockCLIExecutor
+			var opts []CursorProviderOption
+			if tt.setupMock != nil {
+				mockExec = mocks.NewMockCLIExecutor()
+				tt.setupMock(mockExec)
+				opts = []CursorProviderOption{WithCursorExecutor(mockExec)}
+			} else if tt.options != nil {
+				opts = tt.options
+			}
+
+			provider := NewCursorProviderWithOptions(opts...)
+
+			require.NotNil(t, provider)
+			assert.NotNil(t, provider.executor)
+
+			if mockExec != nil {
+				ctx := context.Background()
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
 func TestProviderOptions_EdgeCases(t *testing.T) {
 	t.Run("nil executor option panics are prevented", func(t *testing.T) {
 		// Note: Passing nil executor should work but will cause runtime issues later
@@ -266,6 +317,10 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		// OpenCode
 		opencodeProvider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(nil))
 		assert.NotNil(t, opencodeProvider)
+
+		// Cursor
+		cursorProvider := NewCursorProviderWithOptions(WithCursorExecutor(nil))
+		assert.NotNil(t, cursorProvider)
 	})
 
 	t.Run("empty options slice behaves like no options", func(t *testing.T) {
@@ -316,6 +371,10 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		opencodeProvider := NewOpenCodeProvider()
 		assert.NotNil(t, opencodeProvider)
 		assert.NotNil(t, opencodeProvider.executor)
+
+		cursorProvider := NewCursorProvider()
+		assert.NotNil(t, cursorProvider)
+		assert.NotNil(t, cursorProvider.executor)
 	})
 }
 
@@ -374,6 +433,20 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "opencode execution failed")
+	})
+
+	t.Run("cursor provider executor error propagates", func(t *testing.T) {
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetError(errors.New("cursor CLI failed"))
+
+		provider := NewCursorProviderWithOptions(WithCursorExecutor(mockExec))
+		ctx := context.Background()
+
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "cursor execution failed")
 	})
 }
 
@@ -462,6 +535,25 @@ func TestProviderOptions_Integration(t *testing.T) {
 		calls := mockExec.GetCalls()
 		require.Len(t, calls, 1)
 		assert.Equal(t, "opencode", calls[0].Name)
+	})
+
+	t.Run("cursor provider with mock executor executes successfully", func(t *testing.T) {
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetOutput([]byte(`{"type":"result","result":"Cursor response"}`), []byte(""))
+
+		provider := NewCursorProviderWithOptions(WithCursorExecutor(mockExec))
+		ctx := context.Background()
+
+		result, err := provider.Execute(ctx, "Generate code", nil, nil, nil)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "cursor", result.Provider)
+		assert.Contains(t, result.Output, "Cursor response")
+
+		calls := mockExec.GetCalls()
+		require.Len(t, calls, 1)
+		assert.Equal(t, "agent", calls[0].Name)
 	})
 
 	t.Run("multiple providers can use different executors", func(t *testing.T) {

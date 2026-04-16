@@ -2,7 +2,7 @@
 //
 // The agents package provides concrete implementations of the AgentProvider and AgentRegistry
 // ports defined in the domain layer, enabling workflow steps to invoke AI agents (Claude, Gemini,
-// Codex, OpenCode, and OpenAI-compatible endpoints) for code generation, analysis, and decision-making tasks.
+// Cursor, Codex, OpenCode, and OpenAI-compatible endpoints) for code generation, analysis, and decision-making tasks.
 // Each provider wraps a CLI executor and handles model-specific invocation patterns, streaming
 // output, and error mapping.
 //
@@ -46,6 +46,14 @@
 //   - ExecuteConversation: Not supported (returns error)
 //   - Name: Returns "codex"
 //   - Validate: Checks API key and model configuration
+
+// ## CursorProvider (cursor_provider.go)
+//
+// Cursor CLI provider:
+//   - Execute: Single-shot prompt execution via Cursor CLI (`agent -p`)
+//   - ExecuteConversation: Multi-turn conversation using `--resume <chatId>`
+//   - Name: Returns "cursor"
+//   - Validate: Checks Cursor CLI binary availability (`agent`)
 //
 // ## OpenCodeProvider (opencode_provider.go)
 //
@@ -96,6 +104,7 @@
 //   - WithClaudeExecutor: Inject custom executor for Claude provider
 //   - WithGeminiExecutor: Inject custom executor for Gemini provider
 //   - WithCodexExecutor: Inject custom executor for Codex provider
+//   - WithCursorExecutor: Inject custom executor for Cursor provider
 //   - WithOpenCodeExecutor: Inject custom executor for OpenCode provider
 //   - WithHTTPClient: Inject custom HTTP client for OpenAICompatible provider
 //

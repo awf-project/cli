@@ -26,7 +26,7 @@ var validOutputFormats = map[OutputFormat]bool{
 
 // AgentConfig holds configuration for invoking an AI agent.
 type AgentConfig struct {
-	Provider     string              `yaml:"provider"`      // agent provider: claude, codex, gemini, opencode, openai_compatible
+	Provider     string              `yaml:"provider"`      // agent provider: claude, cursor, codex, gemini, opencode, openai_compatible
 	Prompt       string              `yaml:"prompt"`        // prompt template with {{inputs.*}} and {{states.*}} (single mode) or first user message (conversation mode)
 	PromptFile   string              `yaml:"prompt_file"`   // path to external prompt template file (mutually exclusive with Prompt)
 	Options      map[string]any      `yaml:"options"`       // provider-specific options (model, temperature, max_tokens, etc.)

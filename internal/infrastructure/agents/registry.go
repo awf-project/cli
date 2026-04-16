@@ -73,6 +73,7 @@ func (r *AgentRegistry) Has(name string) bool {
 func (r *AgentRegistry) RegisterDefaults() error {
 	defaults := []ports.AgentProvider{
 		NewClaudeProvider(),
+		NewCursorProvider(),
 		NewCodexProvider(),
 		NewGeminiProvider(),
 		NewOpenAICompatibleProvider(),

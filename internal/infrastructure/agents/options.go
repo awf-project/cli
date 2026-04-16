@@ -35,6 +35,20 @@ func WithCodexLogger(l ports.Logger) CodexProviderOption {
 	}
 }
 
+type CursorProviderOption func(*CursorProvider)
+
+func WithCursorExecutor(executor ports.CLIExecutor) CursorProviderOption {
+	return func(p *CursorProvider) {
+		p.executor = executor
+	}
+}
+
+func WithCursorLogger(l ports.Logger) CursorProviderOption {
+	return func(p *CursorProvider) {
+		p.logger = l
+	}
+}
+
 type OpenCodeProviderOption func(*OpenCodeProvider)
 
 func WithOpenCodeExecutor(executor ports.CLIExecutor) OpenCodeProviderOption {

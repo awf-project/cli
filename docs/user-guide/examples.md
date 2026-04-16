@@ -408,7 +408,7 @@ outer=B inner=1
 
 ## AI Agent Integration
 
-Invoke AI agents (Claude, Codex, Gemini) directly in workflows:
+Invoke AI agents (Claude, Cursor, Codex, Gemini) directly in workflows:
 
 ```yaml
 name: code-review-with-agent
