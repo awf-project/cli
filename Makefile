@@ -143,7 +143,7 @@ docs:
 	cd site && npm ci && npx hugo --minify
 
 docs-serve:
-	cd site && npm ci && npx hugo server
+	cd site && npm ci && npm run dev
 
 docs-clean:
 	rm -rf site/public site/resources site/.hugo_build.lock
