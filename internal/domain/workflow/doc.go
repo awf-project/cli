@@ -108,7 +108,7 @@
 //
 // AI agent invocation:
 //   - AgentConfig: Provider, prompt, options, timeout, mode
-//   - Provider values: claude, codex, gemini, opencode, custom
+//   - Provider values: claude, cursor, codex, gemini, opencode, openai_compatible
 //   - Mode: single (one-shot) or conversation (multi-turn)
 //
 // ## Conversation Mode (F033, conversation.go)

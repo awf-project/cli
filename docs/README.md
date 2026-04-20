@@ -28,7 +28,7 @@ Learn how to use AWF effectively:
 
 - [Commands](user-guide/commands.md) - All CLI commands and flags
 - [Interactive Input Collection](user-guide/interactive-inputs.md) - Automatic prompting for missing workflow inputs
-- [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents via CLI (Claude, Codex, Gemini) or HTTP APIs (OpenAI, Ollama, vLLM, Groq)
+- [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents via CLI (Claude, Cursor, Codex, Gemini) or HTTP APIs (OpenAI, Ollama, vLLM, Groq)
   - [Output Formatting](user-guide/agent-steps.md#output-formatting) - Automatic code fence stripping and JSON validation (`output_format: json|text`)
   - [Streaming Output Display](user-guide/agent-steps.md#streaming-output-display) - Human-readable filtered output for `--output streaming` and `--output buffered` modes
   - [External Prompt Files](user-guide/agent-steps.md#external-prompt-files) - Load prompts from Markdown files with template interpolation

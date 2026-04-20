@@ -251,6 +251,68 @@ func TestSessionResume_OpenCodeExtractsSessionID(t *testing.T) {
 	}
 }
 
+func TestSessionResume_CursorExtractsChatID(t *testing.T) {
+	tests := []struct {
+		name           string
+		mockOutput     []byte
+		wantSessionID  string
+		wantResumeFlag bool
+	}{
+		{
+			name: "turn 1: extract chat_id from system init event",
+			mockOutput: []byte(`{"type":"system","subtype":"init","chat_id":"chat-abc123","model":"composer-2"}` + "\n" +
+				`{"type":"result","result":"Done"}`),
+			wantSessionID:  "chat-abc123",
+			wantResumeFlag: false,
+		},
+		{
+			name: "turn 2: use --resume with extracted chat_id",
+			mockOutput: []byte(`{"type":"system","subtype":"init","chat_id":"chat-abc123","model":"composer-2"}` + "\n" +
+				`{"type":"result","result":"Continued"}`),
+			wantSessionID:  "chat-abc123",
+			wantResumeFlag: true,
+		},
+		{
+			name:           "missing chat identifier: graceful fallback",
+			mockOutput:     []byte(`{"type":"result","result":"No session info"}`),
+			wantSessionID:  "",
+			wantResumeFlag: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput(tt.mockOutput, nil)
+			provider := NewCursorProviderWithOptions(WithCursorExecutor(mockExec))
+
+			state := workflow.NewConversationState("")
+			if tt.wantResumeFlag {
+				state.SessionID = "chat-abc123"
+			}
+
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", nil, nil, nil)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.wantSessionID, result.State.SessionID)
+
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
+
+			hasResumeFlag := false
+			for i, arg := range calls[0].Args {
+				if arg == "--resume" && i+1 < len(calls[0].Args) {
+					hasResumeFlag = true
+					if tt.wantResumeFlag {
+						assert.Equal(t, "chat-abc123", calls[0].Args[i+1])
+					}
+				}
+			}
+			assert.Equal(t, tt.wantResumeFlag, hasResumeFlag)
+		})
+	}
+}
+
 func TestSessionResume_ContinueFromCrossStep(t *testing.T) {
 	t.Run("Gemini: continue_from links turn 2 to turn 1 session ID", func(t *testing.T) {
 		mockExec1 := mocks.NewMockCLIExecutor()
@@ -332,5 +394,32 @@ func TestSessionResume_ContinueFromCrossStep(t *testing.T) {
 		require.Len(t, calls2, 1)
 		assert.Contains(t, calls2[0].Args, "-s")
 		assert.Contains(t, calls2[0].Args, "ses_abc123")
+	})
+
+	t.Run("Cursor: continue_from links turn 2 to turn 1 chat ID", func(t *testing.T) {
+		mockExec1 := mocks.NewMockCLIExecutor()
+		mockExec1.SetOutput([]byte(`{"type":"system","subtype":"init","chat_id":"chat-abc123"}`+"\n"+
+			`{"type":"result","result":"Step 1"}`), nil)
+		provider := NewCursorProviderWithOptions(WithCursorExecutor(mockExec1))
+
+		state := workflow.NewConversationState("")
+		result1, err := provider.ExecuteConversation(context.Background(), state, "step 1 prompt", nil, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, "chat-abc123", result1.State.SessionID)
+
+		mockExec2 := mocks.NewMockCLIExecutor()
+		mockExec2.SetOutput([]byte(`{"type":"system","subtype":"init","chat_id":"chat-abc123"}`+"\n"+
+			`{"type":"result","result":"Step 2"}`), nil)
+		provider2 := NewCursorProviderWithOptions(WithCursorExecutor(mockExec2))
+
+		state2 := workflow.NewConversationState("")
+		state2.SessionID = result1.State.SessionID
+		_, err = provider2.ExecuteConversation(context.Background(), state2, "step 2 prompt", nil, nil, nil)
+		require.NoError(t, err)
+
+		calls2 := mockExec2.GetCalls()
+		require.Len(t, calls2, 1)
+		assert.Contains(t, calls2[0].Args, "--resume")
+		assert.Contains(t, calls2[0].Args, "chat-abc123")
 	})
 }

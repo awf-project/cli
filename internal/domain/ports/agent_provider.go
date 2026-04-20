@@ -8,7 +8,7 @@ import (
 )
 
 // AgentProvider defines the contract for executing AI agent CLI commands.
-// Implementations adapt specific agent CLIs (Claude, Codex, Gemini, etc.)
+// Implementations adapt specific agent CLIs (Claude, Cursor, Codex, Gemini, etc.)
 // to this unified interface.
 type AgentProvider interface {
 	// Execute invokes the agent with the given prompt and options.

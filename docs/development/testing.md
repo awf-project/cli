@@ -16,7 +16,7 @@ make test-unit
 # Integration tests (requires full system setup, tagged with //go:build integration)
 make test-integration
 
-# External tests (requires external CLIs: claude, codex, gemini, opencode)
+# External tests (requires external CLIs: claude, cursor(agent), codex, gemini, opencode)
 make test-external
 
 # All tests including integration
@@ -41,7 +41,7 @@ AWF uses Go build tags to control which tests run in different environments. Thi
 | Tag | Purpose | Usage | Example |
 |-----|---------|-------|---------|
 | `integration` | Full system tests requiring setup, state persistence, CLI execution | `make test-integration` or `go test -tags=integration ./...` | End-to-end workflow execution |
-| `external` | Tests requiring external CLI tools (claude, codex, gemini, opencode) | `make test-external` or `go test -tags=external ./...` | AI provider validation |
+| `external` | Tests requiring external CLI tools (claude, cursor(agent), codex, gemini, opencode) | `make test-external` or `go test -tags=external ./...` | AI provider validation |
 | `slow` | Resource-intensive tests (high memory, concurrency, long-running) | `go test -tags=slow ./...` | Memory leak detection, stress tests |
 | `!short` | Standard Go short mode exclusion for tests that take >100ms | `go test -short ./...` (excludes these) | Database operations, file I/O |
 

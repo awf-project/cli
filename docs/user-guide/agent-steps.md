@@ -2,7 +2,7 @@
 title: "Agent Steps Guide"
 ---
 
-Invoke AI agents (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
+Invoke AI agents (Claude, Cursor, Codex, Gemini, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
 
 ## Overview
 
@@ -85,6 +85,28 @@ analyze:
 - `model`: Claude model identifier (alias like `sonnet` or full name like `claude-sonnet-4-20250514`)
 - `allowed_tools`: Comma-separated list of tools to allow (e.g., `"bash,read"` → `--allowedTools bash,read`)
 - `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--dangerously-skip-permissions`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments. Emits a security audit log.
+
+### Cursor CLI
+
+Requires the Cursor CLI `agent` binary installed (from [cursor.com/cli](https://cursor.com/cli)).
+
+```yaml
+analyze:
+  type: agent
+  provider: cursor
+  prompt: "Review this diff: {{.inputs.diff}}"
+  options:
+    model: composer-2
+    mode: ask
+  timeout: 120
+  on_success: next
+```
+
+**Provider-Specific Options:**
+- `model`: Cursor model identifier (no AWF-side whitelist; validated by Cursor CLI at runtime)
+- `mode`: `ask` or `plan` (maps to `--mode`)
+- `sandbox`: `enabled` or `disabled` (maps to `--sandbox`)
+- `dangerously_skip_permissions`: Skip approval prompts (boolean, maps to `--force`). **Security warning**: bypasses safety confirmations — use only in trusted automation environments.
 
 ### Codex (OpenAI)
 
@@ -242,7 +264,24 @@ step validation error: model must start with "gpt-", "codex-", or match o-series
 
 ### OpenCode & OpenAI-Compatible
 
-No model validation for `opencode` or `openai_compatible` providers — these use arbitrary backend models.
+No model validation for `cursor`, `opencode`, or `openai_compatible` providers — these use arbitrary/backend-specific model names.
+
+## Cursor vs Claude Parity
+
+AWF targets the highest possible parity between `cursor` and `claude` providers. Current mapping:
+
+| Capability | Claude | Cursor | Notes |
+|------------|--------|--------|-------|
+| Single-turn execution | Yes | Yes | Both run in print/headless mode |
+| Conversation mode | Yes | Yes | Cursor uses `--resume <chatId>` |
+| Session extraction | `session_id` from `result` | `chat_id`/`chatId` (system init) | Cursor extraction is tolerant to field variants |
+| `output_format: text` | Yes | Yes | AWF extracts readable assistant text |
+| `output_format: json` | Yes | Yes | AWF exposes final result event payload |
+| `system_prompt` in conversation | Native `--system-prompt` | Inlined on first turn | Cursor CLI has no dedicated system prompt flag |
+| `allowed_tools` | Supported | Not mapped | No Cursor CLI equivalent currently |
+| `dangerously_skip_permissions` | `--dangerously-skip-permissions` | `--force` | Closest available equivalent |
+
+When no exact Cursor equivalent exists, AWF prefers explicit behavior over silent mismatches and documents the fallback.
 
 ### When Validation Occurs
 
@@ -854,7 +893,7 @@ See [Workflow Syntax — Inline Error Shorthand](workflow-syntax.md#inline-error
 |-------|-------|----------|
 | Provider not found | CLI tool not installed | Install required CLI (e.g., `claude install`) |
 | Timeout | Agent response took too long | Increase timeout or reduce prompt complexity |
-| Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `opencode`, or `openai_compatible` |
+| Invalid provider | Unsupported provider | Use `claude`, `cursor`, `codex`, `gemini`, `opencode`, or `openai_compatible` |
 | Command failed | Provider CLI returned error | Check provider configuration and logs |
 
 ### Debugging
