@@ -73,18 +73,18 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 		return nil, err
 	}
 
-	// Gemini CLI is always invoked with --output-format stream-json.
-	// For text intent (default), aggregate assistant content for state.Output;
-	// for json intent, keep raw NDJSON and expose parsed result in Response.
+	// CLI is forced to stream-json, so stdout interleaves init/message/result
+	// events. Aggregate assistant content unconditionally — leaving NDJSON in
+	// state.Output breaks any downstream JSON post-processing.
+	if extracted := extractDisplayText(rawOutput, p.parseGeminiStreamLine); extracted != "" {
+		result.Output = extracted
+		result.Tokens = estimateTokens(extracted)
+	}
+
 	userFormat, _ := getStringOption(options, "output_format")
 	if userFormat == "json" || userFormat == "stream-json" {
 		if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
 			result.Response = jsonResp
-		}
-	} else {
-		if extracted := extractDisplayText(rawOutput, p.parseGeminiStreamLine); extracted != "" {
-			result.Output = extracted
-			result.Tokens = estimateTokens(extracted)
 		}
 	}
 

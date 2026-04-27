@@ -2,7 +2,9 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -1049,3 +1051,34 @@ var (
 	_ = assert.Equal
 	_ = require.NoError
 )
+
+// Regression: NDJSON envelope (init/message/result) must not leak into result.Output.
+func TestGeminiProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
+	agentJSON := `{"colors":["red","blue"]}`
+	messageEvent, err := json.Marshal(map[string]any{
+		"type":    "message",
+		"role":    "assistant",
+		"content": agentJSON,
+	})
+	require.NoError(t, err)
+
+	ndjson := strings.Join([]string{
+		`{"type":"init","session_id":"sess-1","model":"gemini-1.5-pro"}`,
+		string(messageEvent),
+		`{"type":"result","status":"ok"}`,
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewGeminiProviderWithOptions(WithGeminiExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "list 2 colors as JSON",
+		map[string]any{"output_format": "json"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, agentJSON, result.Output)
+
+	var parsed any
+	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))
+}
