@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -999,4 +1000,34 @@ func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_WithOtherOptions(t 
 	assert.Contains(t, calls[0].Args, "--framework")
 	assert.Contains(t, calls[0].Args, "react")
 	assert.Contains(t, calls[0].Args, "--verbose")
+}
+
+// Regression: NDJSON envelope (step_start/text/step_finish) must not leak into result.Output.
+func TestOpenCodeProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
+	agentJSON := `{"colors":["red","blue"]}`
+	textPart, err := json.Marshal(map[string]any{
+		"type": "text",
+		"part": map[string]any{"text": agentJSON},
+	})
+	require.NoError(t, err)
+
+	ndjson := strings.Join([]string{
+		`{"type":"step_start","sessionID":"ses_1","part":{}}`,
+		string(textPart),
+		`{"type":"step_finish","sessionID":"ses_1","part":{"tokens":10,"cost":0.001}}`,
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "list 2 colors as JSON",
+		map[string]any{"output_format": "json"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, agentJSON, result.Output)
+
+	var parsed any
+	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))
 }

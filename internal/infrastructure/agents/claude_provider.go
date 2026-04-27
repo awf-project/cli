@@ -70,19 +70,18 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 
 	userFormat, _ := getStringOption(options, "output_format")
 
-	// Claude CLI is always invoked with --output-format stream-json (NDJSON).
-	// For text intent (default or explicit), extract the clean assistant text
-	// from the result event so {{states.step.Output}} is human-readable.
-	// For json intent, keep rawOutput in state.Output and populate Response
-	// with the parsed result event.
+	// CLI is forced to stream-json, so stdout interleaves lifecycle events
+	// (system, assistant, hook_*) ahead of the result event. Extract the
+	// response unconditionally — leaving NDJSON in state.Output breaks any
+	// downstream JSON post-processing.
+	if extracted := p.extractTextFromJSON(rawOutput); extracted != "" {
+		result.Output = extracted
+		result.Tokens = estimateTokens(extracted)
+	}
+
 	if userFormat == "json" || userFormat == "stream-json" {
 		if jsonResp := p.extractResultEvent(rawOutput); jsonResp != nil {
 			result.Response = jsonResp
-		}
-	} else {
-		if extracted := p.extractTextFromJSON(rawOutput); extracted != "" {
-			result.Output = extracted
-			result.Tokens = estimateTokens(extracted)
 		}
 	}
 

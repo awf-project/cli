@@ -2,6 +2,8 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -342,4 +344,43 @@ func TestClaudeProvider_ExecuteConversation_NilState(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation state cannot be nil")
+}
+
+// Regression: lifecycle events ahead of the result event must not leak into result.Output.
+func TestClaudeProvider_Execute_JSONFormat_NDJSONLifecycleEvents(t *testing.T) {
+	agentJSON := `{"colors":["red","blue"]}`
+	resultEvent, err := json.Marshal(map[string]any{
+		"type":       "result",
+		"subtype":    "success",
+		"result":     agentJSON,
+		"session_id": "sess-1",
+	})
+	require.NoError(t, err)
+
+	ndjson := strings.Join([]string{
+		`{"type":"system","subtype":"hook_started","hook_id":"hk-1","hook_name":"SessionStart:startup"}`,
+		`{"type":"system","subtype":"hook_started","hook_id":"hk-2","hook_name":"SessionStart:startup"}`,
+		`{"type":"system","subtype":"hook_response","output":"context"}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"thinking..."}]}}`,
+		string(resultEvent),
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "list 2 colors as JSON",
+		map[string]any{"output_format": "json"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, agentJSON, result.Output)
+
+	var parsed any
+	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))
+
+	require.NotNil(t, result.Response)
+	assert.Equal(t, "result", result.Response["type"])
+	assert.Equal(t, "sess-1", result.Response["session_id"])
 }

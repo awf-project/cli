@@ -62,18 +62,18 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 		return nil, err
 	}
 
-	// OpenCode CLI is always invoked with --format json (NDJSON). For text intent,
-	// aggregate assistant text parts for state.Output; for json intent, expose the
-	// parsed result via Response (F082).
+	// CLI is forced to --format json (NDJSON), so stdout interleaves
+	// step_start/text/step_finish events. Aggregate text parts unconditionally —
+	// leaving NDJSON in state.Output breaks any downstream JSON post-processing.
+	if extracted := extractDisplayText(rawOutput, p.parseOpencodeStreamLine); extracted != "" {
+		result.Output = extracted
+		result.Tokens = estimateTokens(extracted)
+	}
+
 	userFormat, _ := getStringOption(options, "output_format")
 	if userFormat == "json" || userFormat == "stream-json" {
 		if jsonResp := tryParseJSONResponse(rawOutput); jsonResp != nil {
 			result.Response = jsonResp
-		}
-	} else {
-		if extracted := extractDisplayText(rawOutput, p.parseOpencodeStreamLine); extracted != "" {
-			result.Output = extracted
-			result.Tokens = estimateTokens(extracted)
 		}
 	}
 

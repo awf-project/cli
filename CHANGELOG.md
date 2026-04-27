@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **B015** (#318): Stream-json NDJSON output is now correctly extracted into `state.Output` for all CLI agent providers (Claude, Gemini, OpenCode). Previously, on hosts with `SessionStart` hooks (claude-mem, superpowers, zpm, etc.) — or any environment producing pre-result lifecycle events — agent steps with `output_format: json` failed with `output format processing: invalid JSON: invalid character '{' after top-level value`. Providers now always extract the agent's response from the NDJSON stream so `applyOutputFormat` parses the actual content instead of the wire envelope.
+
+## [0.7.0] - 2026-04-17
+
 ### Breaking Changes
 
 - **F083**: Conversation mode redesigned as an interactive user-driven loop — removes all automated multi-turn fields (`max_turns`, `max_context_tokens`, `strategy`, `stop_condition`, `inject_context`) and the `initial_prompt` agent field. Workflows using these fields now fail YAML parsing silently (fields ignored); update them as follows:
