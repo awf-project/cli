@@ -131,6 +131,11 @@ vendors:
     in:
       - golang.org/x/term
 
+  otel:
+    in:
+      - go.opentelemetry.io/otel
+      - go.opentelemetry.io/otel/**
+
   errgroup:
     in:
       - golang.org/x/sync/errgroup
@@ -242,6 +247,9 @@ components:
 
   infra-updater:
     in: infrastructure/updater
+
+  infra-otel:
+    in: infrastructure/otel
 
   infra-xdg:
     in: infrastructure/xdg
@@ -480,6 +488,13 @@ deps:
     canUse:
       - go-stdlib
 
+  infra-otel:
+    mayDependOn:
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - otel
+
   infra-xdg:
     canUse:
       - go-stdlib
@@ -505,6 +520,7 @@ deps:
       - infra-http
       - infra-logger
       - infra-notify
+      - infra-otel
       - infra-plugin
       - infra-repository
       - infra-store

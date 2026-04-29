@@ -11,21 +11,17 @@ import (
 	"time"
 )
 
-// mockPorts lists local ports where mock Chat Completions servers are started.
-// Matches the base_url values used in unit tests that run against local endpoints.
-var mockPorts = []string{"11434", "8000"}
-
-// externalToLocalTransport redirects requests for known test hostnames to the
-// local mock server. Required because unit tests use realistic (non-localhost)
-// base_url values to verify URL normalization, and those hosts are unreachable
-// in CI/offline environments.
-type externalToLocalTransport struct {
-	hostMap map[string]string // hostname → local host:port
+// testToMockTransport redirects all HTTP requests from test base_url values
+// to the single mock server. Matches on req.URL.Host (hostname:port) so that
+// localhost:<port> entries are intercepted even when a real service (e.g. Ollama)
+// occupies that port.
+type testToMockTransport struct {
+	hostMap map[string]string // host or host:port → mock host:port
 	base    http.RoundTripper
 }
 
-func (t *externalToLocalTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if local, ok := t.hostMap[req.URL.Hostname()]; ok {
+func (t *testToMockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if local, ok := t.hostMap[req.URL.Host]; ok {
 		r := req.Clone(req.Context())
 		r.URL.Scheme = "http"
 		r.URL.Host = local
@@ -42,48 +38,43 @@ func (t *externalToLocalTransport) RoundTrip(req *http.Request) (*http.Response,
 	return resp, nil
 }
 
-// TestMain starts mock Chat Completions servers on local ports used by unit tests
-// so that tests can make real HTTP calls without requiring Ollama or other services.
-// If a port is already in use (e.g., real Ollama is running), the tests use the live server.
+// TestMain starts a single mock Chat Completions server on a random available
+// port, then redirects every test base_url (including localhost variants) to it.
+// This avoids conflicts with real services (e.g. Ollama) running on well-known ports.
 func TestMain(m *testing.M) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", mockChatCompletionsHandler)
 
 	lc := &net.ListenConfig{}
-	var servers []*http.Server
-	for _, port := range mockPorts {
-		listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:"+port)
-		if err == nil {
-			server := &http.Server{
-				Handler:           mux,
-				ReadHeaderTimeout: 5 * time.Second,
-			}
-			servers = append(servers, server)
-			go server.Serve(listener) //nolint:errcheck // background test server; errors are acceptable in test setup
-		}
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to start mock server: %v\n", err)
+		os.Exit(1)
 	}
+	mockAddr := listener.Addr().String()
 
-	// Redirect external test hostnames to the local mock server so tests work
-	// offline and in CI without network access.
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go server.Serve(listener) //nolint:errcheck // background test server
+
 	original := http.DefaultTransport
-	http.DefaultTransport = &externalToLocalTransport{
+	http.DefaultTransport = &testToMockTransport{
 		hostMap: map[string]string{
-			"api.openai.com":     "127.0.0.1:11434",
-			"ollama.example.com": "127.0.0.1:11434",
+			"localhost:11434":    mockAddr,
+			"localhost:8000":     mockAddr,
+			"api.openai.com":     mockAddr,
+			"ollama.example.com": mockAddr,
 		},
 		base: original,
 	}
 
-	// Point env-var-only callers (tests that pass nil options) to the mock server.
-	os.Setenv("OPENAI_BASE_URL", "http://localhost:11434/v1") //nolint:errcheck // test env setup; failure is non-critical
-	os.Setenv("OPENAI_MODEL", "test-model")                   //nolint:errcheck // test env setup; failure is non-critical
+	os.Setenv("OPENAI_BASE_URL", "http://"+mockAddr+"/v1") //nolint:errcheck // test env setup
+	os.Setenv("OPENAI_MODEL", "test-model")                //nolint:errcheck // test env setup
 
 	exitCode := m.Run()
-
-	for _, s := range servers {
-		s.Close()
-	}
-
+	server.Close()
 	os.Exit(exitCode)
 }
 
