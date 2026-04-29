@@ -48,6 +48,7 @@ Learn how to use AWF effectively:
 - [Workflow Packs](user-guide/workflow-packs.md) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
 - [Upgrading AWF](user-guide/upgrade.md) - Self-update command with version checking, checksum verification, and atomic binary replacement
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output
+- [Distributed Tracing](user-guide/tracing.md) - Configure OpenTelemetry tracing to export workflow spans to Jaeger, Grafana Tempo, or compatible backends
 - [Examples](user-guide/examples.md) - Real-world workflow examples
 
 ## Reference

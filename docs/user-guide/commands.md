@@ -107,7 +107,7 @@ awf init --global
 ```
 .awf.yaml              # Configuration file
 .awf/
-├── config.yaml        # Project configuration (inputs pre-population)
+├── config.yaml        # Project configuration (inputs, telemetry, plugins)
 ├── workflows/
 │   └── example.yaml   # Sample workflow
 ├── prompts/
@@ -157,6 +157,8 @@ awf run <workflow> [flags]
 | `--interactive` | Enable step-by-step mode with prompts |
 | `--breakpoint, -b` | Pause only at specific steps (requires --interactive) |
 | `--skip-plugins` | Skip plugin step type resolution (fails if workflow uses custom step types) |
+| `--otel-exporter` | OTLP gRPC endpoint for distributed tracing (e.g., `localhost:4317`); overrides `telemetry.exporter` in `.awf/config.yaml`; omit to use project config or disable |
+| `--otel-service-name` | OpenTelemetry service name resource attribute (default: `awf`); overrides `telemetry.service_name` in `.awf/config.yaml` |
 
 ### Output Modes
 
@@ -195,6 +197,9 @@ awf run deploy --interactive --breakpoint build,deploy
 
 # Execute single step with mocked dependencies
 awf run deploy --step deploy_step --mock states.build.Output="build-123"
+
+# Enable distributed tracing via CLI flags (or configure in .awf/config.yaml)
+awf run deploy --otel-exporter=localhost:4317 --otel-service-name=my-app
 
 # View workflow help with input parameters
 awf run deploy --help

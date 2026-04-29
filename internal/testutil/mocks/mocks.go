@@ -38,6 +38,8 @@ var (
 	_ ports.PluginConfig        = (*MockPluginConfig)(nil)
 	_ ports.PluginStateStore    = (*MockPluginStateStore)(nil)
 	_ ports.UserInputReader     = (*MockUserInputReader)(nil)
+	_ ports.Tracer              = (*MockTracer)(nil)
+	_ ports.Span                = (*MockSpan)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1866,4 +1868,93 @@ func (m *MockUserInputReader) Clear() {
 	m.index = 0
 	m.readErr = nil
 	m.callCount = 0
+}
+
+// MockSpanRecord holds recorded calls made against a single span.
+type MockSpanRecord struct {
+	Name       string
+	Ended      bool
+	Attributes map[string]any
+	Errors     []error
+	Events     []string
+}
+
+// MockSpan is a thread-safe mock implementation of ports.Span.
+type MockSpan struct {
+	mu     sync.Mutex
+	record *MockSpanRecord
+}
+
+func (m *MockSpan) End() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record.Ended = true
+}
+
+func (m *MockSpan) SetAttribute(key string, value any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record.Attributes[key] = value
+}
+
+func (m *MockSpan) RecordError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record.Errors = append(m.record.Errors, err)
+}
+
+func (m *MockSpan) AddEvent(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record.Events = append(m.record.Events, name)
+}
+
+// Record returns the span's recorded data (test helper).
+func (m *MockSpan) Record() *MockSpanRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.record
+}
+
+// MockTracer is a thread-safe mock implementation of ports.Tracer.
+type MockTracer struct {
+	mu    sync.Mutex
+	spans []*MockSpan
+}
+
+// NewMockTracer creates a new thread-safe mock tracer.
+func NewMockTracer() *MockTracer {
+	return &MockTracer{}
+}
+
+func (m *MockTracer) Start(ctx context.Context, spanName string) (context.Context, ports.Span) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	span := &MockSpan{
+		record: &MockSpanRecord{
+			Name:       spanName,
+			Attributes: make(map[string]any),
+			Errors:     make([]error, 0),
+			Events:     make([]string, 0),
+		},
+	}
+	m.spans = append(m.spans, span)
+	return ctx, span
+}
+
+// GetSpans returns all spans created by this tracer (test helper).
+func (m *MockTracer) GetSpans() []*MockSpan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]*MockSpan, len(m.spans))
+	copy(copied, m.spans)
+	return copied
+}
+
+// Clear removes all recorded spans (test helper).
+func (m *MockTracer) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.spans = nil
 }

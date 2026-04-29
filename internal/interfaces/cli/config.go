@@ -47,30 +47,33 @@ func ParseOutputMode(s string) (OutputMode, error) {
 
 // Config holds CLI configuration.
 type Config struct {
-	Verbose      bool
-	Quiet        bool
-	NoColor      bool
-	NoHints      bool
-	OutputMode   OutputMode
-	OutputFormat ui.OutputFormat
-	LogLevel     string
-	ConfigPath   string
-	StoragePath  string
-	PluginsDir   string // Override plugin discovery directory (empty = use BuildPluginPaths)
+	Verbose         bool
+	Quiet           bool
+	NoColor         bool
+	NoHints         bool
+	OutputMode      OutputMode
+	OutputFormat    ui.OutputFormat
+	LogLevel        string
+	ConfigPath      string
+	StoragePath     string
+	PluginsDir      string // Override plugin discovery directory (empty = use BuildPluginPaths)
+	OtelExporter    string
+	OtelServiceName string
 }
 
 // DefaultConfig returns default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		Verbose:      false,
-		Quiet:        false,
-		NoColor:      false,
-		NoHints:      false,
-		OutputMode:   OutputSilent,
-		OutputFormat: ui.FormatText,
-		LogLevel:     "info",
-		ConfigPath:   "",
-		StoragePath:  xdg.AWFDataDir(),
+		Verbose:         false,
+		Quiet:           false,
+		NoColor:         false,
+		NoHints:         false,
+		OutputMode:      OutputSilent,
+		OutputFormat:    ui.FormatText,
+		LogLevel:        "info",
+		ConfigPath:      "",
+		StoragePath:     xdg.AWFDataDir(),
+		OtelServiceName: "awf",
 	}
 }
 

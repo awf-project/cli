@@ -121,8 +121,9 @@ linters:
     misspell:
       locale: US
       ignore-rules:
-        - cancelled  # Used in API: StatusCancelled, CancelledCount
-        - cancelling # User-facing messages
+        - cancelled   # Used in API: StatusCancelled, CancelledCount
+        - cancelling  # User-facing messages
+        - initialise  # British English in test comments
 
     gocognit:
       min-complexity: 30  # Default 30, catches extreme complexity
@@ -179,6 +180,12 @@ linters:
       - path: _test\.go
         linters:
           - wrapcheck
+
+      # British English spellings in test file comments (cannot modify tests)
+      - path: internal/infrastructure/otel/provider_test\.go
+        text: "initialises|initialise"
+        linters:
+          - misspell
 
       # gocritic filepathJoin false positives - test fixture paths are not portable anyway
       - path: _test\.go

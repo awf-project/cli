@@ -63,6 +63,7 @@ type ExecutionService struct {
 	awfPaths           map[string]string
 	auditTrailWriter   ports.AuditTrailWriter
 	packWorkflowLoader PackWorkflowLoader
+	tracer             ports.Tracer
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -132,6 +133,18 @@ func (s *ExecutionService) SetStepTypeProvider(provider ports.StepTypeProvider) 
 // When nil, namespaced references return an error (backward compatible for unnamespaced workflows).
 func (s *ExecutionService) SetPackWorkflowLoader(loader PackWorkflowLoader) {
 	s.packWorkflowLoader = loader
+}
+
+func (s *ExecutionService) SetTracer(tracer ports.Tracer) {
+	s.tracer = tracer
+}
+
+func (s *ExecutionService) startSpan(ctx context.Context, name string) (context.Context, ports.Span) {
+	t := s.tracer
+	if t == nil {
+		t = ports.NopTracer{}
+	}
+	return t.Start(ctx, name)
 }
 
 func (s *ExecutionService) resolveAuditUser() string {
@@ -310,6 +323,12 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		}
 	}
 
+	ctx, span := s.startSpan(ctx, "workflow.run")
+	defer span.End()
+	span.SetAttribute("workflow.name", wf.Name)
+	span.SetAttribute("workflow.version", wf.Version)
+	span.SetAttribute("user", s.resolveAuditUser())
+
 	// expand template references in workflow steps
 	if s.templateSvc != nil {
 		if err := s.templateSvc.ExpandWorkflow(ctx, wf); err != nil {
@@ -320,6 +339,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 	// initialize execution context
 	execCtx := workflow.NewExecutionContext(uuid.New().String(), wf.Name)
 	execCtx.Status = workflow.StatusRunning
+	span.SetAttribute("execution_id", execCtx.WorkflowID)
 
 	// Inherit parent call stack for circular detection in sub-workflows
 	if len(parentCallStack) > 0 {
@@ -479,6 +499,11 @@ func (s *ExecutionService) executeStep(
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
+	ctx, span := s.startSpan(ctx, "step."+step.Name)
+	defer span.End()
+	span.SetAttribute("step.name", step.Name)
+	span.SetAttribute("step.type", string(step.Type))
+
 	startTime := time.Now()
 
 	// T007: Prepare step execution (timeout, pre-hooks, interpolation)
@@ -716,6 +741,12 @@ func (s *ExecutionService) executeParallelStep(
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
+	ctx, span := s.startSpan(ctx, "parallel")
+	defer span.End()
+	span.SetAttribute("step.name", step.Name)
+	span.SetAttribute("parallel.strategy", string(step.Strategy))
+	span.SetAttribute("parallel.branches", len(step.Branches))
+
 	startTime := time.Now()
 
 	// apply step timeout
@@ -827,6 +858,15 @@ func (s *ExecutionService) executeLoopStep(
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
+	loopSpanName := "loop.while"
+	if step.Type == workflow.StepTypeForEach {
+		loopSpanName = "loop.for_each"
+	}
+	ctx, loopSpan := s.startSpan(ctx, loopSpanName)
+	defer loopSpan.End()
+	loopSpan.SetAttribute("step.name", step.Name)
+	loopSpan.SetAttribute("loop.type", string(step.Type))
+
 	startTime := time.Now()
 
 	// Apply step timeout
@@ -843,10 +883,17 @@ func (s *ExecutionService) executeLoopStep(
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
+	var iterationIndex int
+
 	// Create step executor callback that executes body steps
 	// Supports nested loops: body steps can be loops themselves (F043)
 	// F048: Updated to return (nextStep, error) to support transitions within loop body
 	stepExecutor := func(ctx context.Context, stepName string, loopIntCtx *interpolation.Context) (string, error) {
+		iterationIndex++
+		ctx, iterSpan := s.startSpan(ctx, fmt.Sprintf("loop.iteration.%d", iterationIndex))
+		defer iterSpan.End()
+		iterSpan.SetAttribute("iteration.index", iterationIndex)
+
 		bodyStep, ok := wf.Steps[stepName]
 		if !ok {
 			return "", fmt.Errorf("body step not found: %s", stepName)
@@ -1149,6 +1196,12 @@ func (s *ExecutionService) executeStepCommand(
 	step *workflow.Step,
 	cmd *ports.Command,
 ) (*ports.CommandResult, int, error) {
+	ctx, span := s.startSpan(ctx, "shell.execute")
+	defer span.End()
+	if cmd != nil {
+		span.SetAttribute("shell.command", cmd.Program)
+	}
+
 	// Handle nil executor for testing (temporary for T010 RED phase tests)
 	if s.executor == nil {
 		return nil, 0, nil
@@ -1791,6 +1844,10 @@ func (s *ExecutionService) executePluginOperation(
 ) (string, error) {
 	startTime := time.Now()
 
+	ctx, span := s.startSpan(ctx, "plugin.rpc")
+	defer span.End()
+	span.SetAttribute("plugin.name", step.Operation)
+
 	// Validate provider is configured
 	if s.operationProvider == nil {
 		return "", fmt.Errorf("step %s: %w", step.Name, ErrNoOperationProvider)
@@ -1950,6 +2007,9 @@ func (s *ExecutionService) executeAgentStep(
 ) (string, error) {
 	startTime := time.Now()
 
+	ctx, span := s.startSpan(ctx, "agent.call")
+	defer span.End()
+
 	// Validate registry is configured
 	if s.agentRegistry == nil {
 		// Record failed state before returning error to maintain consistent state tracking
@@ -2086,6 +2146,14 @@ func (s *ExecutionService) executeAgentStep(
 				return "", formatErr
 			}
 		}
+	}
+
+	if result != nil {
+		span.SetAttribute("provider", resolvedProvider)
+		if model, ok := step.Agent.Options["model"].(string); ok && model != "" {
+			span.SetAttribute("model", model)
+		}
+		span.SetAttribute("tokens_used", result.Tokens)
 	}
 
 	// Handle execution error (e.g., context canceled, provider error)

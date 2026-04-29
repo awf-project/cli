@@ -15,6 +15,13 @@ type ProjectConfig struct {
 	Notify struct {
 		DefaultBackend string `yaml:"default_backend"`
 	} `yaml:"notify"`
+
+	// Telemetry holds OpenTelemetry tracing defaults.
+	// CLI flags --otel-exporter and --otel-service-name take precedence.
+	Telemetry struct {
+		Exporter    string `yaml:"exporter"`
+		ServiceName string `yaml:"service_name"`
+	} `yaml:"telemetry"`
 }
 
 // ConfigError represents an error during config file operations.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
@@ -23,6 +24,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/github"
 	"github.com/awf-project/cli/internal/infrastructure/http"
 	"github.com/awf-project/cli/internal/infrastructure/notify"
+	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/store"
@@ -106,6 +108,8 @@ Examples:
 	cmd.Flags().StringArrayVarP(&breakpointFlags, "breakpoint", "b", nil,
 		"Pause only at specified steps in interactive mode (comma-separated)")
 	cmd.Flags().BoolVar(&skipPlugins, "skip-plugins", false, "Skip plugin validators")
+	cmd.Flags().StringVar(&cfg.OtelExporter, "otel-exporter", "", "OpenTelemetry OTLP exporter endpoint (e.g. localhost:4317)")
+	cmd.Flags().StringVar(&cfg.OtelServiceName, "otel-service-name", "awf", "OpenTelemetry service name")
 
 	// Wire custom help function for workflow-specific help (F035)
 	cmd.SetHelpFunc(workflowHelpFunc(cfg))
@@ -223,13 +227,30 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		verbose:   cfg.Verbose && !silentOutput,
 		silent:    silentOutput,
 	}
-	resolver := interpolation.NewTemplateResolver()
 
 	// Load project config from .awf/config.yaml
 	projectCfg, err := loadProjectConfig(logger)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
+
+	// Apply telemetry defaults from project config (CLI flags win)
+	if !cmd.Flags().Changed("otel-exporter") && projectCfg.Telemetry.Exporter != "" {
+		cfg.OtelExporter = projectCfg.Telemetry.Exporter
+	}
+	if !cmd.Flags().Changed("otel-service-name") && projectCfg.Telemetry.ServiceName != "" {
+		cfg.OtelServiceName = projectCfg.Telemetry.ServiceName
+	}
+
+	tracer, tracerShutdown, tracerInitErr := buildTracerProvider(ctx, cfg)
+	if tracerInitErr != nil {
+		logger.Warn("failed to initialize tracer, tracing disabled", "error", tracerInitErr)
+		tracer = ports.NopTracer{}
+		tracerShutdown = func() {}
+	}
+	defer tracerShutdown()
+
+	resolver := interpolation.NewTemplateResolver()
 
 	// Merge config inputs with CLI inputs (CLI wins)
 	inputs = mergeInputs(projectCfg.Inputs, inputs)
@@ -324,6 +345,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 			execSvc.SetAuditTrailWriter(auditWriter)
 		}
 	}
+
+	execSvc.SetTracer(tracer)
 
 	// Setup operation providers gated by plugin enable/disable state
 	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)
@@ -1289,6 +1312,50 @@ func buildAuditWriter(logger ports.Logger) (ports.AuditTrailWriter, func(), erro
 		}
 	}
 	return w, cleanup, nil
+}
+
+// buildTracerProvider initializes an OpenTelemetry tracer from CLI config.
+// Returns a NopTracer when OtelExporter is empty (tracing disabled).
+func buildTracerProvider(ctx context.Context, cfg *Config) (ports.Tracer, func(), error) {
+	if cfg.OtelExporter == "" {
+		return ports.NopTracer{}, func() {}, nil
+	}
+
+	endpoint := cfg.OtelExporter
+	insecure := true
+	if strings.HasPrefix(endpoint, "https://") {
+		endpoint = strings.TrimPrefix(endpoint, "https://")
+		insecure = false
+	} else if strings.HasPrefix(endpoint, "http://") {
+		endpoint = strings.TrimPrefix(endpoint, "http://")
+	}
+
+	serviceName := cfg.OtelServiceName
+	if serviceName == "" {
+		serviceName = "awf"
+	}
+
+	tp, err := infraotel.NewTracerProvider(ctx, infraotel.Config{
+		Endpoint:    endpoint,
+		ServiceName: serviceName,
+		Insecure:    insecure,
+	})
+	if err != nil {
+		return ports.NopTracer{}, func() {}, err
+	}
+
+	var once sync.Once
+	shutdown := func() {
+		once.Do(func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := tp.Shutdown(shutdownCtx); err != nil {
+				_ = err // best-effort shutdown; caller cannot act on this
+			}
+		})
+	}
+
+	return tp, shutdown, nil
 }
 
 // buildBuiltinProviders constructs a CompositeOperationProvider from the three built-in providers,

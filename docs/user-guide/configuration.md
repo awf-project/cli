@@ -213,7 +213,7 @@ Fix the YAML syntax and retry the command.
 
 ### Unknown Keys
 
-If the configuration contains unrecognized keys (anything other than `inputs:`), AWF logs a warning but continues execution:
+If the configuration contains unrecognized keys (anything other than `inputs:`, `notify:`, `telemetry:`, etc.), AWF logs a warning but continues execution:
 
 ```
 Warning: unknown key in config file: deprecated_setting
@@ -476,6 +476,55 @@ See [Plugins](plugins.md) for full plugin documentation.
 
 ---
 
+## Telemetry Configuration
+
+Configure OpenTelemetry distributed tracing in `.awf/config.yaml` under the `telemetry:` key. This enables tracing for all workflows in the project without requiring CLI flags.
+
+```yaml
+telemetry:
+  exporter: "localhost:4317"
+  service_name: "my-app"
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `exporter` | string | *(empty)* | OTLP gRPC endpoint. Empty or omitted disables tracing (zero overhead). |
+| `service_name` | string | `awf` | Service name for resource attributes in your observability backend. |
+
+### Priority Order
+
+CLI flags override project configuration:
+
+```
+telemetry config < --otel-exporter / --otel-service-name flags
+```
+
+### Examples
+
+```yaml
+# Local development with Jaeger (docker compose up -d)
+telemetry:
+  exporter: "localhost:4317"
+  service_name: "my-project-dev"
+```
+
+```yaml
+# Remote collector with TLS
+telemetry:
+  exporter: "https://otel-collector.example.com:4317"
+  service_name: "my-project-prod"
+```
+
+```yaml
+# Tracing disabled (default when telemetry section is omitted)
+telemetry:
+  exporter: ""
+```
+
+See [Distributed Tracing](tracing.md) for span structure, backend setup, and troubleshooting.
+
+---
+
 ## Environment Variables
 
 AWF respects the following environment variables to control behavior and override defaults:
@@ -531,3 +580,4 @@ awf run my-workflow
 - [Workflow Syntax](workflow-syntax.md) - Workflow YAML syntax
 - [Plugins](plugins.md) - Plugin system and configuration
 - [Audit Trail](audit-trail.md) - Structured audit logging for workflow executions
+- [Distributed Tracing](tracing.md) - OpenTelemetry tracing configuration and usage
