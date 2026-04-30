@@ -742,7 +742,7 @@ awf error EXECUTION.COMMAND.FAILED -f json
 
 ## awf history
 
-Show workflow execution history.
+Show workflow execution history. IDs and workflow names are displayed in full (no truncation), so IDs can be copied directly into commands like `awf status <id>`.
 
 ```bash
 awf history [flags]

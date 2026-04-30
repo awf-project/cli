@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **F087**: `awf history` now displays full workflow execution IDs without truncation — UUIDs are shown in their complete 36-character form so they can be copied directly into downstream commands (`awf status <id>`, `awf logs <id>`); workflow names are also displayed in full; table rendering migrated from fixed-width `fmt.Fprintf` to `text/tabwriter` for auto-sizing columns, matching the pattern used by other table outputs
+
 ## [0.7.1] - 2026-04-27
 
 ### Fixed
