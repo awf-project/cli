@@ -4,12 +4,16 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -337,7 +341,6 @@ func TestHistoryCommand_AcceptsNoArguments(t *testing.T) {
 func TestRunHistory_NoHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create empty history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -381,7 +384,6 @@ func TestRunHistory_InvalidSinceFormat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 
-			// Create history directory
 			historyDir := filepath.Join(tmpDir, "history")
 			require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -408,7 +410,6 @@ func TestRunHistory_InvalidSinceFormat(t *testing.T) {
 func TestRunHistory_ValidSinceFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -419,14 +420,12 @@ func TestRunHistory_ValidSinceFormat(t *testing.T) {
 	cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--since=2025-12-01"})
 
 	err := cmd.Execute()
-	// Should not error on date parsing
 	require.NoError(t, err)
 }
 
 func TestRunHistory_Stats(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -474,7 +473,6 @@ func TestRunHistory_Stats(t *testing.T) {
 func TestRunHistory_JSONFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -488,7 +486,6 @@ func TestRunHistory_JSONFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	// Empty history should return valid JSON array
 	var records []interface{}
 	err = json.Unmarshal([]byte(output), &records)
 	require.NoError(t, err, "output should be valid JSON array")
@@ -497,7 +494,6 @@ func TestRunHistory_JSONFormat(t *testing.T) {
 func TestRunHistory_Filters(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -540,7 +536,6 @@ func TestRunHistory_Filters(t *testing.T) {
 			cmd.SetArgs(tt.args)
 
 			err := cmd.Execute()
-			// Should not error (even if no results found)
 			require.NoError(t, err)
 		})
 	}
@@ -549,7 +544,6 @@ func TestRunHistory_Filters(t *testing.T) {
 func TestRunHistory_TextOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create history directory
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
@@ -563,9 +557,7 @@ func TestRunHistory_TextOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	// For empty history, should show "No execution history found"
 	if !strings.Contains(output, "No execution history found") {
-		// If there are records, should have table headers
 		assert.Contains(t, output, "ID")
 		assert.Contains(t, output, "WORKFLOW")
 		assert.Contains(t, output, "STATUS")
@@ -574,8 +566,6 @@ func TestRunHistory_TextOutput(t *testing.T) {
 	}
 }
 
-// TestHistoryCommand_SQLiteHistoryStore_Wiring validates that the history command
-// uses SQLiteHistoryStore (T005 component validation for bug-48 fix)
 func TestHistoryCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -603,8 +593,6 @@ func TestHistoryCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	}
 }
 
-// TestHistoryCommand_ConcurrentAccess validates that multiple history commands
-// can run concurrently without lock errors (bug-48 fix validation)
 func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -628,34 +616,27 @@ func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all workers to complete
 	for i := 0; i < numConcurrent; i++ {
 		<-doneChan
 	}
 	close(errChan)
 
-	// Check if any worker failed
-	// Preallocate for potential errors
 	errors := make([]error, 0, numConcurrent)
 	for err := range errChan {
 		errors = append(errors, err)
 	}
 
-	// All concurrent executions should succeed (no lock errors)
 	assert.Empty(t, errors, "concurrent history command executions should not fail with lock errors")
 
-	// Verify history.db exists and is a valid SQLite file
 	historyDBPath := filepath.Join(tmpDir, "history.db")
 	info, err := os.Stat(historyDBPath)
 	require.NoError(t, err)
 	assert.True(t, info.Size() > 0, "history.db should have content")
 }
 
-// TestHistoryCommand_Stats_SQLiteIntegration validates stats with SQLite store
 func TestHistoryCommand_Stats_SQLiteIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Execute history stats command
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -665,7 +646,6 @@ func TestHistoryCommand_Stats_SQLiteIntegration(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Verify SQLite database was created
 	historyDBPath := filepath.Join(tmpDir, "history.db")
 	_, statErr := os.Stat(historyDBPath)
 	assert.NoError(t, statErr, "SQLite history.db should exist after stats query")
@@ -675,7 +655,6 @@ func TestHistoryCommand_Stats_SQLiteIntegration(t *testing.T) {
 	assert.Contains(t, output, "Execution Statistics")
 }
 
-// TestHistoryCommand_FilterWithSQLite validates filtering with SQLite store
 func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
 	tests := []struct {
 		name string
@@ -716,7 +695,6 @@ func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
 			err := cmd.Execute()
 			require.NoError(t, err)
 
-			// Verify SQLite database was created
 			historyDBPath := filepath.Join(tmpDir, "history.db")
 			_, statErr := os.Stat(historyDBPath)
 			assert.NoError(t, statErr, "SQLite history.db should exist after filtered query")
@@ -724,7 +702,6 @@ func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
 	}
 }
 
-// TestHistoryCommand_JSONOutput_SQLite validates JSON output with SQLite store
 func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -737,7 +714,6 @@ func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Verify SQLite database was created
 	historyDBPath := filepath.Join(tmpDir, "history.db")
 	_, statErr := os.Stat(historyDBPath)
 	assert.NoError(t, statErr, "SQLite history.db should exist for JSON output")
@@ -749,7 +725,6 @@ func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 	require.NoError(t, jsonErr, "output should be valid JSON array")
 }
 
-// TestHistoryCommand_StatsJSON_SQLite validates JSON stats output with SQLite
 func TestHistoryCommand_StatsJSON_SQLite(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -762,7 +737,6 @@ func TestHistoryCommand_StatsJSON_SQLite(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Verify SQLite database was created
 	historyDBPath := filepath.Join(tmpDir, "history.db")
 	_, statErr := os.Stat(historyDBPath)
 	assert.NoError(t, statErr, "SQLite history.db should exist for JSON stats")
@@ -773,4 +747,84 @@ func TestHistoryCommand_StatsJSON_SQLite(t *testing.T) {
 	jsonErr := json.Unmarshal([]byte(output), &stats)
 	require.NoError(t, jsonErr, "output should be valid JSON object")
 	assert.Contains(t, stats, "total_executions")
+}
+
+func TestRunHistory_FullIDDisplay(t *testing.T) {
+	tmpDir := t.TempDir()
+	historyPath := filepath.Join(tmpDir, "history.db")
+
+	ctx := context.Background()
+
+	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
+	require.NoError(t, err)
+	defer func() { _ = historyStore.Close() }()
+
+	fullUUID := "550e8400-e29b-41d4-a716-446655440000"
+	fullWorkflowName := "deploy-staging-eu-west-1"
+	record := &workflow.ExecutionRecord{
+		ID:           fullUUID,
+		WorkflowID:   "wf-staging-deploy-001",
+		WorkflowName: fullWorkflowName,
+		Status:       "success",
+		ExitCode:     0,
+		StartedAt:    time.Now().Add(-5 * time.Minute),
+		CompletedAt:  time.Now(),
+		DurationMs:   300000,
+	}
+
+	err = historyStore.Record(ctx, record)
+	require.NoError(t, err)
+
+	historyStore.Close()
+
+	t.Run("text output shows full UUID and workflow name without truncation", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs([]string{"--storage=" + tmpDir, "history"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := out.String()
+		assert.Contains(t, output, fullUUID)
+		assert.Contains(t, output, fullWorkflowName)
+		assert.NotContains(t, output, "...")
+	})
+
+	t.Run("json output preserves full IDs", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs([]string{"--storage=" + tmpDir, "--format=json", "history"})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		var records []map[string]interface{}
+		err = json.Unmarshal(out.Bytes(), &records)
+		require.NoError(t, err)
+		require.Len(t, records, 1)
+
+		assert.Equal(t, fullUUID, records[0]["id"])
+		assert.Equal(t, fullWorkflowName, records[0]["workflow_name"])
+	})
+
+	t.Run("filtered output preserves full IDs", func(t *testing.T) {
+		cmd := cli.NewRootCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs([]string{"--storage=" + tmpDir, "history", "--workflow=" + fullWorkflowName})
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		output := out.String()
+		assert.Contains(t, output, fullUUID)
+		assert.Contains(t, output, fullWorkflowName)
+		assert.NotContains(t, output, "...")
+	})
 }

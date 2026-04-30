@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"text/tabwriter"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
@@ -15,7 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// HistoryInfo is the JSON/output structure for history command.
 type HistoryInfo struct {
 	ID           string `json:"id"`
 	WorkflowID   string `json:"workflow_id"`
@@ -28,7 +28,6 @@ type HistoryInfo struct {
 	ErrorMessage string `json:"error_message,omitempty"`
 }
 
-// HistoryStatsInfo is the JSON/output structure for history stats.
 type HistoryStatsInfo struct {
 	TotalExecutions int   `json:"total_executions"`
 	SuccessCount    int   `json:"success_count"`
@@ -74,7 +73,6 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Open history store
 	historyPath := filepath.Join(cfg.StoragePath, "history.db")
 	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
 	if err != nil {
@@ -82,13 +80,9 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	}
 	defer func() { _ = historyStore.Close() }()
 
-	// Create logger (silent for CLI commands)
 	log := logger.NewConsoleLogger(io.Discard, logger.LevelWarn, cfg.NoColor)
-
-	// Create history service
 	historySvc := application.NewHistoryService(historyStore, log)
 
-	// Build filter
 	filter := &workflow.HistoryFilter{
 		WorkflowName: workflowName,
 		Status:       status,
@@ -128,10 +122,9 @@ func writeHistoryStats(writer *ui.OutputWriter, stats *workflow.HistoryStats) er
 	}
 
 	if writer.IsJSONFormat() {
-		return writeJSON(writer, info)
+		return writer.WriteJSON(info)
 	}
 
-	// Text/table output
 	_, _ = fmt.Fprintf(writer.Out(), "Execution Statistics\n")
 	_, _ = fmt.Fprintf(writer.Out(), "====================\n")
 	_, _ = fmt.Fprintf(writer.Out(), "Total Executions: %d\n", stats.TotalExecutions)
@@ -162,7 +155,7 @@ func writeHistoryRecords(writer *ui.OutputWriter, records []*workflow.ExecutionR
 	}
 
 	if writer.IsJSONFormat() {
-		return writeJSON(writer, infos)
+		return writer.WriteJSON(infos)
 	}
 
 	if len(infos) == 0 {
@@ -170,30 +163,23 @@ func writeHistoryRecords(writer *ui.OutputWriter, records []*workflow.ExecutionR
 		return nil
 	}
 
-	// Text/table output
-	_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n", "ID", "WORKFLOW", "STATUS", "DURATION", "COMPLETED")
-	_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n", "--------------------", "---------------", "----------", "------------", "---------")
+	w := tabwriter.NewWriter(writer.Out(), 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "ID\tWORKFLOW\tSTATUS\tDURATION\tCOMPLETED")
+	_, _ = fmt.Fprintln(w, "----\t--------\t------\t--------\t---------")
 	for i := range infos {
 		info := &infos[i]
-		completedAt, _ := time.Parse(time.RFC3339, info.CompletedAt)
 		duration := formatDuration(info.DurationMs)
-		_, _ = fmt.Fprintf(writer.Out(), "%-20s %-15s %-10s %-12s %s\n",
-			truncate(info.ID, 20),
-			truncate(info.WorkflowName, 15),
+		completedAt, _ := time.Parse(time.RFC3339, info.CompletedAt)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			info.ID,
+			info.WorkflowName,
 			info.Status,
 			duration,
 			completedAt.Format("2006-01-02 15:04"),
 		)
 	}
 
-	return nil
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
+	return w.Flush()
 }
 
 func formatDuration(ms int64) string {
@@ -204,10 +190,4 @@ func formatDuration(ms int64) string {
 		return fmt.Sprintf("%.1fs", float64(ms)/1000)
 	}
 	return fmt.Sprintf("%.1fm", float64(ms)/60000)
-}
-
-func writeJSON(writer *ui.OutputWriter, v any) error {
-	// OutputWriter handles JSON internally through other methods,
-	// but we need direct JSON output here
-	return writer.WriteJSON(v)
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,28 +12,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTruncate(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		maxLen int
-		want   string
-	}{
-		{"empty string", "", 10, ""},
-		{"short string", "hello", 10, "hello"},
-		{"exact length", "exactly10!", 10, "exactly10!"},
-		{"too long", "this is too long", 10, "this is..."},
-		{"unicode", "hello world!", 8, "hello..."},
-		{"maxLen 3", "abc", 3, "abc"},
-		{"maxLen 4 with truncation", "abcde", 4, "a..."},
+func TestWriteHistoryRecords_DisplaysFullValues(t *testing.T) {
+	var out bytes.Buffer
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
+
+	now := time.Now()
+	records := []*workflow.ExecutionRecord{
+		{
+			ID:           "550e8400-e29b-41d4-a716-446655440000",
+			WorkflowID:   "wf-001",
+			WorkflowName: "deploy-staging-eu-west-1",
+			Status:       "success",
+			ExitCode:     0,
+			StartedAt:    now.Add(-5 * time.Minute),
+			CompletedAt:  now,
+			DurationMs:   300000,
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := truncate(tt.input, tt.maxLen)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	err := writeHistoryRecords(writer, records)
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "550e8400-e29b-41d4-a716-446655440000")
+	assert.Contains(t, output, "deploy-staging-eu-west-1")
+	assert.NotContains(t, output, "...")
 }
 
 func TestFormatDuration(t *testing.T) {
@@ -210,16 +214,18 @@ func TestWriteHistoryRecords_JSON(t *testing.T) {
 	assert.Contains(t, output, `"duration_ms": 300000`)
 }
 
-func TestWriteHistoryRecords_TruncatesLongValues(t *testing.T) {
+func TestWriteHistoryRecords_DisplaysFullID(t *testing.T) {
 	var out bytes.Buffer
 	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
 
 	now := time.Now()
+	longID := "this-is-a-very-long-execution-id-that-exceeds-20-chars"
+	longWorkflowName := "very-long-workflow-name-that-exceeds-limit"
 	records := []*workflow.ExecutionRecord{
 		{
-			ID:           "this-is-a-very-long-execution-id-that-exceeds-20-chars",
+			ID:           longID,
 			WorkflowID:   "wf-001",
-			WorkflowName: "very-long-workflow-name-that-exceeds-limit",
+			WorkflowName: longWorkflowName,
 			Status:       "success",
 			ExitCode:     0,
 			StartedAt:    now.Add(-5 * time.Minute),
@@ -232,10 +238,8 @@ func TestWriteHistoryRecords_TruncatesLongValues(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	// IDs are truncated to 20 chars (17 + "...")
-	assert.Contains(t, output, "this-is-a-very-lo...")
-	// Workflow names are truncated to 15 chars (12 + "...")
-	assert.Contains(t, output, "very-long-wo...")
+	assert.Contains(t, output, longID)
+	assert.Contains(t, output, longWorkflowName)
 }
 
 func TestHistoryInfo_Struct(t *testing.T) {
@@ -257,6 +261,70 @@ func TestHistoryInfo_Struct(t *testing.T) {
 	assert.Equal(t, "success", info.Status)
 	assert.Equal(t, 0, info.ExitCode)
 	assert.Equal(t, int64(300000), info.DurationMs)
+}
+
+func TestWriteHistoryRecords_TabwriterFormattedTable(t *testing.T) {
+	var out bytes.Buffer
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
+
+	now := time.Now()
+	records := []*workflow.ExecutionRecord{
+		{
+			ID:           "exec-tabwriter-001",
+			WorkflowID:   "wf-001",
+			WorkflowName: "deploy",
+			Status:       "success",
+			StartedAt:    now.Add(-2 * time.Minute),
+			CompletedAt:  now,
+			DurationMs:   120000,
+		},
+	}
+
+	err := writeHistoryRecords(writer, records)
+	require.NoError(t, err)
+
+	output := out.String()
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	require.GreaterOrEqual(t, len(lines), 3, "tabwriter output must have header, separator, and data rows")
+
+	headerLine := lines[0]
+	for _, col := range []string{"ID", "WORKFLOW", "STATUS", "DURATION", "COMPLETED"} {
+		assert.Contains(t, headerLine, col, "header must contain column %q", col)
+	}
+
+	assert.Contains(t, lines[1], "----")
+
+	dataLine := lines[2]
+	assert.Contains(t, dataLine, "exec-tabwriter-001")
+	assert.Contains(t, dataLine, "deploy")
+	assert.Contains(t, dataLine, "success")
+}
+
+func TestWriteHistoryRecords_NoTruncation(t *testing.T) {
+	var out bytes.Buffer
+	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
+
+	now := time.Now()
+	longExecID := "exec-" + strings.Repeat("abcdef01234567890", 4)
+	longWorkflowName := "deploy-" + strings.Repeat("region-failover-", 3)
+	records := []*workflow.ExecutionRecord{
+		{
+			ID:           longExecID,
+			WorkflowID:   "wf-001",
+			WorkflowName: longWorkflowName,
+			Status:       "success",
+			StartedAt:    now.Add(-time.Minute),
+			CompletedAt:  now,
+			DurationMs:   60000,
+		},
+	}
+
+	err := writeHistoryRecords(writer, records)
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, longExecID, "execution ID must not be truncated")
+	assert.Contains(t, output, longWorkflowName, "workflow name must not be truncated")
 }
 
 func TestHistoryStatsInfo_Struct(t *testing.T) {
