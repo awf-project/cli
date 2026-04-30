@@ -15,6 +15,7 @@ commonVendors:
   - go-stdlib
 
 commonComponents:
+  - pkg-display
   - pkg-expression
   - pkg-interpolation
   - pkg-plugin-sdk
@@ -158,6 +159,9 @@ components:
     in: domain/operation
 
   # PUBLIC PACKAGES
+  pkg-display:
+    in: ../pkg/display
+
   pkg-expression:
     in: ../pkg/expression
 

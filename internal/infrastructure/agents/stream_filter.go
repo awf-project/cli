@@ -14,20 +14,21 @@ const maxLineSize = 10 * 1024 * 1024
 
 var newlineBytes = []byte{'\n'}
 
-// LineExtractor returns "" to skip a line, non-empty to emit it.
-type LineExtractor func(line []byte) string
+// DisplayEventRenderer receives parsed DisplayEvents for rendering to output.
+type DisplayEventRenderer func(events []DisplayEvent)
 
-// StreamFilterWriter buffers NDJSON lines and filters them via LineExtractor.
+// StreamFilterWriter buffers NDJSON lines and filters them.
 // Lines exceeding 10 MB are dumped raw to prevent unbounded memory growth.
 type StreamFilterWriter struct {
-	inner   io.Writer
-	extract LineExtractor
-	buf     []byte
-	logger  ports.Logger
+	inner    io.Writer
+	extract  func(line []byte) string
+	parser   DisplayEventParser
+	renderer DisplayEventRenderer
+	buf      []byte
+	logger   ports.Logger
 }
 
-// NewStreamFilterWriter decorates inner with line filtering. If extract is nil, data passes through unfiltered.
-func NewStreamFilterWriter(inner io.Writer, extract LineExtractor, logger ...ports.Logger) *StreamFilterWriter {
+func newStreamFilterBase(inner io.Writer, logger []ports.Logger) *StreamFilterWriter {
 	if inner == nil {
 		inner = io.Discard
 	}
@@ -35,16 +36,27 @@ func NewStreamFilterWriter(inner io.Writer, extract LineExtractor, logger ...por
 	if len(logger) > 0 && logger[0] != nil {
 		l = logger[0]
 	}
-	return &StreamFilterWriter{
-		inner:   inner,
-		extract: extract,
-		buf:     make([]byte, 0, 4096),
-		logger:  l,
-	}
+	return &StreamFilterWriter{inner: inner, buf: make([]byte, 0, 4096), logger: l}
+}
+
+// NewStreamFilterWriterWithParser decorates inner with event-aware filtering.
+// Parsed events are forwarded to renderer; if renderer is nil events are discarded.
+func NewStreamFilterWriterWithParser(inner io.Writer, parser DisplayEventParser, renderer DisplayEventRenderer, logger ...ports.Logger) *StreamFilterWriter {
+	w := newStreamFilterBase(inner, logger)
+	w.parser = parser
+	w.renderer = renderer
+	return w
+}
+
+// NewStreamFilterWriter decorates inner with line filtering. If extract is nil, data passes through unfiltered.
+func NewStreamFilterWriter(inner io.Writer, extract func(line []byte) string, logger ...ports.Logger) *StreamFilterWriter {
+	w := newStreamFilterBase(inner, logger)
+	w.extract = extract
+	return w
 }
 
 func (w *StreamFilterWriter) Write(p []byte) (int, error) {
-	if w.extract == nil {
+	if w.extract == nil && w.parser == nil {
 		n, err := w.inner.Write(p)
 		if err != nil {
 			return n, fmt.Errorf("write to inner: %w", err)
@@ -69,22 +81,74 @@ func (w *StreamFilterWriter) Write(p []byte) (int, error) {
 			break
 		}
 
-		line := w.buf[:idx]
-		if extracted := w.extract(line); extracted != "" {
-			if err := w.writeExtracted(extracted); err != nil {
-				return n, err
-			}
+		if err := w.processLine(w.buf[:idx]); err != nil {
+			return n, err
 		}
-
 		w.buf = w.buf[idx+1:]
 	}
 
 	return n, nil
 }
 
+func (w *StreamFilterWriter) processLine(line []byte) error {
+	if w.parser != nil {
+		return w.parseAndRenderLine(line)
+	}
+	if extracted := w.extract(line); extracted != "" {
+		return w.writeExtracted(extracted)
+	}
+	return nil
+}
+
+func (w *StreamFilterWriter) parseAndRenderLine(line []byte) error {
+	if len(line) >= maxLineSize {
+		w.logger.Warn("oversized line dumped without extraction", "size", len(line), "limit", maxLineSize)
+		if _, err := w.inner.Write(line); err != nil {
+			return fmt.Errorf("write oversized buffer: %w", err)
+		}
+		if _, err := w.inner.Write(newlineBytes); err != nil {
+			return fmt.Errorf("write newline: %w", err)
+		}
+		return nil
+	}
+	events := w.parser(line)
+	if len(events) == 0 {
+		return nil
+	}
+	if w.renderer != nil {
+		w.renderer(events)
+	}
+	for _, event := range events {
+		if event.Kind == EventText && event.Text != "" {
+			if err := w.writeExtracted(event.Text); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Flush emits any buffered partial line.
 func (w *StreamFilterWriter) Flush() error {
 	if len(w.buf) == 0 {
+		return nil
+	}
+
+	if w.parser != nil {
+		events := w.parser(w.buf)
+		if len(events) > 0 {
+			if w.renderer != nil {
+				w.renderer(events)
+			}
+			for _, event := range events {
+				if event.Kind == EventText && event.Text != "" {
+					if err := w.writeExtracted(event.Text); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		w.buf = w.buf[:0]
 		return nil
 	}
 
@@ -113,8 +177,8 @@ func (w *StreamFilterWriter) writeExtracted(extracted string) error {
 	return nil
 }
 
-func extractDisplayText(raw string, extract LineExtractor) string {
-	if extract == nil {
+func extractDisplayTextFromEvents(raw string, parser DisplayEventParser) string {
+	if parser == nil {
 		return ""
 	}
 
@@ -123,11 +187,15 @@ func extractDisplayText(raw string, extract LineExtractor) string {
 		if line == "" {
 			continue
 		}
-		if extracted := extract([]byte(line)); extracted != "" {
+		events := parser([]byte(line))
+		for _, evt := range events {
+			if evt.Kind != EventText {
+				continue
+			}
 			if result.Len() > 0 {
 				result.WriteRune('\n')
 			}
-			result.WriteString(extracted)
+			result.WriteString(evt.Text)
 		}
 	}
 

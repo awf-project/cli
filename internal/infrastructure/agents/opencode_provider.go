@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -51,7 +52,7 @@ func (p *OpenCodeProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateOpenCodeOptions,
-		parseStreamLine:       p.parseOpencodeStreamLine,
+		parseDisplayEvents:    p.parseOpencodeDisplayEvents,
 	})
 }
 
@@ -65,7 +66,7 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	// CLI is forced to --format json (NDJSON), so stdout interleaves
 	// step_start/text/step_finish events. Aggregate text parts unconditionally —
 	// leaving NDJSON in state.Output breaks any downstream JSON post-processing.
-	if extracted := extractDisplayText(rawOutput, p.parseOpencodeStreamLine); extracted != "" {
+	if extracted := extractDisplayTextFromEvents(rawOutput, p.parseOpencodeDisplayEvents); extracted != "" {
 		result.Output = extracted
 		result.Tokens = estimateTokens(extracted)
 	}
@@ -225,27 +226,40 @@ func (p *OpenCodeProvider) extractSessionID(output string) (string, error) {
 	return sessionID, nil
 }
 
-// parseOpencodeStreamLine extracts displayable assistant text from OpenCode CLI's
-// stream-json output. OpenCode CLI (`opencode run --format json`) emits one JSON
-// object per line with these top-level types:
-//   - "step_start"  — {sessionID, part} (ignored; session ID consumed separately)
-//   - "text"        — {part:{text}} (surface the text field)
-//   - "step_finish" — {sessionID, part:{tokens, cost}} (ignored)
-//
-// Only "text" events are surfaced to the live display. All other events (step
-// metadata, tool use, reasoning blocks) are skipped.
-func (p *OpenCodeProvider) parseOpencodeStreamLine(line []byte) string {
+func (p *OpenCodeProvider) parseOpencodeDisplayEvents(line []byte) []DisplayEvent {
+	// Escape NUL bytes to JSON unicode sequence so json.Unmarshal preserves them
+	// in decoded string fields while avoiding parse errors.
+	sanitized := bytes.ReplaceAll(line, []byte{0x00}, []byte{0x5c, 0x75, 0x30, 0x30, 0x30, 0x30})
+
 	var evt struct {
 		Type string `json:"type"`
-		Part struct {
-			Text string `json:"text"`
+		Part *struct {
+			Text  string         `json:"text"`
+			Name  string         `json:"name"`
+			Input map[string]any `json:"input"`
 		} `json:"part"`
 	}
-	if err := json.Unmarshal(line, &evt); err != nil {
-		return ""
+	if err := json.Unmarshal(sanitized, &evt); err != nil {
+		return nil
 	}
-	if evt.Type != "text" {
-		return ""
+	if evt.Type == "" {
+		return nil
 	}
-	return evt.Part.Text
+	if evt.Type == "text" {
+		text := ""
+		if evt.Part != nil {
+			text = evt.Part.Text
+		}
+		return []DisplayEvent{{Type: evt.Type, Kind: EventText, Text: text}}
+	}
+	if evt.Type == "tool_use" {
+		name := ""
+		arg := ""
+		if evt.Part != nil {
+			name = evt.Part.Name
+			arg = extractArgPreviewFromMap(evt.Part.Input)
+		}
+		return []DisplayEvent{{Type: evt.Type, Kind: EventToolUse, Name: name, Arg: arg, ID: ""}}
+	}
+	return nil
 }

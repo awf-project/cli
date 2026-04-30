@@ -89,3 +89,55 @@ func findFirstNDJSONEvent(output, eventType string) map[string]any {
 	}
 	return nil
 }
+
+// argPreviewKeys defines the ordered list of input map keys used to extract a
+// human-readable preview for EventToolUse.Arg. The first matching key wins.
+var argPreviewKeys = []string{"file_path", "command", "cmd", "query", "pattern"}
+
+// truncateArg returns a preview of s capped at 40 Unicode characters.
+// If s exceeds 40 characters it is truncated to 37 runes and the ellipsis
+// character (U+2026) is appended, yielding exactly 40 visible characters.
+func truncateArg(s string) string {
+	const maxLen = 40
+	const truncLen = 37
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:truncLen]) + "…"
+}
+
+// extractArgPreviewFromMap extracts a human-readable preview from a tool input map.
+// It looks for the first recognized key (file_path, command, cmd, query, pattern)
+// and returns its string value, truncated per truncateArg contract.
+// Returns empty string if the map is nil or no recognized key is found.
+func extractArgPreviewFromMap(m map[string]any) string {
+	for _, key := range argPreviewKeys {
+		if val, ok := m[key]; ok {
+			if s, ok := val.(string); ok {
+				return truncateArg(s)
+			}
+		}
+	}
+	return ""
+}
+
+// extractArgPreview parses a JSON-encoded tool arguments string and delegates to
+// extractArgPreviewFromMap for key extraction and truncation.
+// Returns empty string if the JSON is unparseable or no recognized key is found.
+func extractArgPreview(arguments string) string {
+	if arguments == "" {
+		return ""
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(arguments), &m); err != nil {
+		return ""
+	}
+	return extractArgPreviewFromMap(m)
+}
+
+// parseToolCallArgPreview is an alias for extractArgPreview retained for
+// compatibility with providers that use the longer name.
+func parseToolCallArgPreview(arguments string) string {
+	return extractArgPreview(arguments)
+}

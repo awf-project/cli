@@ -45,7 +45,7 @@ func (p *GeminiProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateGeminiOptions,
-		parseStreamLine:       p.parseGeminiStreamLine,
+		parseDisplayEvents:    p.parseGeminiDisplayEvents,
 	})
 }
 
@@ -76,7 +76,7 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	// CLI is forced to stream-json, so stdout interleaves init/message/result
 	// events. Aggregate assistant content unconditionally — leaving NDJSON in
 	// state.Output breaks any downstream JSON post-processing.
-	if extracted := extractDisplayText(rawOutput, p.parseGeminiStreamLine); extracted != "" {
+	if extracted := extractDisplayTextFromEvents(rawOutput, p.parseGeminiDisplayEvents); extracted != "" {
 		result.Output = extracted
 		result.Tokens = estimateTokens(extracted)
 	}
@@ -179,25 +179,37 @@ func (p *GeminiProvider) extractSessionID(output string) (string, error) {
 	return str, nil
 }
 
-// parseGeminiStreamLine extracts displayable assistant text from Gemini CLI's
-// stream-json output. Gemini CLI (`gemini --output-format stream-json -p`) emits
-// one JSON object per line with these top-level types:
-//   - "init"    — {session_id, model} (ignored)
-//   - "message" — {role, content, delta?} (surface role=="assistant")
-//   - "result"  — {status, stats} (ignored)
-//
-// Only assistant messages are surfaced. User echoes and metadata are skipped.
-func (p *GeminiProvider) parseGeminiStreamLine(line []byte) string {
+func (p *GeminiProvider) parseGeminiDisplayEvents(line []byte) []DisplayEvent {
 	var evt struct {
-		Type    string `json:"type"`
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Type      string `json:"type"`
+		Role      string `json:"role"`
+		Content   string `json:"content"`
+		ToolCalls []struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
+		} `json:"toolCalls"`
 	}
 	if err := json.Unmarshal(line, &evt); err != nil {
-		return ""
+		return nil
 	}
 	if evt.Type != "message" || evt.Role != "assistant" {
-		return ""
+		return nil
 	}
-	return evt.Content
+
+	var out []DisplayEvent
+	if evt.Content != "" {
+		out = append(out, DisplayEvent{Type: evt.Role, Kind: EventText, Text: evt.Content})
+	}
+	for _, call := range evt.ToolCalls {
+		out = append(out, DisplayEvent{
+			Kind: EventToolUse,
+			Name: call.Name,
+			Arg:  extractArgPreviewFromMap(call.Arguments),
+			ID:   "",
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

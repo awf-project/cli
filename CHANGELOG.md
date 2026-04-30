@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **F084**: Bound `StreamFilterWriter` line buffer to 10 MB — prevents silent stream abort on oversized NDJSON events from agent providers. When a single event exceeds 10 MB, a structured warning is logged with the line size and maximum cap; stream processing continues for subsequent events. Includes benchmarks verifying no throughput regression on normal-sized input (~200 B lines).
 
+### Added
+
+- **F085**: Unified display-event abstraction across all agent providers — replaces per-provider `LineExtractor` function-field with a `DisplayEventParser` returning structured `DisplayEvent` values (discriminated by `EventText` and `EventToolUse` kinds); all 5 providers (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible) now emit events through the same parser contract; single interfaces-layer `RenderEvents` renderer with two display modes: default (text only, byte-equivalent to F082 behaviour) and verbose (text + tool-use markers in `[tool: Name(Arg)]` format); well-known tools (`Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Task`) display concise markers with argument truncation (≤ 40 chars); unknown tool names degrade gracefully; parser implementations return plain strings with no ANSI escapes (rendering concerns confined to interfaces layer); `output_format: json` bypasses event parsing entirely for raw passthrough; `DisplayOutput` aggregation on `AgentResult`/`ConversationResult` preserved via text-event concatenation
+
 ### Changed
 
 - **F087**: `awf history` now displays full workflow execution IDs without truncation — UUIDs are shown in their complete 36-character form so they can be copied directly into downstream commands (`awf status <id>`, `awf logs <id>`); workflow names are also displayed in full; table rendering migrated from fixed-width `fmt.Fprintf` to `text/tabwriter` for auto-sizing columns, matching the pattern used by other table outputs

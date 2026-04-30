@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -49,7 +50,7 @@ func (p *CodexProvider) newBase() *baseCLIProvider {
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateCodexOptions,
-		parseStreamLine:       p.parseCodexStreamLine,
+		parseDisplayEvents:    p.parseCodexDisplayEvents,
 	})
 }
 
@@ -64,7 +65,7 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	// interpolation ({{states.step.Output}}) is human-readable (F082).
 	userFormat, _ := getStringOption(options, "output_format")
 	if userFormat != "json" && userFormat != "stream-json" {
-		if extracted := extractDisplayText(rawOutput, p.parseCodexStreamLine); extracted != "" {
+		if extracted := extractDisplayTextFromEvents(rawOutput, p.parseCodexDisplayEvents); extracted != "" {
 			result.Output = extracted
 			result.Tokens = estimateTokens(extracted)
 		}
@@ -178,31 +179,38 @@ func isValidCodexModel(model string) bool {
 	return len(model) >= 2 && model[0] == 'o' && model[1] >= '0' && model[1] <= '9'
 }
 
-// parseCodexStreamLine extracts displayable assistant text from Codex CLI's JSON
-// output (`codex exec --json`). Codex emits one JSON object per line with top-level
-// types including:
-//   - "thread.started"   — {thread_id} (ignored; session consumed separately)
-//   - "turn.started"     — (ignored)
-//   - "item.completed"   — {item:{item_type,text}} (surface assistant_message.text)
-//   - "turn.completed"   — (ignored)
-//   - "error"            — {message} (ignored; stderr path already shows it)
-//
-// Only `item.completed` with `item.item_type=="assistant_message"` is surfaced so
-// the live display shows the final reply text. Reasoning items, tool calls, and
-// status events are skipped.
-func (p *CodexProvider) parseCodexStreamLine(line []byte) string {
+// parseCodexDisplayEvents parses a single NDJSON line from Codex CLI output into
+// DisplayEvents. It emits EventText for assistant_message items and EventToolUse
+// for function_call items. All other event types return nil (skip signal).
+func (p *CodexProvider) parseCodexDisplayEvents(line []byte) []DisplayEvent {
+	// Replace NUL bytes (0x00) with the 6-byte JSON unicode escape sequence
+	// {0x5c,0x75,0x30,0x30,0x30,0x30} = backslash + u + 0 + 0 + 0 + 0.
+	// json.Unmarshal decodes this escape back to NUL, preserving string content.
+	sanitized := bytes.ReplaceAll(line, []byte{0x00}, []byte{0x5c, 0x75, 0x30, 0x30, 0x30, 0x30})
 	var evt struct {
 		Type string `json:"type"`
-		Item struct {
-			ItemType string `json:"item_type"`
-			Text     string `json:"text"`
+		Item *struct {
+			ItemType  string `json:"item_type"`
+			Text      string `json:"text"`
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
 		} `json:"item"`
 	}
-	if err := json.Unmarshal(line, &evt); err != nil {
-		return ""
+	if err := json.Unmarshal(sanitized, &evt); err != nil {
+		return nil
 	}
-	if evt.Type != "item.completed" || evt.Item.ItemType != "assistant_message" {
-		return ""
+	if evt.Type == "" {
+		return nil
 	}
-	return evt.Item.Text
+	if evt.Type == "item.completed" && evt.Item != nil {
+		switch evt.Item.ItemType {
+		case "assistant_message":
+			return []DisplayEvent{{Type: evt.Type, Kind: EventText, Text: evt.Item.Text}}
+		case "function_call":
+			// Codex does not emit tool-call IDs; ID is always empty.
+			preview := parseToolCallArgPreview(evt.Item.Arguments)
+			return []DisplayEvent{{Type: evt.Type, Kind: EventToolUse, Name: evt.Item.Name, Arg: preview, ID: ""}}
+		}
+	}
+	return nil
 }

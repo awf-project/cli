@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Evaluate step transitions before fallback behaviors; transitions take priority over OnSuccess, OnFailure, and ContinueOnError (ADR-001)
-- Use pointer types (*T) for optional config fields in infrastructure types; apply defaults during mapping to distinguish omitted from explicit zero values
 - Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
 - Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
 - Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
@@ -237,15 +235,13 @@ func TestWorkflowValidation(t *testing.T) {
 - Implement per-provider flag mapping without shared abstraction when CLI syntax diverges fundamentally; document divergence (Claude: --flag-name, Gemini: --flag-name=value, Codex: --flag-name) inline
 - Synchronize provider CLI flag changes across both implementation files and central options configuration (options.go); verify declarations and validation rules align
 - When extracting shared infrastructure behavior across multiple provider implementations, apply the delegation pattern uniformly; partial refactoring creates inconsistent ownership
-
 - When wiring optional transformations across multiple execution paths (ExecuteConversation, runWorkflow, etc.), apply consistently to all paths; missing stubs in any path indicates incomplete cross-layer wiring
-
 - When adding hook fields to shared infrastructure types, implement (with stubs acceptable for future providers) across all concrete providers in the same layer; missing implementations in any provider blocks deployment
+- Use function type interfaces (DisplayEventParser) for provider-specific implementations when output formats diverge; enables independent testing and future provider additions without modifying existing code
+- Wire optional render callbacks alongside event parsers in stream processors; decouples rendering from parsing and enables multiple render modes (DefaultMode, VerboseMode) without modifying parser implementations
 
 ## Common Pitfalls
 
-- Never block on I/O without context support; use goroutine+channel+select with buffered channel (cap 1) to enable graceful cancellation
-- Always wrap context.Canceled with fmt.Errorf(msg, %w); callers must use errors.Is(err, context.Canceled) for detection instead of type assertion
 - Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
 - Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
 - When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
@@ -285,10 +281,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Delete dead helper functions immediately when their call sites are removed; verify zero references via grep before committing to prevent stale code
 - Enforce consistent configuration option key naming across all providers using type-safe accessor helpers (getBoolOption, getStringOption); verify no camelCase remnants via grep before final validation
 - When implementing validation constraints (e.g., model name prefixes), grep all test files for old values; update integration tests outside immediate scope before marking work complete
+- Preserve event metadata (EventType, timestamps) when provider output lacks optional fields; never propagate zero-value event type regardless of missing nested data
+- When removing provider-specific methods across multiple providers (e.g., parseClaudeStreamLine), delete all similar methods in single commit; prevents asymmetric cleanup breaking provider consistency
 
 ## Test Conventions
 
-- Write table-driven tests for inline error object parsing (message + status validation) before integration tests; use yamlStep.OnFailure field as 'any' type in test fixtures to validate both string and object forms
 - Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 - Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
@@ -306,10 +303,9 @@ func TestWorkflowValidation(t *testing.T) {
 - Extract HTTP server setup patterns from integration tests into helper functions; eliminate duplication across multiple test functions
 - When flipping integration test assertions for newly-enabled features, transition from 'not configured' errors to provider-level implementation errors; verify assertions change state, not disappear
 - Create separate test files for delegation patterns (*_delegation_test.go) to validate shared behavior independently from provider-specific unit tests
-
 - When adding fields to internal state types (DisplayOutput, cache fields, etc.), write explicit tests verifying the field is NOT resolvable in template interpolation context; prevents accidental exposure of implementation details
-
 - Add BenchmarkXX functions for new I/O processing components; measure throughput, memory allocation, and verify capacity constraints (1MB buffer, etc.) are respected
+- Test event metadata persistence across all input variations for provider translation; include cases with missing optional nested fields to prevent silent metadata loss
 
 ## Review Standards
 

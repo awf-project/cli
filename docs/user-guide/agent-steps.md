@@ -170,6 +170,8 @@ analyze:
 
 **Token Tracking:** Unlike CLI-based providers that estimate tokens from output length, `openai_compatible` reports actual token usage from the API response.
 
+**Display Cadence:** Unlike streaming CLI providers (Claude, Codex, Gemini, OpenCode) that display output incrementally, `openai_compatible` displays all events in a single burst after the HTTP response completes. This means tool-use markers and text output appear together at the end of execution rather than interleaved during streaming. The rendered shape and tool markers are identical across all providers — only the timing differs.
+
 **Example backends:**
 - **Ollama**: `base_url: http://localhost:11434/v1`, `model: llama3`
 - **OpenAI**: `base_url: https://api.openai.com/v1`, `model: gpt-4o`
@@ -543,7 +545,7 @@ process_response:
 The `output_format` field serves two purposes:
 
 1. **Post-processing**: Strips markdown code fences and optionally validates JSON (F065)
-2. **Display filtering**: Controls how agent responses appear on terminal during streaming and buffered execution (F082)
+2. **Display filtering**: Controls how agent responses appear on terminal during streaming and buffered execution, with optional verbose tool-use markers (F082, F085)
 
 When an agent wraps its output in markdown code fences (common with many LLMs), use `output_format` to automatically strip the fences and optionally validate the content:
 
@@ -650,9 +652,9 @@ analyze:
   on_success: next
 ```
 
-### Streaming Output Display
+### Streaming Output Display & Tool Markers
 
-The `output_format` field also controls how agent responses appear on the terminal when running with `awf run --output streaming` or `--output buffered`:
+The `output_format` field controls how agent responses appear on the terminal (F082). Additionally, the `--verbose` flag displays tool-use activity markers (F085) — showing which tools the agent invoked — alongside agent output when running with `awf run --output streaming` or `--output buffered`:
 
 | `output_format` | Streaming Display | Buffered Display | Raw Storage |
 |---|---|---|---|
@@ -676,6 +678,28 @@ awf run code-review --output streaming  # output_format: text (or omitted)
 **Filtering behavior:**
 - `output_format: text` or omitted — Extracted text content displayed (filtered NDJSON)
 - `output_format: json` — Raw NDJSON passed through unchanged
+
+**Tool-Use Markers (Verbose Mode):**
+
+When running with `--verbose` flag, agent tool invocations are displayed as markers alongside agent text:
+
+```bash
+# Without verbose mode (default — text only)
+awf run code-review --output streaming
+# Output: The code has several issues...
+
+# With verbose mode (text + tool markers)
+awf run code-review --output streaming --verbose
+# Output: [tool: Read(main.py)]The code has several issues...[tool: Bash(grep -n "TODO" main.py)]
+```
+
+Tool markers show:
+- **Tool name** (e.g., `Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Task`)
+- **Truncated argument** (≤ 40 characters) in parentheses for context
+- **Interleaved order** — markers appear in the same source order as agent output
+- **Graceful degradation** — unknown tool names display as-is with no crash or error
+
+This works consistently across all 5 supported providers (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible). Verbose mode has no effect on `output_format: json` — raw NDJSON is always passed through unchanged.
 
 #### Buffered Mode (`--output buffered`)
 
@@ -704,6 +728,10 @@ awf run code-review --output silent
 ```
 
 **Note:** `state.Output` always contains the raw NDJSON regardless of display filtering. Filtering only affects terminal display, not data storage.
+
+#### Provider Event Cadence
+
+CLI-based providers (Claude, Codex, Gemini, OpenCode) emit display events incrementally as stream-json lines arrive. The `openai_compatible` provider emits all display events in a single post-response burst after the HTTP response completes — the rendered shape is identical to streaming providers, but "live feedback" timing differs because events are not streamed.
 
 #### Line Buffer Cap
 
