@@ -62,7 +62,7 @@ func wantsRawDisplay(options map[string]any) bool {
 
 func (b *baseCLIProvider) applyStreamFilter(stdout io.Writer, rawDisplay bool) (io.Writer, *StreamFilterWriter) {
 	if b.hooks.parseStreamLine != nil && !rawDisplay && stdout != nil {
-		f := NewStreamFilterWriter(stdout, b.hooks.parseStreamLine)
+		f := NewStreamFilterWriter(stdout, b.hooks.parseStreamLine, b.logger)
 		return f, f
 	}
 	return stdout, nil

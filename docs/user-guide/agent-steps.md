@@ -705,6 +705,12 @@ awf run code-review --output silent
 
 **Note:** `state.Output` always contains the raw NDJSON regardless of display filtering. Filtering only affects terminal display, not data storage.
 
+#### Line Buffer Cap
+
+The stream filter processes NDJSON events line by line with a **10 MB per-line cap**. Individual events up to 10 MB are parsed and displayed normally. If a single NDJSON event exceeds 10 MB (e.g., a very large `content_block_delta` or `tool_use.input` payload), the line is written to `state.Output` as raw text and a structured warning is logged with the line size. Subsequent events continue processing normally — the stream is not aborted.
+
+In parallel execution, each step has its own stream filter, so the worst-case memory for N concurrent agent steps is N × 10 MB for the line buffers.
+
 ### Error Handling
 
 When `output_format: json` is specified but the output is invalid JSON:

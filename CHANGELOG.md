@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **F084**: Bound `StreamFilterWriter` line buffer to 10 MB — prevents silent stream abort on oversized NDJSON events from agent providers. When a single event exceeds 10 MB, a structured warning is logged with the line size and maximum cap; stream processing continues for subsequent events. Includes benchmarks verifying no throughput regression on normal-sized input (~200 B lines).
+
 ### Changed
 
 - **F087**: `awf history` now displays full workflow execution IDs without truncation — UUIDs are shown in their complete 36-character form so they can be copied directly into downstream commands (`awf status <id>`, `awf logs <id>`); workflow names are also displayed in full; table rendering migrated from fixed-width `fmt.Fprintf` to `text/tabwriter` for auto-sizing columns, matching the pattern used by other table outputs
