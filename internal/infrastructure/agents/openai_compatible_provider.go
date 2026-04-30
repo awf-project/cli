@@ -84,7 +84,7 @@ func (p *OpenAICompatibleProvider) Validate() error {
 	return nil
 }
 
-func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, options map[string]any, _, _ io.Writer) (*workflow.AgentResult, error) {
+func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, _ io.Writer) (*workflow.AgentResult, error) {
 	if strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("prompt cannot be empty")
 	}
@@ -110,6 +110,8 @@ func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, o
 	result.TokensEstimated = false
 	result.CompletedAt = time.Now()
 
+	p.writeDisplayOutput(stdout, result.Output)
+
 	if outputFormat, ok := options["output_format"]; ok && outputFormat == "json" {
 		parsed, err := p.parseJSONResponse(result.Output)
 		if err != nil {
@@ -134,7 +136,7 @@ func (p *OpenAICompatibleProvider) parseJSONResponse(output string) (map[string]
 	return parsed, nil
 }
 
-func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, _, _ io.Writer) (*workflow.ConversationResult, error) {
+func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, state *workflow.ConversationState, prompt string, options map[string]any, stdout, _ io.Writer) (*workflow.ConversationResult, error) {
 	if state == nil {
 		return nil, fmt.Errorf("openai_compatible: conversation state cannot be nil")
 	}
@@ -196,7 +198,18 @@ func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, stat
 	result.TokensEstimated = false
 	result.CompletedAt = time.Now()
 
+	p.writeDisplayOutput(stdout, result.Output)
+
 	return result, nil
+}
+
+func (p *OpenAICompatibleProvider) writeDisplayOutput(w io.Writer, output string) {
+	if w == nil {
+		return
+	}
+	if displayText := extractDisplayTextFromEvents(output, p.translateOpenAICompatibleDisplayEvents); displayText != "" {
+		_, _ = io.WriteString(w, displayText) //nolint:gosec,errcheck // best-effort display output to stdout
+	}
 }
 
 func (p *OpenAICompatibleProvider) parseAndValidateOptions(options map[string]any) (parsedOptions, error) {
@@ -385,4 +398,61 @@ func mapHTTPError(resp *httpx.Response) error {
 	default:
 		return fmt.Errorf("openai_compatible: unexpected status (HTTP %d)", resp.StatusCode)
 	}
+}
+
+func (p *OpenAICompatibleProvider) translateOpenAICompatibleDisplayEvents(line []byte) []DisplayEvent {
+	type toolCall struct {
+		ID       string `json:"id"`
+		Function struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		} `json:"function"`
+	}
+	type deltaOrMessage struct {
+		Content   string     `json:"content"`
+		ToolCalls []toolCall `json:"tool_calls"`
+	}
+	var chunk struct {
+		Object  string `json:"object"`
+		Choices []struct {
+			Delta   deltaOrMessage `json:"delta"`
+			Message deltaOrMessage `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(line, &chunk); err != nil {
+		return nil
+	}
+	if chunk.Object == "" {
+		return nil
+	}
+	if len(chunk.Choices) == 0 {
+		return nil
+	}
+
+	// Prefer delta (streaming SSE) over message (complete response).
+	source := chunk.Choices[0].Delta
+	if source.Content == "" && len(source.ToolCalls) == 0 {
+		source = chunk.Choices[0].Message
+	}
+
+	var events []DisplayEvent
+
+	if source.Content != "" {
+		events = append(events, DisplayEvent{Type: chunk.Object, Kind: EventText, Text: source.Content})
+	}
+
+	for _, tc := range source.ToolCalls {
+		events = append(events, DisplayEvent{
+			Type: chunk.Object,
+			Kind: EventToolUse,
+			Name: tc.Function.Name,
+			Arg:  extractArgPreview(tc.Function.Arguments),
+			ID:   tc.ID,
+		})
+	}
+
+	if len(events) == 0 {
+		return nil
+	}
+	return events
 }

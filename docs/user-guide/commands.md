@@ -44,7 +44,7 @@ These flags work with all commands:
 
 | Flag | Description |
 |------|-------------|
-| `--verbose, -v` | Enable verbose output |
+| `--verbose, -v` | Enable verbose output (displays tool-use markers during agent execution) |
 | `--quiet, -q` | Suppress non-error output |
 | `--no-color` | Disable colored output |
 | `--no-hints` | Disable error hint suggestions |

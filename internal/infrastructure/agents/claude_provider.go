@@ -58,7 +58,7 @@ func (p *ClaudeProvider) newBase() *baseCLIProvider {
 		extractSessionID:      p.extractSessionID,
 		extractTextContent:    p.extractTextFromJSON,
 		validateOptions:       validateClaudeOptions,
-		parseStreamLine:       p.parseClaudeStreamLine,
+		parseDisplayEvents:    p.parseClaudeDisplayEvents,
 	})
 }
 
@@ -261,46 +261,49 @@ func (p *ClaudeProvider) extractTextFromJSON(output string) string {
 	return ""
 }
 
-// parseClaudeStreamLine extracts displayable text from Claude CLI's NDJSON stream-json
-// output. Claude CLI (claude -p --output-format stream-json --verbose) emits one JSON
-// object per line with these top-level event types:
-//   - "system"           — session/hook metadata (ignored)
-//   - "assistant"        — assistant turn, with message.content[] blocks ({type,text})
-//   - "rate_limit_event" — throttling notice (ignored)
-//   - "result"           — final aggregated result with .result string (ignored here;
-//     consumed by extractResultEvent for AgentResult.Output)
-//
-// We surface only "assistant" text blocks so the user sees the live reply. Tool-use
-// blocks, thinking blocks, and everything else are skipped to keep the stream readable.
-func (p *ClaudeProvider) parseClaudeStreamLine(line []byte) string {
-	// Escape literal null bytes before unmarshaling: Go's json package rejects
-	// bare 0x00 in string values even though they round-trip as \u0000.
-	line = bytes.ReplaceAll(line, []byte{0x00}, []byte(`\u0000`))
+func (p *ClaudeProvider) parseClaudeDisplayEvents(line []byte) []DisplayEvent {
+	// Replace NUL bytes with a space to avoid JSON parse errors on malformed input.
+	line = bytes.ReplaceAll(line, []byte{0x00}, []byte(" "))
 
 	var evt struct {
 		Type    string `json:"type"`
 		Message *struct {
 			Content []struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Type  string         `json:"type"`
+				Text  string         `json:"text"`
+				ID    string         `json:"id"`
+				Name  string         `json:"name"`
+				Input map[string]any `json:"input"`
 			} `json:"content"`
 		} `json:"message"`
 	}
 	if err := json.Unmarshal(line, &evt); err != nil {
-		return ""
+		return nil
 	}
 	if evt.Type != "assistant" || evt.Message == nil {
-		return ""
+		return nil
 	}
 
-	var out strings.Builder
+	var events []DisplayEvent
 	for _, block := range evt.Message.Content {
-		if block.Type == "text" && block.Text != "" {
-			if out.Len() > 0 {
-				out.WriteByte('\n')
+		switch block.Type {
+		case "text":
+			if block.Text != "" {
+				events = append(events, DisplayEvent{
+					Type: "assistant",
+					Kind: EventText,
+					Text: block.Text,
+				})
 			}
-			out.WriteString(block.Text)
+		case "tool_use":
+			events = append(events, DisplayEvent{
+				Type: "assistant",
+				Kind: EventToolUse,
+				Name: block.Name,
+				Arg:  extractArgPreviewFromMap(block.Input),
+				ID:   block.ID,
+			})
 		}
 	}
-	return out.String()
+	return events
 }

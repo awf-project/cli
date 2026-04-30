@@ -14,14 +14,14 @@ import (
 )
 
 // cliProviderHooks captures provider-specific behavior as function values.
-// Optional hooks (extractTextContent, validateOptions, parseStreamLine) may be nil.
+// Optional hooks (extractTextContent, validateOptions, parseDisplayEvents) may be nil.
 type cliProviderHooks struct {
 	buildExecuteArgs      func(prompt string, options map[string]any) ([]string, error)
 	buildConversationArgs func(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error)
 	extractSessionID      func(output string) (string, error)
 	extractTextContent    func(output string) string
 	validateOptions       func(options map[string]any) error
-	parseStreamLine       LineExtractor
+	parseDisplayEvents    DisplayEventParser
 }
 
 // baseCLIProvider encapsulates the shared Execute and ExecuteConversation
@@ -61,8 +61,8 @@ func wantsRawDisplay(options map[string]any) bool {
 }
 
 func (b *baseCLIProvider) applyStreamFilter(stdout io.Writer, rawDisplay bool) (io.Writer, *StreamFilterWriter) {
-	if b.hooks.parseStreamLine != nil && !rawDisplay && stdout != nil {
-		f := NewStreamFilterWriter(stdout, b.hooks.parseStreamLine, b.logger)
+	if b.hooks.parseDisplayEvents != nil && !rawDisplay && stdout != nil {
+		f := NewStreamFilterWriterWithParser(stdout, b.hooks.parseDisplayEvents, nil, b.logger)
 		return f, f
 	}
 	return stdout, nil
@@ -113,7 +113,7 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 
 	var displayOutput string
 	if !rawDisplay {
-		displayOutput = extractDisplayText(rawOutput, b.hooks.parseStreamLine)
+		displayOutput = extractDisplayTextFromEvents(rawOutput, b.hooks.parseDisplayEvents)
 	}
 
 	result := &workflow.AgentResult{
@@ -208,7 +208,7 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 
 	var displayOutput string
 	if !rawDisplay {
-		displayOutput = extractDisplayText(rawOutput, b.hooks.parseStreamLine)
+		displayOutput = extractDisplayTextFromEvents(rawOutput, b.hooks.parseDisplayEvents)
 	}
 
 	result := &workflow.ConversationResult{

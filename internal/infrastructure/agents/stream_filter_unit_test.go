@@ -19,7 +19,7 @@ func TestStreamFilterWriter_10MBBoundary(t *testing.T) {
 	tests := []struct {
 		name        string
 		writes      [][]byte
-		extract     LineExtractor
+		extract     func(line []byte) string
 		wantWritten string
 		needsFlush  bool
 	}{
@@ -132,7 +132,7 @@ func TestStreamFilterWriter_WriteReturnValue(t *testing.T) {
 	tests := []struct {
 		name          string
 		input         []byte
-		extract       LineExtractor
+		extract       func(line []byte) string
 		wantBytesRead int
 	}{
 		{
