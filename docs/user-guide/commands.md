@@ -14,6 +14,7 @@ title: "CLI Commands"
 | `awf list` | List available workflows |
 | `awf list prompts` | List available prompt files |
 | `awf status <id>` | Show execution status |
+| `awf tui` | Open interactive terminal user interface |
 | `awf validate <workflow>` | Validate workflow syntax |
 | `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
 | `awf error [code]` | Look up error code documentation |
@@ -547,6 +548,118 @@ awf status abc123-def456
 # JSON output for scripting
 awf status abc123-def456 -f json
 ```
+
+---
+
+## awf tui
+
+Open an interactive terminal user interface for browsing, executing, and monitoring workflows.
+
+```bash
+awf tui [flags]
+```
+
+### Description
+
+Launches a full-screen Bubble Tea terminal UI with tab-based navigation providing:
+
+- **Workflows Tab**: Filterable list of available workflows with launch and validation actions
+- **Monitoring Tab**: Real-time execution tree visualization with step statuses, durations, and live log streaming
+- **History Tab**: Browse past execution records with filtering by workflow name, status, and date range
+- **Agent Conversations Tab**: View multi-turn agent interactions with Markdown-formatted responses
+- **External Logs Tab**: Live tail of Claude Code JSONL session files for monitoring development sessions
+
+The TUI bridges to existing CLI workflows while providing enhanced visibility into real-time execution and historical data without requiring raw command-line interaction.
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Cycle through tabs (next) |
+| `Shift+Tab` | Cycle through tabs (previous) |
+| `q` / `Ctrl+C` | Quit the TUI (prompts for confirmation if workflow is running) |
+| `↑` / `↓` | Navigate list items |
+| `Enter` | Select/activate item, launch workflow, or open details |
+| `f` | Filter list (Workflows/History tabs) |
+| `v` | Validate selected workflow |
+| Space | Toggle selection in multi-select lists |
+
+### Features
+
+#### Workflow Filtering
+
+In the **Workflows** tab, use the search filter to quickly find workflows:
+
+- Filter by workflow name or description
+- Sub-second response time
+- Match highlighting in results
+
+#### Real-Time Monitoring
+
+In the **Monitoring** tab while a workflow is running:
+
+- Tree visualization with status icons (⏳ pending, ▶ running, ✓ success, ✗ failed)
+- Auto-scrolling log viewport showing real-time step output
+- Manual scroll-lock to pause auto-scroll
+- Step duration tracking
+- Auto-selection of failed steps in the tree for immediate error visibility
+
+#### History Exploration
+
+In the **History** tab:
+
+- Chronologically sorted execution records from `history.db`
+- Filter by workflow name, execution status (success/failed/cancelled), and date range
+- Inspect past execution details including full tree state, timing breakdown, and step outputs
+
+#### Agent Conversations
+
+In the **Agent Conversations** tab:
+
+- View multi-turn agent interactions during workflow execution
+- Markdown-formatted responses with proper heading, code block, and list rendering
+- Approval prompts (if applicable) with keyboard shortcuts
+
+#### External Logs
+
+In the **External Logs** tab:
+
+- Live tailing of Claude Code JSONL session files
+- Automatic detection of latest session file in `~/.claude/projects/...`
+- Formatted message display with timestamps
+- Graceful fallback if no session is active
+
+### Examples
+
+```bash
+# Open the TUI
+awf tui
+
+# Launch from a script or CI/CD (non-interactive)
+# Note: TUI requires a terminal; use `awf run` or `awf history` in non-interactive contexts
+awf tui
+```
+
+### Environment
+
+| Variable | Description |
+|----------|-------------|
+| `AWF_CONFIG` | Path to project configuration file (default: `.awf/config.yaml`) |
+| `AWF_STORAGE` | Path to storage directory (default: `.awf/storage/`) |
+
+### Notes
+
+- **Terminal requirements**: Minimum 80x24 character dimensions recommended
+- **Color support**: Automatically detects terminal color capabilities (true color, 256-color, basic ANSI)
+- **Terminal state**: TUI restores terminal state cleanly on exit, panic recovery, or signal termination (SIGINT/SIGTERM)
+- **Secret masking**: All sensitive values (variables starting with `SECRET_`, `API_KEY`, `PASSWORD`) are automatically masked in TUI views
+- **Non-interactive contexts**: TUI requires a terminal with TTY support. Use `awf run`, `awf history`, and `awf status` commands for non-interactive automation
+
+### See Also
+
+- [Workflow Execution](workflow-syntax.md) - Workflow syntax and configuration
+- [Commands](commands.md) - Full command reference
+- [Interactive Inputs](interactive-inputs.md) - Terminal-based input prompting
 
 ---
 

@@ -177,9 +177,12 @@ func TestCategorizeError_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "deeply wrapped StructuredError",
-			err: fmt.Errorf("layer 3: %w",
-				fmt.Errorf("layer 2: %w",
-					fmt.Errorf("layer 1: %w",
+			err: fmt.Errorf(
+				"layer 3: %w",
+				fmt.Errorf(
+					"layer 2: %w",
+					fmt.Errorf(
+						"layer 1: %w",
 						domerrors.NewStructuredError(
 							domerrors.ErrorCodeExecutionCommandTimeout,
 							"command timeout",

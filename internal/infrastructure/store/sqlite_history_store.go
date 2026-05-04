@@ -129,7 +129,8 @@ func (s *SQLiteHistoryStore) Record(ctx context.Context, record *workflow.Execut
 		(id, workflow_id, workflow_name, status, exit_code, started_at, completed_at, duration_ms, error_message)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := s.db.ExecContext(ctx, query,
+	_, err := s.db.ExecContext(
+		ctx, query,
 		record.ID,
 		record.WorkflowID,
 		record.WorkflowName,
@@ -307,7 +308,8 @@ func (s *SQLiteHistoryStore) Cleanup(ctx context.Context, olderThan time.Duratio
 	cutoff := time.Now().Add(-olderThan)
 	cutoffNs := cutoff.UnixNano()
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.db.ExecContext(
+		ctx,
 		"DELETE FROM execution_records WHERE completed_at < ?",
 		cutoffNs,
 	)

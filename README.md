@@ -33,6 +33,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compati
 - **Built-in GitHub Plugin** - Declarative GitHub operations (get_issue, create_pr, batch) with auth fallback and concurrent execution
 - **Built-in HTTP Operation** - Declarative REST API calls (GET, POST, PUT, DELETE) with configurable timeout, response capture, and retryable status codes
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
+- **Terminal User Interface (TUI)** - Full-screen interactive dashboard (`awf tui`) with tab-based navigation for workflow browsing, real-time execution monitoring, history exploration, agent conversation rendering, and Claude Code session tailing; built on Bubble Tea with Lip Gloss styling and Glamour Markdown rendering
 
 ## Installation
 
@@ -133,6 +134,7 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf workflow update [name]` | Update an installed workflow pack |
 | `awf workflow remove <pack>` | Remove an installed workflow pack |
 | `awf workflow search [query]` | Search for workflow packs on GitHub |
+| `awf tui` | Launch the interactive terminal UI |
 | `awf upgrade` | Upgrade AWF to the latest version |
 | `awf version` | Show version information |
 | `awf completion <shell>` | Generate shell autocompletion |

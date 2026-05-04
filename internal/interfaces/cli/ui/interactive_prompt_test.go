@@ -388,7 +388,8 @@ func TestCLIPrompt_EditInput_MidReadCancellation(t *testing.T) {
 
 	require.Error(t, err, "timeout during blocked read must return an error")
 	// EditInput returns current on read error, but cancellation before the read returns nil
-	assert.True(t,
+	assert.True(
+		t,
 		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled),
 		"error must be a context error, got: %v", err,
 	)

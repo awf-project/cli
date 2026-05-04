@@ -71,7 +71,8 @@ func (r *Retryer) Wait(ctx context.Context, attempt int) error {
 	delay := r.NextDelay(attempt)
 
 	if r.logger != nil {
-		r.logger.Debug("waiting before retry",
+		r.logger.Debug(
+			"waiting before retry",
 			"attempt", attempt,
 			"delay", delay.String(),
 		)

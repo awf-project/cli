@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -33,15 +34,14 @@ func newListCommand(cfg *Config) *cobra.Command {
 
 func runList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
-
-	// Create output writer
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Create composite repository with XDG paths
 	repo := NewWorkflowRepository()
+	svc := application.NewWorkflowService(repo, nil, nil, nil, nil)
+	packDirs := workflowPackSearchDirs()
+	svc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(packDirs))
 
-	// List workflows with source info
-	infos, err := repo.ListWithSource(ctx)
+	entries, err := svc.ListAllWorkflows(ctx)
 	if err != nil {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
@@ -49,14 +49,10 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
-	packWorkflows, _ := collectPackWorkflows(ctx) //nolint:errcheck // pack discovery errors don't block workflow listing
-
-	if len(infos) == 0 && len(packWorkflows) == 0 {
-		// For JSON/quiet, output empty result
+	if len(entries) == 0 {
 		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 			return writer.WriteWorkflows([]ui.WorkflowInfo{})
 		}
-		// For text/table, show helpful message
 		formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 			Verbose: cfg.Verbose,
 			Quiet:   cfg.Quiet,
@@ -70,33 +66,15 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 		return nil
 	}
 
-	// Sort by source then name
-	sort.Slice(infos, func(i, j int) bool {
-		if infos[i].Source != infos[j].Source {
-			return infos[i].Source < infos[j].Source
+	workflows := make([]ui.WorkflowInfo, len(entries))
+	for i, e := range entries {
+		workflows[i] = ui.WorkflowInfo{
+			Name:        e.Name,
+			Source:      e.Source,
+			Version:     e.Version,
+			Description: e.Description,
 		}
-		return infos[i].Name < infos[j].Name
-	})
-
-	// Build workflow list
-	workflows := make([]ui.WorkflowInfo, 0, len(infos))
-	for _, info := range infos {
-		wf, loadErr := repo.Load(ctx, info.Name)
-
-		wfInfo := ui.WorkflowInfo{
-			Name:   info.Name,
-			Source: info.Source.String(),
-		}
-
-		if loadErr == nil {
-			wfInfo.Version = wf.Version
-			wfInfo.Description = wf.Description
-		}
-
-		workflows = append(workflows, wfInfo)
 	}
-
-	workflows = append(workflows, packWorkflows...)
 
 	if err := writer.WriteWorkflows(workflows); err != nil {
 		return fmt.Errorf("failed to write output: %w", err)
@@ -108,7 +86,7 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 			Quiet:   cfg.Quiet,
 			NoColor: cfg.NoColor,
 		})
-		formatter.Debug(fmt.Sprintf("\nFound %d workflow(s)", len(infos)))
+		formatter.Debug(fmt.Sprintf("\nFound %d workflow(s)", len(entries)))
 	}
 
 	return nil

@@ -433,7 +433,8 @@ func (w *OutputWriter) writeStructuredError(err *domerrors.StructuredError, code
 //   - CommandFailureHintGenerator: permission/path verification guidance
 //   - PluginDisabledHintGenerator: plugin disable/enable guidance
 func (w *OutputWriter) newHumanErrorFormatter() ErrorFormatter {
-	return NewHumanErrorFormatter(!w.noColor, w.noHints,
+	return NewHumanErrorFormatter(
+		!w.noColor, w.noHints,
 		errfmt.FileNotFoundHintGenerator,
 		errfmt.YAMLSyntaxHintGenerator,
 		errfmt.InvalidStateHintGenerator,

@@ -93,7 +93,8 @@ func BuildWorkflowPaths() []repository.SourcedPath {
 	}
 
 	// 2. Local project directory and 3. Global XDG directory (lowest priority)
-	paths = append(paths,
+	paths = append(
+		paths,
 		repository.SourcedPath{
 			Path:   xdg.LocalWorkflowsDir(),
 			Source: repository.SourceLocal,
@@ -127,7 +128,8 @@ func BuildPromptPaths() []repository.SourcedPath {
 	}
 
 	// 2. Local project directory and 3. Global XDG directory (lowest priority)
-	paths = append(paths,
+	paths = append(
+		paths,
 		repository.SourcedPath{
 			Path:   xdg.LocalPromptsDir(),
 			Source: repository.SourceLocal,

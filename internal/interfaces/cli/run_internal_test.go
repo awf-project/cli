@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
@@ -1300,7 +1301,7 @@ func TestMergeInputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeInputs(tt.configInputs, tt.cliInputs)
+			got := application.MergeInputs(tt.configInputs, tt.cliInputs)
 
 			// Verify result matches expected
 			assert.Equal(t, tt.want, got, "merged result should match expected")
@@ -1333,7 +1334,7 @@ func TestMergeInputs_Immutability(t *testing.T) {
 	}
 
 	// Perform merge
-	result := mergeInputs(configInputs, cliInputs)
+	result := application.MergeInputs(configInputs, cliInputs)
 
 	// Verify original maps are unchanged
 	assert.Equal(t, originalConfig, configInputs, "configInputs should not be modified")
@@ -1350,7 +1351,7 @@ func TestMergeInputs_ReturnNewMap(t *testing.T) {
 	configInputs := map[string]any{"key": "value"}
 	cliInputs := map[string]any{}
 
-	result := mergeInputs(configInputs, cliInputs)
+	result := application.MergeInputs(configInputs, cliInputs)
 
 	// Result should be a different map instance
 	if len(configInputs) > 0 && len(result) > 0 {
@@ -1404,7 +1405,7 @@ func TestMergeInputs_SpecialKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mergeInputs(tt.configInputs, tt.cliInputs)
+			result := application.MergeInputs(tt.configInputs, tt.cliInputs)
 			assert.Equal(t, tt.wantValue, result[tt.checkKey])
 		})
 	}
@@ -1446,7 +1447,7 @@ func TestMergeInputs_ComplexValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mergeInputs(tt.configInputs, tt.cliInputs)
+			result := application.MergeInputs(tt.configInputs, tt.cliInputs)
 			assert.Equal(t, tt.wantValue, result[tt.checkKey])
 		})
 	}
@@ -1804,7 +1805,7 @@ func TestRunWorkflow_ConfigIntegration(t *testing.T) {
 			cliInputs, err := parseInputFlags(tt.cliInputFlags)
 			require.NoError(t, err)
 
-			merged := mergeInputs(tt.configInputs, cliInputs)
+			merged := application.MergeInputs(tt.configInputs, cliInputs)
 
 			// Verify merge produces expected result
 			for key, expectedVal := range tt.expectedInputs {

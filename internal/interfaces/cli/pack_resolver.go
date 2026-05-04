@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/awf-project/cli/internal/application"
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
@@ -139,13 +138,4 @@ func resolvePackWorkflow(
 	}
 
 	return wf, packDir, nil
-}
-
-// buildPackAWFPaths returns AWF paths with pack_name set for pack context.
-// The prompts_dir and scripts_dir remain at global XDG paths — the 3-tier
-// resolution in resolveLocalOverGlobal handles pack-embedded and user-override paths.
-func buildPackAWFPaths(packName string) map[string]string {
-	paths := buildAWFPaths()
-	paths[application.AWFPackNameKey] = packName
-	return paths
 }

@@ -1116,7 +1116,8 @@ func TestHumanErrorFormatter_HintGeneration_WithColor(t *testing.T) {
 
 // TestHumanErrorFormatter_HintGeneration_OrderPreserved tests that hint order is preserved.
 func TestHumanErrorFormatter_HintGeneration_OrderPreserved(t *testing.T) {
-	formatter := NewHumanErrorFormatter(false, false,
+	formatter := NewHumanErrorFormatter(
+		false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
 				{Message: "First hint"},
@@ -1149,7 +1150,8 @@ func TestHumanErrorFormatter_HintGeneration_OrderPreserved(t *testing.T) {
 
 // TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder tests generator execution order.
 func TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder(t *testing.T) {
-	formatter := NewHumanErrorFormatter(false, false,
+	formatter := NewHumanErrorFormatter(
+		false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
 				{Message: "Generator 1 hint"},
@@ -1190,7 +1192,8 @@ func TestHumanErrorFormatter_HintGeneration_MultipleGeneratorsOrder(t *testing.T
 
 // TestHumanErrorFormatter_HintGeneration_ConsistentOutput tests deterministic hint rendering.
 func TestHumanErrorFormatter_HintGeneration_ConsistentOutput(t *testing.T) {
-	formatter := NewHumanErrorFormatter(false, false,
+	formatter := NewHumanErrorFormatter(
+		false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
 				{Message: "Consistent hint 1"},
@@ -1216,7 +1219,8 @@ func TestHumanErrorFormatter_HintGeneration_ConsistentOutput(t *testing.T) {
 
 // TestHumanErrorFormatter_HintGeneration_CompleteFormat tests full error output with hints.
 func TestHumanErrorFormatter_HintGeneration_CompleteFormat(t *testing.T) {
-	formatter := NewHumanErrorFormatter(false, false,
+	formatter := NewHumanErrorFormatter(
+		false, false,
 		func(err *domainerrors.StructuredError) []domainerrors.Hint {
 			return []domainerrors.Hint{
 				{Message: "Did you mean 'workflow.yaml'?"},

@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Implement private per-provider extraction methods (no shared interface) when output formats diverge fundamentally; avoids premature abstraction and enables independent testing
 - Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
 - Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
 - Plugin binaries must be discoverable at <plugins_dir>/<plugin_name>/awf-plugin-<plugin_name>; host validates binary existence and version compatibility via gRPC handshake after process start
@@ -239,10 +238,10 @@ func TestWorkflowValidation(t *testing.T) {
 - When adding hook fields to shared infrastructure types, implement (with stubs acceptable for future providers) across all concrete providers in the same layer; missing implementations in any provider blocks deployment
 - Use function type interfaces (DisplayEventParser) for provider-specific implementations when output formats diverge; enables independent testing and future provider additions without modifying existing code
 - Wire optional render callbacks alongside event parsers in stream processors; decouples rendering from parsing and enables multiple render modes (DefaultMode, VerboseMode) without modifying parser implementations
+- When integrating external UI frameworks, create Bridge adapters in the interface layer that wrap application services; maintain zero infrastructure imports in bridge implementation
 
 ## Common Pitfalls
 
-- Extract a generic helper only after 3 similar concrete implementations exist; prefer duplication below that threshold to avoid premature abstraction
 - Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
 - When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
 - Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
@@ -283,6 +282,7 @@ func TestWorkflowValidation(t *testing.T) {
 - When implementing validation constraints (e.g., model name prefixes), grep all test files for old values; update integration tests outside immediate scope before marking work complete
 - Preserve event metadata (EventType, timestamps) when provider output lacks optional fields; never propagate zero-value event type regardless of missing nested data
 - When removing provider-specific methods across multiple providers (e.g., parseClaudeStreamLine), delete all similar methods in single commit; prevents asymmetric cleanup breaking provider consistency
+- Never commit doc.go files with minimal content in interface layer; mirror established patterns like cli/doc.go with architecture overviews and component descriptions (150+ lines)
 
 ## Test Conventions
 

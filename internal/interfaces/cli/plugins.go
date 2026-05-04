@@ -26,75 +26,22 @@ type PluginSystemResult struct {
 // If plugin directories don't exist or contain no plugins, the function succeeds
 // with an empty plugin service (graceful degradation).
 func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*PluginSystemResult, error) {
-	// Get plugin paths
-	pluginPaths := getPluginSearchPaths(cfg)
-
-	// Find all existing plugin directories
-	pluginsDirs := findExistingDirs(pluginPaths)
-
-	// Create state store for plugin enable/disable persistence
+	pluginDirs := getPluginSearchPaths(cfg)
 	stateStorePath := filepath.Join(cfg.StoragePath, "plugins")
-	stateStore := infrastructurePlugin.NewJSONPluginStateStore(stateStorePath)
 
-	// Load persisted plugin states
-	if err := stateStore.Load(ctx); err != nil {
-		if logger != nil {
-			logger.Warn("failed to load plugin states, using defaults", "error", err)
-		}
+	sysResult, err := infrastructurePlugin.InitSystem(ctx, pluginDirs, stateStorePath, logger)
+	if err != nil {
+		return nil, err
 	}
 
-	// If no plugins directory exists, return a stub service (graceful degradation)
-	if len(pluginsDirs) == 0 {
-		// Create service with nil manager (no plugins available)
-		service := application.NewPluginService(nil, stateStore, logger)
-		registerBuiltins(service, Version)
-		return &PluginSystemResult{
-			Service:    service,
-			StateStore: stateStore,
-			Cleanup:    func() {},
-		}, nil
-	}
-
-	// Initialize plugin infrastructure
-	parser := infrastructurePlugin.NewManifestParser()
-	loader := infrastructurePlugin.NewFileSystemLoader(parser)
-	manager := infrastructurePlugin.NewRPCPluginManager(loader)
-	manager.SetPluginsDirs(pluginsDirs)
-
-	// Create the plugin service
-	service := application.NewPluginService(manager, stateStore, logger)
-	registerBuiltins(service, Version)
-
-	// Startup enabled plugins
-	if err := service.StartupEnabledPlugins(ctx); err != nil {
-		if logger != nil {
-			logger.Warn("some plugins failed to start", "error", err)
-		}
-		// Don't fail workflow execution due to plugin failures
-	}
-
-	// Create cleanup function
-	cleanup := func() {
-		shutdownCtx := context.Background()
-		if err := service.ShutdownAll(shutdownCtx); err != nil {
-			if logger != nil {
-				logger.Error("failed to shutdown plugins", "error", err)
-			}
-		}
-		// Save state after shutdown
-		if err := service.SaveState(shutdownCtx); err != nil {
-			if logger != nil {
-				logger.Error("failed to save plugin state", "error", err)
-			}
-		}
-	}
+	registerBuiltins(sysResult.Service, Version)
 
 	return &PluginSystemResult{
-		Service:    service,
-		Manager:    manager,
-		RPCManager: manager,
-		StateStore: stateStore,
-		Cleanup:    cleanup,
+		Service:    sysResult.Service,
+		Manager:    sysResult.Manager,
+		RPCManager: sysResult.RPCManager,
+		StateStore: sysResult.StateStore,
+		Cleanup:    sysResult.Cleanup,
 	}, nil
 }
 

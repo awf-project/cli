@@ -9,9 +9,11 @@ import (
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
+	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/spf13/cobra"
@@ -185,7 +187,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 
 	// Merge config inputs with CLI inputs (CLI wins)
-	inputs := mergeInputs(projectCfg.Inputs, cliInputs)
+	inputs := application.MergeInputs(projectCfg.Inputs, cliInputs)
 
 	// Create history store and service
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
@@ -212,10 +214,10 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
-	execSvc.SetAWFPaths(buildAWFPaths())
+	execSvc.SetAWFPaths(xdg.AWFPaths())
 
 	// Setup audit trail writer (F071)
-	if auditWriter, auditCleanup, auditErr := buildAuditWriter(logger); auditErr != nil {
+	if auditWriter, auditCleanup, auditErr := audit.NewWriterFromEnv(); auditErr != nil {
 		logger.Warn("failed to initialize audit writer, audit trail disabled", "error", auditErr)
 	} else {
 		defer auditCleanup()

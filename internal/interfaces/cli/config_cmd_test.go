@@ -133,7 +133,8 @@ func TestConfigShow_NoConfigFile_DisplaysMessage(t *testing.T) {
 
 	output := out.String()
 	// Should indicate no config found
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(output, "No") || strings.Contains(output, "not found") || strings.Contains(output, "no config"),
 		"expected message indicating no config found, got: %s", output,
 	)
@@ -287,11 +288,13 @@ func TestConfigShow_TableFormat(t *testing.T) {
 
 	output := out.String()
 	// Table should have headers
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(output, "KEY") || strings.Contains(output, "NAME") || strings.Contains(output, "INPUT"),
 		"table should have column headers",
 	)
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(output, "VALUE") || strings.Contains(output, "project"),
 		"table should show input values",
 	)
@@ -375,7 +378,8 @@ func TestConfigShow_InvalidYAML_ReturnsError(t *testing.T) {
 		errMsg = err.Error()
 	}
 	combined := errOutput + errMsg
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(combined, "YAML") || strings.Contains(combined, "yaml") ||
 			strings.Contains(combined, "parse") || strings.Contains(combined, "config"),
 		"error should mention YAML parsing issue, got: %s", combined,

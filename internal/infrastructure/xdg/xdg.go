@@ -96,6 +96,26 @@ func LocalWorkflowPacksDir() string {
 	return ".awf/workflow-packs"
 }
 
+// AWFPaths returns all AWF XDG directory paths as a map for template interpolation.
+// Keys: prompts_dir, scripts_dir, config_dir, data_dir, workflows_dir, plugins_dir.
+func AWFPaths() map[string]string {
+	return map[string]string{
+		"prompts_dir":   AWFPromptsDir(),
+		"scripts_dir":   AWFScriptsDir(),
+		"config_dir":    AWFConfigDir(),
+		"data_dir":      AWFDataDir(),
+		"workflows_dir": AWFWorkflowsDir(),
+		"plugins_dir":   AWFPluginsDir(),
+	}
+}
+
+// PackAWFPaths returns AWF paths with pack_name set for pack context.
+func PackAWFPaths(packName string) map[string]string {
+	paths := AWFPaths()
+	paths["pack_name"] = packName
+	return paths
+}
+
 // LocalConfigPath returns the local project config file path.
 // It checks AWF_CONFIG_PATH environment variable first, then defaults to ".awf/config.yaml".
 func LocalConfigPath() string {

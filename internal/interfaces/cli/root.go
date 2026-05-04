@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -97,6 +98,7 @@ Examples:
 	cmd.AddCommand(newDiagramCommand(cfg))
 	cmd.AddCommand(newErrorCommand(cfg))
 	cmd.AddCommand(newUpgradeCommand(cfg))
+	cmd.AddCommand(tui.NewCommand())
 
 	return cmd
 }

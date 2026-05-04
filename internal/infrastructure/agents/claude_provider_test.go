@@ -403,7 +403,8 @@ func TestClaudeProvider_ExecuteConversation_LargeHistory_Integration(t *testing.
 
 	// Add many turns to test large conversation history
 	for i := 0; i < 20; i++ {
-		state.Turns = append(state.Turns,
+		state.Turns = append(
+			state.Turns,
 			*workflow.NewTurn(workflow.TurnRoleUser, "Question "+string(rune(i+'A'))),
 			*workflow.NewTurn(workflow.TurnRoleAssistant, "Answer "+string(rune(i+'A'))),
 		)

@@ -12,6 +12,21 @@ import (
 	"github.com/awf-project/cli/pkg/interpolation"
 )
 
+func cloneConversationState(state *workflow.ConversationState) *workflow.ConversationState {
+	if state == nil {
+		return nil
+	}
+	turns := make([]workflow.Turn, len(state.Turns))
+	copy(turns, state.Turns)
+	return &workflow.ConversationState{
+		Turns:       turns,
+		TotalTurns:  state.TotalTurns,
+		TotalTokens: state.TotalTokens,
+		StoppedBy:   state.StoppedBy,
+		SessionID:   state.SessionID,
+	}
+}
+
 // ConversationManager orchestrates interactive user→agent→user conversations.
 //
 // Each turn: resolve initial prompt → send to provider → stream response →
@@ -187,6 +202,18 @@ func (m *ConversationManager) ExecuteConversation(
 	var lastResult *workflow.ConversationResult
 
 	for {
+		// Push user turn immediately so the TUI poll sees it before the
+		// provider responds (gives instant visual feedback).
+		previewState := cloneConversationState(state)
+		if err := previewState.AddTurn(workflow.NewTurn(workflow.TurnRoleUser, resolvedPrompt)); err != nil {
+			return nil, fmt.Errorf("preview turn: %w", err)
+		}
+		execCtx.SetStepState(step.Name, workflow.StepState{
+			Name:         step.Name,
+			Status:       workflow.StatusRunning,
+			Conversation: previewState,
+		})
+
 		result, err := m.executeTurn(ctx, provider, state, resolvedPrompt, options, stdoutW, stderrW)
 		if err != nil {
 			if lastResult != nil {
@@ -198,6 +225,14 @@ func (m *ConversationManager) ExecuteConversation(
 
 		state = result.State
 		lastResult = result
+
+		// Push complete state with both user and assistant turns.
+		execCtx.SetStepState(step.Name, workflow.StepState{
+			Name:         step.Name,
+			Status:       workflow.StatusRunning,
+			Conversation: state,
+			Output:       result.Output,
+		})
 
 		userInput, err := m.userInputReader.ReadInput(ctx)
 		if err != nil {

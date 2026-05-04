@@ -756,10 +756,12 @@ func (e *InteractiveExecutor) executeLoopStep(
 
 	if step.Type == workflow.StepTypeForEach {
 		result, err = e.loopExecutor.ExecuteForEach(
-			stepCtx, wf, step, execCtx, stepExecutor, e.buildInterpolationContext)
+			stepCtx, wf, step, execCtx, stepExecutor, e.buildInterpolationContext,
+		)
 	} else {
 		result, err = e.loopExecutor.ExecuteWhile(
-			stepCtx, wf, step, execCtx, stepExecutor, e.buildInterpolationContext)
+			stepCtx, wf, step, execCtx, stepExecutor, e.buildInterpolationContext,
+		)
 	}
 
 	// Record loop step state

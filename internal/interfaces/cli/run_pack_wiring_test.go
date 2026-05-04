@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -214,7 +215,7 @@ func TestPackValidation_PathTraversalRejection(t *testing.T) {
 
 // TestPackContextInjection_AWFPathsWithPack verifies pack_name in AWF context
 func TestPackContextInjection_AWFPathsWithPack(t *testing.T) {
-	awfPaths := buildPackAWFPaths("speckit")
+	awfPaths := xdg.PackAWFPaths("speckit")
 
 	// Verify pack_name is set
 	assert.Equal(t, "speckit", awfPaths["pack_name"])
@@ -229,7 +230,7 @@ func TestPackContextInjection_AWFPathsWithPack(t *testing.T) {
 
 // TestPackContextInjection_LocalWorkflowsUnchanged verifies local behavior preserved
 func TestPackContextInjection_LocalWorkflowsUnchanged(t *testing.T) {
-	localAWFPaths := buildAWFPaths()
+	localAWFPaths := xdg.AWFPaths()
 
 	// Verify pack_name is NOT set for local workflows
 	_, hasPack := localAWFPaths["pack_name"]
@@ -245,8 +246,8 @@ func TestPackContextInjection_LocalWorkflowsUnchanged(t *testing.T) {
 
 // TestPackContextInjection_PathDifference verifies pack paths differ from local
 func TestPackContextInjection_PathDifference(t *testing.T) {
-	localPaths := buildAWFPaths()
-	packPaths := buildPackAWFPaths("test-pack")
+	localPaths := xdg.AWFPaths()
+	packPaths := xdg.PackAWFPaths("test-pack")
 
 	// Both should have config_dir (or similar)
 	assert.Contains(t, localPaths, "config_dir")
@@ -332,7 +333,7 @@ states:
 	assert.NotEmpty(t, wf.Steps)
 
 	// Verify AWF paths injected with pack context
-	awfPaths := buildPackAWFPaths(packName)
+	awfPaths := xdg.PackAWFPaths(packName)
 	assert.Equal(t, packName, awfPaths["pack_name"])
 }
 
@@ -346,7 +347,7 @@ func TestWorkflowResolution_LocalWorkflowBypass(t *testing.T) {
 	assert.Equal(t, "local-workflow", workflow)
 
 	// AWF paths should not include pack_name
-	localPaths := buildAWFPaths()
+	localPaths := xdg.AWFPaths()
 	_, hasPack := localPaths["pack_name"]
 	assert.False(t, hasPack)
 }
@@ -400,13 +401,13 @@ func TestErrorHandling_MissingManifest(t *testing.T) {
 // TestBuildPackAWFPaths_ConsistentAcrossCalls verifies idempotency
 func TestBuildPackAWFPaths_ConsistentAcrossCalls(t *testing.T) {
 	// Multiple calls should produce same paths for same pack
-	paths1 := buildPackAWFPaths("test-pack")
-	paths2 := buildPackAWFPaths("test-pack")
+	paths1 := xdg.PackAWFPaths("test-pack")
+	paths2 := xdg.PackAWFPaths("test-pack")
 
 	assert.Equal(t, paths1, paths2)
 
 	// Different packs should have different pack_name but same structure
-	paths3 := buildPackAWFPaths("other-pack")
+	paths3 := xdg.PackAWFPaths("other-pack")
 	assert.Equal(t, "test-pack", paths1["pack_name"])
 	assert.Equal(t, "other-pack", paths3["pack_name"])
 

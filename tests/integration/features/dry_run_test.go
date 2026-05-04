@@ -408,7 +408,8 @@ func TestDryRun_TerminalSteps_ShowsStatus_Integration(t *testing.T) {
 	// Verify terminal steps with status
 	assert.Contains(t, output, "[T]")
 	// At least one terminal step should be shown
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(output, "done") || strings.Contains(output, "error"),
 		"should show terminal step names",
 	)

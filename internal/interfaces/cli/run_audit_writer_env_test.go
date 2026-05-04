@@ -4,22 +4,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/awf-project/cli/internal/infrastructure/audit"
-	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
+	auditpkg "github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func newTestLogger() *testmocks.MockLogger {
-	return testmocks.NewMockLogger()
-}
 
 // TestBuildAuditWriter_DisabledWhenOffEnvVar verifies that AWF_AUDIT_LOG=off returns nil writer
 func TestBuildAuditWriter_DisabledWhenOffEnvVar(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "off")
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 
 	assert.Nil(t, writer, "writer must be nil when AWF_AUDIT_LOG=off")
 	assert.NoError(t, err, "should not error when disabled")
@@ -33,8 +27,7 @@ func TestBuildAuditWriter_DisabledWhenOffEnvVar(t *testing.T) {
 func TestBuildAuditWriter_DefaultPathWhenEmpty(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "")
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must always be provided")
 	defer cleanup()
 
@@ -44,7 +37,7 @@ func TestBuildAuditWriter_DefaultPathWhenEmpty(t *testing.T) {
 	assert.NoError(t, err, "should not error when creating writer with default path")
 
 	// Verify the writer implements the AuditTrailWriter interface
-	_, ok := writer.(*audit.FileAuditTrailWriter)
+	_, ok := writer.(*auditpkg.FileAuditTrailWriter)
 	assert.True(t, ok, "writer must be FileAuditTrailWriter type")
 }
 
@@ -53,8 +46,7 @@ func TestBuildAuditWriter_CustomPathWhenSet(t *testing.T) {
 	customPath := filepath.Join(t.TempDir(), "custom-audit.jsonl")
 	t.Setenv("AWF_AUDIT_LOG", customPath)
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must always be provided")
 	defer cleanup()
 
@@ -63,7 +55,7 @@ func TestBuildAuditWriter_CustomPathWhenSet(t *testing.T) {
 	assert.NoError(t, err, "should not error when creating writer with custom path")
 
 	// Verify the writer is FileAuditTrailWriter type
-	_, ok := writer.(*audit.FileAuditTrailWriter)
+	_, ok := writer.(*auditpkg.FileAuditTrailWriter)
 	assert.True(t, ok, "writer must be FileAuditTrailWriter type")
 }
 
@@ -72,8 +64,7 @@ func TestBuildAuditWriter_UnsetEnvVarUsesDefault(t *testing.T) {
 	// Ensure the env var is not set (t.Setenv handles cleanup automatically)
 	t.Setenv("AWF_AUDIT_LOG", "")
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must always be provided")
 	defer cleanup()
 
@@ -99,9 +90,8 @@ func TestBuildAuditWriter_OffIsCaseSensitive(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("AWF_AUDIT_LOG", tt.envValue)
-			logger := newTestLogger()
 
-			writer, cleanup, err := buildAuditWriter(logger)
+			writer, cleanup, err := auditpkg.NewWriterFromEnv()
 			require.NotNil(t, cleanup, "cleanup must always be provided")
 			defer cleanup()
 
@@ -131,9 +121,8 @@ func TestBuildAuditWriter_CleanupAlwaysProvided(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("AWF_AUDIT_LOG", tt.env)
-			logger := newTestLogger()
 
-			_, cleanup, _ := buildAuditWriter(logger)
+			_, cleanup, _ := auditpkg.NewWriterFromEnv()
 
 			// Cleanup must always be provided and callable
 			assert.NotNil(t, cleanup, "cleanup function must always be provided")
@@ -147,8 +136,7 @@ func TestBuildAuditWriter_CleanupCallsWriterClose(t *testing.T) {
 	customPath := filepath.Join(t.TempDir(), "cleanup-test.jsonl")
 	t.Setenv("AWF_AUDIT_LOG", customPath)
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NoError(t, err, "should create writer successfully")
 	require.NotNil(t, writer, "writer must not be nil")
 	require.NotNil(t, cleanup, "cleanup must be provided")
@@ -160,9 +148,8 @@ func TestBuildAuditWriter_CleanupCallsWriterClose(t *testing.T) {
 // TestBuildAuditWriter_NoErrorWhenDisabled verifies AWF_AUDIT_LOG=off doesn't error
 func TestBuildAuditWriter_NoErrorWhenDisabled(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "off")
-	logger := newTestLogger()
 
-	_, _, err := buildAuditWriter(logger)
+	_, _, err := auditpkg.NewWriterFromEnv()
 
 	assert.NoError(t, err, "should never return error when disabled with 'off'")
 }
@@ -172,8 +159,7 @@ func TestBuildAuditWriter_RelativePathHandling(t *testing.T) {
 	relativePath := "relative/path/audit.jsonl"
 	t.Setenv("AWF_AUDIT_LOG", relativePath)
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must be provided")
 	defer cleanup()
 
@@ -187,8 +173,7 @@ func TestBuildAuditWriter_AbsolutePathHandling(t *testing.T) {
 	absPath := filepath.Join(t.TempDir(), "subdir", "audit.jsonl")
 	t.Setenv("AWF_AUDIT_LOG", absPath)
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must be provided")
 	defer cleanup()
 
@@ -201,8 +186,7 @@ func TestBuildAuditWriter_AbsolutePathHandling(t *testing.T) {
 func TestBuildAuditWriter_DefaultPathStructure(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "")
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must be provided")
 	defer cleanup()
 
@@ -211,29 +195,15 @@ func TestBuildAuditWriter_DefaultPathStructure(t *testing.T) {
 	assert.NoError(t, err, "should not error with default path")
 
 	// The writer should be constructed to use the XDG default path structure
-	_, ok := writer.(*audit.FileAuditTrailWriter)
+	_, ok := writer.(*auditpkg.FileAuditTrailWriter)
 	assert.True(t, ok, "writer should be FileAuditTrailWriter using default XDG path")
-}
-
-// TestBuildAuditWriter_LoggerParameterUsage verifies logger is passed correctly
-func TestBuildAuditWriter_LoggerParameterUsage(t *testing.T) {
-	logger := newTestLogger()
-	t.Setenv("AWF_AUDIT_LOG", "off")
-
-	_, cleanup, _ := buildAuditWriter(logger)
-	require.NotNil(t, cleanup, "cleanup must be provided")
-
-	// Logger parameter should not cause errors
-	assert.NotPanics(t, cleanup, "logger should not cause issues")
 }
 
 // TestBuildAuditWriter_MultipleCallsIndependent verifies multiple calls don't interfere
 func TestBuildAuditWriter_MultipleCallsIndependent(t *testing.T) {
-	logger := newTestLogger()
-
 	// Call 1: with "off"
 	t.Setenv("AWF_AUDIT_LOG", "off")
-	writer1, cleanup1, err1 := buildAuditWriter(logger)
+	writer1, cleanup1, err1 := auditpkg.NewWriterFromEnv()
 	assert.Nil(t, writer1)
 	assert.NoError(t, err1)
 	assert.NotNil(t, cleanup1)
@@ -241,7 +211,7 @@ func TestBuildAuditWriter_MultipleCallsIndependent(t *testing.T) {
 	// Call 2: with custom path
 	path2 := filepath.Join(t.TempDir(), "test2.jsonl")
 	t.Setenv("AWF_AUDIT_LOG", path2)
-	writer2, cleanup2, err2 := buildAuditWriter(logger)
+	writer2, cleanup2, err2 := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup2)
 	defer cleanup2()
 	assert.NotNil(t, writer2, "second call should create writer")
@@ -249,7 +219,7 @@ func TestBuildAuditWriter_MultipleCallsIndependent(t *testing.T) {
 
 	// Call 3: back to "off"
 	t.Setenv("AWF_AUDIT_LOG", "off")
-	writer3, cleanup3, err3 := buildAuditWriter(logger)
+	writer3, cleanup3, err3 := auditpkg.NewWriterFromEnv()
 	assert.Nil(t, writer3)
 	assert.NoError(t, err3)
 	assert.NotNil(t, cleanup3)
@@ -265,8 +235,7 @@ func TestBuildAuditWriter_WriteablePathRequired(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
 	t.Setenv("AWF_AUDIT_LOG", path)
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup)
 	defer cleanup()
 
@@ -279,8 +248,7 @@ func TestBuildAuditWriter_WriteablePathRequired(t *testing.T) {
 func TestBuildAuditWriter_InterfaceCompliance(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", filepath.Join(t.TempDir(), "iface.jsonl"))
 
-	logger := newTestLogger()
-	writer, cleanup, err := buildAuditWriter(logger)
+	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup)
 	defer cleanup()
 
