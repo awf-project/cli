@@ -426,7 +426,8 @@ func TestValidateWorkflow_PromptFileValidation_MultipleFilesFirstFailureReported
 	require.Error(t, err)
 
 	errMsg := err.Error()
-	assert.True(t,
+	assert.True(
+		t,
 		strings.Contains(errMsg, "missing1.md") || strings.Contains(errMsg, "missing3.md"),
 		"error should mention at least one missing file",
 	)

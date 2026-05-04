@@ -377,7 +377,8 @@ func TestCodexProvider_ExecuteConversation_LargeHistory_Integration(t *testing.T
 
 	// Add many turns to test large conversation history
 	for i := 0; i < 15; i++ {
-		state.Turns = append(state.Turns,
+		state.Turns = append(
+			state.Turns,
 			*workflow.NewTurn(workflow.TurnRoleUser, "Question about topic "+string(rune(i+'A'))),
 			*workflow.NewTurn(workflow.TurnRoleAssistant, "Answer about topic "+string(rune(i+'A'))),
 		)

@@ -152,7 +152,8 @@ func TestJSONLogger_FieldTypes(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = logger.Close() }()
 
-	logger.Info("types test",
+	logger.Info(
+		"types test",
 		"string", "hello",
 		"int", 42,
 		"float", 3.14,

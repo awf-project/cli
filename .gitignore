@@ -19,6 +19,8 @@ coverage.html
 .DS_Store
 Thumbs.db
 
+npm-cache/
+
 # Dependencies (if vendored)
 .grepai/
 

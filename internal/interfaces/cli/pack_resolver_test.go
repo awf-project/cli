@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -594,14 +595,14 @@ states:
 }
 
 func TestBuildPackAWFPaths_IncludesPackName(t *testing.T) {
-	paths := buildPackAWFPaths("speckit")
+	paths := xdg.PackAWFPaths("speckit")
 
 	assert.NotNil(t, paths)
 	assert.Equal(t, "speckit", paths["pack_name"])
 }
 
 func TestBuildPackAWFPaths_IncludesAllStandardPaths(t *testing.T) {
-	paths := buildPackAWFPaths("speckit")
+	paths := xdg.PackAWFPaths("speckit")
 
 	standardKeys := []string{
 		"prompts_dir",
@@ -619,7 +620,7 @@ func TestBuildPackAWFPaths_IncludesAllStandardPaths(t *testing.T) {
 }
 
 func TestBuildPackAWFPaths_PathsNotEmpty(t *testing.T) {
-	paths := buildPackAWFPaths("test-pack")
+	paths := xdg.PackAWFPaths("test-pack")
 
 	// All paths except pack_name should be non-empty XDG paths
 	assert.NotEmpty(t, paths["prompts_dir"])
@@ -656,7 +657,7 @@ func TestBuildPackAWFPaths_DifferentPackNames(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			paths := buildPackAWFPaths(tt.packName)
+			paths := xdg.PackAWFPaths(tt.packName)
 
 			assert.Equal(t, tt.expectedPN, paths["pack_name"])
 		})

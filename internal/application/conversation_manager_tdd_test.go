@@ -55,7 +55,8 @@ func TestConversationManager_ExecuteConversation_SingleTurn_HappyPath(t *testing
 		if state.Turns == nil {
 			state.Turns = make([]workflow.Turn, 0)
 		}
-		state.Turns = append(state.Turns, //nolint:gocritic // separate appends aid readability in test closures
+		state.Turns = append(
+			state.Turns, //nolint:gocritic // separate appends aid readability in test closures
 			workflow.Turn{Role: "user", Content: prompt},
 			workflow.Turn{Role: "assistant", Content: "Hello! I'm here to help."},
 		)
@@ -172,7 +173,8 @@ func TestConversationManager_ExecuteConversation_WithSystemPrompt(t *testing.T) 
 		if state.Turns == nil {
 			state.Turns = make([]workflow.Turn, 0)
 		}
-		state.Turns = append(state.Turns, //nolint:gocritic // separate appends aid readability in test closures
+		state.Turns = append(
+			state.Turns, //nolint:gocritic // separate appends aid readability in test closures
 			workflow.Turn{Role: "user", Content: prompt},
 			workflow.Turn{Role: "assistant", Content: "Math result: 4"},
 		)
@@ -220,7 +222,8 @@ func TestConversationManager_ExecuteConversation_ContinueFrom_HappyPath(t *testi
 		if state.Turns == nil {
 			state.Turns = make([]workflow.Turn, 0)
 		}
-		state.Turns = append(state.Turns, //nolint:gocritic // separate appends aid readability in test closures
+		state.Turns = append(
+			state.Turns, //nolint:gocritic // separate appends aid readability in test closures
 			workflow.Turn{Role: "user", Content: prompt},
 			workflow.Turn{Role: "assistant", Content: "Continuing our conversation..."},
 		)
@@ -361,7 +364,8 @@ func TestConversationManager_ExecuteConversation_ContextCancellation_Error(t *te
 		if state.Turns == nil {
 			state.Turns = make([]workflow.Turn, 0)
 		}
-		state.Turns = append(state.Turns, //nolint:gocritic // separate appends aid readability in test closures
+		state.Turns = append(
+			state.Turns, //nolint:gocritic // separate appends aid readability in test closures
 			workflow.Turn{Role: "user", Content: prompt},
 			workflow.Turn{Role: "assistant", Content: "Response"},
 		)
@@ -547,7 +551,8 @@ func TestConversationManager_ExecuteConversation_EmptyInputTerminates(t *testing
 		if state.Turns == nil {
 			state.Turns = make([]workflow.Turn, 0)
 		}
-		state.Turns = append(state.Turns, //nolint:gocritic // separate appends aid readability in test closures
+		state.Turns = append(
+			state.Turns, //nolint:gocritic // separate appends aid readability in test closures
 			workflow.Turn{Role: "user", Content: prompt},
 			workflow.Turn{Role: "assistant", Content: "Response"},
 		)

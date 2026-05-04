@@ -524,6 +524,77 @@ func TestAWFWorkflowPacksDir(t *testing.T) {
 	}
 }
 
+func TestAWFPaths(t *testing.T) {
+	paths := AWFPaths()
+	expected := map[string]string{
+		"prompts_dir":   AWFPromptsDir(),
+		"scripts_dir":   AWFScriptsDir(),
+		"config_dir":    AWFConfigDir(),
+		"data_dir":      AWFDataDir(),
+		"workflows_dir": AWFWorkflowsDir(),
+		"plugins_dir":   AWFPluginsDir(),
+	}
+	for key, want := range expected {
+		got, ok := paths[key]
+		if !ok {
+			t.Errorf("AWFPaths() missing key %q", key)
+			continue
+		}
+		if got != want {
+			t.Errorf("AWFPaths()[%q] = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestAWFPaths_HasExactKeys(t *testing.T) {
+	paths := AWFPaths()
+	expectedKeys := []string{
+		"prompts_dir",
+		"scripts_dir",
+		"config_dir",
+		"data_dir",
+		"workflows_dir",
+		"plugins_dir",
+	}
+	assert.Len(t, paths, len(expectedKeys), "AWFPaths() should have exactly %d keys", len(expectedKeys))
+	for _, key := range expectedKeys {
+		assert.Contains(t, paths, key, "AWFPaths() should contain key %q", key)
+	}
+}
+
+func TestPackAWFPaths(t *testing.T) {
+	paths := PackAWFPaths("my-pack")
+	if paths["pack_name"] != "my-pack" {
+		t.Errorf("PackAWFPaths() pack_name = %q, want %q", paths["pack_name"], "my-pack")
+	}
+	if paths["prompts_dir"] != AWFPromptsDir() {
+		t.Errorf("PackAWFPaths() prompts_dir = %q, want %q", paths["prompts_dir"], AWFPromptsDir())
+	}
+}
+
+func TestPackAWFPaths_IncludesAllAWFPaths(t *testing.T) {
+	packPaths := PackAWFPaths("test-pack")
+	basePaths := AWFPaths()
+
+	for key, want := range basePaths {
+		got, ok := packPaths[key]
+		if !ok {
+			t.Errorf("PackAWFPaths() missing key %q from AWFPaths()", key)
+			continue
+		}
+		if got != want {
+			t.Errorf("PackAWFPaths()[%q] = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestPackAWFPaths_DoesNotMutateAWFPaths(t *testing.T) {
+	_ = PackAWFPaths("mutate-check")
+	base := AWFPaths()
+	_, hasPack := base["pack_name"]
+	assert.False(t, hasPack, "AWFPaths() must not contain pack_name after PackAWFPaths() call")
+}
+
 func TestAWFWorkflowPacksDir_IsUnderDataDir(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "")
 

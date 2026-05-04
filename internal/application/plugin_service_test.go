@@ -180,9 +180,12 @@ func newMockPluginLogger() *mockPluginLogger {
 	return &mockPluginLogger{logs: make([]string, 0)}
 }
 
-func (m *mockPluginLogger) Debug(msg string, fields ...any)             { m.logs = append(m.logs, "DEBUG: "+msg) }
-func (m *mockPluginLogger) Info(msg string, fields ...any)              { m.logs = append(m.logs, "INFO: "+msg) }
-func (m *mockPluginLogger) Warn(msg string, fields ...any)              { m.logs = append(m.logs, "WARN: "+msg) }
+func (m *mockPluginLogger) Debug(msg string, fields ...any) { m.logs = append(m.logs, "DEBUG: "+msg) }
+
+func (m *mockPluginLogger) Info(msg string, fields ...any) { m.logs = append(m.logs, "INFO: "+msg) }
+
+func (m *mockPluginLogger) Warn(msg string, fields ...any) { m.logs = append(m.logs, "WARN: "+msg) }
+
 func (m *mockPluginLogger) Error(msg string, fields ...any)             { m.logs = append(m.logs, "ERROR: "+msg) }
 func (m *mockPluginLogger) WithContext(ctx map[string]any) ports.Logger { return m }
 

@@ -27,11 +27,12 @@ type FileAuditTrailWriter struct {
 // NewFileAuditTrailWriter opens or creates the audit log file at path.
 // Creates parent directories as needed. File permissions are 0o600.
 func NewFileAuditTrailWriter(path string) (*FileAuditTrailWriter, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	cleanPath := filepath.Clean(path)
+	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating audit log directory: %w", err)
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(cleanPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // path is cleaned above; callers control the input
 	if err != nil {
 		return nil, fmt.Errorf("opening audit log file: %w", err)
 	}

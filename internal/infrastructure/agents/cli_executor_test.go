@@ -334,7 +334,8 @@ func TestExecCLIExecutor_Run_CommandTimeout(t *testing.T) {
 			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "timeout should cause error")
-			assert.True(t,
+			assert.True(
+				t,
 				errors.Is(err, context.DeadlineExceeded) || err != nil,
 				"error should be timeout-related",
 			)
@@ -378,7 +379,8 @@ func TestExecCLIExecutor_Run_ContextCancellation(t *testing.T) {
 			stdout, stderr, err := executor.Run(ctx, tt.binary, nil, nil, tt.args...)
 
 			assert.Error(t, err, "cancellation should cause error")
-			assert.True(t,
+			assert.True(
+				t,
 				errors.Is(err, context.Canceled) || err != nil,
 				"error should be cancellation-related",
 			)
@@ -446,7 +448,8 @@ func TestExecCLIExecutor_Run_StderrOutput(t *testing.T) {
 			require.NoError(t, err)
 			// Note: os/exec.CombinedOutput merges stderr into stdout
 			// So we might see output in stdout or stderr depending on implementation
-			assert.True(t,
+			assert.True(
+				t,
 				len(stdout) > 0 || len(stderr) > 0,
 				"should have output in stdout or stderr",
 			)
@@ -669,7 +672,8 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 
 			// Error may or may not occur depending on command timing
 			if err != nil {
-				assert.True(t,
+				assert.True(
+					t,
 					errors.Is(err, context.Canceled) || err != nil,
 					"if error occurs, should be cancellation-related",
 				)

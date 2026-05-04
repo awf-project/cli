@@ -21,6 +21,7 @@ type WorkflowService struct {
 	logger            ports.Logger
 	validator         ports.ExpressionValidator
 	validatorProvider ports.WorkflowValidatorProvider
+	packDiscoverer    ports.PackDiscoverer
 }
 
 func NewWorkflowService(
@@ -43,6 +44,36 @@ func (s *WorkflowService) SetValidatorProvider(p ports.WorkflowValidatorProvider
 	s.validatorProvider = p
 }
 
+func (s *WorkflowService) SetPackDiscoverer(d ports.PackDiscoverer) {
+	s.packDiscoverer = d
+}
+
+func (s *WorkflowService) ListAllWorkflows(ctx context.Context) ([]workflow.WorkflowEntry, error) {
+	names, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list workflows: %w", err)
+	}
+
+	entries := make([]workflow.WorkflowEntry, 0, len(names))
+	for _, name := range names {
+		entry := workflow.WorkflowEntry{Name: name}
+		if wf, loadErr := s.repo.Load(ctx, name); loadErr == nil {
+			entry.Version = wf.Version
+			entry.Description = wf.Description
+		}
+		entries = append(entries, entry)
+	}
+
+	if s.packDiscoverer != nil {
+		packEntries, packErr := s.packDiscoverer.DiscoverWorkflows(ctx)
+		if packErr == nil {
+			entries = append(entries, packEntries...)
+		}
+	}
+
+	return entries, nil
+}
+
 func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
 	workflows, err := s.repo.List(ctx)
 	if err != nil {
@@ -52,6 +83,14 @@ func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
 }
 
 func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workflow.Workflow, error) {
+	if packName, wfName, ok := strings.Cut(name, "/"); ok && s.packDiscoverer != nil {
+		wf, err := s.packDiscoverer.LoadWorkflow(ctx, packName, wfName)
+		if err != nil {
+			return nil, fmt.Errorf("load pack workflow %s: %w", name, err)
+		}
+		return wf, nil
+	}
+
 	wf, err := s.repo.Load(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("load workflow %s: %w", name, err)

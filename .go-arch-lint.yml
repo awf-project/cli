@@ -132,6 +132,12 @@ vendors:
     in:
       - golang.org/x/term
 
+  bubbletea:
+    in:
+      - charm.land/bubbletea/**
+      - charm.land/bubbles/**
+      - charm.land/lipgloss/**
+
   otel:
     in:
       - go.opentelemetry.io/otel
@@ -265,6 +271,9 @@ components:
   interfaces-cli-ui:
     in: interfaces/cli/ui
 
+  interfaces-tui:
+    in: interfaces/tui
+
   # TEST UTILITIES
   testutil:
     in: testutil
@@ -308,7 +317,7 @@ deps:
       - go-stdlib
       - go-protobuf
 
-  # APPLICATION — domain only (NO infrastructure)
+  # APPLICATION — domain + wiring via ExecutionSetup (see execution_setup.go)
   application:
     mayDependOn:
       - domain-workflow
@@ -316,6 +325,13 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - infra-agents
+      - infra-expression
+      - infra-github
+      - infra-http
+      - infra-notify
+      - infra-repository
+      - infra-xdg
     canUse:
       - go-stdlib
       - go-sync
@@ -340,6 +356,7 @@ deps:
     mayDependOn:
       - domain-workflow
       - domain-ports
+      - infra-xdg
     canUse:
       - go-stdlib
 
@@ -436,6 +453,7 @@ deps:
 
   infra-plugin:
     mayDependOn:
+      - application
       - domain-plugin
       - domain-operation
       - domain-ports
@@ -480,6 +498,8 @@ deps:
 
   infra-workflowpkg:
     mayDependOn:
+      - domain-workflow
+      - infra-repository
       - pkg-registry
       - pkg-httpx
     canUse:
@@ -533,6 +553,7 @@ deps:
       - infra-workflowpkg
       - infra-xdg
       - interfaces-cli-ui
+      - interfaces-tui
     canUse:
       - go-stdlib
       - go-sync
@@ -543,6 +564,29 @@ deps:
       - uuid
       - progressbar
       - go-term
+
+  interfaces-tui:
+    mayDependOn:
+      - application
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - domain-operation
+      - infra-audit
+      - infra-config
+      - infra-executor
+      - infra-otel
+      - infra-plugin
+      - infra-repository
+      - infra-store
+      - infra-workflowpkg
+      - infra-xdg
+    canUse:
+      - go-stdlib
+      - cobra
+      - bubbletea
+      - zap
 
   interfaces-cli-ui:
     mayDependOn:

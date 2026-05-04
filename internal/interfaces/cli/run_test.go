@@ -4,23 +4,29 @@ import (
 	"context"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/ports"
+	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestBuildTracerProvider_ReturnsNopTracerWhenExporterEmpty verifies that
-// buildTracerProvider returns a NopTracer when OtelExporter is not configured.
-func TestBuildTracerProvider_ReturnsNopTracerWhenExporterEmpty(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "",
-		OtelServiceName: "awf",
+// TestNewTracerFromConfig_ReturnsNopTracerWhenExporterEmpty verifies that
+// NewTracerFromConfig returns a NopTracer when Endpoint is not configured.
+func TestNewTracerFromConfig_ReturnsNopTracerWhenExporterEmpty(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "",
+		ServiceName: "awf",
 	}
 
-	tracer, shutdown, err := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, err := infraotel.NewTracerFromConfig(context.Background(), cfg)
 
 	require.NoError(t, err)
 	require.NotNil(t, tracer)
 	require.NotNil(t, shutdown)
+	defer shutdown()
+
+	_, ok := tracer.(ports.NopTracer)
+	assert.True(t, ok, "expected NopTracer for empty endpoint")
 
 	// Should be able to start a span with NopTracer
 	ctx, span := tracer.Start(context.Background(), "test-span")
@@ -29,18 +35,19 @@ func TestBuildTracerProvider_ReturnsNopTracerWhenExporterEmpty(t *testing.T) {
 	span.End()
 }
 
-// TestBuildTracerProvider_AcceptsOtlpExporterEndpoint verifies that
-// buildTracerProvider accepts a valid OTLP exporter endpoint.
-func TestBuildTracerProvider_AcceptsOtlpExporterEndpoint(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "test-service",
+// TestNewTracerFromConfig_AcceptsOtlpExporterEndpoint verifies that
+// NewTracerFromConfig accepts a valid OTLP exporter endpoint.
+func TestNewTracerFromConfig_AcceptsOtlpExporterEndpoint(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "test-service",
 	}
 
-	tracer, shutdown, _ := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, _ := infraotel.NewTracerFromConfig(context.Background(), cfg)
 
 	require.NotNil(t, tracer)
 	require.NotNil(t, shutdown)
+	defer shutdown()
 
 	// Even if exporter endpoint is invalid, should return a tracer
 	// (connection errors are deferred until actual span export)
@@ -50,15 +57,15 @@ func TestBuildTracerProvider_AcceptsOtlpExporterEndpoint(t *testing.T) {
 	span.End()
 }
 
-// TestBuildTracerProvider_ShutdownFunctionIsCallable verifies that
-// the shutdown function returned by buildTracerProvider can be called without panic.
-func TestBuildTracerProvider_ShutdownFunctionIsCallable(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "test-service",
+// TestNewTracerFromConfig_ShutdownFunctionIsCallable verifies that
+// the shutdown function returned by NewTracerFromConfig can be called without panic.
+func TestNewTracerFromConfig_ShutdownFunctionIsCallable(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "test-service",
 	}
 
-	_, shutdown, err := buildTracerProvider(context.Background(), cfg)
+	_, shutdown, err := infraotel.NewTracerFromConfig(context.Background(), cfg)
 	require.NoError(t, err)
 
 	// Shutdown should be callable without panic
@@ -67,15 +74,16 @@ func TestBuildTracerProvider_ShutdownFunctionIsCallable(t *testing.T) {
 	})
 }
 
-// TestBuildTracerProvider_UsesServiceNameFromConfig verifies that
-// buildTracerProvider uses the OtelServiceName from config.
-func TestBuildTracerProvider_UsesServiceNameFromConfig(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "my-custom-service",
+// TestNewTracerFromConfig_UsesServiceNameFromConfig verifies that
+// NewTracerFromConfig uses the ServiceName from config.
+func TestNewTracerFromConfig_UsesServiceNameFromConfig(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "my-custom-service",
 	}
 
-	tracer, _, _ := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, _ := infraotel.NewTracerFromConfig(context.Background(), cfg)
+	defer shutdown()
 
 	// Should be able to create spans with the configured service
 	ctx, span := tracer.Start(context.Background(), "test-span")
@@ -84,15 +92,16 @@ func TestBuildTracerProvider_UsesServiceNameFromConfig(t *testing.T) {
 	span.End()
 }
 
-// TestBuildTracerProvider_PropagatesContextWithSpan verifies that
-// buildTracerProvider properly propagates the context when starting a span.
-func TestBuildTracerProvider_PropagatesContextWithSpan(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "",
-		OtelServiceName: "awf",
+// TestNewTracerFromConfig_PropagatesContextWithSpan verifies that
+// NewTracerFromConfig properly propagates the context when starting a span.
+func TestNewTracerFromConfig_PropagatesContextWithSpan(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "",
+		ServiceName: "awf",
 	}
 
-	tracer, _, _ := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, _ := infraotel.NewTracerFromConfig(context.Background(), cfg)
+	defer shutdown()
 
 	originalCtx := context.Background()
 	spanCtx, span := tracer.Start(originalCtx, "test-span")
@@ -147,18 +156,18 @@ func TestDefaultConfig_OtelExporterEmptyByDefault(t *testing.T) {
 	assert.Empty(t, cfg.OtelExporter)
 }
 
-// TestBuildTracerProvider_WorksWithContextTimeout verifies that
-// buildTracerProvider works correctly when given a context with timeout.
-func TestBuildTracerProvider_WorksWithContextTimeout(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "test-service",
+// TestNewTracerFromConfig_WorksWithContextTimeout verifies that
+// NewTracerFromConfig works correctly when given a context with timeout.
+func TestNewTracerFromConfig_WorksWithContextTimeout(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "test-service",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1000000000) // 1 second timeout
 	defer cancel()
 
-	tracer, shutdown, _ := buildTracerProvider(ctx, cfg)
+	tracer, shutdown, _ := infraotel.NewTracerFromConfig(ctx, cfg)
 
 	require.NotNil(t, tracer)
 	require.NotNil(t, shutdown)
@@ -172,13 +181,13 @@ func TestBuildTracerProvider_WorksWithContextTimeout(t *testing.T) {
 	shutdown()
 }
 
-// TestBuildTracerProvider_HandlesNilConfig verifies that
-// buildTracerProvider handles nil config gracefully (defensive programming).
-func TestBuildTracerProvider_HandlesMissingConfig(t *testing.T) {
+// TestNewTracerFromConfig_HandlesMissingConfig verifies that
+// NewTracerFromConfig handles empty config gracefully (defensive programming).
+func TestNewTracerFromConfig_HandlesMissingConfig(t *testing.T) {
 	// Create a minimal config instead of nil
-	cfg := &Config{}
+	cfg := infraotel.TracerConfig{}
 
-	tracer, shutdown, _ := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, _ := infraotel.NewTracerFromConfig(context.Background(), cfg)
 
 	// Should not panic and should return valid objects
 	require.NotPanics(t, func() {
@@ -189,16 +198,17 @@ func TestBuildTracerProvider_HandlesMissingConfig(t *testing.T) {
 	require.NotNil(t, shutdown)
 }
 
-// TestBuildTracerProvider_SpanStartReturnsValidSpan verifies that
+// TestNewTracerFromConfig_SpanStartReturnsValidSpan verifies that
 // spans returned from Tracer.Start implement the Span interface.
-func TestBuildTracerProvider_SpanStartReturnsValidSpan(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "",
-		OtelServiceName: "awf",
+func TestNewTracerFromConfig_SpanStartReturnsValidSpan(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "",
+		ServiceName: "awf",
 	}
 
-	tracer, _, err := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, err := infraotel.NewTracerFromConfig(context.Background(), cfg)
 	require.NoError(t, err)
+	defer shutdown()
 
 	_, span := tracer.Start(context.Background(), "test-span")
 
@@ -211,15 +221,15 @@ func TestBuildTracerProvider_SpanStartReturnsValidSpan(t *testing.T) {
 	})
 }
 
-// TestBuildTracerProvider_MultipleShutdownCalls verifies that
+// TestNewTracerFromConfig_MultipleShutdownCalls verifies that
 // calling shutdown multiple times doesn't cause panic.
-func TestBuildTracerProvider_MultipleShutdownCalls(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "test-service",
+func TestNewTracerFromConfig_MultipleShutdownCalls(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "test-service",
 	}
 
-	_, shutdown, err := buildTracerProvider(context.Background(), cfg)
+	_, shutdown, err := infraotel.NewTracerFromConfig(context.Background(), cfg)
 	require.NoError(t, err)
 
 	// Multiple shutdown calls should be safe
@@ -230,15 +240,15 @@ func TestBuildTracerProvider_MultipleShutdownCalls(t *testing.T) {
 	})
 }
 
-// TestBuildTracerProvider_ReturnsErrorOrNilConsistently verifies that
-// buildTracerProvider consistently returns error parameter as third value.
-func TestBuildTracerProvider_ReturnsThreeValues(t *testing.T) {
-	cfg := &Config{
-		OtelExporter:    "localhost:4317",
-		OtelServiceName: "test-service",
+// TestNewTracerFromConfig_ReturnsThreeValues verifies that
+// NewTracerFromConfig consistently returns three values.
+func TestNewTracerFromConfig_ReturnsThreeValues(t *testing.T) {
+	cfg := infraotel.TracerConfig{
+		Endpoint:    "localhost:4317",
+		ServiceName: "test-service",
 	}
 
-	tracer, shutdown, err := buildTracerProvider(context.Background(), cfg)
+	tracer, shutdown, err := infraotel.NewTracerFromConfig(context.Background(), cfg)
 
 	// All three return values should be present
 	assert.NotNil(t, tracer)
@@ -287,9 +297,9 @@ func TestRunCommand_WithOtelFlags(t *testing.T) {
 	assert.Equal(t, "awf-production", cfg.OtelServiceName)
 }
 
-// TestBuildTracerProvider_ExporterEndpointValidation verifies that
-// buildTracerProvider validates the exporter endpoint format.
-func TestBuildTracerProvider_ExporterEndpointValidation(t *testing.T) {
+// TestNewTracerFromConfig_ExporterEndpointValidation verifies that
+// NewTracerFromConfig handles various endpoint formats.
+func TestNewTracerFromConfig_ExporterEndpointValidation(t *testing.T) {
 	tests := []struct {
 		name          string
 		exporterURL   string
@@ -324,12 +334,12 @@ func TestBuildTracerProvider_ExporterEndpointValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				OtelExporter:    tt.exporterURL,
-				OtelServiceName: tt.serviceName,
+			cfg := infraotel.TracerConfig{
+				Endpoint:    tt.exporterURL,
+				ServiceName: tt.serviceName,
 			}
 
-			tracer, shutdown, _ := buildTracerProvider(context.Background(), cfg)
+			tracer, shutdown, _ := infraotel.NewTracerFromConfig(context.Background(), cfg)
 
 			if tt.shouldSucceed {
 				require.NotNil(t, tracer)

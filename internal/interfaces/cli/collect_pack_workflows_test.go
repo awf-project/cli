@@ -168,7 +168,8 @@ states:
   initial: done
   done:
     type: terminal
-`), 0o644))
+`), 0o644,
+	))
 
 	createPackState(t, packDir, "disabled-pack", "1.0.0", false)
 
@@ -282,7 +283,8 @@ states:
   initial: done
   done:
     type: terminal
-`), 0o644))
+`), 0o644,
+	))
 
 	workflows, err := collectPackWorkflows(context.Background())
 

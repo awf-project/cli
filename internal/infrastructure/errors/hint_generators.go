@@ -347,7 +347,8 @@ func YAMLSyntaxHintGenerator(err *errors.StructuredError) []errors.Hint {
 	}
 
 	// Add common YAML syntax tips
-	hints = append(hints,
+	hints = append(
+		hints,
 		errors.Hint{
 			Message: "Common YAML issues: ensure proper indentation with spaces (not tabs)",
 		},
@@ -621,7 +622,8 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 	switch exitCode {
 	case 126:
 		// Permission denied
-		hints = append(hints,
+		hints = append(
+			hints,
 			errors.Hint{
 				Message: "Permission denied: check if the command has execute permissions",
 			},
@@ -637,7 +639,8 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 
 	case 127:
 		// Command not found
-		hints = append(hints,
+		hints = append(
+			hints,
 			errors.Hint{
 				Message: "Command not found: the command may not be installed or not in PATH",
 			},
@@ -655,7 +658,8 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 
 	case 130:
 		// SIGINT (Ctrl+C)
-		hints = append(hints,
+		hints = append(
+			hints,
 			errors.Hint{
 				Message: "Command was interrupted (exit code 130 = SIGINT)",
 			},
@@ -666,7 +670,8 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 
 	case 137:
 		// SIGKILL (out of memory or killed)
-		hints = append(hints,
+		hints = append(
+			hints,
 			errors.Hint{
 				Message: "Command was killed (exit code 137 = SIGKILL)",
 			},
@@ -677,7 +682,8 @@ func CommandFailureHintGenerator(err *errors.StructuredError) []errors.Hint {
 
 	case 2:
 		// Misuse of shell builtin
-		hints = append(hints,
+		hints = append(
+			hints,
 			errors.Hint{
 				Message: "Misuse of shell builtin (exit code 2)",
 			},

@@ -9,28 +9,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/config"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
-	"github.com/awf-project/cli/internal/infrastructure/github"
-	"github.com/awf-project/cli/internal/infrastructure/http"
-	"github.com/awf-project/cli/internal/infrastructure/notify"
 	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
-	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
-	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -242,7 +235,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		cfg.OtelServiceName = projectCfg.Telemetry.ServiceName
 	}
 
-	tracer, tracerShutdown, tracerInitErr := buildTracerProvider(ctx, cfg)
+	tracer, tracerShutdown, tracerInitErr := infraotel.NewTracerFromConfig(ctx, infraotel.TracerConfig{
+		Endpoint:    cfg.OtelExporter,
+		ServiceName: cfg.OtelServiceName,
+	})
 	if tracerInitErr != nil {
 		logger.Warn("failed to initialize tracer, tracing disabled", "error", tracerInitErr)
 		tracer = ports.NopTracer{}
@@ -250,10 +246,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	defer tracerShutdown()
 
-	resolver := interpolation.NewTemplateResolver()
-
 	// Merge config inputs with CLI inputs (CLI wins)
-	inputs = mergeInputs(projectCfg.Inputs, inputs)
+	inputs = application.MergeInputs(projectCfg.Inputs, inputs)
 
 	// Parse namespace to check if this is a pack workflow
 	packName, workflowBase := parseWorkflowNamespace(workflowName)
@@ -277,17 +271,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
 
-	// Create history store and service
+	// Create history store (lifecycle managed by ExecutionSetup builder via WithHistoryStore)
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		return fmt.Errorf("failed to open history store: %w", err)
 	}
-	defer func() {
-		if closeErr := historyStore.Close(); closeErr != nil {
-			logger.Error("failed to close history store", "error", closeErr)
-		}
-	}()
-	historySvc := application.NewHistoryService(historyStore, logger)
 
 	// Initialize plugin system (skip if --skip-plugins flag is set)
 	var pluginResult *PluginSystemResult
@@ -307,72 +295,63 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		}
 	}
 
-	// Create services
-	exprValidator := infraexpression.NewExprValidator()
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
-	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := infraexpression.NewExprEvaluator()
-	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
-
-	// Setup agent registry for F039 agent step execution
-	agentRegistry := agents.NewAgentRegistry()
-	if err = agentRegistry.RegisterDefaults(); err != nil {
-		return fmt.Errorf("failed to register agent providers: %w", err)
-	}
-	execSvc.SetAgentRegistry(agentRegistry)
-	convMgr := application.NewConversationManager(logger, resolver, agentRegistry)
-	convMgr.SetUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout))
-	execSvc.SetConversationManager(convMgr)
-
-	// Set AWF paths with pack context if applicable
-	if packName != "" {
-		execSvc.SetAWFPaths(buildPackAWFPaths(packName))
-	} else {
-		execSvc.SetAWFPaths(buildAWFPaths())
-	}
-
-	// Setup PackWorkflowLoader for C072 pack workflow resolution in subworkflow calls
-	execSvc.SetPackWorkflowLoader(func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
-		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
-	})
-
 	// Setup audit trail writer (F071)
-	if auditWriter, auditCleanup, auditErr := buildAuditWriter(logger); auditErr != nil {
+	var auditWriter ports.AuditTrailWriter
+	if aw, auditCleanup, auditErr := audit.NewWriterFromEnv(); auditErr != nil {
 		logger.Warn("failed to initialize audit writer, audit trail disabled", "error", auditErr)
 	} else {
 		defer auditCleanup()
-		if auditWriter != nil {
-			execSvc.SetAuditTrailWriter(auditWriter)
-		}
+		auditWriter = aw
 	}
 
-	execSvc.SetTracer(tracer)
-
-	// Setup operation providers gated by plugin enable/disable state
-	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)
-	if err != nil {
-		return fmt.Errorf("failed to build operation providers: %w", err)
-	}
-	execSvc.SetOperationProvider(compositeProvider)
-	execSvc.SetPluginService(pluginResult.Service)
-	if pluginResult.RPCManager != nil {
-		wfSvc.SetValidatorProvider(pluginResult.RPCManager.ValidatorProvider(0))
-		execSvc.SetStepTypeProvider(pluginResult.RPCManager.StepTypeProvider(logger))
-	}
-
-	// Setup template service for workflow template expansion
 	templatePaths := []string{
 		".awf/templates",
 		filepath.Join(cfg.StoragePath, "templates"),
 	}
-	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
-	templateSvc := application.NewTemplateService(templateRepo, logger)
-	execSvc.SetTemplateService(templateSvc)
 
-	// Pass writers to execution service for streaming mode
-	if stdoutWriter != nil {
-		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)
+	packResolver := func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
+		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
 	}
+
+	setupOpts := []application.SetupOption{
+		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+		application.WithHistoryStore(historyStore),
+		application.WithTemplatePaths(templatePaths),
+		application.WithTracer(tracer),
+		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
+		application.WithPackContext(packName, packResolver),
+	}
+
+	if !skipPlugins && pluginResult != nil {
+		setupOpts = append(
+			setupOpts,
+			application.WithPluginState(pluginResult.Service),
+			application.WithPluginService(pluginResult.Service),
+		)
+		if pluginResult.RPCManager != nil {
+			setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
+				Operations: pluginResult.Manager,
+				Validators: pluginResult.RPCManager.ValidatorProvider(0),
+				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
+			}))
+		}
+	}
+
+	if auditWriter != nil {
+		setupOpts = append(setupOpts, application.WithAuditWriter(auditWriter))
+	}
+
+	if stdoutWriter != nil {
+		setupOpts = append(setupOpts, application.WithOutputWriters(stdoutWriter, stderrWriter))
+	}
+
+	setupResult, err := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize execution: %w", err)
+	}
+	defer setupResult.Cleanup()
+
+	execSvc := setupResult.ExecService
 
 	// Show start message (text format only)
 	if !silentOutput && cfg.OutputFormat != ui.FormatQuiet {
@@ -516,13 +495,13 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	}
 
 	// Merge config inputs with CLI inputs (CLI wins)
-	inputs = mergeInputs(projectCfg.Inputs, inputs)
+	inputs = application.MergeInputs(projectCfg.Inputs, inputs)
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	dryRunExec := application.NewDryRunExecutor(wfSvc, resolver, exprEvaluator, logger)
-	dryRunExec.SetAWFPaths(buildAWFPaths())
+	dryRunExec.SetAWFPaths(xdg.AWFPaths())
 
 	// Setup template service for workflow template expansion
 	templatePaths := []string{
@@ -595,7 +574,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	}
 
 	// Merge config inputs with CLI inputs (CLI wins)
-	inputs = mergeInputs(projectCfg.Inputs, inputs)
+	inputs = application.MergeInputs(projectCfg.Inputs, inputs)
 
 	// Create services
 	exprValidator := infraexpression.NewExprValidator()
@@ -622,7 +601,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
 	templateSvc := application.NewTemplateService(templateRepo, logger)
 	interactiveExec.SetTemplateService(templateSvc)
-	interactiveExec.SetAWFPaths(buildAWFPaths())
+	interactiveExec.SetAWFPaths(xdg.AWFPaths())
 
 	// Set breakpoints if specified
 	if len(breakpoints) > 0 {
@@ -991,7 +970,6 @@ func runSingleStep(
 		verbose:   cfg.Verbose,
 		silent:    cfg.Quiet,
 	}
-	resolver := interpolation.NewTemplateResolver()
 
 	// Load project config from .awf/config.yaml
 	// TODO(T027): Use projectCfg.Notify to register backends dynamically
@@ -1000,17 +978,11 @@ func runSingleStep(
 		return fmt.Errorf("config error: %w", err)
 	}
 
-	// Create history store and service
+	// Create history store (lifecycle managed by ExecutionSetup builder via WithHistoryStore)
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		return fmt.Errorf("failed to open history store: %w", err)
 	}
-	defer func() {
-		if closeErr := historyStore.Close(); closeErr != nil {
-			logger.Error("failed to close history store", "error", closeErr)
-		}
-	}()
-	historySvc := application.NewHistoryService(historyStore, logger)
 
 	// Initialize plugin system (skip if --skip-plugins flag is set)
 	var pluginResult *PluginSystemResult
@@ -1030,55 +1002,46 @@ func runSingleStep(
 		}
 	}
 
-	// Create services
-	exprValidator := infraexpression.NewExprValidator()
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
-	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := infraexpression.NewExprEvaluator()
-	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
-
-	// Setup agent registry for F039 agent step execution
-	agentRegistry := agents.NewAgentRegistry()
-	if err = agentRegistry.RegisterDefaults(); err != nil {
-		return fmt.Errorf("failed to register agent providers: %w", err)
-	}
-	execSvc.SetAgentRegistry(agentRegistry)
-	convMgr := application.NewConversationManager(logger, resolver, agentRegistry)
-	convMgr.SetUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout))
-	execSvc.SetConversationManager(convMgr)
-
 	// Parse namespace to set up pack context if applicable
 	packName, _ := parseWorkflowNamespace(workflowName)
-	if packName != "" {
-		execSvc.SetAWFPaths(buildPackAWFPaths(packName))
-	} else {
-		execSvc.SetAWFPaths(buildAWFPaths())
-	}
-
-	// Setup PackWorkflowLoader for C072 pack workflow resolution in subworkflow calls
-	execSvc.SetPackWorkflowLoader(func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
+	packResolver := func(ctx context.Context, targetPackName, targetWorkflow string) (*workflow.Workflow, string, error) {
 		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
-	})
-
-	// Setup operation providers gated by plugin enable/disable state
-	compositeProvider, err := buildBuiltinProviders(pluginResult.Service, projectCfg, logger, pluginResult.Manager)
-	if err != nil {
-		return fmt.Errorf("failed to build operation providers: %w", err)
-	}
-	execSvc.SetOperationProvider(compositeProvider)
-	execSvc.SetPluginService(pluginResult.Service)
-	if pluginResult.RPCManager != nil {
-		execSvc.SetStepTypeProvider(pluginResult.RPCManager.StepTypeProvider(logger))
 	}
 
-	// Setup template service for workflow template expansion
 	templatePaths := []string{
 		".awf/templates",
 		filepath.Join(cfg.StoragePath, "templates"),
 	}
-	templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
-	templateSvc := application.NewTemplateService(templateRepo, logger)
-	execSvc.SetTemplateService(templateSvc)
+
+	stepSetupOpts := []application.SetupOption{
+		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+		application.WithHistoryStore(historyStore),
+		application.WithTemplatePaths(templatePaths),
+		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
+		application.WithPackContext(packName, packResolver),
+	}
+
+	if !skipPlugins && pluginResult != nil {
+		stepSetupOpts = append(
+			stepSetupOpts,
+			application.WithPluginState(pluginResult.Service),
+			application.WithPluginService(pluginResult.Service),
+		)
+		if pluginResult.RPCManager != nil {
+			stepSetupOpts = append(stepSetupOpts, application.WithPluginProviders(application.PluginProviders{
+				Operations: pluginResult.Manager,
+				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
+			}))
+		}
+	}
+
+	stepSetupResult, err := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, stepSetupOpts...).Build(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize execution: %w", err)
+	}
+	defer stepSetupResult.Cleanup()
+
+	execSvc := stepSetupResult.ExecService
 
 	// Show start message
 	if !cfg.Quiet {
@@ -1160,14 +1123,6 @@ func hasMissingRequiredInputs(wf *workflow.Workflow, inputs map[string]any) bool
 	return false
 }
 
-// mergeInputs returns configInputs merged with cliInputs. CLI wins on conflict.
-func mergeInputs(configInputs, cliInputs map[string]any) map[string]any {
-	result := make(map[string]any)
-	maps.Copy(result, configInputs)
-	maps.Copy(result, cliInputs)
-	return result
-}
-
 // collectMissingInputsIfNeeded checks if required inputs are missing and
 // prompts the user interactively if stdin is a terminal.
 //
@@ -1225,173 +1180,4 @@ func isTerminal(r io.Reader) bool {
 		return term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 	}
 	return false
-}
-
-// registerNotifyBackends registers notification backends from config (T027 stub).
-//
-// This function reads backend configuration from .awf/config.yaml and registers
-// the appropriate backends with the NotifyOperationProvider. It supports:
-//   - Desktop notifications (always enabled)
-//   - Webhook (always enabled, URL provided per-operation)
-//
-// If default_backend is configured, it sets the default backend for the provider.
-//
-// Parameters:
-//   - provider: notification provider to register backends with
-//   - cfg: project configuration containing backend settings
-//   - logger: structured logger for backend registration tracing
-//
-// Returns:
-//   - error: non-nil if backend registration fails
-func registerNotifyBackends(provider *notify.NotifyOperationProvider, cfg *config.ProjectConfig, logger ports.Logger) error {
-	// Validate inputs
-	if provider == nil {
-		return fmt.Errorf("notify provider cannot be nil")
-	}
-	if cfg == nil {
-		return fmt.Errorf("config cannot be nil")
-	}
-
-	// 1. Register desktop backend (always enabled)
-	desktopBackend := notify.NewDesktopBackend()
-	if err := provider.RegisterBackend("desktop", desktopBackend); err != nil {
-		return fmt.Errorf("failed to register desktop backend: %w", err)
-	}
-	logger.Debug("registered desktop notification backend")
-
-	// 2. Register webhook backend (always enabled)
-	webhookBackend := notify.NewWebhookBackend()
-	if err := provider.RegisterBackend("webhook", webhookBackend); err != nil {
-		return fmt.Errorf("failed to register webhook backend: %w", err)
-	}
-	logger.Debug("registered webhook notification backend")
-
-	// 3. Set default backend if cfg.Notify.DefaultBackend is set
-	if strings.TrimSpace(cfg.Notify.DefaultBackend) != "" {
-		provider.SetDefaultBackend(cfg.Notify.DefaultBackend)
-		logger.Debug("set default notification backend", "backend", cfg.Notify.DefaultBackend)
-	}
-
-	return nil
-}
-
-// buildAWFPaths returns the AWF XDG directory paths for template interpolation (F063).
-func buildAWFPaths() map[string]string {
-	return map[string]string{
-		"prompts_dir":   xdg.AWFPromptsDir(),
-		"scripts_dir":   xdg.AWFScriptsDir(),
-		"config_dir":    xdg.AWFConfigDir(),
-		"data_dir":      xdg.AWFDataDir(),
-		"workflows_dir": xdg.AWFWorkflowsDir(),
-		"plugins_dir":   xdg.AWFPluginsDir(),
-	}
-}
-
-// buildAuditWriter creates a FileAuditTrailWriter based on the AWF_AUDIT_LOG env var.
-// Returns (nil, noop, nil) when AWF_AUDIT_LOG=off.
-// The caller must defer the returned cleanup func.
-func buildAuditWriter(logger ports.Logger) (ports.AuditTrailWriter, func(), error) {
-	auditLog := os.Getenv("AWF_AUDIT_LOG")
-	if auditLog == "off" {
-		return nil, func() {}, nil
-	}
-
-	auditPath := auditLog
-	if auditPath == "" {
-		auditPath = filepath.Join(xdg.AWFDataDir(), "audit.jsonl")
-	}
-
-	w, err := audit.NewFileAuditTrailWriter(auditPath)
-	if err != nil {
-		return nil, func() {}, err
-	}
-
-	cleanup := func() {
-		if closeErr := w.Close(); closeErr != nil {
-			logger.Error("failed to close audit writer", "error", closeErr)
-		}
-	}
-	return w, cleanup, nil
-}
-
-// buildTracerProvider initializes an OpenTelemetry tracer from CLI config.
-// Returns a NopTracer when OtelExporter is empty (tracing disabled).
-func buildTracerProvider(ctx context.Context, cfg *Config) (ports.Tracer, func(), error) {
-	if cfg.OtelExporter == "" {
-		return ports.NopTracer{}, func() {}, nil
-	}
-
-	endpoint := cfg.OtelExporter
-	insecure := true
-	if strings.HasPrefix(endpoint, "https://") {
-		endpoint = strings.TrimPrefix(endpoint, "https://")
-		insecure = false
-	} else if strings.HasPrefix(endpoint, "http://") {
-		endpoint = strings.TrimPrefix(endpoint, "http://")
-	}
-
-	serviceName := cfg.OtelServiceName
-	if serviceName == "" {
-		serviceName = "awf"
-	}
-
-	tp, err := infraotel.NewTracerProvider(ctx, infraotel.Config{
-		Endpoint:    endpoint,
-		ServiceName: serviceName,
-		Insecure:    insecure,
-	})
-	if err != nil {
-		return ports.NopTracer{}, func() {}, err
-	}
-
-	var once sync.Once
-	shutdown := func() {
-		once.Do(func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := tp.Shutdown(shutdownCtx); err != nil {
-				_ = err // best-effort shutdown; caller cannot act on this
-			}
-		})
-	}
-
-	return tp, shutdown, nil
-}
-
-// buildBuiltinProviders constructs a CompositeOperationProvider from the three built-in providers,
-// gating each behind an IsPluginEnabled() check so disabled providers are excluded from execution.
-// If manager is non-nil (external plugins available), it is appended last so plugin operations
-// are dispatched after built-in providers.
-func buildBuiltinProviders(pluginSvc *application.PluginService, projectCfg *config.ProjectConfig, logger ports.Logger, manager ports.OperationProvider) (*pluginmgr.CompositeOperationProvider, error) {
-	// pluginSvc nil check is a defensive guard — both call-sites pass non-nil service,
-	// but we fall back to enabling all providers if called without a service.
-	var providers []ports.OperationProvider
-
-	if pluginSvc == nil || pluginSvc.IsPluginEnabled("github") {
-		githubClient := github.NewClient(logger)
-		providers = append(providers, github.NewGitHubOperationProvider(githubClient, logger))
-	}
-
-	if pluginSvc == nil || pluginSvc.IsPluginEnabled("notify") {
-		notifyProvider := notify.NewNotifyOperationProvider(logger)
-		cfg := projectCfg
-		if cfg == nil {
-			cfg = &config.ProjectConfig{}
-		}
-		if err := registerNotifyBackends(notifyProvider, cfg, logger); err != nil {
-			return nil, fmt.Errorf("failed to register notify backends: %w", err)
-		}
-		providers = append(providers, notifyProvider)
-	}
-
-	if pluginSvc == nil || pluginSvc.IsPluginEnabled("http") {
-		httpClient := httpx.NewClient()
-		providers = append(providers, http.NewHTTPOperationProvider(httpClient, logger))
-	}
-
-	if manager != nil {
-		providers = append(providers, manager)
-	}
-
-	return pluginmgr.NewCompositeOperationProvider(providers...), nil
 }

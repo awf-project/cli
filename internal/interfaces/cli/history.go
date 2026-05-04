@@ -170,7 +170,8 @@ func writeHistoryRecords(writer *ui.OutputWriter, records []*workflow.ExecutionR
 		info := &infos[i]
 		duration := formatDuration(info.DurationMs)
 		completedAt, _ := time.Parse(time.RFC3339, info.CompletedAt)
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(
+			w, "%s\t%s\t%s\t%s\t%s\n",
 			info.ID,
 			info.WorkflowName,
 			info.Status,

@@ -143,7 +143,8 @@ func TestFileNotFoundHintGenerator_FindsMultipleSimilarFiles_OrdersByRelevance(t
 	// First hint should mention the closest match (test.yaml is closest to tset.yaml)
 	if len(hints) > 0 {
 		firstHint := hints[0].Message
-		assert.True(t,
+		assert.True(
+			t,
 			containsSubstring(firstHint, "test.yaml") || containsSubstring(firstHint, "test-workflow.yaml"),
 			"first hint should mention one of the similar files",
 		)
@@ -580,7 +581,8 @@ func TestInvalidStateHintGenerator_ReturnsMultipleHints_OrderedByRelevance(t *te
 	// First hint should mention the closest match
 	if len(hints) > 0 {
 		firstHint := hints[0].Message
-		assert.True(t,
+		assert.True(
+			t,
 			containsSubstring(firstHint, "start") || containsSubstring(firstHint, "setup"),
 			"first hint should mention one of the closest matches",
 		)
@@ -652,7 +654,8 @@ func TestInvalidStateHintGenerator_FindsMultipleSimilarStates_OrdersByDistance(t
 	// First hint should mention the closest match ("process" is closest to "proces")
 	if len(hints) > 0 {
 		firstHint := hints[0].Message
-		assert.True(t,
+		assert.True(
+			t,
 			containsSubstring(firstHint, "process") || containsSubstring(firstHint, "preprocess"),
 			"first hint should mention one of the closest matches",
 		)

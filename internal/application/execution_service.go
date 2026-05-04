@@ -292,93 +292,98 @@ func (s *ExecutionService) RunWithWorkflow(
 	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil)
 }
 
-// runWithCallStack executes a workflow by name with an optional parent call stack.
-// This is used internally by executeCallWorkflowStep to preserve circular detection.
-func (s *ExecutionService) runWithCallStack(
+// RunWorkflowAsync starts workflow execution and returns the ExecutionContext immediately.
+// The returned context is observable via GetAllStepStates() while execution runs in a
+// background goroutine. The done channel receives nil on success or the execution error.
+func (s *ExecutionService) RunWorkflowAsync(
 	ctx context.Context,
-	workflowName string,
+	wf *workflow.Workflow,
 	inputs map[string]any,
-	parentCallStack []string,
-) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack)
+) (*workflow.ExecutionContext, <-chan error, error) {
+	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, nil)
+	if err != nil {
+		if span != nil {
+			span.End()
+		}
+		return nil, nil, err
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		defer span.End()
+		done <- s.runExecutionLoop(spanCtx, wf, execCtx)
+	}()
+
+	return execCtx, done, nil
 }
 
-// runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
-// If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
-//
-//nolint:gocognit // Complexity 35: main execution loop handles state machine transitions, error handling, and hook execution. Refactoring would split tightly-coupled state management.
-func (s *ExecutionService) runWithCallStackAndWorkflow(
+// prepareExecution handles workflow setup: span creation, template expansion, context
+// initialization, input validation, audit emission, and workflow_start hooks.
+// Returns the span-enriched context, the span (caller must End() it), and the execution context.
+func (s *ExecutionService) prepareExecution(
 	ctx context.Context,
-	workflowName string,
 	wf *workflow.Workflow,
 	inputs map[string]any,
 	parentCallStack []string,
-) (*workflow.ExecutionContext, error) {
-	// load workflow if not provided
-	if wf == nil {
-		var err error
-		wf, err = s.workflowSvc.GetWorkflow(ctx, workflowName)
-		if err != nil {
-			return nil, fmt.Errorf("load workflow: %w", err)
-		}
-	}
-
+) (context.Context, ports.Span, *workflow.ExecutionContext, error) {
 	ctx, span := s.startSpan(ctx, "workflow.run")
-	defer span.End()
 	span.SetAttribute("workflow.name", wf.Name)
 	span.SetAttribute("workflow.version", wf.Version)
 	span.SetAttribute("user", s.resolveAuditUser())
 
-	// expand template references in workflow steps
 	if s.templateSvc != nil {
 		if err := s.templateSvc.ExpandWorkflow(ctx, wf); err != nil {
-			return nil, fmt.Errorf("expand templates: %w", err)
+			span.End()
+			return ctx, nil, nil, fmt.Errorf("expand templates: %w", err)
 		}
 	}
 
-	// initialize execution context
 	execCtx := workflow.NewExecutionContext(uuid.New().String(), wf.Name)
 	execCtx.Status = workflow.StatusRunning
 	span.SetAttribute("execution_id", execCtx.WorkflowID)
 
-	// Inherit parent call stack for circular detection in sub-workflows
 	if len(parentCallStack) > 0 {
 		execCtx.CallStack = make([]string, len(parentCallStack))
 		copy(execCtx.CallStack, parentCallStack)
 	}
 
-	// Apply default values for inputs not provided
 	for _, inp := range wf.Inputs {
 		if _, provided := inputs[inp.Name]; !provided && inp.Default != nil {
 			execCtx.SetInput(inp.Name, inp.Default)
 		}
 	}
-	// Then apply user-provided inputs (overriding defaults)
 	for k, v := range inputs {
 		execCtx.SetInput(k, v)
 	}
 
-	// Validate inputs against definitions
 	if err := s.validateInputs(execCtx.Inputs, wf.Inputs); err != nil {
-		return nil, fmt.Errorf("input validation failed: %w", err)
+		span.End()
+		return ctx, nil, nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
 	s.logger.Info("starting workflow", "workflow", wf.Name, "id", execCtx.WorkflowID)
-
-	// emit audit started event before workflow_start hooks
 	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
 
-	// execute workflow_start hooks
 	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
 		s.recordExecutionEnd(ctx, execCtx, err.Error())
-		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
+		span.End()
+		return ctx, nil, nil, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
 
-	// execution loop
-	// Note: loop body duplicated in executeFromStep (same file). Keep both in sync.
+	return ctx, span, execCtx, nil
+}
+
+// runExecutionLoop runs the step-by-step state machine and post-execution hooks.
+//
+//nolint:gocognit,cyclop // Execution loop handles state transitions, error handling, and hook execution.
+func (s *ExecutionService) runExecutionLoop(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	execCtx *workflow.ExecutionContext,
+) error {
 	var execErr error
 	currentStep := wf.Initial
 	for {
@@ -391,9 +396,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 		execCtx.CurrentStep = currentStep
 
-		// terminal state - done
 		if step.Type == workflow.StepTypeTerminal {
-			// Check terminal status: failure or success (default)
 			if step.Status == workflow.TerminalFailure {
 				execCtx.Status = workflow.StatusFailed
 				execCtx.ExitCode = step.ExitCode
@@ -416,7 +419,6 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			break
 		}
 
-		// execute step based on type
 		var nextStep string
 		var err error
 
@@ -448,19 +450,14 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			break
 		}
 
-		// checkpoint after each step
 		s.checkpoint(ctx, execCtx)
-
 		currentStep = nextStep
 	}
 
-	// execute workflow hooks based on outcome
-	// use background context for hooks since main ctx may be cancelled
 	hookCtx := context.Background()
-	intCtx = s.buildInterpolationContext(execCtx)
+	intCtx := s.buildInterpolationContext(execCtx)
 
 	if execErr != nil {
-		// check if this was a cancellation (SIGINT/SIGTERM) or timeout
 		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
@@ -470,10 +467,9 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
-			return execCtx, execErr
+			return execErr
 		}
 
-		// regular error - execute error hook
 		intCtx.Error = &interpolation.ErrorData{
 			Type:    classifyErrorType(execErr),
 			Message: execErr.Error(),
@@ -482,14 +478,50 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx, false); err != nil {
 			s.logger.Warn("workflow_error hook failed", "error", err)
 		}
-		return execCtx, execErr
+		return execErr
 	}
 
-	// workflow completed successfully
 	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
-	return execCtx, nil
+	return nil
+}
+
+// runWithCallStack executes a workflow by name with an optional parent call stack.
+// This is used internally by executeCallWorkflowStep to preserve circular detection.
+func (s *ExecutionService) runWithCallStack(
+	ctx context.Context,
+	workflowName string,
+	inputs map[string]any,
+	parentCallStack []string,
+) (*workflow.ExecutionContext, error) {
+	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack)
+}
+
+// runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
+// If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
+func (s *ExecutionService) runWithCallStackAndWorkflow(
+	ctx context.Context,
+	workflowName string,
+	wf *workflow.Workflow,
+	inputs map[string]any,
+	parentCallStack []string,
+) (*workflow.ExecutionContext, error) {
+	if wf == nil {
+		var err error
+		wf, err = s.workflowSvc.GetWorkflow(ctx, workflowName)
+		if err != nil {
+			return nil, fmt.Errorf("load workflow: %w", err)
+		}
+	}
+
+	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack)
+	if err != nil {
+		return nil, err
+	}
+	defer span.End()
+
+	return execCtx, s.runExecutionLoop(spanCtx, wf, execCtx)
 }
 
 // executeStep executes a single step and returns the next step name.
@@ -694,7 +726,8 @@ func (s *ExecutionService) executeWithRetry(
 
 		// Check if we should retry
 		if !retryer.ShouldRetry(exitCode, attempt) {
-			s.logger.Debug("not retrying",
+			s.logger.Debug(
+				"not retrying",
 				"step", step.Name,
 				"attempt", attempt,
 				"exit_code", exitCode,
@@ -704,7 +737,8 @@ func (s *ExecutionService) executeWithRetry(
 		}
 
 		// Log retry
-		s.logger.Info("retrying step",
+		s.logger.Info(
+			"retrying step",
 			"step", step.Name,
 			"attempt", attempt,
 			"exit_code", exitCode,
@@ -945,10 +979,12 @@ func (s *ExecutionService) executeLoopStep(
 
 	if step.Type == workflow.StepTypeForEach {
 		result, err = s.loopExecutor.ExecuteForEach(
-			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext)
+			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext,
+		)
 	} else {
 		result, err = s.loopExecutor.ExecuteWhile(
-			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext)
+			stepCtx, wf, step, execCtx, stepExecutor, s.buildInterpolationContext,
+		)
 	}
 
 	// Record loop step state
