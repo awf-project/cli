@@ -3,17 +3,17 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
 
-A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.
+A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.
 
 ## Features
 
 - **State Machine Execution** - Define workflows as state machines with conditional transitions based on exit codes, command output, or custom expressions
 - **Inline Error Handling** - Specify error messages and exit codes directly on steps without creating separate terminal states
-- **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
-- **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output; human-readable streaming display controlled by `output_format` field (text vs raw NDJSON); unified display-event abstraction across all 5 providers with optional verbose mode showing tool-use markers (`[tool: Name(Arg)]`)
+- **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini, GitHub Copilot) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
+- **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output; human-readable streaming display controlled by `output_format` field (text vs raw NDJSON); unified display-event abstraction across all 6 providers with optional verbose mode showing tool-use markers (`[tool: Name(Arg)]`)
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support
 - **External Script Files** - Load commands from external script files with shebang-based interpreter dispatch, template interpolation, path resolution, and local override support
-- **Conversation Mode** - Multi-turn conversations with native session resume for CLI providers (`claude`, `codex`, `gemini`, `opencode`), automatic context window management for HTTP providers, mid-conversation context injection via `inject_context` field, and token tracking across all turns
+- **Conversation Mode** - Multi-turn conversations with native session resume for CLI providers (`claude`, `codex`, `gemini`, `opencode`, `github_copilot`), automatic context window management for HTTP providers, mid-conversation context injection via `inject_context` field, and token tracking across all turns
 - **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
 - **Loop Constructs** - For-each and while loops with full context access

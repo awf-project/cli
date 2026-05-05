@@ -13,13 +13,15 @@ const (
 // DisplayEvent represents a parsed event from a provider's streaming output.
 // Kind discriminates the event type for rendering; Type holds the raw provider JSON event type.
 // Text holds displayable output for EventText events; Name, Arg, ID are populated for EventToolUse events.
+// Delta indicates the event is a streaming token fragment that should be written without a trailing newline.
 type DisplayEvent struct {
-	Type string
-	Kind EventKind
-	Text string
-	Name string
-	Arg  string
-	ID   string
+	Type  string
+	Kind  EventKind
+	Text  string
+	Name  string
+	Arg   string
+	ID    string
+	Delta bool
 }
 
 // DisplayMode controls which event categories are rendered to the writer.
