@@ -66,7 +66,7 @@ You'll see the agent's first reply, then a `> ` prompt where you can type. When 
 
 | Field | Required | Description |
 |---|---|---|
-| `provider` | Yes | Agent provider (`claude`, `gemini`, `codex`, `opencode`, `openai_compatible`) |
+| `provider` | Yes | Agent provider (`claude`, `gemini`, `codex`, `opencode`, `github_copilot`, `openai_compatible`) |
 | `mode` | Yes | Must be `conversation` |
 | `prompt` | Yes | First user message — sent automatically as turn 1 |
 | `system_prompt` | No | System message preserved for the whole session |
@@ -137,7 +137,7 @@ states:
 Both steps run as `mode: single` (the default — no `mode:` line needed). There is no interactive loop. Each step runs exactly one agent turn.
 
 - `seed` has `conversation: {}`. This marks the step as session-tracked: AWF calls `provider.ExecuteConversation` (instead of `provider.Execute`), the provider runs one turn, and the session ID returned by the CLI is captured into `state.conversation.session_id`.
-- `recall` has `conversation: {continue_from: seed}`. AWF clones the conversation state from `seed` (session ID + turn history) and passes it to the provider, which resumes the session via its native flag (`claude -r <id>`, `gemini --resume <id>`, `codex resume <id>`, `opencode -s <id>`).
+- `recall` has `conversation: {continue_from: seed}`. AWF clones the conversation state from `seed` (session ID + turn history) and passes it to the provider, which resumes the session via its native flag (`claude -r <id>`, `gemini --resume <id>`, `codex resume <id>`, `opencode -s <id>`, `copilot --resume=<id>`).
 
 ### Why the Empty `conversation: {}`?
 

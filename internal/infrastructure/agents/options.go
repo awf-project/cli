@@ -49,6 +49,20 @@ func WithOpenCodeLogger(l ports.Logger) OpenCodeProviderOption {
 	}
 }
 
+type CopilotProviderOption func(*CopilotProvider)
+
+func WithCopilotExecutor(executor ports.CLIExecutor) CopilotProviderOption {
+	return func(p *CopilotProvider) {
+		p.executor = executor
+	}
+}
+
+func WithCopilotLogger(l ports.Logger) CopilotProviderOption {
+	return func(p *CopilotProvider) {
+		p.logger = l
+	}
+}
+
 type OpenAICompatibleProviderOption func(*OpenAICompatibleProvider)
 
 func WithHTTPClient(client *httpx.Client) OpenAICompatibleProviderOption {

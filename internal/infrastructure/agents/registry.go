@@ -77,6 +77,7 @@ func (r *AgentRegistry) RegisterDefaults() error {
 		NewGeminiProvider(),
 		NewOpenAICompatibleProvider(),
 		NewOpenCodeProvider(),
+		NewCopilotProvider(),
 	}
 
 	var errs []error
