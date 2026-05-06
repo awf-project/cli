@@ -228,6 +228,54 @@ awf run parallel-deploy
 
 ---
 
+### EXECUTION.EVENT.DELIVERY_FAILED
+
+**Description:** An event could not be delivered to a subscribed plugin via gRPC HandleEvent RPC.
+
+**Resolution:** Check that the target plugin is running and responsive. Review plugin logs for errors in `HandleEvent` implementation. If the plugin is slow, consider offloading work to a goroutine within `HandleEvent`.
+
+**Example:**
+```bash
+awf run deploy-pipeline
+# Error [EXECUTION.EVENT.DELIVERY_FAILED]: failed to deliver event "workflow.completed" to plugin "awf-plugin-notify": context deadline exceeded
+```
+
+**Related codes:** `EXECUTION.EVENT.BUFFER_FULL`, `EXECUTION.COMMAND.FAILED`
+
+---
+
+### EXECUTION.EVENT.CYCLE_DETECTED
+
+**Description:** Event propagation reached the maximum depth of 3, indicating a circular event chain between plugins.
+
+**Resolution:** Review your plugins' `HandleEvent` implementations. If Plugin A emits an event that triggers Plugin B, which emits an event triggering Plugin A, the cycle is halted at depth 3. Redesign event flows to avoid circular dependencies.
+
+**Example:**
+```bash
+awf run workflow
+# Warning [EXECUTION.EVENT.CYCLE_DETECTED]: propagation depth exceeded for event "custom.ping" (depth 3); halting to prevent infinite loop
+```
+
+**Related codes:** `EXECUTION.EVENT.DELIVERY_FAILED`
+
+---
+
+### EXECUTION.EVENT.BUFFER_FULL
+
+**Description:** A plugin's event buffer (256 events) is full. New events for this plugin are dropped while other plugins continue receiving normally.
+
+**Resolution:** Speed up the plugin's `HandleEvent` implementation (target < 100ms). Use goroutines for blocking I/O. Consider reducing the number of subscribed event patterns.
+
+**Example:**
+```bash
+awf run high-throughput
+# Warning [EXECUTION.EVENT.BUFFER_FULL]: event buffer full for plugin "awf-plugin-metrics"; dropping event "step.completed"
+```
+
+**Related codes:** `EXECUTION.EVENT.DELIVERY_FAILED`
+
+---
+
 ## SYSTEM Category (Exit Code 4)
 
 Infrastructure and system-level failures.
@@ -429,7 +477,7 @@ If you're migrating from AWF versions before v0.4.0, the error code taxonomy pre
 |------------------|-------------------------|-------|
 | 1 (User Error) | `USER.INPUT.*` | All user-facing errors |
 | 2 (Workflow Error) | `WORKFLOW.PARSE.*`, `WORKFLOW.VALIDATION.*` | Workflow definition errors |
-| 3 (Execution Error) | `EXECUTION.COMMAND.*`, `EXECUTION.PARALLEL.*` | Runtime failures |
+| 3 (Execution Error) | `EXECUTION.COMMAND.*`, `EXECUTION.PARALLEL.*`, `EXECUTION.EVENT.*` | Runtime failures |
 | 4 (System Error) | `SYSTEM.IO.*` | Infrastructure errors |
 
 Exit codes remain unchanged, but error messages now include structured error codes for programmatic handling.

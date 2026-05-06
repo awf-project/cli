@@ -9,6 +9,14 @@ homepage: https://github.com/example/awf-plugin-slack
 capabilities:
   - operations
   - step_types
+  - events
+
+events:
+  subscribe:
+    - "workflow.*"
+    - "step.*"
+  emit:
+    - "custom.notification"
 
 config:
   webhook_url:

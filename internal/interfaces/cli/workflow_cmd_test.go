@@ -767,7 +767,7 @@ func TestFindPackDir_ShortAndLongName(t *testing.T) {
 	assert.Empty(t, findPackDir("nonexistent"), "unknown pack should return empty string")
 }
 
-// TestEffectiveCLIVersion_DevPrefix verifies effectiveCLIVersion returns "0.5.0"
+// TestEffectiveCLIVersion_DevPrefix verifies effectiveCLIVersion returns "999.0.0"
 // for any version string starting with "dev" and the verbatim version otherwise.
 func TestEffectiveCLIVersion_DevPrefix(t *testing.T) {
 	tests := []struct {
@@ -775,9 +775,9 @@ func TestEffectiveCLIVersion_DevPrefix(t *testing.T) {
 		version string
 		want    string
 	}{
-		{"exact dev", "dev", "0.5.0"},
-		{"dev with hash", "dev-abc123", "0.5.0"},
-		{"dev dirty", "dev-abc123-dirty", "0.5.0"},
+		{"exact dev", "dev", "999.0.0"},
+		{"dev with hash", "dev-abc123", "999.0.0"},
+		{"dev dirty", "dev-abc123-dirty", "999.0.0"},
 		{"real version", "1.2.3", "1.2.3"},
 		{"pre-release", "1.0.0-rc1", "1.0.0-rc1"},
 	}

@@ -329,10 +329,10 @@ func extractPackName(ownerRepo string) string {
 }
 
 // effectiveCLIVersion returns Version, substituting a valid semver for "dev" builds
-// so pack version constraint checks work correctly outside production releases.
+// so version constraint checks (packs, plugins) work correctly outside production releases.
 func effectiveCLIVersion() string {
 	if strings.HasPrefix(Version, "dev") {
-		return "0.5.0"
+		return "999.0.0"
 	}
 	return Version
 }

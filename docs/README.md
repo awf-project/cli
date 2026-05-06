@@ -45,6 +45,7 @@ Learn how to use AWF effectively:
 - [Retry Configuration](user-guide/retry.md) - Automatic retry with backoff strategies, delay capping, and exit code filtering
 - [Templates](user-guide/templates.md) - Reusable workflow templates
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types
+- [Plugin Events](user-guide/plugin-events.md) - Real-time event reactivity between plugins and core
 - [Workflow Packs](user-guide/workflow-packs.md) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
 - [Terminal UI (TUI)](user-guide/tui.md) - Interactive dashboard for workflow browsing, monitoring, history, and agent conversations
 - [Upgrading AWF](user-guide/upgrade.md) - Self-update command with version checking, checksum verification, and atomic binary replacement
@@ -69,6 +70,7 @@ Technical reference documentation:
 For contributors and developers:
 
 - [Architecture](development/architecture.md) - Hexagonal architecture overview
+- [Plugin Event Architecture](development/plugin-event-architecture.md) - EventBus, gRPC event adapter, and wiring design
 - [Project Structure](development/project-structure.md) - Codebase organization
 - [Code Quality](development/code-quality.md) - Linters, formatters, and quality tooling
 - [Testing](development/testing.md) - Testing conventions and commands

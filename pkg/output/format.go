@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	codeFenceRegex = regexp.MustCompile(`(?s)^\s*` + "```" + `[a-zA-Z0-9]*\r?\n(.*?)\r?\n` + "```")
-	fenceMarker    = regexp.MustCompile("```")
-	endsWithFence  = regexp.MustCompile(`\n` + "```" + `\s*$`)
+	codeFenceRegex    = regexp.MustCompile(`(?s)^\s*` + "```" + `[a-zA-Z0-9]*\r?\n(.*?)\r?\n` + "```")
+	fenceMarker       = regexp.MustCompile("```")
+	endsWithFence     = regexp.MustCompile(`\n` + "```" + `\s*$`)
+	embeddedJSONFence = regexp.MustCompile("(?s)" + "```" + `[jJ][sS][oO][nN]\r?\n(.*?)\r?\n` + "```")
 )
 
 // StripCodeFences removes outermost markdown code fences from input.
@@ -47,6 +48,15 @@ func ValidateAndParseJSON(input string) (any, error) {
 	return result, nil
 }
 
+// extractEmbeddedJSONFence finds a ```json code fence anywhere in the text.
+func extractEmbeddedJSONFence(input string) string {
+	matches := embeddedJSONFence.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
 // ProcessOutputFormat applies format-specific processing to agent output.
 // For "json": strips fences then validates/parses JSON.
 // For "text": strips fences only.
@@ -56,6 +66,14 @@ func ProcessOutputFormat(output, format string) (processed string, parsed any, e
 	case "json":
 		processed = StripCodeFences(output)
 		parsed, err = ValidateAndParseJSON(processed)
+		if err != nil {
+			if extracted := extractEmbeddedJSONFence(output); extracted != "" {
+				parsed, err = ValidateAndParseJSON(extracted)
+				if err == nil {
+					return extracted, parsed, nil
+				}
+			}
+		}
 		return processed, parsed, err
 	case "text":
 		processed = StripCodeFences(output)

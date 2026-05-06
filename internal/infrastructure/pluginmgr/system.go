@@ -14,14 +14,16 @@ type SystemResult struct {
 	Manager    ports.OperationProvider
 	RPCManager *RPCPluginManager
 	StateStore *JSONPluginStateStore
+	EventBus   *EventBus
 	Cleanup    func()
 }
 
 // InitSystem initializes the plugin infrastructure from the given directories.
 // pluginDirs may be nil or empty — returns a stub service with graceful degradation.
 // stateStorePath: directory for persisting plugin enable/disable state.
+// hostVersion: AWF CLI version for plugin compatibility checks (e.g. "0.8.0").
 // logger may be nil; log calls are skipped when it is nil.
-func InitSystem(ctx context.Context, pluginDirs []string, stateStorePath string, logger ports.Logger) (*SystemResult, error) {
+func InitSystem(ctx context.Context, pluginDirs []string, stateStorePath, hostVersion string, logger ports.Logger) (*SystemResult, error) {
 	stateStore := NewJSONPluginStateStore(stateStorePath)
 	if err := stateStore.Load(ctx); err != nil {
 		if logger != nil {
@@ -44,6 +46,11 @@ func InitSystem(ctx context.Context, pluginDirs []string, stateStorePath string,
 	loader := NewFileSystemLoader(parser)
 	manager := NewRPCPluginManager(loader)
 	manager.SetPluginsDirs(existingDirs)
+	if hostVersion != "" {
+		manager.SetHostVersion(hostVersion)
+	}
+	eventBus := NewEventBus(logger)
+	manager.SetEventBus(eventBus)
 
 	service := application.NewPluginService(manager, stateStore, logger)
 
@@ -54,6 +61,7 @@ func InitSystem(ctx context.Context, pluginDirs []string, stateStorePath string,
 	}
 
 	cleanup := func() {
+		_ = eventBus.Close()
 		shutdownCtx := context.Background()
 		if err := service.ShutdownAll(shutdownCtx); err != nil {
 			if logger != nil {
@@ -72,6 +80,7 @@ func InitSystem(ctx context.Context, pluginDirs []string, stateStorePath string,
 		Manager:    manager,
 		RPCManager: manager,
 		StateStore: stateStore,
+		EventBus:   eventBus,
 		Cleanup:    cleanup,
 	}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -109,14 +110,17 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 	}
 
 	// Check capabilities
-	if len(manifest.Capabilities) != 2 {
-		t.Errorf("Capabilities count = %d, want 2", len(manifest.Capabilities))
+	if len(manifest.Capabilities) != 3 {
+		t.Errorf("Capabilities count = %d, want 3", len(manifest.Capabilities))
 	}
 	if !manifest.HasCapability(pluginmodel.CapabilityOperations) {
 		t.Error("expected operations capability")
 	}
 	if !manifest.HasCapability(pluginmodel.CapabilityStepTypes) {
 		t.Error("expected step_types capability")
+	}
+	if !manifest.HasCapability(pluginmodel.CapabilityEvents) {
+		t.Error("expected events capability")
 	}
 
 	// Check config fields
@@ -204,6 +208,24 @@ func TestManifestParser_ParseFile_ValidFull(t *testing.T) {
 		if i < len(logLevel.Enum) && logLevel.Enum[i] != v {
 			t.Errorf("log_level.Enum[%d] = %q, want %q", i, logLevel.Enum[i], v)
 		}
+	}
+
+	// Check events section
+	if len(manifest.Events.Subscribe) != 2 {
+		t.Errorf("Events.Subscribe count = %d, want 2", len(manifest.Events.Subscribe))
+	}
+	expectedSubscribe := []string{"workflow.*", "step.*"}
+	for i, v := range expectedSubscribe {
+		if i < len(manifest.Events.Subscribe) && manifest.Events.Subscribe[i] != v {
+			t.Errorf("Events.Subscribe[%d] = %q, want %q", i, manifest.Events.Subscribe[i], v)
+		}
+	}
+
+	if len(manifest.Events.Emit) != 1 {
+		t.Errorf("Events.Emit count = %d, want 1", len(manifest.Events.Emit))
+	}
+	if len(manifest.Events.Emit) > 0 && manifest.Events.Emit[0] != "custom.notification" {
+		t.Errorf("Events.Emit[0] = %q, want %q", manifest.Events.Emit[0], "custom.notification")
 	}
 }
 
@@ -585,6 +607,119 @@ func TestManifestParser_ParseFile_EdgeCases(t *testing.T) {
 				t.Error("ParseFile() returned non-nil manifest for invalid file")
 			}
 		})
+	}
+}
+
+func TestManifestParser_Parse_EventsSection(t *testing.T) {
+	parser := NewManifestParser()
+	yamlContent := `
+name: events-test-plugin
+version: 1.0.0
+awf_version: ">=0.4.0"
+capabilities:
+  - operations
+  - events
+events:
+  subscribe:
+    - "workflow.*"
+    - "step.started"
+    - "custom.event"
+  emit:
+    - "notification.sent"
+    - "alert.triggered"
+`
+	reader := strings.NewReader(yamlContent)
+
+	manifest, err := parser.Parse(reader)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if manifest == nil {
+		t.Fatal("Parse() returned nil manifest")
+	}
+
+	if !manifest.HasCapability(pluginmodel.CapabilityEvents) {
+		t.Error("expected events capability")
+	}
+
+	if len(manifest.Events.Subscribe) != 3 {
+		t.Errorf("Events.Subscribe count = %d, want 3", len(manifest.Events.Subscribe))
+	}
+	expectedSubscribe := []string{"workflow.*", "step.started", "custom.event"}
+	for i, v := range expectedSubscribe {
+		if i < len(manifest.Events.Subscribe) && manifest.Events.Subscribe[i] != v {
+			t.Errorf("Events.Subscribe[%d] = %q, want %q", i, manifest.Events.Subscribe[i], v)
+		}
+	}
+
+	if len(manifest.Events.Emit) != 2 {
+		t.Errorf("Events.Emit count = %d, want 2", len(manifest.Events.Emit))
+	}
+	expectedEmit := []string{"notification.sent", "alert.triggered"}
+	for i, v := range expectedEmit {
+		if i < len(manifest.Events.Emit) && manifest.Events.Emit[i] != v {
+			t.Errorf("Events.Emit[%d] = %q, want %q", i, manifest.Events.Emit[i], v)
+		}
+	}
+}
+
+func TestManifestParser_Parse_EmptyEventsSection(t *testing.T) {
+	parser := NewManifestParser()
+	yamlContent := `
+name: no-events-plugin
+version: 1.0.0
+awf_version: ">=0.4.0"
+capabilities:
+  - operations
+events:
+  subscribe: []
+  emit: []
+`
+	reader := strings.NewReader(yamlContent)
+
+	manifest, err := parser.Parse(reader)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if manifest == nil {
+		t.Fatal("Parse() returned nil manifest")
+	}
+
+	if len(manifest.Events.Subscribe) != 0 {
+		t.Errorf("Events.Subscribe count = %d, want 0", len(manifest.Events.Subscribe))
+	}
+	if len(manifest.Events.Emit) != 0 {
+		t.Errorf("Events.Emit count = %d, want 0", len(manifest.Events.Emit))
+	}
+}
+
+func TestManifestParser_ParseFile_ValidFull_NoGoroutineLeaks(t *testing.T) {
+	parser := NewManifestParser()
+	path := filepath.Join(fixturesPath, "valid-full", "plugin.yaml")
+
+	// Record initial goroutine count
+	runtime.GC()
+	initialGoroutines := runtime.NumGoroutine()
+
+	// Parse the manifest multiple times
+	for i := 0; i < 10; i++ {
+		manifest, err := parser.ParseFile(path)
+		if err != nil {
+			t.Fatalf("ParseFile() iteration %d error = %v", i, err)
+		}
+		if manifest == nil {
+			t.Fatalf("ParseFile() iteration %d returned nil", i)
+		}
+	}
+
+	// Record final goroutine count after parsing
+	runtime.GC()
+	finalGoroutines := runtime.NumGoroutine()
+
+	// Allow for minor fluctuations (±1 goroutine is acceptable)
+	if finalGoroutines > initialGoroutines+1 {
+		t.Errorf("goroutine leak detected: initial = %d, final = %d, diff = %d",
+			initialGoroutines, finalGoroutines, finalGoroutines-initialGoroutines)
 	}
 }
 

@@ -107,7 +107,7 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 		xdg.LocalPluginsDir(),
 		xdg.AWFPluginsDir(),
 	}
-	pluginResult, pluginErr := pluginmgr.InitSystem(context.Background(), pluginDirs, filepath.Join(storagePath, "plugins"), &nopLogger{})
+	pluginResult, pluginErr := pluginmgr.InitSystem(context.Background(), pluginDirs, filepath.Join(storagePath, "plugins"), "", &nopLogger{})
 
 	// Initialize tracer (same as CLI).
 	otelCfg := infraotel.TracerConfig{

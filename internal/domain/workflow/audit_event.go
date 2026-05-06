@@ -9,6 +9,11 @@ import (
 const (
 	EventWorkflowStarted   = "workflow.started"
 	EventWorkflowCompleted = "workflow.completed"
+	EventWorkflowFailed    = "workflow.failed"
+	EventStepStarted       = "step.started"
+	EventStepCompleted     = "step.completed"
+	EventStepFailed        = "step.failed"
+	EventStepRetrying      = "step.retrying"
 	auditSchemaVersion     = 1
 )
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,7 @@ type pluginConnection struct {
 	operation     pluginv1.OperationServiceClient
 	validator     pluginv1.ValidatorServiceClient
 	stepType      pluginv1.StepTypeServiceClient
+	event         pluginv1.EventServiceClient
 	processCancel context.CancelFunc // cancels the long-lived process context on Shutdown
 }
 
@@ -92,6 +94,7 @@ type grpcClientBundle struct {
 	operation pluginv1.OperationServiceClient
 	validator pluginv1.ValidatorServiceClient
 	stepType  pluginv1.StepTypeServiceClient
+	event     pluginv1.EventServiceClient
 }
 
 // GRPCClient creates gRPC service clients from the connection established by go-plugin.
@@ -102,6 +105,7 @@ func (p *clientPlugin) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, con
 		operation: pluginv1.NewOperationServiceClient(conn),
 		validator: pluginv1.NewValidatorServiceClient(conn),
 		stepType:  pluginv1.NewStepTypeServiceClient(conn),
+		event:     pluginv1.NewEventServiceClient(conn),
 	}, nil
 }
 
@@ -124,6 +128,7 @@ type RPCPluginManager struct {
 	loader      *FileSystemLoader                  // for plugin discovery
 	pluginsDirs []string                           // directories to discover plugins from
 	hostVersion string                             // current AWF version for plugin compatibility checks
+	eventBus    *EventBus                          // optional; nil means no event wiring
 }
 
 // NewRPCPluginManager creates a new RPCPluginManager.
@@ -132,7 +137,7 @@ func NewRPCPluginManager(loader *FileSystemLoader) *RPCPluginManager {
 		plugins:     make(map[string]*pluginmodel.PluginInfo),
 		connections: make(map[string]*pluginConnection),
 		loader:      loader,
-		hostVersion: "0.5.0",
+		hostVersion: "999.0.0",
 	}
 }
 
@@ -179,6 +184,7 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 			conn.operation = bundle.operation
 			conn.validator = bundle.validator
 			conn.stepType = bundle.stepType
+			conn.event = bundle.event
 		}
 
 		return conn, nil
@@ -370,6 +376,7 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 		pluginInfo.Status = pluginmodel.StatusRunning
 		pluginInfo.Operations = m.queryOperationNames(ctx, name, conn)
 		pluginInfo.StepTypes = m.queryStepTypeNames(ctx, name, conn)
+		m.wireEventSubscriptions(name, conn, pluginInfo)
 	}
 
 	return nil
@@ -907,6 +914,35 @@ func (m *RPCPluginManager) StepTypeProvider(logger ports.Logger) ports.StepTypeP
 		return nil
 	}
 	return &compositeStepTypeProvider{adapters: adapters}
+}
+
+// SetHostVersion overrides the default host version used for plugin compatibility checks.
+func (m *RPCPluginManager) SetHostVersion(v string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.hostVersion = v
+}
+
+// SetEventBus injects an EventBus for event subscription wiring after plugin Init.
+// Must be called before any Init() calls to enable event routing.
+func (m *RPCPluginManager) SetEventBus(bus *EventBus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.eventBus = bus
+}
+
+// wireEventSubscriptions registers the plugin's event subscriptions if the manifest declares the events capability.
+func (m *RPCPluginManager) wireEventSubscriptions(pluginName string, conn *pluginConnection, info *pluginmodel.PluginInfo) {
+	if m.eventBus == nil || conn.event == nil || info.Manifest == nil {
+		return
+	}
+
+	if !slices.Contains(info.Manifest.Capabilities, pluginmodel.CapabilityEvents) {
+		return
+	}
+
+	adapter := newGRPCEventAdapter(conn.event, pluginName)
+	m.eventBus.Subscribe(pluginName, info.Manifest.Events.Subscribe, adapter)
 }
 
 // splitOperationName splits "pluginName.opName" into (pluginName, opName).

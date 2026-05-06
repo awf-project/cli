@@ -5,9 +5,11 @@ import (
 	"io"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -310,6 +312,56 @@ func TestBuild_WithAllOptions(t *testing.T) {
 	assert.False(t, historyStore.IsClosed(), "store must not be closed before Cleanup()")
 	assert.NotPanics(t, result.Cleanup)
 	assert.True(t, historyStore.IsClosed(), "Cleanup() must close the HistoryStore")
+}
+
+func TestExecutionSetup_WithEventPublisher(t *testing.T) {
+	mockPublisher := testmocks.NewMockEventPublisher()
+
+	repo := testmocks.NewMockWorkflowRepository()
+	store := testmocks.NewMockStateStore()
+	executor := testmocks.NewMockCommandExecutor()
+	logger := testmocks.NewMockLogger()
+
+	simpleWf := &workflow.Workflow{
+		Name:    "test-workflow",
+		Initial: "step1",
+		Steps: map[string]*workflow.Step{
+			"step1": {
+				Name:      "step1",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo hello",
+				OnSuccess: "done",
+			},
+			"done": {
+				Name: "done",
+				Type: workflow.StepTypeTerminal,
+			},
+		},
+	}
+	repo.AddWorkflow("test-workflow", simpleWf)
+	executor.SetCommandResult("echo hello", &ports.CommandResult{ExitCode: 0, Stdout: "hello"})
+
+	setup := application.NewExecutionSetup(
+		repo,
+		store,
+		executor,
+		logger,
+		application.WithEventPublisher(mockPublisher),
+	)
+
+	result, err := setup.Build(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.ExecService)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = result.ExecService.Run(ctx, "test-workflow", map[string]any{})
+	require.NoError(t, err)
+
+	events := mockPublisher.GetEvents()
+	assert.Greater(t, len(events), 0, "MockEventPublisher must receive events after Run()")
 }
 
 // nopWriter is a no-op io.Writer used in tests.

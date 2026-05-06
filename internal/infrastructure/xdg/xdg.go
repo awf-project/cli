@@ -60,10 +60,13 @@ func AWFLogsDir() string {
 
 // LegacyDirExists checks if the old ~/.awf directory exists
 func LegacyDirExists() bool {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
 	legacyDir := filepath.Join(home, ".awf")
-	_, err := os.Stat(legacyDir)
-	return err == nil
+	_, statErr := os.Stat(legacyDir)
+	return statErr == nil
 }
 
 // LocalWorkflowsDir returns the local project workflows directory

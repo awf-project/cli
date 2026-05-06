@@ -335,6 +335,9 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
 			}))
 		}
+		if pluginResult.EventPublisher != nil {
+			setupOpts = append(setupOpts, application.WithEventPublisher(pluginResult.EventPublisher))
+		}
 	}
 
 	if auditWriter != nil {

@@ -75,6 +75,14 @@ func (p *BasePlugin) Shutdown(_ context.Context) error {
 	return nil
 }
 
+func (p *BasePlugin) Patterns() []string {
+	return nil
+}
+
+func (p *BasePlugin) HandleEvent(_ context.Context, _ Event) ([]Event, error) { //nolint:gocritic // hugeParam: interface constraint, Event cannot be a pointer here
+	return nil, nil
+}
+
 type OperationResult struct {
 	Success bool
 	Output  string

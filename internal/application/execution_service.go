@@ -11,6 +11,7 @@ import (
 	"time"
 
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -64,6 +65,7 @@ type ExecutionService struct {
 	auditTrailWriter   ports.AuditTrailWriter
 	packWorkflowLoader PackWorkflowLoader
 	tracer             ports.Tracer
+	eventPublisher     ports.EventPublisher
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -87,6 +89,11 @@ func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider
 // When set, agent-type steps can execute AI provider operations.
 func (s *ExecutionService) SetAgentRegistry(registry ports.AgentRegistry) {
 	s.agentRegistry = registry
+}
+
+// SetEventPublisher configures the event publisher for workflow lifecycle event emission.
+func (s *ExecutionService) SetEventPublisher(p ports.EventPublisher) {
+	s.eventPublisher = p
 }
 
 // SetEvaluator configures the expression evaluator for conditional transitions.
@@ -220,6 +227,44 @@ func (s *ExecutionService) emitAuditCompleted(ctx context.Context, execCtx *work
 		if s.logger != nil {
 			s.logger.Warn("audit trail write failed", "error", err, "event", workflow.EventWorkflowCompleted)
 		}
+	}
+}
+
+func (s *ExecutionService) emitEvent(ctx context.Context, eventType string, metadata map[string]string) {
+	if s.eventPublisher == nil {
+		return
+	}
+
+	masked := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if isSecretInputKey(k) {
+			masked[k] = "***"
+		} else {
+			masked[k] = v
+		}
+	}
+
+	event := pluginmodel.NewDomainEvent(eventType, "core", masked, nil)
+	if err := s.eventPublisher.Publish(ctx, event); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("event publish failed", "event", eventType, "error", err)
+		}
+	}
+}
+
+func (s *ExecutionService) emitWorkflowTerminalEvent(ctx context.Context, execCtx *workflow.ExecutionContext, execErr error) {
+	if execErr != nil {
+		s.emitEvent(ctx, workflow.EventWorkflowFailed, map[string]string{
+			"workflow_id":   execCtx.WorkflowID,
+			"workflow_name": execCtx.WorkflowName,
+			"error":         execErr.Error(),
+		})
+	} else {
+		s.emitEvent(ctx, workflow.EventWorkflowCompleted, map[string]string{
+			"workflow_id":   execCtx.WorkflowID,
+			"workflow_name": execCtx.WorkflowName,
+			"duration":      execCtx.CompletedAt.Sub(execCtx.StartedAt).String(),
+		})
 	}
 }
 
@@ -363,6 +408,10 @@ func (s *ExecutionService) prepareExecution(
 
 	s.logger.Info("starting workflow", "workflow", wf.Name, "id", execCtx.WorkflowID)
 	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
+	s.emitEvent(ctx, workflow.EventWorkflowStarted, map[string]string{
+		"workflow_id":   execCtx.WorkflowID,
+		"workflow_name": execCtx.WorkflowName,
+	})
 
 	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
@@ -415,6 +464,7 @@ func (s *ExecutionService) runExecutionLoop(
 				terminalErrMsg = execErr.Error()
 			}
 			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
+			s.emitWorkflowTerminalEvent(ctx, execCtx, execErr)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -423,6 +473,10 @@ func (s *ExecutionService) runExecutionLoop(
 		var err error
 
 		s.logger.Debug("executing step", "step", step.Name)
+		s.emitEvent(ctx, workflow.EventStepStarted, map[string]string{
+			"workflow_id": execCtx.WorkflowID,
+			"step_name":   step.Name,
+		})
 
 		switch step.Type {
 		case workflow.StepTypeCommand:
@@ -442,14 +496,32 @@ func (s *ExecutionService) runExecutionLoop(
 		}
 
 		if err != nil {
+			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+				"error":       err.Error(),
+			})
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
 			s.recordExecutionEnd(ctx, execCtx, err.Error())
+			s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 			execErr = err
 			break
 		}
 
+		if ss, ok := execCtx.GetStepState(step.Name); ok && ss.Status == workflow.StatusFailed {
+			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+				"error":       ss.Error,
+			})
+		} else {
+			s.emitEvent(ctx, workflow.EventStepCompleted, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+			})
+		}
 		s.checkpoint(ctx, execCtx)
 		currentStep = nextStep
 	}
@@ -744,6 +816,10 @@ func (s *ExecutionService) executeWithRetry(
 			"exit_code", exitCode,
 			"max_attempts", retryCfg.MaxAttempts,
 		)
+		s.emitEvent(ctx, workflow.EventStepRetrying, map[string]string{
+			"step_name": step.Name,
+			"attempt":   fmt.Sprint(attempt),
+		})
 
 		// Wait before next attempt
 		if err := retryer.Wait(ctx, attempt); err != nil {
@@ -1674,6 +1750,7 @@ func (s *ExecutionService) executeFromStep(
 				terminalErrMsg = execErr.Error()
 			}
 			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
+			s.emitWorkflowTerminalEvent(ctx, execCtx, execErr)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -1683,6 +1760,10 @@ func (s *ExecutionService) executeFromStep(
 		var err error
 
 		s.logger.Debug("executing step", "step", step.Name)
+		s.emitEvent(ctx, workflow.EventStepStarted, map[string]string{
+			"workflow_id": execCtx.WorkflowID,
+			"step_name":   step.Name,
+		})
 
 		switch step.Type {
 		case workflow.StepTypeCommand:
@@ -1702,12 +1783,31 @@ func (s *ExecutionService) executeFromStep(
 		}
 
 		if err != nil {
+			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+				"error":       err.Error(),
+			})
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
 			s.recordExecutionEnd(ctx, execCtx, err.Error())
+			s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 			execErr = err
 			break
+		}
+
+		if ss, ok := execCtx.GetStepState(step.Name); ok && ss.Status == workflow.StatusFailed {
+			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+				"error":       ss.Error,
+			})
+		} else {
+			s.emitEvent(ctx, workflow.EventStepCompleted, map[string]string{
+				"workflow_id": execCtx.WorkflowID,
+				"step_name":   step.Name,
+			})
 		}
 
 		// checkpoint after each step

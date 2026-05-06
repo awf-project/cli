@@ -1,0 +1,15 @@
+name: event-logger
+version: 1.0.0
+description: Example event plugin — logs workflow and step lifecycle events
+awf_version: ">=0.8.0"
+author: AWF Project
+license: MIT
+capabilities:
+  - events
+
+events:
+  subscribe:
+    - "workflow.*"
+    - "step.*"
+  emit:
+    - "logger.workflow_failed"
