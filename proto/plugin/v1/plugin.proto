@@ -149,3 +149,21 @@ message ExecuteStepResponse {
   bytes data = 2;
   int32 exit_code = 3;
 }
+
+service EventService {
+  rpc HandleEvent(HandleEventRequest) returns (HandleEventResponse);
+}
+
+message HandleEventRequest {
+  string id = 1;
+  string type = 2;
+  int64 timestamp_unix_nanos = 3;
+  string source = 4;
+  map<string, string> metadata = 5;
+  bytes payload = 6;
+  int32 propagation_depth = 7;
+}
+
+message HandleEventResponse {
+  repeated HandleEventRequest emitted_events = 1;
+}

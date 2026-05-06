@@ -214,6 +214,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)
+	// TODO(F090): wire EventPublisher when plugin system is available in resume path
 	execSvc.SetAWFPaths(xdg.AWFPaths())
 
 	// Setup audit trail writer (F071)

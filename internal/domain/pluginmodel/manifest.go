@@ -16,12 +16,14 @@ const (
 	CapabilityOperations = "operations"
 	CapabilityStepTypes  = "step_types"
 	CapabilityValidators = "validators"
+	CapabilityEvents     = "events"
 )
 
 var ValidCapabilities = []string{
 	CapabilityOperations,
 	CapabilityStepTypes,
 	CapabilityValidators,
+	CapabilityEvents,
 }
 
 const (
@@ -36,6 +38,11 @@ var ValidConfigTypes = []string{
 	ConfigTypeBoolean,
 }
 
+type ManifestEvents struct {
+	Subscribe []string `yaml:"subscribe"`
+	Emit      []string `yaml:"emit"`
+}
+
 type Manifest struct {
 	Name         string
 	Version      string
@@ -46,6 +53,7 @@ type Manifest struct {
 	Homepage     string
 	Capabilities []string
 	Config       map[string]ConfigField
+	Events       ManifestEvents `yaml:"events"`
 }
 
 type ConfigField struct {

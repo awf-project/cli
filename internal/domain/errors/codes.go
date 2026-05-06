@@ -70,6 +70,15 @@ const (
 
 	// ErrorCodeExecutionPluginDisabled indicates an operation references a disabled plugin.
 	ErrorCodeExecutionPluginDisabled ErrorCode = "EXECUTION.PLUGIN.DISABLED"
+
+	// ErrorCodeExecutionEventDeliveryFailed indicates event delivery to a subscriber failed.
+	ErrorCodeExecutionEventDeliveryFailed ErrorCode = "EXECUTION.EVENT.DELIVERY_FAILED"
+
+	// ErrorCodeExecutionEventCycleDetected indicates a publish loop was detected in event routing.
+	ErrorCodeExecutionEventCycleDetected ErrorCode = "EXECUTION.EVENT.CYCLE_DETECTED"
+
+	// ErrorCodeExecutionEventBufferFull indicates the event buffer capacity was exceeded.
+	ErrorCodeExecutionEventBufferFull ErrorCode = "EXECUTION.EVENT.BUFFER_FULL"
 )
 
 // Error code constants for SYSTEM category (exit code 4).

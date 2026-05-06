@@ -100,6 +100,7 @@ type setupConfig struct {
 	historyStore    ports.HistoryStore
 	templatePaths   []string
 	pluginService   *PluginService
+	eventPublisher  ports.EventPublisher
 }
 
 // WithNotifyConfig configures notification backend defaults.
@@ -162,6 +163,11 @@ func WithTemplatePaths(paths []string) SetupOption {
 // WithPluginService injects the plugin lifecycle manager into the execution service.
 func WithPluginService(svc *PluginService) SetupOption {
 	return func(c *setupConfig) { c.pluginService = svc }
+}
+
+// WithEventPublisher injects an event publisher into the execution service.
+func WithEventPublisher(p ports.EventPublisher) SetupOption {
+	return func(c *setupConfig) { c.eventPublisher = p }
 }
 
 // ExecutionSetup centralizes ExecutionService wiring.
@@ -266,6 +272,10 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 
 	if cfg.tracer != nil {
 		execSvc.SetTracer(cfg.tracer)
+	}
+
+	if cfg.eventPublisher != nil {
+		execSvc.SetEventPublisher(cfg.eventPublisher)
 	}
 
 	compositeProvider := s.buildProviders(cfg)

@@ -19,7 +19,7 @@ func (l *nopLogger) WithContext(map[string]any) ports.Logger { return l }
 
 func TestInitSystem_EmptyDirs(t *testing.T) {
 	dir := t.TempDir()
-	result, err := pluginmgr.InitSystem(context.Background(), nil, filepath.Join(dir, "plugins"), &nopLogger{})
+	result, err := pluginmgr.InitSystem(context.Background(), nil, filepath.Join(dir, "plugins"), "", &nopLogger{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestInitSystem_EmptyDirs(t *testing.T) {
 
 func TestInitSystem_NonExistentDirs(t *testing.T) {
 	dir := t.TempDir()
-	result, err := pluginmgr.InitSystem(context.Background(), []string{"/nonexistent/a", "/nonexistent/b"}, filepath.Join(dir, "plugins"), &nopLogger{})
+	result, err := pluginmgr.InitSystem(context.Background(), []string{"/nonexistent/a", "/nonexistent/b"}, filepath.Join(dir, "plugins"), "", &nopLogger{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

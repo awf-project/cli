@@ -291,7 +291,8 @@ config:
 | `version` | string | Yes | Semantic version |
 | `description` | string | No | Brief description |
 | `awf_version` | string | Yes | AWF version constraint (semver) |
-| `capabilities` | array | Yes | List: `operations`, `step_types`, `validators` |
+| `capabilities` | array | Yes | List: `operations`, `step_types`, `validators`, `events` |
+| `events` | object | No | Event subscriptions and emissions (see [Plugin Events](#plugin-events)) |
 | `config` | object | No | Configuration schema |
 
 #### Config Field Schema
@@ -594,6 +595,8 @@ func main() {
 | `sdk.GetStringDefault(inputs, key, default)` | Extract string input with fallback |
 | `sdk.GetIntDefault(inputs, key, default)` | Extract integer input with fallback |
 | `sdk.GetBoolDefault(inputs, key, default)` | Extract boolean input with fallback |
+| `sdk.EventSubscriber` | Interface for receiving events (`Patterns()` + `HandleEvent()`) |
+| `sdk.Event` | SDK event struct with ID, Type, Source, Metadata, Payload |
 
 ### Validator Plugin
 
@@ -743,6 +746,133 @@ See [Workflow Syntax - Custom Step Types](workflow-syntax.md#custom-step-type-st
 
 ---
 
+### Plugin Events
+
+Implement `sdk.EventSubscriber` to react to workflow lifecycle events and events emitted by other plugins. This enables real-time notifications, metrics collection, audit logging, and inter-plugin communication.
+
+**Event Subscriber Interface:**
+
+```go
+type EventSubscriber interface {
+    Patterns() []string                          // Event types to subscribe to (glob patterns)
+    HandleEvent(ctx context.Context, event Event) ([]Event, error)  // Handle incoming event
+}
+```
+
+**Available Events:**
+
+Plugins can subscribe to core workflow lifecycle events emitted by the AWF ExecutionService:
+
+| Event Type | Description | Metadata |
+|------------|-------------|----------|
+| `workflow.started` | Workflow execution started | `workflow_id`, `workflow_name` |
+| `workflow.completed` | Workflow completed successfully | `workflow_id`, `workflow_name`, `duration` |
+| `workflow.failed` | Workflow failed | `workflow_id`, `workflow_name`, `error_message` |
+| `step.started` | Step execution started | `workflow_id`, `step_name` |
+| `step.completed` | Step completed | `workflow_id`, `step_name` |
+| `step.failed` | Step failed | `workflow_id`, `step_name`, `error_message` |
+| `step.retrying` | Step retrying after failure | `workflow_id`, `step_name`, `attempt` |
+
+Plugins can also emit custom events that other plugins subscribe to (e.g., `deploy.completed`, `notification.sent`).
+
+**Event Subscriber Example:**
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type NotificationPlugin struct {
+    sdk.BasePlugin
+}
+
+// Patterns declares which event types this plugin subscribes to
+// Supports glob patterns: workflow.* matches all workflow events
+func (p *NotificationPlugin) Patterns() []string {
+    return []string{"workflow.completed", "workflow.failed"}
+}
+
+// HandleEvent is called when a matching event occurs
+func (p *NotificationPlugin) HandleEvent(ctx context.Context, event sdk.Event) ([]sdk.Event, error) {
+    log.Printf("Workflow %s %s\n", event.Metadata["workflow_id"], event.Type)
+    
+    // Plugins can emit events that other plugins will receive
+    if event.Type == "workflow.completed" {
+        return []sdk.Event{
+            {
+                Type:   "notification.sent",
+                Source: p.PluginName,
+                Metadata: map[string]string{
+                    "channel": "slack",
+                    "status":  "success",
+                },
+            },
+        }, nil
+    }
+    
+    return nil, nil
+}
+
+func main() {
+    sdk.Serve(&NotificationPlugin{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "awf-plugin-notify",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+**Plugin Manifest Declaration:**
+
+Declare event subscriptions and emissions in `plugin.yaml`:
+
+```yaml
+name: awf-plugin-notify
+version: 1.0.0
+description: Sends notifications on workflow events
+awf_version: ">=0.7.0"
+
+capabilities:
+  - events
+
+events:
+  subscribe:
+    - "workflow.*"      # Subscribe to all workflow events
+    - "step.failed"     # Subscribe to failed steps
+  emit:
+    - "notification.sent"    # Emit custom events
+    - "notification.failed"
+```
+
+**Pattern Matching:**
+
+Event patterns use glob matching with `.` as segment separator:
+
+| Pattern | Matches | Does NOT Match |
+|---------|---------|----------------|
+| `workflow.started` | Exact match | `workflow.completed` |
+| `workflow.*` | `workflow.started`, `workflow.completed`, `workflow.failed` | `workflow.step.started` |
+| `step.*` | All step events | `workflow.step.completed` |
+| `*.*` | All two-segment events | `workflow` (single segment) |
+| `*` | Single-segment events only | — |
+
+**Back-Pressure & Isolation:**
+
+- Each plugin receives events on its own buffered channel (256-event capacity)
+- Slow plugins don't block event delivery to other plugins
+- If a plugin's buffer fills, events are dropped with a warning logged
+**Cycle Detection:**
+
+AWF prevents event loops by limiting propagation depth to 3 levels. If Plugin A emits an event that triggers Plugin B, which emits an event triggering Plugin A, propagation stops at depth 3 and a warning is logged.
+
+---
+
 ### Echo Plugin Example
 
 The `examples/plugins/awf-plugin-echo/` directory contains a complete working plugin that echoes its input text. Use it as a starting point:
@@ -888,6 +1018,7 @@ Update AWF or use a compatible plugin version.
 
 ## See Also
 
+- [Plugin Events](plugin-events.md) - Event subscriptions, inter-plugin communication, and pattern matching
 - [Commands](commands.md) - CLI command reference
 - [Workflow Syntax](workflow-syntax.md) - Operation usage in workflows
 - [Architecture](../development/architecture.md) - Plugin system internals

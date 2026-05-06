@@ -12,11 +12,12 @@ import (
 
 // PluginSystemResult contains the initialized plugin system components.
 type PluginSystemResult struct {
-	Service    *application.PluginService
-	Manager    ports.OperationProvider
-	RPCManager *infrastructurePlugin.RPCPluginManager // for validator/step-type providers (C069)
-	StateStore *infrastructurePlugin.JSONPluginStateStore
-	Cleanup    func()
+	Service        *application.PluginService
+	Manager        ports.OperationProvider
+	RPCManager     *infrastructurePlugin.RPCPluginManager // for validator/step-type providers (C069)
+	StateStore     *infrastructurePlugin.JSONPluginStateStore
+	EventPublisher ports.EventPublisher
+	Cleanup        func()
 }
 
 // initPluginSystem initializes the plugin infrastructure for workflow execution.
@@ -29,20 +30,24 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	pluginDirs := getPluginSearchPaths(cfg)
 	stateStorePath := filepath.Join(cfg.StoragePath, "plugins")
 
-	sysResult, err := infrastructurePlugin.InitSystem(ctx, pluginDirs, stateStorePath, logger)
+	sysResult, err := infrastructurePlugin.InitSystem(ctx, pluginDirs, stateStorePath, effectiveCLIVersion(), logger)
 	if err != nil {
 		return nil, err
 	}
 
 	registerBuiltins(sysResult.Service, Version)
 
-	return &PluginSystemResult{
+	result := &PluginSystemResult{
 		Service:    sysResult.Service,
 		Manager:    sysResult.Manager,
 		RPCManager: sysResult.RPCManager,
 		StateStore: sysResult.StateStore,
 		Cleanup:    sysResult.Cleanup,
-	}, nil
+	}
+	if sysResult.EventBus != nil {
+		result.EventPublisher = sysResult.EventBus
+	}
+	return result, nil
 }
 
 // getPluginSearchPaths returns the plugin directories to search.

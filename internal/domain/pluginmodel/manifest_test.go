@@ -12,7 +12,8 @@ func TestValidCapabilities_ContainsExpectedValues(t *testing.T) {
 	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityOperations)
 	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityStepTypes)
 	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityValidators)
-	assert.Len(t, pluginmodel.ValidCapabilities, 3)
+	assert.Contains(t, pluginmodel.ValidCapabilities, pluginmodel.CapabilityEvents)
+	assert.Len(t, pluginmodel.ValidCapabilities, 4)
 }
 
 func TestCapabilityConstants_Values(t *testing.T) {

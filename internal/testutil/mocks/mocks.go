@@ -40,6 +40,7 @@ var (
 	_ ports.UserInputReader     = (*MockUserInputReader)(nil)
 	_ ports.Tracer              = (*MockTracer)(nil)
 	_ ports.Span                = (*MockSpan)(nil)
+	_ ports.EventPublisher      = (*MockEventPublisher)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1957,4 +1958,64 @@ func (m *MockTracer) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.spans = nil
+}
+
+// MockEventPublisher is a thread-safe mock implementation of ports.EventPublisher.
+// It collects published events for assertion in tests.
+type MockEventPublisher struct {
+	mu         sync.RWMutex
+	events     []*pluginmodel.DomainEvent
+	publishErr error
+}
+
+// NewMockEventPublisher creates a new thread-safe mock event publisher.
+func NewMockEventPublisher() *MockEventPublisher {
+	return &MockEventPublisher{
+		events: make([]*pluginmodel.DomainEvent, 0),
+	}
+}
+
+// Publish appends the event to the internal slice; returns publishErr if set.
+// Thread-safe for concurrent access.
+func (m *MockEventPublisher) Publish(_ context.Context, event *pluginmodel.DomainEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.publishErr != nil {
+		return m.publishErr
+	}
+	m.events = append(m.events, event)
+	return nil
+}
+
+// Close is a no-op for the mock publisher.
+// Thread-safe for concurrent access.
+func (m *MockEventPublisher) Close() error {
+	return nil
+}
+
+// GetEvents returns a copy of all published events (test helper).
+// Thread-safe for concurrent access.
+func (m *MockEventPublisher) GetEvents() []*pluginmodel.DomainEvent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*pluginmodel.DomainEvent, len(m.events))
+	copy(result, m.events)
+	return result
+}
+
+// SetPublishError causes subsequent Publish calls to return err (test helper).
+// Thread-safe for concurrent access.
+func (m *MockEventPublisher) SetPublishError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.publishErr = err
+}
+
+// Clear removes all collected events and resets error state (test helper).
+// Thread-safe for concurrent access.
+func (m *MockEventPublisher) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = make([]*pluginmodel.DomainEvent, 0)
+	m.publishErr = nil
 }

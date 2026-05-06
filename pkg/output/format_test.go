@@ -469,6 +469,66 @@ func TestProcessOutputFormat_Empty(t *testing.T) {
 	}
 }
 
+func TestProcessOutputFormat_JSON_EmbeddedFence(t *testing.T) {
+	tests := []struct {
+		name       string
+		output     string
+		wantOutput string
+		wantParsed map[string]any
+		wantErr    bool
+	}{
+		{
+			name:       "prose before json code fence",
+			output:     "Based on my review, here is my assessment:\n\n```json\n{\"status\":\"REJECTED\",\"score\":85}\n```",
+			wantOutput: `{"status":"REJECTED","score":85}`,
+			wantParsed: map[string]any{"status": "REJECTED", "score": float64(85)},
+		},
+		{
+			name:       "prose before and after json code fence",
+			output:     "Here are the results:\n\n```json\n{\"key\":\"value\"}\n```\n\nLet me know if you need more details.",
+			wantOutput: `{"key":"value"}`,
+			wantParsed: map[string]any{"key": "value"},
+		},
+		{
+			name:       "multiline prose before json fence",
+			output:     "I analyzed the code.\nHere is my assessment.\nThe results follow:\n\n```json\n{\"ok\":true}\n```",
+			wantOutput: `{"ok":true}`,
+			wantParsed: map[string]any{"ok": true},
+		},
+		{
+			name:    "prose with embedded invalid json fence still errors",
+			output:  "Some text\n\n```json\n{\"broken\":\n```",
+			wantErr: true,
+		},
+		{
+			name:    "prose without any json fence still errors",
+			output:  "Just plain text with no JSON at all",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processed, parsed, err := output.ProcessOutputFormat(tt.output, "json")
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOutput, processed)
+
+			result, ok := parsed.(map[string]any)
+			require.True(t, ok, "expected map[string]any, got %T", parsed)
+
+			for k, v := range tt.wantParsed {
+				assert.Equal(t, v, result[k])
+			}
+		})
+	}
+}
+
 func TestProcessOutputFormat_BackwardCompatibility(t *testing.T) {
 	rawOutput := "Agent response with ```json\n{\"key\":\"value\"}\n``` embedded"
 

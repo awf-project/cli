@@ -238,14 +238,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Use function type interfaces (DisplayEventParser) for provider-specific implementations when output formats diverge; enables independent testing and future provider additions without modifying existing code
 - Wire optional render callbacks alongside event parsers in stream processors; decouples rendering from parsing and enables multiple render modes (DefaultMode, VerboseMode) without modifying parser implementations
 - When integrating external UI frameworks, create Bridge adapters in the interface layer that wrap application services; maintain zero infrastructure imports in bridge implementation
-
+- Enforce event propagation depth limits to prevent infinite event loops; set maxPropagationDepth in EventBus and include propagation_depth in protocol buffer event definitions
 - Use provider name prefixes for all infrastructure provider helper methods (buildCopilot, extractCopilot, parseCopilot, validateCopilot) to prevent naming collisions across implementations
 
 ## Common Pitfalls
 
-- Use 0o755 for executable scripts, 0o644 for data files, 0o700 for private temp files; match permissions to file purpose and access expectations
-- When adding new scaffolded directories to init, replicate existing implementation patterns (e.g., createExampleScript mirrors createExamplePrompt) for consistency
-- Always update user-facing documentation (docs/reference/, docs/user-guide/) and CHANGELOG.md when implementing features or behavior changes
 - Halt implementation immediately when scope deviations are discovered; update plan and communicate changes before continuing work
 - Apply identical error handling patterns across similar functions; handleNonZeroExit and handleExecutionError must both evaluate transitions before fallbacks
 - When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
@@ -284,10 +281,12 @@ func TestWorkflowValidation(t *testing.T) {
 - Preserve event metadata (EventType, timestamps) when provider output lacks optional fields; never propagate zero-value event type regardless of missing nested data
 - When removing provider-specific methods across multiple providers (e.g., parseClaudeStreamLine), delete all similar methods in single commit; prevents asymmetric cleanup breaking provider consistency
 - Never commit doc.go files with minimal content in interface layer; mirror established patterns like cli/doc.go with architecture overviews and component descriptions (150+ lines)
+- Always document changes to `.golangci.yml` or linter config in commit message; ensure `make lint` passes before committing
+- When modifying files in pkg/, document API impact in commit message; verify exports and function signatures haven't changed unexpectedly
+- Never silently initialize nested struct fields during YAML unmarshaling; explicitly map all sections (events, metadata, etc.) to prevent zero values from hiding parsing bugs
 
 ## Test Conventions
 
-- Use distinct file naming for unit vs integration tests: *_unit_test.go vs *_test.go; prevents error analysis tools from reporting incorrect file scopes
 - Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 - Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
@@ -307,6 +306,7 @@ func TestWorkflowValidation(t *testing.T) {
 - When adding fields to internal state types (DisplayOutput, cache fields, etc.), write explicit tests verifying the field is NOT resolvable in template interpolation context; prevents accidental exposure of implementation details
 - Add BenchmarkXX functions for new I/O processing components; measure throughput, memory allocation, and verify capacity constraints (1MB buffer, etc.) are respected
 - Test event metadata persistence across all input variations for provider translation; include cases with missing optional nested fields to prevent silent metadata loss
+- When testing YAML unmarshaling, assert on all nested struct fields; verify that arrays like Events.Subscribe and Events.Emit are populated, not defaulted to empty
 
 ## Review Standards
 

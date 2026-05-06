@@ -49,6 +49,12 @@ func WrapManifestParseError(file string, cause error) *ManifestParseError {
 	}
 }
 
+// yamlEvents is the YAML representation of the events section in a plugin manifest.
+type yamlEvents struct {
+	Subscribe []string `yaml:"subscribe"`
+	Emit      []string `yaml:"emit"`
+}
+
 // yamlManifest is the YAML representation of a plugin manifest.
 type yamlManifest struct {
 	Name         string                     `yaml:"name"`
@@ -60,6 +66,7 @@ type yamlManifest struct {
 	Homepage     string                     `yaml:"homepage"`
 	Capabilities []string                   `yaml:"capabilities"`
 	Config       map[string]yamlConfigField `yaml:"config"`
+	Events       yamlEvents                 `yaml:"events"`
 }
 
 // yamlConfigField is the YAML representation of a plugin configuration field.
@@ -162,6 +169,11 @@ func mapToDomain(m *yamlManifest) *pluginmodel.Manifest {
 				Enum:        field.Enum,
 			}
 		}
+	}
+
+	manifest.Events = pluginmodel.ManifestEvents{
+		Subscribe: m.Events.Subscribe,
+		Emit:      m.Events.Emit,
 	}
 
 	return manifest

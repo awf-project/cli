@@ -161,6 +161,12 @@ type InteractivePrompt interface {
     StatusPresenter
     UserInteraction
 }
+
+// EventPublisher delivers domain events to subscribed plugins (F090).
+type EventPublisher interface {
+    Publish(ctx context.Context, event *pluginmodel.DomainEvent) error
+    Close() error
+}
 ```
 
 ### Application Layer
@@ -291,6 +297,23 @@ service OperationService {
     rpc ListOperations(ListRequest) returns (ListResponse) {}
     rpc GetOperation(GetRequest) returns (OperationSchema) {}
     rpc Execute(ExecuteRequest) returns (ExecuteResponse) {}
+}
+
+// ValidatorService: custom workflow validation rules
+service ValidatorService {
+    rpc ValidateWorkflow(ValidateWorkflowRequest) returns (ValidateWorkflowResponse) {}
+    rpc ValidateStep(ValidateStepRequest) returns (ValidateStepResponse) {}
+}
+
+// StepTypeService: custom step type execution
+service StepTypeService {
+    rpc ListStepTypes(ListStepTypesRequest) returns (ListStepTypesResponse) {}
+    rpc ExecuteStep(ExecuteStepRequest) returns (ExecuteStepResponse) {}
+}
+
+// EventService: real-time event delivery (F090)
+service EventService {
+    rpc HandleEvent(HandleEventRequest) returns (HandleEventResponse) {}
 }
 ```
 
@@ -611,5 +634,6 @@ The PluginManager interface (7 methods) was evaluated for ISP compliance and kep
 ## See Also
 
 - [Project Structure](project-structure.md) - Directory organization
+- [Plugin Event System Architecture](plugin-event-architecture.md) - EventBus, gRPC adapter, and wiring details
 - [Testing](testing.md) - Testing conventions
 - [Contributing](../../CONTRIBUTING.md) - Development workflow
