@@ -118,10 +118,20 @@ func (w *StreamFilterWriter) parseAndRenderLine(line []byte) error {
 	if w.renderer != nil {
 		w.renderer(events)
 	}
+	return w.writeTextEvents(events)
+}
+
+func (w *StreamFilterWriter) writeTextEvents(events []DisplayEvent) error {
 	for _, event := range events {
 		if event.Kind == EventText && event.Text != "" {
-			if err := w.writeExtracted(event.Text); err != nil {
-				return err
+			if event.Delta {
+				if _, err := io.WriteString(w.inner, event.Text); err != nil {
+					return fmt.Errorf("write delta text: %w", err)
+				}
+			} else {
+				if err := w.writeExtracted(event.Text); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -140,12 +150,8 @@ func (w *StreamFilterWriter) Flush() error {
 			if w.renderer != nil {
 				w.renderer(events)
 			}
-			for _, event := range events {
-				if event.Kind == EventText && event.Text != "" {
-					if err := w.writeExtracted(event.Text); err != nil {
-						return err
-					}
-				}
+			if err := w.writeTextEvents(events); err != nil {
+				return err
 			}
 		}
 		w.buf = w.buf[:0]

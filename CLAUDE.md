@@ -72,7 +72,7 @@ Use `mcp__plugin_common_serena__write_memory` or `mcp__plugin_common_serena__edi
 
 ## Project Overview
 
-**ai-workflow-cli** (`awf`) - A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex) through YAML-configured workflows with state machine execution.
+**ai-workflow-cli** (`awf`) - A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot) through YAML-configured workflows with state machine execution.
 
 ## Architecture
 
@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Pass optional turn-specific configuration (e.g., system_prompt) through options map in application layer; keeps infrastructure providers independent of turn logic
 - Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
 - Plugin binaries must be discoverable at <plugins_dir>/<plugin_name>/awf-plugin-<plugin_name>; host validates binary existence and version compatibility via gRPC handshake after process start
 - Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
@@ -239,6 +238,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Use function type interfaces (DisplayEventParser) for provider-specific implementations when output formats diverge; enables independent testing and future provider additions without modifying existing code
 - Wire optional render callbacks alongside event parsers in stream processors; decouples rendering from parsing and enables multiple render modes (DefaultMode, VerboseMode) without modifying parser implementations
 - When integrating external UI frameworks, create Bridge adapters in the interface layer that wrap application services; maintain zero infrastructure imports in bridge implementation
+
+- Use provider name prefixes for all infrastructure provider helper methods (buildCopilot, extractCopilot, parseCopilot, validateCopilot) to prevent naming collisions across implementations
 
 ## Common Pitfalls
 

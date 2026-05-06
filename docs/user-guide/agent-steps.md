@@ -2,7 +2,7 @@
 title: "Agent Steps Guide"
 ---
 
-Invoke AI agents (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
+Invoke AI agents (Claude, Codex, Gemini, GitHub Copilot, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
 
 ## Overview
 
@@ -126,6 +126,38 @@ summarize:
 - `model`: Gemini model identifier — validated to start with `gemini-` prefix (see [Model Validation](#model-validation) below)
 - `dangerously_skip_permissions`: Skip permission prompts (boolean, maps to `--approval-mode=yolo`). **Security warning**: bypasses all safety prompts — use only in trusted, automated environments.
 
+### GitHub Copilot
+
+Requires the `copilot` CLI tool installed and authentication via `copilot login` or environment variables.
+
+```yaml
+code_generate:
+  type: agent
+  provider: github_copilot
+  prompt: "Generate a function to: {{.inputs.requirement}}"
+  options:
+    model: gpt-4o
+    mode: interactive
+  timeout: 60
+  on_success: next
+```
+
+**Provider-Specific Options:**
+- `model`: GitHub Copilot model identifier (e.g., `gpt-4o`, `gpt-4`, `gpt-3.5-turbo`)
+- `mode`: Agent mode — one of `interactive` (default), `plan`, or `autopilot`
+- `effort`: Reasoning effort level — one of `low`, `medium`, or `high`
+- `allowed_tools`: Comma-separated list of tools to allow (e.g., `"bash,github_api"` → `--allow-tool bash --allow-tool github_api`)
+- `denied_tools`: Comma-separated list of tools to deny (maps to `--deny-tool`)
+- `allow_all`: Allow all available tools (boolean, maps to `--allow-all`)
+- `system_prompt`: Custom system message (passed via prompt prepending)
+
+**Authentication:**
+GitHub Copilot CLI supports authentication via:
+- `copilot login` (interactive authentication)
+- `COPILOT_GITHUB_TOKEN` environment variable
+- `GH_TOKEN` environment variable
+- `GITHUB_TOKEN` environment variable (classic PATs not supported)
+
 ### OpenCode
 
 Requires the `opencode` CLI tool installed.
@@ -242,9 +274,9 @@ options:
 step validation error: model must start with "gpt-", "codex-", or match o-series pattern (e.g., o1, o3-mini)
 ```
 
-### OpenCode & OpenAI-Compatible
+### GitHub Copilot, OpenCode & OpenAI-Compatible
 
-No model validation for `opencode` or `openai_compatible` providers — these use arbitrary backend models.
+No model validation for `github_copilot`, `opencode`, or `openai_compatible` providers — these support arbitrary backend models.
 
 ### When Validation Occurs
 
@@ -699,7 +731,7 @@ Tool markers show:
 - **Interleaved order** — markers appear in the same source order as agent output
 - **Graceful degradation** — unknown tool names display as-is with no crash or error
 
-This works consistently across all 5 supported providers (Claude, Codex, Gemini, OpenCode, OpenAI-Compatible). Verbose mode has no effect on `output_format: json` — raw NDJSON is always passed through unchanged.
+This works consistently across all 6 supported providers (Claude, Codex, Gemini, GitHub Copilot, OpenCode, OpenAI-Compatible). Verbose mode has no effect on `output_format: json` — raw NDJSON is always passed through unchanged.
 
 #### Buffered Mode (`--output buffered`)
 

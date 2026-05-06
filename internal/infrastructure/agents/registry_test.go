@@ -269,10 +269,11 @@ func TestAgentRegistry_RegisterDefaults(t *testing.T) {
 
 	// Verify default providers are registered
 	list := registry.List()
-	assert.Len(t, list, 5)
+	assert.Len(t, list, 6)
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "github_copilot")
 	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 }
@@ -281,7 +282,7 @@ func TestAgentRegistry_RegisterDefaults_EachProviderRetrievable(t *testing.T) {
 	registry := NewAgentRegistry()
 	_ = registry.RegisterDefaults()
 
-	tests := []string{"claude", "codex", "gemini", "openai_compatible", "opencode"}
+	tests := []string{"claude", "codex", "gemini", "github_copilot", "openai_compatible", "opencode"}
 
 	for _, name := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -446,51 +447,20 @@ func TestAgentRegistry_RegisterDefaults_PartialFailure(t *testing.T) {
 
 	// Verify RegisterDefaults continues on error - other providers should be registered
 	list := registry.List()
-	assert.Len(t, list, 5, "All 5 default providers should be registered (1 pre-existing + 4 new)")
+	assert.Len(t, list, 6, "All 6 default providers should be registered (1 pre-existing + 5 new)")
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "github_copilot")
 	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 
 	// Verify each provider is retrievable
-	for _, name := range []string{"claude", "codex", "gemini", "openai_compatible", "opencode"} {
+	for _, name := range []string{"claude", "codex", "gemini", "github_copilot", "openai_compatible", "opencode"} {
 		provider, getErr := registry.Get(name)
 		assert.NoError(t, getErr, "Provider %s should be retrievable", name)
 		assert.NotNil(t, provider)
 		assert.Equal(t, name, provider.Name())
-	}
-}
-
-func TestAgentRegistry_RegisterDefaults_EmptyRegistry(t *testing.T) {
-	// Create fresh registry, call RegisterDefaults
-	// Verify: no error returned
-	// Verify: all 4 default providers registered (claude, gemini, codex, opencode)
-	registry := NewAgentRegistry()
-
-	err := registry.RegisterDefaults()
-
-	// Should succeed without errors
-	require.NoError(t, err)
-
-	// Verify all 5 default providers are registered
-	list := registry.List()
-	assert.Len(t, list, 5)
-	assert.Contains(t, list, "claude")
-	assert.Contains(t, list, "codex")
-	assert.Contains(t, list, "gemini")
-	assert.Contains(t, list, "openai_compatible")
-	assert.Contains(t, list, "opencode")
-
-	// Verify each provider is retrievable and functional
-	for _, name := range []string{"claude", "codex", "gemini", "openai_compatible", "opencode"} {
-		provider, getErr := registry.Get(name)
-		require.NoError(t, getErr, "Provider %s should be retrievable", name)
-		require.NotNil(t, provider)
-		assert.Equal(t, name, provider.Name())
-
-		// Verify provider has Has() check
-		assert.True(t, registry.Has(name))
 	}
 }
 
@@ -509,12 +479,13 @@ func TestAgentRegistry_RegisterDefaults_MultiplePreRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "claude")
 	assert.Contains(t, err.Error(), "gemini")
 
-	// All 5 providers should still be registered
+	// All 6 providers should still be registered
 	list := registry.List()
-	assert.Len(t, list, 5)
+	assert.Len(t, list, 6)
 	assert.Contains(t, list, "claude")
 	assert.Contains(t, list, "codex")
 	assert.Contains(t, list, "gemini")
+	assert.Contains(t, list, "github_copilot")
 	assert.Contains(t, list, "openai_compatible")
 	assert.Contains(t, list, "opencode")
 }
@@ -530,15 +501,16 @@ func TestAgentRegistry_RegisterDefaults_AllPreRegistered(t *testing.T) {
 	// Try to register defaults again
 	err2 := registry.RegisterDefaults()
 
-	// Should fail with aggregated error for all 5 providers
+	// Should fail with aggregated error for all 6 providers
 	assert.Error(t, err2)
 	assert.Contains(t, err2.Error(), "claude")
 	assert.Contains(t, err2.Error(), "codex")
 	assert.Contains(t, err2.Error(), "gemini")
+	assert.Contains(t, err2.Error(), "github_copilot")
 	assert.Contains(t, err2.Error(), "openai_compatible")
 	assert.Contains(t, err2.Error(), "opencode")
 
-	// Should still have exactly 5 providers (no duplicates)
+	// Should still have exactly 6 providers (no duplicates)
 	list := registry.List()
-	assert.Len(t, list, 5)
+	assert.Len(t, list, 6)
 }

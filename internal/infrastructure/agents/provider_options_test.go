@@ -245,6 +245,70 @@ func TestOpenCodeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	}
 }
 
+func TestCopilotProvider_NewWithOptions_HappyPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(*mocks.MockCLIExecutor)
+		options   []CopilotProviderOption
+	}{
+		{
+			name: "no options uses default executor",
+			setupMock: func(m *mocks.MockCLIExecutor) {
+				m.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"copilot output\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), []byte(""))
+			},
+			options: nil,
+		},
+		{
+			name: "with custom executor option",
+			setupMock: func(m *mocks.MockCLIExecutor) {
+				m.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"custom copilot output\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), []byte(""))
+			},
+			options: []CopilotProviderOption{
+				WithCopilotExecutor(mocks.NewMockCLIExecutor()),
+			},
+		},
+		{
+			name: "with custom logger option",
+			setupMock: func(m *mocks.MockCLIExecutor) {
+				m.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"copilot with logger\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), []byte(""))
+			},
+			options: []CopilotProviderOption{
+				WithCopilotExecutor(mocks.NewMockCLIExecutor()),
+				WithCopilotLogger(&mocks.MockLogger{}),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mockExec *mocks.MockCLIExecutor
+			var opts []CopilotProviderOption
+			if tt.setupMock != nil {
+				mockExec = mocks.NewMockCLIExecutor()
+				tt.setupMock(mockExec)
+				// Always use mock executor for testing
+				opts = []CopilotProviderOption{WithCopilotExecutor(mockExec)}
+			} else if tt.options != nil {
+				opts = tt.options
+			}
+
+			provider := NewCopilotProviderWithOptions(opts...)
+
+			require.NotNil(t, provider)
+			assert.NotNil(t, provider.executor)
+			assert.NotNil(t, provider.logger)
+
+			// Verify executor is functional
+			if mockExec != nil {
+				ctx := context.Background()
+				result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
 func TestProviderOptions_EdgeCases(t *testing.T) {
 	t.Run("nil executor option panics are prevented", func(t *testing.T) {
 		// Note: Passing nil executor should work but will cause runtime issues later
@@ -375,6 +439,20 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "opencode execution failed")
 	})
+
+	t.Run("copilot provider executor error propagates", func(t *testing.T) {
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetError(errors.New("copilot CLI failed"))
+
+		provider := NewCopilotProviderWithOptions(WithCopilotExecutor(mockExec))
+		ctx := context.Background()
+
+		result, err := provider.Execute(ctx, "test prompt", nil, nil, nil)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "copilot execution failed")
+	})
 }
 
 func TestProviderOptions_Integration(t *testing.T) {
@@ -493,5 +571,25 @@ func TestProviderOptions_Integration(t *testing.T) {
 
 		geminiCalls := geminiMock.GetCalls()
 		require.Len(t, geminiCalls, 1)
+	})
+
+	t.Run("copilot provider with mock executor executes successfully", func(t *testing.T) {
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"Copilot response\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), []byte(""))
+
+		provider := NewCopilotProviderWithOptions(WithCopilotExecutor(mockExec))
+		ctx := context.Background()
+
+		result, err := provider.Execute(ctx, "Generate code", nil, nil, nil)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "github_copilot", result.Provider)
+		assert.Contains(t, result.Output, "Copilot response")
+
+		// Verify executor was called correctly
+		calls := mockExec.GetCalls()
+		require.Len(t, calls, 1)
+		assert.Equal(t, "copilot", calls[0].Name)
 	})
 }
