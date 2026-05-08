@@ -152,6 +152,11 @@ message ExecuteStepResponse {
 
 service EventService {
   rpc HandleEvent(HandleEventRequest) returns (HandleEventResponse);
+  rpc StreamEvents(stream EventStreamMessage) returns (StreamEventsResponse);
+}
+
+service HostEventService {
+  rpc Emit(EmitRequest) returns (EmitResponse);
 }
 
 message HandleEventRequest {
@@ -167,3 +172,31 @@ message HandleEventRequest {
 message HandleEventResponse {
   repeated HandleEventRequest emitted_events = 1;
 }
+
+message EmitRequest {
+  string event_type = 1;
+  bytes payload = 2;
+  string source_plugin = 3;
+  int32 propagation_depth = 4;
+  int64 timestamp_unix_nanos = 5;
+  map<string, string> metadata = 6;
+}
+
+message EmitResponse {
+  bool success = 1;
+  string error_message = 2;
+  string event_id = 3;
+}
+
+message EventStreamMessage {
+  string id = 1;
+  string type = 2;
+  int64 timestamp_unix_nanos = 3;
+  string source = 4;
+  map<string, string> metadata = 5;
+  bytes payload = 6;
+  int32 propagation_depth = 7;
+  uint64 sequence_number = 8;
+}
+
+message StreamEventsResponse {}

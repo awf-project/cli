@@ -173,7 +173,7 @@ func (s *operationServiceServer) Execute(ctx context.Context, req *pluginv1.Exec
 
 // GRPCServer implements the go-plugin GRPCPlugin interface by registering
 // the PluginService and OperationService gRPC servers.
-func (b *GRPCPluginBridge) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) (err error) {
+func (b *GRPCPluginBridge) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Recover from panic if gRPC server is uninitialized (e.g., created with struct literal).
@@ -192,6 +192,11 @@ func (b *GRPCPluginBridge) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) (e
 	pluginv1.RegisterValidatorServiceServer(s, &validatorServiceServer{impl: b.impl})
 	pluginv1.RegisterStepTypeServiceServer(s, &stepTypeServiceServer{impl: b.impl})
 	pluginv1.RegisterEventServiceServer(s, &eventServiceServer{impl: b.impl})
+
+	if ba, ok := b.impl.(BrokerAwarePlugin); ok {
+		ba.SetHostClient(NewHostClient(broker, b.impl.Name()))
+	}
+
 	return nil
 }
 

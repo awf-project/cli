@@ -11,6 +11,18 @@ import (
 	"google.golang.org/grpc"
 )
 
+// brokerAwareTestPlugin implements both Plugin and BrokerAwarePlugin.
+type brokerAwareTestPlugin struct {
+	BasePlugin
+	setHostClientCalled bool
+	receivedClient      *HostClient
+}
+
+func (p *brokerAwareTestPlugin) SetHostClient(client *HostClient) {
+	p.setHostClientCalled = true
+	p.receivedClient = client
+}
+
 // errorPlugin is a test plugin that returns errors on Init/Shutdown.
 type errorPlugin struct {
 	BasePlugin
@@ -326,4 +338,29 @@ func TestPluginServiceServer_GetInfo_ReturnsEmptyFields(t *testing.T) {
 	assert.Equal(t, "0.1.0", resp.Version)
 	assert.Empty(t, resp.Description)
 	assert.Empty(t, resp.Capabilities)
+}
+
+func TestGRPCServer_CallsSetHostClientWhenBrokerAwarePlugin(t *testing.T) {
+	plugin := &brokerAwareTestPlugin{
+		BasePlugin: BasePlugin{PluginName: "aware", PluginVersion: "1.0.0"},
+	}
+	bridge := &GRPCPluginBridge{impl: plugin}
+	server := grpc.NewServer()
+	defer server.Stop()
+
+	err := bridge.GRPCServer(nil, server)
+
+	require.NoError(t, err)
+	assert.True(t, plugin.setHostClientCalled, "SetHostClient must be called when plugin implements BrokerAwarePlugin")
+}
+
+func TestGRPCServer_SkipsSetHostClientWhenNotBrokerAwarePlugin(t *testing.T) {
+	plugin := &testPlugin{BasePlugin: BasePlugin{PluginName: "plain", PluginVersion: "1.0.0"}}
+	bridge := &GRPCPluginBridge{impl: plugin}
+	server := grpc.NewServer()
+	defer server.Stop()
+
+	err := bridge.GRPCServer(nil, server)
+
+	require.NoError(t, err)
 }

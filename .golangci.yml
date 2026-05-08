@@ -276,6 +276,11 @@ linters:
         linters:
           - gosec
 
+      # StreamManager test helpers - scaffolding fields/methods exist for test extensibility
+      - path: internal/infrastructure/pluginmgr/stream_manager_test\.go
+        linters:
+          - unused
+
       # Compile-time type assertions (var _ Interface = (*Type)(nil))
       - text: "Error return value is not checked"
         source: "var _ .* = \\(\\*.*\\)\\(nil\\)"

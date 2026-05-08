@@ -2,6 +2,8 @@ package sdk
 
 import (
 	"context"
+	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -9,6 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // nonSubscriberPlugin implements Plugin but NOT EventSubscriber.
@@ -189,6 +194,129 @@ func TestEventServiceServer_HandleEvent_ConvertsEmittedEventsToProto(t *testing.
 	assert.Equal(t, map[string]string{"key": "val"}, got.Metadata)
 	assert.Equal(t, []byte(`{}`), got.Payload)
 	assert.Equal(t, int32(1), got.PropagationDepth)
+}
+
+// mockStreamEventsServer implements EventService_StreamEventsServer for testing.
+type mockStreamEventsServer struct {
+	messages []*pluginv1.EventStreamMessage
+	pos      int
+	recvErr  error
+	closed   bool
+	closeErr error
+	ctx      context.Context
+}
+
+func (m *mockStreamEventsServer) Recv() (*pluginv1.EventStreamMessage, error) {
+	if m.pos < len(m.messages) {
+		msg := m.messages[m.pos]
+		m.pos++
+		return msg, nil
+	}
+	if m.recvErr != nil {
+		return nil, m.recvErr
+	}
+	return nil, io.EOF
+}
+
+func (m *mockStreamEventsServer) SendAndClose(_ *pluginv1.StreamEventsResponse) error {
+	m.closed = true
+	return m.closeErr
+}
+
+func (m *mockStreamEventsServer) SetHeader(metadata.MD) error  { return nil }
+func (m *mockStreamEventsServer) SendHeader(metadata.MD) error { return nil }
+func (m *mockStreamEventsServer) SetTrailer(metadata.MD)       {}
+func (m *mockStreamEventsServer) Context() context.Context {
+	if m.ctx != nil {
+		return m.ctx
+	}
+	return context.Background()
+}
+func (m *mockStreamEventsServer) SendMsg(any) error { return nil }
+func (m *mockStreamEventsServer) RecvMsg(any) error { return nil }
+
+func TestStreamEvents_ReturnsUnimplementedWhenNotSubscriber(t *testing.T) {
+	p := &nonSubscriberPlugin{}
+	server := &eventServiceServer{impl: p}
+	stream := &mockStreamEventsServer{}
+
+	err := server.StreamEvents(stream)
+
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Unimplemented, st.Code())
+}
+
+func TestStreamEvents_SendsAndClosesOnEOF(t *testing.T) {
+	p := &capturingSubscriberPlugin{}
+	server := &eventServiceServer{impl: p}
+	stream := &mockStreamEventsServer{messages: []*pluginv1.EventStreamMessage{}}
+
+	err := server.StreamEvents(stream)
+
+	require.NoError(t, err)
+	assert.True(t, stream.closed, "SendAndClose must be called on EOF")
+}
+
+func TestStreamEvents_DispatchesEachEventToSubscriber(t *testing.T) {
+	p := &capturingSubscriberPlugin{}
+	server := &eventServiceServer{impl: p}
+	stream := &mockStreamEventsServer{
+		messages: []*pluginv1.EventStreamMessage{
+			{Id: "evt-1", Type: "workflow.started"},
+			{Id: "evt-2", Type: "step.completed"},
+		},
+	}
+
+	err := server.StreamEvents(stream)
+
+	require.NoError(t, err)
+	assert.True(t, p.handleCalled, "HandleEvent must be called for each received message")
+	assert.Equal(t, "evt-2", p.lastEvent.ID, "last dispatched event must be the second message")
+}
+
+func TestStreamEvents_ConvertsMessageFieldsToEvent(t *testing.T) {
+	nanos := int64(1_700_000_000_000_000_000)
+	p := &capturingSubscriberPlugin{}
+	server := &eventServiceServer{impl: p}
+	stream := &mockStreamEventsServer{
+		messages: []*pluginv1.EventStreamMessage{
+			{
+				Id:                 "evt-xyz",
+				Type:               "step.completed",
+				TimestampUnixNanos: nanos,
+				Source:             "plugin-a",
+				Metadata:           map[string]string{"run_id": "abc"},
+				Payload:            []byte(`{"ok":true}`),
+				PropagationDepth:   2,
+			},
+		},
+	}
+
+	err := server.StreamEvents(stream)
+
+	require.NoError(t, err)
+	require.True(t, p.handleCalled)
+	assert.Equal(t, "evt-xyz", p.lastEvent.ID)
+	assert.Equal(t, "step.completed", p.lastEvent.Type)
+	assert.Equal(t, time.Unix(0, nanos), p.lastEvent.Timestamp)
+	assert.Equal(t, "plugin-a", p.lastEvent.Source)
+	assert.Equal(t, map[string]string{"run_id": "abc"}, p.lastEvent.Metadata)
+	assert.Equal(t, []byte(`{"ok":true}`), p.lastEvent.Payload)
+	assert.Equal(t, 2, p.lastEvent.PropagationDepth)
+}
+
+func TestStreamEvents_PropagatesNonEOFRecvError(t *testing.T) {
+	p := &capturingSubscriberPlugin{}
+	server := &eventServiceServer{impl: p}
+	recvErr := errors.New("transport error")
+	stream := &mockStreamEventsServer{recvErr: recvErr}
+
+	err := server.StreamEvents(stream)
+
+	assert.ErrorIs(t, err, recvErr)
+	assert.False(t, stream.closed, "SendAndClose must not be called on transport error")
 }
 
 func TestGRPCServer_RegistersEventService(t *testing.T) {

@@ -35,6 +35,10 @@ func (m *mockEventClient) HandleEvent(_ context.Context, in *pluginv1.HandleEven
 	return &pluginv1.HandleEventResponse{}, nil
 }
 
+func (m *mockEventClient) StreamEvents(_ context.Context, _ ...grpc.CallOption) (grpc.ClientStreamingClient[pluginv1.EventStreamMessage, pluginv1.StreamEventsResponse], error) {
+	return nil, nil
+}
+
 func (m *mockEventClient) getLastRequest() *pluginv1.HandleEventRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -127,6 +131,44 @@ func TestGRPCEventAdapter_DeliverEvent_PropagatesClientError(t *testing.T) {
 	})
 
 	require.Error(t, err)
+}
+
+func TestDomainEventToStreamMessage_AllFields(t *testing.T) {
+	ts := time.Unix(1700000000, 123456789)
+	event := &pluginmodel.DomainEvent{
+		ID:               "stream-event-1",
+		Type:             "workflow.started",
+		Timestamp:        ts,
+		Source:           "workflow-service",
+		Metadata:         map[string]string{"env": "prod"},
+		Payload:          []byte(`{"step":"init"}`),
+		PropagationDepth: 3,
+	}
+
+	msg := domainEventToStreamMessage(event, 42)
+
+	require.NotNil(t, msg)
+	assert.Equal(t, "stream-event-1", msg.GetId())
+	assert.Equal(t, "workflow.started", msg.GetType())
+	assert.Equal(t, ts.UnixNano(), msg.GetTimestampUnixNanos())
+	assert.Equal(t, "workflow-service", msg.GetSource())
+	assert.Equal(t, map[string]string{"env": "prod"}, msg.GetMetadata())
+	assert.Equal(t, []byte(`{"step":"init"}`), msg.GetPayload())
+	assert.Equal(t, int32(3), msg.GetPropagationDepth())
+	assert.Equal(t, uint64(42), msg.GetSequenceNumber())
+}
+
+func TestDomainEventToStreamMessage_ZeroSequenceNumber(t *testing.T) {
+	event := &pluginmodel.DomainEvent{
+		ID:   "event-zero",
+		Type: "test.event",
+	}
+
+	msg := domainEventToStreamMessage(event, 0)
+
+	require.NotNil(t, msg)
+	assert.Equal(t, uint64(0), msg.GetSequenceNumber())
+	assert.Equal(t, "event-zero", msg.GetId())
 }
 
 func TestWireEventSubscriptions_RegistersSubscriptionForEventsCapability(t *testing.T) {

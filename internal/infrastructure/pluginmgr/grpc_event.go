@@ -49,6 +49,19 @@ func protoToDomainEvent(r *pluginv1.HandleEventRequest) *pluginmodel.DomainEvent
 	}
 }
 
+func domainEventToStreamMessage(event *pluginmodel.DomainEvent, seqNum uint64) *pluginv1.EventStreamMessage {
+	return &pluginv1.EventStreamMessage{
+		Id:                 event.ID,
+		Type:               event.Type,
+		TimestampUnixNanos: event.Timestamp.UnixNano(),
+		Source:             event.Source,
+		Metadata:           event.Metadata,
+		Payload:            event.Payload,
+		PropagationDepth:   int32(event.PropagationDepth), //nolint:gosec // G115: propagation depth is bounded by EventBus max depth, never exceeds int32 range
+		SequenceNumber:     seqNum,
+	}
+}
+
 func (a *grpcEventAdapter) DeliverEvent(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
 	handlerCtx, cancel := context.WithTimeout(ctx, defaultEventHandlerTimeout)
 	defer cancel()
