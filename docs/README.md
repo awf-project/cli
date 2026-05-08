@@ -44,7 +44,7 @@ Learn how to use AWF effectively:
   - [Notification Operations](user-guide/workflow-syntax.md#notification-operations) - Built-in notification plugin with desktop and webhook backends
 - [Retry Configuration](user-guide/retry.md) - Automatic retry with backoff strategies, delay capping, and exit code filtering
 - [Templates](user-guide/templates.md) - Reusable workflow templates
-- [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types
+- [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types; transport security (AutoMTLS, binary integrity verification) and log forwarding
 - [Plugin Events](user-guide/plugin-events.md) - Real-time event reactivity between plugins and core
 - [Workflow Packs](user-guide/workflow-packs.md) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
 - [Terminal UI (TUI)](user-guide/tui.md) - Interactive dashboard for workflow browsing, monitoring, history, and agent conversations

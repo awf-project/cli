@@ -7,6 +7,7 @@ import (
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
+	infralogger "github.com/awf-project/cli/internal/infrastructure/logger"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
@@ -112,7 +113,7 @@ func TestPluginProviderWiring_RPCManagerNil(t *testing.T) {
 	stateStore := store.NewJSONStore(t.TempDir())
 	shellExecutor := executor.NewShellExecutor()
 
-	logger := &NullLogger{}
+	logger := &infralogger.NopLogger{}
 	exprValidator := &NullExprValidator{}
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
@@ -146,7 +147,7 @@ func TestPluginProviderWiring_ValidatorProviderCalled(t *testing.T) {
 	stateStore := store.NewJSONStore(t.TempDir())
 	shellExecutor := executor.NewShellExecutor()
 
-	logger := &NullLogger{}
+	logger := &infralogger.NopLogger{}
 	exprValidator := &NullExprValidator{}
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
@@ -265,7 +266,7 @@ func TestPluginProviderWiring_NilValidatorProvider(t *testing.T) {
 	stateStore := store.NewJSONStore(t.TempDir())
 	shellExecutor := executor.NewShellExecutor()
 
-	logger := &NullLogger{}
+	logger := &infralogger.NopLogger{}
 	exprValidator := &NullExprValidator{}
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
@@ -284,7 +285,7 @@ func TestPluginProviderWiring_NilStepTypeProvider(t *testing.T) {
 	stateStore := store.NewJSONStore(t.TempDir())
 	shellExecutor := executor.NewShellExecutor()
 
-	logger := &NullLogger{}
+	logger := &infralogger.NopLogger{}
 	exprValidator := &NullExprValidator{}
 
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
@@ -348,12 +349,3 @@ type NullExprValidator struct{}
 func (n *NullExprValidator) Compile(expr string) error {
 	return nil
 }
-
-// NullLogger is a stub logger that discards all output
-type NullLogger struct{}
-
-func (n *NullLogger) Debug(msg string, keysAndValues ...any)      {}
-func (n *NullLogger) Info(msg string, keysAndValues ...any)       {}
-func (n *NullLogger) Warn(msg string, keysAndValues ...any)       {}
-func (n *NullLogger) Error(msg string, keysAndValues ...any)      {}
-func (n *NullLogger) WithContext(ctx map[string]any) ports.Logger { return n }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -918,6 +919,92 @@ func TestJSONPluginStateStore_GetSourceData_ExistingData(t *testing.T) {
 	require.NotNil(t, data)
 	assert.Equal(t, "owner/repo", data["repository"])
 	assert.Equal(t, "1.0.0", data["version"])
+}
+
+// --- SetChecksum tests ---
+
+func TestJSONPluginStateStore_SetChecksum_StoresHashAndTimestamp(t *testing.T) {
+	store := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+	ctx := context.Background()
+
+	require.NoError(t, store.SetEnabled(ctx, "my-plugin", true))
+
+	before := time.Now().Unix()
+	err := store.SetChecksum("my-plugin", "abc123def456")
+	after := time.Now().Unix()
+
+	require.NoError(t, err)
+
+	state := store.GetState("my-plugin")
+	require.NotNil(t, state)
+	assert.Equal(t, "abc123def456", state.Checksum)
+	assert.GreaterOrEqual(t, state.ChecksumAt, before)
+	assert.LessOrEqual(t, state.ChecksumAt, after)
+}
+
+func TestJSONPluginStateStore_SetChecksum_UnknownPluginReturnsError(t *testing.T) {
+	store := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+
+	err := store.SetChecksum("nonexistent", "abc123")
+
+	assert.Error(t, err)
+}
+
+// --- GetChecksum tests ---
+
+func TestJSONPluginStateStore_GetChecksum_UnknownPlugin(t *testing.T) {
+	store := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+
+	hash, at, ok := store.GetChecksum("nonexistent")
+
+	assert.Equal(t, "", hash)
+	assert.Equal(t, int64(0), at)
+	assert.False(t, ok)
+}
+
+func TestJSONPluginStateStore_GetChecksum_EmptyChecksum(t *testing.T) {
+	store := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+	ctx := context.Background()
+
+	require.NoError(t, store.SetEnabled(ctx, "my-plugin", true))
+
+	hash, at, ok := store.GetChecksum("my-plugin")
+
+	assert.Equal(t, "", hash)
+	assert.Equal(t, int64(0), at)
+	assert.False(t, ok)
+}
+
+func TestJSONPluginStateStore_GetChecksum_ReturnsStoredValue(t *testing.T) {
+	store := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+	ctx := context.Background()
+
+	require.NoError(t, store.SetEnabled(ctx, "my-plugin", true))
+	require.NoError(t, store.SetChecksum("my-plugin", "deadbeef1234"))
+
+	hash, at, ok := store.GetChecksum("my-plugin")
+
+	assert.Equal(t, "deadbeef1234", hash)
+	assert.NotZero(t, at)
+	assert.True(t, ok)
+}
+
+func TestJSONPluginStateStore_Checksum_Roundtrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	store1 := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	require.NoError(t, store1.SetEnabled(ctx, "my-plugin", true))
+	require.NoError(t, store1.SetChecksum("my-plugin", "cafebabe5678"))
+	require.NoError(t, store1.Save(ctx))
+
+	store2 := pluginmgr.NewJSONPluginStateStore(tmpDir)
+	require.NoError(t, store2.Load(ctx))
+
+	hash, at, ok := store2.GetChecksum("my-plugin")
+	assert.Equal(t, "cafebabe5678", hash)
+	assert.NotZero(t, at)
+	assert.True(t, ok)
 }
 
 // --- RemoveState tests ---

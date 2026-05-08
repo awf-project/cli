@@ -449,6 +449,101 @@ awf plugin enable awf-plugin-github
 
 Plugin state persists across AWF restarts.
 
+#### Verify Plugin Integrity
+
+Verify that installed plugin binaries have not been modified or corrupted:
+
+```bash
+# Verify all plugins
+awf plugin verify
+
+# Verify a specific plugin
+awf plugin verify jira
+
+# Verify and update stored checksums (useful for manually installed or local plugins)
+awf plugin verify jira --update
+```
+
+The verify command checks the SHA-256 checksum of each plugin binary against a stored value. For plugins installed via `awf plugin install`, the checksum is recorded automatically at install time. For manually placed or locally-built plugins, use `--update` to compute and store their checksums.
+
+**Output example:**
+
+```
+Plugin                Status   Expected Hash                          Actual Hash                            
+awf-plugin-jira       ✓ pass   a3f9d4c5e8b2f1g7h8i9j0k1l2m3n4o5p   a3f9d4c5e8b2f1g7h8i9j0k1l2m3n4o5p
+awf-plugin-metrics    ✗ fail   b2e8c3d7f6a4h5i9j2k3l4m5n6o7p8q9r   x1y2z3a4b5c6d7e8f9g0h1i2j3k4l5m6n7
+awf-plugin-custom     ! miss   (no stored checksum)                   c9h8i7j6k5l4m3n2o1p0q1r2s3t4u5v6w
+```
+
+- **✓ pass** - Binary matches the stored checksum (integrity verified)
+- **✗ fail** - Binary does not match; the plugin may be corrupted or tampered with
+- **! miss** - No checksum stored; plugin will launch without verification (use `--update` to enable verification)
+
+### Plugin Security
+
+AWF implements multiple security layers for plugin execution:
+
+#### Automatic Mutual TLS (AutoMTLS)
+
+All host-plugin communication uses automatic mutual TLS encryption by default. AWF and plugin binaries automatically generate ephemeral certificates at startup — no manual key management is required.
+
+**Benefits:**
+- Prevents network sniffing of plugin data on shared infrastructure
+- Protects secrets passed through plugin communication
+- Transparent to end users and plugin authors
+
+**Backward compatibility:** If a plugin binary is built with an older SDK that doesn't support AutoMTLS, the connection automatically downgrades to plaintext with a warning in the logs. The plugin continues to function.
+
+#### Binary Integrity Verification
+
+AWF verifies the SHA-256 checksum of each plugin binary before launching it. This prevents execution of corrupted or tampered binaries.
+
+**When verification happens:**
+- For plugins installed via `awf plugin install`: checksum is verified automatically at runtime using the stored value from install time
+- For manually placed plugins: use `awf plugin verify --update` to enable checksum verification
+
+**When verification is skipped:**
+- Plugins without a stored checksum launch with a warning recommending checksum verification
+- This allows existing plugins installed before this feature to continue functioning
+
+**Example: Detecting a Tampered Plugin**
+
+```bash
+# After installing a plugin, its checksum is stored
+$ awf plugin install myorg/awf-plugin-jira
+✓ Installed awf-plugin-jira v1.2.0
+
+# If the binary is modified later (e.g., by disk corruption or supply chain attack)
+$ echo "malware" >> ~/.local/share/awf/plugins/awf-plugin-jira/awf-plugin-jira
+$ awf run my-workflow
+Error: plugin "awf-plugin-jira" checksum mismatch
+  Expected: a3f9d4c5e8b2f1g7h8i9j0k1l2m3n4o5p
+  Actual:   x1y2z3a4b5c6d7e8f9g0h1i2j3k4l5m6n7
+
+# The plugin is refused and workflow execution stops
+```
+
+#### Plugin Output Forwarding
+
+Plugin logs and subprocess output (stdout/stderr) are forwarded to AWF's log output with structured context. This aids debugging when plugins crash or behave unexpectedly.
+
+**Plugin sources:**
+- Plugin-emitted structured logs (via hclog)
+- Plugin panic output
+- Direct writes to stdout/stderr
+
+**Log level:** Plugin output is forwarded at the INFO level for structured logs and WARN level for panic/output capture. AWF's configured log level (e.g., `--quiet`, `--verbose`) filters what appears in the final output.
+
+**Example:**
+
+```bash
+$ awf run workflow --verbose
+[INFO] Starting plugin awf-plugin-metrics...
+[INFO] plugin=awf-plugin-metrics: Listening on port 50051
+[INFO] plugin=awf-plugin-metrics: Registered collectors: cpu, memory, disk
+[WARN] plugin=awf-plugin-jira: Deprecated API v2 used — upgrade to v3 recommended
+```
+
 ### Using Plugin Operations
 
 Plugins register custom operations that can be used in workflow steps:

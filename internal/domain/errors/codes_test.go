@@ -870,6 +870,23 @@ func TestErrorCode_Taxonomy_Coverage(t *testing.T) {
 	})
 }
 
+func TestErrorCodeExecutionPluginChecksumMismatch_Constant(t *testing.T) {
+	assert.Equal(t, "EXECUTION.PLUGIN.CHECKSUM_MISMATCH", string(errors.ErrorCodeExecutionPluginChecksumMismatch))
+}
+
+func TestErrorCodeExecutionPluginChecksumMismatch_ExitCode(t *testing.T) {
+	assert.Equal(t, 3, errors.ErrorCodeExecutionPluginChecksumMismatch.ExitCode())
+}
+
+func TestErrorCodeExecutionPluginChecksumMismatch_IsValid(t *testing.T) {
+	code := errors.ErrorCodeExecutionPluginChecksumMismatch
+
+	assert.True(t, code.IsValid())
+	assert.Equal(t, "EXECUTION", code.Category())
+	assert.Equal(t, "PLUGIN", code.Subcategory())
+	assert.Equal(t, "CHECKSUM_MISMATCH", code.Specific())
+}
+
 func TestErrorCode_Taxonomy_Subcategories(t *testing.T) {
 	// Verify expected subcategories exist
 	subcategoryTests := []struct {

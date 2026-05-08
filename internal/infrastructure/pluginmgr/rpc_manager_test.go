@@ -1,9 +1,14 @@
 package pluginmgr
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +18,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
@@ -2494,5 +2500,193 @@ func TestRPCPluginManager_ShutdownAll_Idempotent(t *testing.T) {
 	// Second shutdown all (should be idempotent, no panic)
 	if err := manager.ShutdownAll(ctx); err != nil {
 		t.Logf("Second ShutdownAll() error = %v", err)
+	}
+}
+
+// --- T004: SetStateStore, verifyChecksum, Init checksum enforcement ---
+
+func TestRPCPluginManager_SetStateStore(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	store := NewJSONPluginStateStore(t.TempDir())
+
+	manager.SetStateStore(store)
+
+	manager.mu.RLock()
+	got := manager.stateStore
+	manager.mu.RUnlock()
+
+	if got != store {
+		t.Error("SetStateStore() did not assign the stateStore field")
+	}
+}
+
+func TestRPCPluginManager_VerifyChecksum_NoStateStore(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "fake-plugin")
+	if err := os.WriteFile(binPath, []byte("fake binary content"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checksumBytes, err := manager.verifyChecksum("test-plugin", binPath)
+	if err != nil {
+		t.Errorf("verifyChecksum() error = %v, want nil when no state store configured", err)
+	}
+	if checksumBytes != nil {
+		t.Errorf("verifyChecksum() checksumBytes = %v, want nil when no state store configured", checksumBytes)
+	}
+}
+
+func TestRPCPluginManager_VerifyChecksum_NoChecksumStored(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	store := NewJSONPluginStateStore(t.TempDir())
+	manager.SetStateStore(store)
+
+	// Register plugin state without a checksum
+	if err := store.SetEnabled(context.Background(), "test-plugin", true); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "fake-plugin")
+	if err := os.WriteFile(binPath, []byte("fake binary content"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checksumBytes, err := manager.verifyChecksum("test-plugin", binPath)
+	if err != nil {
+		t.Errorf("verifyChecksum() error = %v, want nil when no checksum stored for plugin", err)
+	}
+	if checksumBytes != nil {
+		t.Errorf("verifyChecksum() checksumBytes = %v, want nil when no checksum stored for plugin", checksumBytes)
+	}
+}
+
+func TestRPCPluginManager_VerifyChecksum_ChecksumMatch(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	store := NewJSONPluginStateStore(t.TempDir())
+	manager.SetStateStore(store)
+
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "fake-plugin")
+	content := []byte("real plugin binary content")
+	if err := os.WriteFile(binPath, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hash := sha256.Sum256(content)
+	hexHash := hex.EncodeToString(hash[:])
+
+	if err := store.SetEnabled(context.Background(), "test-plugin", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetChecksum("test-plugin", hexHash); err != nil {
+		t.Fatal(err)
+	}
+
+	checksumBytes, err := manager.verifyChecksum("test-plugin", binPath)
+	if err != nil {
+		t.Errorf("verifyChecksum() error = %v, want nil on checksum match", err)
+	}
+	if len(checksumBytes) == 0 {
+		t.Fatal("verifyChecksum() returned empty checksumBytes, want decoded hash bytes on match")
+	}
+	expected, _ := hex.DecodeString(hexHash)
+	if !bytes.Equal(checksumBytes, expected) {
+		t.Errorf("verifyChecksum() checksumBytes = %x, want %x", checksumBytes, expected)
+	}
+}
+
+func TestRPCPluginManager_VerifyChecksum_ChecksumMismatch(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	store := NewJSONPluginStateStore(t.TempDir())
+	manager.SetStateStore(store)
+
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "fake-plugin")
+	if err := os.WriteFile(binPath, []byte("real plugin binary content"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Store a wrong (all-zeros) checksum — does not match actual file content
+	wrongHash := hex.EncodeToString(make([]byte, 32))
+	if err := store.SetEnabled(context.Background(), "test-plugin", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetChecksum("test-plugin", wrongHash); err != nil {
+		t.Fatal(err)
+	}
+
+	checksumBytes, err := manager.verifyChecksum("test-plugin", binPath)
+
+	if err == nil {
+		t.Fatal("verifyChecksum() error = nil, want EXECUTION.PLUGIN.CHECKSUM_MISMATCH error on hash mismatch")
+	}
+	if checksumBytes != nil {
+		t.Errorf("verifyChecksum() checksumBytes = %v, want nil on mismatch", checksumBytes)
+	}
+
+	var structErr *domainerrors.StructuredError
+	if errors.As(err, &structErr) {
+		if structErr.Code != domainerrors.ErrorCodeExecutionPluginChecksumMismatch {
+			t.Errorf("error code = %q, want %q", structErr.Code, domainerrors.ErrorCodeExecutionPluginChecksumMismatch)
+		}
+		// Error details must name the plugin
+		if name, ok := structErr.Details["plugin"]; ok {
+			if name != "test-plugin" {
+				t.Errorf("error details[plugin] = %q, want %q", name, "test-plugin")
+			}
+		}
+	} else if !strings.Contains(err.Error(), "CHECKSUM_MISMATCH") {
+		t.Errorf("error = %q, want EXECUTION.PLUGIN.CHECKSUM_MISMATCH", err.Error())
+	}
+}
+
+// TestRPCPluginManager_Init_ChecksumMismatch_FailsFast verifies Init() returns
+// CHECKSUM_MISMATCH before attempting to start the plugin process.
+func TestRPCPluginManager_Init_ChecksumMismatch_FailsFast(t *testing.T) {
+	parser := NewManifestParser()
+	loader := NewFileSystemLoader(parser)
+	manager := NewRPCPluginManager(loader)
+	manager.SetPluginsDir(fixturesPath)
+
+	store := NewJSONPluginStateStore(t.TempDir())
+	manager.SetStateStore(store)
+
+	ctx := context.Background()
+
+	if err := manager.Load(ctx, "valid-simple"); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Register plugin state with a wrong checksum
+	if err := store.SetEnabled(ctx, "valid-simple", true); err != nil {
+		t.Fatal(err)
+	}
+	wrongHash := hex.EncodeToString(make([]byte, 32))
+	if err := store.SetChecksum("valid-simple", wrongHash); err != nil {
+		t.Fatal(err)
+	}
+
+	err := manager.Init(ctx, "valid-simple", nil)
+
+	if err == nil {
+		t.Fatal("Init() error = nil, want CHECKSUM_MISMATCH error when stored hash does not match binary")
+	}
+
+	var structErr *domainerrors.StructuredError
+	if errors.As(err, &structErr) {
+		assert.Equal(t, domainerrors.ErrorCodeExecutionPluginChecksumMismatch, structErr.Code)
+	} else if !strings.Contains(err.Error(), "CHECKSUM_MISMATCH") {
+		t.Errorf("Init() error = %q, want EXECUTION.PLUGIN.CHECKSUM_MISMATCH", err.Error())
+	}
+
+	// Fail-fast: no connection should have been established
+	manager.mu.RLock()
+	_, connected := manager.connections["valid-simple"]
+	manager.mu.RUnlock()
+	if connected {
+		t.Error("Init() stored a connection despite checksum mismatch — not failing fast")
 	}
 }

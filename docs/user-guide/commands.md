@@ -22,6 +22,7 @@ title: "CLI Commands"
 | `awf plugin list` | List installed plugins |
 | `awf plugin install <owner/repo>` | Install a plugin from GitHub releases |
 | `awf plugin update [name]` | Update an installed plugin |
+| `awf plugin verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
 | `awf plugin remove <name>` | Remove an installed plugin |
 | `awf plugin search [query]` | Search for plugins on GitHub |
 | `awf plugin enable <name>` | Enable a plugin |
@@ -913,6 +914,7 @@ awf plugin <subcommand> [flags]
 | `list` | List all plugins (use `--operations` to show provided operations) |
 | `install <owner/repo>` | Install a plugin from GitHub releases |
 | `update [name]` | Update an installed plugin to the latest version |
+| `verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
 | `remove <name>` | Remove an installed plugin |
 | `search [query]` | Search for available plugins on GitHub |
 | `enable <name>` | Enable a disabled plugin |
@@ -1072,6 +1074,82 @@ awf plugin update --all
 |-------|-------|
 | `requires a plugin name or --all flag` | No plugin name and `--all` not specified |
 | `plugin "<name>" is not installed` | Plugin name not found in installed plugins |
+
+---
+
+## awf plugin verify
+
+Verify the integrity of plugin binaries using SHA-256 checksums.
+
+```bash
+awf plugin verify [plugin-names...] [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `plugin-names` | One or more plugin names to verify (optional; omit to verify all plugins) |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--update` | Recompute and update stored checksums for the specified plugins |
+| `-f, --format` | Output format (text, json) |
+
+### Description
+
+Verifies that installed plugin binaries have not been modified or corrupted by comparing their SHA-256 checksums against stored values. Checksums are recorded automatically during `awf plugin install`. For manually placed or locally-built plugins, use `--update` to compute and store checksums.
+
+**Without arguments:** Verifies all installed plugins.
+
+**With plugin names:** Verifies only the named plugins.
+
+**Without `--update`:** Read-only verification; reports pass/fail/missing status.
+
+**With `--update`:** Recomputes checksums for the named plugins and updates the stored values. Useful for locally-built or manually installed plugins.
+
+### Output
+
+Each plugin is reported with one of three statuses:
+
+| Status | Symbol | Meaning |
+|--------|--------|---------|
+| Pass | `✓` | Binary matches the stored checksum |
+| Fail | `✗` | Binary does NOT match the stored checksum (possible tampering or corruption) |
+| Missing | `!` | No stored checksum (plugin will launch without verification) |
+
+Output includes: plugin name, status, expected hash, and actual hash.
+
+### Examples
+
+```bash
+# Verify all plugins
+awf plugin verify
+
+# Verify a specific plugin
+awf plugin verify jira
+
+# Verify multiple plugins
+awf plugin verify jira metrics custom
+
+# Verify and update checksums for a locally-built plugin
+awf plugin verify custom --update
+
+# Verify all and update a specific plugin's checksum
+awf plugin verify --update jira
+
+# JSON output for scripting
+awf plugin verify -f json
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `plugin "<name>" is not installed` | Named plugin not found in installed plugins |
+| `checksum mismatch` | Plugin binary does not match the stored checksum (possible corruption or tampering) |
 
 ---
 

@@ -2,6 +2,8 @@ package pluginmgr
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,12 +15,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
+	infralogger "github.com/awf-project/cli/internal/infrastructure/logger"
 	"github.com/awf-project/cli/pkg/plugin/sdk"
 	"github.com/awf-project/cli/pkg/registry"
 	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
@@ -129,6 +134,8 @@ type RPCPluginManager struct {
 	pluginsDirs []string                           // directories to discover plugins from
 	hostVersion string                             // current AWF version for plugin compatibility checks
 	eventBus    *EventBus                          // optional; nil means no event wiring
+	stateStore  *JSONPluginStateStore              // optional; nil means no checksum verification
+	zapLogger   *zap.Logger                        // optional; nil falls back to zap.NewNop()
 }
 
 // NewRPCPluginManager creates a new RPCPluginManager.
@@ -362,7 +369,12 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 		return compatErr
 	}
 
-	conn, _, err := m.startPluginProcess(ctx, name, binaryPath, config)
+	checksumBytes, err := m.verifyChecksum(name, binaryPath)
+	if err != nil {
+		return err
+	}
+
+	conn, _, err := m.startPluginProcess(ctx, name, binaryPath, config, checksumBytes)
 	if err != nil {
 		return err
 	}
@@ -463,18 +475,33 @@ func (m *RPCPluginManager) checkVersionCompatibility(name string, info *pluginmo
 // startPluginProcess creates a go-plugin client, establishes gRPC connection,
 // verifies the plugin via GetInfo, and calls Init RPC.
 // Returns the connection and processCancel (caller must store or invoke on error).
-func (m *RPCPluginManager) startPluginProcess(ctx context.Context, name, binaryPath string, config map[string]any) (*pluginConnection, context.CancelFunc, error) {
+// checksumBytes, when non-nil, enables go-plugin SecureConfig verification (redundant layer after Init checksum check).
+func (m *RPCPluginManager) startPluginProcess(ctx context.Context, name, binaryPath string, config map[string]any, checksumBytes []byte) (*pluginConnection, context.CancelFunc, error) {
 	processCtx, processCancel := context.WithCancel(context.Background())
 
-	client := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig: sdk.Handshake,
-		Plugins: goplugin.PluginSet{
-			"awf-plugin": &clientPlugin{},
-		},
+	zapLog := m.zapLogger
+	if zapLog == nil {
+		zapLog = zap.NewNop()
+	}
+
+	clientCfg := &goplugin.ClientConfig{
+		HandshakeConfig:  sdk.Handshake,
+		Plugins:          goplugin.PluginSet{"awf-plugin": &clientPlugin{}},
 		Cmd:              exec.CommandContext(processCtx, binaryPath), //nolint:gosec // binaryPath is validated by resolvePluginBinary
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
-		Logger:           hclog.NewNullLogger(),
-	})
+		AutoMTLS:         true,
+		Logger:           infralogger.NewHCLogAdapter(zapLog, name),
+		SyncStdout:       infralogger.NewLogWriter(zapLog, zapcore.WarnLevel),
+		SyncStderr:       infralogger.NewLogWriter(zapLog, zapcore.WarnLevel),
+	}
+	if len(checksumBytes) > 0 {
+		clientCfg.SecureConfig = &goplugin.SecureConfig{
+			Checksum: checksumBytes,
+			Hash:     sha256.New(),
+		}
+	}
+
+	client := goplugin.NewClient(clientCfg)
 
 	conn, err := m.connectWithTimeout(ctx, client)
 	if err != nil {
@@ -943,6 +970,69 @@ func (m *RPCPluginManager) wireEventSubscriptions(pluginName string, conn *plugi
 
 	adapter := newGRPCEventAdapter(conn.event, pluginName)
 	m.eventBus.Subscribe(pluginName, info.Manifest.Events.Subscribe, adapter)
+}
+
+// SetStateStore injects a JSONPluginStateStore for launch-time checksum verification.
+// Must be called before any Init() calls to enable checksum enforcement.
+func (m *RPCPluginManager) SetStateStore(store *JSONPluginStateStore) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stateStore = store
+}
+
+// SetZapLogger injects a zap.Logger used for the hclog adapter and stdout/stderr capture.
+// When not set, startPluginProcess falls back to zap.NewNop().
+func (m *RPCPluginManager) SetZapLogger(zapLogger *zap.Logger) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.zapLogger = zapLogger
+}
+
+// verifyChecksum reads the plugin binary, computes SHA-256, and compares with the stored hash.
+// Returns (nil, nil) when no state store is configured or no checksum is stored for the plugin.
+// Returns (checksumBytes, nil) on a hash match; returns (nil, error) on mismatch.
+func (m *RPCPluginManager) verifyChecksum(pluginName, binaryPath string) ([]byte, error) {
+	if m.stateStore == nil {
+		return nil, nil
+	}
+
+	hexHash, _, exists := m.stateStore.GetChecksum(pluginName)
+	if !exists {
+		return nil, nil
+	}
+
+	realPath, err := filepath.EvalSymlinks(binaryPath)
+	if err != nil {
+		realPath = binaryPath
+	}
+
+	data, err := os.ReadFile(realPath) //nolint:gosec // path validated by resolvePluginBinary
+	if err != nil {
+		return nil, WrapRPCManagerError("init", pluginName, fmt.Errorf("failed to read plugin binary for checksum: %w", err))
+	}
+
+	actualSum := sha256.Sum256(data)
+	actualHex := hex.EncodeToString(actualSum[:])
+
+	if actualHex != hexHash {
+		return nil, domainerrors.NewStructuredError(
+			domainerrors.ErrorCodeExecutionPluginChecksumMismatch,
+			fmt.Sprintf("CHECKSUM_MISMATCH: plugin %q binary hash mismatch (expected %s, got %s)", pluginName, hexHash, actualHex),
+			map[string]any{
+				"plugin":   pluginName,
+				"expected": hexHash,
+				"actual":   actualHex,
+			},
+			nil,
+		)
+	}
+
+	decoded, err := hex.DecodeString(hexHash)
+	if err != nil {
+		return nil, WrapRPCManagerError("init", pluginName, fmt.Errorf("invalid stored checksum hex: %w", err))
+	}
+
+	return decoded, nil
 }
 
 // splitOperationName splits "pluginName.opName" into (pluginName, opName).

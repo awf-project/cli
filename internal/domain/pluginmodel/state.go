@@ -5,6 +5,8 @@ type PluginState struct {
 	Config     map[string]any `json:"config,omitempty"`
 	DisabledAt int64          `json:"disabled_at,omitempty"`
 	SourceData map[string]any `json:"source_data,omitempty"`
+	Checksum   string         `json:"checksum,omitempty"`
+	ChecksumAt int64          `json:"checksum_at,omitempty"`
 }
 
 func NewPluginState() *PluginState {
