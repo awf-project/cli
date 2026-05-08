@@ -27,7 +27,7 @@ func Serve(p Plugin) {
 			pluginSetKey: &GRPCPluginBridge{impl: p},
 		},
 		GRPCServer: goplugin.DefaultGRPCServer,
-		Logger:     hclog.NewNullLogger(),
+		Logger:     hclog.Default(),
 	})
 }
 

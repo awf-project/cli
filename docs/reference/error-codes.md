@@ -276,6 +276,22 @@ awf run high-throughput
 
 ---
 
+### EXECUTION.PLUGIN.CHECKSUM_MISMATCH
+
+**Description:** The SHA-256 checksum of a plugin binary does not match the stored value recorded at install time. The plugin was refused before any code from the binary executed.
+
+**Resolution:** The plugin binary may have been corrupted, accidentally overwritten, or tampered with. Reinstall the plugin with `awf plugin install <owner/repo> --force` to get a fresh copy with a valid checksum. If you intentionally replaced the binary (e.g., local development), run `awf plugin verify --update <name>` to recompute and store the new checksum.
+
+**Example:**
+```bash
+awf run my-workflow
+# Error [EXECUTION.PLUGIN.CHECKSUM_MISMATCH]: plugin "awf-plugin-jira" binary hash mismatch (expected a3f9d4..., got x1y2z3...)
+```
+
+**Related codes:** `EXECUTION.COMMAND.FAILED`
+
+---
+
 ## SYSTEM Category (Exit Code 4)
 
 Infrastructure and system-level failures.

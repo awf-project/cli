@@ -450,6 +450,7 @@ deps:
       - go-stdlib
       - zap
       - color
+      - go-hclog
 
   infra-plugin:
     mayDependOn:
@@ -461,9 +462,11 @@ deps:
       - proto-plugin
       - pkg-httpx
       - pkg-registry
+      - infra-logger
     canUse:
       - go-stdlib
       - yaml
+      - zap
       - go-hclog
       - go-plugin
       - go-grpc

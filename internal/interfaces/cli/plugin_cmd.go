@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,6 +46,7 @@ Examples:
 	cmd.AddCommand(newPluginUpdateCommand(cfg))
 	cmd.AddCommand(newPluginRemoveCommand(cfg))
 	cmd.AddCommand(newPluginSearchCommand(cfg))
+	cmd.AddCommand(newPluginVerifyCommand(cfg))
 
 	return cmd
 }
@@ -289,7 +292,7 @@ func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
 
 	if writer.IsJSONFormat() {
 		return writer.WriteJSON(map[string]any{
-			"plugin":  name,
+			"name":    name,
 			"enabled": true,
 		})
 	}
@@ -513,11 +516,23 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 	if err != nil {
 		return fmt.Errorf("failed to build source metadata: %w", err)
 	}
-	if err := stateStore.SetSourceData(ctx, pluginName, sourceData); err != nil {
-		return fmt.Errorf("failed to persist source metadata: %w", err)
+	if setErr := stateStore.SetSourceData(ctx, pluginName, sourceData); setErr != nil {
+		return fmt.Errorf("failed to persist source metadata: %w", setErr)
 	}
-	if err := stateStore.Save(ctx); err != nil {
-		return fmt.Errorf("failed to save plugin state: %w", err)
+
+	binaryPath := filepath.Join(pluginDir, "awf-plugin-"+pluginName)
+	binData, err := os.ReadFile(binaryPath) //nolint:gosec // G304: path derived from validated plugin name and controlled pluginDir
+	if err != nil {
+		return fmt.Errorf("failed to read installed binary for checksum: %w", err)
+	}
+	sum := sha256.Sum256(binData)
+	hexHash := hex.EncodeToString(sum[:])
+	if setErr := stateStore.SetChecksum(pluginName, hexHash); setErr != nil {
+		return fmt.Errorf("failed to persist checksum: %w", setErr)
+	}
+
+	if saveErr := stateStore.Save(ctx); saveErr != nil {
+		return fmt.Errorf("failed to save plugin state: %w", saveErr)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Plugin %q installed successfully (version %s)\n", pluginName, release.TagName)
@@ -835,6 +850,138 @@ func runPluginRemove(cmd *cobra.Command, cfg *Config, name string, opts removeOp
 		}
 	}
 
+	return nil
+}
+
+type verifyOptions struct {
+	update bool
+}
+
+func newPluginVerifyCommand(cfg *Config) *cobra.Command {
+	var opts verifyOptions
+
+	cmd := &cobra.Command{
+		Use:   "verify [plugin-names...]",
+		Short: "Verify checksums of installed plugins",
+		Long: `Verify the SHA-256 checksum of installed plugin binaries.
+
+Without arguments: verify all installed plugins.
+With arguments: verify only named plugins.
+
+Reports PASS, FAIL, or MISSING per plugin. Use --update to recompute
+and persist checksums from disk.
+
+Examples:
+  awf plugin verify
+  awf plugin verify jira slack
+  awf plugin verify --update`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPluginVerify(cmd, cfg, args, opts)
+		},
+	}
+
+	cmd.Flags().BoolVar(&opts.update, "update", false, "recompute and persist checksums from disk")
+
+	return cmd
+}
+
+func collectInstalledPluginNames(pluginPaths []string) []string {
+	var names []string
+	for _, dir := range findExistingDirs(pluginPaths) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			binary := filepath.Join(dir, e.Name(), "awf-plugin-"+e.Name())
+			if _, err := os.Stat(binary); err == nil {
+				names = append(names, e.Name())
+			}
+		}
+	}
+	return names
+}
+
+func verifyOnePlugin(cmd *cobra.Command, stateStore *infrastructurePlugin.JSONPluginStateStore, pluginPaths []string, name string, update bool) (updated, failed bool) {
+	pluginDir := findPluginDir(pluginPaths, name)
+	if pluginDir == "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "error: plugin %q not found\n", name)
+		return false, true
+	}
+
+	binaryPath := filepath.Join(pluginDir, "awf-plugin-"+name)
+	binData, err := os.ReadFile(binaryPath) //nolint:gosec // G304: path derived from validated plugin name and controlled pluginDir
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "error: failed to read binary for plugin %q: %v\n", name, err)
+		return false, true
+	}
+
+	sum := sha256.Sum256(binData)
+	actualHash := hex.EncodeToString(sum[:])
+
+	if update {
+		if setErr := stateStore.SetChecksum(name, actualHash); setErr != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "error: failed to update checksum for plugin %q: %v\n", name, setErr)
+			return false, true
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%-30s  UPDATED  %s\n", name, actualHash)
+		return true, false
+	}
+
+	storedHash, _, exists := stateStore.GetChecksum(name)
+	if !exists {
+		fmt.Fprintf(cmd.OutOrStdout(), "%-30s  MISSING\n", name)
+		return false, true
+	}
+	if actualHash == storedHash {
+		fmt.Fprintf(cmd.OutOrStdout(), "%-30s  PASS  %s\n", name, storedHash)
+		return false, false
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "%-30s  FAIL  expected=%s actual=%s\n", name, storedHash, actualHash)
+	return false, true
+}
+
+func runPluginVerify(cmd *cobra.Command, cfg *Config, args []string, opts verifyOptions) error {
+	ctx := context.Background()
+
+	// Use cfg.StoragePath directly as the state store base: verify reads/writes StoragePath/plugins.json.
+	stateStore := infrastructurePlugin.NewJSONPluginStateStore(cfg.StoragePath)
+	if err := stateStore.Load(ctx); err != nil {
+		cmd.PrintErrf("Warning: could not load plugin state: %v\n", err)
+	}
+
+	pluginPaths := getPluginSearchPaths(cfg)
+
+	pluginNames := args
+	if len(pluginNames) == 0 {
+		pluginNames = collectInstalledPluginNames(pluginPaths)
+	}
+
+	anyFailed := false
+	anyUpdated := false
+
+	for _, name := range pluginNames {
+		updated, failed := verifyOnePlugin(cmd, stateStore, pluginPaths, name, opts.update)
+		if updated {
+			anyUpdated = true
+		}
+		if failed {
+			anyFailed = true
+		}
+	}
+
+	if anyUpdated {
+		if saveErr := stateStore.Save(ctx); saveErr != nil {
+			return fmt.Errorf("failed to save updated checksums: %w", saveErr)
+		}
+	}
+
+	if anyFailed {
+		return fmt.Errorf("one or more plugins failed verification")
+	}
 	return nil
 }
 

@@ -79,6 +79,9 @@ const (
 
 	// ErrorCodeExecutionEventBufferFull indicates the event buffer capacity was exceeded.
 	ErrorCodeExecutionEventBufferFull ErrorCode = "EXECUTION.EVENT.BUFFER_FULL"
+
+	// ErrorCodeExecutionPluginChecksumMismatch indicates plugin binary checksum verification failed.
+	ErrorCodeExecutionPluginChecksumMismatch ErrorCode = "EXECUTION.PLUGIN.CHECKSUM_MISMATCH"
 )
 
 // Error code constants for SYSTEM category (exit code 4).

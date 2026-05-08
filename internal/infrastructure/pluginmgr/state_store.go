@@ -282,6 +282,37 @@ func (s *JSONPluginStateStore) GetSourceData(name string) map[string]any {
 	return state.SourceData
 }
 
+// SetChecksum stores the hex-encoded SHA-256 hash and current Unix timestamp for a plugin.
+// Returns an error if the plugin is not yet registered in the state store.
+func (s *JSONPluginStateStore) SetChecksum(pluginName, hexHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, exists := s.states[pluginName]
+	if !exists {
+		return fmt.Errorf("set checksum: plugin %q not found", pluginName)
+	}
+
+	state.Checksum = hexHash
+	state.ChecksumAt = time.Now().Unix()
+
+	return nil
+}
+
+// GetChecksum returns the stored checksum and its timestamp for a plugin.
+// Returns ("", 0, false) if the plugin is unknown or has no checksum stored.
+func (s *JSONPluginStateStore) GetChecksum(pluginName string) (hexHash string, checksumAt int64, exists bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	state, ok := s.states[pluginName]
+	if !ok || state.Checksum == "" {
+		return "", 0, false
+	}
+
+	return state.Checksum, state.ChecksumAt, true
+}
+
 // RemoveState removes all state entries for a plugin name.
 func (s *JSONPluginStateStore) RemoveState(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
