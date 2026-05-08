@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -741,6 +742,263 @@ func TestExecuteStepResponse_ErrorCase(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, int32(1), resp2.ExitCode)
+}
+
+// TestHandleEventRequest_HappyPath verifies HandleEventRequest with all fields.
+func TestHandleEventRequest_HappyPath(t *testing.T) {
+	req := &HandleEventRequest{
+		Id:                 "event-123",
+		Type:               "workflow.step.completed",
+		TimestampUnixNanos: 1700000000000000000,
+		Source:             "plugin-a",
+		Metadata: map[string]string{
+			"correlation_id": "corr-456",
+		},
+		Payload:          []byte(`{"result":"ok"}`),
+		PropagationDepth: 2,
+	}
+	require.NotNil(t, req)
+
+	assert.Equal(t, "event-123", req.Id)
+	assert.Equal(t, "workflow.step.completed", req.Type)
+	assert.Equal(t, int64(1700000000000000000), req.TimestampUnixNanos)
+	assert.Equal(t, "plugin-a", req.Source)
+	assert.Equal(t, "corr-456", req.Metadata["correlation_id"])
+	assert.Equal(t, []byte(`{"result":"ok"}`), req.Payload)
+	assert.Equal(t, int32(2), req.PropagationDepth)
+
+	data, err := proto.Marshal(req)
+	require.NoError(t, err)
+
+	req2 := &HandleEventRequest{}
+	err = proto.Unmarshal(data, req2)
+	require.NoError(t, err)
+
+	assert.Equal(t, req.Id, req2.Id)
+	assert.Equal(t, req.Type, req2.Type)
+	assert.Equal(t, req.TimestampUnixNanos, req2.TimestampUnixNanos)
+	assert.Equal(t, req.Source, req2.Source)
+	assert.Equal(t, req.Metadata, req2.Metadata)
+	assert.Equal(t, req.Payload, req2.Payload)
+	assert.Equal(t, req.PropagationDepth, req2.PropagationDepth)
+}
+
+// TestHandleEventResponse_HappyPath verifies HandleEventResponse with emitted events.
+func TestHandleEventResponse_HappyPath(t *testing.T) {
+	resp := &HandleEventResponse{
+		EmittedEvents: []*HandleEventRequest{
+			{
+				Id:     "child-event-1",
+				Type:   "workflow.step.started",
+				Source: "plugin-b",
+			},
+		},
+	}
+	require.NotNil(t, resp)
+
+	assert.Len(t, resp.EmittedEvents, 1)
+	assert.Equal(t, "child-event-1", resp.EmittedEvents[0].Id)
+	assert.Equal(t, "workflow.step.started", resp.EmittedEvents[0].Type)
+
+	data, err := proto.Marshal(resp)
+	require.NoError(t, err)
+
+	resp2 := &HandleEventResponse{}
+	err = proto.Unmarshal(data, resp2)
+	require.NoError(t, err)
+
+	assert.Len(t, resp2.EmittedEvents, 1)
+	assert.Equal(t, resp.EmittedEvents[0].Id, resp2.EmittedEvents[0].Id)
+}
+
+// TestEmitRequest_HappyPath verifies EmitRequest has all required fields.
+func TestEmitRequest_HappyPath(t *testing.T) {
+	req := &EmitRequest{
+		EventType:          "workflow.step.completed",
+		Payload:            []byte(`{"output":"done"}`),
+		SourcePlugin:       "my-plugin",
+		PropagationDepth:   1,
+		TimestampUnixNanos: 1700000000000000000,
+		Metadata: map[string]string{
+			"trace_id": "trace-abc",
+		},
+	}
+	require.NotNil(t, req)
+
+	assert.Equal(t, "workflow.step.completed", req.EventType)
+	assert.Equal(t, []byte(`{"output":"done"}`), req.Payload)
+	assert.Equal(t, "my-plugin", req.SourcePlugin)
+	assert.Equal(t, int32(1), req.PropagationDepth)
+	assert.Equal(t, int64(1700000000000000000), req.TimestampUnixNanos)
+	assert.Equal(t, "trace-abc", req.Metadata["trace_id"])
+
+	data, err := proto.Marshal(req)
+	require.NoError(t, err)
+
+	req2 := &EmitRequest{}
+	err = proto.Unmarshal(data, req2)
+	require.NoError(t, err)
+
+	assert.Equal(t, req.EventType, req2.EventType)
+	assert.Equal(t, req.Payload, req2.Payload)
+	assert.Equal(t, req.SourcePlugin, req2.SourcePlugin)
+	assert.Equal(t, req.PropagationDepth, req2.PropagationDepth)
+	assert.Equal(t, req.TimestampUnixNanos, req2.TimestampUnixNanos)
+	assert.Equal(t, req.Metadata, req2.Metadata)
+}
+
+// TestEmitResponse_HappyPath verifies EmitResponse success fields.
+func TestEmitResponse_HappyPath(t *testing.T) {
+	resp := &EmitResponse{
+		Success:      true,
+		ErrorMessage: "",
+		EventId:      "evt-789",
+	}
+	require.NotNil(t, resp)
+
+	assert.True(t, resp.Success)
+	assert.Empty(t, resp.ErrorMessage)
+	assert.Equal(t, "evt-789", resp.EventId)
+
+	data, err := proto.Marshal(resp)
+	require.NoError(t, err)
+
+	resp2 := &EmitResponse{}
+	err = proto.Unmarshal(data, resp2)
+	require.NoError(t, err)
+
+	assert.True(t, resp2.Success)
+	assert.Equal(t, "evt-789", resp2.EventId)
+}
+
+// TestEmitResponse_ErrorCase verifies EmitResponse when emission fails.
+func TestEmitResponse_ErrorCase(t *testing.T) {
+	resp := &EmitResponse{
+		Success:      false,
+		ErrorMessage: "propagation depth exceeded",
+		EventId:      "",
+	}
+	require.NotNil(t, resp)
+
+	assert.False(t, resp.Success)
+	assert.Equal(t, "propagation depth exceeded", resp.ErrorMessage)
+	assert.Empty(t, resp.EventId)
+
+	data, err := proto.Marshal(resp)
+	require.NoError(t, err)
+
+	resp2 := &EmitResponse{}
+	err = proto.Unmarshal(data, resp2)
+	require.NoError(t, err)
+
+	assert.False(t, resp2.Success)
+	assert.Equal(t, resp.ErrorMessage, resp2.ErrorMessage)
+}
+
+// TestEventStreamMessage_HappyPath verifies EventStreamMessage has all 8 required fields.
+func TestEventStreamMessage_HappyPath(t *testing.T) {
+	msg := &EventStreamMessage{
+		Id:                 "stream-evt-001",
+		Type:               "workflow.step.started",
+		TimestampUnixNanos: 1700000000000000000,
+		Source:             "host",
+		Metadata: map[string]string{
+			"workflow_id": "wf-123",
+		},
+		Payload:          []byte(`{"step":"init"}`),
+		PropagationDepth: 0,
+		SequenceNumber:   42,
+	}
+	require.NotNil(t, msg)
+
+	assert.Equal(t, "stream-evt-001", msg.Id)
+	assert.Equal(t, "workflow.step.started", msg.Type)
+	assert.Equal(t, int64(1700000000000000000), msg.TimestampUnixNanos)
+	assert.Equal(t, "host", msg.Source)
+	assert.Equal(t, "wf-123", msg.Metadata["workflow_id"])
+	assert.Equal(t, []byte(`{"step":"init"}`), msg.Payload)
+	assert.Equal(t, int32(0), msg.PropagationDepth)
+	assert.Equal(t, uint64(42), msg.SequenceNumber)
+
+	data, err := proto.Marshal(msg)
+	require.NoError(t, err)
+
+	msg2 := &EventStreamMessage{}
+	err = proto.Unmarshal(data, msg2)
+	require.NoError(t, err)
+
+	assert.Equal(t, msg.Id, msg2.Id)
+	assert.Equal(t, msg.Type, msg2.Type)
+	assert.Equal(t, msg.TimestampUnixNanos, msg2.TimestampUnixNanos)
+	assert.Equal(t, msg.Source, msg2.Source)
+	assert.Equal(t, msg.Metadata, msg2.Metadata)
+	assert.Equal(t, msg.Payload, msg2.Payload)
+	assert.Equal(t, msg.PropagationDepth, msg2.PropagationDepth)
+	assert.Equal(t, msg.SequenceNumber, msg2.SequenceNumber)
+}
+
+// TestStreamEventsResponse_EmptyMessage verifies StreamEventsResponse is an empty message.
+func TestStreamEventsResponse_EmptyMessage(t *testing.T) {
+	resp := &StreamEventsResponse{}
+	require.NotNil(t, resp)
+
+	data, err := proto.Marshal(resp)
+	require.NoError(t, err)
+
+	resp2 := &StreamEventsResponse{}
+	err = proto.Unmarshal(data, resp2)
+	require.NoError(t, err)
+
+	assert.EqualValues(t, "StreamEventsResponse", resp.ProtoReflect().Descriptor().Name())
+}
+
+// TestEventService_StreamEventsClientInterface verifies the client-side streaming interface.
+// The host (client) must be able to Send(*EventStreamMessage) and CloseAndRecv() (*StreamEventsResponse, error).
+func TestEventService_StreamEventsClientInterface(t *testing.T) {
+	// Compile-time assertion: EventService_StreamEventsClient satisfies the required interface.
+	// This test fails to compile if the generated type does not expose Send/CloseAndRecv.
+	type streamEventsClientIface interface {
+		Send(*EventStreamMessage) error
+		CloseAndRecv() (*StreamEventsResponse, error)
+	}
+	var _ streamEventsClientIface = EventService_StreamEventsClient(nil)
+}
+
+// TestEventService_StreamEventsServerInterface verifies the server-side streaming interface.
+// The plugin (server) must be able to Recv() (*EventStreamMessage, error) and SendAndClose(*StreamEventsResponse) error.
+func TestEventService_StreamEventsServerInterface(t *testing.T) {
+	// Compile-time assertion: EventService_StreamEventsServer satisfies the required interface.
+	type streamEventsServerIface interface {
+		Recv() (*EventStreamMessage, error)
+		SendAndClose(*StreamEventsResponse) error
+	}
+	var _ streamEventsServerIface = EventService_StreamEventsServer(nil)
+}
+
+// TestHostEventService_ServiceDescriptor verifies HostEventService descriptor is registered.
+func TestHostEventService_ServiceDescriptor(t *testing.T) {
+	desc := &HostEventService_ServiceDesc
+	assert.Equal(t, "plugin.v1.HostEventService", desc.ServiceName)
+	assert.Len(t, desc.Methods, 1)
+	assert.Equal(t, "Emit", desc.Methods[0].MethodName)
+	assert.Empty(t, desc.Streams)
+}
+
+// TestEventService_StreamEventsDescriptor verifies EventService has StreamEvents as a client-side stream.
+func TestEventService_StreamEventsDescriptor(t *testing.T) {
+	desc := &EventService_ServiceDesc
+	assert.Equal(t, "plugin.v1.EventService", desc.ServiceName)
+
+	var streamDesc *grpc.StreamDesc
+	for i := range desc.Streams {
+		if desc.Streams[i].StreamName == "StreamEvents" {
+			streamDesc = &desc.Streams[i]
+			break
+		}
+	}
+	require.NotNil(t, streamDesc, "StreamEvents stream descriptor not found in EventService")
+	assert.True(t, streamDesc.ClientStreams, "StreamEvents must be client-side streaming")
+	assert.False(t, streamDesc.ServerStreams, "StreamEvents must not be server-side streaming")
 }
 
 // TestValidationIssue_AllSeveritiesSerialize verifies all severity enum values serialize correctly.

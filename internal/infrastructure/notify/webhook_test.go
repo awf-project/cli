@@ -863,6 +863,11 @@ func TestWebhookBackend_Send_OutputsAsJSONString(t *testing.T) {
 // --- Concurrent Send tests ---
 
 func TestWebhookBackend_Send_ConcurrentCalls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
 	backend := newWebhookBackend()
 
 	const numGoroutines = 10
@@ -874,24 +879,23 @@ func TestWebhookBackend_Send_ConcurrentCalls(t *testing.T) {
 			payload := NotificationPayload{
 				Message: "Concurrent test",
 				Metadata: map[string]string{
-					"webhook_url": "https://httpbin.org/post",
+					"webhook_url": server.URL,
 				},
 			}
 
 			result, err := backend.Send(ctx, payload)
 
-			// Given: concurrent Send calls
-			// When: multiple goroutines call Send simultaneously
-			// Then: should handle concurrent requests safely
 			assert.NoError(t, err, "goroutine %d failed", id)
-			assert.NotNil(t, result, "goroutine %d got nil result", id)
-			assert.Equal(t, "webhook", result.Backend)
+			if result != nil {
+				assert.Equal(t, "webhook", result.Backend)
+			} else {
+				t.Errorf("goroutine %d got nil result", id)
+			}
 
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
 	for range numGoroutines {
 		select {
 		case <-done:

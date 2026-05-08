@@ -83,7 +83,8 @@ type pluginConnection struct {
 	validator     pluginv1.ValidatorServiceClient
 	stepType      pluginv1.StepTypeServiceClient
 	event         pluginv1.EventServiceClient
-	processCancel context.CancelFunc // cancels the long-lived process context on Shutdown
+	broker        *goplugin.GRPCBroker // per-plugin broker instance for host service wiring
+	processCancel context.CancelFunc   // cancels the long-lived process context on Shutdown
 }
 
 // clientPlugin implements goplugin.GRPCPlugin for the host side.
@@ -100,17 +101,19 @@ type grpcClientBundle struct {
 	validator pluginv1.ValidatorServiceClient
 	stepType  pluginv1.StepTypeServiceClient
 	event     pluginv1.EventServiceClient
+	broker    *goplugin.GRPCBroker
 }
 
 // GRPCClient creates gRPC service clients from the connection established by go-plugin.
 // Called by go-plugin on the host side when Dispense("awf-plugin") is invoked.
-func (p *clientPlugin) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, conn *grpc.ClientConn) (interface{}, error) {
+func (p *clientPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, conn *grpc.ClientConn) (interface{}, error) {
 	return &grpcClientBundle{
 		plugin:    pluginv1.NewPluginServiceClient(conn),
 		operation: pluginv1.NewOperationServiceClient(conn),
 		validator: pluginv1.NewValidatorServiceClient(conn),
 		stepType:  pluginv1.NewStepTypeServiceClient(conn),
 		event:     pluginv1.NewEventServiceClient(conn),
+		broker:    broker,
 	}, nil
 }
 
@@ -127,15 +130,16 @@ var (
 // RPCPluginManager implements PluginManager using HashiCorp go-plugin for RPC.
 // It manages plugin lifecycle: discovery, loading, initialization, and shutdown.
 type RPCPluginManager struct {
-	mu          sync.RWMutex
-	plugins     map[string]*pluginmodel.PluginInfo // plugin name -> info
-	connections map[string]*pluginConnection       // active connections, protected by mu (NFR-004)
-	loader      *FileSystemLoader                  // for plugin discovery
-	pluginsDirs []string                           // directories to discover plugins from
-	hostVersion string                             // current AWF version for plugin compatibility checks
-	eventBus    *EventBus                          // optional; nil means no event wiring
-	stateStore  *JSONPluginStateStore              // optional; nil means no checksum verification
-	zapLogger   *zap.Logger                        // optional; nil falls back to zap.NewNop()
+	mu            sync.RWMutex
+	plugins       map[string]*pluginmodel.PluginInfo // plugin name -> info
+	connections   map[string]*pluginConnection       // active connections, protected by mu (NFR-004)
+	loader        *FileSystemLoader                  // for plugin discovery
+	pluginsDirs   []string                           // directories to discover plugins from
+	hostVersion   string                             // current AWF version for plugin compatibility checks
+	eventBus      *EventBus                          // optional; nil means no event wiring
+	streamManager *StreamManager                     // optional; nil falls back to unary event delivery
+	stateStore    *JSONPluginStateStore              // optional; nil means no checksum verification
+	zapLogger     *zap.Logger                        // optional; nil falls back to zap.NewNop()
 }
 
 // NewRPCPluginManager creates a new RPCPluginManager.
@@ -192,6 +196,7 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 			conn.validator = bundle.validator
 			conn.stepType = bundle.stepType
 			conn.event = bundle.event
+			conn.broker = bundle.broker
 		}
 
 		return conn, nil
@@ -384,6 +389,7 @@ func (m *RPCPluginManager) Init(ctx context.Context, name string, config map[str
 	defer m.mu.Unlock()
 
 	m.connections[name] = conn
+	m.startBrokerHostService(conn)
 	if pluginInfo, found := m.plugins[name]; found {
 		pluginInfo.Status = pluginmodel.StatusRunning
 		pluginInfo.Operations = m.queryOperationNames(ctx, name, conn)
@@ -644,6 +650,9 @@ func (m *RPCPluginManager) Shutdown(ctx context.Context, name string) error {
 	if conn != nil {
 		if conn.plugin != nil {
 			conn.plugin.Shutdown(ctx, &pluginv1.ShutdownRequest{}) //nolint:gosec,errcheck // Best effort shutdown, don't fail if RPC fails
+		}
+		if m.streamManager != nil {
+			m.streamManager.UnregisterStream(name)
 		}
 		if conn.client != nil {
 			conn.client.Kill()
@@ -958,6 +967,42 @@ func (m *RPCPluginManager) SetEventBus(bus *EventBus) {
 	m.eventBus = bus
 }
 
+// SetStreamManager injects a StreamManager for stream-based event delivery.
+// Must be called before any Init() calls to enable stream routing.
+func (m *RPCPluginManager) SetStreamManager(sm *StreamManager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.streamManager = sm
+}
+
+// manifestLookup returns a thread-safe function for looking up plugin manifests.
+func (m *RPCPluginManager) manifestLookup() manifestLookupFn {
+	return func(name string) (*pluginmodel.PluginInfo, bool) {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		info, ok := m.plugins[name]
+		return info, ok
+	}
+}
+
+// startBrokerHostService serves HostEventService on the plugin's broker.
+// No-op when conn.broker is nil or m.eventBus is nil.
+func (m *RPCPluginManager) startBrokerHostService(conn *pluginConnection) {
+	if conn.broker == nil || m.eventBus == nil {
+		return
+	}
+	zapLog := m.zapLogger
+	if zapLog == nil {
+		zapLog = zap.NewNop()
+	}
+	svc := newHostEventService(m.eventBus, m.manifestLookup(), zapToPortsLogger{zapLog})
+	go conn.broker.AcceptAndServe(sdk.HostEventServiceID, func(opts []grpc.ServerOption) *grpc.Server {
+		s := grpc.NewServer(opts...)
+		pluginv1.RegisterHostEventServiceServer(s, svc)
+		return s
+	})
+}
+
 // wireEventSubscriptions registers the plugin's event subscriptions if the manifest declares the events capability.
 func (m *RPCPluginManager) wireEventSubscriptions(pluginName string, conn *pluginConnection, info *pluginmodel.PluginInfo) {
 	if m.eventBus == nil || conn.event == nil || info.Manifest == nil {
@@ -968,8 +1013,12 @@ func (m *RPCPluginManager) wireEventSubscriptions(pluginName string, conn *plugi
 		return
 	}
 
-	adapter := newGRPCEventAdapter(conn.event, pluginName)
-	m.eventBus.Subscribe(pluginName, info.Manifest.Events.Subscribe, adapter)
+	unaryAdapter := newGRPCEventAdapter(conn.event, pluginName)
+	var deliverer EventDeliverer = unaryAdapter
+	if m.streamManager != nil {
+		deliverer = m.streamManager.GetDeliverer(pluginName, unaryAdapter)
+	}
+	m.eventBus.Subscribe(pluginName, info.Manifest.Events.Subscribe, deliverer)
 }
 
 // SetStateStore injects a JSONPluginStateStore for launch-time checksum verification.
@@ -1034,6 +1083,29 @@ func (m *RPCPluginManager) verifyChecksum(pluginName, binaryPath string) ([]byte
 
 	return decoded, nil
 }
+
+// zapToPortsLogger bridges *zap.Logger to ports.Logger for use in hostEventService.
+type zapToPortsLogger struct {
+	logger *zap.Logger
+}
+
+func (z zapToPortsLogger) Debug(msg string, fields ...any) { z.logger.Sugar().Debugw(msg, fields...) }
+
+func (z zapToPortsLogger) Info(msg string, fields ...any) { z.logger.Sugar().Infow(msg, fields...) }
+
+func (z zapToPortsLogger) Warn(msg string, fields ...any) { z.logger.Sugar().Warnw(msg, fields...) }
+
+func (z zapToPortsLogger) Error(msg string, fields ...any) { z.logger.Sugar().Errorw(msg, fields...) }
+
+func (z zapToPortsLogger) WithContext(ctx map[string]any) ports.Logger {
+	fields := make([]zap.Field, 0, len(ctx))
+	for k, v := range ctx {
+		fields = append(fields, zap.Any(k, v))
+	}
+	return zapToPortsLogger{logger: z.logger.With(fields...)}
+}
+
+var _ ports.Logger = zapToPortsLogger{}
 
 // splitOperationName splits "pluginName.opName" into (pluginName, opName).
 // Returns ("", name) if no prefix is found.

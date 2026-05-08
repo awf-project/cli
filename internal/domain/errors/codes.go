@@ -82,6 +82,12 @@ const (
 
 	// ErrorCodeExecutionPluginChecksumMismatch indicates plugin binary checksum verification failed.
 	ErrorCodeExecutionPluginChecksumMismatch ErrorCode = "EXECUTION.PLUGIN.CHECKSUM_MISMATCH"
+
+	// ErrorCodeExecutionPluginBrokerEmitDenied indicates a plugin attempted to emit an event it is not authorized to emit.
+	ErrorCodeExecutionPluginBrokerEmitDenied ErrorCode = "EXECUTION.PLUGIN.BROKER_EMIT_DENIED"
+
+	// ErrorCodeExecutionPluginStreamSetupFailed indicates a streaming connection to a plugin could not be established.
+	ErrorCodeExecutionPluginStreamSetupFailed ErrorCode = "EXECUTION.PLUGIN.STREAM_SETUP_FAILED"
 )
 
 // Error code constants for SYSTEM category (exit code 4).

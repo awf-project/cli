@@ -243,8 +243,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- Halt implementation immediately when scope deviations are discovered; update plan and communicate changes before continuing work
-- Apply identical error handling patterns across similar functions; handleNonZeroExit and handleExecutionError must both evaluate transitions before fallbacks
 - When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
 - Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
 - Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
@@ -284,10 +282,11 @@ func TestWorkflowValidation(t *testing.T) {
 - Always document changes to `.golangci.yml` or linter config in commit message; ensure `make lint` passes before committing
 - When modifying files in pkg/, document API impact in commit message; verify exports and function signatures haven't changed unexpectedly
 - Never silently initialize nested struct fields during YAML unmarshaling; explicitly map all sections (events, metadata, etc.) to prevent zero values from hiding parsing bugs
+- Always stage all modified implementation files and run 'git status' before marking task complete; unstaged files indicate incomplete task closure.
+- Update plan task status immediately when implementation completes; regenerate validation report to catch status-code mismatches before submission.
 
 ## Test Conventions
 
-- Never hardcode OS-specific values in test assertions (usernames, paths, shell names); use `os/user.Current()` or mock dependencies for reproducible tests across environments
 - Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
 - Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
@@ -307,6 +306,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Add BenchmarkXX functions for new I/O processing components; measure throughput, memory allocation, and verify capacity constraints (1MB buffer, etc.) are respected
 - Test event metadata persistence across all input variations for provider translation; include cases with missing optional nested fields to prevent silent metadata loss
 - When testing YAML unmarshaling, assert on all nested struct fields; verify that arrays like Events.Subscribe and Events.Emit are populated, not defaulted to empty
+- New gRPC and concurrency-heavy infrastructure requires >85% test coverage; run 'make test-race' to verify no data races in stream managers and lock-protected sections.
 
 ## Review Standards
 

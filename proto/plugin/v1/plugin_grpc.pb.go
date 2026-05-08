@@ -655,7 +655,8 @@ var StepTypeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	EventService_HandleEvent_FullMethodName = "/plugin.v1.EventService/HandleEvent"
+	EventService_HandleEvent_FullMethodName  = "/plugin.v1.EventService/HandleEvent"
+	EventService_StreamEvents_FullMethodName = "/plugin.v1.EventService/StreamEvents"
 )
 
 // EventServiceClient is the client API for EventService service.
@@ -663,6 +664,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EventServiceClient interface {
 	HandleEvent(ctx context.Context, in *HandleEventRequest, opts ...grpc.CallOption) (*HandleEventResponse, error)
+	StreamEvents(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[EventStreamMessage, StreamEventsResponse], error)
 }
 
 type eventServiceClient struct {
@@ -683,11 +685,25 @@ func (c *eventServiceClient) HandleEvent(ctx context.Context, in *HandleEventReq
 	return out, nil
 }
 
+func (c *eventServiceClient) StreamEvents(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[EventStreamMessage, StreamEventsResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EventService_ServiceDesc.Streams[0], EventService_StreamEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[EventStreamMessage, StreamEventsResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_StreamEventsClient = grpc.ClientStreamingClient[EventStreamMessage, StreamEventsResponse]
+
 // EventServiceServer is the server API for EventService service.
 // All implementations must embed UnimplementedEventServiceServer
 // for forward compatibility.
 type EventServiceServer interface {
 	HandleEvent(context.Context, *HandleEventRequest) (*HandleEventResponse, error)
+	StreamEvents(grpc.ClientStreamingServer[EventStreamMessage, StreamEventsResponse]) error
 	mustEmbedUnimplementedEventServiceServer()
 }
 
@@ -700,6 +716,9 @@ type UnimplementedEventServiceServer struct{}
 
 func (UnimplementedEventServiceServer) HandleEvent(context.Context, *HandleEventRequest) (*HandleEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HandleEvent not implemented")
+}
+func (UnimplementedEventServiceServer) StreamEvents(grpc.ClientStreamingServer[EventStreamMessage, StreamEventsResponse]) error {
+	return status.Error(codes.Unimplemented, "method StreamEvents not implemented")
 }
 func (UnimplementedEventServiceServer) mustEmbedUnimplementedEventServiceServer() {}
 func (UnimplementedEventServiceServer) testEmbeddedByValue()                      {}
@@ -740,6 +759,13 @@ func _EventService_HandleEvent_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EventService_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(EventServiceServer).StreamEvents(&grpc.GenericServerStream[EventStreamMessage, StreamEventsResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_StreamEventsServer = grpc.ClientStreamingServer[EventStreamMessage, StreamEventsResponse]
+
 // EventService_ServiceDesc is the grpc.ServiceDesc for EventService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -750,6 +776,114 @@ var EventService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HandleEvent",
 			Handler:    _EventService_HandleEvent_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamEvents",
+			Handler:       _EventService_StreamEvents_Handler,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "proto/plugin/v1/plugin.proto",
+}
+
+const (
+	HostEventService_Emit_FullMethodName = "/plugin.v1.HostEventService/Emit"
+)
+
+// HostEventServiceClient is the client API for HostEventService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type HostEventServiceClient interface {
+	Emit(ctx context.Context, in *EmitRequest, opts ...grpc.CallOption) (*EmitResponse, error)
+}
+
+type hostEventServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewHostEventServiceClient(cc grpc.ClientConnInterface) HostEventServiceClient {
+	return &hostEventServiceClient{cc}
+}
+
+func (c *hostEventServiceClient) Emit(ctx context.Context, in *EmitRequest, opts ...grpc.CallOption) (*EmitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmitResponse)
+	err := c.cc.Invoke(ctx, HostEventService_Emit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// HostEventServiceServer is the server API for HostEventService service.
+// All implementations must embed UnimplementedHostEventServiceServer
+// for forward compatibility.
+type HostEventServiceServer interface {
+	Emit(context.Context, *EmitRequest) (*EmitResponse, error)
+	mustEmbedUnimplementedHostEventServiceServer()
+}
+
+// UnimplementedHostEventServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedHostEventServiceServer struct{}
+
+func (UnimplementedHostEventServiceServer) Emit(context.Context, *EmitRequest) (*EmitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Emit not implemented")
+}
+func (UnimplementedHostEventServiceServer) mustEmbedUnimplementedHostEventServiceServer() {}
+func (UnimplementedHostEventServiceServer) testEmbeddedByValue()                          {}
+
+// UnsafeHostEventServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HostEventServiceServer will
+// result in compilation errors.
+type UnsafeHostEventServiceServer interface {
+	mustEmbedUnimplementedHostEventServiceServer()
+}
+
+func RegisterHostEventServiceServer(s grpc.ServiceRegistrar, srv HostEventServiceServer) {
+	// If the following call panics, it indicates UnimplementedHostEventServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&HostEventService_ServiceDesc, srv)
+}
+
+func _HostEventService_Emit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostEventServiceServer).Emit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostEventService_Emit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostEventServiceServer).Emit(ctx, req.(*EmitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// HostEventService_ServiceDesc is the grpc.ServiceDesc for HostEventService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var HostEventService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "plugin.v1.HostEventService",
+	HandlerType: (*HostEventServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Emit",
+			Handler:    _HostEventService_Emit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

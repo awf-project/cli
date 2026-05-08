@@ -1479,6 +1479,286 @@ func (x *HandleEventResponse) GetEmittedEvents() []*HandleEventRequest {
 	return nil
 }
 
+type EmitRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	EventType          string                 `protobuf:"bytes,1,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	Payload            []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	SourcePlugin       string                 `protobuf:"bytes,3,opt,name=source_plugin,json=sourcePlugin,proto3" json:"source_plugin,omitempty"`
+	PropagationDepth   int32                  `protobuf:"varint,4,opt,name=propagation_depth,json=propagationDepth,proto3" json:"propagation_depth,omitempty"`
+	TimestampUnixNanos int64                  `protobuf:"varint,5,opt,name=timestamp_unix_nanos,json=timestampUnixNanos,proto3" json:"timestamp_unix_nanos,omitempty"`
+	Metadata           map[string]string      `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *EmitRequest) Reset() {
+	*x = EmitRequest{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmitRequest) ProtoMessage() {}
+
+func (x *EmitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmitRequest.ProtoReflect.Descriptor instead.
+func (*EmitRequest) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *EmitRequest) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *EmitRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *EmitRequest) GetSourcePlugin() string {
+	if x != nil {
+		return x.SourcePlugin
+	}
+	return ""
+}
+
+func (x *EmitRequest) GetPropagationDepth() int32 {
+	if x != nil {
+		return x.PropagationDepth
+	}
+	return 0
+}
+
+func (x *EmitRequest) GetTimestampUnixNanos() int64 {
+	if x != nil {
+		return x.TimestampUnixNanos
+	}
+	return 0
+}
+
+func (x *EmitRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type EmitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	EventId       string                 `protobuf:"bytes,3,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmitResponse) Reset() {
+	*x = EmitResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmitResponse) ProtoMessage() {}
+
+func (x *EmitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmitResponse.ProtoReflect.Descriptor instead.
+func (*EmitResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *EmitResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *EmitResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *EmitResponse) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+type EventStreamMessage struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type               string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	TimestampUnixNanos int64                  `protobuf:"varint,3,opt,name=timestamp_unix_nanos,json=timestampUnixNanos,proto3" json:"timestamp_unix_nanos,omitempty"`
+	Source             string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	Metadata           map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Payload            []byte                 `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`
+	PropagationDepth   int32                  `protobuf:"varint,7,opt,name=propagation_depth,json=propagationDepth,proto3" json:"propagation_depth,omitempty"`
+	SequenceNumber     uint64                 `protobuf:"varint,8,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *EventStreamMessage) Reset() {
+	*x = EventStreamMessage{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventStreamMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventStreamMessage) ProtoMessage() {}
+
+func (x *EventStreamMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventStreamMessage.ProtoReflect.Descriptor instead.
+func (*EventStreamMessage) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *EventStreamMessage) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *EventStreamMessage) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *EventStreamMessage) GetTimestampUnixNanos() int64 {
+	if x != nil {
+		return x.TimestampUnixNanos
+	}
+	return 0
+}
+
+func (x *EventStreamMessage) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *EventStreamMessage) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *EventStreamMessage) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *EventStreamMessage) GetPropagationDepth() int32 {
+	if x != nil {
+		return x.PropagationDepth
+	}
+	return 0
+}
+
+func (x *EventStreamMessage) GetSequenceNumber() uint64 {
+	if x != nil {
+		return x.SequenceNumber
+	}
+	return 0
+}
+
+type StreamEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamEventsResponse) Reset() {
+	*x = StreamEventsResponse{}
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamEventsResponse) ProtoMessage() {}
+
+func (x *StreamEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_plugin_v1_plugin_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamEventsResponse.ProtoReflect.Descriptor instead.
+func (*StreamEventsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_plugin_v1_plugin_proto_rawDescGZIP(), []int{30}
+}
+
 var File_proto_plugin_v1_plugin_proto protoreflect.FileDescriptor
 
 const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
@@ -1581,7 +1861,35 @@ const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"[\n" +
 	"\x13HandleEventResponse\x12D\n" +
-	"\x0eemitted_events\x18\x01 \x03(\v2\x1d.plugin.v1.HandleEventRequestR\remittedEvents*a\n" +
+	"\x0eemitted_events\x18\x01 \x03(\v2\x1d.plugin.v1.HandleEventRequestR\remittedEvents\"\xc9\x02\n" +
+	"\vEmitRequest\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x01 \x01(\tR\teventType\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\x12#\n" +
+	"\rsource_plugin\x18\x03 \x01(\tR\fsourcePlugin\x12+\n" +
+	"\x11propagation_depth\x18\x04 \x01(\x05R\x10propagationDepth\x120\n" +
+	"\x14timestamp_unix_nanos\x18\x05 \x01(\x03R\x12timestampUnixNanos\x12@\n" +
+	"\bmetadata\x18\x06 \x03(\v2$.plugin.v1.EmitRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"h\n" +
+	"\fEmitResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12\x19\n" +
+	"\bevent_id\x18\x03 \x01(\tR\aeventId\"\xf8\x02\n" +
+	"\x12EventStreamMessage\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x120\n" +
+	"\x14timestamp_unix_nanos\x18\x03 \x01(\x03R\x12timestampUnixNanos\x12\x16\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\x12G\n" +
+	"\bmetadata\x18\x05 \x03(\v2+.plugin.v1.EventStreamMessage.MetadataEntryR\bmetadata\x12\x18\n" +
+	"\apayload\x18\x06 \x01(\fR\apayload\x12+\n" +
+	"\x11propagation_depth\x18\a \x01(\x05R\x10propagationDepth\x12'\n" +
+	"\x0fsequence_number\x18\b \x01(\x04R\x0esequenceNumber\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x16\n" +
+	"\x14StreamEventsResponse*a\n" +
 	"\bSeverity\x12\x18\n" +
 	"\x14SEVERITY_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10SEVERITY_WARNING\x10\x01\x12\x12\n" +
@@ -1600,9 +1908,12 @@ const file_proto_plugin_v1_plugin_proto_rawDesc = "" +
 	"\fValidateStep\x12\x1e.plugin.v1.ValidateStepRequest\x1a\x1f.plugin.v1.ValidateStepResponse2\xb3\x01\n" +
 	"\x0fStepTypeService\x12R\n" +
 	"\rListStepTypes\x12\x1f.plugin.v1.ListStepTypesRequest\x1a .plugin.v1.ListStepTypesResponse\x12L\n" +
-	"\vExecuteStep\x12\x1d.plugin.v1.ExecuteStepRequest\x1a\x1e.plugin.v1.ExecuteStepResponse2\\\n" +
+	"\vExecuteStep\x12\x1d.plugin.v1.ExecuteStepRequest\x1a\x1e.plugin.v1.ExecuteStepResponse2\xae\x01\n" +
 	"\fEventService\x12L\n" +
-	"\vHandleEvent\x12\x1d.plugin.v1.HandleEventRequest\x1a\x1e.plugin.v1.HandleEventResponseB5Z3github.com/awf-project/cli/proto/plugin/v1;pluginv1b\x06proto3"
+	"\vHandleEvent\x12\x1d.plugin.v1.HandleEventRequest\x1a\x1e.plugin.v1.HandleEventResponse\x12P\n" +
+	"\fStreamEvents\x12\x1d.plugin.v1.EventStreamMessage\x1a\x1f.plugin.v1.StreamEventsResponse(\x012K\n" +
+	"\x10HostEventService\x127\n" +
+	"\x04Emit\x12\x16.plugin.v1.EmitRequest\x1a\x17.plugin.v1.EmitResponseB5Z3github.com/awf-project/cli/proto/plugin/v1;pluginv1b\x06proto3"
 
 var (
 	file_proto_plugin_v1_plugin_proto_rawDescOnce sync.Once
@@ -1617,7 +1928,7 @@ func file_proto_plugin_v1_plugin_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_plugin_v1_plugin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_proto_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_proto_plugin_v1_plugin_proto_goTypes = []any{
 	(Severity)(0),                    // 0: plugin.v1.Severity
 	(*GetInfoRequest)(nil),           // 1: plugin.v1.GetInfoRequest
@@ -1647,52 +1958,64 @@ var file_proto_plugin_v1_plugin_proto_goTypes = []any{
 	(*ExecuteStepResponse)(nil),      // 25: plugin.v1.ExecuteStepResponse
 	(*HandleEventRequest)(nil),       // 26: plugin.v1.HandleEventRequest
 	(*HandleEventResponse)(nil),      // 27: plugin.v1.HandleEventResponse
-	nil,                              // 28: plugin.v1.InitRequest.ConfigEntry
-	nil,                              // 29: plugin.v1.ExecuteRequest.InputsEntry
-	nil,                              // 30: plugin.v1.ExecuteResponse.DataEntry
-	nil,                              // 31: plugin.v1.HandleEventRequest.MetadataEntry
+	(*EmitRequest)(nil),              // 28: plugin.v1.EmitRequest
+	(*EmitResponse)(nil),             // 29: plugin.v1.EmitResponse
+	(*EventStreamMessage)(nil),       // 30: plugin.v1.EventStreamMessage
+	(*StreamEventsResponse)(nil),     // 31: plugin.v1.StreamEventsResponse
+	nil,                              // 32: plugin.v1.InitRequest.ConfigEntry
+	nil,                              // 33: plugin.v1.ExecuteRequest.InputsEntry
+	nil,                              // 34: plugin.v1.ExecuteResponse.DataEntry
+	nil,                              // 35: plugin.v1.HandleEventRequest.MetadataEntry
+	nil,                              // 36: plugin.v1.EmitRequest.MetadataEntry
+	nil,                              // 37: plugin.v1.EventStreamMessage.MetadataEntry
 }
 var file_proto_plugin_v1_plugin_proto_depIdxs = []int32{
-	28, // 0: plugin.v1.InitRequest.config:type_name -> plugin.v1.InitRequest.ConfigEntry
+	32, // 0: plugin.v1.InitRequest.config:type_name -> plugin.v1.InitRequest.ConfigEntry
 	13, // 1: plugin.v1.ListOperationsResponse.operations:type_name -> plugin.v1.OperationSchema
 	13, // 2: plugin.v1.GetOperationResponse.operation:type_name -> plugin.v1.OperationSchema
-	29, // 3: plugin.v1.ExecuteRequest.inputs:type_name -> plugin.v1.ExecuteRequest.InputsEntry
-	30, // 4: plugin.v1.ExecuteResponse.data:type_name -> plugin.v1.ExecuteResponse.DataEntry
+	33, // 3: plugin.v1.ExecuteRequest.inputs:type_name -> plugin.v1.ExecuteRequest.InputsEntry
+	34, // 4: plugin.v1.ExecuteResponse.data:type_name -> plugin.v1.ExecuteResponse.DataEntry
 	14, // 5: plugin.v1.OperationSchema.inputs:type_name -> plugin.v1.InputSchema
 	15, // 6: plugin.v1.OperationSchema.outputs:type_name -> plugin.v1.OutputSchema
 	0,  // 7: plugin.v1.ValidationIssue.severity:type_name -> plugin.v1.Severity
 	16, // 8: plugin.v1.ValidateWorkflowResponse.issues:type_name -> plugin.v1.ValidationIssue
 	16, // 9: plugin.v1.ValidateStepResponse.issues:type_name -> plugin.v1.ValidationIssue
 	22, // 10: plugin.v1.ListStepTypesResponse.step_types:type_name -> plugin.v1.StepTypeInfo
-	31, // 11: plugin.v1.HandleEventRequest.metadata:type_name -> plugin.v1.HandleEventRequest.MetadataEntry
+	35, // 11: plugin.v1.HandleEventRequest.metadata:type_name -> plugin.v1.HandleEventRequest.MetadataEntry
 	26, // 12: plugin.v1.HandleEventResponse.emitted_events:type_name -> plugin.v1.HandleEventRequest
-	1,  // 13: plugin.v1.PluginService.GetInfo:input_type -> plugin.v1.GetInfoRequest
-	3,  // 14: plugin.v1.PluginService.Init:input_type -> plugin.v1.InitRequest
-	5,  // 15: plugin.v1.PluginService.Shutdown:input_type -> plugin.v1.ShutdownRequest
-	7,  // 16: plugin.v1.OperationService.ListOperations:input_type -> plugin.v1.ListOperationsRequest
-	9,  // 17: plugin.v1.OperationService.GetOperation:input_type -> plugin.v1.GetOperationRequest
-	11, // 18: plugin.v1.OperationService.Execute:input_type -> plugin.v1.ExecuteRequest
-	17, // 19: plugin.v1.ValidatorService.ValidateWorkflow:input_type -> plugin.v1.ValidateWorkflowRequest
-	19, // 20: plugin.v1.ValidatorService.ValidateStep:input_type -> plugin.v1.ValidateStepRequest
-	21, // 21: plugin.v1.StepTypeService.ListStepTypes:input_type -> plugin.v1.ListStepTypesRequest
-	24, // 22: plugin.v1.StepTypeService.ExecuteStep:input_type -> plugin.v1.ExecuteStepRequest
-	26, // 23: plugin.v1.EventService.HandleEvent:input_type -> plugin.v1.HandleEventRequest
-	2,  // 24: plugin.v1.PluginService.GetInfo:output_type -> plugin.v1.GetInfoResponse
-	4,  // 25: plugin.v1.PluginService.Init:output_type -> plugin.v1.InitResponse
-	6,  // 26: plugin.v1.PluginService.Shutdown:output_type -> plugin.v1.ShutdownResponse
-	8,  // 27: plugin.v1.OperationService.ListOperations:output_type -> plugin.v1.ListOperationsResponse
-	10, // 28: plugin.v1.OperationService.GetOperation:output_type -> plugin.v1.GetOperationResponse
-	12, // 29: plugin.v1.OperationService.Execute:output_type -> plugin.v1.ExecuteResponse
-	18, // 30: plugin.v1.ValidatorService.ValidateWorkflow:output_type -> plugin.v1.ValidateWorkflowResponse
-	20, // 31: plugin.v1.ValidatorService.ValidateStep:output_type -> plugin.v1.ValidateStepResponse
-	23, // 32: plugin.v1.StepTypeService.ListStepTypes:output_type -> plugin.v1.ListStepTypesResponse
-	25, // 33: plugin.v1.StepTypeService.ExecuteStep:output_type -> plugin.v1.ExecuteStepResponse
-	27, // 34: plugin.v1.EventService.HandleEvent:output_type -> plugin.v1.HandleEventResponse
-	24, // [24:35] is the sub-list for method output_type
-	13, // [13:24] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	36, // 13: plugin.v1.EmitRequest.metadata:type_name -> plugin.v1.EmitRequest.MetadataEntry
+	37, // 14: plugin.v1.EventStreamMessage.metadata:type_name -> plugin.v1.EventStreamMessage.MetadataEntry
+	1,  // 15: plugin.v1.PluginService.GetInfo:input_type -> plugin.v1.GetInfoRequest
+	3,  // 16: plugin.v1.PluginService.Init:input_type -> plugin.v1.InitRequest
+	5,  // 17: plugin.v1.PluginService.Shutdown:input_type -> plugin.v1.ShutdownRequest
+	7,  // 18: plugin.v1.OperationService.ListOperations:input_type -> plugin.v1.ListOperationsRequest
+	9,  // 19: plugin.v1.OperationService.GetOperation:input_type -> plugin.v1.GetOperationRequest
+	11, // 20: plugin.v1.OperationService.Execute:input_type -> plugin.v1.ExecuteRequest
+	17, // 21: plugin.v1.ValidatorService.ValidateWorkflow:input_type -> plugin.v1.ValidateWorkflowRequest
+	19, // 22: plugin.v1.ValidatorService.ValidateStep:input_type -> plugin.v1.ValidateStepRequest
+	21, // 23: plugin.v1.StepTypeService.ListStepTypes:input_type -> plugin.v1.ListStepTypesRequest
+	24, // 24: plugin.v1.StepTypeService.ExecuteStep:input_type -> plugin.v1.ExecuteStepRequest
+	26, // 25: plugin.v1.EventService.HandleEvent:input_type -> plugin.v1.HandleEventRequest
+	30, // 26: plugin.v1.EventService.StreamEvents:input_type -> plugin.v1.EventStreamMessage
+	28, // 27: plugin.v1.HostEventService.Emit:input_type -> plugin.v1.EmitRequest
+	2,  // 28: plugin.v1.PluginService.GetInfo:output_type -> plugin.v1.GetInfoResponse
+	4,  // 29: plugin.v1.PluginService.Init:output_type -> plugin.v1.InitResponse
+	6,  // 30: plugin.v1.PluginService.Shutdown:output_type -> plugin.v1.ShutdownResponse
+	8,  // 31: plugin.v1.OperationService.ListOperations:output_type -> plugin.v1.ListOperationsResponse
+	10, // 32: plugin.v1.OperationService.GetOperation:output_type -> plugin.v1.GetOperationResponse
+	12, // 33: plugin.v1.OperationService.Execute:output_type -> plugin.v1.ExecuteResponse
+	18, // 34: plugin.v1.ValidatorService.ValidateWorkflow:output_type -> plugin.v1.ValidateWorkflowResponse
+	20, // 35: plugin.v1.ValidatorService.ValidateStep:output_type -> plugin.v1.ValidateStepResponse
+	23, // 36: plugin.v1.StepTypeService.ListStepTypes:output_type -> plugin.v1.ListStepTypesResponse
+	25, // 37: plugin.v1.StepTypeService.ExecuteStep:output_type -> plugin.v1.ExecuteStepResponse
+	27, // 38: plugin.v1.EventService.HandleEvent:output_type -> plugin.v1.HandleEventResponse
+	31, // 39: plugin.v1.EventService.StreamEvents:output_type -> plugin.v1.StreamEventsResponse
+	29, // 40: plugin.v1.HostEventService.Emit:output_type -> plugin.v1.EmitResponse
+	28, // [28:41] is the sub-list for method output_type
+	15, // [15:28] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_proto_plugin_v1_plugin_proto_init() }
@@ -1706,9 +2029,9 @@ func file_proto_plugin_v1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_plugin_v1_plugin_proto_rawDesc), len(file_proto_plugin_v1_plugin_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   31,
+			NumMessages:   37,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   6,
 		},
 		GoTypes:           file_proto_plugin_v1_plugin_proto_goTypes,
 		DependencyIndexes: file_proto_plugin_v1_plugin_proto_depIdxs,

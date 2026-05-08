@@ -22,10 +22,11 @@ awf run workflow
 Plugins can:
 1. **Subscribe to core events** — react to workflow/step lifecycle (`workflow.started`, `step.failed`, etc.)
 2. **Subscribe to custom events** — react to events from other plugins
-3. **Emit custom events** — notify other plugins of plugin-specific milestones
+3. **Emit custom events** — notify other plugins of plugin-specific milestones, either by returning events from `HandleEvent` or by calling `HostClient.Emit()` at any time during execution
 4. **Use glob patterns** — subscribe to event families (`workflow.*`, `step.*`)
+5. **Receive events via streaming** — opt into persistent gRPC streaming for lower-latency delivery (automatic fallback to unary RPCs)
 
-All communication happens in real-time via gRPC without the plugin polling or managing connections.
+All communication happens in real-time via gRPC without the plugin polling or managing connections. The host uses GRPCBroker to expose a reverse channel that plugins can use to emit events back at runtime.
 
 ## Subscribing to Events
 
@@ -181,7 +182,14 @@ Metadata: map[string]string{
 
 ## Emitting Custom Events
 
-Plugins can emit events that other plugins subscribe to. Use `HandleEvent` return value:
+Plugins can emit events in two ways:
+
+1. **Via `HandleEvent` return value** — Emit events as a response to received events
+2. **Via `HostClient`** — Emit events directly to the host at any time (F092+)
+
+### Method 1: Return Events from HandleEvent
+
+Emit events that other plugins subscribe to by returning them from `HandleEvent`:
 
 ### Example: Deploy Plugin → Notification Plugin
 
@@ -425,6 +433,110 @@ func main() {
 }
 ```
 
+### Method 2: Emit Directly via HostClient
+
+For long-running operations, async work, or independent event emission, use `HostClient` to emit events directly to the host at any time:
+
+```go
+import (
+    "context"
+    "encoding/json"
+    
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type AnalysisPlugin struct {
+    sdk.BasePlugin
+    hostClient *sdk.HostClient
+}
+
+// Plugin receives broker connection during initialization
+func (p *AnalysisPlugin) SetHostClient(client *sdk.HostClient) {
+    p.hostClient = client
+}
+
+func (p *AnalysisPlugin) Operation(ctx context.Context, req *sdk.OperationRequest) (*sdk.OperationResponse, error) {
+    // Do analysis work...
+    result := analyzeCode(req.Input)
+    
+    // Emit event directly via HostClient (doesn't wait for HandleEvent call)
+    if p.hostClient != nil {
+        payload, _ := json.Marshal(map[string]any{
+            "file":     req.Input,
+            "severity": result.Severity,
+            "issues":   len(result.Issues),
+        })
+        
+        p.hostClient.Emit(ctx, "analysis.complete", payload, map[string]string{
+            "status": result.Status,
+        })
+    }
+    
+    return &sdk.OperationResponse{Output: result.Summary}, nil
+}
+
+func main() {
+    sdk.Serve(&AnalysisPlugin{
+        BasePlugin: sdk.BasePlugin{
+            PluginName:    "awf-plugin-analysis",
+            PluginVersion: "1.0.0",
+        },
+    })
+}
+```
+
+**Requirements for `HostClient.Emit()`:**
+
+1. **Declare emit patterns in manifest** — The `events.emit` field must list all event types your plugin can emit:
+
+```yaml
+name: awf-plugin-analysis
+version: 1.0.0
+awf_version: ">=0.8.0"
+
+capabilities:
+  - operations
+  - events
+
+events:
+  emit:
+    - "analysis.*"              # Pattern: analysis.complete, analysis.failed, etc.
+    - "code.scanned"            # Specific event
+```
+
+2. **Implement `SetHostClient`** — The framework calls this during plugin initialization to pass the broker connection:
+
+```go
+func (p *MyPlugin) SetHostClient(client *sdk.HostClient) {
+    p.hostClient = client
+}
+```
+
+3. **Check for nil** — `HostClient` is only available if the host supports broker communication (AWF v0.8.0+). Always check before using:
+
+```go
+if p.hostClient != nil {
+    p.hostClient.Emit(ctx, "event.type", payload, metadata)
+}
+```
+
+**Error Handling:**
+
+Emit calls can fail if:
+- Plugin doesn't declare the event type in `events.emit` (authorization denied)
+- Event type not correctly declared (misspelled pattern)
+- Host's event system is temporarily unavailable (rare)
+
+Handle errors gracefully — emit failures shouldn't break your operation:
+
+```go
+if p.hostClient != nil {
+    if err := p.hostClient.Emit(ctx, eventType, payload, metadata); err != nil {
+        p.logger.Warn("emit failed (continuing anyway)", "event", eventType, "error", err)
+    }
+}
+```
+
 ## Handling Errors
 
 If `HandleEvent` returns an error, the event is logged but doesn't block event delivery to other plugins:
@@ -452,6 +564,38 @@ func (p *MyPlugin) HandleEvent(ctx context.Context, event sdk.Event) ([]sdk.Even
     }
 }
 ```
+
+## Streaming Event Delivery
+
+By default, AWF delivers events to plugins via individual unary `HandleEvent` RPCs — one RPC per event. For event-heavy workflows, this creates overhead from repeated connection round-trips.
+
+Plugins that implement the `StreamEvents` RPC receive events over a persistent gRPC stream instead. The host (gRPC client) pushes events via `Send()`, and the plugin (gRPC server) receives them in a `Recv()` loop. This is automatic — plugins that support streaming get it; those that don't continue using unary delivery.
+
+### How It Works
+
+```
+Host detects plugin supports StreamEvents
+    │
+    ├─ Opens persistent stream connection
+    │
+    └─ All subsequent events use stream.Send()
+       instead of individual HandleEvent RPCs
+```
+
+### Automatic Fallback
+
+If a plugin does not implement `StreamEvents`, the host detects the gRPC `Unimplemented` status and falls back to unary `HandleEvent` transparently. No configuration needed.
+
+If an active stream breaks (plugin crash, network issue), the StreamManager detects the disconnect within 5 seconds and falls back to unary delivery. Three consecutive send timeouts also trigger stream teardown and fallback.
+
+### When to Use Streaming
+
+Streaming is beneficial when:
+- Your plugin receives many events in rapid succession (parallel step execution)
+- Latency between event emission and handling is critical
+- A workflow emits 100+ events to your plugin per run
+
+For plugins that handle a few events per workflow run, unary delivery is equally effective.
 
 ## Performance Considerations
 
