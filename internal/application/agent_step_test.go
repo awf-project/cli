@@ -1039,7 +1039,7 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Resume(context.Background(), "test-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "test-id", nil, "current")
 
 	// Should succeed after resuming at the agent step
 	require.NoError(t, err)

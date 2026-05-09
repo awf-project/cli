@@ -36,7 +36,10 @@ Input overrides can be provided to change input values on resume.
 Examples:
   awf resume --list
   awf resume abc123-def456
-  awf resume abc123-def456 --input max_tokens=5000`,
+  awf resume abc123-def456 --input max_tokens=5000
+  awf resume abc123-def456 --from current
+  awf resume abc123-def456 --from previous
+  awf resume abc123-def456 --from validate`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if listFlag {
@@ -59,6 +62,7 @@ Examples:
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "List resumable workflows")
 	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Override input parameter (key=value)")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "silent", "Output mode: silent, streaming, buffered")
+	cmd.Flags().String("from", "current", "Step to resume from: current (default), previous, or <step-name>")
 
 	return cmd
 }
@@ -237,8 +241,10 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 	startTime := time.Now()
 
+	fromStep, _ := cmd.Flags().GetString("from") //nolint:errcheck // flag registered on this command; GetString cannot fail
+
 	// Resume execution
-	execCtx, execErr := execSvc.Resume(ctx, workflowID, inputs)
+	execCtx, execErr := execSvc.Resume(ctx, workflowID, inputs, fromStep)
 
 	// Flush streaming writers
 	if stdoutWriter != nil {

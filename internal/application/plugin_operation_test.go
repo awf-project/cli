@@ -579,7 +579,7 @@ func TestExecutionService_Resume_WithOperationStep(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Resume(context.Background(), "test-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "test-id", nil, "current")
 
 	// Should succeed after resuming at the operation step
 	require.NoError(t, err)

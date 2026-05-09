@@ -1259,3 +1259,225 @@ func TestExecutionContext_MultipleSteps_DataIsolation(t *testing.T) {
 	assert.Equal(t, "data-1", retrieved1.Data["unique"])
 	assert.Equal(t, "data-2", retrieved2.Data["unique"])
 }
+
+// DeleteStepState tests (T001)
+
+func TestDeleteStepState_RemovesExistingStep(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	state := workflow.StepState{
+		Name:   "build",
+		Status: workflow.StatusCompleted,
+		Output: "built successfully",
+	}
+
+	ctx.SetStepState("build", state)
+	_, exists := ctx.GetStepState("build")
+	require.True(t, exists, "step should exist after SetStepState")
+
+	ctx.DeleteStepState("build")
+
+	_, exists = ctx.GetStepState("build")
+	assert.False(t, exists, "step should not exist after DeleteStepState")
+}
+
+func TestDeleteStepState_UpdatesTimestampWhenKeyExists(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	state := workflow.StepState{
+		Name:   "build",
+		Status: workflow.StatusCompleted,
+	}
+
+	ctx.SetStepState("build", state)
+	initialUpdate := ctx.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+	ctx.DeleteStepState("build")
+
+	assert.True(t, ctx.UpdatedAt.After(initialUpdate), "UpdatedAt should be updated after deleting existing step")
+}
+
+func TestDeleteStepState_NonexistentStepIsNoop(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	assert.NotPanics(t, func() {
+		ctx.DeleteStepState("nonexistent")
+	}, "DeleteStepState should not panic on nonexistent key")
+}
+
+// TestDeleteStepState_NonexistentStepDoesNotUpdateTimestamp verifies that deleting a
+// nonexistent key is a strict no-op: neither the timestamp nor the map changes.
+// This test passes against the stub (which is also a no-op) — that is expected and
+// intentional: a "nothing should happen" assertion cannot be made RED against a stub
+// that does nothing. The complementary RED tests are TestDeleteStepState_UpdatesTimestampWhenKeyExists
+// and TestDeleteStepState_RemovesExistingStep, which verify the positive side.
+func TestDeleteStepState_NonexistentStepDoesNotUpdateTimestamp(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+	// Pre-populate a different key to prove the context is fully initialized.
+	ctx.SetStepState("other-step", workflow.StepState{Name: "other-step", Status: workflow.StatusCompleted})
+	initialUpdate := ctx.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+	ctx.DeleteStepState("nonexistent")
+
+	// Timestamp must not advance.
+	assert.Equal(t, initialUpdate, ctx.UpdatedAt, "UpdatedAt should not change when deleting nonexistent step")
+	// Unrelated keys must be unaffected.
+	_, otherExists := ctx.GetStepState("other-step")
+	assert.True(t, otherExists, "other-step must remain after no-op deletion")
+}
+
+func TestDeleteStepState_ReturnZeroValueOnGetAfterDelete(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	state := workflow.StepState{
+		Name:      "build",
+		Status:    workflow.StatusCompleted,
+		Output:    "success",
+		ExitCode:  0,
+		Attempt:   1,
+		StartedAt: time.Now(),
+	}
+
+	ctx.SetStepState("build", state)
+	ctx.DeleteStepState("build")
+
+	retrieved, exists := ctx.GetStepState("build")
+	assert.False(t, exists, "exists should be false after deletion")
+
+	zeroState := workflow.StepState{}
+	assert.Equal(t, zeroState, retrieved, "retrieved state should be zero-value")
+}
+
+func TestDeleteStepState_MutexProtection(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	state := workflow.StepState{
+		Name:   "build",
+		Status: workflow.StatusCompleted,
+	}
+
+	ctx.SetStepState("build", state)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx.DeleteStepState("build")
+		}()
+	}
+
+	wg.Wait()
+
+	_, exists := ctx.GetStepState("build")
+	assert.False(t, exists, "step should be deleted after concurrent DeleteStepState calls")
+}
+
+func TestDeleteStepState_TableDriven(t *testing.T) {
+	tests := []struct {
+		name              string
+		stepName          string
+		shouldExistBefore bool
+		shouldUpdateTime  bool
+	}{
+		{
+			name:              "delete existing step updates timestamp",
+			stepName:          "existing-step",
+			shouldExistBefore: true,
+			shouldUpdateTime:  true,
+		},
+		{
+			name:              "delete nonexistent step does not update timestamp",
+			stepName:          "nonexistent-step",
+			shouldExistBefore: false,
+			shouldUpdateTime:  false,
+		},
+		{
+			name:              "delete another existing step",
+			stepName:          "compile",
+			shouldExistBefore: true,
+			shouldUpdateTime:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := workflow.NewExecutionContext("test-id", "test-wf")
+			initialUpdate := ctx.UpdatedAt
+
+			if tt.shouldExistBefore {
+				state := workflow.StepState{
+					Name:   tt.stepName,
+					Status: workflow.StatusCompleted,
+				}
+				ctx.SetStepState(tt.stepName, state)
+				initialUpdate = ctx.UpdatedAt
+			}
+
+			time.Sleep(time.Millisecond)
+			ctx.DeleteStepState(tt.stepName)
+
+			_, exists := ctx.GetStepState(tt.stepName)
+			assert.False(t, exists, "step should not exist after deletion")
+
+			if tt.shouldUpdateTime {
+				assert.True(t, ctx.UpdatedAt.After(initialUpdate), "UpdatedAt should be updated for existing step deletion")
+			} else {
+				assert.Equal(t, initialUpdate, ctx.UpdatedAt, "UpdatedAt should not change for nonexistent step deletion")
+			}
+		})
+	}
+}
+
+func TestDeleteStepState_MultipleSteps(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	step1 := workflow.StepState{Name: "step-1", Status: workflow.StatusCompleted}
+	step2 := workflow.StepState{Name: "step-2", Status: workflow.StatusCompleted}
+	step3 := workflow.StepState{Name: "step-3", Status: workflow.StatusCompleted}
+
+	ctx.SetStepState("step-1", step1)
+	ctx.SetStepState("step-2", step2)
+	ctx.SetStepState("step-3", step3)
+
+	ctx.DeleteStepState("step-2")
+
+	_, exists1 := ctx.GetStepState("step-1")
+	_, exists2 := ctx.GetStepState("step-2")
+	_, exists3 := ctx.GetStepState("step-3")
+
+	assert.True(t, exists1, "step-1 should still exist")
+	assert.False(t, exists2, "step-2 should be deleted")
+	assert.True(t, exists3, "step-3 should still exist")
+}
+
+func TestDeleteStepState_DeleteThenRecreate(t *testing.T) {
+	ctx := workflow.NewExecutionContext("test-id", "test-wf")
+
+	state := workflow.StepState{
+		Name:   "build",
+		Status: workflow.StatusCompleted,
+		Output: "original",
+	}
+
+	ctx.SetStepState("build", state)
+	ctx.DeleteStepState("build")
+
+	_, exists := ctx.GetStepState("build")
+	assert.False(t, exists, "step should be deleted")
+
+	newState := workflow.StepState{
+		Name:   "build",
+		Status: workflow.StatusRunning,
+		Output: "recreated",
+	}
+
+	ctx.SetStepState("build", newState)
+	retrieved, exists := ctx.GetStepState("build")
+
+	assert.True(t, exists, "step should exist after recreation")
+	assert.Equal(t, workflow.StatusRunning, retrieved.Status)
+	assert.Equal(t, "recreated", retrieved.Output)
+}

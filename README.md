@@ -117,7 +117,7 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf error [code]` | Lookup error codes with descriptions and resolutions |
 | `awf list` | List available workflows |
 | `awf list prompts` | List available prompt files |
-| `awf resume` | Resume interrupted workflow |
+| `awf resume <id>` | Resume interrupted workflow with `--from` to jump to `previous` step, `current` (default), or specific step name |
 | `awf history` | Show execution history |
 | `awf status <id>` | Check workflow status |
 | `awf config show` | Display project configuration |

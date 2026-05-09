@@ -117,6 +117,16 @@ func (c *ExecutionContext) SetStepState(stepName string, state StepState) { //no
 	c.UpdatedAt = time.Now()
 }
 
+// DeleteStepState removes the state of a step if it exists; no-op on missing key.
+func (c *ExecutionContext) DeleteStepState(stepName string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.States[stepName]; ok {
+		delete(c.States, stepName)
+		c.UpdatedAt = time.Now()
+	}
+}
+
 // GetStepState retrieves the state of a step.
 func (c *ExecutionContext) GetStepState(stepName string) (StepState, bool) {
 	c.mu.RLock()
