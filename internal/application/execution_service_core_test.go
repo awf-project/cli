@@ -1112,7 +1112,7 @@ func TestExecutionService_Resume_Success(t *testing.T) {
 	mocks.StateStore.Save(context.Background(), interruptedState)
 
 	// Execute resume
-	ctx, err := execSvc.Resume(context.Background(), "test-id-123", nil)
+	ctx, err := execSvc.Resume(context.Background(), "test-id-123", nil, "current")
 
 	require.NoError(t, err, "resume should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status, "workflow should be completed")
@@ -1137,7 +1137,7 @@ func TestExecutionService_Resume_NotFound(t *testing.T) {
 	// Resume non-existent workflow should fail
 	execSvc, _ := NewTestHarness(t).Build()
 
-	_, err := execSvc.Resume(context.Background(), "non-existent-id", nil)
+	_, err := execSvc.Resume(context.Background(), "non-existent-id", nil, "current")
 
 	require.Error(t, err, "resume should fail for non-existent workflow")
 	assert.Contains(t, err.Error(), "not found", "error should indicate workflow not found")
@@ -1169,7 +1169,7 @@ func TestExecutionService_Resume_AlreadyCompleted(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), completedState)
 
-	_, err := execSvc.Resume(context.Background(), "completed-id", nil)
+	_, err := execSvc.Resume(context.Background(), "completed-id", nil, "current")
 
 	require.Error(t, err, "resume should fail for completed workflow")
 	assert.Contains(t, err.Error(), "completed", "error should mention workflow is completed")
@@ -1191,7 +1191,7 @@ func TestExecutionService_Resume_WorkflowDefinitionNotFound(t *testing.T) {
 	execSvc, mocks := NewTestHarness(t).Build()
 	mocks.StateStore.Save(context.Background(), orphanState)
 
-	_, err := execSvc.Resume(context.Background(), "orphan-id", nil)
+	_, err := execSvc.Resume(context.Background(), "orphan-id", nil, "current")
 
 	require.Error(t, err, "resume should fail when workflow definition not found")
 	assert.Contains(t, err.Error(), "not found", "error should indicate workflow definition not found")
@@ -1224,7 +1224,7 @@ func TestExecutionService_Resume_StepNotFound(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), staleState)
 
-	_, err := execSvc.Resume(context.Background(), "stale-id", nil)
+	_, err := execSvc.Resume(context.Background(), "stale-id", nil, "current")
 
 	require.Error(t, err, "resume should fail when current step no longer exists")
 	assert.Contains(t, err.Error(), "old_step", "error should mention the missing step name")
@@ -1258,7 +1258,7 @@ func TestExecutionService_Resume_InputOverrides(t *testing.T) {
 
 	// Resume with overrides
 	overrides := map[string]any{"key": "overridden"}
-	ctx, err := execSvc.Resume(context.Background(), "override-id", overrides)
+	ctx, err := execSvc.Resume(context.Background(), "override-id", overrides, "current")
 
 	require.NoError(t, err, "resume with overrides should succeed")
 
@@ -1309,7 +1309,7 @@ func TestExecutionService_Resume_SkipsCompletedSteps(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), skipState)
 
-	ctx, err := execSvc.Resume(context.Background(), "skip-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "skip-id", nil, "current")
 
 	require.NoError(t, err, "resume should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1348,7 +1348,7 @@ func TestExecutionService_Resume_FailedStatus(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), failedState)
 
-	ctx, err := execSvc.Resume(context.Background(), "failed-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "failed-id", nil, "current")
 
 	require.NoError(t, err, "resume of failed workflow should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1380,7 +1380,7 @@ func TestExecutionService_Resume_CancelledStatus(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), cancelledState)
 
-	ctx, err := execSvc.Resume(context.Background(), "cancelled-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "cancelled-id", nil, "current")
 
 	require.NoError(t, err, "resume of cancelled workflow should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1737,7 +1737,7 @@ func TestExecutionService_Resume_CallWorkflow_DispatcherRouting(t *testing.T) {
 		Build()
 	mocks.StateStore.Save(context.Background(), resumeState)
 
-	ctx, err := execSvc.Resume(context.Background(), "resume-test-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "resume-test-id", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

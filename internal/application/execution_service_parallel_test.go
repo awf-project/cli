@@ -57,7 +57,7 @@ func TestExecutionService_Resume_ParallelStep(t *testing.T) {
 	})
 	require.NoError(t, err, "setup should succeed")
 
-	ctx, err := execSvc.Resume(context.Background(), "parallel-id", nil)
+	ctx, err := execSvc.Resume(context.Background(), "parallel-id", nil, "current")
 
 	require.NoError(t, err, "resume with parallel step should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

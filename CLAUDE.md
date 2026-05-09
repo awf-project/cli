@@ -310,3 +310,4 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Review Standards
 
+- Never mark implementation complete without confirming `make build`, `make lint`, and `make test` pass with zero violations

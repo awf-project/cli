@@ -386,7 +386,7 @@ func TestSignalHandling_ResumabilityAfterInterruption(t *testing.T) {
 			require.Equal(t, workflow.StatusCancelled, execCtx1.Status)
 
 			ctx2 := context.Background()
-			execCtx2, err := svc.Resume(ctx2, execCtx1.WorkflowID, nil)
+			execCtx2, err := svc.Resume(ctx2, execCtx1.WorkflowID, nil, "current")
 
 			if tt.wantErr {
 				require.Error(t, err)

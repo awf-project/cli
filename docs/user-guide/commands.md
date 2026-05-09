@@ -10,7 +10,7 @@ title: "CLI Commands"
 | `awf init --global` | Initialize global prompts and scripts directories |
 | `awf run <workflow>` | Execute a local workflow |
 | `awf run <pack/workflow>` | Execute a workflow from an installed pack |
-| `awf resume [workflow-id]` | Resume an interrupted workflow |
+| `awf resume [workflow-id]` | Resume an interrupted workflow (`--from` to resume from a specific step) |
 | `awf list` | List available workflows |
 | `awf list prompts` | List available prompt files |
 | `awf status <id>` | Show execution status |
@@ -429,8 +429,24 @@ awf resume [workflow-id] [flags]
 | Flag | Description |
 |------|-------------|
 | `--list, -l` | List resumable workflows |
+| `--from` | Resume from step: `current` (default), `previous` (last completed step), or explicit `<step-name>` |
 | `--input, -i` | Override input parameter on resume (key=value) |
 | `--output, -o` | Output mode: silent (default), streaming, buffered |
+
+### `--from` Flag Values
+
+| Value | Description | Use Case |
+|-------|-------------|----------|
+| `current` | Resume from the current (failed) step | Default behavior; backward compatible with pre-F093 `awf resume` |
+| `previous` | Resume from the last completed step before the failure | Recover from upstream issues without re-running the current step |
+| `<step-name>` | Resume from a specific named step | Jump back multiple steps to the root cause |
+
+### State Cleanup Behavior
+
+When using `--from previous` or `--from <step-name>`:
+- All step states completed after the target step are removed from execution history
+- The workflow re-executes from the target step with the cleaned state
+- Interpolation references to cleaned steps (e.g., `{{states.removed_step.output}}`) will fail with "unknown state"
 
 ### Examples
 
@@ -438,12 +454,25 @@ awf resume [workflow-id] [flags]
 # List all resumable (interrupted) workflows
 awf resume --list
 
-# Resume a specific workflow
+# Resume a specific workflow (default: resume from current step)
 awf resume abc123-def456
 
-# Resume with input override
-awf resume abc123-def456 --input max_tokens=5000
+# Resume from the previous (last completed) step
+awf resume abc123-def456 --from previous
+
+# Resume from a specific step by name
+awf resume abc123-def456 --from build_step
+
+# Resume with input override and from flag
+awf resume abc123-def456 --from previous --input max_tokens=5000
 ```
+
+### Error Handling
+
+| Error | When | Resolution |
+|-------|------|-----------|
+| "no prior completed step" | Using `--from previous` on a workflow that hasn't completed any steps | Use `--from <explicit-step-name>` or re-run with `awf run` |
+| "step not found" | Using `--from <step-name>` where the step never executed | List completed steps with `awf status <id>` to find valid step names |
 
 ---
 

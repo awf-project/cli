@@ -325,7 +325,7 @@ func TestExecutionService_InlineOnFailure_ResumePathMessageIncluded(t *testing.T
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	_, resumeErr := execSvc.Resume(context.Background(), "wf-resume-001", nil)
+	_, resumeErr := execSvc.Resume(context.Background(), "wf-resume-001", nil, "current")
 
 	require.Error(t, resumeErr)
 	assert.True(t, strings.Contains(resumeErr.Error(), "Deployment failed on retry"),

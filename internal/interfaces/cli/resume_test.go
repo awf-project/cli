@@ -1143,6 +1143,86 @@ states:
 	require.NoError(t, err, "resume should succeed with commented config")
 }
 
+// TestResumeCommand_HasFromFlag verifies --from flag is registered with default "current".
+func TestResumeCommand_HasFromFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() != "resume" {
+			continue
+		}
+		flag := sub.Flags().Lookup("from")
+		require.NotNil(t, flag, "expected 'resume' command to have --from flag")
+		assert.Equal(t, "current", flag.DefValue, "--from flag default must be \"current\"")
+		assert.Equal(t, "", flag.Shorthand, "--from must have no shorthand (-f is reserved for root --format)")
+		return
+	}
+
+	t.Error("resume command not found")
+}
+
+// TestResumeCommand_Help_ShowsFromFlag verifies --help output describes the --from flag
+// with references to current, previous, and step name options.
+func TestResumeCommand_Help_ShowsFromFlag(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"resume", "--help"})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "--from", "help must show --from flag")
+	assert.Contains(t, output, "current", "help description must mention 'current'")
+	assert.Contains(t, output, "previous", "help description must mention 'previous'")
+}
+
+// TestResumeCommand_FromPreviousFlag_AcceptedByCLI verifies the CLI does not reject --from previous.
+// Validation of the value belongs to the application layer (resolveFromStep), not CLI.
+func TestResumeCommand_FromPreviousFlag_AcceptedByCLI(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	statesDir := filepath.Join(tmpDir, "states")
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	// No workflow state exists — command should fail at application layer, not flag parsing
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "nonexistent-id", "--from", "previous"})
+
+	err := cmd.Execute()
+	// Must fail at application layer (workflow not found), never with "unknown flag" error
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag", "--from previous must not be rejected by CLI flag parsing")
+	assert.NotContains(t, err.Error(), "flag provided but not defined", "--from must be a defined flag")
+}
+
+// TestResumeCommand_FromStepNameFlag_AcceptedByCLI verifies the CLI passes arbitrary step names through
+// to the application layer without transformation (FR-009).
+func TestResumeCommand_FromStepNameFlag_AcceptedByCLI(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	statesDir := filepath.Join(tmpDir, "states")
+	require.NoError(t, os.MkdirAll(statesDir, 0o755))
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	// Non-existent workflow — fails at application layer, not CLI flag parsing
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "nonexistent-id", "--from", "validate"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag", "--from <step-name> must not be rejected by CLI flag parsing")
+	assert.NotContains(t, err.Error(), "flag provided but not defined", "--from must be a defined flag")
+}
+
 // TestResumeCommand_ConfigEmptyInputs tests behavior with empty inputs section.
 func TestResumeCommand_ConfigEmptyInputs(t *testing.T) {
 	tmpDir := setupTestDir(t)

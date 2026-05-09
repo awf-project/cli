@@ -1626,11 +1626,13 @@ func (s *ExecutionService) validateInputs(inputs map[string]any, defs []workflow
 
 // Resume continues an interrupted workflow execution from where it left off.
 // It loads persisted state, validates resumability, merges input overrides,
-// and continues execution from CurrentStep while skipping completed steps.
+// and continues execution from the resolved fromStep while skipping completed steps.
+// fromStep may be "current", "previous", or a literal step name present in States.
 func (s *ExecutionService) Resume(
 	ctx context.Context,
 	workflowID string,
 	inputOverrides map[string]any,
+	fromStep string,
 ) (*workflow.ExecutionContext, error) {
 	// 1. Load state
 	execCtx, err := s.store.Load(ctx, workflowID)
@@ -1657,15 +1659,30 @@ func (s *ExecutionService) Resume(
 		return nil, fmt.Errorf("cannot resume: step '%s' no longer exists in workflow", execCtx.CurrentStep)
 	}
 
-	// 5. Merge input overrides
+	// 5. Resolve the from-step target
+	targetStep, err := s.resolveFromStep(execCtx, wf, fromStep)
+	if err != nil {
+		return nil, err
+	}
+
+	// 6. Cleanup states after target and persist atomically before execution
+	if targetStep != execCtx.CurrentStep {
+		s.cleanupStatesAfter(execCtx, targetStep)
+		s.checkpoint(ctx, execCtx)
+	}
+
+	// 7. Merge input overrides
 	for k, v := range inputOverrides {
 		execCtx.SetInput(k, v)
 	}
 
-	// 6. Reset status to running
+	// 8. Set current step to resolved target
+	execCtx.CurrentStep = targetStep
+
+	// 9. Reset status to running
 	execCtx.Status = workflow.StatusRunning
 
-	// 7. Execute from current step
+	// 10. Execute from resolved step
 	s.logger.Info("resuming workflow", "id", workflowID, "from", execCtx.CurrentStep)
 
 	// emit audit started event before workflow_start hooks (resume path)
@@ -1682,6 +1699,70 @@ func (s *ExecutionService) Resume(
 
 	// Continue execution from current step
 	return s.executeFromStep(ctx, wf, execCtx)
+}
+
+// resolveFromStep resolves the --from flag value to a concrete step name.
+// Accepts "current", "previous", or a literal step name that exists in the workflow.
+func (s *ExecutionService) resolveFromStep(execCtx *workflow.ExecutionContext, wf *workflow.Workflow, fromStep string) (string, error) {
+	switch fromStep {
+	case "current":
+		return execCtx.CurrentStep, nil
+	case "previous":
+		var bestName string
+		var bestTime time.Time
+		allStates := execCtx.GetAllStepStates()
+		for name, state := range allStates { //nolint:gocritic // rangeValCopy: iterating defensive copy from GetAllStepStates, value semantics required for timestamp comparison
+			if name == execCtx.CurrentStep {
+				continue
+			}
+			if state.CompletedAt.IsZero() {
+				continue
+			}
+			if state.CompletedAt.After(bestTime) || (state.CompletedAt.Equal(bestTime) && name > bestName) {
+				bestTime = state.CompletedAt
+				bestName = name
+			}
+		}
+		if bestName == "" {
+			return "", domainerrors.NewUserError(
+				domainerrors.ErrorCodeUserInputValidationFailed,
+				"no prior step: no completed step found to resume from",
+				nil,
+				nil,
+			)
+		}
+		return bestName, nil
+	default:
+		allStates := execCtx.GetAllStepStates()
+		if _, exists := allStates[fromStep]; !exists {
+			return "", domainerrors.NewUserError(
+				domainerrors.ErrorCodeUserInputValidationFailed,
+				fmt.Sprintf("step not found in execution history: %s", fromStep),
+				map[string]any{"step": fromStep},
+				nil,
+			)
+		}
+		return fromStep, nil
+	}
+}
+
+// cleanupStatesAfter deletes all States entries whose CompletedAt is strictly after the target step's CompletedAt.
+// The target step itself is preserved.
+func (s *ExecutionService) cleanupStatesAfter(execCtx *workflow.ExecutionContext, targetStepName string) {
+	targetState, ok := execCtx.GetStepState(targetStepName)
+	if !ok {
+		return
+	}
+	cutoff := targetState.CompletedAt
+	allStates := execCtx.GetAllStepStates()
+	for name, state := range allStates { //nolint:gocritic // rangeValCopy: iterating defensive copy from GetAllStepStates, value semantics required for timestamp comparison
+		if name == targetStepName {
+			continue
+		}
+		if state.CompletedAt.After(cutoff) {
+			execCtx.DeleteStepState(name)
+		}
+	}
 }
 
 // ListResumable returns all workflow executions that can be resumed.
@@ -1729,7 +1810,6 @@ func (s *ExecutionService) executeFromStep(
 
 		execCtx.CurrentStep = currentStep
 
-		// terminal state - done
 		if step.Type == workflow.StepTypeTerminal {
 			// Check terminal status: failure or success (default)
 			if step.Status == workflow.TerminalFailure {
@@ -1755,7 +1835,6 @@ func (s *ExecutionService) executeFromStep(
 			break
 		}
 
-		// execute step based on type
 		var nextStep string
 		var err error
 
@@ -1810,7 +1889,6 @@ func (s *ExecutionService) executeFromStep(
 			})
 		}
 
-		// checkpoint after each step
 		s.checkpoint(ctx, execCtx)
 
 		currentStep = nextStep

@@ -60,7 +60,7 @@ func TestExecuteFromStep_StepNotFound(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-001", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-001", nil, "current")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "step not found")
@@ -106,7 +106,7 @@ func TestExecuteFromStep_TerminalStepSuccess(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-002", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-002", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -151,7 +151,7 @@ func TestExecuteFromStep_TerminalStepFailure(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-003", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-003", nil, "current")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal failure state")
@@ -204,7 +204,7 @@ func TestExecuteFromStep_ContextCancelled(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	execCtx, err := execSvc.Resume(context.Background(), "wf-004", nil)
+	execCtx, err := execSvc.Resume(context.Background(), "wf-004", nil, "current")
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled))
@@ -254,7 +254,7 @@ func TestExecuteFromStep_RegularError_ClassifiesAndExecutesHook(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-005", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-005", nil, "current")
 
 	require.Error(t, err)
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
@@ -313,7 +313,7 @@ func TestExecuteFromStep_SuccessfulCompletion_ExecutesEndHook(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-006", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-006", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -356,7 +356,7 @@ func TestExecuteFromStep_DispatchesOperationStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-007", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-007", nil, "current")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "operation provider not configured")
@@ -412,7 +412,7 @@ func TestExecuteFromStep_DispatchesParallelStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-008", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-008", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -464,7 +464,7 @@ func TestExecuteFromStep_DispatchesLoopStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-009", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-009", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -527,7 +527,7 @@ func TestExecuteFromStep_DispatchesCallWorkflowStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-010", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-010", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -572,7 +572,7 @@ func TestExecuteFromStep_DispatchesAgentStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-011", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-011", nil, "current")
 
 	// This test verifies that executeFromStep dispatches to executeAgentStep
 	require.Error(t, err)
@@ -616,7 +616,7 @@ func TestExecuteFromStep_DispatchesDefaultCommandStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-012", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-012", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -666,7 +666,7 @@ func TestExecuteFromStep_CheckpointsAfterEachStep(t *testing.T) {
 	err := mocks.StateStore.Save(context.Background(), savedState)
 	require.NoError(t, err)
 
-	ctx, err := execSvc.Resume(context.Background(), "wf-013", nil)
+	ctx, err := execSvc.Resume(context.Background(), "wf-013", nil, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

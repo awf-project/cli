@@ -157,7 +157,7 @@ states:
 	defer cancel()
 
 	// Resume execution
-	resumedCtx, err := execSvc.Resume(ctx, "interrupted-id-123", nil)
+	resumedCtx, err := execSvc.Resume(ctx, "interrupted-id-123", nil, "current")
 
 	require.NoError(t, err, "resume should succeed")
 	assert.Equal(t, workflow.StatusCompleted, resumedCtx.Status)
@@ -347,7 +347,7 @@ states:
 
 	// Resume with overridden input
 	overrides := map[string]any{"message": "overridden-message"}
-	resumedCtx, err := execSvc.Resume(ctx, "override-id", overrides)
+	resumedCtx, err := execSvc.Resume(ctx, "override-id", overrides, "current")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, resumedCtx.Status)
@@ -424,7 +424,7 @@ states:
 	require.NoError(t, stateStore.Save(ctx, failedState))
 
 	// Resume - this time the step should succeed
-	resumedCtx, err := execSvc.Resume(ctx, "failed-id", nil)
+	resumedCtx, err := execSvc.Resume(ctx, "failed-id", nil, "current")
 
 	require.NoError(t, err, "resume of failed workflow should succeed")
 	assert.Equal(t, workflow.StatusCompleted, resumedCtx.Status)
@@ -489,7 +489,7 @@ states:
 	require.NoError(t, stateStore.Save(ctx, staleState))
 
 	// Resume should fail because step2 doesn't exist
-	_, err := execSvc.Resume(ctx, "stale-id", nil)
+	_, err := execSvc.Resume(ctx, "stale-id", nil, "current")
 
 	require.Error(t, err, "resume should fail when step no longer exists")
 	assert.Contains(t, err.Error(), "step2", "error should mention missing step")
@@ -561,7 +561,7 @@ states:
 	require.NoError(t, stateStore.Save(ctx, interruptedState))
 
 	// Resume
-	resumedCtx, err := execSvc.Resume(ctx, "parallel-id", nil)
+	resumedCtx, err := execSvc.Resume(ctx, "parallel-id", nil, "current")
 
 	require.NoError(t, err, "resume with parallel step should succeed")
 	assert.Equal(t, workflow.StatusCompleted, resumedCtx.Status)
