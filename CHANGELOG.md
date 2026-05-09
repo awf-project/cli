@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-09
+
 ### Fixed
 
 - **F084**: Bound `StreamFilterWriter` line buffer to 10 MB — prevents silent stream abort on oversized NDJSON events from agent providers. When a single event exceeds 10 MB, a structured warning is logged with the line size and maximum cap; stream processing continues for subsequent events. Includes benchmarks verifying no throughput regression on normal-sized input (~200 B lines).
