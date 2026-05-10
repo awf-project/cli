@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Ink drop shadow -->
+  <rect x="9" y="9" width="50" height="50" fill="#0E0E0E"/>
+  <!-- Red offset block (mid layer) -->
+  <rect x="7" y="7" width="50" height="50" fill="#FF2D4C"/>
+  <!-- Yellow block with thick ink border -->
+  <rect x="3" y="3" width="50" height="50" fill="#FFD60A" stroke="#0E0E0E" stroke-width="5"/>
+  <!-- AWF text -->
+  <text x="28" y="37"
+        text-anchor="middle"
+        font-family="'Bungee', 'Arial Black', Impact, Haettenschweiler, 'Franklin Gothic Bold', sans-serif"
+        font-weight="900"
+        font-size="18"
+        letter-spacing="0.5"
+        fill="#0E0E0E">AWF</text>
+</svg>
