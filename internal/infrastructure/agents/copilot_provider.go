@@ -136,6 +136,9 @@ func appendCopilotOptions(args []string, options map[string]any) []string {
 	}
 	if allow, ok := getBoolOption(options, "allow_all"); ok && allow {
 		args = append(args, "--allow-all")
+	} else if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skip {
+		// Alias for cross-provider compatibility: dangerously_skip_permissions maps to --allow-all
+		args = append(args, "--allow-all")
 	}
 	return args
 }
