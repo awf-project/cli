@@ -91,6 +91,13 @@ func TestCopilotProvider_Execute_WithOptions(t *testing.T) {
 			wantCLIArgs: []string{"-p", "test", "--output-format=json", "--silent", "--allow-all"},
 		},
 		{
+			name:        "dangerously_skip_permissions alias",
+			prompt:      "test",
+			options:     map[string]any{"dangerously_skip_permissions": true},
+			mockStdout:  `{"type":"assistant.message","data":{"content":"code","messageId":"m1"}}` + "\n" + `{"type":"result","sessionId":"s1","exitCode":0}`,
+			wantCLIArgs: []string{"-p", "test", "--output-format=json", "--silent", "--allow-all"},
+		},
+		{
 			name:        "unknown options silently ignored",
 			prompt:      "test",
 			options:     map[string]any{"language": "python", "quiet": true},
@@ -475,6 +482,42 @@ func TestCopilotProvider_DeniedToolsMultiple(t *testing.T) {
 	args := calls[0].Args
 	assert.Contains(t, args, "--deny-tool=bash")
 	assert.Contains(t, args, "--deny-tool=python")
+}
+
+func TestCopilotProvider_DangerouslySkipPermissions_AllowAllTakesPrecedence(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"code\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), nil)
+	provider := NewCopilotProviderWithOptions(WithCopilotExecutor(mockExec))
+
+	options := map[string]any{"allow_all": true, "dangerously_skip_permissions": true}
+	_, err := provider.Execute(context.Background(), "test", options, nil, nil)
+
+	require.NoError(t, err)
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	args := calls[0].Args
+	// allow_all takes precedence; --allow-all should appear exactly once
+	count := 0
+	for _, a := range args {
+		if a == "--allow-all" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "--allow-all should appear exactly once when both options are set")
+}
+
+func TestCopilotProvider_DangerouslySkipPermissions_FalseOmitsFlag(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("{\"type\":\"assistant.message\",\"data\":{\"content\":\"code\",\"messageId\":\"m1\"}}\n{\"type\":\"result\",\"sessionId\":\"s1\",\"exitCode\":0}"), nil)
+	provider := NewCopilotProviderWithOptions(WithCopilotExecutor(mockExec))
+
+	options := map[string]any{"dangerously_skip_permissions": false}
+	_, err := provider.Execute(context.Background(), "test", options, nil, nil)
+
+	require.NoError(t, err)
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	assert.NotContains(t, calls[0].Args, "--allow-all")
 }
 
 func TestCopilotProvider_AllowAllFalseOmitsFlag(t *testing.T) {
