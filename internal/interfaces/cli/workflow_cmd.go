@@ -330,8 +330,12 @@ func extractPackName(ownerRepo string) string {
 
 // effectiveCLIVersion returns Version, substituting a valid semver for "dev" builds
 // so version constraint checks (packs, plugins) work correctly outside production releases.
+// Also handles non-parseable git describe output (e.g., "v0.8.1-3-gabcdef-dirty").
 func effectiveCLIVersion() string {
 	if strings.HasPrefix(Version, "dev") {
+		return "999.0.0"
+	}
+	if _, err := registry.ParseVersion(Version); err != nil {
 		return "999.0.0"
 	}
 	return Version

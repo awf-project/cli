@@ -37,6 +37,21 @@ func TestParseVersion(t *testing.T) {
 			want:  registry.Version{Major: 2, Minor: 0, Patch: 0, Prerelease: "rc.1+build.123"},
 		},
 		{
+			name:  "v prefix stripped",
+			input: "v1.2.3",
+			want:  registry.Version{Major: 1, Minor: 2, Patch: 3, Prerelease: ""},
+		},
+		{
+			name:  "v prefix with prerelease",
+			input: "v0.8.1-dirty",
+			want:  registry.Version{Major: 0, Minor: 8, Patch: 1, Prerelease: "dirty"},
+		},
+		{
+			name:  "v prefix with complex prerelease",
+			input: "v2.0.0-rc.1",
+			want:  registry.Version{Major: 2, Minor: 0, Patch: 0, Prerelease: "rc.1"},
+		},
+		{
 			name:    "invalid format - missing patch",
 			input:   "1.2",
 			wantErr: true,
@@ -551,6 +566,24 @@ func TestCheckVersionConstraint(t *testing.T) {
 			constraintStr: ">=1.0.0",
 			versionStr:    "invalid",
 			wantErr:       true,
+		},
+		{
+			name:          "v-prefixed version in range",
+			constraintStr: ">=0.8.0",
+			versionStr:    "v0.8.1",
+			want:          true,
+		},
+		{
+			name:          "v-prefixed dirty version in range",
+			constraintStr: ">=0.8.0",
+			versionStr:    "v0.8.1-dirty",
+			want:          true,
+		},
+		{
+			name:          "v-prefixed dirty version prerelease less than release",
+			constraintStr: ">=0.8.1",
+			versionStr:    "v0.8.1-dirty",
+			want:          false,
 		},
 	}
 

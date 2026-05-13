@@ -171,12 +171,13 @@ func (cs Constraints) String() string {
 }
 
 // ParseVersion parses a version string into a Version struct.
-// Accepts formats: "1.0.0", "1.0.0-alpha.1"
+// Accepts formats: "1.0.0", "1.0.0-alpha.1", "v1.0.0", "v1.0.0-alpha.1"
 func ParseVersion(s string) (Version, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return Version{}, errors.New("version: empty string")
 	}
+	s = strings.TrimPrefix(s, "v")
 
 	matches := versionRegex.FindStringSubmatch(s)
 	if matches == nil {

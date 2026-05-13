@@ -780,6 +780,10 @@ func TestEffectiveCLIVersion_DevPrefix(t *testing.T) {
 		{"dev dirty", "dev-abc123-dirty", "999.0.0"},
 		{"real version", "1.2.3", "1.2.3"},
 		{"pre-release", "1.0.0-rc1", "1.0.0-rc1"},
+		{"v-prefixed version", "v0.8.1", "v0.8.1"},
+		{"v-prefixed dirty", "v0.8.1-dirty", "v0.8.1-dirty"},
+		{"git describe with commits", "v0.8.1-3-gabcdef", "999.0.0"},
+		{"git describe dirty with commits", "v0.8.1-3-gabcdef-dirty", "999.0.0"},
 	}
 
 	for _, tt := range tests {
