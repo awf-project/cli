@@ -45,7 +45,10 @@ Access output, exit code, and token usage from previous steps:
 ```yaml
 {{.states.step_name.Output}}            # Command output (raw text, or cleaned if output_format set)
 {{.states.step_name.ExitCode}}          # Exit code (0 for success, non-zero for failure)
-{{.states.step_name.TokensUsed}}        # Tokens consumed by agent steps
+{{.states.step_name.TokensUsed}}        # Total tokens consumed by agent steps
+{{.states.step_name.TokensInput}}       # Input tokens (prompt + context)
+{{.states.step_name.TokensOutput}}      # Output tokens (assistant response)
+{{.states.step_name.TokensEstimated}}   # true if token counts are estimates, false if from provider
 {{.states.step_name.Response.field}}    # Parsed field from operation/agent structured output (heuristic)
 {{.states.step_name.JSON.field}}        # Parsed field from output_format: json (explicit)
 ```
@@ -98,7 +101,7 @@ On POSIX systems, exit codes are typically 0–255. Exit code 0 indicates succes
 
 #### TokensUsed
 
-Tokens consumed by agent steps (Claude, Gemini, Codex). Available for all agent step types:
+Total tokens consumed by agent steps. Available for all agent step types:
 
 ```yaml
 run_agent:
@@ -121,7 +124,40 @@ transitions:
     goto: token_exceeded
 ```
 
-**Note**: Replaced deprecated `states.step_name.Tokens` field. If migrating from earlier versions, update workflow YAML expressions from `{{.states.step_name.Tokens}}` to `{{.states.step_name.TokensUsed}}`.
+#### TokensInput / TokensOutput
+
+Separate input and output token counts. Available for all agent step types:
+
+```yaml
+log_details:
+  type: step
+  command: |
+    echo "Input: {{.states.analyze.TokensInput}}, Output: {{.states.analyze.TokensOutput}}"
+```
+
+In conversation mode (`continue_from`), `TokensInput` includes all prior turns. In single-turn mode, `TokensInput` is `0` and `TokensOutput` equals `TokensUsed`.
+
+#### TokensEstimated
+
+Boolean indicating whether token counts are exact (from the provider's JSON output) or estimated (`len/4` approximation). Use to decide whether to trust the values for billing or budgeting:
+
+```yaml
+transitions:
+  - when: "states.analyze.TokensEstimated == false and states.analyze.TokensUsed > inputs.budget"
+    goto: over_budget
+```
+
+| Provider | TokensEstimated | Source |
+|----------|----------------|--------|
+| Claude | `false` | `result` event `usage` field |
+| Gemini | `false` | `result` event `stats` field |
+| Codex | `false` | `turn.completed` event `usage` field |
+| Copilot | `false` (output only) | `assistant.message` event `outputTokens` |
+| OpenCode | `false` | `step_finish` event `part.tokens` field |
+| OpenAI-Compatible | `false` | API response `usage` field |
+| Any provider (fallback) | `true` | `len(output) / 4` estimation |
+
+**Note**: `TokensUsed` replaced deprecated `states.step_name.Tokens` field. If migrating from earlier versions, update workflow YAML expressions from `{{.states.step_name.Tokens}}` to `{{.states.step_name.TokensUsed}}`.
 
 #### Response (Operation Outputs)
 

@@ -243,7 +243,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- When removing redundant infrastructure code, document the architectural ownership pattern; explain which layer assumed responsibility and why the field was removed
 - Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
 - Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
 - Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
@@ -284,6 +283,7 @@ func TestWorkflowValidation(t *testing.T) {
 - Never silently initialize nested struct fields during YAML unmarshaling; explicitly map all sections (events, metadata, etc.) to prevent zero values from hiding parsing bugs
 - Always stage all modified implementation files and run 'git status' before marking task complete; unstaged files indicate incomplete task closure.
 - Update plan task status immediately when implementation completes; regenerate validation report to catch status-code mismatches before submission.
+- Always replicate nolint:errcheck directives identically across all provider implementations; verify explanatory comments match before make lint
 
 ## Test Conventions
 

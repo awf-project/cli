@@ -13,8 +13,28 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
 
+type fallbackTokenizer struct{}
+
+func (fallbackTokenizer) CountTokens(text string) (int, error) { return len(text) / 4, nil }
+func (fallbackTokenizer) CountTurnsTokens(turns []string) (int, error) {
+	n := 0
+	for _, t := range turns {
+		n += len(t)
+	}
+	return n / 4, nil
+}
+func (fallbackTokenizer) IsEstimate() bool  { return true }
+func (fallbackTokenizer) ModelName() string { return "fallback" }
+
+type tokenUsage struct {
+	InputTokens  int
+	OutputTokens int
+	TotalTokens  int
+	CostUSD      float64
+}
+
 // cliProviderHooks captures provider-specific behavior as function values.
-// Optional hooks (extractTextContent, validateOptions, parseDisplayEvents) may be nil.
+// Optional hooks (extractTextContent, validateOptions, parseDisplayEvents, extractTokenUsage) may be nil.
 type cliProviderHooks struct {
 	buildExecuteArgs      func(prompt string, options map[string]any) ([]string, error)
 	buildConversationArgs func(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error)
@@ -22,16 +42,18 @@ type cliProviderHooks struct {
 	extractTextContent    func(output string) string
 	validateOptions       func(options map[string]any) error
 	parseDisplayEvents    DisplayEventParser
+	extractTokenUsage     func(rawOutput string) *tokenUsage
 }
 
 // baseCLIProvider encapsulates the shared Execute and ExecuteConversation
 // orchestration logic for all CLI-based agent providers.
 type baseCLIProvider struct {
-	name     string
-	binary   string
-	executor ports.CLIExecutor
-	logger   ports.Logger
-	hooks    cliProviderHooks
+	name      string
+	binary    string
+	executor  ports.CLIExecutor
+	logger    ports.Logger
+	tokenizer ports.Tokenizer
+	hooks     cliProviderHooks
 }
 
 func newBaseCLIProvider(name, binary string, executor ports.CLIExecutor, log ports.Logger, hooks cliProviderHooks) *baseCLIProvider {
@@ -39,11 +61,12 @@ func newBaseCLIProvider(name, binary string, executor ports.CLIExecutor, log por
 		log = logger.NopLogger{}
 	}
 	return &baseCLIProvider{
-		name:     name,
-		binary:   binary,
-		executor: executor,
-		logger:   log,
-		hooks:    hooks,
+		name:      name,
+		binary:    binary,
+		executor:  executor,
+		logger:    log,
+		tokenizer: fallbackTokenizer{},
+		hooks:     hooks,
 	}
 }
 
@@ -116,14 +139,26 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		displayOutput = extractDisplayTextFromEvents(rawOutput, b.hooks.parseDisplayEvents)
 	}
 
+	var outputTokens int
+	hasRealTokens := false
+	if b.hooks.extractTokenUsage != nil {
+		if usage := b.hooks.extractTokenUsage(rawOutput); usage != nil {
+			outputTokens = usage.TotalTokens
+			hasRealTokens = true
+		}
+	}
+	if !hasRealTokens {
+		outputTokens, _ = b.tokenizer.CountTokens(outputStr) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+	}
+
 	result := &workflow.AgentResult{
 		Provider:        b.name,
 		Output:          outputStr,
 		DisplayOutput:   displayOutput,
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
-		Tokens:          estimateTokens(outputStr),
-		TokensEstimated: true,
+		Tokens:          outputTokens,
+		TokensEstimated: !hasRealTokens && b.tokenizer.IsEstimate(),
 	}
 
 	return result, rawOutput, nil
@@ -193,7 +228,21 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 	}
 
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
-	assistantTurn.Tokens = estimateTokens(outputStr)
+
+	var assistantTokens, inputTokens int
+	hasRealTokens := false
+	if b.hooks.extractTokenUsage != nil {
+		if usage := b.hooks.extractTokenUsage(rawOutput); usage != nil {
+			assistantTokens = usage.OutputTokens
+			inputTokens = usage.InputTokens
+			hasRealTokens = true
+		}
+	}
+	if !hasRealTokens {
+		assistantTokens, _ = b.tokenizer.CountTokens(outputStr) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+	}
+	assistantTurn.Tokens = assistantTokens
+
 	if addErr := workingState.AddTurn(assistantTurn); addErr != nil {
 		return nil, "", fmt.Errorf("failed to add assistant turn: %w", addErr)
 	}
@@ -204,7 +253,14 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 	}
 	workingState.SessionID = sessionID
 
-	inputTokens := estimateInputTokens(workingState.Turns, 1)
+	if !hasRealTokens {
+		limit := len(workingState.Turns) - 1
+		turnContents := make([]string, 0, limit)
+		for _, t := range workingState.Turns[0:limit] {
+			turnContents = append(turnContents, t.Content)
+		}
+		inputTokens, _ = b.tokenizer.CountTurnsTokens(turnContents) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+	}
 
 	var displayOutput string
 	if !rawDisplay {
@@ -219,7 +275,7 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 		TokensInput:     inputTokens,
 		TokensOutput:    assistantTurn.Tokens,
 		TokensTotal:     inputTokens + assistantTurn.Tokens,
-		TokensEstimated: true,
+		TokensEstimated: !hasRealTokens && b.tokenizer.IsEstimate(),
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
 	}

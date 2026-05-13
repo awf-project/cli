@@ -44,13 +44,16 @@ var ValidWorkflowProperties = map[string]bool{
 
 // ValidStateProperties lists known step state properties that can be referenced.
 var ValidStateProperties = map[string]bool{
-	"Output":     true,
-	"Stderr":     true,
-	"ExitCode":   true,
-	"Status":     true,
-	"Response":   true,
-	"TokensUsed": true,
-	"JSON":       true,
+	"Output":          true,
+	"Stderr":          true,
+	"ExitCode":        true,
+	"Status":          true,
+	"Response":        true,
+	"TokensUsed":      true,
+	"TokensInput":     true,
+	"TokensOutput":    true,
+	"TokensEstimated": true,
+	"JSON":            true,
 }
 
 // ValidErrorProperties lists known error properties in error hooks.

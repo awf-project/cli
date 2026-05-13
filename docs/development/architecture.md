@@ -207,7 +207,7 @@ Implements domain ports with concrete technologies.
 - `pluginmgr/` - Plugin lifecycle (manifest, state, gRPC connections); delegates transport to `pkg/registry/`
 - `repository/` - YAML file loader implementing `Repository`
 - `store/` - JSON state store implementing `StateStore`, SQLite history storage
-- `tokenizer/` - Token counting for conversation context management
+- `tokenizer/` - Token counting implementations (`ApproximationTokenizer`, `TiktokenTokenizer`) implementing `ports.Tokenizer`; injected into `baseCLIProvider` for unified token counting across all CLI agent providers
 - `xdg/` - XDG directory discovery
 
 **Shared Packages (`pkg/`):**

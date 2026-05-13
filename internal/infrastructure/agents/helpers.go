@@ -7,10 +7,6 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
-func estimateTokens(output string) int {
-	return len(output) / 4
-}
-
 func cloneState(state *workflow.ConversationState) *workflow.ConversationState {
 	if state == nil {
 		return nil
@@ -36,27 +32,19 @@ func getStringOption(options map[string]any, key string) (string, bool) {
 	return val, ok
 }
 
+func buildFirstTurnPrompt(userPrompt string, options map[string]any) string {
+	if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
+		return sysPrompt + "\n\n" + userPrompt
+	}
+	return userPrompt
+}
+
 func getBoolOption(options map[string]any, key string) (value, found bool) {
 	if options == nil {
 		return false, false
 	}
 	val, ok := options[key].(bool)
 	return val, ok
-}
-
-func estimateInputTokens(turns []workflow.Turn, excludeLastN int) int {
-	inputTokens := 0
-	limit := len(turns) - excludeLastN
-	if limit < 0 {
-		limit = 0
-	}
-	for i := 0; i < limit; i++ {
-		if turns[i].Tokens == 0 {
-			turns[i].Tokens = estimateTokens(turns[i].Content)
-		}
-		inputTokens += turns[i].Tokens
-	}
-	return inputTokens
 }
 
 func tryParseJSONResponse(output string) map[string]any {
@@ -88,6 +76,31 @@ func findFirstNDJSONEvent(output, eventType string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func findLastNDJSONEvent(output, eventType string) map[string]any {
+	var found map[string]any
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var evt map[string]any
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+		if t, ok := evt["type"].(string); ok && t == eventType {
+			found = evt
+		}
+	}
+	return found
+}
+
+func intFromMap(m map[string]any, key string) int {
+	if v, ok := m[key].(float64); ok {
+		return int(v)
+	}
+	return 0
 }
 
 // argPreviewKeys defines the ordered list of input map keys used to extract a
@@ -134,10 +147,4 @@ func extractArgPreview(arguments string) string {
 		return ""
 	}
 	return extractArgPreviewFromMap(m)
-}
-
-// parseToolCallArgPreview is an alias for extractArgPreview retained for
-// compatibility with providers that use the longer name.
-func parseToolCallArgPreview(arguments string) string {
-	return extractArgPreview(arguments)
 }

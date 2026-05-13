@@ -16,8 +16,9 @@ import (
 // GeminiProvider implements AgentProvider for Gemini CLI.
 // Invokes: gemini -p "prompt"
 type GeminiProvider struct {
-	base     *baseCLIProvider
-	executor ports.CLIExecutor
+	base      *baseCLIProvider
+	executor  ports.CLIExecutor
+	tokenizer ports.Tokenizer
 }
 
 func NewGeminiProvider() *GeminiProvider {
@@ -40,13 +41,18 @@ func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider 
 }
 
 func (p *GeminiProvider) newBase() *baseCLIProvider {
-	return newBaseCLIProvider("gemini", "gemini", p.executor, nil, cliProviderHooks{
+	b := newBaseCLIProvider("gemini", "gemini", p.executor, nil, cliProviderHooks{
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateGeminiOptions,
 		parseDisplayEvents:    p.parseGeminiDisplayEvents,
+		extractTokenUsage:     p.extractGeminiTokenUsage,
 	})
+	if p.tokenizer != nil {
+		b.tokenizer = p.tokenizer
+	}
+	return b
 }
 
 func validateGeminiOptions(options map[string]any) error {
@@ -78,7 +84,10 @@ func (p *GeminiProvider) Execute(ctx context.Context, prompt string, options map
 	// state.Output breaks any downstream JSON post-processing.
 	if extracted := extractDisplayTextFromEvents(rawOutput, p.parseGeminiDisplayEvents); extracted != "" {
 		result.Output = extracted
-		result.Tokens = estimateTokens(extracted)
+		if result.TokensEstimated {
+			tokens, _ := p.base.tokenizer.CountTokens(extracted) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+			result.Tokens = tokens
+		}
 	}
 
 	userFormat, _ := getStringOption(options, "output_format")
@@ -111,18 +120,23 @@ func (p *GeminiProvider) Validate() error {
 	return nil
 }
 
-func (p *GeminiProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
-	args := []string{"-p", prompt}
-
+func prependGeminiGlobalFlags(args []string, options map[string]any) []string {
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)
 	}
-	// Always force stream-json NDJSON at the CLI level so the F082 display filter
-	// and text extraction have a consistent wire format (F082, aligned with Claude).
 	args = append([]string{"--output-format", "stream-json"}, args...)
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
 		args = append([]string{"--approval-mode=yolo"}, args...)
 	}
+	return args
+}
+
+func (p *GeminiProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
+	args := []string{"-p", prompt}
+
+	// Always force stream-json NDJSON at the CLI level so the F082 display filter
+	// and text extraction have a consistent wire format (F082, aligned with Claude).
+	args = prependGeminiGlobalFlags(args, options)
 
 	return args, nil
 }
@@ -134,21 +148,11 @@ func (p *GeminiProvider) buildConversationArgs(state *workflow.ConversationState
 	if state != nil && state.SessionID != "" {
 		args = []string{"--resume", state.SessionID, "-p", prompt}
 	} else {
-		effectivePrompt := prompt
-		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			effectivePrompt = sysPrompt + "\n\n" + prompt
-		}
-		args = []string{"-p", effectivePrompt}
+		args = []string{"-p", buildFirstTurnPrompt(prompt, options)}
 	}
 
-	if model, ok := getStringOption(options, "model"); ok {
-		args = append([]string{"--model", model}, args...)
-	}
 	// Force stream-json unconditionally for reliable session ID extraction.
-	args = append([]string{"--output-format", "stream-json"}, args...)
-	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		args = append([]string{"--approval-mode=yolo"}, args...)
-	}
+	args = prependGeminiGlobalFlags(args, options)
 
 	return args, nil
 }
@@ -177,6 +181,22 @@ func (p *GeminiProvider) extractSessionID(output string) (string, error) {
 		return "", errors.New("session_id is empty")
 	}
 	return str, nil
+}
+
+func (p *GeminiProvider) extractGeminiTokenUsage(rawOutput string) *tokenUsage {
+	evt := findFirstNDJSONEvent(rawOutput, "result")
+	if evt == nil {
+		return nil
+	}
+	stats, ok := evt["stats"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return &tokenUsage{
+		InputTokens:  intFromMap(stats, "input_tokens"),
+		OutputTokens: intFromMap(stats, "output_tokens"),
+		TotalTokens:  intFromMap(stats, "total_tokens"),
+	}
 }
 
 func (p *GeminiProvider) parseGeminiDisplayEvents(line []byte) []DisplayEvent {

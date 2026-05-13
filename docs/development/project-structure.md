@@ -58,7 +58,7 @@ awf/
 │   │   ├── plugin/              # RPC plugin manager, composite provider
 │   │   ├── repository/          # YAML workflow loaders
 │   │   ├── store/               # SQLite history, JSON state store
-│   │   ├── tokenizer/           # Token counting
+│   │   ├── tokenizer/           # Token counting (ports.Tokenizer implementations)
 │   │   └── xdg/                 # XDG directory discovery
 │   │
 │   └── interfaces/              # External interfaces
