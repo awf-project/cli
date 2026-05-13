@@ -8,42 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEstimateTokens(t *testing.T) {
-	tests := []struct {
-		name     string
-		output   string
-		expected int
-	}{
-		{
-			name:     "empty_string",
-			output:   "",
-			expected: 0,
-		},
-		{
-			name:     "short_string",
-			output:   "test", // 4 chars = 1 token
-			expected: 1,
-		},
-		{
-			name:     "medium_string",
-			output:   "hello world test", // 16 chars = 4 tokens
-			expected: 4,
-		},
-		{
-			name:     "long_string",
-			output:   "This is a longer string for testing token estimation accurately.", // 64 chars
-			expected: 16,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := estimateTokens(tt.output)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestCloneState(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -209,63 +173,6 @@ func TestGetBoolOption(t *testing.T) {
 			value, ok := getBoolOption(tt.options, tt.key)
 			assert.Equal(t, tt.wantValue, value)
 			assert.Equal(t, tt.wantOK, ok)
-		})
-	}
-}
-
-func TestEstimateInputTokens(t *testing.T) {
-	tests := []struct {
-		name         string
-		turns        []workflow.Turn
-		excludeLastN int
-		expected     int
-	}{
-		{
-			name:         "empty_turns",
-			turns:        []workflow.Turn{},
-			excludeLastN: 0,
-			expected:     0,
-		},
-		{
-			name: "single_turn_exclude_one",
-			turns: []workflow.Turn{
-				{Role: "user", Content: "test", Tokens: 10},
-			},
-			excludeLastN: 1,
-			expected:     0,
-		},
-		{
-			name: "multiple_turns_exclude_one",
-			turns: []workflow.Turn{
-				{Role: "user", Content: "hello", Tokens: 5},
-				{Role: "assistant", Content: "hi there", Tokens: 10},
-			},
-			excludeLastN: 1,
-			expected:     5,
-		},
-		{
-			name: "estimate_missing_tokens",
-			turns: []workflow.Turn{
-				{Role: "user", Content: "test", Tokens: 0}, // Will be estimated: 4/4=1
-				{Role: "assistant", Content: "response", Tokens: 0},
-			},
-			excludeLastN: 1,
-			expected:     1,
-		},
-		{
-			name: "exclude_more_than_available",
-			turns: []workflow.Turn{
-				{Role: "user", Content: "test", Tokens: 10},
-			},
-			excludeLastN: 5,
-			expected:     0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := estimateInputTokens(tt.turns, tt.excludeLastN)
-			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

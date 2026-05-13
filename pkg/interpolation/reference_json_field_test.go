@@ -25,7 +25,10 @@ func TestValidStateProperties_AllFields(t *testing.T) {
 		"Status",
 		"Response",
 		"TokensUsed",
-		"JSON", // F065: new field for explicit JSON output
+		"TokensInput",
+		"TokensOutput",
+		"TokensEstimated",
+		"JSON",
 	}
 
 	for _, field := range expectedFields {

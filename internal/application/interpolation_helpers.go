@@ -23,13 +23,16 @@ func buildInterpolationContext(
 	for name := range allStates {
 		state := allStates[name]
 		states[name] = interpolation.StepStateData{
-			Output:     state.Output,
-			Stderr:     state.Stderr,
-			ExitCode:   state.ExitCode,
-			Status:     state.Status.String(),
-			Response:   state.Response,
-			TokensUsed: state.TokensUsed,
-			JSON:       state.JSON,
+			Output:          state.Output,
+			Stderr:          state.Stderr,
+			ExitCode:        state.ExitCode,
+			Status:          state.Status.String(),
+			Response:        state.Response,
+			TokensUsed:      state.TokensUsed,
+			TokensInput:     state.TokensInput,
+			TokensOutput:    state.TokensOutput,
+			TokensEstimated: state.TokensEstimated,
+			JSON:            state.JSON,
 		}
 	}
 

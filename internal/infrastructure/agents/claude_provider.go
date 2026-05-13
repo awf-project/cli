@@ -19,9 +19,10 @@ import (
 // ClaudeProvider implements AgentProvider for Claude CLI.
 // Invokes: claude -p "prompt" --output-format stream-json
 type ClaudeProvider struct {
-	base     *baseCLIProvider
-	logger   ports.Logger
-	executor ports.CLIExecutor
+	base      *baseCLIProvider
+	logger    ports.Logger
+	executor  ports.CLIExecutor
+	tokenizer ports.Tokenizer
 }
 
 func NewClaudeProvider(l ...ports.Logger) *ClaudeProvider {
@@ -52,14 +53,19 @@ func NewClaudeProviderWithOptions(opts ...ClaudeProviderOption) *ClaudeProvider 
 }
 
 func (p *ClaudeProvider) newBase() *baseCLIProvider {
-	return newBaseCLIProvider("claude", "claude", p.executor, p.logger, cliProviderHooks{
+	b := newBaseCLIProvider("claude", "claude", p.executor, p.logger, cliProviderHooks{
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		extractTextContent:    p.extractTextFromJSON,
 		validateOptions:       validateClaudeOptions,
 		parseDisplayEvents:    p.parseClaudeDisplayEvents,
+		extractTokenUsage:     p.extractClaudeTokenUsage,
 	})
+	if p.tokenizer != nil {
+		b.tokenizer = p.tokenizer
+	}
+	return b
 }
 
 func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
@@ -76,7 +82,10 @@ func (p *ClaudeProvider) Execute(ctx context.Context, prompt string, options map
 	// downstream JSON post-processing.
 	if extracted := p.extractTextFromJSON(rawOutput); extracted != "" {
 		result.Output = extracted
-		result.Tokens = estimateTokens(extracted)
+		if result.TokensEstimated {
+			tokens, _ := p.base.tokenizer.CountTokens(extracted) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+			result.Tokens = tokens
+		}
 	}
 
 	if userFormat == "json" || userFormat == "stream-json" {
@@ -259,6 +268,35 @@ func (p *ClaudeProvider) extractTextFromJSON(output string) string {
 		return fmt.Sprint(num)
 	}
 	return ""
+}
+
+func (p *ClaudeProvider) extractClaudeTokenUsage(rawOutput string) *tokenUsage {
+	evt := p.extractResultEvent(rawOutput)
+	if evt == nil {
+		return nil
+	}
+	usageVal, ok := evt["usage"]
+	if !ok || usageVal == nil {
+		return nil
+	}
+	usage, ok := usageVal.(map[string]any)
+	if !ok {
+		return nil
+	}
+	input := intFromMap(usage, "input_tokens") +
+		intFromMap(usage, "cache_creation_input_tokens") +
+		intFromMap(usage, "cache_read_input_tokens")
+	output := intFromMap(usage, "output_tokens")
+	var costUSD float64
+	if v, ok := evt["total_cost_usd"].(float64); ok {
+		costUSD = v
+	}
+	return &tokenUsage{
+		InputTokens:  input,
+		OutputTokens: output,
+		TotalTokens:  input + output,
+		CostUSD:      costUSD,
+	}
 }
 
 func (p *ClaudeProvider) parseClaudeDisplayEvents(line []byte) []DisplayEvent {

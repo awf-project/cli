@@ -200,7 +200,7 @@ analyze:
 - `top_p`: Nucleus sampling threshold
 - `system_prompt`: System message prepended to conversation (used in `mode: conversation`)
 
-**Token Tracking:** Unlike CLI-based providers that estimate tokens from output length, `openai_compatible` reports actual token usage from the API response.
+**Token Tracking:** Unlike CLI-based providers that estimate tokens via the unified `Tokenizer` port, `openai_compatible` reports actual token usage from the API response.
 
 **Display Cadence:** Unlike streaming CLI providers (Claude, Codex, Gemini, OpenCode) that display output incrementally, `openai_compatible` displays all events in a single burst after the HTTP response completes. This means tool-use markers and text output appear together at the end of execution rather than interleaved during streaming. The rendered shape and tool markers are identical across all providers — only the timing differs.
 
@@ -547,7 +547,10 @@ Agent responses are automatically captured in the execution state:
 | `{{.states.step_name.Output}}` | string | Raw response text (or cleaned text if `output_format` is set) |
 | `{{.states.step_name.Response}}` | object | Parsed JSON response (automatic heuristic) |
 | `{{.states.step_name.JSON}}` | object | Parsed JSON from `output_format: json` (explicit, see [Output Formatting](#output-formatting)) |
-| `{{.states.step_name.TokensUsed}}` | int | Tokens consumed by this step |
+| `{{.states.step_name.TokensUsed}}` | int | Total tokens consumed by this step |
+| `{{.states.step_name.TokensInput}}` | int | Input tokens (prompt + context). `0` in single-turn mode. |
+| `{{.states.step_name.TokensOutput}}` | int | Output tokens (assistant response) |
+| `{{.states.step_name.TokensEstimated}}` | bool | `false` when tokens come from the provider, `true` when estimated |
 | `{{.states.step_name.ExitCode}}` | int | 0 for success, non-zero for failure |
 
 ### Accessing Raw Output
@@ -964,7 +967,7 @@ aggregate:
 
 ## Token Tracking
 
-Some providers report token usage (useful for cost tracking):
+All agent providers report token usage in the `TokensUsed` field:
 
 ```yaml
 analyze:
@@ -981,7 +984,31 @@ log_tokens:
   on_success: done
 ```
 
-**Note**: All agent providers (Claude, Gemini, Codex) report token usage in the `TokensUsed` field.
+**How it works:**
+
+All 6 providers extract **real token counts** from their CLI/API JSON output when available. `TokensEstimated` is `false` in this case. If the provider output does not contain token data, AWF falls back to an approximation (`len(output)/4`) and sets `TokensEstimated` to `true`.
+
+| Provider | Source of real tokens | Fields available |
+|----------|----------------------|-----------------|
+| Claude | `result` event `usage` field | input, output, cost |
+| Gemini | `result` event `stats` field | input, output, total |
+| Codex | `turn.completed` event `usage` field | input, output |
+| Copilot | `assistant.message` event | output only |
+| OpenCode | `step_finish` event `part.tokens` field | input, output, total, cost |
+| OpenAI-Compatible | API response `usage` field | input, output, total |
+
+Use `TokensInput` and `TokensOutput` for detailed tracking:
+
+```yaml
+log_details:
+  type: step
+  command: |
+    echo "Input: {{.states.analyze.TokensInput}}, Output: {{.states.analyze.TokensOutput}}"
+    echo "Estimated: {{.states.analyze.TokensEstimated}}"
+  on_success: done
+```
+
+In conversation mode (`continue_from`), `TokensInput` includes all prior turns. In single-turn mode, `TokensInput` is `0` and `TokensOutput` equals `TokensUsed`.
 
 ## Best Practices
 

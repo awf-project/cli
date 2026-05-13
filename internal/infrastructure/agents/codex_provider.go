@@ -18,9 +18,10 @@ import (
 // CodexProvider implements AgentProvider for Codex CLI.
 // Invokes: codex exec --json "prompt"
 type CodexProvider struct {
-	base     *baseCLIProvider
-	logger   ports.Logger
-	executor ports.CLIExecutor
+	base      *baseCLIProvider
+	logger    ports.Logger
+	executor  ports.CLIExecutor
+	tokenizer ports.Tokenizer
 }
 
 func NewCodexProvider() *CodexProvider {
@@ -45,13 +46,18 @@ func NewCodexProviderWithOptions(opts ...CodexProviderOption) *CodexProvider {
 }
 
 func (p *CodexProvider) newBase() *baseCLIProvider {
-	return newBaseCLIProvider("codex", "codex", p.executor, p.logger, cliProviderHooks{
+	b := newBaseCLIProvider("codex", "codex", p.executor, p.logger, cliProviderHooks{
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateCodexOptions,
 		parseDisplayEvents:    p.parseCodexDisplayEvents,
+		extractTokenUsage:     p.extractCodexTokenUsage,
 	})
+	if p.tokenizer != nil {
+		b.tokenizer = p.tokenizer
+	}
+	return b
 }
 
 func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
@@ -67,7 +73,10 @@ func (p *CodexProvider) Execute(ctx context.Context, prompt string, options map[
 	if userFormat != "json" && userFormat != "stream-json" {
 		if extracted := extractDisplayTextFromEvents(rawOutput, p.parseCodexDisplayEvents); extracted != "" {
 			result.Output = extracted
-			result.Tokens = estimateTokens(extracted)
+			if result.TokensEstimated {
+				tokens, _ := p.base.tokenizer.CountTokens(extracted) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+				result.Tokens = tokens
+			}
 		}
 	}
 
@@ -108,20 +117,11 @@ func (p *CodexProvider) buildConversationArgs(state *workflow.ConversationState,
 	} else {
 		// Codex CLI has no --system-prompt flag; inline the system prompt into
 		// the first-turn message only when a session is not yet established.
-		effectivePrompt := buildCodexFirstTurnPrompt(prompt, options)
+		effectivePrompt := buildFirstTurnPrompt(prompt, options)
 		args = []string{"exec", "--json", effectivePrompt}
 	}
 	args = appendCodexOptions(args, options)
 	return args, nil
-}
-
-// buildCodexFirstTurnPrompt prepends an optional system prompt for the first turn.
-// Codex CLI has no --system-prompt flag, so the system context must be embedded in the message.
-func buildCodexFirstTurnPrompt(userPrompt string, options map[string]any) string {
-	if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-		return sysPrompt + "\n\n" + userPrompt
-	}
-	return userPrompt
 }
 
 // appendCodexOptions appends Codex CLI flags from options; unknown keys are silently ignored.
@@ -155,6 +155,28 @@ func (p *CodexProvider) extractSessionID(output string) (string, error) {
 		return str, nil
 	}
 	return "", errors.New("thread_id is not a non-empty string")
+}
+
+func (p *CodexProvider) extractCodexTokenUsage(rawOutput string) *tokenUsage {
+	evt := findFirstNDJSONEvent(rawOutput, "turn.completed")
+	if evt == nil {
+		return nil
+	}
+	usageVal, ok := evt["usage"]
+	if !ok || usageVal == nil {
+		return nil
+	}
+	usage, ok := usageVal.(map[string]any)
+	if !ok {
+		return nil
+	}
+	input := intFromMap(usage, "input_tokens")
+	output := intFromMap(usage, "output_tokens")
+	return &tokenUsage{
+		InputTokens:  input,
+		OutputTokens: output,
+		TotalTokens:  input + output,
+	}
 }
 
 func validateCodexOptions(options map[string]any) error {
@@ -208,7 +230,7 @@ func (p *CodexProvider) parseCodexDisplayEvents(line []byte) []DisplayEvent {
 			return []DisplayEvent{{Type: evt.Type, Kind: EventText, Text: evt.Item.Text}}
 		case "function_call":
 			// Codex does not emit tool-call IDs; ID is always empty.
-			preview := parseToolCallArgPreview(evt.Item.Arguments)
+			preview := extractArgPreview(evt.Item.Arguments)
 			return []DisplayEvent{{Type: evt.Type, Kind: EventToolUse, Name: evt.Item.Name, Arg: preview, ID: ""}}
 		}
 	}

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **F094**: Unified token counting via `ports.Tokenizer` port — all CLI-based agent providers (Claude, Gemini, Codex, GitHub Copilot, OpenCode) now count tokens through an injected `Tokenizer` interface instead of inline `len(output)/4` helpers; default `ApproximationTokenizer` preserves identical behavior; eliminates mutation side-effect on shared conversation turn state during input token estimation; dead `estimateTokens`/`estimateInputTokens` helpers removed; enables future swap to real token counting (e.g., tiktoken, stream-extracted counts) by changing a single injection point
+
 ## [0.8.1] - 2026-05-11
+
+- **F093**: Add dangerously_skip_permissions alias for --allow-all for Github Copilot agent
 
 ## [0.8.0] - 2026-05-09
 

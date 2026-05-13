@@ -17,9 +17,10 @@ import (
 // CopilotProvider implements AgentProvider for GitHub Copilot CLI.
 // Invokes: copilot -p "prompt" --output-format=json --silent
 type CopilotProvider struct {
-	base     *baseCLIProvider
-	logger   ports.Logger
-	executor ports.CLIExecutor
+	base      *baseCLIProvider
+	logger    ports.Logger
+	executor  ports.CLIExecutor
+	tokenizer ports.Tokenizer
 }
 
 func NewCopilotProvider() *CopilotProvider {
@@ -44,14 +45,19 @@ func NewCopilotProviderWithOptions(opts ...CopilotProviderOption) *CopilotProvid
 }
 
 func (p *CopilotProvider) newBase() *baseCLIProvider {
-	return newBaseCLIProvider("github_copilot", "copilot", p.executor, p.logger, cliProviderHooks{
+	b := newBaseCLIProvider("github_copilot", "copilot", p.executor, p.logger, cliProviderHooks{
 		buildExecuteArgs:      p.buildCopilotExecuteArgs,
 		buildConversationArgs: p.buildCopilotConversationArgs,
 		extractSessionID:      p.extractCopilotSessionID,
 		extractTextContent:    p.extractCopilotTextContent,
 		validateOptions:       validateCopilotOptions,
 		parseDisplayEvents:    p.parseCopilotDisplayEvents,
+		extractTokenUsage:     p.extractCopilotTokenUsage,
 	})
+	if p.tokenizer != nil {
+		b.tokenizer = p.tokenizer
+	}
+	return b
 }
 
 func (p *CopilotProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
@@ -61,7 +67,10 @@ func (p *CopilotProvider) Execute(ctx context.Context, prompt string, options ma
 	}
 	if extracted := p.extractCopilotTextContent(rawOutput); extracted != "" {
 		result.Output = extracted
-		result.Tokens = estimateTokens(extracted)
+		if result.TokensEstimated {
+			tokens, _ := p.base.tokenizer.CountTokens(extracted) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+			result.Tokens = tokens
+		}
 	}
 	return result, nil
 }
@@ -97,20 +106,11 @@ func (p *CopilotProvider) buildCopilotConversationArgs(state *workflow.Conversat
 	if state.SessionID != "" {
 		args = []string{"--resume=" + state.SessionID, "-p", prompt, "--output-format=json", "--silent"}
 	} else {
-		effectivePrompt := buildCopilotFirstTurnPrompt(prompt, options)
+		effectivePrompt := buildFirstTurnPrompt(prompt, options)
 		args = []string{"-p", effectivePrompt, "--output-format=json", "--silent"}
 	}
 	args = appendCopilotOptions(args, options)
 	return args, nil
-}
-
-// buildCopilotFirstTurnPrompt prepends an optional system prompt.
-// Copilot CLI has no --system-prompt flag; the system context must be embedded in the message.
-func buildCopilotFirstTurnPrompt(userPrompt string, options map[string]any) string {
-	if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-		return sysPrompt + "\n\n" + userPrompt
-	}
-	return userPrompt
 }
 
 // appendCopilotOptions appends Copilot CLI flags from options; unknown keys are silently ignored.
@@ -201,6 +201,25 @@ func (p *CopilotProvider) extractCopilotSessionID(output string) (string, error)
 		return str, nil
 	}
 	return "", errors.New("sessionId is not a non-empty string")
+}
+
+func (p *CopilotProvider) extractCopilotTokenUsage(rawOutput string) *tokenUsage {
+	evt := findLastNDJSONEvent(rawOutput, "assistant.message")
+	if evt == nil {
+		return nil
+	}
+	data, ok := evt["data"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	outputTokens := intFromMap(data, "outputTokens")
+	if outputTokens == 0 {
+		return nil
+	}
+	return &tokenUsage{
+		OutputTokens: outputTokens,
+		TotalTokens:  outputTokens,
+	}
 }
 
 func (p *CopilotProvider) parseCopilotDisplayEvents(line []byte) []DisplayEvent {

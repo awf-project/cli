@@ -13,11 +13,23 @@ func WithClaudeExecutor(executor ports.CLIExecutor) ClaudeProviderOption {
 	}
 }
 
+func WithClaudeTokenizer(tok ports.Tokenizer) ClaudeProviderOption {
+	return func(p *ClaudeProvider) {
+		p.tokenizer = tok
+	}
+}
+
 type GeminiProviderOption func(*GeminiProvider)
 
 func WithGeminiExecutor(executor ports.CLIExecutor) GeminiProviderOption {
 	return func(p *GeminiProvider) {
 		p.executor = executor
+	}
+}
+
+func WithGeminiTokenizer(tok ports.Tokenizer) GeminiProviderOption {
+	return func(p *GeminiProvider) {
+		p.tokenizer = tok
 	}
 }
 
@@ -35,6 +47,12 @@ func WithCodexLogger(l ports.Logger) CodexProviderOption {
 	}
 }
 
+func WithCodexTokenizer(tok ports.Tokenizer) CodexProviderOption {
+	return func(p *CodexProvider) {
+		p.tokenizer = tok
+	}
+}
+
 type OpenCodeProviderOption func(*OpenCodeProvider)
 
 func WithOpenCodeExecutor(executor ports.CLIExecutor) OpenCodeProviderOption {
@@ -49,6 +67,12 @@ func WithOpenCodeLogger(l ports.Logger) OpenCodeProviderOption {
 	}
 }
 
+func WithOpenCodeTokenizer(tok ports.Tokenizer) OpenCodeProviderOption {
+	return func(p *OpenCodeProvider) {
+		p.tokenizer = tok
+	}
+}
+
 type CopilotProviderOption func(*CopilotProvider)
 
 func WithCopilotExecutor(executor ports.CLIExecutor) CopilotProviderOption {
@@ -60,6 +84,12 @@ func WithCopilotExecutor(executor ports.CLIExecutor) CopilotProviderOption {
 func WithCopilotLogger(l ports.Logger) CopilotProviderOption {
 	return func(p *CopilotProvider) {
 		p.logger = l
+	}
+}
+
+func WithCopilotTokenizer(tok ports.Tokenizer) CopilotProviderOption {
+	return func(p *CopilotProvider) {
+		p.tokenizer = tok
 	}
 }
 

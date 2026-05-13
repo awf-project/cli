@@ -17,13 +17,12 @@ import (
 // OpenCodeProvider implements AgentProvider for OpenCode CLI.
 // Invokes: opencode run "prompt"
 type OpenCodeProvider struct {
-	base     *baseCLIProvider
-	logger   ports.Logger
-	executor ports.CLIExecutor
+	base      *baseCLIProvider
+	logger    ports.Logger
+	executor  ports.CLIExecutor
+	tokenizer ports.Tokenizer
 }
 
-// NewOpenCodeProvider creates a new OpenCodeProvider.
-// If no executor is provided, ExecCLIExecutor is used by default.
 func NewOpenCodeProvider() *OpenCodeProvider {
 	p := &OpenCodeProvider{
 		logger:   logger.NopLogger{},
@@ -33,7 +32,6 @@ func NewOpenCodeProvider() *OpenCodeProvider {
 	return p
 }
 
-// NewOpenCodeProviderWithOptions creates a new OpenCodeProvider with functional options.
 func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodeProvider {
 	p := &OpenCodeProvider{
 		logger:   logger.NopLogger{},
@@ -47,13 +45,18 @@ func NewOpenCodeProviderWithOptions(opts ...OpenCodeProviderOption) *OpenCodePro
 }
 
 func (p *OpenCodeProvider) newBase() *baseCLIProvider {
-	return newBaseCLIProvider("opencode", "opencode", p.executor, p.logger, cliProviderHooks{
+	b := newBaseCLIProvider("opencode", "opencode", p.executor, p.logger, cliProviderHooks{
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateOpenCodeOptions,
 		parseDisplayEvents:    p.parseOpencodeDisplayEvents,
+		extractTokenUsage:     p.extractOpenCodeTokenUsage,
 	})
+	if p.tokenizer != nil {
+		b.tokenizer = p.tokenizer
+	}
+	return b
 }
 
 // Execute invokes the OpenCode CLI with the given prompt and options.
@@ -68,7 +71,10 @@ func (p *OpenCodeProvider) Execute(ctx context.Context, prompt string, options m
 	// leaving NDJSON in state.Output breaks any downstream JSON post-processing.
 	if extracted := extractDisplayTextFromEvents(rawOutput, p.parseOpencodeDisplayEvents); extracted != "" {
 		result.Output = extracted
-		result.Tokens = estimateTokens(extracted)
+		if result.TokensEstimated {
+			tokens, _ := p.base.tokenizer.CountTokens(extracted) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+			result.Tokens = tokens
+		}
 	}
 
 	userFormat, _ := getStringOption(options, "output_format")
@@ -119,9 +125,7 @@ func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]an
 func (p *OpenCodeProvider) buildConversationArgs(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error) {
 	effectivePrompt := prompt
 	if len(state.Turns) == 0 {
-		if sysPrompt, ok := getStringOption(options, "system_prompt"); ok && sysPrompt != "" {
-			effectivePrompt = sysPrompt + "\n\n" + prompt
-		}
+		effectivePrompt = buildFirstTurnPrompt(prompt, options)
 	}
 
 	args := []string{"run", effectivePrompt}
@@ -224,6 +228,28 @@ func (p *OpenCodeProvider) extractSessionID(output string) (string, error) {
 	}
 
 	return sessionID, nil
+}
+
+func (p *OpenCodeProvider) extractOpenCodeTokenUsage(rawOutput string) *tokenUsage {
+	evt := findFirstNDJSONEvent(rawOutput, "step_finish")
+	if evt == nil {
+		return nil
+	}
+	part, ok := evt["part"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	tokens, ok := part["tokens"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	cost, _ := part["cost"].(float64) //nolint:errcheck // type assertion; zero-value fallback is intentional
+	return &tokenUsage{
+		InputTokens:  intFromMap(tokens, "input"),
+		OutputTokens: intFromMap(tokens, "output"),
+		TotalTokens:  intFromMap(tokens, "total"),
+		CostUSD:      cost,
+	}
 }
 
 func (p *OpenCodeProvider) parseOpencodeDisplayEvents(line []byte) []DisplayEvent {

@@ -2332,6 +2332,9 @@ func (s *ExecutionService) executeAgentStep(
 			state.DisplayOutput = convResult.DisplayOutput
 			state.Response = convResult.Response
 			state.TokensUsed = convResult.TokensTotal
+			state.TokensInput = convResult.TokensInput
+			state.TokensOutput = convResult.TokensOutput
+			state.TokensEstimated = convResult.TokensEstimated
 			state.Conversation = convResult.State
 			result = &workflow.AgentResult{
 				Provider:    convResult.Provider,
@@ -2354,6 +2357,8 @@ func (s *ExecutionService) executeAgentStep(
 			state.Response = result.Response
 			// AC6: Token usage in states.step_name.tokens_used
 			state.TokensUsed = result.Tokens
+			state.TokensOutput = result.Tokens
+			state.TokensEstimated = result.TokensEstimated
 
 			// F065: Apply output format post-processing
 			if formatErr := s.applyOutputFormat(step, &state, execCtx); formatErr != nil {

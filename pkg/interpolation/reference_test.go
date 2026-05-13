@@ -819,7 +819,7 @@ func TestValidationMaps_Comprehensive(t *testing.T) {
 		},
 		"ValidStateProperties": {
 			validMap:   interpolation.ValidStateProperties,
-			required:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed", "JSON"},
+			required:   []string{"Output", "Stderr", "ExitCode", "Status", "Response", "TokensUsed", "TokensInput", "TokensOutput", "TokensEstimated", "JSON"},
 			invalid:    []string{"stdout", "result", ""},
 			deprecated: []string{"output", "stderr", "exit_code", "status", "response", "tokensused", "json"},
 		},

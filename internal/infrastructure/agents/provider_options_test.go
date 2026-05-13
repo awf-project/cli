@@ -5,13 +5,29 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Component: T004 - Provider Constructor Functional Options
-// Tests the refactored provider constructors with CLIExecutor dependency injection
+type stubTokenizer struct{}
+
+func (stubTokenizer) CountTokens(string) (int, error)        { return 0, nil }
+func (stubTokenizer) CountTurnsTokens([]string) (int, error) { return 0, nil }
+func (stubTokenizer) IsEstimate() bool                       { return true }
+func (stubTokenizer) ModelName() string                      { return "stub" }
+
+var _ ports.Tokenizer = stubTokenizer{}
+
+type countingTokenizer struct{ count int }
+
+func (t countingTokenizer) CountTokens(string) (int, error)        { return t.count, nil }
+func (t countingTokenizer) CountTurnsTokens([]string) (int, error) { return t.count, nil }
+func (t countingTokenizer) IsEstimate() bool                       { return false }
+func (t countingTokenizer) ModelName() string                      { return "counting" }
+
+var _ ports.Tokenizer = countingTokenizer{}
 
 func TestClaudeProvider_NewWithOptions_HappyPath(t *testing.T) {
 	tests := []struct {
@@ -453,6 +469,121 @@ func TestProviderOptions_ErrorHandling(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "copilot execution failed")
 	})
+}
+
+func TestWithCopilotTokenizer(t *testing.T) {
+	tok := stubTokenizer{}
+	provider := NewCopilotProviderWithOptions(WithCopilotTokenizer(tok))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestWithCodexTokenizer(t *testing.T) {
+	tok := stubTokenizer{}
+	provider := NewCodexProviderWithOptions(WithCodexTokenizer(tok))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestWithOpenCodeTokenizer(t *testing.T) {
+	tok := stubTokenizer{}
+	provider := NewOpenCodeProviderWithOptions(WithOpenCodeTokenizer(tok))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestWithClaudeTokenizer(t *testing.T) {
+	tok := stubTokenizer{}
+	provider := NewClaudeProviderWithOptions(WithClaudeTokenizer(tok))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestWithGeminiTokenizer(t *testing.T) {
+	tok := stubTokenizer{}
+	provider := NewGeminiProviderWithOptions(WithGeminiTokenizer(tok))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestClaudeProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
+	const expectedTokens = 99
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"result","result":"extracted text here"}`), []byte(""))
+
+	provider := NewClaudeProviderWithOptions(
+		WithClaudeExecutor(mockExec),
+		WithClaudeTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, expectedTokens, result.Tokens)
+}
+
+func TestGeminiProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
+	const expectedTokens = 99
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"message","role":"assistant","content":"gemini text here"}`), []byte(""))
+
+	provider := NewGeminiProviderWithOptions(
+		WithGeminiExecutor(mockExec),
+		WithGeminiTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, expectedTokens, result.Tokens)
+}
+
+func TestCopilotProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
+	const expectedTokens = 88
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"assistant.message","data":{"content":"copilot extracted text here","messageId":"m1"}}`+"\n"+`{"type":"result","sessionId":"s1","exitCode":0}`), []byte(""))
+
+	provider := NewCopilotProviderWithOptions(
+		WithCopilotExecutor(mockExec),
+		WithCopilotTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, expectedTokens, result.Tokens)
+}
+
+func TestCodexProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
+	const expectedTokens = 77
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"item.completed","item":{"item_type":"assistant_message","text":"codex extracted text here"}}`), []byte(""))
+
+	provider := NewCodexProviderWithOptions(
+		WithCodexExecutor(mockExec),
+		WithCodexTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, expectedTokens, result.Tokens)
+}
+
+func TestOpenCodeProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
+	const expectedTokens = 66
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"text","part":{"text":"opencode extracted text here"}}`), []byte(""))
+
+	provider := NewOpenCodeProviderWithOptions(
+		WithOpenCodeExecutor(mockExec),
+		WithOpenCodeTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, expectedTokens, result.Tokens)
 }
 
 func TestProviderOptions_Integration(t *testing.T) {
