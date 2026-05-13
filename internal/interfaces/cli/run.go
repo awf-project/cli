@@ -387,7 +387,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 			result.Status = string(execCtx.Status)
 			// Include step outputs in buffered mode
 			if cfg.OutputMode == OutputBuffered {
-				result.Steps = buildStepInfos(execCtx)
+				result.Steps = buildStepInfos(wf, execCtx)
 			}
 		}
 		if execErr != nil {
@@ -412,7 +412,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		if execCtx != nil {
 			result.WorkflowID = execCtx.WorkflowID
 			result.Status = string(execCtx.Status)
-			result.Steps = buildStepInfos(execCtx)
+			result.Steps = buildStepInfos(wf, execCtx)
 		}
 		if execErr != nil {
 			result.Status = "failed"
@@ -433,7 +433,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	if execErr != nil {
 		// Show buffered output on error
 		if cfg.OutputMode == OutputBuffered && execCtx != nil {
-			showStepOutputs(formatter, execCtx)
+			showStepOutputs(formatter, wf, execCtx)
 		}
 		if execCtx != nil {
 			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
@@ -443,7 +443,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 
 	// F037: Show success feedback for steps with no output (silent/streaming modes)
 	if cfg.OutputMode != OutputBuffered && execCtx != nil {
-		showEmptyStepFeedback(formatter, execCtx)
+		showEmptyStepFeedback(formatter, wf, execCtx)
 	}
 
 	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
@@ -451,11 +451,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 
 	// Show buffered output after successful completion
 	if cfg.OutputMode == OutputBuffered && execCtx != nil {
-		showStepOutputs(formatter, execCtx)
+		showStepOutputs(formatter, wf, execCtx)
 	}
 
 	if cfg.Verbose && execCtx != nil {
-		showExecutionDetails(formatter, execCtx)
+		showExecutionDetails(formatter, wf, execCtx)
 	}
 
 	return nil
@@ -713,15 +713,18 @@ func resolvePromptFromPaths(relativePath string, paths []repository.SourcedPath)
 		relativePath, strings.Join(searchedPaths, ", "))
 }
 
-func showExecutionDetails(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
+func showExecutionDetails(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
 	formatter.Printf("\n--- Execution Details ---\n")
 	formatter.Printf("Status: %s\n", execCtx.Status)
 	formatter.Printf("Steps executed:\n")
 
-	allStates := execCtx.GetAllStepStates()
-	for name, state := range allStates {
+	for _, step := range workflow.ExecutionOrder(wf) {
+		state, ok := execCtx.GetStepState(step.Name)
+		if !ok {
+			continue
+		}
 		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
-		formatter.StatusLine("  "+name, string(state.Status), fmt.Sprintf("(%s)", duration))
+		formatter.StatusLine("  "+step.Name, string(state.Status), fmt.Sprintf("(%s)", duration))
 	}
 }
 
@@ -732,43 +735,53 @@ func displayValueOf(state *workflow.StepState) string {
 	return state.Output
 }
 
-func showStepOutputs(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
-	allStates := execCtx.GetAllStepStates()
-	for name, state := range allStates {
+func showStepOutputs(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
+	for _, step := range workflow.ExecutionOrder(wf) {
+		state, ok := execCtx.GetStepState(step.Name)
+		if !ok {
+			continue
+		}
 		displayOutput := displayValueOf(&state)
 		if displayOutput != "" {
-			formatter.Printf("\n--- [%s] stdout ---\n", name)
+			formatter.Printf("\n--- [%s] stdout ---\n", step.Name)
 			formatter.Printf("%s", displayOutput)
 		}
 		if state.Stderr != "" {
-			formatter.Printf("\n--- [%s] stderr ---\n", name)
+			formatter.Printf("\n--- [%s] stderr ---\n", step.Name)
 			formatter.Printf("%s", state.Stderr)
 		}
-		// F037: Success feedback for steps with no output
 		if state.Output == "" && state.Stderr == "" &&
 			state.Status == workflow.StatusCompleted {
-			formatter.StepSuccess(name)
+			formatter.StepSuccess(step.Name)
 		}
 	}
 }
 
 // showEmptyStepFeedback displays success message for steps that had no output.
 // Used for silent/streaming modes where showStepOutputs is not called.
-func showEmptyStepFeedback(formatter *ui.Formatter, execCtx *workflow.ExecutionContext) {
-	for name, state := range execCtx.States {
+func showEmptyStepFeedback(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
+	for _, step := range workflow.ExecutionOrder(wf) {
+		state, ok := execCtx.GetStepState(step.Name)
+		if !ok {
+			continue
+		}
 		if state.Output == "" && state.Stderr == "" &&
 			state.Status == workflow.StatusCompleted {
-			formatter.StepSuccess(name)
+			formatter.StepSuccess(step.Name)
 		}
 	}
 }
 
-func buildStepInfos(execCtx *workflow.ExecutionContext) []ui.StepInfo {
-	// Preallocate for all steps
-	steps := make([]ui.StepInfo, 0, len(execCtx.States))
-	for name, state := range execCtx.States {
+func buildStepInfos(wf *workflow.Workflow, execCtx *workflow.ExecutionContext) []ui.StepInfo {
+	ordered := workflow.ExecutionOrder(wf)
+	steps := make([]ui.StepInfo, 0, len(ordered))
+	for _, step := range ordered {
+		state, ok := execCtx.GetStepState(step.Name)
+		if !ok {
+			continue
+		}
 		steps = append(steps, ui.StepInfo{
-			Name:        name,
+			Name:        step.Name,
 			Status:      string(state.Status),
 			Output:      state.Output,
 			Stderr:      state.Stderr,
