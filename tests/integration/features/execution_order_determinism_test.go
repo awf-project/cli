@@ -398,8 +398,8 @@ func TestNextDefaultStep_ResolvesDefaultTransition(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "handles nil step gracefully",
-			step: nil,
+			name:     "handles nil step gracefully",
+			step:     nil,
 			expected: "",
 		},
 	}

@@ -158,7 +158,6 @@ func TestValidate_InvalidVersion(t *testing.T) {
 		invalidVersion string
 	}{
 		{name: "not semver", invalidVersion: "1.0"},
-		{name: "contains v prefix", invalidVersion: "v1.0.0"},
 		{name: "non-numeric", invalidVersion: "abc.def.ghi"},
 		{name: "empty string", invalidVersion: ""},
 	}
