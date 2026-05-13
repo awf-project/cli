@@ -172,6 +172,23 @@ awf run <workflow> [flags]
 
 **Note:** For agent steps, the `output_format` field controls display filtering: `text` or omitted (default) shows human-readable output; `json` shows raw NDJSON. See [Output Formatting](agent-steps.md#streaming-output-display) for details.
 
+### Execution Summary
+
+After a workflow completes, AWF displays an execution summary with step statuses, durations, and output. Steps are always displayed in **workflow-defined order** — following the `Initial` state through default transitions and `on_success` references — regardless of actual execution timing or internal map ordering. This ensures consistent, readable output across runs:
+
+```
+--- Execution Details ---
+Status: completed
+Steps executed:
+  init        completed (12ms)
+  build       completed (1.234s)
+  test        completed (856ms)
+  deploy      completed (3.012s)
+  done        completed (0ms)
+```
+
+Steps that were not executed (e.g., because the workflow branched to a different path) are omitted from the summary. Step stdout/stderr blocks follow the same ordering.
+
 ### Examples
 
 ```bash

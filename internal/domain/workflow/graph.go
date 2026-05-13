@@ -1,6 +1,9 @@
 package workflow
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // VisitState represents the DFS visit state of a node during graph traversal.
 // Used for three-color marking in cycle detection:
@@ -232,14 +235,50 @@ func DetectCycles(steps map[string]*Step, initial string) []string {
 
 // formatCyclePath formats a cycle path as "A -> B -> C -> A".
 func formatCyclePath(path []string) string {
-	if len(path) == 0 {
+	return strings.Join(path, " -> ")
+}
+
+// NextDefaultStep returns the next step name following the default (unconditional) path.
+// Checks Transitions for an entry with empty When first; falls back to OnSuccess.
+func NextDefaultStep(step *Step) string {
+	if step == nil {
 		return ""
 	}
-	result := path[0]
-	for i := 1; i < len(path); i++ {
-		result += " -> " + path[i]
+	for _, tr := range step.Transitions {
+		if tr.When == "" {
+			return tr.Goto
+		}
 	}
-	return result
+	return step.OnSuccess
+}
+
+// ExecutionOrder returns steps in default-path order by walking the graph from Initial,
+// following default transitions (empty When) and falling back to OnSuccess.
+// Stops at terminal steps, visited steps (cycle prevention), or missing references.
+func ExecutionOrder(wf *Workflow) []Step {
+	if wf == nil || len(wf.Steps) == 0 || wf.Initial == "" {
+		return nil
+	}
+
+	visited := make(map[string]bool, len(wf.Steps))
+	steps := make([]Step, 0, len(wf.Steps))
+	current := wf.Initial
+
+	for current != "" && !visited[current] {
+		step, ok := wf.Steps[current]
+		if !ok {
+			break
+		}
+		visited[current] = true
+		steps = append(steps, *step)
+
+		if step.Type == StepTypeTerminal {
+			break
+		}
+		current = NextDefaultStep(step)
+	}
+
+	return steps
 }
 
 // GetTransitions returns all outbound transitions from a step.

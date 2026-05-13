@@ -257,6 +257,12 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	// Calculate duration
 	durationMs := time.Since(startTime).Milliseconds()
 
+	// Load workflow for ordered step display (F095); nil on error falls back to no steps shown
+	var wf *workflow.Workflow
+	if execCtx != nil && execCtx.WorkflowName != "" {
+		wf, _ = repo.Load(ctx, execCtx.WorkflowName) //nolint:errcheck // nil wf skips ordered display gracefully
+	}
+
 	// Output result (same pattern as runWorkflow)
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 		result := ui.RunResult{
@@ -267,7 +273,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 			result.WorkflowID = execCtx.WorkflowID
 			result.Status = string(execCtx.Status)
 			if cfg.OutputMode == OutputBuffered {
-				result.Steps = buildStepInfos(execCtx)
+				result.Steps = buildStepInfos(wf, execCtx)
 			}
 		}
 		if execErr != nil {
@@ -292,7 +298,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		if execCtx != nil {
 			result.WorkflowID = execCtx.WorkflowID
 			result.Status = string(execCtx.Status)
-			result.Steps = buildStepInfos(execCtx)
+			result.Steps = buildStepInfos(wf, execCtx)
 		}
 		if execErr != nil {
 			result.Status = "failed"
@@ -312,7 +318,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 
 	if execErr != nil {
 		if cfg.OutputMode == OutputBuffered && execCtx != nil {
-			showStepOutputs(formatter, execCtx)
+			showStepOutputs(formatter, wf, execCtx)
 		}
 		if execCtx != nil {
 			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
@@ -321,18 +327,18 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 
 	if cfg.OutputMode != OutputBuffered && execCtx != nil {
-		showEmptyStepFeedback(formatter, execCtx)
+		showEmptyStepFeedback(formatter, wf, execCtx)
 	}
 
 	formatter.Success(fmt.Sprintf("Workflow resumed and completed in %s", duration))
 	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
 
 	if cfg.OutputMode == OutputBuffered && execCtx != nil {
-		showStepOutputs(formatter, execCtx)
+		showStepOutputs(formatter, wf, execCtx)
 	}
 
 	if cfg.Verbose && execCtx != nil {
-		showExecutionDetails(formatter, execCtx)
+		showExecutionDetails(formatter, wf, execCtx)
 	}
 
 	return nil

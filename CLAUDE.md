@@ -243,7 +243,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- Always apply code deletions before writing tests that validate the deletion effect; tests may pass against overridden behavior instead of the intended code path
 - Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
 - Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
 - When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
@@ -284,10 +283,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Always stage all modified implementation files and run 'git status' before marking task complete; unstaged files indicate incomplete task closure.
 - Update plan task status immediately when implementation completes; regenerate validation report to catch status-code mismatches before submission.
 - Always replicate nolint:errcheck directives identically across all provider implementations; verify explanatory comments match before make lint
+- Always test unplanned file modifications discovered during implementation; update task plan if intentional, revert if accidental
 
 ## Test Conventions
 
-- Test context cancellation with context.WithCancel() and early ctx.Err() checks; verify operation fails with wrapped context.Canceled error within timeout
 - Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
 - Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
 - Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
@@ -307,7 +306,9 @@ func TestWorkflowValidation(t *testing.T) {
 - Test event metadata persistence across all input variations for provider translation; include cases with missing optional nested fields to prevent silent metadata loss
 - When testing YAML unmarshaling, assert on all nested struct fields; verify that arrays like Events.Subscribe and Events.Emit are populated, not defaulted to empty
 - New gRPC and concurrency-heavy infrastructure requires >85% test coverage; run 'make test-race' to verify no data races in stream managers and lock-protected sections.
+- Always write unit tests for CLI helper functions; parseInputFlags, resolvePromptInput, categorizeError must have >80% coverage before commit
 
 ## Review Standards
 
 - Never mark implementation complete without confirming `make build`, `make lint`, and `make test` pass with zero violations
+- Always verify all validation expert reports generate successfully; missing sections (Conformance, Coverage, Cleanup) indicate incomplete validation

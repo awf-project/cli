@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,11 +41,16 @@ func setupConfigTestDir(t *testing.T) string {
 func TestShowExecutionDetails(t *testing.T) {
 	tests := []struct {
 		name    string
+		wf      *workflow.Workflow
 		execCtx *workflow.ExecutionContext
 		wantOut []string // substrings expected in output
 	}{
 		{
 			name: "single completed step",
+			wf: &workflow.Workflow{
+				Initial: "step1",
+				Steps:   map[string]*workflow.Step{"step1": {Name: "step1", Type: workflow.StepTypeTerminal}},
+			},
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-123", "test-wf")
 				ctx.Status = workflow.StatusCompleted
@@ -60,6 +66,13 @@ func TestShowExecutionDetails(t *testing.T) {
 		},
 		{
 			name: "multiple steps with different statuses",
+			wf: &workflow.Workflow{
+				Initial: "fetch",
+				Steps: map[string]*workflow.Step{
+					"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+					"process": {Name: "process", Type: workflow.StepTypeTerminal},
+				},
+			},
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-456", "multi-wf")
 				ctx.Status = workflow.StatusFailed
@@ -79,6 +92,66 @@ func TestShowExecutionDetails(t *testing.T) {
 			}(),
 			wantOut: []string{"fetch", "process", "failed"},
 		},
+		{
+			name: "steps displayed in graph order not insertion order",
+			wf: &workflow.Workflow{
+				Initial: "fetch",
+				Steps: map[string]*workflow.Step{
+					"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+					"process": {Name: "process", Type: workflow.StepTypeCommand, OnSuccess: "store"},
+					"store":   {Name: "store", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-order", "order-wf")
+				ctx.Status = workflow.StatusCompleted
+				// Insert states in reverse order
+				ctx.States["store"] = workflow.StepState{
+					Name:        "store",
+					Status:      workflow.StatusCompleted,
+					StartedAt:   time.Now(),
+					CompletedAt: time.Now().Add(10 * time.Millisecond),
+				}
+				ctx.States["process"] = workflow.StepState{
+					Name:        "process",
+					Status:      workflow.StatusCompleted,
+					StartedAt:   time.Now(),
+					CompletedAt: time.Now().Add(20 * time.Millisecond),
+				}
+				ctx.States["fetch"] = workflow.StepState{
+					Name:        "fetch",
+					Status:      workflow.StatusCompleted,
+					StartedAt:   time.Now(),
+					CompletedAt: time.Now().Add(30 * time.Millisecond),
+				}
+				return ctx
+			}(),
+			wantOut: []string{"fetch", "process", "store"},
+		},
+		{
+			name: "skips steps not in execution context without panic",
+			wf: &workflow.Workflow{
+				Initial: "a",
+				Steps: map[string]*workflow.Step{
+					"a": {Name: "a", Type: workflow.StepTypeCommand, OnSuccess: "b"},
+					"b": {Name: "b", Type: workflow.StepTypeCommand, OnSuccess: "c"},
+					"c": {Name: "c", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-skip", "skip-wf")
+				ctx.Status = workflow.StatusCompleted
+				// Only "a" has state; "b" and "c" are absent
+				ctx.States["a"] = workflow.StepState{
+					Name:        "a",
+					Status:      workflow.StatusCompleted,
+					StartedAt:   time.Now(),
+					CompletedAt: time.Now().Add(5 * time.Millisecond),
+				}
+				return ctx
+			}(),
+			wantOut: []string{"a"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -86,7 +159,7 @@ func TestShowExecutionDetails(t *testing.T) {
 			buf := new(bytes.Buffer)
 			formatter := ui.NewFormatter(buf, ui.FormatOptions{NoColor: true})
 
-			showExecutionDetails(formatter, tt.execCtx)
+			showExecutionDetails(formatter, tt.wf, tt.execCtx)
 
 			output := buf.String()
 			for _, want := range tt.wantOut {
@@ -94,17 +167,94 @@ func TestShowExecutionDetails(t *testing.T) {
 			}
 		})
 	}
+
+	// Dedicated ordering sub-test for showExecutionDetails.
+	t.Run("fetch appears before process before store in output", func(t *testing.T) {
+		wf := &workflow.Workflow{
+			Initial: "fetch",
+			Steps: map[string]*workflow.Step{
+				"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+				"process": {Name: "process", Type: workflow.StepTypeCommand, OnSuccess: "store"},
+				"store":   {Name: "store", Type: workflow.StepTypeTerminal},
+			},
+		}
+		ctx := workflow.NewExecutionContext("order-details", "wf")
+		ctx.Status = workflow.StatusCompleted
+		// Reverse insertion order
+		ctx.States["store"] = workflow.StepState{
+			Name: "store", Status: workflow.StatusCompleted,
+			StartedAt: time.Now(), CompletedAt: time.Now().Add(10 * time.Millisecond),
+		}
+		ctx.States["process"] = workflow.StepState{
+			Name: "process", Status: workflow.StatusCompleted,
+			StartedAt: time.Now(), CompletedAt: time.Now().Add(20 * time.Millisecond),
+		}
+		ctx.States["fetch"] = workflow.StepState{
+			Name: "fetch", Status: workflow.StatusCompleted,
+			StartedAt: time.Now(), CompletedAt: time.Now().Add(30 * time.Millisecond),
+		}
+
+		buf := new(bytes.Buffer)
+		formatter := ui.NewFormatter(buf, ui.FormatOptions{NoColor: true})
+		showExecutionDetails(formatter, wf, ctx)
+		output := buf.String()
+
+		fetchIdx := strings.Index(output, "fetch")
+		processIdx := strings.Index(output, "process")
+		storeIdx := strings.Index(output, "store")
+
+		assert.Greater(t, fetchIdx, -1, "output should contain 'fetch'")
+		assert.Greater(t, processIdx, -1, "output should contain 'process'")
+		assert.Greater(t, storeIdx, -1, "output should contain 'store'")
+		assert.Less(t, fetchIdx, processIdx, "'fetch' should appear before 'process' in output")
+		assert.Less(t, processIdx, storeIdx, "'process' should appear before 'store' in output")
+	})
+
+	// Dedicated sub-test: steps absent from ExecutionContext must not appear.
+	t.Run("steps absent from execution context do not appear in output", func(t *testing.T) {
+		wf := &workflow.Workflow{
+			Initial: "a",
+			Steps: map[string]*workflow.Step{
+				"a": {Name: "a", Type: workflow.StepTypeCommand, OnSuccess: "b"},
+				"b": {Name: "b", Type: workflow.StepTypeCommand, OnSuccess: "c"},
+				"c": {Name: "c", Type: workflow.StepTypeTerminal},
+			},
+		}
+		ctx := workflow.NewExecutionContext("skip-details", "wf")
+		ctx.States["a"] = workflow.StepState{
+			Name: "a", Status: workflow.StatusCompleted,
+			StartedAt: time.Now(), CompletedAt: time.Now().Add(5 * time.Millisecond),
+		}
+
+		buf := new(bytes.Buffer)
+		formatter := ui.NewFormatter(buf, ui.FormatOptions{NoColor: true})
+		showExecutionDetails(formatter, wf, ctx)
+		output := buf.String()
+
+		assert.Contains(t, output, "a", "output should contain step 'a'")
+		assert.NotContains(t, output, " b ", "output should not reference step 'b'")
+		assert.NotContains(t, output, " c ", "output should not reference step 'c'")
+	})
+}
+
+func makeWorkflowWithStep(stepName string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Initial: stepName,
+		Steps:   map[string]*workflow.Step{stepName: {Name: stepName, Type: workflow.StepTypeTerminal}},
+	}
 }
 
 func TestShowStepOutputs(t *testing.T) {
 	tests := []struct {
 		name       string
+		wf         *workflow.Workflow
 		execCtx    *workflow.ExecutionContext
 		wantOut    []string
 		notWantOut []string
 	}{
 		{
 			name: "step with stdout only",
+			wf:   makeWorkflowWithStep("build"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-1", "wf")
 				ctx.States["build"] = workflow.StepState{
@@ -118,6 +268,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "step with stderr",
+			wf:   makeWorkflowWithStep("lint"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-2", "wf")
 				ctx.States["lint"] = workflow.StepState{
@@ -131,6 +282,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "step with no output shows success",
+			wf:   makeWorkflowWithStep("clean"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-3", "wf")
 				ctx.States["clean"] = workflow.StepState{
@@ -145,6 +297,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "prefers DisplayOutput over Output when non-empty",
+			wf:   makeWorkflowWithStep("agent-step"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-4", "wf")
 				ctx.States["agent-step"] = workflow.StepState{
@@ -160,6 +313,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "falls back to Output when DisplayOutput empty",
+			wf:   makeWorkflowWithStep("plain-step"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-5", "wf")
 				ctx.States["plain-step"] = workflow.StepState{
@@ -174,6 +328,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "success feedback when both DisplayOutput and Output empty",
+			wf:   makeWorkflowWithStep("silent-agent"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-6", "wf")
 				ctx.States["silent-agent"] = workflow.StepState{
@@ -189,6 +344,7 @@ func TestShowStepOutputs(t *testing.T) {
 		},
 		{
 			name: "uses Output for success feedback detection, not DisplayOutput",
+			wf:   makeWorkflowWithStep("output-step"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-7", "wf")
 				ctx.States["output-step"] = workflow.StepState{
@@ -202,6 +358,29 @@ func TestShowStepOutputs(t *testing.T) {
 			}(),
 			wantOut: []string{"output-step", "stdout", "some raw output"},
 		},
+		{
+			name: "skips steps not in execution context",
+			wf: &workflow.Workflow{
+				Initial: "a",
+				Steps: map[string]*workflow.Step{
+					"a": {Name: "a", Type: workflow.StepTypeCommand, OnSuccess: "b"},
+					"b": {Name: "b", Type: workflow.StepTypeCommand, OnSuccess: "c"},
+					"c": {Name: "c", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-8", "wf")
+				// Only "a" has state; "b" and "c" are absent
+				ctx.States["a"] = workflow.StepState{
+					Name:   "a",
+					Status: workflow.StatusCompleted,
+					Output: "hello",
+				}
+				return ctx
+			}(),
+			wantOut:    []string{"[a]", "stdout", "hello"},
+			notWantOut: []string{"[b]", "[c]"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -209,7 +388,7 @@ func TestShowStepOutputs(t *testing.T) {
 			buf := new(bytes.Buffer)
 			formatter := ui.NewFormatter(buf, ui.FormatOptions{NoColor: true})
 
-			showStepOutputs(formatter, tt.execCtx)
+			showStepOutputs(formatter, tt.wf, tt.execCtx)
 
 			output := buf.String()
 			for _, want := range tt.wantOut {
@@ -272,11 +451,13 @@ func TestDisplayValueOf(t *testing.T) {
 func TestShowEmptyStepFeedback(t *testing.T) {
 	tests := []struct {
 		name     string
+		wf       *workflow.Workflow
 		execCtx  *workflow.ExecutionContext
 		wantStep string
 	}{
 		{
 			name: "completed step with no output",
+			wf:   makeWorkflowWithStep("silent-step"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-1", "wf")
 				ctx.States["silent-step"] = workflow.StepState{
@@ -291,6 +472,7 @@ func TestShowEmptyStepFeedback(t *testing.T) {
 		},
 		{
 			name: "step with output should not show feedback",
+			wf:   makeWorkflowWithStep("verbose-step"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-2", "wf")
 				ctx.States["verbose-step"] = workflow.StepState{
@@ -302,6 +484,29 @@ func TestShowEmptyStepFeedback(t *testing.T) {
 			}(),
 			wantStep: "", // should not contain step name in success message
 		},
+		{
+			name: "skips steps not in execution context",
+			wf: &workflow.Workflow{
+				Initial: "a",
+				Steps: map[string]*workflow.Step{
+					"a": {Name: "a", Type: workflow.StepTypeCommand, OnSuccess: "b"},
+					"b": {Name: "b", Type: workflow.StepTypeCommand, OnSuccess: "c"},
+					"c": {Name: "c", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-3", "wf")
+				// Only "a" has state (completed, no output, no stderr)
+				ctx.States["a"] = workflow.StepState{
+					Name:   "a",
+					Status: workflow.StatusCompleted,
+					Output: "",
+					Stderr: "",
+				}
+				return ctx
+			}(),
+			wantStep: "a",
+		},
 	}
 
 	for _, tt := range tests {
@@ -309,11 +514,16 @@ func TestShowEmptyStepFeedback(t *testing.T) {
 			buf := new(bytes.Buffer)
 			formatter := ui.NewFormatter(buf, ui.FormatOptions{NoColor: true})
 
-			showEmptyStepFeedback(formatter, tt.execCtx)
+			showEmptyStepFeedback(formatter, tt.wf, tt.execCtx)
 
 			output := buf.String()
 			if tt.wantStep != "" {
 				assert.Contains(t, output, tt.wantStep)
+			}
+			// For the skip-missing case, verify absent steps do not appear
+			if tt.name == "skips steps not in execution context" {
+				assert.NotContains(t, output, " b ", "output should not reference absent step 'b'")
+				assert.NotContains(t, output, " c ", "output should not reference absent step 'c'")
 			}
 		})
 	}
@@ -322,12 +532,14 @@ func TestShowEmptyStepFeedback(t *testing.T) {
 func TestBuildStepInfos(t *testing.T) {
 	tests := []struct {
 		name      string
+		wf        *workflow.Workflow
 		execCtx   *workflow.ExecutionContext
 		wantCount int
 		wantNames []string
 	}{
 		{
 			name: "single step",
+			wf:   makeWorkflowWithStep("step1"),
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-1", "wf")
 				ctx.States["step1"] = workflow.StepState{
@@ -345,6 +557,14 @@ func TestBuildStepInfos(t *testing.T) {
 		},
 		{
 			name: "multiple steps",
+			wf: &workflow.Workflow{
+				Initial: "fetch",
+				Steps: map[string]*workflow.Step{
+					"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+					"process": {Name: "process", Type: workflow.StepTypeCommand, OnSuccess: "store"},
+					"store":   {Name: "store", Type: workflow.StepTypeTerminal},
+				},
+			},
 			execCtx: func() *workflow.ExecutionContext {
 				ctx := workflow.NewExecutionContext("test-2", "wf")
 				ctx.States["fetch"] = workflow.StepState{Name: "fetch", Status: workflow.StatusCompleted}
@@ -357,15 +577,62 @@ func TestBuildStepInfos(t *testing.T) {
 		},
 		{
 			name:      "empty states",
+			wf:        nil,
 			execCtx:   workflow.NewExecutionContext("test-3", "wf"),
 			wantCount: 0,
 			wantNames: []string{},
+		},
+		{
+			name: "ordering is deterministic regardless of map insertion order",
+			wf: &workflow.Workflow{
+				Initial: "fetch",
+				Steps: map[string]*workflow.Step{
+					"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+					"process": {Name: "process", Type: workflow.StepTypeCommand, OnSuccess: "store"},
+					"store":   {Name: "store", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-4", "wf")
+				// Insert states in REVERSE order to verify graph traversal order wins
+				ctx.States["store"] = workflow.StepState{Name: "store", Status: workflow.StatusCompleted}
+				ctx.States["process"] = workflow.StepState{Name: "process", Status: workflow.StatusCompleted}
+				ctx.States["fetch"] = workflow.StepState{Name: "fetch", Status: workflow.StatusCompleted}
+				return ctx
+			}(),
+			wantCount: 3,
+			wantNames: []string{"fetch", "process", "store"},
+		},
+		{
+			name: "skips steps not in execution context",
+			wf: &workflow.Workflow{
+				Initial: "a",
+				Steps: map[string]*workflow.Step{
+					"a": {Name: "a", Type: workflow.StepTypeCommand, OnSuccess: "b"},
+					"b": {Name: "b", Type: workflow.StepTypeCommand, OnSuccess: "c"},
+					"c": {Name: "c", Type: workflow.StepTypeTerminal},
+				},
+			},
+			execCtx: func() *workflow.ExecutionContext {
+				ctx := workflow.NewExecutionContext("test-5", "wf")
+				// Only "a" has state; "b" and "c" are absent
+				ctx.States["a"] = workflow.StepState{
+					Name:        "a",
+					Status:      workflow.StatusCompleted,
+					Output:      "output-a",
+					StartedAt:   time.Now(),
+					CompletedAt: time.Now().Add(10 * time.Millisecond),
+				}
+				return ctx
+			}(),
+			wantCount: 1,
+			wantNames: []string{"a"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			steps := buildStepInfos(tt.execCtx)
+			steps := buildStepInfos(tt.wf, tt.execCtx)
 
 			assert.Len(t, steps, tt.wantCount)
 
@@ -379,6 +646,32 @@ func TestBuildStepInfos(t *testing.T) {
 			}
 		})
 	}
+
+	// Dedicated ordering sub-test: verify graph-traversal order, not map insertion order.
+	t.Run("ordering assertion is exact not just presence", func(t *testing.T) {
+		wf := &workflow.Workflow{
+			Initial: "fetch",
+			Steps: map[string]*workflow.Step{
+				"fetch":   {Name: "fetch", Type: workflow.StepTypeCommand, OnSuccess: "process"},
+				"process": {Name: "process", Type: workflow.StepTypeCommand, OnSuccess: "store"},
+				"store":   {Name: "store", Type: workflow.StepTypeTerminal},
+			},
+		}
+		ctx := workflow.NewExecutionContext("order-test", "wf")
+		// Reverse insertion order
+		ctx.States["store"] = workflow.StepState{Name: "store", Status: workflow.StatusCompleted}
+		ctx.States["process"] = workflow.StepState{Name: "process", Status: workflow.StatusCompleted}
+		ctx.States["fetch"] = workflow.StepState{Name: "fetch", Status: workflow.StatusCompleted}
+
+		steps := buildStepInfos(wf, ctx)
+
+		names := make([]string, len(steps))
+		for i, s := range steps {
+			names[i] = s.Name
+		}
+		assert.Equal(t, []string{"fetch", "process", "store"}, names,
+			"steps must follow graph traversal order regardless of States map insertion order")
+	})
 }
 
 func TestCategorizeError(t *testing.T) {
@@ -421,12 +714,9 @@ func TestCategorizeError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := &exitError{err: assert.AnError}
-			// Create error with specific message for testing
 			testErr := &testError{msg: tt.errMsg}
 			got := categorizeError(testErr)
 			assert.Equal(t, tt.wantExit, got)
-			_ = err // silence unused
 		})
 	}
 }
@@ -1325,13 +1615,9 @@ func TestMergeInputs_Immutability(t *testing.T) {
 
 	// Take copies before merge
 	originalConfig := make(map[string]any)
-	for k, v := range configInputs {
-		originalConfig[k] = v
-	}
+	maps.Copy(originalConfig, configInputs)
 	originalCLI := make(map[string]any)
-	for k, v := range cliInputs {
-		originalCLI[k] = v
-	}
+	maps.Copy(originalCLI, cliInputs)
 
 	// Perform merge
 	result := application.MergeInputs(configInputs, cliInputs)

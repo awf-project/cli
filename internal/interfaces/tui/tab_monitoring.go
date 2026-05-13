@@ -322,7 +322,7 @@ func (t *MonitoringTab) SetExecCtx(ctx *workflow.ExecutionContext, wf *workflow.
 	t.execCtx = ctx
 	t.wf = wf
 	if wf != nil {
-		t.steps = orderedSteps(wf)
+		t.steps = workflow.ExecutionOrder(wf)
 	}
 }
 
@@ -822,43 +822,4 @@ func treesFromFlat(flat []*TreeNode) []*TreeNode {
 		}
 	}
 	return roots
-}
-
-// orderedSteps returns steps in execution order by walking the workflow graph
-// from Initial, following OnSuccess / default transitions.
-func orderedSteps(wf *workflow.Workflow) []workflow.Step {
-	if wf == nil || len(wf.Steps) == 0 || wf.Initial == "" {
-		return nil
-	}
-
-	visited := make(map[string]bool, len(wf.Steps))
-	steps := make([]workflow.Step, 0, len(wf.Steps))
-	current := wf.Initial
-
-	for current != "" && !visited[current] {
-		step, ok := wf.Steps[current]
-		if !ok {
-			break
-		}
-		visited[current] = true
-		steps = append(steps, *step)
-
-		if step.Type == workflow.StepTypeTerminal {
-			break
-		}
-		current = nextStepName(step)
-	}
-
-	return steps
-}
-
-// nextStepName resolves the default next step for graph traversal.
-// Checks Transitions for a default fallback first, then falls back to OnSuccess.
-func nextStepName(step *workflow.Step) string {
-	for _, tr := range step.Transitions {
-		if tr.When == "" {
-			return tr.Goto
-		}
-	}
-	return step.OnSuccess
 }

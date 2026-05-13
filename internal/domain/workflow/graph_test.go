@@ -1448,3 +1448,463 @@ func TestBuildCyclePath_ErrorHandling(t *testing.T) {
 		assert.Equal(t, []string{"only", "only"}, result)
 	})
 }
+
+// NextDefaultStep Tests
+
+func TestNextDefaultStep_NilStep(t *testing.T) {
+	result := workflow.NextDefaultStep(nil)
+	assert.Equal(t, "", result, "nil step should return empty string")
+}
+
+func TestNextDefaultStep_DefaultTransition(t *testing.T) {
+	step := &workflow.Step{
+		Name: "test",
+		Type: workflow.StepTypeCommand,
+		Transitions: workflow.Transitions{
+			{When: "", Goto: "next_step"},
+			{When: "condition", Goto: "alternate"},
+		},
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "next_step", result, "should return default transition Goto")
+}
+
+func TestNextDefaultStep_OnlyOnSuccess(t *testing.T) {
+	step := &workflow.Step{
+		Name:      "test",
+		Type:      workflow.StepTypeCommand,
+		OnSuccess: "success_step",
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "success_step", result, "should return OnSuccess when no default transition")
+}
+
+func TestNextDefaultStep_DefaultTransitionTakePrecedence(t *testing.T) {
+	step := &workflow.Step{
+		Name:      "test",
+		Type:      workflow.StepTypeCommand,
+		OnSuccess: "success_step",
+		Transitions: workflow.Transitions{
+			{When: "", Goto: "default_step"},
+		},
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "default_step", result, "default transition should take precedence over OnSuccess")
+}
+
+func TestNextDefaultStep_NoTransitionsNoOnSuccess(t *testing.T) {
+	step := &workflow.Step{
+		Name: "test",
+		Type: workflow.StepTypeCommand,
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "", result, "should return empty string when no transitions or OnSuccess")
+}
+
+func TestNextDefaultStep_OnlyConditionalTransitions(t *testing.T) {
+	step := &workflow.Step{
+		Name: "test",
+		Type: workflow.StepTypeCommand,
+		Transitions: workflow.Transitions{
+			{When: "condition1", Goto: "step1"},
+			{When: "condition2", Goto: "step2"},
+		},
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "", result, "should return empty string when only conditional transitions")
+}
+
+func TestNextDefaultStep_TerminalStepNoTransitions(t *testing.T) {
+	step := &workflow.Step{
+		Name:   "done",
+		Type:   workflow.StepTypeTerminal,
+		Status: workflow.TerminalSuccess,
+	}
+
+	result := workflow.NextDefaultStep(step)
+	assert.Equal(t, "", result, "terminal step should return empty string")
+}
+
+// ExecutionOrder Tests
+
+func TestExecutionOrder_NilWorkflow(t *testing.T) {
+	result := workflow.ExecutionOrder(nil)
+	assert.Nil(t, result, "nil workflow should return nil")
+}
+
+func TestExecutionOrder_EmptyStepsMap(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps:   map[string]*workflow.Step{},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+	assert.Nil(t, result, "empty Steps map should return nil")
+}
+
+func TestExecutionOrder_EmptyInitial(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "",
+		Steps: map[string]*workflow.Step{
+			"step1": {Name: "step1", Type: workflow.StepTypeCommand},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+	assert.Nil(t, result, "empty Initial should return nil")
+}
+
+func TestExecutionOrder_MissingInitialStep(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "nonexistent",
+		Steps: map[string]*workflow.Step{
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+	assert.Equal(t, []workflow.Step{}, result, "missing initial step should return empty slice")
+}
+
+func TestExecutionOrder_LinearChain(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "init",
+		Steps: map[string]*workflow.Step{
+			"init": {
+				Name:      "init",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "build",
+			},
+			"build": {
+				Name:      "build",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "test",
+			},
+			"test": {
+				Name:      "test",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 4, "linear chain should have 4 steps")
+	assert.Equal(t, "init", result[0].Name)
+	assert.Equal(t, "build", result[1].Name)
+	assert.Equal(t, "test", result[2].Name)
+	assert.Equal(t, "done", result[3].Name)
+}
+
+func TestExecutionOrder_FollowsDefaultTransition(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name: "start",
+				Type: workflow.StepTypeCommand,
+				Transitions: workflow.Transitions{
+					{When: "", Goto: "default_path"},
+					{When: "condition", Goto: "alternate_path"},
+				},
+			},
+			"default_path": {
+				Name:      "default_path",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"alternate_path": {
+				Name:      "alternate_path",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 3)
+	assert.Equal(t, "start", result[0].Name)
+	assert.Equal(t, "default_path", result[1].Name)
+	assert.Equal(t, "done", result[2].Name)
+}
+
+func TestExecutionOrder_StopsAtTerminalStep(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 2)
+	assert.Equal(t, "start", result[0].Name)
+	assert.Equal(t, "done", result[1].Name)
+}
+
+func TestExecutionOrder_StopsAtRevisitedStep(t *testing.T) {
+	// Cycle: a -> b -> a (should stop when revisiting a)
+	wf := &workflow.Workflow{
+		Initial: "a",
+		Steps: map[string]*workflow.Step{
+			"a": {
+				Name:      "a",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "b",
+			},
+			"b": {
+				Name:      "b",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "a",
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 2, "should stop at revisited step 'a'")
+	assert.Equal(t, "a", result[0].Name)
+	assert.Equal(t, "b", result[1].Name)
+}
+
+func TestExecutionOrder_StopsAtMissingTransitionTarget(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "nonexistent",
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	assert.Len(t, result, 1, "should stop when next step is missing")
+	assert.Equal(t, "start", result[0].Name)
+}
+
+func TestExecutionOrder_IncludesParallelStepAsSingleEntry(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "parallel_step",
+			},
+			"parallel_step": {
+				Name:      "parallel_step",
+				Type:      workflow.StepTypeParallel,
+				Branches:  []string{"branch1", "branch2"},
+				OnSuccess: "done",
+			},
+			"branch1": {
+				Name:      "branch1",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"branch2": {
+				Name:      "branch2",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 3)
+	assert.Equal(t, "start", result[0].Name)
+	assert.Equal(t, "parallel_step", result[1].Name, "parallel step should be included as single entry")
+	assert.Equal(t, "done", result[2].Name)
+}
+
+func TestExecutionOrder_StopsAtOnlyConditionalTransitions(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "middle",
+			},
+			"middle": {
+				Name: "middle",
+				Type: workflow.StepTypeCommand,
+				Transitions: workflow.Transitions{
+					{When: "condition1", Goto: "path1"},
+					{When: "condition2", Goto: "path2"},
+				},
+			},
+			"path1": {
+				Name:      "path1",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"path2": {
+				Name:      "path2",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 2, "should stop at step with only conditional transitions")
+	assert.Equal(t, "start", result[0].Name)
+	assert.Equal(t, "middle", result[1].Name)
+}
+
+func TestExecutionOrder_ValueCopies(t *testing.T) {
+	originalStep := &workflow.Step{
+		Name:      "start",
+		Type:      workflow.StepTypeCommand,
+		OnSuccess: "done",
+	}
+
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": originalStep,
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 2)
+
+	// Verify returned steps are value copies, not pointers to originals
+	assert.Equal(t, "start", result[0].Name)
+	assert.NotSame(t, originalStep, &result[0], "should return value copy, not pointer to original")
+}
+
+func TestExecutionOrder_ComplexChainWithMultipleTerminals(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "init",
+		Steps: map[string]*workflow.Step{
+			"init": {
+				Name:      "init",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "process",
+			},
+			"process": {
+				Name:      "process",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "success_terminal",
+				OnFailure: "error_terminal",
+			},
+			"success_terminal": {
+				Name:   "success_terminal",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+			"error_terminal": {
+				Name:   "error_terminal",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalFailure,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	// Should follow OnSuccess path, not OnFailure
+	require.Len(t, result, 3)
+	assert.Equal(t, "init", result[0].Name)
+	assert.Equal(t, "process", result[1].Name)
+	assert.Equal(t, "success_terminal", result[2].Name)
+}
+
+func TestExecutionOrder_BothDefaultTransitionAndOnSuccess(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "start",
+		Steps: map[string]*workflow.Step{
+			"start": {
+				Name:      "start",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "onsuccess_step",
+				Transitions: workflow.Transitions{
+					{When: "", Goto: "default_step"},
+				},
+			},
+			"default_step": {
+				Name:      "default_step",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"onsuccess_step": {
+				Name:      "onsuccess_step",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "done",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	// Should follow default transition, not OnSuccess
+	require.Len(t, result, 3)
+	assert.Equal(t, "start", result[0].Name)
+	assert.Equal(t, "default_step", result[1].Name, "should follow default transition, not OnSuccess")
+	assert.Equal(t, "done", result[2].Name)
+}
