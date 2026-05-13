@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCopilotProvider_parseCopilotDisplayEvents_MessageDelta(t *testing.T) {
+func TestCopilotProvider_parseCopilotDisplayEvents_AssistantMessage(t *testing.T) {
 	provider := NewCopilotProvider()
 
 	tests := []struct {
@@ -19,36 +19,41 @@ func TestCopilotProvider_parseCopilotDisplayEvents_MessageDelta(t *testing.T) {
 		wantText string
 	}{
 		{
-			name:     "message delta with text",
-			line:     []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-1","deltaContent":"hello world"}}`),
+			name:     "complete message with text content",
+			line:     []byte(`{"type":"assistant.message","data":{"content":"stored","messageId":"msg-1","outputTokens":4}}`),
 			wantLen:  1,
 			wantKind: EventText,
-			wantText: "hello world",
+			wantText: "stored",
 		},
 		{
-			name:     "message delta with multiline text",
-			line:     []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-2","deltaContent":"line1\nline2"}}`),
+			name:     "complete message with multiline content",
+			line:     []byte(`{"type":"assistant.message","data":{"content":"line1\nline2","messageId":"msg-2"}}`),
 			wantLen:  1,
 			wantKind: EventText,
 			wantText: "line1\nline2",
 		},
 		{
-			name:     "message delta with special characters",
-			line:     []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-3","deltaContent":"Response {braces} 你好"}}`),
+			name:     "complete message with special characters",
+			line:     []byte(`{"type":"assistant.message","data":{"content":"Response {braces} 你好","messageId":"msg-3"}}`),
 			wantLen:  1,
 			wantKind: EventText,
 			wantText: "Response {braces} 你好",
 		},
 		{
-			name:     "message delta with escaped quotes",
-			line:     []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-4","deltaContent":"She said \"hello\""}}`),
+			name:     "complete message with escaped quotes",
+			line:     []byte(`{"type":"assistant.message","data":{"content":"She said \"hello\"","messageId":"msg-4"}}`),
 			wantLen:  1,
 			wantKind: EventText,
 			wantText: `She said "hello"`,
 		},
 		{
-			name:    "message delta with empty deltaContent is skipped",
-			line:    []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-5","deltaContent":""}}`),
+			name:    "complete message with empty content is skipped",
+			line:    []byte(`{"type":"assistant.message","data":{"content":"","messageId":"msg-5"}}`),
+			wantLen: 0,
+		},
+		{
+			name:    "complete message without content field is skipped",
+			line:    []byte(`{"type":"assistant.message","data":{"messageId":"msg-6"}}`),
 			wantLen: 0,
 		},
 	}
@@ -63,6 +68,7 @@ func TestCopilotProvider_parseCopilotDisplayEvents_MessageDelta(t *testing.T) {
 			require.Len(t, got, tt.wantLen)
 			assert.Equal(t, tt.wantKind, got[0].Kind)
 			assert.Equal(t, tt.wantText, got[0].Text)
+			assert.False(t, got[0].Delta, "assistant.message should not be marked as delta")
 		})
 	}
 }
@@ -138,8 +144,8 @@ func TestCopilotProvider_parseCopilotDisplayEvents_IgnoredTypes(t *testing.T) {
 			line: []byte(`{"type":"assistant.turn_end","data":{"turnId":"0"}}`),
 		},
 		{
-			name: "assistant.message (complete) is not a display event",
-			line: []byte(`{"type":"assistant.message","data":{"content":"hello","messageId":"msg-1"}}`),
+			name: "assistant.message_delta is not a display event (deltas duplicate assistant.message content)",
+			line: []byte(`{"type":"assistant.message_delta","data":{"messageId":"msg-1","deltaContent":"hello"}}`),
 		},
 		{
 			name: "tool.execution_complete is not a display event",
@@ -172,7 +178,7 @@ func TestCopilotProvider_parseCopilotDisplayEvents_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "incomplete JSON object",
-			line: []byte(`{"type":"assistant.message_delta"`),
+			line: []byte(`{"type":"assistant.message"`),
 		},
 		{
 			name: "not JSON at all",
@@ -180,7 +186,7 @@ func TestCopilotProvider_parseCopilotDisplayEvents_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "JSON with null type",
-			line: []byte(`{"type":null,"data":{"deltaContent":"hello"}}`),
+			line: []byte(`{"type":null,"data":{"content":"hello"}}`),
 		},
 	}
 
@@ -201,8 +207,8 @@ func TestCopilotProvider_parseCopilotDisplayEvents_EventKindMetadata(t *testing.
 		wantKind EventKind
 	}{
 		{
-			name:     "message delta has EventText kind",
-			line:     []byte(`{"type":"assistant.message_delta","data":{"deltaContent":"test"}}`),
+			name:     "complete message has EventText kind",
+			line:     []byte(`{"type":"assistant.message","data":{"content":"test"}}`),
 			wantKind: EventText,
 		},
 		{
@@ -226,7 +232,7 @@ func TestCopilotProvider_parseCopilotDisplayEvents_LargeInput(t *testing.T) {
 	provider := NewCopilotProvider()
 
 	largeContent := strings.Repeat("x", 1024*1024)
-	line := []byte(`{"type":"assistant.message_delta","data":{"deltaContent":"` + largeContent + `"}}`)
+	line := []byte(`{"type":"assistant.message","data":{"content":"` + largeContent + `"}}`)
 
 	got := provider.parseCopilotDisplayEvents(line)
 
@@ -237,7 +243,7 @@ func TestCopilotProvider_parseCopilotDisplayEvents_LargeInput(t *testing.T) {
 
 func BenchmarkParseCopilotDisplayEvents(b *testing.B) {
 	provider := NewCopilotProvider()
-	line := []byte(`{"type":"assistant.message_delta","data":{"deltaContent":"Hello from Copilot!"}}`)
+	line := []byte(`{"type":"assistant.message","data":{"content":"Hello from Copilot!"}}`)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -250,7 +256,7 @@ func BenchmarkParseCopilotDisplayEvents(b *testing.B) {
 func BenchmarkParseCopilotDisplayEvents_LargePayload(b *testing.B) {
 	provider := NewCopilotProvider()
 	largeContent := strings.Repeat("x", 10000)
-	line := []byte(`{"type":"assistant.message_delta","data":{"deltaContent":"` + largeContent + `"}}`)
+	line := []byte(`{"type":"assistant.message","data":{"content":"` + largeContent + `"}}`)
 
 	b.ReportAllocs()
 	b.ResetTimer()
