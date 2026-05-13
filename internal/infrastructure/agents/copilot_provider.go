@@ -231,9 +231,9 @@ func (p *CopilotProvider) parseCopilotDisplayEvents(line []byte) []DisplayEvent 
 		return nil
 	}
 	switch evt.Type {
-	case "assistant.message_delta":
-		if delta, ok := evt.Data["deltaContent"].(string); ok && delta != "" {
-			return []DisplayEvent{{Type: evt.Type, Kind: EventText, Text: delta, Delta: true}}
+	case "assistant.message":
+		if content, ok := evt.Data["content"].(string); ok && content != "" {
+			return []DisplayEvent{{Type: evt.Type, Kind: EventText, Text: content}}
 		}
 	case "tool.execution_start":
 		name, ok := evt.Data["toolName"].(string)
