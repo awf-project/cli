@@ -1908,3 +1908,205 @@ func TestExecutionOrder_BothDefaultTransitionAndOnSuccess(t *testing.T) {
 	assert.Equal(t, "default_step", result[1].Name, "should follow default transition, not OnSuccess")
 	assert.Equal(t, "done", result[2].Name)
 }
+
+func TestGetTransitions_ForEachStep(t *testing.T) {
+	step := &workflow.Step{
+		Name:      "loop",
+		Type:      workflow.StepTypeForEach,
+		OnSuccess: "fallback",
+		OnFailure: "error",
+		Loop: &workflow.LoopConfig{
+			Type:       workflow.LoopTypeForEach,
+			Items:      "{{.states.prev.Output}}",
+			Body:       []string{"body1", "body2"},
+			OnComplete: "after_loop",
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Contains(t, transitions, "fallback")
+	assert.Contains(t, transitions, "error")
+	assert.Contains(t, transitions, "body1")
+	assert.Contains(t, transitions, "body2")
+	assert.Contains(t, transitions, "after_loop")
+}
+
+func TestGetTransitions_WhileStep(t *testing.T) {
+	step := &workflow.Step{
+		Name: "loop",
+		Type: workflow.StepTypeWhile,
+		Loop: &workflow.LoopConfig{
+			Type:       workflow.LoopTypeWhile,
+			Condition:  "true",
+			Body:       []string{"check"},
+			OnComplete: "done",
+		},
+	}
+
+	transitions := workflow.GetTransitions(step)
+
+	assert.Contains(t, transitions, "check")
+	assert.Contains(t, transitions, "done")
+}
+
+func TestNextDefaultStep_ForEachLoopOnComplete(t *testing.T) {
+	step := &workflow.Step{
+		Name: "loop",
+		Type: workflow.StepTypeForEach,
+		Loop: &workflow.LoopConfig{
+			Type:       workflow.LoopTypeForEach,
+			Items:      "{{.states.prev.Output}}",
+			Body:       []string{"body1"},
+			OnComplete: "after_loop",
+		},
+	}
+
+	next := workflow.NextDefaultStep(step)
+
+	assert.Equal(t, "after_loop", next)
+}
+
+func TestNextDefaultStep_ForEachFallsBackToOnSuccess(t *testing.T) {
+	step := &workflow.Step{
+		Name:      "loop",
+		Type:      workflow.StepTypeForEach,
+		OnSuccess: "fallback",
+		Loop: &workflow.LoopConfig{
+			Type:  workflow.LoopTypeForEach,
+			Items: "{{.states.prev.Output}}",
+			Body:  []string{"body1"},
+		},
+	}
+
+	next := workflow.NextDefaultStep(step)
+
+	assert.Equal(t, "fallback", next)
+}
+
+func TestExecutionOrder_ForEachWithBodySteps(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "setup",
+		Steps: map[string]*workflow.Step{
+			"setup": {
+				Name:      "setup",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "loop",
+			},
+			"loop": {
+				Name: "loop",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type:       workflow.LoopTypeForEach,
+					Items:      "{{.states.setup.Output}}",
+					Body:       []string{"body_step", "call_sub"},
+					OnComplete: "done",
+				},
+			},
+			"body_step": {
+				Name:      "body_step",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "call_sub",
+			},
+			"call_sub": {
+				Name:      "call_sub",
+				Type:      workflow.StepTypeCallWorkflow,
+				OnSuccess: "loop",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 5)
+	assert.Equal(t, "setup", result[0].Name)
+	assert.Equal(t, "loop", result[1].Name)
+	assert.Equal(t, "body_step", result[2].Name)
+	assert.Equal(t, "call_sub", result[3].Name)
+	assert.Equal(t, "done", result[4].Name)
+}
+
+func TestExecutionOrder_WhileWithBodySteps(t *testing.T) {
+	wf := &workflow.Workflow{
+		Initial: "init",
+		Steps: map[string]*workflow.Step{
+			"init": {
+				Name:      "init",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "retry_loop",
+			},
+			"retry_loop": {
+				Name: "retry_loop",
+				Type: workflow.StepTypeWhile,
+				Loop: &workflow.LoopConfig{
+					Type:       workflow.LoopTypeWhile,
+					Condition:  "true",
+					Body:       []string{"attempt"},
+					OnComplete: "success",
+				},
+			},
+			"attempt": {
+				Name:      "attempt",
+				Type:      workflow.StepTypeCommand,
+				OnSuccess: "retry_loop",
+			},
+			"success": {
+				Name:   "success",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
+
+	result := workflow.ExecutionOrder(wf)
+
+	require.NotNil(t, result)
+	require.Len(t, result, 4)
+	assert.Equal(t, "init", result[0].Name)
+	assert.Equal(t, "retry_loop", result[1].Name)
+	assert.Equal(t, "attempt", result[2].Name)
+	assert.Equal(t, "success", result[3].Name)
+}
+
+func TestFindReachableStates_ForEachBodyAndOnComplete(t *testing.T) {
+	steps := map[string]*workflow.Step{
+		"start": {
+			Name:      "start",
+			Type:      workflow.StepTypeCommand,
+			OnSuccess: "loop",
+		},
+		"loop": {
+			Name: "loop",
+			Type: workflow.StepTypeForEach,
+			Loop: &workflow.LoopConfig{
+				Type:       workflow.LoopTypeForEach,
+				Items:      "items",
+				Body:       []string{"body1"},
+				OnComplete: "done",
+			},
+		},
+		"body1": {
+			Name:      "body1",
+			Type:      workflow.StepTypeCommand,
+			OnSuccess: "loop",
+		},
+		"done": {
+			Name:   "done",
+			Type:   workflow.StepTypeTerminal,
+			Status: workflow.TerminalSuccess,
+		},
+	}
+
+	reachable := workflow.FindReachableStates(steps, "start")
+
+	assert.True(t, reachable["start"])
+	assert.True(t, reachable["loop"])
+	assert.True(t, reachable["body1"], "loop body step should be reachable")
+	assert.True(t, reachable["done"], "on_complete target should be reachable")
+}

@@ -239,7 +239,8 @@ func formatCyclePath(path []string) string {
 }
 
 // NextDefaultStep returns the next step name following the default (unconditional) path.
-// Checks Transitions for an entry with empty When first; falls back to OnSuccess.
+// Checks Transitions for an entry with empty When first; for loop steps falls back to
+// Loop.OnComplete; otherwise falls back to OnSuccess.
 func NextDefaultStep(step *Step) string {
 	if step == nil {
 		return ""
@@ -249,11 +250,16 @@ func NextDefaultStep(step *Step) string {
 			return tr.Goto
 		}
 	}
+	if step.Loop != nil && step.Loop.OnComplete != "" {
+		return step.Loop.OnComplete
+	}
 	return step.OnSuccess
 }
 
 // ExecutionOrder returns steps in default-path order by walking the graph from Initial,
 // following default transitions (empty When) and falling back to OnSuccess.
+// For loop steps (for_each/while), body steps are included inline before continuing
+// to the loop's on_complete target.
 // Stops at terminal steps, visited steps (cycle prevention), or missing references.
 func ExecutionOrder(wf *Workflow) []Step {
 	if wf == nil || len(wf.Steps) == 0 || wf.Initial == "" {
@@ -275,6 +281,22 @@ func ExecutionOrder(wf *Workflow) []Step {
 		if step.Type == StepTypeTerminal {
 			break
 		}
+
+		// For loop steps, include body steps inline
+		if step.Loop != nil {
+			for _, bodyName := range step.Loop.Body {
+				if visited[bodyName] {
+					continue
+				}
+				bodyStep, exists := wf.Steps[bodyName]
+				if !exists {
+					continue
+				}
+				visited[bodyName] = true
+				steps = append(steps, *bodyStep)
+			}
+		}
+
 		current = NextDefaultStep(step)
 	}
 
@@ -282,8 +304,9 @@ func ExecutionOrder(wf *Workflow) []Step {
 }
 
 // GetTransitions returns all outbound transitions from a step.
-// For command/operation/loop/call_workflow steps: on_success, on_failure
+// For command/operation/call_workflow steps: on_success, on_failure
 // For parallel steps: on_success, on_failure, and all branches
+// For loop steps (for_each/while): on_success, on_failure, body steps, and on_complete
 // For terminal steps: empty
 func GetTransitions(step *Step) []string {
 	if step == nil {
@@ -310,6 +333,14 @@ func GetTransitions(step *Step) []string {
 	// For parallel steps, add branches
 	if step.Type == StepTypeParallel {
 		transitions = append(transitions, step.Branches...)
+	}
+
+	// For loop steps, add body steps and on_complete
+	if step.Loop != nil {
+		transitions = append(transitions, step.Loop.Body...)
+		if step.Loop.OnComplete != "" {
+			transitions = append(transitions, step.Loop.OnComplete)
+		}
 	}
 
 	return transitions
