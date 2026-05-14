@@ -290,6 +290,130 @@ Model validation runs during:
 - Workflow stops immediately on validation failure (exit code 2)
 - No need for downstream CLI error handling — wrong models are caught early
 
+## Agent Skills
+
+Agent steps can declare `skills:` to inject deterministic domain knowledge into the agent's prompt context. Skills are loaded from SKILL.md files following the [agentskills.io](https://agentskills.io) specification. Unlike agent-native skill activation (model-driven), AWF injects skills explicitly — the workflow YAML is the single source of truth.
+
+### Basic Usage
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Review this code: {{.inputs.code}}"
+  skills:
+    - go-conventions
+    - code-review
+  on_success: done
+```
+
+Each declared skill's markdown body is injected into the prompt context wrapped in a `<skill_content>` block, placed before the user prompt.
+
+### Skill References
+
+Skills can be referenced by **name** (discovered from filesystem) or by **explicit path**:
+
+```yaml
+# Name-based: discovered from search paths
+skills:
+  - go-conventions
+
+# Path-based: relative to workflow file
+skills:
+  - path: ./custom-skills/audit
+
+# Mixed: both in the same step
+skills:
+  - go-conventions
+  - path: ./custom-skills/audit
+```
+
+### Discovery Directories
+
+Name-based skills are discovered across 7 priority-ordered directories (first match wins):
+
+| Priority | Directory | Scope |
+|----------|-----------|-------|
+| 1 | `AWF_SKILLS_PATH` env var | Override (exclusive — disables all other paths) |
+| 2 | `<project>/.awf/skills/` | Local project (AWF-specific) |
+| 3 | `<project>/.agents/skills/` | Local project (cross-client interop) |
+| 4 | `<project>/.claude/skills/` | Local project (Claude Code compat) |
+| 5 | `$XDG_CONFIG_HOME/awf/skills/` | Global user (AWF-specific) |
+| 6 | `~/.agents/skills/` | Global user (cross-client interop) |
+| 7 | `~/.claude/skills/` | Global user (Claude Code compat) |
+
+### SKILL.md Format
+
+Each skill is a directory containing a `SKILL.md` file. YAML frontmatter is stripped; only the markdown body is injected:
+
+```
+.awf/skills/go-conventions/
+├── SKILL.md
+├── scripts/check.sh          # Optional bundled resources
+└── references/style-guide.md  # Optional bundled resources
+```
+
+**SKILL.md:**
+```markdown
+---
+name: go-conventions
+description: Go coding conventions
+---
+
+Follow these Go conventions:
+- Use `gofmt` for formatting
+- Error messages start lowercase
+- Return early, avoid deep nesting
+```
+
+The frontmatter (`---` delimited block) is stripped. The skill name comes from the directory name, not frontmatter fields.
+
+### Injection Format
+
+Skills are injected as structured XML blocks before the user prompt:
+
+```xml
+<skill_content name="go-conventions">
+Follow these Go conventions:
+- Use `gofmt` for formatting
+- Error messages start lowercase
+- Return early, avoid deep nesting
+
+Skill directory: /project/.awf/skills/go-conventions
+Relative paths in this skill are relative to the skill directory.
+
+<skill_resources>
+  <file>scripts/check.sh</file>
+  <file>references/style-guide.md</file>
+</skill_resources>
+</skill_content>
+```
+
+Bundled resources are listed but not eagerly read — agents can access them using their native file tools via the skill directory path.
+
+### Validation
+
+`awf validate` checks all skill references before runtime:
+
+```bash
+awf validate my-workflow
+# Error: skill 'nonexistent' not found in search paths
+# Warning: skill 'empty-skill' has empty SKILL.md (no content to inject)
+```
+
+| Check | Result |
+|-------|--------|
+| Skill directory not found | Error (`skill_not_found`) |
+| Directory exists but no SKILL.md | Error (`skill_missing_skillmd`) |
+| SKILL.md is empty (0 bytes) | Warning (`skill_empty_content`) |
+| SKILL.md > 500KB | Warning (context window impact) |
+
+### Limitations
+
+- Skills are injected only for single-turn agent steps (`mode: single`). Conversation mode (`mode: conversation`) does not support skill injection in v1.
+- No template interpolation is applied to skill content — it is injected as-is.
+- Skills do not reference other skills; only workflow steps reference skills.
+
 ## Prompt Templates
 
 Prompts support full variable interpolation with access to workflow context:
@@ -323,6 +447,208 @@ review:
 - `{{.workflow.name}}` - Workflow name
 
 See [Variable Interpolation Reference](../reference/interpolation.md) for complete details.
+
+## Agent Skills
+
+Inject reusable domain knowledge (skills) into agent steps to provide specialized context, instructions, or guidelines. Skills are Markdown files bundled in standard discovery directories that AWF loads and prepends to agent prompts automatically.
+
+**Why use skills?**
+- **Reusable knowledge** — Define best practices, coding standards, or domain guidelines once, use across workflows
+- **Deterministic injection** — Explicit YAML declarations ensure exactly the right skills reach each step
+- **Bundled resources** — Include scripts, reference files, or examples alongside skill content
+
+### Basic Usage
+
+Create a skill directory with a `SKILL.md` file:
+
+**Directory structure:**
+```
+.awf/skills/
+├── go-conventions/
+│   ├── SKILL.md                 # Markdown content (frontmatter optional)
+│   └── references/
+│       └── style-guide.md       # Bundled resources
+└── code-review/
+    └── SKILL.md
+```
+
+**File:** `.awf/skills/go-conventions/SKILL.md`
+```markdown
+# Go Conventions Skill
+
+Follow these Go best practices:
+
+- Use CamelCase for public identifiers
+- Keep functions under 30 lines
+- Handle errors explicitly
+- Use interfaces for abstraction
+```
+
+Reference the skill by name in your workflow:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Review this Go code: {{.inputs.code}}"
+  skills: [go-conventions]
+  on_success: done
+```
+
+When executed, the skill content is automatically injected into the agent's prompt context before the user prompt:
+
+```
+<skill_content name="go-conventions">
+Follow these Go best practices:
+- Use CamelCase for public identifiers
+- Keep functions under 30 lines
+- Handle errors explicitly
+- Use interfaces for abstraction
+
+Skill directory: /project/.awf/skills/go-conventions
+Relative paths in this skill are relative to the skill directory.
+</skill_content>
+
+Review this Go code: <code>
+...
+</code>
+```
+
+### Multiple Skills
+
+Declare multiple skills in a single step:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Review this code: {{.inputs.code}}"
+  skills:
+    - go-conventions
+    - security-review
+    - performance-optimization
+  on_success: done
+```
+
+Skills are injected in declaration order, each wrapped in separate `<skill_content>` blocks.
+
+### Skill Discovery
+
+AWF searches for skills in the following directories, in priority order:
+
+1. **`AWF_SKILLS_PATH` environment variable** (if set, exclusive — overrides all others)
+2. **`.awf/skills/`** (project-level, AWF-specific)
+3. **`.agents/skills/`** (project-level, cross-client compatibility per agentskills.io spec)
+4. **`.claude/skills/`** (project-level, Claude Code compatibility)
+5. **`$XDG_CONFIG_HOME/awf/skills/`** (global user, AWF-specific — defaults to `~/.config/awf/skills/`)
+6. **`~/.agents/skills/`** (global user, cross-client)
+7. **`~/.claude/skills/`** (global user, Claude Code compatibility)
+
+This enables shared global skills while allowing project-specific overrides.
+
+**Example with environment variable:**
+
+```bash
+# Use only skills from custom directory
+AWF_SKILLS_PATH=/shared/skills:~/my-skills awf run workflow
+```
+
+### Explicit Path References
+
+Reference skills by explicit path instead of discovery:
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Review: {{.inputs.code}}"
+  skills:
+    - path: ./custom-skills/audit
+    - path: /shared/skills/compliance
+  on_success: done
+```
+
+Paths can be:
+- **Relative** to the workflow directory: `path: ./custom-skills/audit`
+- **Absolute**: `path: /home/user/skills/audit`
+- **Home-relative**: `path: ~/shared-skills/audit`
+
+### Skill Content Format
+
+**Frontmatter is optional** — AWF strips YAML frontmatter (content between `---` delimiters) if present, preserving only the Markdown body:
+
+```markdown
+---
+name: go-conventions
+description: Go coding standards
+license: MIT
+---
+
+# Go Conventions
+
+Follow these best practices...
+```
+
+Only the Markdown body is injected. The skill name comes from the directory name (e.g., `go-conventions`), not from frontmatter.
+
+### Bundled Resources
+
+Include additional files (scripts, guides, examples) alongside `SKILL.md`:
+
+```
+.awf/skills/audit/
+├── SKILL.md                    # Main skill content
+├── scripts/
+│   ├── check-security.sh
+│   └── validate-config.py
+└── references/
+    ├── checklist.md
+    └── examples/
+        └── sample-config.yaml
+```
+
+AWF automatically enumerates bundled resources in the skill context:
+
+```
+<skill_content name="audit">
+[skill markdown body]
+
+Skill directory: /project/.awf/skills/audit
+Relative paths in this skill are relative to the skill directory.
+
+<skill_resources>
+  <file>references/checklist.md</file>
+  <file>references/examples/sample-config.yaml</file>
+  <file>scripts/check-security.sh</file>
+  <file>scripts/validate-config.py</file>
+</skill_resources>
+</skill_content>
+```
+
+Agents can use bundled resources via their native file tools (Read, Bash) by referencing the skill directory and relative paths.
+
+### Validation
+
+Use `awf validate` to check that all skill references exist and are readable:
+
+```bash
+awf validate workflow.yaml
+```
+
+Validation reports:
+- ✓ Skills found with valid `SKILL.md` files
+- ✗ Skills referenced but not found
+- ✗ Skill directories found but missing `SKILL.md`
+- ⚠ Empty `SKILL.md` files (warning — content will be empty)
+
+### Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `SkillNotFoundError` | Referenced skill not found in discovery paths | Check skill directory name matches YAML declaration; verify `SKILL.md` exists |
+| Empty skill content | `SKILL.md` is 0 bytes or contains only frontmatter | Add Markdown body to `SKILL.md` |
+| Skill not in expected location | Wrong discovery directory | Move skill to one of the 7 standard directories or use `path:` reference |
+| Large skill file warning | `SKILL.md` exceeds 500KB | Consider splitting into multiple smaller skills |
 
 ## External Prompt Files
 
@@ -922,6 +1248,7 @@ See [Workflow Syntax — Inline Error Shorthand](workflow-syntax.md#inline-error
 | Error | Cause | Solution |
 |-------|-------|----------|
 | Provider not found | CLI tool not installed | Install required CLI (e.g., `claude install`) |
+| Skill not found | Skill name doesn't match any directory in discovery paths | Check skill name and discovery directories (see [Agent Skills](#agent-skills)) |
 | Timeout | Agent response took too long | Increase timeout or reduce prompt complexity |
 | Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `opencode`, or `openai_compatible` |
 | Command failed | Provider CLI returned error | Check provider configuration and logs |

@@ -56,7 +56,22 @@ awf run deploy --workflow-file missing.yaml
 # Error [USER.INPUT.MISSING_FILE]: workflow file 'missing.yaml' not found
 ```
 
-**Related codes:** `USER.INPUT.INVALID_FORMAT`, `SYSTEM.IO.READ_FAILED`
+**Related codes:** `USER.INPUT.INVALID_FORMAT`, `USER.INPUT.MISSING_SKILL`, `SYSTEM.IO.READ_FAILED`
+
+### USER.INPUT.MISSING_SKILL
+
+**Description:** A skill referenced in a workflow step could not be found. Either the skill directory does not exist in any discovery path, or the directory exists but contains no SKILL.md file.
+
+**Resolution:** Verify the skill name matches a directory in one of the discovery paths (`.awf/skills/`, `.agents/skills/`, `.claude/skills/`, or `$XDG_CONFIG_HOME/awf/skills/`). For path-based references, verify the path is correct relative to the workflow file.
+
+**Example:**
+```bash
+awf run code-review
+# Error [USER.INPUT.MISSING_SKILL]: skill 'nonexistent-skill' not found in search paths:
+#   .awf/skills/, .agents/skills/, .claude/skills/, ~/.config/awf/skills/
+```
+
+**Related codes:** `USER.INPUT.MISSING_FILE`, `WORKFLOW.VALIDATION.INVALID_REFERENCE`
 
 ---
 

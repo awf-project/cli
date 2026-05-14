@@ -533,6 +533,7 @@ func TestAWFPaths(t *testing.T) {
 		"data_dir":      AWFDataDir(),
 		"workflows_dir": AWFWorkflowsDir(),
 		"plugins_dir":   AWFPluginsDir(),
+		"skills_dir":    AWFSkillsDir(),
 	}
 	for key, want := range expected {
 		got, ok := paths[key]
@@ -555,6 +556,7 @@ func TestAWFPaths_HasExactKeys(t *testing.T) {
 		"data_dir",
 		"workflows_dir",
 		"plugins_dir",
+		"skills_dir",
 	}
 	assert.Len(t, paths, len(expectedKeys), "AWFPaths() should have exactly %d keys", len(expectedKeys))
 	for _, key := range expectedKeys {

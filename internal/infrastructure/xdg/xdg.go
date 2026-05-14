@@ -79,6 +79,16 @@ func LocalPromptsDir() string {
 	return ".awf/prompts"
 }
 
+// AWFSkillsDir returns the global skills directory ($XDG_CONFIG_HOME/awf/skills)
+func AWFSkillsDir() string {
+	return filepath.Join(AWFConfigDir(), "skills")
+}
+
+// LocalSkillsDir returns the local project skills directory
+func LocalSkillsDir() string {
+	return ".awf/skills"
+}
+
 // AWFPluginsDir returns the global plugins directory ($XDG_DATA_HOME/awf/plugins)
 func AWFPluginsDir() string {
 	return filepath.Join(AWFDataDir(), "plugins")
@@ -100,7 +110,7 @@ func LocalWorkflowPacksDir() string {
 }
 
 // AWFPaths returns all AWF XDG directory paths as a map for template interpolation.
-// Keys: prompts_dir, scripts_dir, config_dir, data_dir, workflows_dir, plugins_dir.
+// Keys: prompts_dir, scripts_dir, config_dir, data_dir, workflows_dir, plugins_dir, skills_dir.
 func AWFPaths() map[string]string {
 	return map[string]string{
 		"prompts_dir":   AWFPromptsDir(),
@@ -109,6 +119,7 @@ func AWFPaths() map[string]string {
 		"data_dir":      AWFDataDir(),
 		"workflows_dir": AWFWorkflowsDir(),
 		"plugins_dir":   AWFPluginsDir(),
+		"skills_dir":    AWFSkillsDir(),
 	}
 }
 

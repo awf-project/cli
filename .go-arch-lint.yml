@@ -261,6 +261,9 @@ components:
   infra-otel:
     in: infrastructure/otel
 
+  infra-skills:
+    in: infrastructure/skills
+
   infra-xdg:
     in: infrastructure/xdg
 
@@ -331,6 +334,7 @@ deps:
       - infra-http
       - infra-notify
       - infra-repository
+      - infra-skills
       - infra-xdg
     canUse:
       - go-stdlib
@@ -522,6 +526,14 @@ deps:
       - go-stdlib
       - otel
 
+  infra-skills:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - infra-xdg
+    canUse:
+      - go-stdlib
+
   infra-xdg:
     canUse:
       - go-stdlib
@@ -550,6 +562,7 @@ deps:
       - infra-otel
       - infra-plugin
       - infra-repository
+      - infra-skills
       - infra-store
       - infra-tokenizer
       - infra-updater

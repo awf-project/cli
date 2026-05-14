@@ -116,6 +116,7 @@ type Step struct {
 	TemplateRef     *WorkflowTemplateRef // template reference (for use_template steps)
 	CallWorkflow    *CallWorkflowConfig  // for call_workflow type: sub-workflow configuration
 	Agent           *AgentConfig         // for agent type: AI agent configuration
+	Skills          []SkillReference     // for agent type: skills to inject into the agent context
 	Config          map[string]any       // C069: plugin-provided step type configuration
 }
 

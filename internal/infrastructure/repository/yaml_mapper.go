@@ -160,12 +160,19 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 
 	// Parse timeout
 	if y.Timeout != "" {
-		timeout, err := parseDuration(y.Timeout)
-		if err != nil {
+		d, parseErr := parseDuration(y.Timeout)
+		if parseErr != nil {
 			return nil, NewParseError(filePath, "states."+name+".timeout", "invalid duration: "+y.Timeout)
 		}
-		step.Timeout = int(timeout.Seconds())
+		step.Timeout = int(d.Seconds())
 	}
+
+	// Parse skill references
+	skillRefs, err := mapSkillRefs(y.Skills)
+	if err != nil {
+		return nil, NewParseError(filePath, "states."+name+".skills", err.Error())
+	}
+	step.Skills = skillRefs
 
 	return step, nil
 }
@@ -489,6 +496,37 @@ func mapConversationConfig(y *yamlConversationConfig) *workflow.ConversationConf
 	return &workflow.ConversationConfig{
 		ContinueFrom: y.ContinueFrom,
 	}
+}
+
+// mapSkillRefs converts a polymorphic []any from YAML into []workflow.SkillReference.
+// Each element is either a string (name-based) or map[string]any with a "path" key (path-based).
+func mapSkillRefs(skills []any) ([]workflow.SkillReference, error) {
+	if len(skills) == 0 {
+		return nil, nil
+	}
+	refs := make([]workflow.SkillReference, 0, len(skills))
+	for i, elem := range skills {
+		switch v := elem.(type) {
+		case string:
+			if v == "" {
+				return nil, fmt.Errorf("skill[%d]: empty skill name", i)
+			}
+			refs = append(refs, workflow.SkillReference{Name: v})
+		case map[string]any:
+			pathVal, ok := v["path"]
+			if !ok {
+				return nil, fmt.Errorf("skill[%d]: map must have 'path' key", i)
+			}
+			pathStr, ok := pathVal.(string)
+			if !ok || pathStr == "" {
+				return nil, fmt.Errorf("skill[%d]: path must be a non-empty string", i)
+			}
+			refs = append(refs, workflow.SkillReference{Path: pathStr})
+		default:
+			return nil, fmt.Errorf("skill[%d]: invalid type", i)
+		}
+	}
+	return refs, nil
 }
 
 // normalizeOnFailure normalizes on_failure to a step name string.
