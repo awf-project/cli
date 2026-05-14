@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-14
+
+### Added
+
+- **F096**: Agent skills integration — workflow steps declare skills via `skills: [skill-name]` or `skills: [path: ./custom/skill]` YAML syntax; AWF discovers skills from `AWF_SKILLS_PATH` env var, `<project>/.awf/skills/`, `<project>/.agents/skills/`, `<project>/.claude/skills/`, and global XDG/home directories with defined priority; SKILL.md frontmatter (YAML header between `---` delimiters) is stripped to extract markdown body; skill content is injected into provider prompt context before the user prompt using agentskills.io structured wrapping format with skill directory path, relative path resolution hint, and `<skill_resources>` enumeration of bundled files (without eager loading); `awf validate` checks all skill references for existence and warns on empty SKILL.md files; circular skill references and frontmatter parsing are explicitly out of scope for v1; skill content is loaded synchronously and deterministically (no model-driven activation)
+
 ### Changed
 
 - **F095**: Deterministic step display ordering in CLI execution summary — `--- Execution Details ---`, step stdout/stderr blocks, and `buildStepInfos` now display steps in workflow-defined order (following `Initial` → default transitions → `OnSuccess`) instead of non-deterministic Go map iteration; new domain-level `ExecutionOrder(*Workflow) []Step` and `NextDefaultStep(*Step) string` functions in `internal/domain/workflow/graph.go` provide a single source of truth for default-path graph traversal; TUI's private `orderedSteps`/`nextStepName` deleted and replaced by delegation to the domain functions; CLI display functions (`showExecutionDetails`, `showStepOutputs`, `showEmptyStepFeedback`, `buildStepInfos`) accept `*workflow.Workflow` parameter and iterate via `ExecutionOrder()` output; `showEmptyStepFeedback` switched from direct `execCtx.States` access to thread-safe `GetStepState` per-step lookup
