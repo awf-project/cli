@@ -35,6 +35,7 @@ awf/
 │   │   │   └── registry.go      # OperationRegistry (implements ports.OperationProvider)
 │   │   └── ports/               # Port interfaces
 │   │       ├── repository.go    # Workflow repository
+│   │       ├── skill_repository.go # Skill repository (F096)
 │   │       ├── store.go         # State store
 │   │       ├── executor.go      # Command executor
 │   │       └── logger.go        # Logger interface
@@ -57,6 +58,7 @@ awf/
 │   │   ├── notify/              # Built-in notification operation provider
 │   │   ├── plugin/              # RPC plugin manager, composite provider
 │   │   ├── repository/          # YAML workflow loaders
+│   │   ├── skills/              # Filesystem skill repository (F096)
 │   │   ├── store/               # SQLite history, JSON state store
 │   │   ├── tokenizer/           # Token counting (ports.Tokenizer implementations)
 │   │   └── xdg/                 # XDG directory discovery
@@ -125,7 +127,8 @@ awf/
 │   ├── workflows/               # Workflow definitions
 │   ├── templates/               # Workflow templates
 │   ├── prompts/                 # Prompt templates
-│   └── scripts/                 # Script files
+│   ├── scripts/                 # Script files
+│   └── skills/                  # Agent skill definitions (SKILL.md per directory)
 │
 ├── bin/                         # Built binaries (gitignored)
 │

@@ -243,8 +243,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Common Pitfalls
 
-- Wrap YAML/JSON mapping errors (duration parse, type conversion) in domain error types; surface failures immediately to prevent silent defaults
-- Never merge infrastructure provider stubs; always implement ExecuteConversation fully or return NotImplementedError with linked tracking issue
 - When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
 - Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
 - When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
@@ -284,6 +282,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Update plan task status immediately when implementation completes; regenerate validation report to catch status-code mismatches before submission.
 - Always replicate nolint:errcheck directives identically across all provider implementations; verify explanatory comments match before make lint
 - Always test unplanned file modifications discovered during implementation; update task plan if intentional, revert if accidental
+- Never use standard YAML unmarshaling for skill metadata; implement frontmatter parsing (YAML header between --- delimiters) to preserve metadata
+- Never skip testing XDG directory fallback paths; code will fail on systems without XDG_DATA_HOME and XDG_CONFIG_HOME variables set
 
 ## Test Conventions
 

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -143,11 +145,17 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		}
 	}
 
+	var skillWarnings []string
+	if validationErr == nil {
+		skillWarnings, validationErr = validateSkillRefs(wf)
+	}
+
 	// Collect disabled plugin warnings (non-blocking, skipped on quiet format or when --skip-plugins)
 	var pluginWarnings []string
 	if !skipPlugins && validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
 		pluginWarnings = collectDisabledPluginWarnings(ctx, cfg, wf)
 	}
+	pluginWarnings = append(pluginWarnings, skillWarnings...)
 
 	// validatorTimeout is reserved for plugin validator invocation (wired in GREEN phase)
 	_ = validatorTimeout
@@ -334,6 +342,71 @@ func runValidatePack(cmd *cobra.Command, cfg *Config, packName string, skipPlugi
 
 	workflowsDir := filepath.Join(packDir, "workflows")
 	return runValidateDir(cmd, cfg, workflowsDir, skipPlugins, validatorTimeout)
+}
+
+func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
+	hasSkills := false
+	for _, step := range wf.Steps {
+		if len(step.Skills) > 0 {
+			hasSkills = true
+			break
+		}
+	}
+	if !hasSkills {
+		return nil, nil
+	}
+
+	repo := skills.NewFilesystemSkillRepository(nil)
+	ctx := context.Background()
+	var warnings []string
+
+	for _, step := range wf.Steps {
+		for _, ref := range step.Skills {
+			var skill *workflow.Skill
+			var err error
+
+			if ref.IsPathBased() {
+				absPath := ref.Path
+				if !filepath.IsAbs(absPath) {
+					absPath = filepath.Join(wf.SourceDir, filepath.Clean(absPath))
+				}
+				skill, err = repo.LoadFromPath(ctx, absPath)
+			} else {
+				skill, err = repo.Load(ctx, ref.Name)
+				if err != nil {
+					var notFound *workflow.SkillNotFoundError
+					if errors.As(err, &notFound) && skillDirExists(notFound.Name, notFound.SearchPaths) {
+						return nil, workflow.ValidationError{
+							Level:   workflow.ValidationLevelError,
+							Code:    workflow.ErrSkillMissingSkillMD,
+							Message: fmt.Sprintf("skill %q has no SKILL.md", notFound.Name),
+							Path:    fmt.Sprintf("states.%s.skills", step.Name),
+						}
+					}
+					return nil, err
+				}
+			}
+
+			if err != nil {
+				return nil, err
+			}
+
+			if skill.Content == "" {
+				warnings = append(warnings, fmt.Sprintf("skill %q has empty content", skill.Name))
+			}
+		}
+	}
+
+	return warnings, nil
+}
+
+func skillDirExists(name string, searchPaths []string) bool {
+	for _, searchPath := range searchPaths {
+		if _, err := os.Stat(filepath.Join(searchPath, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // collectDisabledPluginWarnings checks operation steps for disabled plugin references.

@@ -80,6 +80,9 @@ type yamlStep struct {
 	Mode         string                  `yaml:"mode"`          // execution mode: "single" (default) or "conversation"
 	SystemPrompt string                  `yaml:"system_prompt"` // system prompt for conversation mode
 	Conversation *yamlConversationConfig `yaml:"conversation"`  // conversation-specific configuration
+
+	// Skill references (F096) - polymorphic: string (name) or map{"path": "..."} (path-based)
+	Skills []any `yaml:"skills"`
 }
 
 // yamlTransition is the YAML representation of a conditional transition.

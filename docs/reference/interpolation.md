@@ -304,6 +304,7 @@ Access system directories configured per XDG standards:
 {{.awf.cache_dir}}       # ~/.cache/awf (or $XDG_CACHE_HOME/awf)
 {{.awf.prompts_dir}}     # Designated prompts directory within config_dir
 {{.awf.scripts_dir}}     # Designated scripts directory within config_dir
+{{.awf.skills_dir}}      # Designated skills directory within config_dir
 {{.awf.workflows_dir}}   # Designated workflows directory within config_dir
 {{.awf.plugins_dir}}     # Plugin installation directory
 ```
@@ -324,12 +325,13 @@ deploy:
 
 #### Local-Before-Global Resolution
 
-When using `{{.awf.prompts_dir}}` or `{{.awf.scripts_dir}}`, AWF implements **local-before-global resolution**. This enables per-project overrides of shared global files. The resolution applies to all uses of these variables:
+When using `{{.awf.prompts_dir}}`, `{{.awf.scripts_dir}}`, or `{{.awf.skills_dir}}`, AWF implements **local-before-global resolution**. This enables per-project overrides of shared global files. The resolution applies to all uses of these variables:
 
 - **In `script_file` fields** — `script_file: "{{.awf.scripts_dir}}/deploy.sh"`
 - **In `prompt_file` fields** — `prompt_file: "{{.awf.prompts_dir}}/code_review.md"`
 - **In `command` fields** — `command: "source {{.awf.scripts_dir}}/helpers.sh && deploy"`
 - **In `dir` fields** — `dir: "{{.awf.scripts_dir}}"`
+- **In skills discovery** — Agent skills are resolved across multiple tiers: `.awf/skills/` (project override) → `.agents/skills/` → `.claude/skills/` → `$XDG_CONFIG_HOME/awf/skills/` (global fallback)
 
 ##### Local Workflows (2-tier)
 

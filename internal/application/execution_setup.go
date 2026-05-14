@@ -14,6 +14,7 @@ import (
 	infrahttp "github.com/awf-project/cli/internal/infrastructure/http"
 	"github.com/awf-project/cli/internal/infrastructure/notify"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	infraskills "github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -277,6 +278,8 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 	if cfg.eventPublisher != nil {
 		execSvc.SetEventPublisher(cfg.eventPublisher)
 	}
+
+	execSvc.SetSkillRepository(infraskills.NewFilesystemSkillRepository(s.logger))
 
 	compositeProvider := s.buildProviders(cfg)
 	execSvc.SetOperationProvider(compositeProvider)

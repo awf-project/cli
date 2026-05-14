@@ -27,6 +27,7 @@ type ExecutionServiceBuilder struct {
 	registry   ports.AgentRegistry
 	evaluator  interface{} // application.ExpressionEvaluator - kept as interface{} to avoid circular import
 	validator  ports.ExpressionValidator
+	skillRepo  ports.SkillRepository
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -87,6 +88,13 @@ func (b *ExecutionServiceBuilder) WithAgentRegistry(registry ports.AgentRegistry
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.registry = registry
+	return b
+}
+
+func (b *ExecutionServiceBuilder) WithSkillRepository(repo ports.SkillRepository) *ExecutionServiceBuilder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.skillRepo = repo
 	return b
 }
 
@@ -183,6 +191,10 @@ func (b *ExecutionServiceBuilder) Build() *application.ExecutionService {
 
 	// Configure agent registry (C038: Use MockAgentRegistry as default)
 	svc.SetAgentRegistry(registry)
+
+	if b.skillRepo != nil {
+		svc.SetSkillRepository(b.skillRepo)
+	}
 
 	// Configure expression evaluator if provided (for conditional transitions)
 	if b.evaluator != nil {

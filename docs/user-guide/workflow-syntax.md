@@ -387,6 +387,27 @@ analyze:
   on_failure: error
 ```
 
+### Agent Step with Skills
+
+Inject domain knowledge into agent context via `skills:` declarations. Skills are loaded from SKILL.md files and prepended to the prompt.
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  prompt: "Review this Go code: {{.states.read.Output}}"
+  skills:
+    - go-conventions
+    - path: ./custom-skills/security-audit
+  options:
+    model: claude-sonnet-4-20250514
+  timeout: 120
+  on_success: done
+  on_failure: error
+```
+
+See [Agent Steps — Agent Skills](agent-steps.md#agent-skills) for discovery paths, SKILL.md format, and validation.
+
 ### Conversation Mode
 
 `mode: conversation` runs an **interactive user-driven loop**: the agent replies, AWF prompts for your next message, and the loop continues until you submit an empty line, `exit`, or `quit`. It requires a terminal (or piped stdin).
@@ -419,6 +440,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 | `system_prompt` | string | No | System message preserved for the whole session |
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Session tracking sub-struct. Presence opts the step into session tracking (marker flag); contents: see [Session Tracking](#session-tracking) |
+| `skills` | array | No | Skill references for agent context injection — name-based (e.g., `go-conventions`) or path-based (e.g., `path: ./custom/audit`); see [Agent Skills](agent-steps.md#agent-skills) |
 | `options` | map | No | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
 | `timeout` | int or string | No | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
 | `on_success` | string | No | Next state on success |

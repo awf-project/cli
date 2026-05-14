@@ -3,6 +3,7 @@ bin/
 dist/
 /awf
 **/CLAUDE.md
+.agents
 
 # Test artifacts
 coverage.out

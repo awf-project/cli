@@ -41,6 +41,7 @@ var (
 	_ ports.Tracer              = (*MockTracer)(nil)
 	_ ports.Span                = (*MockSpan)(nil)
 	_ ports.EventPublisher      = (*MockEventPublisher)(nil)
+	_ ports.SkillRepository     = (*MockSkillRepository)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -2018,4 +2019,80 @@ func (m *MockEventPublisher) Clear() {
 	defer m.mu.Unlock()
 	m.events = make([]*pluginmodel.DomainEvent, 0)
 	m.publishErr = nil
+}
+
+// MockSkillRepository is a thread-safe mock implementation of ports.SkillRepository.
+type MockSkillRepository struct {
+	mu      sync.RWMutex
+	skills  map[string]*workflow.Skill
+	loadErr error
+}
+
+// NewMockSkillRepository creates a new thread-safe mock skill repository.
+func NewMockSkillRepository() *MockSkillRepository {
+	return &MockSkillRepository{
+		skills: make(map[string]*workflow.Skill),
+	}
+}
+
+// Load retrieves a skill by name.
+// Thread-safe for concurrent access.
+func (m *MockSkillRepository) Load(ctx context.Context, name string) (*workflow.Skill, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.loadErr != nil {
+		return nil, m.loadErr
+	}
+
+	skill, ok := m.skills[name]
+	if !ok {
+		return nil, domainerrors.NewUserError(
+			domainerrors.ErrorCodeUserInputMissingSkill,
+			"skill not found: "+name,
+			map[string]any{"name": name},
+			nil,
+		)
+	}
+
+	return skill, nil
+}
+
+// LoadFromPath retrieves a skill by its absolute file path.
+// Thread-safe for concurrent access.
+func (m *MockSkillRepository) LoadFromPath(ctx context.Context, absolutePath string) (*workflow.Skill, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.loadErr != nil {
+		return nil, m.loadErr
+	}
+
+	skill, ok := m.skills[absolutePath]
+	if !ok {
+		return nil, domainerrors.NewUserError(
+			domainerrors.ErrorCodeUserInputMissingSkill,
+			"skill not found at path: "+absolutePath,
+			map[string]any{"path": absolutePath},
+			nil,
+		)
+	}
+
+	return skill, nil
+}
+
+// SetSkill adds or updates a skill in the repository (test helper).
+// Thread-safe for concurrent access.
+func (m *MockSkillRepository) SetSkill(name string, skill *workflow.Skill) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.skills[name] = skill
+}
+
+// SetLoadError configures an error to be returned by Load and LoadFromPath (test helper).
+// Thread-safe for concurrent access.
+func (m *MockSkillRepository) SetLoadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.loadErr = err
 }

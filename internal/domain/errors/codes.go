@@ -35,6 +35,9 @@ const (
 
 	// ErrorCodeUserInputValidationFailed indicates input parameter validation error.
 	ErrorCodeUserInputValidationFailed ErrorCode = "USER.INPUT.VALIDATION_FAILED"
+
+	// ErrorCodeUserInputMissingSkill indicates a required skill was not found.
+	ErrorCodeUserInputMissingSkill ErrorCode = "USER.INPUT.MISSING_SKILL"
 )
 
 // Error code constants for WORKFLOW category (exit code 2).

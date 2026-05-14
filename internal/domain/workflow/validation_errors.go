@@ -39,6 +39,11 @@ const (
 	ErrCircularWorkflowCall ValidationCode = "circular_workflow_call"
 	ErrUndefinedSubworkflow ValidationCode = "undefined_subworkflow"
 	ErrMaxNestingExceeded   ValidationCode = "max_nesting_exceeded"
+
+	// Skill validation codes
+	ErrSkillNotFound       ValidationCode = "skill_not_found"
+	ErrSkillMissingSkillMD ValidationCode = "skill_missing_skillmd"
+	ErrSkillEmptyContent   ValidationCode = "skill_empty_content"
 )
 
 // ValidationError represents a single validation issue.

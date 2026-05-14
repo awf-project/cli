@@ -66,6 +66,7 @@ type ExecutionService struct {
 	packWorkflowLoader PackWorkflowLoader
 	tracer             ports.Tracer
 	eventPublisher     ports.EventPublisher
+	skillRepo          ports.SkillRepository
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -107,6 +108,10 @@ func (s *ExecutionService) SetEvaluator(evaluator ports.ExpressionEvaluator) {
 // Accepts ConversationExecutor interface to allow dependency injection and testing with mocks.
 func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 	s.conversationMgr = mgr
+}
+
+func (s *ExecutionService) SetSkillRepository(repo ports.SkillRepository) {
+	s.skillRepo = repo
 }
 
 // SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
@@ -2283,6 +2288,16 @@ func (s *ExecutionService) executeAgentStep(
 	resolvedPrompt, err := s.resolver.Resolve(promptToResolve, intCtx)
 	if err != nil {
 		return "", fmt.Errorf("step %s: resolve prompt: %w", step.Name, err)
+	}
+
+	if len(step.Skills) > 0 && s.skillRepo != nil {
+		skillContent, skillErr := ResolveAndFormatSkills(stepCtx, s.skillRepo, step.Skills, wf.SourceDir)
+		if skillErr != nil {
+			return "", fmt.Errorf("step %s: resolve skills: %w", step.Name, skillErr)
+		}
+		if skillContent != "" {
+			resolvedPrompt = skillContent + "\n\n" + resolvedPrompt
+		}
 	}
 
 	resolvedProvider, err := s.resolver.Resolve(step.Agent.Provider, intCtx)
