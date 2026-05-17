@@ -11,10 +11,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Simple resolver mock for testing
 type testResolver struct{}
 
 func (t *testResolver) Resolve(template string, ctx *interpolation.Context) (string, error) {
+	return template, nil
+}
+
+type testResolverWithValues struct {
+	values map[string]string
+}
+
+func (r *testResolverWithValues) Resolve(template string, _ *interpolation.Context) (string, error) {
+	if v, ok := r.values[template]; ok {
+		return v, nil
+	}
 	return template, nil
 }
 
@@ -102,7 +112,7 @@ func TestInitializeConversationState_FreshStart(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	state, resolvedPrompt, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext)
+	state, resolvedPrompt, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, state)
@@ -144,7 +154,7 @@ func TestInitializeConversationState_ContinueFrom_WithSessionID(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	state, resolvedPrompt, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext)
+	state, resolvedPrompt, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, state)
@@ -178,7 +188,7 @@ func TestInitializeConversationState_ContinueFrom_StepNotFound(t *testing.T) {
 		return interpolation.NewContext()
 	}
 
-	state, _, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext)
+	state, _, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext, "")
 
 	assert.Error(t, err)
 	assert.Nil(t, state)
@@ -214,7 +224,7 @@ func TestInitializeConversationState_ContinueFrom_NoConversationState(t *testing
 		return interpolation.NewContext()
 	}
 
-	state, _, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext)
+	state, _, err := manager.initializeConversationState(step, "claude", config, execCtx, buildContext, "")
 
 	assert.Error(t, err)
 	assert.Nil(t, state)

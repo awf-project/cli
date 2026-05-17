@@ -44,6 +44,11 @@ const (
 	ErrSkillNotFound       ValidationCode = "skill_not_found"
 	ErrSkillMissingSkillMD ValidationCode = "skill_missing_skillmd"
 	ErrSkillEmptyContent   ValidationCode = "skill_empty_content"
+
+	// Agent role validation codes
+	ErrRoleNotFound        ValidationCode = "role_not_found"
+	ErrRoleMissingAgentsMD ValidationCode = "role_missing_agents_md"
+	ErrRoleEmptyContent    ValidationCode = "role_empty_content"
 )
 
 // ValidationError represents a single validation issue.

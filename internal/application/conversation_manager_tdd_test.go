@@ -87,7 +87,7 @@ func TestConversationManager_ExecuteConversation_SingleTurn_HappyPath(t *testing
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should complete successfully with StopReasonUserExit
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestConversationManager_ExecuteConversation_MultiTurn_HappyPath(t *testing.
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should execute 3 turns (initial + 2 user inputs), stop with UserExit
 	require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestConversationManager_ExecuteConversation_WithSystemPrompt(t *testing.T) 
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: system prompt should be passed to provider
 	require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestConversationManager_ExecuteConversation_ContinueFrom_HappyPath(t *testi
 
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should resume prior session, retain session ID and prior turns
 	require.NoError(t, err)
@@ -305,7 +305,7 @@ func TestConversationManager_ExecuteConversation_MissingUserInputReader_Error(t 
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should return error about missing UserInputReader
 	assert.Error(t, err)
@@ -323,7 +323,7 @@ func TestConversationManager_ExecuteConversation_NilStep_Error(t *testing.T) {
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), nil, &workflow.ConversationConfig{}, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), nil, &workflow.ConversationConfig{}, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -348,7 +348,7 @@ func TestConversationManager_ExecuteConversation_ProviderNotFound_Error(t *testi
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -396,7 +396,7 @@ func TestConversationManager_ExecuteConversation_ContextCancellation_Error(t *te
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	_, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should return error related to context cancellation
 	assert.Error(t, err)
@@ -426,7 +426,7 @@ func TestConversationManager_ExecuteConversation_ContinueFromStepNotFound_Error(
 	// No prior step in states
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -482,7 +482,7 @@ func TestConversationManager_ExecuteConversation_ProviderExecutionError_Preserve
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should return error but preserve last result
 	assert.Error(t, err)
@@ -531,7 +531,7 @@ func TestConversationManager_SetUserInputReader(t *testing.T) {
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager2.ExecuteConversation(context.Background(), step, &workflow.ConversationConfig{}, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager2.ExecuteConversation(context.Background(), step, &workflow.ConversationConfig{}, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// If reader was properly set, call should succeed (not fail on missing UserInputReader)
 	assert.NoError(t, err)
@@ -582,7 +582,7 @@ func TestConversationManager_ExecuteConversation_EmptyInputTerminates(t *testing
 	execCtx := newTestExecutionContext(t)
 	buildContext := newTestBuildContext()
 
-	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, io.Discard, io.Discard)
+	result, err := manager.ExecuteConversation(context.Background(), step, config, execCtx, buildContext, "", io.Discard, io.Discard)
 
 	// Assertions: should exit after first turn without another provider call
 	require.NoError(t, err)

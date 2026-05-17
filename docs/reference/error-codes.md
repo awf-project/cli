@@ -75,6 +75,23 @@ awf run code-review
 
 ---
 
+### USER.INPUT.MISSING_ROLE
+
+**Description:** An agent role referenced in a workflow step could not be resolved. Either the role directory does not exist in any discovery path, the directory exists but contains no `AGENTS.md` file, or no `AgentRoleRepository` is wired when the step is executed.
+
+**Resolution:** Verify the role name matches a directory in one of the discovery paths (`.awf/agents/`, `.agents/`, `$XDG_CONFIG_HOME/awf/agents/`, `~/.agents/`) and that `<role-dir>/AGENTS.md` is readable. For path-based references, verify the path is correct relative to the workflow file. Set `AWF_AGENTS_PATH=<dir>` to restrict discovery to a single directory.
+
+**Example:**
+```bash
+awf run code-review
+# Error [USER.INPUT.MISSING_ROLE]: role 'go-senior' not found in search paths:
+#   .awf/agents/, .agents/, ~/.config/awf/agents/, ~/.agents/
+```
+
+**Related codes:** `USER.INPUT.MISSING_SKILL`, `USER.INPUT.MISSING_FILE`, `WORKFLOW.VALIDATION.INVALID_REFERENCE`
+
+---
+
 ### USER.INPUT.INVALID_FORMAT
 
 **Description:** The file format does not match expected structure or contains invalid syntax.

@@ -650,6 +650,237 @@ Validation reports:
 | Skill not in expected location | Wrong discovery directory | Move skill to one of the 7 standard directories or use `path:` reference |
 | Large skill file warning | `SKILL.md` exceeds 500KB | Consider splitting into multiple smaller skills |
 
+## Agent Roles
+
+Agent roles define reusable personas that are injected into the agent's system prompt. Unlike skills (which inject knowledge into the user prompt), roles establish the agent's identity, behavior, and perspective via the system prompt. Roles are stored in AGENTS.md files following the [agents.md](https://github.com/agentsmd/agents.md) specification.
+
+### Basic Usage
+
+Create a role directory with an `AGENTS.md` file:
+
+**Directory structure:**
+```
+.awf/agents/
+├── go-senior/
+│   └── AGENTS.md          # Agent persona (frontmatter optional)
+├── security-reviewer/
+│   └── AGENTS.md
+└── docs-writer/
+    └── AGENTS.md
+```
+
+**File:** `.awf/agents/go-senior/AGENTS.md`
+```markdown
+---
+name: go-senior
+description: Senior Go engineer persona
+---
+
+You are a senior Go engineer with 10+ years of experience. 
+
+When reviewing code:
+- Prioritize readability and maintainability
+- Suggest idiomatic Go patterns
+- Consider performance implications
+- Flag potential race conditions
+- Reference Go proverbs and best practices
+```
+
+Reference the role by name in your workflow:
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  role: go-senior
+  prompt: "Review this Go code: {{.inputs.code}}"
+  on_success: done
+```
+
+When executed, the AGENTS.md content is stripped of frontmatter and injected as the system prompt to the agent, establishing the persona before the user prompt is sent.
+
+### Multiple Roles
+
+A single agent step uses one role only. To combine multiple personas, either:
+1. Create a composite role that includes all relevant perspectives
+2. Chain multiple agent steps with different roles
+
+```yaml
+# ❌ Invalid: only one role per step
+step:
+  type: agent
+  role: go-senior
+  role: security-reviewer  # Error
+
+# ✅ Valid: chain steps for multiple perspectives
+initial_review:
+  type: agent
+  provider: claude
+  role: go-senior
+  prompt: "Review this code: {{.inputs.code}}"
+  on_success: security_review
+
+security_review:
+  type: agent
+  provider: claude
+  role: security-reviewer
+  prompt: |
+    After this Go review:
+    {{.states.initial_review.Output}}
+    
+    Now analyze for security issues: {{.inputs.code}}
+  on_success: done
+```
+
+### Role Discovery
+
+AWF searches for roles in the following directories, in priority order:
+
+1. **`AWF_AGENTS_PATH` environment variable** (if set, exclusive — overrides all others)
+2. **`.awf/agents/`** (project-level, AWF-specific)
+3. **`.agents/`** (project-level, cross-client compatibility)
+4. **`$XDG_CONFIG_HOME/awf/agents/`** (global user, AWF-specific — defaults to `~/.config/awf/agents/`)
+5. **`~/.agents/`** (global user, cross-client)
+
+This enables shared global personas while allowing project-specific overrides.
+
+**Example with environment variable:**
+
+```bash
+# Use only roles from custom directory
+AWF_AGENTS_PATH=/shared/agents awf run workflow
+```
+
+### Role Content Format
+
+**Frontmatter is optional** — AWF strips YAML frontmatter (content between `---` delimiters) if present, preserving only the Markdown body:
+
+```markdown
+---
+name: go-senior
+description: Senior Go engineer persona
+license: MIT
+tags: [go, senior, code-review]
+---
+
+You are a senior Go engineer...
+```
+
+Only the Markdown body is injected as the system prompt. The role name comes from the directory name (e.g., `go-senior`), not from frontmatter.
+
+### Combining Role with Inline System Prompt
+
+A step can combine a role with an inline `system_prompt` field. The role content is injected first, followed by the inline prompt, separated by a blank line:
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  role: go-senior
+  system_prompt: "Focus on performance optimizations and memory leaks."
+  prompt: "Review this code: {{.inputs.code}}"
+  on_success: done
+```
+
+The effective system prompt sent to the agent is:
+
+```
+<go-senior AGENTS.md content>
+
+Focus on performance optimizations and memory leaks.
+```
+
+This allows you to reuse a base persona while adding step-specific context or overrides.
+
+### Explicit Path References
+
+Reference roles by explicit path instead of discovery:
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  role: ./custom-agents/senior-go
+  prompt: "Review: {{.inputs.code}}"
+  on_success: done
+```
+
+Paths can be:
+- **Relative** to the workflow directory: `role: ./custom-agents/senior-go`
+- **Absolute**: `role: /home/user/agents/senior-go`
+- **Home-relative**: `role: ~/shared-agents/senior-go`
+
+### Dynamic Role Selection
+
+The `role` field supports template interpolation, enabling dynamic role selection based on workflow inputs or state:
+
+```yaml
+inputs:
+  - name: persona
+    type: string
+    default: go-senior
+
+review:
+  type: agent
+  provider: claude
+  role: "{{.inputs.persona}}"
+  prompt: "Review: {{.inputs.code}}"
+  on_success: done
+```
+
+```bash
+awf run workflow --input persona=security-reviewer --input code="..."
+```
+
+### Validation
+
+Use `awf validate` to check that all role references exist and are readable:
+
+```bash
+awf validate workflow.yaml
+```
+
+Validation reports:
+- ✓ Roles found with valid `AGENTS.md` files
+- ✗ Roles referenced but not found in any discovery path
+- ✗ Role directories found but missing `AGENTS.md`
+- ⚠ Empty `AGENTS.md` files (warning — content will be empty)
+- ⚠ `AGENTS.md` exceeds 500KB (warning — context window impact)
+- ⚠ Combined `role + system_prompt` exceeds 10KB (warning — context window impact)
+
+### Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `AgentRoleNotFoundError` | Referenced role not found in discovery paths | Check role directory name matches YAML declaration; verify `AGENTS.md` exists |
+| Empty role content | `AGENTS.md` is 0 bytes or contains only frontmatter | Add Markdown body to `AGENTS.md` |
+| Role not in expected location | Wrong discovery directory | Move role to one of the 5 standard directories or use explicit path reference |
+| Large role file warning | `AGENTS.md` exceeds 500KB | Consider splitting into multiple smaller roles or removing verbose content |
+| Combined prompt too large | `role + system_prompt` over 10KB | Reduce role/prompt size or split into separate steps |
+
+### Conversation Mode with Roles
+
+Roles work seamlessly in conversation mode (`mode: conversation`). The role is resolved and injected once at the start of the conversation, establishing the agent's persona for all subsequent user turns:
+
+```yaml
+chat:
+  type: agent
+  provider: claude
+  mode: conversation
+  role: go-senior
+  system_prompt: "Be helpful and concise."
+  prompt: "{{.inputs.topic}}"
+  timeout: 600
+  on_success: done
+```
+
+### Limitations
+
+- A single agent step uses one role only — no composition or inheritance
+- No template interpolation is applied to role content — it is injected as-is
+- Roles do not reference other roles; only workflow steps reference roles
+- Roles establish system-level persona via the standard `system_prompt` mechanism available to all providers (Claude native `--system-prompt`, CLI-based providers via first-turn concat, HTTP providers via API field)
+
 ## External Prompt Files
 
 Instead of inlining prompts in YAML, you can load prompts from external Markdown files using the `prompt_file` field:

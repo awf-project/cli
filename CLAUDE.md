@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
-- CLI command implementations must call infrastructure layer methods rather than reimplementing HTTP requests, parsing, or validation; avoid logic duplication
 - Application layer must persist source metadata (SetSourceData) after successful infrastructure installation; omitting state blocks downstream operations like updates
 - Use dual import aliases (e.g., infrastructurePlugin + registry) when consuming refactored packages; explicitly requalify all symbol references to prevent ambiguity
 - Keep thin wrapper functions in original location for backward compatibility; delegate completely to extracted packages to maintain single source of truth
@@ -240,6 +238,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Use provider name prefixes for all infrastructure provider helper methods (buildCopilot, extractCopilot, parseCopilot, validateCopilot) to prevent naming collisions across implementations
 - Use mutex-protected getter/setter methods (Get*/Set*) for concurrent shared state; apply consistently across all goroutine-accessed fields
 - Server owns background task coordination (WaitGroup); pass by pointer to handlers and coordinate shutdown: httpSrv.Shutdown() then sseWG.Wait()
+- Always update `.go-arch-lint.yml` when adding new infrastructure components; register the package and document its dependency rules in the commit message
+- When implementing infrastructure adapters that follow established patterns (e.g., FilesystemAgentRoleRepository mirrors FilesystemSkillRepository), reuse shared utilities (skills.StripFrontmatter) to maintain single source of truth
 
 ## Common Pitfalls
 

@@ -26,15 +26,16 @@ var validOutputFormats = map[OutputFormat]bool{
 
 // AgentConfig holds configuration for invoking an AI agent.
 type AgentConfig struct {
-	Provider     string              `yaml:"provider"`      // agent provider: claude, codex, gemini, opencode, openai_compatible
-	Prompt       string              `yaml:"prompt"`        // prompt template with {{inputs.*}} and {{states.*}} (single mode) or first user message (conversation mode)
-	PromptFile   string              `yaml:"prompt_file"`   // path to external prompt template file (mutually exclusive with Prompt)
-	Options      map[string]any      `yaml:"options"`       // provider-specific options (model, temperature, max_tokens, etc.)
-	Timeout      int                 `yaml:"timeout"`       // seconds, 0 = use DefaultAgentTimeout
-	Mode         string              `yaml:"mode"`          // execution mode: "single" (default) or "conversation"
-	SystemPrompt string              `yaml:"system_prompt"` // system prompt preserved across conversation (conversation mode only)
-	Conversation *ConversationConfig `yaml:"conversation"`  // conversation-specific configuration (conversation mode only)
-	OutputFormat OutputFormat        `yaml:"output_format"` // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
+	Provider     string              `yaml:"provider"`       // agent provider: claude, codex, gemini, opencode, openai_compatible
+	Prompt       string              `yaml:"prompt"`         // prompt template with {{inputs.*}} and {{states.*}} (single mode) or first user message (conversation mode)
+	PromptFile   string              `yaml:"prompt_file"`    // path to external prompt template file (mutually exclusive with Prompt)
+	Options      map[string]any      `yaml:"options"`        // provider-specific options (model, temperature, max_tokens, etc.)
+	Timeout      int                 `yaml:"timeout"`        // seconds, 0 = use DefaultAgentTimeout
+	Mode         string              `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
+	SystemPrompt string              `yaml:"system_prompt"`  // system prompt preserved across conversation (conversation mode only)
+	Role         string              `yaml:"role,omitempty"` // role name or path resolved at execution time; may contain {{...}} templates
+	Conversation *ConversationConfig `yaml:"conversation"`   // conversation-specific configuration (conversation mode only)
+	OutputFormat OutputFormat        `yaml:"output_format"`  // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
 }
 
 // Validate checks if the agent configuration is valid.
@@ -98,7 +99,20 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 		return errors.New("timeout must be non-negative")
 	}
 
+	// Reject path traversal in Role; existence is verified at execution time
+	if c.Role != "" && containsPathTraversal(c.Role) {
+		return ValidationError{
+			Level:   ValidationLevelError,
+			Code:    ErrRoleNotFound,
+			Message: "role path contains path-traversal pattern (..): " + c.Role,
+		}
+	}
+
 	return nil
+}
+
+func containsPathTraversal(s string) bool {
+	return strings.Contains(s, "..")
 }
 
 // GetTimeout returns the effective timeout as a time.Duration.
@@ -113,11 +127,6 @@ func (c *AgentConfig) GetTimeout() time.Duration {
 // IsConversationMode returns true if the agent is configured for conversation mode.
 func (c *AgentConfig) IsConversationMode() bool {
 	return c.Mode == "conversation"
-}
-
-// GetEffectivePrompt returns the prompt for this agent step.
-func (c *AgentConfig) GetEffectivePrompt() string {
-	return c.Prompt
 }
 
 // AgentResult holds the result of an agent execution.

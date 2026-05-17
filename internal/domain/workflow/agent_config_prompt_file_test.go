@@ -269,15 +269,6 @@ func TestAgentConfig_PromptFile_MutualExclusivity_NonEmptyPrompt(t *testing.T) {
 	}
 }
 
-func TestAgentConfig_PromptFile_GetEffectivePrompt_DoesNotReturnFile(t *testing.T) {
-	config := AgentConfig{
-		Provider:   "claude",
-		PromptFile: "prompts/analyze.md",
-	}
-	effectivePrompt := config.GetEffectivePrompt()
-	assert.Empty(t, effectivePrompt)
-}
-
 func TestAgentConfig_PromptFile_ConversationMode_Combinations(t *testing.T) {
 	tests := []struct {
 		name       string

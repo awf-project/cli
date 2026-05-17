@@ -283,79 +283,6 @@ func TestAgentConfig_IsConversationMode_AfterValidation(t *testing.T) {
 	}
 }
 
-// workflow.AgentConfig GetEffectivePrompt Tests
-
-func TestAgentConfig_GetEffectivePrompt(t *testing.T) {
-	tests := []struct {
-		name           string
-		mode           string
-		prompt         string
-		expectedPrompt string
-	}{
-		{
-			name:           "single mode uses prompt",
-			mode:           "single",
-			prompt:         "Main prompt",
-			expectedPrompt: "Main prompt",
-		},
-		{
-			name:           "conversation mode uses prompt",
-			mode:           "conversation",
-			prompt:         "Conversation prompt",
-			expectedPrompt: "Conversation prompt",
-		},
-		{
-			name:           "empty mode returns prompt",
-			mode:           "",
-			prompt:         "Main prompt",
-			expectedPrompt: "Main prompt",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := workflow.AgentConfig{
-				Provider: "claude",
-				Mode:     tt.mode,
-				Prompt:   tt.prompt,
-			}
-			_ = config.Validate(nil) // Normalize mode
-			assert.Equal(t, tt.expectedPrompt, config.GetEffectivePrompt())
-		})
-	}
-}
-
-func TestAgentConfig_GetEffectivePrompt_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name           string
-		config         workflow.AgentConfig
-		expectedPrompt string
-	}{
-		{
-			name: "empty prompt returns empty",
-			config: workflow.AgentConfig{
-				Mode:   "conversation",
-				Prompt: "",
-			},
-			expectedPrompt: "",
-		},
-		{
-			name: "multiline prompt",
-			config: workflow.AgentConfig{
-				Mode:   "conversation",
-				Prompt: "Line 1\nLine 2",
-			},
-			expectedPrompt: "Line 1\nLine 2",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedPrompt, tt.config.GetEffectivePrompt())
-		})
-	}
-}
-
 func TestAgentConfig_ConversationMode_Complete(t *testing.T) {
 	config := workflow.AgentConfig{
 		Provider:     "claude",
@@ -381,7 +308,7 @@ Say "APPROVED" when done.`,
 	assert.Equal(t, "claude", config.Provider)
 	assert.True(t, config.IsConversationMode())
 	assert.Contains(t, config.SystemPrompt, "code reviewer")
-	assert.Contains(t, config.GetEffectivePrompt(), "Review this code")
+	assert.Contains(t, config.Prompt, "Review this code")
 	require.NotNil(t, config.Conversation)
 }
 
@@ -395,7 +322,7 @@ func TestAgentConfig_ConversationMode_MinimalConfig(t *testing.T) {
 	err := config.Validate(nil)
 	require.NoError(t, err)
 	assert.True(t, config.IsConversationMode())
-	assert.Equal(t, "Hello", config.GetEffectivePrompt())
+	assert.Equal(t, "Hello", config.Prompt)
 	assert.Nil(t, config.Conversation)
 }
 
@@ -413,7 +340,7 @@ func TestAgentConfig_SingleMode_BackwardCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, config.IsConversationMode())
 	assert.Equal(t, "single", config.Mode) // Normalized to "single"
-	assert.Equal(t, "Analyze this code", config.GetEffectivePrompt())
+	assert.Equal(t, "Analyze this code", config.Prompt)
 }
 
 func TestAgentConfig_ConversationMode_Errors(t *testing.T) {

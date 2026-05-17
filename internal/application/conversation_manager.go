@@ -36,6 +36,7 @@ type ConversationManager struct {
 	resolver        interpolation.Resolver
 	agentRegistry   ports.AgentRegistry
 	userInputReader ports.UserInputReader
+	agentRoleRepo   ports.AgentRoleRepository
 }
 
 func NewConversationManager(
@@ -54,6 +55,12 @@ func NewConversationManager(
 // When nil, conversations that require user input will return an error.
 func (m *ConversationManager) SetUserInputReader(r ports.UserInputReader) {
 	m.userInputReader = r
+}
+
+// SetAgentRoleRepository wires the optional agent role repository for role-based
+// system prompt injection. When nil, steps that reference a role will return an error.
+func (m *ConversationManager) SetAgentRoleRepository(repo ports.AgentRoleRepository) {
+	m.agentRoleRepo = repo
 }
 
 // validateConversationInputs validates step and agent config inputs.
@@ -78,6 +85,7 @@ func (m *ConversationManager) initializeConversationState(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	composedSystemPrompt string,
 ) (*workflow.ConversationState, string, error) {
 	var state *workflow.ConversationState
 	if config != nil && config.ContinueFrom != "" {
@@ -105,8 +113,7 @@ func (m *ConversationManager) initializeConversationState(
 		}
 		copy(state.Turns, prior.Turns)
 	} else {
-		systemPrompt := step.Agent.SystemPrompt
-		state = workflow.NewConversationState(systemPrompt)
+		state = workflow.NewConversationState(composedSystemPrompt)
 	}
 
 	intCtx := buildContext(execCtx)
@@ -165,6 +172,7 @@ func (m *ConversationManager) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	workflowDir string,
 	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if err := m.validateConversationInputs(step, config); err != nil {
@@ -182,7 +190,12 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, fmt.Errorf("step %s: %w", step.Name, err)
 	}
 
-	state, resolvedPrompt, err := m.initializeConversationState(step, resolvedProvider, config, execCtx, buildContext)
+	composedPrompt, roleErr := BuildRoleSystemPrompt(ctx, m.agentRoleRepo, m.resolver, step, workflowDir, intCtx)
+	if roleErr != nil {
+		return nil, fmt.Errorf("step %s: resolve role: %w", step.Name, roleErr)
+	}
+
+	state, resolvedPrompt, err := m.initializeConversationState(step, resolvedProvider, config, execCtx, buildContext, composedPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -191,8 +204,11 @@ func (m *ConversationManager) ExecuteConversation(
 	// and inject output_format so baseCLIProvider can route display filtering
 	// identically between executeAgentStep and conversation mode (F082).
 	options := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
-	if step.Agent.SystemPrompt != "" {
-		options["system_prompt"] = step.Agent.SystemPrompt
+	if composedPrompt != "" {
+		if _, exists := options["system_prompt"]; exists {
+			m.logger.Warn("options.system_prompt overridden by composed role+system_prompt", "step", step.Name)
+		}
+		options["system_prompt"] = composedPrompt
 	}
 
 	if m.userInputReader == nil {

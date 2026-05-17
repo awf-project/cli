@@ -482,6 +482,7 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 		Options:      y.Options,
 		Mode:         y.Mode,
 		SystemPrompt: y.SystemPrompt,
+		Role:         y.Role,
 		Conversation: mapConversationConfig(y.Conversation),
 		OutputFormat: workflow.OutputFormat(y.OutputFormat),
 		// Timeout is handled separately via step.Timeout
