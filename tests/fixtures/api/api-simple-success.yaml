@@ -1,0 +1,16 @@
+name: api-simple-success
+description: Two-step workflow for API integration SSE tests
+version: "1.0.0"
+author: test
+
+states:
+  initial: step_one
+  step_one:
+    type: step
+    command: echo "step one done"
+    on_success: done
+    on_failure: failed
+  done:
+    type: terminal
+  failed:
+    type: terminal

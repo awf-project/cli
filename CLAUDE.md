@@ -217,8 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Validate agent provider options only against what each CLI actually accepts; do not validate against API documentation if the underlying CLI rejects the option
-- Plugin binaries must be discoverable at <plugins_dir>/<plugin_name>/awf-plugin-<plugin_name>; host validates binary existence and version compatibility via gRPC handshake after process start
 - Commit generated protobuf files (.pb.go, _grpc.pb.go) to git; treat as source artifacts for build reproducibility, not ephemeral build outputs
 - CLI command implementations must call infrastructure layer methods rather than reimplementing HTTP requests, parsing, or validation; avoid logic duplication
 - Application layer must persist source metadata (SetSourceData) after successful infrastructure installation; omitting state blocks downstream operations like updates
@@ -240,10 +238,11 @@ func TestWorkflowValidation(t *testing.T) {
 - When integrating external UI frameworks, create Bridge adapters in the interface layer that wrap application services; maintain zero infrastructure imports in bridge implementation
 - Enforce event propagation depth limits to prevent infinite event loops; set maxPropagationDepth in EventBus and include propagation_depth in protocol buffer event definitions
 - Use provider name prefixes for all infrastructure provider helper methods (buildCopilot, extractCopilot, parseCopilot, validateCopilot) to prevent naming collisions across implementations
+- Use mutex-protected getter/setter methods (Get*/Set*) for concurrent shared state; apply consistently across all goroutine-accessed fields
+- Server owns background task coordination (WaitGroup); pass by pointer to handlers and coordinate shutdown: httpSrv.Shutdown() then sseWG.Wait()
 
 ## Common Pitfalls
 
-- When enabling session persistence in CLI providers, force JSON output format for reliable field extraction; document as known limitation that overrides user-specified format
 - Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
 - When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
 - Leverage Go's map[string]any behavior to silently ignore unsupported provider options; avoids validation errors while maintaining clear intent
@@ -284,11 +283,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Always test unplanned file modifications discovered during implementation; update task plan if intentional, revert if accidental
 - Never use standard YAML unmarshaling for skill metadata; implement frontmatter parsing (YAML header between --- delimiters) to preserve metadata
 - Never skip testing XDG directory fallback paths; code will fail on systems without XDG_DATA_HOME and XDG_CONFIG_HOME variables set
+- Major feature implementations require supporting infrastructure changes (ExecutionContext getters, helper modifications); document rationale in commit message and update validation plan if discovered
 
 ## Test Conventions
 
-- Mock evaluators must have pre-configured results for every expression input; unconfigured expressions return zero value, which may bypass validation checks in evaluation pipelines
-- Distinguish fixture path updates (allowed without review) from content changes (require explicit review); document rationale for content modifications in commit message
 - Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
 - Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
 - Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
@@ -307,6 +305,8 @@ func TestWorkflowValidation(t *testing.T) {
 - When testing YAML unmarshaling, assert on all nested struct fields; verify that arrays like Events.Subscribe and Events.Emit are populated, not defaulted to empty
 - New gRPC and concurrency-heavy infrastructure requires >85% test coverage; run 'make test-race' to verify no data races in stream managers and lock-protected sections.
 - Always write unit tests for CLI helper functions; parseInputFlags, resolvePromptInput, categorizeError must have >80% coverage before commit
+- HTTP servers require unit tests for the server struct itself: route registration, API initialization, graceful shutdown, not just individual handlers
+- Organize interface layer test fixtures in tests/fixtures/<interface-type>/ with descriptive names (e.g., api-simple-success.yaml, api-failing.yaml)
 
 ## Review Standards
 

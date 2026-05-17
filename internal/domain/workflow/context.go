@@ -138,7 +138,7 @@ func (c *ExecutionContext) GetStepState(stepName string) (StepState, bool) {
 	return state, ok
 }
 
-// GetAllStepStates returns a copy of all step states in a thread-safe manner.
+// GetAllStepStates returns a copy of all step states.
 func (c *ExecutionContext) GetAllStepStates() map[string]StepState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -148,6 +148,50 @@ func (c *ExecutionContext) GetAllStepStates() map[string]StepState {
 		states[k] = v
 	}
 	return states
+}
+
+// GetStatus returns the current execution status.
+func (c *ExecutionContext) GetStatus() ExecutionStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Status
+}
+
+// SetStatus updates the execution status.
+func (c *ExecutionContext) SetStatus(s ExecutionStatus) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Status = s
+	c.UpdatedAt = time.Now()
+}
+
+// GetCompletedAt returns the completion time.
+func (c *ExecutionContext) GetCompletedAt() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.CompletedAt
+}
+
+// SetCompletedAt updates CompletedAt and UpdatedAt.
+func (c *ExecutionContext) SetCompletedAt(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.CompletedAt = t
+	c.UpdatedAt = time.Now()
+}
+
+// GetCurrentStep returns the name of the step currently executing.
+func (c *ExecutionContext) GetCurrentStep() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.CurrentStep
+}
+
+// GetUpdatedAt returns the last update time.
+func (c *ExecutionContext) GetUpdatedAt() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.UpdatedAt
 }
 
 // PushCallStack adds a workflow name to the call stack.

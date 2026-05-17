@@ -42,6 +42,8 @@ Numbers are never reused. If a decision is reversed, the original ADR is marked 
 | [012](012-runtime-shell-detection.md) | Runtime Shell Detection with $SHELL Environment Variable | Accepted |
 | [013](013-context-aware-input-ports.md) | Context-Aware Input Ports | Accepted |
 | [014](014-shebang-execution-for-script-files.md) | Shebang Execution for Script Files | Accepted |
+| [015](015-grpc-go-plugin-transport-for-external-plugins.md) | gRPC via go-plugin as External Plugin Transport | Accepted |
+| [016](016-http-interface-adapter-huma-sse-streaming.md) | HTTP Interface Adapter with Huma v2 and SSE Streaming | Accepted |
 
 ## Creating a New ADR
 

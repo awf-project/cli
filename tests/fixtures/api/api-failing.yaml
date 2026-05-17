@@ -1,0 +1,16 @@
+name: api-failing
+description: Workflow with an intentionally failing step for error path integration tests
+version: "1.0.0"
+author: test
+
+states:
+  initial: fail_step
+  fail_step:
+    type: step
+    command: "false"
+    on_success: done
+    on_failure: failed
+  done:
+    type: terminal
+  failed:
+    type: terminal

@@ -34,6 +34,7 @@ title: "CLI Commands"
 | `awf workflow remove <name>` | Remove an installed workflow pack |
 | `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf config show` | Display project configuration |
+| `awf serve` | Start HTTP API server for remote execution and monitoring |
 | `awf upgrade` | Upgrade AWF to the latest version |
 | `awf upgrade --check` | Check for available updates without installing |
 | `awf upgrade --version <tag>` | Install a specific version |
@@ -595,6 +596,72 @@ awf status abc123-def456
 # JSON output for scripting
 awf status abc123-def456 -f json
 ```
+
+---
+
+## awf serve
+
+Start an HTTP API server for remote workflow execution and monitoring.
+
+```bash
+awf serve [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--port <int>` | Port to bind on (default: `2511`) |
+| `--host <string>` | Host to bind on (default: `127.0.0.1`) |
+
+### Description
+
+Launches an HTTP API server exposing REST endpoints and Server-Sent Events (SSE) streaming for:
+- **Workflow discovery** — list and fetch workflow definitions
+- **Workflow validation** — statically validate workflows before execution
+- **Async execution** — start workflows and receive `execution_id` immediately
+- **Real-time monitoring** — stream step-by-step progress via SSE
+- **Execution history** — query historical executions and aggregated statistics
+
+The server generates an auto-synced OpenAPI 3.1 specification served at `/openapi.json` with interactive Swagger UI at `/docs`.
+
+Default binding is `127.0.0.1:2511` (localhost only) — use `--host 0.0.0.0` at your own risk in production without authentication.
+
+### Graceful Shutdown
+
+The server listens for SIGINT (Ctrl+C) and SIGTERM signals. On shutdown:
+1. New HTTP requests return 503
+2. Active SSE streams drain within 30 seconds
+3. Running workflows continue (separate from the HTTP server lifecycle)
+4. Server exits cleanly
+
+### Examples
+
+```bash
+# Start on localhost (default)
+awf serve
+
+# Start on a custom port
+awf serve --port 8080
+
+# Bind to all interfaces
+awf serve --host 0.0.0.0 --port 8080
+
+# Access the API
+curl http://localhost:2511/api/workflows
+
+# Open interactive API docs
+open http://localhost:2511/docs
+```
+
+### Security Considerations
+
+- **Default localhost binding** prevents accidental network exposure
+- **No authentication in v1** — requires running in isolated network or behind a reverse proxy with auth
+- For production: use reverse proxy (nginx, HAProxy) with HTTPS, authentication, and rate limiting
+- Monitor `/api/executions` for long-running or stuck workflows
+
+See [HTTP API Documentation](api.md) for endpoint reference, client libraries, and integration examples.
 
 ---
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **F097**: HTTP REST API server (`awf serve`) — new `internal/interfaces/api/` adapter alongside `cli/` and `tui/` exposing workflow discovery (`GET /api/workflows`, `GET /api/workflows/{name}`, `POST /api/workflows/{name}/validate`), async execution (`POST /api/workflows/{name}/run` returning 202 + `execution_id`), lifecycle control (`GET /api/executions`, `GET /api/executions/{id}`, `DELETE /api/executions/{id}`, `POST /api/executions/{id}/resume`), Server-Sent Events streaming (`GET /api/executions/{id}/events` emitting `step.started`, `step.completed`, `step.failed`, `workflow.completed`, `workflow.failed`, `output`), and history queries (`GET /api/history`, `GET /api/history/stats`); Huma v2 + chi v5 generate OpenAPI 3.1 spec served at `/openapi.json`, `/openapi.yaml`, and Swagger UI at `/docs`; Bridge adapter pattern mirrors `tui/bridge.go` with `sync.Map` tracking active executions; SSE polling at 200ms cadence matching TUI; graceful shutdown via `signal.NotifyContext` waits up to 30s for active streams; default binding `127.0.0.1:2511` (loopback-only, non-loopback opt-in via `--host`); arch-lint enforces `interfaces-api` may import only `application/` and `domain/*` (no `infrastructure/`, `cli/`, or `tui/`); see [ADR-016](docs/ADR/016-http-interface-adapter-huma-sse-streaming.md)
+
 ## [0.9.0] - 2026-05-14
 
 ### Added

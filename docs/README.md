@@ -48,6 +48,7 @@ Learn how to use AWF effectively:
 - [Plugins](user-guide/plugins.md) - Extend AWF with custom operations, validators, and step types; transport security (AutoMTLS, binary integrity verification) and log forwarding
 - [Plugin Events](user-guide/plugin-events.md) - Real-time event reactivity between plugins and core
 - [Workflow Packs](user-guide/workflow-packs.md) - Install, execute (`awf run pack/workflow`), and manage reusable workflow packs with 3-tier path resolution
+- [HTTP API](user-guide/api.md) - REST API server with OpenAPI 3.1 spec, async workflow execution, real-time SSE streaming, and remote integration
 - [Terminal UI (TUI)](user-guide/tui.md) - Interactive dashboard for workflow browsing, monitoring, history, and agent conversations
 - [Upgrading AWF](user-guide/upgrade.md) - Self-update command with version checking, checksum verification, and atomic binary replacement
 - [Audit Trail](user-guide/audit-trail.md) - Structured execution audit log with JSONL output

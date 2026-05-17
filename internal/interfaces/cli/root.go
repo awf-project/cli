@@ -99,6 +99,7 @@ Examples:
 	cmd.AddCommand(newErrorCommand(cfg))
 	cmd.AddCommand(newUpgradeCommand(cfg))
 	cmd.AddCommand(tui.NewCommand())
+	cmd.AddCommand(NewServeCommand())
 
 	return cmd
 }

@@ -1,0 +1,16 @@
+name: api-slow
+description: Long-running workflow for cancel propagation integration tests
+version: "1.0.0"
+author: test
+
+states:
+  initial: slow_step
+  slow_step:
+    type: step
+    command: sleep 30
+    on_success: done
+    on_failure: failed
+  done:
+    type: terminal
+  failed:
+    type: terminal

@@ -443,7 +443,7 @@ func (s *ExecutionService) runExecutionLoop(
 	for {
 		step, ok := wf.Steps[currentStep]
 		if !ok {
-			execCtx.Status = workflow.StatusFailed
+			execCtx.SetStatus(workflow.StatusFailed)
 			execErr = fmt.Errorf("step not found: %s", currentStep)
 			break
 		}
@@ -452,7 +452,7 @@ func (s *ExecutionService) runExecutionLoop(
 
 		if step.Type == workflow.StepTypeTerminal {
 			if step.Status == workflow.TerminalFailure {
-				execCtx.Status = workflow.StatusFailed
+				execCtx.SetStatus(workflow.StatusFailed)
 				execCtx.ExitCode = step.ExitCode
 				if msg := s.interpolateTerminalMessage(step.Message, s.buildInterpolationContext(execCtx)); msg != "" {
 					execErr = errors.New(msg)
@@ -460,9 +460,9 @@ func (s *ExecutionService) runExecutionLoop(
 					execErr = fmt.Errorf("workflow reached terminal failure state: %s", currentStep)
 				}
 			} else {
-				execCtx.Status = workflow.StatusCompleted
+				execCtx.SetStatus(workflow.StatusCompleted)
 			}
-			execCtx.CompletedAt = time.Now()
+			execCtx.SetCompletedAt(time.Now())
 			s.checkpoint(ctx, execCtx)
 			terminalErrMsg := ""
 			if execErr != nil {
@@ -470,7 +470,7 @@ func (s *ExecutionService) runExecutionLoop(
 			}
 			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
 			s.emitWorkflowTerminalEvent(ctx, execCtx, execErr)
-			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
+			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.GetStatus())
 			break
 		}
 
@@ -629,6 +629,13 @@ func (s *ExecutionService) executeStep(
 	if err != nil {
 		return "", err
 	}
+
+	// Mark step as running so SSE handler can observe it before completion.
+	execCtx.SetStepState(step.Name, workflow.StepState{
+		Name:      step.Name,
+		Status:    workflow.StatusRunning,
+		StartedAt: startTime,
+	})
 
 	// T008: Execute command (with retry if configured)
 	result, attempt, execErr := s.executeStepCommand(stepCtx, step, cmd)
