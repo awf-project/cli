@@ -51,6 +51,24 @@ func (m *MockLogger) WithContext(ctx map[string]any) ports.Logger {
 	return m
 }
 
+// Errors returns all error messages captured by the logger.
+func (m *MockLogger) Errors() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.errors))
+	copy(result, m.errors)
+	return result
+}
+
+// Infos returns all info messages captured by the logger.
+func (m *MockLogger) Infos() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.info))
+	copy(result, m.info)
+	return result
+}
+
 // SkipInCI skips the test if running in a CI environment.
 func SkipInCI(t *testing.T) {
 	t.Helper()

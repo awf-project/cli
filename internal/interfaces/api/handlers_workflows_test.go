@@ -1,0 +1,156 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+
+	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/awf-project/cli/internal/domain/workflow"
+)
+
+func TestWorkflowHandler_List_HappyPath(t *testing.T) {
+	mock := newMockWorkflowLister("deploy-prod", "test-service")
+	mock.entries[0].Version = "1.0.0"
+	mock.entries[0].Description = "Deploy to production"
+	mock.entries[1].Version = "2.0.0"
+	mock.entries[1].Description = "Run tests"
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	resp := api.Get("/api/workflows")
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Workflows []WorkflowSummary `json:"workflows"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Len(t, result.Body.Workflows, 2)
+	assert.Equal(t, "deploy-prod", result.Body.Workflows[0].Name)
+	assert.Equal(t, "1.0.0", result.Body.Workflows[0].Version)
+	assert.Equal(t, "Deploy to production", result.Body.Workflows[0].Description)
+}
+
+func TestWorkflowHandler_Get_NotFound_Returns404(t *testing.T) {
+	mock := newMockWorkflowLister()
+	mock.getErr = errors.New("workflow not found")
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	resp := api.Get("/api/workflows/nonexistent")
+	assert.Equal(t, 404, resp.Code)
+}
+
+func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
+	mock := newMockWorkflowLister("bad-workflow")
+	mock.validErr = errors.New("invalid step reference")
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	validateInput := struct {
+		Body struct {
+			Inputs map[string]any `json:"inputs"`
+		} `json:"body"`
+	}{}
+
+	resp := api.Post("/api/workflows/bad-workflow/validate", validateInput)
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Errors []string `json:"errors"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, result.Body.Errors)
+}
+
+func TestWorkflowHandler_List_EmptyList(t *testing.T) {
+	mock := newMockWorkflowLister()
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	resp := api.Get("/api/workflows")
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Workflows []WorkflowSummary `json:"workflows"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Empty(t, result.Body.Workflows)
+}
+
+func TestWorkflowHandler_Get_FoundWorkflow_ReturnsWorkflow(t *testing.T) {
+	mock := newMockWorkflowLister("test-workflow")
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	resp := api.Get("/api/workflows/test-workflow")
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body *workflow.Workflow `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.NotNil(t, result.Body)
+	assert.Equal(t, "test-workflow", result.Body.Name)
+}
+
+func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T) {
+	mock := newMockWorkflowLister("valid-workflow")
+	// validErr defaults to nil, which means validation passed
+
+	bridge := NewBridge(mock, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+
+	validateInput := struct {
+		Body struct {
+			Inputs map[string]any `json:"inputs"`
+		} `json:"body"`
+	}{}
+
+	resp := api.Post("/api/workflows/valid-workflow/validate", validateInput)
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Errors []string `json:"errors"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Empty(t, result.Body.Errors)
+}

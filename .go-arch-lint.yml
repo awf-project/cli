@@ -147,6 +147,16 @@ vendors:
     in:
       - golang.org/x/sync/errgroup
 
+  huma:
+    in:
+      - github.com/danielgtaylor/huma/v2
+      - github.com/danielgtaylor/huma/v2/**
+
+  chi:
+    in:
+      - github.com/go-chi/chi/v5
+      - github.com/go-chi/chi/v5/**
+
 components:
   # DOMAIN LAYER
   domain-workflow:
@@ -276,6 +286,9 @@ components:
 
   interfaces-tui:
     in: interfaces/tui
+
+  interfaces-api:
+    in: interfaces/api
 
   # TEST UTILITIES
   testutil:
@@ -570,6 +583,7 @@ deps:
       - infra-xdg
       - interfaces-cli-ui
       - interfaces-tui
+      - interfaces-api
     canUse:
       - go-stdlib
       - go-sync
@@ -603,6 +617,22 @@ deps:
       - cobra
       - bubbletea
       - zap
+
+  interfaces-api:
+    mayDependOn:
+      - application
+      - domain-workflow
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+      - domain-operation
+    canUse:
+      - go-stdlib
+      - go-sync
+      - huma
+      - chi
+      - zap
+      - uuid
 
   interfaces-cli-ui:
     mayDependOn:
