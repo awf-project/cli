@@ -77,9 +77,10 @@ type yamlStep struct {
 	Config map[string]any `yaml:"config"` // plugin-provided step type parameters
 
 	// Agent conversation mode (F033) - extends agent configuration
-	Mode         string                  `yaml:"mode"`          // execution mode: "single" (default) or "conversation"
-	SystemPrompt string                  `yaml:"system_prompt"` // system prompt for conversation mode
-	Conversation *yamlConversationConfig `yaml:"conversation"`  // conversation-specific configuration
+	Mode         string                  `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
+	SystemPrompt string                  `yaml:"system_prompt"`  // system prompt for conversation mode
+	Role         string                  `yaml:"role,omitempty"` // agent role name or path (F098)
+	Conversation *yamlConversationConfig `yaml:"conversation"`   // conversation-specific configuration
 
 	// Skill references (F096) - polymorphic: string (name) or map{"path": "..."} (path-based)
 	Skills []any `yaml:"skills"`

@@ -23,8 +23,12 @@ func DataHome() string {
 	return filepath.Join(home, ".local", "share")
 }
 
-// AWFConfigDir returns the AWF config directory ($XDG_CONFIG_HOME/awf)
+// AWFConfigDir returns the AWF config directory.
+// Checks $AWF_CONFIG_HOME first, then falls back to $XDG_CONFIG_HOME/awf.
 func AWFConfigDir() string {
+	if dir := os.Getenv("AWF_CONFIG_HOME"); dir != "" {
+		return dir
+	}
 	return filepath.Join(ConfigHome(), "awf")
 }
 
@@ -87,6 +91,16 @@ func AWFSkillsDir() string {
 // LocalSkillsDir returns the local project skills directory
 func LocalSkillsDir() string {
 	return ".awf/skills"
+}
+
+// AWFAgentsDir returns the global agents directory ($XDG_CONFIG_HOME/awf/agents)
+func AWFAgentsDir() string {
+	return filepath.Join(AWFConfigDir(), "agents")
+}
+
+// LocalAgentsDir returns the local project agents directory
+func LocalAgentsDir() string {
+	return ".awf/agents"
 }
 
 // AWFPluginsDir returns the global plugins directory ($XDG_DATA_HOME/awf/plugins)

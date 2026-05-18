@@ -36,6 +36,7 @@ type ConversationExecutor interface {
 		config *workflow.ConversationConfig,
 		execCtx *workflow.ExecutionContext,
 		buildContext ContextBuilderFunc,
+		workflowDir string,
 		stdoutW, stderrW io.Writer,
 	) (*workflow.ConversationResult, error)
 }
@@ -67,6 +68,7 @@ type ExecutionService struct {
 	tracer             ports.Tracer
 	eventPublisher     ports.EventPublisher
 	skillRepo          ports.SkillRepository
+	agentRoleRepo      ports.AgentRoleRepository
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -112,6 +114,14 @@ func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 
 func (s *ExecutionService) SetSkillRepository(repo ports.SkillRepository) {
 	s.skillRepo = repo
+}
+
+func (s *ExecutionService) SetAgentRoleRepository(repo ports.AgentRoleRepository) {
+	s.agentRoleRepo = repo
+}
+
+func (s *ExecutionService) buildRoleAwareSystemPrompt(ctx context.Context, step *workflow.Step, workflowDir string, intCtx *interpolation.Context) (string, error) {
+	return BuildRoleSystemPrompt(ctx, s.agentRoleRepo, s.resolver, step, workflowDir, intCtx)
 }
 
 // SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
@@ -2278,7 +2288,7 @@ func (s *ExecutionService) executeAgentStep(
 
 	// F033: Route to conversation execution if mode is "conversation"
 	if step.Agent.Mode == "conversation" {
-		return s.executeConversationStep(stepCtx, step, execCtx)
+		return s.executeConversationStep(stepCtx, wf, step, execCtx)
 	}
 
 	// F063: Load prompt from file if prompt_file is specified
@@ -2332,6 +2342,17 @@ func (s *ExecutionService) executeAgentStep(
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
 	opts := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
 
+	composedPrompt, roleErr := s.buildRoleAwareSystemPrompt(stepCtx, step, wf.SourceDir, intCtx)
+	if roleErr != nil {
+		return "", fmt.Errorf("step %s: resolve role: %w", step.Name, roleErr)
+	}
+	if composedPrompt != "" {
+		if _, exists := opts["system_prompt"]; exists {
+			s.logger.Warn("options.system_prompt overridden by composed role+system_prompt", "step", step.Name)
+		}
+		opts["system_prompt"] = composedPrompt
+	}
+
 	// Record step state
 	state := workflow.StepState{
 		Name:        step.Name,
@@ -2348,7 +2369,7 @@ func (s *ExecutionService) executeAgentStep(
 	var execErr error
 	if step.Agent.Conversation != nil {
 		var convResult *workflow.ConversationResult
-		convResult, execErr = s.executeResumableAgentCall(stepCtx, step, provider, resolvedProvider, resolvedPrompt, opts, execCtx)
+		convResult, execErr = s.executeResumableAgentCall(stepCtx, step, provider, resolvedProvider, resolvedPrompt, opts, execCtx, wf.SourceDir)
 		if convResult != nil {
 			state.Output = convResult.Output
 			state.DisplayOutput = convResult.DisplayOutput
@@ -2484,19 +2505,23 @@ func (s *ExecutionService) executeResumableAgentCall(
 	resolvedPrompt string,
 	opts map[string]any,
 	execCtx *workflow.ExecutionContext,
+	workflowDir string,
 ) (*workflow.ConversationResult, error) {
-	state, err := s.buildResumableState(step, resolvedProvider, execCtx)
+	// Resolve composed prompt BEFORE state init so the persisted state
+	// carries the full role+inline system prompt (mirrors the ConversationManager fix).
+	composed, roleErr := s.buildRoleAwareSystemPrompt(ctx, step, workflowDir, s.buildInterpolationContext(execCtx))
+	if roleErr != nil {
+		return nil, fmt.Errorf("resolve role: %w", roleErr)
+	}
+	state, err := s.buildResumableState(step, resolvedProvider, execCtx, composed)
 	if err != nil {
 		return nil, err
 	}
 	// Providers consume system_prompt via the options map (same convention as
 	// ConversationManager). Inject it on fresh sessions only; on resumed
 	// sessions the provider retains the system prompt from the prior turn.
-	if step.Agent.SystemPrompt != "" && state.SessionID == "" {
-		if opts == nil {
-			opts = map[string]any{}
-		}
-		opts["system_prompt"] = step.Agent.SystemPrompt
+	if composed != "" && state.SessionID == "" {
+		opts["system_prompt"] = composed
 	}
 	return provider.ExecuteConversation(ctx, state, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
 }
@@ -2508,10 +2533,11 @@ func (s *ExecutionService) buildResumableState(
 	step *workflow.Step,
 	resolvedProvider string,
 	execCtx *workflow.ExecutionContext,
+	composedSystemPrompt string,
 ) (*workflow.ConversationState, error) {
 	cfg := step.Agent.Conversation
 	if cfg == nil || cfg.ContinueFrom == "" {
-		return workflow.NewConversationState(step.Agent.SystemPrompt), nil
+		return workflow.NewConversationState(composedSystemPrompt), nil
 	}
 
 	priorStepState, ok := execCtx.GetStepState(cfg.ContinueFrom)
@@ -2556,6 +2582,7 @@ func (s *ExecutionService) buildResumableState(
 // F051: T009 - Implement delegation to ConversationManager
 func (s *ExecutionService) executeConversationStep(
 	ctx context.Context,
+	wf *workflow.Workflow,
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
@@ -2584,6 +2611,7 @@ func (s *ExecutionService) executeConversationStep(
 		step.Agent.Conversation,
 		execCtx,
 		buildContext,
+		wf.SourceDir,
 		s.stdoutWriter,
 		s.stderrWriter,
 	)

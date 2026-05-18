@@ -72,7 +72,7 @@ func TestExecuteConversationStep_T009_HappyPath_SingleTurnSuccess(t *testing.T) 
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	nextStep, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	nextStep, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", nextStep) // Empty string means use OnSuccess transition
@@ -135,7 +135,7 @@ func TestExecuteConversationStep_T009_HappyPath_MultiTurnSuccess(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	nextStep, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	nextStep, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", nextStep)
@@ -197,7 +197,7 @@ func TestExecuteConversationStep_T009_HappyPath_WithInputInterpolation(t *testin
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.NoError(t, err)
 	assert.True(t, buildContextCalled, "buildContext function should have been passed and called")
@@ -233,7 +233,7 @@ func TestExecuteConversationStep_T009_EdgeCase_MinimalConfig(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	nextStep, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	nextStep, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", nextStep)
@@ -282,7 +282,7 @@ func TestExecuteConversationStep_T009_EdgeCase_EmptyOutput(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	nextStep, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	nextStep, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", nextStep)
@@ -310,7 +310,7 @@ func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T)
 	execCtx.Status = workflow.StatusRunning
 	// Mock manager that checks context
 	mockConvMgr := &mockConversationManagerWithContextT009{
-		executeFunc: func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error) {
+		executeFunc: func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, workflowDir string, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error) {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -326,7 +326,7 @@ func TestExecuteConversationStep_T009_EdgeCase_ContextCancellation(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := svc.executeConversationStep(ctx, step, execCtx)
+	_, err := svc.executeConversationStep(ctx, &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled))
@@ -352,7 +352,7 @@ func TestExecuteConversationStep_T009_Error_NoConversationManager(t *testing.T) 
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation manager not configured")
@@ -375,7 +375,7 @@ func TestExecuteConversationStep_T009_Error_NilAgentConfig(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "agent config is nil")
@@ -405,7 +405,7 @@ func TestExecuteConversationStep_T009_Error_ConversationManagerFailure(t *testin
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "provider authentication failed")
@@ -435,7 +435,7 @@ func TestExecuteConversationStep_T009_Error_ProviderNotFound(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "provider not found")
@@ -465,7 +465,7 @@ func TestExecuteConversationStep_T009_Error_InterpolationFailure(t *testing.T) {
 		logger:          newMockLogger(),
 		resolver:        newMockResolver(),
 	}
-	_, err := svc.executeConversationStep(context.Background(), step, execCtx)
+	_, err := svc.executeConversationStep(context.Background(), &workflow.Workflow{}, step, execCtx)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "interpolation failed")
@@ -483,6 +483,7 @@ func (m *mockConversationManagerT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	workflowDir string,
 	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if m.err != nil {
@@ -493,7 +494,7 @@ func (m *mockConversationManagerT009) ExecuteConversation(
 
 // mockConversationManagerWithContextT009 allows testing context cancellation.
 type mockConversationManagerWithContextT009 struct {
-	executeFunc func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error)
+	executeFunc func(ctx context.Context, step *workflow.Step, config *workflow.ConversationConfig, execCtx *workflow.ExecutionContext, buildContext ContextBuilderFunc, workflowDir string, stdoutW, stderrW io.Writer) (*workflow.ConversationResult, error)
 }
 
 func (m *mockConversationManagerWithContextT009) ExecuteConversation(
@@ -502,9 +503,10 @@ func (m *mockConversationManagerWithContextT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	workflowDir string,
 	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
-	return m.executeFunc(ctx, step, config, execCtx, buildContext, stdoutW, stderrW)
+	return m.executeFunc(ctx, step, config, execCtx, buildContext, workflowDir, stdoutW, stderrW)
 }
 
 // mockConversationManagerWithBuildContextT009 captures buildContext calls for verification.
@@ -519,6 +521,7 @@ func (m *mockConversationManagerWithBuildContextT009) ExecuteConversation(
 	config *workflow.ConversationConfig,
 	execCtx *workflow.ExecutionContext,
 	buildContext ContextBuilderFunc,
+	workflowDir string,
 	stdoutW, stderrW io.Writer,
 ) (*workflow.ConversationResult, error) {
 	if m.onExecute != nil {

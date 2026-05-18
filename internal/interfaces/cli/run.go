@@ -21,6 +21,7 @@ import (
 	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
 	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -318,6 +319,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths(templatePaths),
 		application.WithTracer(tracer),
+		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
 		application.WithPackContext(packName, packResolver),
 	}
@@ -1035,6 +1037,7 @@ func runSingleStep(
 		application.WithTemplatePaths(templatePaths),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
 		application.WithPackContext(packName, packResolver),
+		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 	}
 
 	if !skipPlugins && pluginResult != nil {

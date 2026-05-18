@@ -171,6 +171,7 @@ func TestConversationManager_ExecuteConversation_MultiTurn(t *testing.T) {
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -219,6 +220,7 @@ func TestConversationManager_ExecuteConversation_Error_NoUserInputReader(t *test
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -252,6 +254,7 @@ func TestConversationManager_ExecuteConversation_Error_NilStep(t *testing.T) {
 		&workflow.ConversationConfig{},
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -293,6 +296,7 @@ func TestConversationManager_ExecuteConversation_Error_NilConfig(t *testing.T) {
 		nil,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -335,6 +339,7 @@ func TestConversationManager_ExecuteConversation_Error_ProviderNotFound(t *testi
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -384,6 +389,7 @@ func TestConversationManager_ExecuteConversation_Error_UserInputReaderFails(t *t
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -430,6 +436,7 @@ func TestConversationManager_ExecuteConversation_Error_ProviderExecutionFails(t 
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -479,6 +486,7 @@ func TestConversationManager_ExecuteConversation_Error_ContextCancellation(t *te
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -526,6 +534,7 @@ func TestConversationManager_ExecuteConversation_Error_ContinueFromStepNotFound(
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)
@@ -581,6 +590,7 @@ func TestConversationManager_ExecuteConversation_Error_ContinueFromNoConversatio
 		config,
 		execCtx,
 		buildContext,
+		"",
 		io.Discard,
 		io.Discard,
 	)

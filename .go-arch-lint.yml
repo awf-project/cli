@@ -271,6 +271,9 @@ components:
   infra-otel:
     in: infrastructure/otel
 
+  infra-roles:
+    in: infrastructure/roles
+
   infra-skills:
     in: infrastructure/skills
 
@@ -347,6 +350,7 @@ deps:
       - infra-http
       - infra-notify
       - infra-repository
+      - infra-roles
       - infra-skills
       - infra-xdg
     canUse:
@@ -539,6 +543,15 @@ deps:
       - go-stdlib
       - otel
 
+  infra-roles:
+    mayDependOn:
+      - domain-workflow
+      - domain-ports
+      - infra-skills
+      - infra-xdg
+    canUse:
+      - go-stdlib
+
   infra-skills:
     mayDependOn:
       - domain-workflow
@@ -575,6 +588,7 @@ deps:
       - infra-otel
       - infra-plugin
       - infra-repository
+      - infra-roles
       - infra-skills
       - infra-store
       - infra-tokenizer

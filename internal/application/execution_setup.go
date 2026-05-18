@@ -102,6 +102,7 @@ type setupConfig struct {
 	templatePaths   []string
 	pluginService   *PluginService
 	eventPublisher  ports.EventPublisher
+	agentRoleRepo   ports.AgentRoleRepository
 }
 
 // WithNotifyConfig configures notification backend defaults.
@@ -169,6 +170,11 @@ func WithPluginService(svc *PluginService) SetupOption {
 // WithEventPublisher injects an event publisher into the execution service.
 func WithEventPublisher(p ports.EventPublisher) SetupOption {
 	return func(c *setupConfig) { c.eventPublisher = p }
+}
+
+// WithAgentRoleRepository injects an agent role repository for F098 role resolution.
+func WithAgentRoleRepository(repo ports.AgentRoleRepository) SetupOption {
+	return func(c *setupConfig) { c.agentRoleRepo = repo }
 }
 
 // ExecutionSetup centralizes ExecutionService wiring.
@@ -260,6 +266,9 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		if cfg.userInputReader != nil {
 			convMgr.SetUserInputReader(cfg.userInputReader)
 		}
+		if cfg.agentRoleRepo != nil {
+			convMgr.SetAgentRoleRepository(cfg.agentRoleRepo)
+		}
 		execSvc.SetConversationManager(convMgr)
 	}
 
@@ -280,6 +289,10 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 	}
 
 	execSvc.SetSkillRepository(infraskills.NewFilesystemSkillRepository(s.logger))
+
+	if cfg.agentRoleRepo != nil {
+		execSvc.SetAgentRoleRepository(cfg.agentRoleRepo)
+	}
 
 	compositeProvider := s.buildProviders(cfg)
 	execSvc.SetOperationProvider(compositeProvider)

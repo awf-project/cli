@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
@@ -150,12 +152,19 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		skillWarnings, validationErr = validateSkillRefs(wf)
 	}
 
+	var roleWarnings []string
+	if validationErr == nil {
+		roleRepo := roles.NewFilesystemAgentRoleRepository(nil)
+		roleWarnings, validationErr = validateRoleRefs(wf, roleRepo)
+	}
+
 	// Collect disabled plugin warnings (non-blocking, skipped on quiet format or when --skip-plugins)
 	var pluginWarnings []string
 	if !skipPlugins && validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
 		pluginWarnings = collectDisabledPluginWarnings(ctx, cfg, wf)
 	}
 	pluginWarnings = append(pluginWarnings, skillWarnings...)
+	pluginWarnings = append(pluginWarnings, roleWarnings...)
 
 	// validatorTimeout is reserved for plugin validator invocation (wired in GREEN phase)
 	_ = validatorTimeout
@@ -400,6 +409,74 @@ func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
 	return warnings, nil
 }
 
+func validateRoleRefs(wf *workflow.Workflow, repo ports.AgentRoleRepository) ([]string, error) {
+	ctx := context.Background()
+	var warnings []string
+
+	for _, step := range wf.Steps {
+		if step.Agent == nil || step.Agent.Role == "" {
+			continue
+		}
+
+		role := step.Agent.Role
+
+		// Defense in depth: reject path-traversal even though domain + infra also reject it.
+		if strings.Contains(role, "..") {
+			return nil, workflow.ValidationError{
+				Level:   workflow.ValidationLevelError,
+				Code:    workflow.ErrRoleNotFound,
+				Message: "role path contains path-traversal pattern (..): " + role,
+				Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
+			}
+		}
+
+		agentRole, err := application.ResolveAgentRole(ctx, repo, role, wf.SourceDir)
+		if err != nil {
+			var notFound *workflow.AgentRoleNotFoundError
+			if errors.As(err, &notFound) {
+				if roleDirExistsWithoutAgentsMD(notFound) {
+					return nil, workflow.ValidationError{
+						Level:   workflow.ValidationLevelError,
+						Code:    workflow.ErrRoleMissingAgentsMD,
+						Message: fmt.Sprintf("role %q has no AGENTS.md", notFound.Name),
+						Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
+					}
+				}
+				return nil, workflow.ValidationError{
+					Level:   workflow.ValidationLevelError,
+					Code:    workflow.ErrRoleNotFound,
+					Message: err.Error(),
+					Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
+				}
+			}
+			return nil, workflow.ValidationError{
+				Level:   workflow.ValidationLevelError,
+				Code:    workflow.ErrRoleNotFound,
+				Message: err.Error(),
+				Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
+			}
+		}
+
+		if agentRole.Content == "" {
+			warnings = append(warnings, fmt.Sprintf("[%s] role %q has empty AGENTS.md body", workflow.ErrRoleEmptyContent, agentRole.Name))
+		} else {
+			var rawSize int64
+			if agentRole.SourcePath != "" {
+				if info, statErr := os.Stat(agentRole.SourcePath); statErr == nil {
+					rawSize = info.Size()
+				}
+			}
+			if rawSize > 500*1024 {
+				warnings = append(warnings, fmt.Sprintf("role %q: AGENTS.md exceeds 500KB size threshold", agentRole.Name))
+			} else if len(agentRole.Content)+len(step.Agent.SystemPrompt) > 10*1024 {
+				warnings = append(warnings, fmt.Sprintf("role %q: combined role content and system_prompt exceeds 10KB threshold", agentRole.Name))
+			}
+		}
+	}
+
+	return warnings, nil
+}
+
 func skillDirExists(name string, searchPaths []string) bool {
 	for _, searchPath := range searchPaths {
 		if _, err := os.Stat(filepath.Join(searchPath, name)); err == nil {
@@ -407,6 +484,21 @@ func skillDirExists(name string, searchPaths []string) bool {
 		}
 	}
 	return false
+}
+
+// roleDirExistsWithoutAgentsMD checks whether the role directory exists but
+// is missing an AGENTS.md file. For path-based refs (single search path that
+// equals the role path itself), it checks the path directly rather than
+// joining name into the path (which would double-nest).
+func roleDirExistsWithoutAgentsMD(notFound *workflow.AgentRoleNotFoundError) bool {
+	if len(notFound.SearchPaths) == 1 {
+		dir := notFound.SearchPaths[0]
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return true
+		}
+		return false
+	}
+	return skillDirExists(notFound.Name, notFound.SearchPaths)
 }
 
 // collectDisabledPluginWarnings checks operation steps for disabled plugin references.

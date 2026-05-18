@@ -38,6 +38,9 @@ const (
 
 	// ErrorCodeUserInputMissingSkill indicates a required skill was not found.
 	ErrorCodeUserInputMissingSkill ErrorCode = "USER.INPUT.MISSING_SKILL"
+
+	// ErrorCodeUserInputMissingRole indicates a required agent role was not found.
+	ErrorCodeUserInputMissingRole ErrorCode = "USER.INPUT.MISSING_ROLE"
 )
 
 // Error code constants for WORKFLOW category (exit code 2).

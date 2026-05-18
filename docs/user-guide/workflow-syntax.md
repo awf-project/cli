@@ -408,6 +408,28 @@ review:
 
 See [Agent Steps — Agent Skills](agent-steps.md#agent-skills) for discovery paths, SKILL.md format, and validation.
 
+### Agent Step with Role
+
+Inject a reusable persona into agent steps via `role:` field. Roles are loaded from AGENTS.md files and establish the agent's identity via system prompt.
+
+```yaml
+review:
+  type: agent
+  provider: claude
+  role: go-senior
+  system_prompt: "Focus on performance and memory safety."
+  prompt: "Review this Go code: {{.states.read.Output}}"
+  options:
+    model: claude-sonnet-4-20250514
+  timeout: 120
+  on_success: done
+  on_failure: error
+```
+
+Roles and inline `system_prompt` are combined: role content is injected first, followed by the inline prompt, separated by a blank line.
+
+See [Agent Steps — Agent Roles](agent-steps.md#agent-roles) for discovery paths, AGENTS.md format, dynamic role selection, and validation.
+
 ### Conversation Mode
 
 `mode: conversation` runs an **interactive user-driven loop**: the agent replies, AWF prompts for your next message, and the loop continues until you submit an empty line, `exit`, or `quit`. It requires a terminal (or piped stdin).
@@ -438,6 +460,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation); in `mode: conversation` this serves as the first user message |
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`; not supported in `mode: conversation`) |
 | `system_prompt` | string | No | System message preserved for the whole session |
+| `role` | string | No | Role reference — name-based (e.g., `go-senior`) or path-based (e.g., `./custom-agents/senior`); loaded from AGENTS.md file and injected as system prompt; see [Agent Roles](agent-steps.md#agent-roles) |
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Session tracking sub-struct. Presence opts the step into session tracking (marker flag); contents: see [Session Tracking](#session-tracking) |
 | `skills` | array | No | Skill references for agent context injection — name-based (e.g., `go-conventions`) or path-based (e.g., `path: ./custom/audit`); see [Agent Skills](agent-steps.md#agent-skills) |

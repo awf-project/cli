@@ -42,6 +42,7 @@ var (
 	_ ports.Span                = (*MockSpan)(nil)
 	_ ports.EventPublisher      = (*MockEventPublisher)(nil)
 	_ ports.SkillRepository     = (*MockSkillRepository)(nil)
+	_ ports.AgentRoleRepository = (*MockAgentRoleRepository)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -2095,4 +2096,27 @@ func (m *MockSkillRepository) SetLoadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.loadErr = err
+}
+
+// MockAgentRoleRepository is a mock implementation of ports.AgentRoleRepository
+// with injectable function fields for fine-grained test control.
+type MockAgentRoleRepository struct {
+	LoadFunc         func(ctx context.Context, name string) (*workflow.AgentRole, error)
+	LoadFromPathFunc func(ctx context.Context, absolutePath string) (*workflow.AgentRole, error)
+}
+
+// Load delegates to LoadFunc.
+func (m *MockAgentRoleRepository) Load(ctx context.Context, name string) (*workflow.AgentRole, error) {
+	if m.LoadFunc != nil {
+		return m.LoadFunc(ctx, name)
+	}
+	return nil, nil
+}
+
+// LoadFromPath delegates to LoadFromPathFunc.
+func (m *MockAgentRoleRepository) LoadFromPath(ctx context.Context, absolutePath string) (*workflow.AgentRole, error) {
+	if m.LoadFromPathFunc != nil {
+		return m.LoadFromPathFunc(ctx, absolutePath)
+	}
+	return nil, nil
 }

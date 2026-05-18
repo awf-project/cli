@@ -153,7 +153,7 @@ func TestAPI_ListExecutions_Integration(t *testing.T) {
 	var result struct {
 		Body struct {
 			Executions []struct {
-				ExecutionID string `json:"execution_id"`
+				ExecutionID  string `json:"execution_id"`
 				WorkflowName string `json:"workflow_name"`
 			} `json:"executions"`
 		} `json:"body"`
@@ -194,7 +194,7 @@ func TestAPI_RunWorkflow_WithInputs_Integration(t *testing.T) {
 
 	var result struct {
 		Body struct {
-			ExecutionID string `json:"execution_id"`
+			ExecutionID  string `json:"execution_id"`
 			WorkflowName string `json:"workflow_name"`
 		} `json:"body"`
 	}
