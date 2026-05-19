@@ -1,0 +1,21 @@
+{{- $terminalLanguages := slice "bash" "sh" "shell" "powershell" -}}
+{{- $isTerminal := in $terminalLanguages .Type -}}
+{{- $title := .Attributes.title | default .Type -}}
+
+{{- $result := transform.HighlightCodeBlock . -}}
+
+<div class="{{ if $isTerminal }}terminal-window{{ else }}code-showcase{{ end }} not-content">
+  <div class="{{ if $isTerminal }}terminal-header{{ else }}code-header{{ end }}">
+    <div class="{{ if $isTerminal }}terminal-dots{{ else }}code-dots{{ end }}" aria-hidden="true">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <span class="{{ if $isTerminal }}terminal-title{{ else }}file-name{{ end }}">
+      {{- $title -}}
+    </span>
+  </div>
+  <div class="{{ if $isTerminal }}terminal-body{{ else }}code-body{{ end }}">
+    {{ $result.Wrapped }}
+  </div>
+</div>

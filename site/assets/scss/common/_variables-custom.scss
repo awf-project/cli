@@ -1,1 +1,29 @@
-// Put your custom SCSS variables here
+// AWF Pop Culture Comic Edition Tokens
+$paper:       #FFF5DC;
+$paper-deep:  #FFE8A8;
+$ink:         #0E0E0E;
+$red:         #FF2D4C;
+$blue:        #1F3CFF;
+$yellow:      #FFD60A;
+$pink:        #FF6FD8;
+$mint:        #9BF6C9;
+$lilac:       #C7B6FF;
+
+$ink-10:      rgba(14, 14, 14, 0.1);
+$ink-20:      rgba(14, 14, 14, 0.2);
+$ink-50:      rgba(14, 14, 14, 0.5);
+
+$f-display: 'Rubik Mono One', 'Bungee', system-ui, sans-serif;
+$f-pop:     'Bungee', 'Rubik Mono One', system-ui, sans-serif;
+$f-body:    'Work Sans', system-ui, sans-serif;
+$f-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+$bw: 3px;
+$bw-thick: 5px;
+
+$sh-1: 4px 4px 0 $ink;
+$sh-2: 8px 8px 0 $ink;
+$sh-3: 12px 12px 0 $ink;
+$sh-red:    8px 8px 0 $red;
+$sh-blue:   8px 8px 0 $blue;
+$sh-yellow: 8px 8px 0 $yellow;

@@ -4,6 +4,7 @@ dist/
 /awf
 **/CLAUDE.md
 .agents
+.antigravitycli/
 
 # Test artifacts
 coverage.out

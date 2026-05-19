@@ -1,1 +1,553 @@
-// Put your custom SCSS code here
+/* AWF Pop Culture Comic Edition Styles */
+
+:root {
+  --paper: #{$paper};
+  --ink: #{$ink};
+  --red: #{$red};
+  --blue: #{$blue};
+  --yellow: #{$yellow};
+  --mint: #{$mint};
+}
+
+body {
+  font-family: $f-body;
+  color: $ink;
+  background-color: $paper;
+  
+  /* Halftone dots + paper grain overlay */
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(14,14,14,.11) 1.5px, transparent 1.6px),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 .12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 14px 14px, 200px 200px;
+  background-attachment: fixed;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: $f-pop;
+  color: $ink;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+h1, .h1 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  text-shadow: 2px 2px 0 $yellow, 4px 4px 0 $red;
+  margin-bottom: 1.5rem;
+}
+
+/* Navbar */
+.navbar {
+  background-color: $paper !important;
+  border-bottom: $bw-thick solid $ink !important;
+  box-shadow: 0 4px 0 $red;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.navbar-brand {
+  font-family: $f-pop;
+  font-size: 1.5rem;
+  background-color: $yellow;
+  border: $bw solid $ink;
+  padding: 0.2rem 0.75rem;
+  box-shadow: 2px 2px 0 $red, 4px 4px 0 $ink;
+  transform: rotate(-2deg);
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: rotate(2deg) scale(1.05);
+    color: $ink;
+  }
+}
+
+.nav-link {
+  font-family: $f-body;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 1rem !important;
+  border: $bw solid transparent;
+  transition: all 0.15s ease;
+  
+  &:hover {
+    background-color: $ink;
+    color: $yellow !important;
+    border-color: $ink;
+    box-shadow: 3px 3px 0 $red;
+    transform: translate(-2px, -2px);
+  }
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: $yellow !important;
+  color: $ink !important;
+  border: $bw solid $ink !important;
+  font-family: $f-body;
+  font-weight: 800;
+  text-transform: uppercase;
+  border-radius: 0 !important;
+  box-shadow: $sh-1;
+  transition: all 0.15s ease;
+  
+  &:hover {
+    background-color: $red !important;
+    color: $paper !important;
+    transform: translate(-2px, -2px);
+    box-shadow: $sh-2;
+  }
+}
+
+.btn-outline-primary {
+  border: $bw solid $ink !important;
+  color: $ink !important;
+  font-family: $f-body;
+  font-weight: 800;
+  text-transform: uppercase;
+  border-radius: 0 !important;
+  box-shadow: $sh-1;
+  
+  &:hover {
+    background-color: $ink !important;
+    color: $yellow !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 3px 3px 0 $red;
+  }
+}
+
+/* Code Showcase & Terminal Styling from awf-project.ai */
+
+.code-showcase,
+.terminal-window {
+  max-width: 880px;
+  margin: 2rem auto;
+  background: $ink;
+  border: $bw-thick solid $ink;
+  box-shadow: $sh-3;
+  position: relative;
+  overflow: hidden;
+}
+
+.code-showcase { 
+  background: #1a1a1a; 
+  transform: rotate(-0.5deg); 
+  
+  &:hover { 
+    transform: rotate(0); 
+    transition: transform 0.3s ease; 
+  }
+}
+
+/* Masking tape corners on code showcase */
+.code-showcase::before,
+.code-showcase::after {
+  content: '';
+  position: absolute;
+  width: 90px;
+  height: 22px;
+  background: rgba(255, 214, 10, 0.85);
+  border: 1px solid rgba(14, 14, 14, 0.25);
+  z-index: 5;
+  pointer-events: none;
+}
+.code-showcase::before { top: -10px; left: -22px; transform: rotate(-18deg); }
+.code-showcase::after { top: -10px; right: -22px; transform: rotate(18deg); }
+
+.code-header,
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: $yellow;
+  border-bottom: $bw solid $ink;
+  color: $ink;
+}
+.terminal-header { background: $red; color: $paper; }
+
+.code-dots,
+.terminal-dots {
+  display: flex;
+  gap: 0.5rem;
+}
+.code-dots .dot,
+.terminal-dots .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid $ink;
+}
+.dot.red { background: #FF5F57; }
+.dot.yellow { background: #FEBC2E; }
+.dot.green { background: #28C840; }
+
+.file-name,
+.terminal-title {
+  font-family: $f-mono;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+
+.code-body,
+.terminal-body {
+  padding: 1.6rem 1.8rem;
+  overflow-x: auto;
+}
+.code-body pre,
+.terminal-body pre,
+.code-body .chroma,
+.terminal-body .chroma {
+  font-family: $f-mono !important;
+  font-size: 0.88rem !important;
+  line-height: 1.7 !important;
+  color: #eaeaea !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Syntax Highlighting Colors from Website */
+/*! purgecss start ignore */
+.code-body .chroma .c, .terminal-body .chroma .c,
+.code-body .chroma .c1, .terminal-body .chroma .c1,
+.code-body .chroma .cm, .terminal-body .chroma .cm { color: #8AD9A8 !important; font-style: italic !important; }
+
+.code-body .chroma .k, .terminal-body .chroma .k,
+.code-body .chroma .kd, .terminal-body .chroma .kd,
+.code-body .chroma .kn, .terminal-body .chroma .kn,
+.code-body .chroma .nt, .terminal-body .chroma .nt,
+.code-body .chroma .o, .terminal-body .chroma .o { color: $yellow !important; font-weight: 700 !important; }
+
+.code-body .chroma .s, .terminal-body .chroma .s,
+.code-body .chroma .s1, .terminal-body .chroma .s1,
+.code-body .chroma .s2, .terminal-body .chroma .s2 { color: $pink !important; }
+
+.code-body .chroma .n, .terminal-body .chroma .n,
+.code-body .chroma .nv, .terminal-body .chroma .nv,
+.code-body .chroma .m, .terminal-body .chroma .m,
+.code-body .chroma .mi, .terminal-body .chroma .mi,
+.code-body .chroma .mf, .terminal-body .chroma .mf { color: $mint !important; }
+/*! purgecss end ignore */
+
+/* Terminal CRT scanlines */
+.terminal-window {
+  background: #0a1410;
+  transform: rotate(0.4deg);
+  
+  &:hover { 
+    transform: rotate(0); 
+    transition: transform 0.3s ease; 
+  }
+}
+.terminal-body { position: relative; }
+.terminal-body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0.18) 2px,
+    rgba(0,0,0,0.18) 3px
+  );
+  mix-blend-mode: overlay;
+}
+.terminal-white   { color: #eafff0; }
+.terminal-dim     { color: #6EBF8E; opacity: 0.75; }
+.terminal-cyan    { color: #5BEFFF; }
+.terminal-success { color: #9BF6C9; font-weight: 700; }
+
+/* Content Area */
+.docs-content {
+  background-color: transparent;
+}
+
+code:not(pre code) {
+  background-color: $paper-deep;
+  color: $red;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+/* Sidebar */
+.docs-sidebar {
+  border-right: $bw solid $ink;
+}
+
+/* Brutal Comic Tables */
+table {
+  width: 100%;
+  margin: 2rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: $bw-thick solid $ink;
+  background-color: $paper;
+  box-shadow: $sh-2;
+}
+
+th, td {
+  padding: 1rem;
+  border: 1px solid $ink-20;
+  text-align: left;
+}
+
+thead {
+  background-color: $yellow;
+  color: $ink;
+  
+  th {
+    font-family: $f-pop;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: $bw solid $ink;
+    border-right: 1px solid $ink-20;
+    
+    &:last-child {
+      border-right: none;
+    }
+  }
+}
+
+tbody {
+  tr {
+    &:nth-child(even) {
+      background-color: $paper-deep;
+    }
+    
+    &:hover {
+      background-color: $mint;
+      transition: background-color 0.2s ease;
+    }
+  }
+  
+  td {
+    font-family: $f-body;
+    font-weight: 500;
+    
+    code {
+      background-color: $ink;
+      color: $yellow;
+      padding: 0.1rem 0.3rem;
+    }
+  }
+}
+
+/* Docs Navigation (Previous/Next) */
+.page-nav {
+  margin-top: 4rem;
+  gap: 1.5rem;
+  
+  .card {
+    background-color: $paper;
+    border: $bw solid $ink !important;
+    border-radius: 0 !important;
+    box-shadow: $sh-1;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    
+    &:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: $sh-2;
+    }
+    
+    /* Style for 'Next' card (which is .Next in Hugo, but visually "Previous" in the layout logic sometimes) */
+    /* Wait, line 5 has $pages.Next . which means NEXT in order, but it's labeled 'chapter_previous' in line 17? */
+    /* Actually, Doks logic: $pages.Next is the previous page in history? Or next? */
+    /* Let's just style them generally. */
+    
+    background-color: $paper-deep;
+    
+    &:hover {
+      background-color: $mint;
+    }
+    
+    /* Next usually has a specific indicator */
+    &.text-end {
+       background-color: $yellow;
+       &:hover { background-color: $red; }
+    }
+    
+    .card-body {
+      padding: 1.25rem;
+    }
+    
+    .text-body-secondary {
+      font-family: $f-pop;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      color: $ink !important;
+      opacity: 0.7;
+      margin-bottom: 0.25rem;
+    }
+    
+    .stretched-link {
+      font-family: $f-display;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: $ink !important;
+    }
+    
+    .icon {
+      stroke: $ink;
+      stroke-width: 3px;
+    }
+  }
+}
+
+/* Remove default margin/spacing between cards if any */
+.page-nav > .m-2 {
+  display: none;
+}
+
+/* Brutal Comic Modals */
+.modal-content {
+  background-color: $paper;
+  border: $bw-thick solid $ink !important;
+  border-radius: 0 !important;
+  box-shadow: $sh-3;
+  overflow: hidden;
+}
+
+.modal-header {
+  background-color: $yellow;
+  border-bottom: $bw solid $ink !important;
+  border-radius: 0 !important;
+  padding: 1.5rem;
+  
+  .search-text {
+    background-color: $paper;
+    border: $bw solid $ink !important;
+    border-radius: 0 !important;
+    font-family: $f-body;
+    font-weight: 600;
+    
+    &:focus {
+      box-shadow: 4px 4px 0 $red;
+      border-color: $ink !important;
+    }
+  }
+}
+
+.modal-body {
+  padding: 2rem;
+}
+
+.modal-footer {
+  border-top: $bw solid $ink !important;
+  background-color: $paper-deep;
+  
+  kbd {
+    background-color: $ink;
+    color: $yellow;
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+    font-family: $f-mono;
+  }
+}
+
+/* Search results in modal */
+.search-result {
+  .card {
+    background-color: $paper;
+    border: $bw solid $ink !important;
+    border-radius: 0 !important;
+    box-shadow: $sh-1;
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: $sh-2;
+      background-color: $paper-deep;
+    }
+    
+    .h5.title a {
+      font-family: $f-display;
+      color: $ink !important;
+      text-decoration: none;
+    }
+    
+    .content {
+      font-family: $f-body;
+      color: $ink;
+      opacity: 0.8;
+    }
+  }
+}
+
+/* Modal backdrop customization */
+.modal-backdrop {
+  background-color: $ink !important;
+  
+  &.show {
+    opacity: 0.6 !important;
+  }
+}
+
+.docs-link {
+  font-weight: 600;
+  color: $ink;
+  
+  &:hover, &.active {
+    color: $red !important;
+    text-decoration: underline;
+  }
+}
+
+/* Footer */
+footer {
+  border-top: $bw-thick solid $ink;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  background-color: $paper-deep;
+}
+
+/* Brutal Comic Scrollbar */
+
+/* Firefox support */
+*, .docs-content, pre {
+  scrollbar-width: auto;
+  scrollbar-color: $yellow $paper-deep;
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+::-webkit-scrollbar,
+.docs-content::-webkit-scrollbar,
+pre::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  display: block !important;
+}
+
+::-webkit-scrollbar-track,
+.docs-content::-webkit-scrollbar-track,
+pre::-webkit-scrollbar-track {
+  background-color: $paper-deep !important;
+  border-left: $bw solid $ink !important;
+  background-image: radial-gradient($ink-10 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+::-webkit-scrollbar-thumb,
+.docs-content::-webkit-scrollbar-thumb,
+pre::-webkit-scrollbar-thumb {
+  background-color: $yellow !important;
+  border: $bw solid $ink !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+  
+  &:hover {
+    background-color: $red !important;
+  }
+}
+
+::-webkit-scrollbar-corner {
+  background-color: $paper !important;
+  border: $bw solid $ink !important;
+}
+
