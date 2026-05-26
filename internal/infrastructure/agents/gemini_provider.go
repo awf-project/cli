@@ -8,21 +8,29 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/logger"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // GeminiProvider implements AgentProvider for Gemini CLI.
 // Invokes: gemini -p "prompt"
 type GeminiProvider struct {
-	base      *baseCLIProvider
-	executor  ports.CLIExecutor
-	tokenizer ports.Tokenizer
+	base              *baseCLIProvider
+	logger            ports.Logger
+	executor          ports.CLIExecutor
+	cmdExecutor       ports.CommandExecutor
+	tokenizer         ports.Tokenizer
+	denyAllPolicyPath string
 }
 
 func NewGeminiProvider() *GeminiProvider {
 	p := &GeminiProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 	p.base = p.newBase()
@@ -31,6 +39,7 @@ func NewGeminiProvider() *GeminiProvider {
 
 func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider {
 	p := &GeminiProvider{
+		logger:   logger.NopLogger{},
 		executor: NewExecCLIExecutor(),
 	}
 	for _, opt := range opts {
@@ -41,13 +50,14 @@ func NewGeminiProviderWithOptions(opts ...GeminiProviderOption) *GeminiProvider 
 }
 
 func (p *GeminiProvider) newBase() *baseCLIProvider {
-	b := newBaseCLIProvider("gemini", "gemini", p.executor, nil, cliProviderHooks{
+	b := newBaseCLIProvider("gemini", "gemini", p.executor, p.logger, cliProviderHooks{
 		buildExecuteArgs:      p.buildExecuteArgs,
 		buildConversationArgs: p.buildConversationArgs,
 		extractSessionID:      p.extractSessionID,
 		validateOptions:       validateGeminiOptions,
 		parseDisplayEvents:    p.parseGeminiDisplayEvents,
 		extractTokenUsage:     p.extractGeminiTokenUsage,
+		mcpInjector:           p.geminiMCPInjector,
 	})
 	if p.tokenizer != nil {
 		b.tokenizer = p.tokenizer
@@ -197,6 +207,71 @@ func (p *GeminiProvider) extractGeminiTokenUsage(rawOutput string) *tokenUsage {
 		OutputTokens: intFromMap(stats, "output_tokens"),
 		TotalTokens:  intFromMap(stats, "total_tokens"),
 	}
+}
+
+func (p *GeminiProvider) geminiMCPInjector(ctx context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+	if cfg == nil {
+		return args, options, noopMCPCleanup, nil
+	}
+
+	if p.cmdExecutor == nil {
+		return nil, options, noopMCPCleanup, fmt.Errorf("gemini mcp add: command executor not configured")
+	}
+
+	// Generate a unique registration name to prevent collisions when multiple AWF
+	// processes run concurrently. Each invocation of this injector owns exactly
+	// one registration keyed by this name; the cleanup closure captures name so
+	// it removes only its own registration, never another run's.
+	name := mcpProxyNamePrefix + randShortID(8)
+
+	// Gemini MCP registration uses the `gemini mcp add <name> <cmd> [args...]`
+	// subcommand (positional args, no -- separator unlike OpenCode).
+	serveCmd := mcpServeCommand(mcpConfigPath)
+	// interpolation.ShellEscape each argument to prevent shell injection from name or
+	// any component of serveCmd (executable path, config path with special chars).
+	quotedServeCmd := make([]string, len(serveCmd))
+	for i, a := range serveCmd {
+		quotedServeCmd[i] = interpolation.ShellEscape(a)
+	}
+	addProgram := "gemini mcp add " + interpolation.ShellEscape(name) + " " + strings.Join(quotedServeCmd, " ")
+
+	// Derive timeout from parent ctx so a cancelled workflow propagates cancellation.
+	// context.Background() is intentionally used in the cleanup closure (mcp remove)
+	// so teardown runs even when the parent context has already been cancelled.
+	addCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if _, err := p.cmdExecutor.Execute(addCtx, &ports.Command{Program: addProgram}); err != nil {
+		return nil, options, noopMCPCleanup, fmt.Errorf("gemini mcp add: %w", err)
+	}
+
+	newArgs = make([]string, len(args), len(args)+4)
+	copy(newArgs, args)
+
+	// Full isolation: Gemini supports --allowed-mcp-server-names to whitelist servers
+	// and --policy to deny all built-in tools. No system_prompt mutation needed.
+	if cfg.InterceptBuiltins {
+		newArgs = append(newArgs, "--allowed-mcp-server-names", name)
+		if p.denyAllPolicyPath != "" {
+			newArgs = append(newArgs, "--policy", p.denyAllPolicyPath)
+		}
+	}
+
+	cmdExec := p.cmdExecutor
+	var once sync.Once
+	var removeErr error
+	removeCleanup := func() error {
+		once.Do(func() {
+			// interpolation.ShellEscape: same injection defense as the add command above (F099-S1).
+			_, removeErr = cmdExec.Execute(context.Background(), &ports.Command{
+				Program: "gemini mcp remove " + interpolation.ShellEscape(name),
+			})
+		})
+		return removeErr
+	}
+
+	// Gemini does not mutate system_prompt; return options unchanged.
+	return newArgs, options, removeCleanup, nil
 }
 
 func (p *GeminiProvider) parseGeminiDisplayEvents(line []byte) []DisplayEvent {

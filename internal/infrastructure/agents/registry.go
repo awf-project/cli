@@ -70,11 +70,16 @@ func (r *AgentRegistry) Has(name string) bool {
 // RegisterDefaults registers all default providers.
 // It continues registering even if individual providers fail,
 // collecting all errors and returning them aggregated.
-func (r *AgentRegistry) RegisterDefaults() error {
+//
+// Pass nil for cmdExec to disable MCP proxy support for providers that require a
+// CommandExecutor (Gemini); attempting to use mcp_proxy with such a provider
+// will fail at step startup with a clear error rather than a nil-pointer panic.
+// OpenCode MCP proxy uses workspace file config and does not require a CommandExecutor.
+func (r *AgentRegistry) RegisterDefaults(cmdExec ports.CommandExecutor) error {
 	defaults := []ports.AgentProvider{
 		NewClaudeProvider(),
 		NewCodexProvider(),
-		NewGeminiProvider(),
+		NewGeminiProviderWithOptions(WithGeminiCommandExecutor(cmdExec)),
 		NewOpenAICompatibleProvider(),
 		NewOpenCodeProvider(),
 		NewCopilotProvider(),

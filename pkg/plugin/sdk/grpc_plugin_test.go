@@ -364,3 +364,128 @@ func TestGRPCServer_SkipsSetHostClientWhenNotBrokerAwarePlugin(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+// --- OperationSchemaProvider tests ---
+
+// richSchemaPlugin implements both OperationProvider and OperationSchemaProvider.
+// It is used to verify that the gRPC bridge propagates full metadata when both
+// interfaces are present.
+type richSchemaPlugin struct {
+	BasePlugin
+}
+
+func (p *richSchemaPlugin) Operations() []string { return []string{"greet"} }
+
+func (p *richSchemaPlugin) HandleOperation(_ context.Context, _ string, _ map[string]any) (*OperationResult, error) {
+	return NewSuccessResult("hello", nil), nil
+}
+
+func (p *richSchemaPlugin) GetOperationSchema(name string) (OperationMeta, bool) {
+	if name != "greet" {
+		return OperationMeta{}, false
+	}
+	return OperationMeta{
+		Description: "Greet a person.",
+		Inputs: []InputMeta{
+			{Name: "name", Type: InputTypeString, Required: true, Description: "Person's name."},
+			{Name: "formal", Type: InputTypeBoolean, Description: "Use formal greeting."},
+		},
+		Outputs: []OutputMeta{
+			{Name: "message", Type: InputTypeString, Description: "The greeting message."},
+		},
+	}, true
+}
+
+// TestListOperations_WithSchemaProvider_EmitsFullMetadata asserts that ListOperations
+// propagates Description, Inputs, and Outputs when the plugin implements OperationSchemaProvider.
+func TestListOperations_WithSchemaProvider_EmitsFullMetadata(t *testing.T) {
+	plugin := &richSchemaPlugin{BasePlugin: BasePlugin{PluginName: "rich", PluginVersion: "1.0.0"}}
+	server := &operationServiceServer{impl: plugin}
+
+	resp, err := server.ListOperations(context.Background(), &pluginv1.ListOperationsRequest{})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, resp.Operations, 1)
+
+	op := resp.Operations[0]
+	assert.Equal(t, "greet", op.Name)
+	assert.Equal(t, "Greet a person.", op.Description)
+	require.Len(t, op.Inputs, 2)
+	assert.Equal(t, "name", op.Inputs[0].Name)
+	assert.Equal(t, "string", op.Inputs[0].Type)
+	assert.True(t, op.Inputs[0].Required)
+	assert.Equal(t, "Person's name.", op.Inputs[0].Description)
+	assert.Equal(t, "formal", op.Inputs[1].Name)
+	assert.Equal(t, "boolean", op.Inputs[1].Type)
+	assert.False(t, op.Inputs[1].Required)
+	require.Len(t, op.Outputs, 1)
+	assert.Equal(t, "message", op.Outputs[0].Name)
+	assert.Equal(t, "string", op.Outputs[0].Type)
+	assert.Equal(t, "The greeting message.", op.Outputs[0].Description)
+}
+
+// TestGetOperation_WithSchemaProvider_EmitsFullMetadata asserts that GetOperation
+// propagates Description, Inputs, and Outputs when the plugin implements OperationSchemaProvider.
+func TestGetOperation_WithSchemaProvider_EmitsFullMetadata(t *testing.T) {
+	plugin := &richSchemaPlugin{BasePlugin: BasePlugin{PluginName: "rich", PluginVersion: "1.0.0"}}
+	server := &operationServiceServer{impl: plugin}
+
+	resp, err := server.GetOperation(context.Background(), &pluginv1.GetOperationRequest{Name: "greet"})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.Operation)
+	assert.Equal(t, "greet", resp.Operation.Name)
+	assert.Equal(t, "Greet a person.", resp.Operation.Description)
+	require.Len(t, resp.Operation.Inputs, 2)
+	require.Len(t, resp.Operation.Outputs, 1)
+	assert.Equal(t, "message", resp.Operation.Outputs[0].Name)
+}
+
+// TestListOperations_WithoutSchemaProvider_RemainsNameOnly asserts that a plugin
+// implementing only OperationProvider (no OperationSchemaProvider) produces
+// name-only schemas — backwards compatibility is preserved.
+func TestListOperations_WithoutSchemaProvider_RemainsNameOnly(t *testing.T) {
+	srv := &operationServiceServer{impl: &legacyNoSchemaPlugin{
+		BasePlugin: BasePlugin{PluginName: "legacy", PluginVersion: "1.0.0"},
+	}}
+
+	resp, err := srv.ListOperations(context.Background(), &pluginv1.ListOperationsRequest{})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, resp.Operations, 1)
+
+	op := resp.Operations[0]
+	assert.Equal(t, "myop", op.Name)
+	assert.Empty(t, op.Description, "description must be empty when no OperationSchemaProvider")
+	assert.Empty(t, op.Inputs, "inputs must be empty when no OperationSchemaProvider")
+	assert.Empty(t, op.Outputs, "outputs must be empty when no OperationSchemaProvider")
+}
+
+// legacyNoSchemaPlugin is a helper for TestListOperations_WithoutSchemaProvider_RemainsNameOnly.
+// It implements OperationProvider but NOT OperationSchemaProvider, representing the
+// class of plugins that existed before the optional interface was introduced.
+type legacyNoSchemaPlugin struct {
+	BasePlugin
+}
+
+func (p *legacyNoSchemaPlugin) Operations() []string { return []string{"myop"} }
+
+func (p *legacyNoSchemaPlugin) HandleOperation(_ context.Context, _ string, _ map[string]any) (*OperationResult, error) {
+	return NewSuccessResult("done", nil), nil
+}
+
+// TestGetOperationSchema_UnknownName_ReturnsNotOK is a protocol test for the
+// GetOperationSchema helper: unknown names must return (zero, false).
+func TestGetOperationSchema_UnknownName_ReturnsNotOK(t *testing.T) {
+	plugin := &richSchemaPlugin{BasePlugin: BasePlugin{PluginName: "rich", PluginVersion: "1.0.0"}}
+
+	meta, ok := plugin.GetOperationSchema("does-not-exist")
+
+	assert.False(t, ok)
+	assert.Empty(t, meta.Description)
+	assert.Empty(t, meta.Inputs)
+	assert.Empty(t, meta.Outputs)
+}

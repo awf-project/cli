@@ -35,6 +35,7 @@ Learn how to use AWF effectively:
   - [Streaming Output Display & Tool Markers](user-guide/agent-steps.md#streaming-output-display--tool-markers) - Human-readable filtered output and tool-use markers for `--output streaming` and `--output buffered` modes
   - [External Prompt Files](user-guide/agent-steps.md#external-prompt-files) - Load prompts from Markdown files with template interpolation
   - [Model Validation](user-guide/agent-steps.md#model-validation) - Provider-specific model name validation (Claude, Gemini, Codex)
+  - [MCP Proxy](user-guide/agent-steps.md#mcp-proxy-tool-interception-and-control) - Tool call interception and observability via Model Context Protocol; expose plugin operations as MCP tools
 - [Conversation Mode](user-guide/conversation-steps.md) - Multi-turn conversations with native session resume for CLI providers and context window management
 - [Configuration](user-guide/configuration.md) - Project configuration file
 - [Workflow Syntax](user-guide/workflow-syntax.md) - YAML workflow definition reference

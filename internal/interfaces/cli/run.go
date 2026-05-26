@@ -15,6 +15,7 @@ import (
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/config"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
@@ -222,6 +223,12 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		silent:    silentOutput,
 	}
 
+	// Purge orphan MCP registrations left by crashed prior runs before any
+	// workflow logic runs. Failures are non-fatal and logged at debug level.
+	if purgeErr := agents.PurgeOrphanMCPRegistrations(ctx, shellExecutor, logger); purgeErr != nil {
+		logger.Debug("orphan MCP purge returned unexpected error", "error", purgeErr)
+	}
+
 	// Load project config from .awf/config.yaml
 	projectCfg, err := loadProjectConfig(logger)
 	if err != nil {
@@ -314,6 +321,11 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return resolvePackWorkflow(ctx, targetPackName, targetWorkflow, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
 	}
 
+	// Build the F099 MCP tool proxy CLIExecutor for subprocess lifecycle management.
+	// The ProviderFactory itself is built inside ExecutionSetup.Build so it can capture
+	// the composite OperationProvider and expose plugin tools alongside builtins.
+	toolCLIExec := agents.NewExecCLIExecutor()
+
 	setupOpts := []application.SetupOption{
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
@@ -322,6 +334,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
 		application.WithPackContext(packName, packResolver),
+		application.WithToolProxy(toolCLIExec),
 	}
 
 	if !skipPlugins && pluginResult != nil {
@@ -464,7 +477,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 }
 
 // runDryRun executes a dry-run of the workflow, showing the execution plan without running commands.
-func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, skipPlugins bool) error {
+func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, _ bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -529,7 +542,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 }
 
 // runInteractive executes the workflow in interactive step-by-step mode.
-func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string, skipPlugins bool) error {
+func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string, _ bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -539,7 +552,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	// Parse breakpoints (flatten comma-separated values)
 	var breakpoints []string
 	for _, bp := range breakpointFlags {
-		for _, b := range strings.Split(bp, ",") {
+		for b := range strings.SplitSeq(bp, ",") {
 			b = strings.TrimSpace(b)
 			if b != "" {
 				breakpoints = append(breakpoints, b)

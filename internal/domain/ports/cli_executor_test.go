@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -15,6 +16,7 @@ import (
 // mockCLIExecutor is a test implementation of CLIExecutor interface
 type mockCLIExecutor struct {
 	runFunc    func(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error)
+	startFunc  func(ctx context.Context, name string, args ...string) (ports.CLIProcess, error)
 	runCalled  int
 	lastCalled struct {
 		name string
@@ -37,9 +39,52 @@ func (m *mockCLIExecutor) Run(ctx context.Context, name string, stdoutW, stderrW
 	return m.runFunc(ctx, name, stdoutW, stderrW, args...)
 }
 
+func (m *mockCLIExecutor) Start(ctx context.Context, name string, args ...string) (ports.CLIProcess, error) {
+	if m.startFunc != nil {
+		return m.startFunc(ctx, name, args...)
+	}
+	return &fakeProc{doneCh: make(chan struct{})}, nil
+}
+
+// fakeProc satisfies ports.CLIProcess for compile-time and contract tests.
+type fakeProc struct {
+	doneCh chan struct{}
+}
+
+func (f *fakeProc) Signal(sig os.Signal) error { return nil }
+func (f *fakeProc) Wait() error                { return nil }
+func (f *fakeProc) Done() <-chan struct{}      { return f.doneCh }
+
+// Compile-time checks: both interface contracts must be satisfied.
+var (
+	_ ports.CLIExecutor = (*mockCLIExecutor)(nil)
+	_ ports.CLIProcess  = (*fakeProc)(nil)
+)
+
 func TestCLIExecutorInterface(t *testing.T) {
-	// Verify interface compliance
+	// Verify interface compliance (already enforced by var _ above)
 	var _ ports.CLIExecutor = (*mockCLIExecutor)(nil)
+}
+
+func TestCLIProcessInterface(t *testing.T) {
+	// Compile-time contract test: fakeProc must implement CLIProcess
+	var _ ports.CLIProcess = (*fakeProc)(nil)
+}
+
+func TestCLIExecutor_Start_ReturnsProcess(t *testing.T) {
+	mock := newMockCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := mock.Start(ctx, "test-binary", "--arg")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if proc == nil {
+		t.Error("expected non-nil CLIProcess")
+	}
+	if proc.Done() == nil {
+		t.Error("expected non-nil Done channel")
+	}
 }
 
 func TestCLIExecutor_Run_HappyPath(t *testing.T) {

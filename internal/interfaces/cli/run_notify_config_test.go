@@ -21,6 +21,8 @@ import (
 )
 
 func TestRunCommand_LoadsNotifyConfig_AllFields(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: A project with complete notify configuration
 	tmpDir := setupTestDir(t)
 
@@ -69,6 +71,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_DefaultBackend(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: A config with default_backend set
 	tmpDir := setupTestDir(t)
 
@@ -115,6 +119,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_EmptyConfig(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: An empty config file
 	tmpDir := setupTestDir(t)
 
@@ -213,6 +219,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_PartialNotifySection(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Config with notify section but only some fields
 	tmpDir := setupTestDir(t)
 
@@ -260,6 +268,8 @@ states:
 }
 
 func TestRunSingleStep_LoadsNotifyConfig(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Single-step execution with notify config
 	tmpDir := setupTestDir(t)
 
@@ -314,6 +324,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_WithInputsSection(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Config with both inputs and notify sections
 	tmpDir := setupTestDir(t)
 
@@ -361,6 +373,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_InvalidYAML(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Config file with invalid YAML syntax
 	tmpDir := setupTestDir(t)
 
@@ -415,6 +429,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_UnknownKeys(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Config with unknown keys in notify section
 	tmpDir := setupTestDir(t)
 
@@ -465,6 +481,8 @@ states:
 }
 
 func TestRunCommand_LoadsNotifyConfig_InvalidBackendValue(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Config with invalid default_backend value
 	tmpDir := setupTestDir(t)
 
@@ -565,6 +583,8 @@ states:
 }
 
 func TestRunCommand_NotifyConfigWiringToProvider_FullStack(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+
 	// GIVEN: Complete config that exercises full wiring stack
 	tmpDir := setupTestDir(t)
 

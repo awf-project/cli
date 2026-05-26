@@ -507,6 +507,82 @@ recall:
 
 See [Conversation Mode & Session Tracking](conversation-steps.md) for the full reference and cross-provider examples.
 
+### MCP Proxy - Tool Interception and Extension
+
+The `mcp_proxy:` block intercepts and audits agent tool calls through a local MCP (Model Context Protocol) server, and allows extending the agent's tool set with custom operations from gRPC plugins.
+
+**When to use MCP Proxy:**
+- **Observability** — Log and trace every tool call (Read, Write, Edit, Bash, Glob, Grep) via OpenTelemetry spans and structured logs
+- **Extension** — Expose custom gRPC plugin operations as MCP tools so the agent can invoke them naturally
+- **Control** — Ensure the agent uses only AWF-managed tools (for full interception mode)
+
+**Basic usage — enable MCP proxy with built-in tools only:**
+
+```yaml
+analyze:
+  type: agent
+  provider: claude
+  prompt: "Analyze the code"
+  mcp_proxy:
+    enable: true
+  timeout: 120
+  on_success: done
+```
+
+The agent sees only the 6 built-in tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`.
+
+**With plugin tools — expose custom operations:**
+
+```yaml
+deploy:
+  type: agent
+  provider: claude
+  prompt: "Deploy the new release"
+  mcp_proxy:
+    enable: true
+    plugin_tools:
+      - plugin: kubernetes
+        expose: [kubectl_apply, kubectl_get]
+  timeout: 300
+  on_success: done
+```
+
+The agent sees built-in tools plus namespaced plugin tools: `kubernetes_kubectl_apply`, `kubernetes_kubectl_get`.
+
+**Additive mode — keep native tools, add plugin tools:**
+
+```yaml
+deploy:
+  type: agent
+  provider: claude
+  prompt: "Deploy the new release"
+  mcp_proxy:
+    enable: true
+    intercept_builtins: false
+    plugin_tools:
+      - plugin: kubernetes
+        expose: [kubectl_apply]
+  timeout: 300
+  on_success: done
+```
+
+The agent sees its native built-in tools plus the plugin tools. Only the plugin tools are routed through AWF's MCP proxy (and logged/traced).
+
+**MCP Proxy Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enable` | boolean | `false` | Activate the MCP proxy for this step |
+| `intercept_builtins` | boolean | `true` | If `true`, re-expose the 6 built-in tools through the proxy (replaces native tools); if `false`, leave native tools intact and only add plugin tools via proxy |
+| `plugin_tools` | array | - | Plugins to expose (optional). Each entry has `plugin` (plugin name) and `expose` (list of operation names) |
+
+**Provider Support:**
+
+- **Claude, Gemini, OpenAI Compatible** — Full MCP-only isolation (native tools disabled when `intercept_builtins: true`)
+- **Codex, OpenCode** — Coexistence mode (native tools remain accessible; a startup warning is logged)
+
+See [Agent Steps](agent-steps.md#mcp-proxy) for detailed examples and migration guide.
+
 ### Available Providers
 
 | Provider | Binary/Endpoint | Conversation Support | Description |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ var (
 	_ ports.StateStore          = (*MockStateStore)(nil)
 	_ ports.CommandExecutor     = (*MockCommandExecutor)(nil)
 	_ ports.CLIExecutor         = (*MockCLIExecutor)(nil)
+	_ ports.CLIProcess          = (*MockCLIProcess)(nil)
 	_ ports.Logger              = (*MockLogger)(nil)
 	_ ports.HistoryStore        = (*MockHistoryStore)(nil)
 	_ ports.ExpressionValidator = (*MockExpressionValidator)(nil)
@@ -43,6 +45,7 @@ var (
 	_ ports.EventPublisher      = (*MockEventPublisher)(nil)
 	_ ports.SkillRepository     = (*MockSkillRepository)(nil)
 	_ ports.AgentRoleRepository = (*MockAgentRoleRepository)(nil)
+	_ ports.OperationProvider   = (*MockOperationProvider)(nil)
 )
 
 // MockWorkflowRepository is a thread-safe mock implementation of ports.WorkflowRepository.
@@ -1305,6 +1308,70 @@ func (m *MockAgentProvider) Clear() {
 	m.validateFunc = nil
 }
 
+// MockCLIProcess is a test-controlled implementation of ports.CLIProcess.
+// Tests can signal completion via Close() and configure Wait errors.
+type MockCLIProcess struct {
+	mu        sync.Mutex
+	signaled  []os.Signal
+	waitErr   error
+	doneCh    chan struct{}
+	closeOnce sync.Once
+}
+
+// NewMockCLIProcess creates a MockCLIProcess whose Done channel is open until Close is called.
+func NewMockCLIProcess() *MockCLIProcess {
+	return &MockCLIProcess{
+		doneCh: make(chan struct{}),
+	}
+}
+
+// Signal records the signal sent to the process.
+func (p *MockCLIProcess) Signal(sig os.Signal) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.signaled = append(p.signaled, sig)
+	return nil
+}
+
+// Wait returns the configured wait error and is idempotent.
+func (p *MockCLIProcess) Wait() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.waitErr
+}
+
+// Done returns a channel that is closed when Close is called.
+func (p *MockCLIProcess) Done() <-chan struct{} {
+	return p.doneCh
+}
+
+// Close simulates process exit, closing the Done channel exactly once.
+func (p *MockCLIProcess) Close() {
+	p.closeOnce.Do(func() { close(p.doneCh) })
+}
+
+// SetWaitError configures the error returned by Wait (test helper).
+func (p *MockCLIProcess) SetWaitError(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.waitErr = err
+}
+
+// GetSignals returns all signals sent to the process (test helper).
+func (p *MockCLIProcess) GetSignals() []os.Signal {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	copied := make([]os.Signal, len(p.signaled))
+	copy(copied, p.signaled)
+	return copied
+}
+
+// MockCLIStartCall records a single Start call.
+type MockCLIStartCall struct {
+	Name string
+	Args []string
+}
+
 // MockCLIExecutor is a thread-safe mock implementation of ports.CLIExecutor.
 // It uses sync.Mutex to protect concurrent access to call history.
 //
@@ -1314,11 +1381,13 @@ func (m *MockAgentProvider) Clear() {
 //	executor.SetOutput([]byte("output"), []byte(""))
 //	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--version")
 type MockCLIExecutor struct {
-	mu      sync.Mutex
-	stdout  []byte
-	stderr  []byte
-	execErr error
-	calls   []MockCLICall
+	mu         sync.Mutex
+	stdout     []byte
+	stderr     []byte
+	execErr    error
+	calls      []MockCLICall
+	StartFunc  func(ctx context.Context, name string, args ...string) (ports.CLIProcess, error)
+	startCalls []MockCLIStartCall
 }
 
 // MockCLICall records a single CLI execution call.
@@ -1383,14 +1452,43 @@ func (m *MockCLIExecutor) GetCalls() []MockCLICall {
 	return copied
 }
 
+// Start records the call and delegates to StartFunc if configured, or returns a default MockCLIProcess.
+func (m *MockCLIExecutor) Start(ctx context.Context, name string, args ...string) (ports.CLIProcess, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.startCalls = append(m.startCalls, MockCLIStartCall{Name: name, Args: args})
+
+	if m.StartFunc != nil {
+		return m.StartFunc(ctx, name, args...)
+	}
+
+	return NewMockCLIProcess(), nil
+}
+
+// GetStartCalls returns all recorded Start calls (test helper).
+func (m *MockCLIExecutor) GetStartCalls() []MockCLIStartCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]MockCLIStartCall, len(m.startCalls))
+	for i, c := range m.startCalls {
+		argsCopy := make([]string, len(c.Args))
+		copy(argsCopy, c.Args)
+		copied[i] = MockCLIStartCall{Name: c.Name, Args: argsCopy}
+	}
+	return copied
+}
+
 // Clear removes all recorded calls and resets output/errors (test helper).
 func (m *MockCLIExecutor) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = make([]MockCLICall, 0)
+	m.startCalls = make([]MockCLIStartCall, 0)
 	m.stdout = nil
 	m.stderr = nil
 	m.execErr = nil
+	m.StartFunc = nil
 }
 
 // MockErrorFormatter is a thread-safe mock implementation of ports.ErrorFormatter.
@@ -2119,4 +2217,115 @@ func (m *MockAgentRoleRepository) LoadFromPath(ctx context.Context, absolutePath
 		return m.LoadFromPathFunc(ctx, absolutePath)
 	}
 	return nil, nil
+}
+
+// MockOperationCall records a single Execute call.
+type MockOperationCall struct {
+	Name   string
+	Inputs map[string]any
+}
+
+// MockOperationProvider is a thread-safe mock implementation of ports.OperationProvider.
+type MockOperationProvider struct {
+	mu           sync.RWMutex
+	operations   map[string]*pluginmodel.OperationSchema
+	executeFunc  func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error)
+	executeErr   error
+	executeCalls []MockOperationCall
+}
+
+// NewMockOperationProvider creates a new thread-safe mock operation provider.
+func NewMockOperationProvider() *MockOperationProvider {
+	return &MockOperationProvider{
+		operations: make(map[string]*pluginmodel.OperationSchema),
+	}
+}
+
+// GetOperation returns the operation schema for name, or (nil, false) if absent.
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	schema, ok := m.operations[name]
+	return schema, ok
+}
+
+// ListOperations returns all registered operation schemas.
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) ListOperations() []*pluginmodel.OperationSchema {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*pluginmodel.OperationSchema, 0, len(m.operations))
+	for _, s := range m.operations {
+		result = append(result, s)
+	}
+	return result
+}
+
+// Execute dispatches the named operation and records the call.
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) Execute(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executeCalls = append(m.executeCalls, MockOperationCall{Name: name, Inputs: inputs})
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, name, inputs)
+	}
+	if m.executeErr != nil {
+		return nil, m.executeErr
+	}
+	return &pluginmodel.OperationResult{Success: true}, nil
+}
+
+// AddOperation registers an operation schema (test helper).
+// It indexes the schema under both its short name (e.g. "send") and the
+// fully-qualified "pluginName.opName" form (e.g. "notify.send") so that tests
+// work whether the caller passes a prefixed or unprefixed name to GetOperation.
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) AddOperation(schema *pluginmodel.OperationSchema) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.operations[schema.Name] = schema
+	if schema.PluginName != "" {
+		m.operations[schema.PluginName+"."+schema.Name] = schema
+	}
+}
+
+// SetExecuteFunc configures a custom function for Execute calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) SetExecuteFunc(fn func(ctx context.Context, name string, inputs map[string]any) (*pluginmodel.OperationResult, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executeFunc = fn
+	m.executeErr = nil
+}
+
+// SetExecuteError configures an error to be returned by Execute (test helper).
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) SetExecuteError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executeErr = err
+	m.executeFunc = nil
+}
+
+// GetExecuteCalls returns all recorded Execute calls (test helper).
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) GetExecuteCalls() []MockOperationCall {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	copied := make([]MockOperationCall, len(m.executeCalls))
+	copy(copied, m.executeCalls)
+	return copied
+}
+
+// Clear removes all operations and resets configuration (test helper).
+// Thread-safe for concurrent access.
+func (m *MockOperationProvider) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.operations = make(map[string]*pluginmodel.OperationSchema)
+	m.executeFunc = nil
+	m.executeErr = nil
+	m.executeCalls = nil
 }

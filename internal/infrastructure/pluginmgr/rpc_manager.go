@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,13 @@ import (
 
 // ErrNoPluginsConfigured indicates no plugin loader or directory is configured.
 var ErrNoPluginsConfigured = errors.New("rpc_manager: no plugins configured")
+
+// operationsNotImplementedMarker is the exact error string returned by
+// pkg/plugin/sdk/grpc_plugin.go operationServiceServer.Execute when the plugin
+// does not implement the OperationProvider interface. It is a structured gRPC
+// success response (err==nil, resp.Success==false) rather than a gRPC error, so
+// the caller must check it explicitly to distinguish "wrong plugin" from "real failure".
+const operationsNotImplementedMarker = "plugin does not implement operations"
 
 // Default plugins directory relative to config.
 const DefaultPluginsDir = "plugins"
@@ -106,7 +114,7 @@ type grpcClientBundle struct {
 
 // GRPCClient creates gRPC service clients from the connection established by go-plugin.
 // Called by go-plugin on the host side when Dispense("awf-plugin") is invoked.
-func (p *clientPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, conn *grpc.ClientConn) (interface{}, error) {
+func (p *clientPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, conn *grpc.ClientConn) (any, error) {
 	return &grpcClientBundle{
 		plugin:    pluginv1.NewPluginServiceClient(conn),
 		operation: pluginv1.NewOperationServiceClient(conn),
@@ -162,7 +170,7 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 	}
 
 	// Buffered channel for result (capacity 1 so goroutine can send without blocking)
-	resultChan := make(chan interface{}, 1)
+	resultChan := make(chan any, 1)
 
 	go func() {
 		// client.Client() returns the ClientProtocol; Dispense("awf-plugin") then calls GRPCClient()
@@ -727,9 +735,7 @@ func (m *RPCPluginManager) connectionsSnapshot() map[string]*pluginConnection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	conns := make(map[string]*pluginConnection, len(m.connections))
-	for k, v := range m.connections {
-		conns[k] = v
-	}
+	maps.Copy(conns, m.connections)
 	return conns
 }
 
@@ -847,6 +853,13 @@ func (m *RPCPluginManager) Execute(ctx context.Context, name string, inputs map[
 			lastErr = WrapRPCManagerError("execute", name, err)
 			continue
 		}
+		// A plugin that does not implement OperationProvider returns a structured
+		// success response (err==nil) with Success=false and the well-known marker
+		// string (see pkg/plugin/sdk/grpc_plugin.go operationServiceServer.Execute).
+		// This is not a real failure — treat it as "wrong plugin, try next".
+		if resp != nil && !resp.Success && resp.Error == operationsNotImplementedMarker {
+			continue
+		}
 		return convertExecuteResponse(pid, resp), nil
 	}
 
@@ -875,15 +888,7 @@ func (m *RPCPluginManager) validatorClients(timeout time.Duration) []*grpcValida
 		}
 
 		// Check if plugin has validators capability
-		hasCapability := false
-		for _, cap := range info.Manifest.Capabilities {
-			if cap == pluginmodel.CapabilityValidators {
-				hasCapability = true
-				break
-			}
-		}
-
-		if !hasCapability {
+		if !slices.Contains(info.Manifest.Capabilities, pluginmodel.CapabilityValidators) {
 			continue
 		}
 
@@ -913,15 +918,7 @@ func (m *RPCPluginManager) stepTypeClient(logger ports.Logger) []*grpcStepTypeAd
 		}
 
 		// Check if plugin has step_types capability
-		hasCapability := false
-		for _, cap := range info.Manifest.Capabilities {
-			if cap == pluginmodel.CapabilityStepTypes {
-				hasCapability = true
-				break
-			}
-		}
-
-		if !hasCapability {
+		if !slices.Contains(info.Manifest.Capabilities, pluginmodel.CapabilityStepTypes) {
 			continue
 		}
 
@@ -1110,11 +1107,11 @@ var _ ports.Logger = zapToPortsLogger{}
 // splitOperationName splits "pluginName.opName" into (pluginName, opName).
 // Returns ("", name) if no prefix is found.
 func splitOperationName(name string) (pluginName, opName string) {
-	idx := strings.IndexByte(name, '.')
-	if idx < 0 {
+	before, after, found := strings.Cut(name, ".")
+	if !found {
 		return "", name
 	}
-	return name[:idx], name[idx+1:]
+	return before, after
 }
 
 // compile-time checks that RPCPluginManager implements PluginManager and OperationProvider

@@ -3334,3 +3334,46 @@ func indexByte(s, substr string) int {
 	}
 	return -1
 }
+
+// TestYAMLSyntaxHintGenerator_ReturnsNoHints_ForMCPProxyEmptyProxy is a
+// regression test for bug #3: after fixing bug #2 (code preservation), the
+// YAMLSyntaxHintGenerator must NOT fire for USER.MCP_PROXY.EMPTY_PROXY errors.
+// If it did, the user would see confusing YAML indentation/syntax hints for a
+// purely semantic MCP proxy misconfiguration.
+func TestYAMLSyntaxHintGenerator_ReturnsNoHints_ForMCPProxyEmptyProxy(t *testing.T) {
+	// Given: a USER.MCP_PROXY.EMPTY_PROXY StructuredError (the code preserved
+	// after fixing bug #2 in yaml_repository.go)
+	structErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserMCPProxyEmptyProxy,
+		string(domainerrors.ErrorCodeUserMCPProxyEmptyProxy)+": MCP proxy enabled with intercept_builtins=false but no plugin_tools specified",
+		map[string]any{"step": "bad_empty_proxy"},
+		nil,
+	)
+
+	// When
+	hints := YAMLSyntaxHintGenerator(structErr)
+
+	// Then: no YAML syntax hints must be returned for a non-YAML error code
+	assert.NotNil(t, hints, "should return non-nil slice")
+	assert.Empty(t, hints, "YAMLSyntaxHintGenerator must return no hints for USER.MCP_PROXY.EMPTY_PROXY errors")
+}
+
+// TestYAMLSyntaxHintGenerator_ReturnsNoHints_ForMCPProxyNameCollision is a
+// regression test for bug #3: the YAMLSyntaxHintGenerator must NOT fire for
+// USER.MCP_PROXY.NAME_COLLISION errors either.
+func TestYAMLSyntaxHintGenerator_ReturnsNoHints_ForMCPProxyNameCollision(t *testing.T) {
+	// Given: a USER.MCP_PROXY.NAME_COLLISION StructuredError
+	structErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserMCPProxyNameCollision,
+		string(domainerrors.ErrorCodeUserMCPProxyNameCollision)+": duplicate plugin entry: echo",
+		map[string]any{"step": "bad_name_collision"},
+		nil,
+	)
+
+	// When
+	hints := YAMLSyntaxHintGenerator(structErr)
+
+	// Then: no YAML syntax hints
+	assert.NotNil(t, hints, "should return non-nil slice")
+	assert.Empty(t, hints, "YAMLSyntaxHintGenerator must return no hints for USER.MCP_PROXY.NAME_COLLISION errors")
+}

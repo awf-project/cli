@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -53,6 +56,7 @@ func (p *CopilotProvider) newBase() *baseCLIProvider {
 		validateOptions:       validateCopilotOptions,
 		parseDisplayEvents:    p.parseCopilotDisplayEvents,
 		extractTokenUsage:     p.extractCopilotTokenUsage,
+		mcpInjector:           p.copilotMCPInjector,
 	})
 	if p.tokenizer != nil {
 		b.tokenizer = p.tokenizer
@@ -245,11 +249,128 @@ func (p *CopilotProvider) parseCopilotDisplayEvents(line []byte) []DisplayEvent 
 	return nil
 }
 
+// copilotMCPInjector appends Copilot-specific MCP flags to args.
+//
+// Copilot CLI's --additional-mcp-config flag accepts a JSON string or a file
+// path (prefixed with `@`). It expects the standard `{"mcpServers": {...}}`
+// shape; AWF's internal proxy config has a different shape, so this injector
+// writes a small wrapper file mapping the server name "awf-proxy" to the spawn
+// command `awf mcp-serve --config=<internal>`, and passes the WRAPPER path
+// (prefixed with `@`) to --additional-mcp-config. The returned cleanup removes
+// the wrapper file after Execute returns.
+//
+// Copilot has no equivalent to Claude's `--tools ""` flag, so full native-tool
+// blocking is impossible. This injector therefore runs in COEXISTENCE mode
+// like Codex/OpenCode:
+//   - intercept_builtins=true: --additional-mcp-config @<wrapper> +
+//     --disable-builtin-mcps (best-effort: blocks Copilot's bundled
+//     github-mcp-server, but the native shell/edit/read tools remain
+//     accessible), emits a WARN log, and prepends an MCP-only directive to
+//     system_prompt as a mitigation guidance to the model.
+//   - intercept_builtins=false: --additional-mcp-config @<wrapper> only.
+func (p *CopilotProvider) copilotMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+	if cfg == nil {
+		return args, options, noopMCPCleanup, nil
+	}
+
+	wrapperPath, wrapperCleanup, werr := writeCopilotMCPWrapper(mcpConfigPath)
+	if werr != nil {
+		return nil, options, noopMCPCleanup, werr
+	}
+
+	newArgs = make([]string, len(args), len(args)+3)
+	copy(newArgs, args)
+	// The `@` prefix tells Copilot to read the MCP config from the given file path.
+	newArgs = append(newArgs, "--additional-mcp-config", "@"+wrapperPath)
+
+	// Clone options so we don't mutate the caller's map.
+	newOpts := make(map[string]any, len(options)+1)
+	maps.Copy(newOpts, options)
+
+	if cfg.InterceptBuiltins {
+		// Best-effort: disable Copilot's bundled github-mcp-server so the only
+		// MCP surface is awf-proxy. This does NOT block native shell/edit tools.
+		newArgs = append(newArgs, "--disable-builtin-mcps")
+
+		p.logger.Warn("mcp_proxy on provider=copilot runs in coexistence mode; built-in tools are not blocked")
+
+		// Prepend MCP-only instruction to system_prompt (coexistence mitigation).
+		// Guides the model to prefer MCP tools when intercept_builtins=true but
+		// native tool blocking is unavailable.
+		const mcpOnlyPrefix = "Use only MCP tools, never built-in tools. "
+		existing, _ := getStringOption(newOpts, "system_prompt")
+		newOpts["system_prompt"] = mcpOnlyPrefix + existing
+	}
+
+	return newArgs, newOpts, wrapperCleanup, nil
+}
+
+// copilotMCPWrapperServer is one entry under "mcpServers" in the Copilot wrapper config.
+type copilotMCPWrapperServer struct {
+	Type    string   `json:"type"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+// copilotMCPWrapperConfig is the shape Copilot CLI expects for --additional-mcp-config.
+type copilotMCPWrapperConfig struct {
+	MCPServers map[string]copilotMCPWrapperServer `json:"mcpServers"`
+}
+
+// writeCopilotMCPWrapper writes a Copilot-compatible MCP config that maps the
+// "awf-proxy" server name to "<awf-bin> mcp-serve --config=<internalConfigPath>",
+// returns the wrapper file path and an idempotent cleanup that removes the file.
+// The internal config path itself is owned by ProxyService and removed by its own
+// cleanup; this function manages ONLY the wrapper file.
+func writeCopilotMCPWrapper(internalConfigPath string) (path string, cleanup func() error, err error) {
+	cmd := mcpServeCommand(internalConfigPath)
+	if len(cmd) == 0 {
+		return "", noopMCPCleanup, fmt.Errorf("copilot mcp wrapper: empty mcp-serve command")
+	}
+
+	wrapper := copilotMCPWrapperConfig{
+		MCPServers: map[string]copilotMCPWrapperServer{
+			"awf-proxy": {Type: "local", Command: cmd[0], Args: cmd[1:]},
+		},
+	}
+	data, err := json.Marshal(wrapper)
+	if err != nil {
+		return "", noopMCPCleanup, fmt.Errorf("marshal copilot mcp wrapper: %w", err)
+	}
+
+	f, createErr := os.CreateTemp("", "awf-copilot-mcp-*.json")
+	if createErr != nil {
+		return "", noopMCPCleanup, fmt.Errorf("create copilot mcp wrapper: %w", createErr)
+	}
+	tmpPath := f.Name()
+	if _, writeErr := f.Write(data); writeErr != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return "", noopMCPCleanup, fmt.Errorf("write copilot mcp wrapper: %w", writeErr)
+	}
+	if closeErr := f.Close(); closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return "", noopMCPCleanup, fmt.Errorf("close copilot mcp wrapper: %w", closeErr)
+	}
+
+	var once sync.Once
+	cleanup = func() error {
+		var rerr error
+		once.Do(func() {
+			if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+				rerr = removeErr
+			}
+		})
+		return rerr
+	}
+	return tmpPath, cleanup, nil
+}
+
 // extractCopilotTextContent scans JSONL output for the last assistant.message event
 // and returns its data.content field. Falls back to raw output when not found.
 func (p *CopilotProvider) extractCopilotTextContent(output string) string {
 	var lastContent string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

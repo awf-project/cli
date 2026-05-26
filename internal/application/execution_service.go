@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/user"
 	"strings"
 	"time"
 
+	"github.com/awf-project/cli/internal/application/tools"
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -69,6 +71,7 @@ type ExecutionService struct {
 	eventPublisher     ports.EventPublisher
 	skillRepo          ports.SkillRepository
 	agentRoleRepo      ports.AgentRoleRepository
+	toolProxy          *tools.ProxyService
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -92,6 +95,13 @@ func (s *ExecutionService) SetOperationProvider(provider ports.OperationProvider
 // When set, agent-type steps can execute AI provider operations.
 func (s *ExecutionService) SetAgentRegistry(registry ports.AgentRegistry) {
 	s.agentRegistry = registry
+}
+
+// SetToolProxyService configures the MCP tool proxy for F099 per-step proxy lifecycle.
+// Must be called after SetAgentRegistry and before SetConversationManager.
+// When nil, proxy behavior is skipped and existing flows are unaffected.
+func (s *ExecutionService) SetToolProxyService(svc *tools.ProxyService) {
+	s.toolProxy = svc
 }
 
 // SetEventPublisher configures the event publisher for workflow lifecycle event emission.
@@ -440,6 +450,33 @@ func (s *ExecutionService) prepareExecution(
 	return ctx, span, execCtx, nil
 }
 
+// dispatchStep routes a single non-terminal step to the appropriate executor based on
+// its type. It is shared by runExecutionLoop and executeFromStep to keep the dispatch
+// logic in one place — any new step type must be added here only.
+func (s *ExecutionService) dispatchStep(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+) (string, error) {
+	switch step.Type {
+	case workflow.StepTypeCommand:
+		return s.executeStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeParallel:
+		return s.executeParallelStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeForEach, workflow.StepTypeWhile:
+		return s.executeLoopStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeOperation:
+		return s.executePluginOperation(ctx, step, execCtx)
+	case workflow.StepTypeCallWorkflow:
+		return s.executeCallWorkflowStep(ctx, wf, step, execCtx)
+	case workflow.StepTypeAgent:
+		return s.executeAgentStep(ctx, wf, step, execCtx)
+	default:
+		return s.executeCustomStepType(ctx, wf, step, execCtx)
+	}
+}
+
 // runExecutionLoop runs the step-by-step state machine and post-execution hooks.
 //
 //nolint:gocognit,cyclop // Execution loop handles state transitions, error handling, and hook execution.
@@ -493,23 +530,7 @@ func (s *ExecutionService) runExecutionLoop(
 			"step_name":   step.Name,
 		})
 
-		switch step.Type {
-		case workflow.StepTypeCommand:
-			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeParallel:
-			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeForEach, workflow.StepTypeWhile:
-			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeOperation:
-			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
-		case workflow.StepTypeCallWorkflow:
-			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeAgent:
-			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
-		default:
-			nextStep, err = s.executeCustomStepType(ctx, wf, step, execCtx)
-		}
-
+		nextStep, err = s.dispatchStep(ctx, wf, step, execCtx)
 		if err != nil {
 			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
 				"workflow_id": execCtx.WorkflowID,
@@ -1369,10 +1390,7 @@ func (s *ExecutionService) recordStepResult(
 		limitResult, err := s.outputLimiter.Apply(result.Stdout, result.Stderr)
 		if err != nil {
 			// Log error but don't fail the step - store raw output
-			s.logger.Error("Failed to apply output limits", map[string]interface{}{
-				"step":  step.Name,
-				"error": err.Error(),
-			})
+			s.logger.Error("Failed to apply output limits", "step", step.Name, "error", err)
 			state.Output = result.Stdout
 			state.Stderr = result.Stderr
 		} else {
@@ -1725,7 +1743,7 @@ func (s *ExecutionService) Resume(
 
 // resolveFromStep resolves the --from flag value to a concrete step name.
 // Accepts "current", "previous", or a literal step name that exists in the workflow.
-func (s *ExecutionService) resolveFromStep(execCtx *workflow.ExecutionContext, wf *workflow.Workflow, fromStep string) (string, error) {
+func (s *ExecutionService) resolveFromStep(execCtx *workflow.ExecutionContext, _ *workflow.Workflow, fromStep string) (string, error) {
 	switch fromStep {
 	case "current":
 		return execCtx.CurrentStep, nil
@@ -1811,7 +1829,7 @@ func (s *ExecutionService) ListResumable(ctx context.Context) ([]*workflow.Execu
 
 // executeFromStep continues workflow execution from the specified starting step.
 // It handles the execution loop, hooks, and state transitions.
-// Note: main execution loop body duplicated in runWithCallStackAndWorkflow (same file). Keep both in sync.
+// Step dispatch is delegated to dispatchStep (same file) to keep the routing logic in one place.
 //
 //nolint:gocognit // Complexity 31: main execution loop orchestrates step dispatch, hooks, cancellation, and error handling as a cohesive unit.
 func (s *ExecutionService) executeFromStep(
@@ -1866,23 +1884,7 @@ func (s *ExecutionService) executeFromStep(
 			"step_name":   step.Name,
 		})
 
-		switch step.Type {
-		case workflow.StepTypeCommand:
-			nextStep, err = s.executeStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeParallel:
-			nextStep, err = s.executeParallelStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeForEach, workflow.StepTypeWhile:
-			nextStep, err = s.executeLoopStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeOperation:
-			nextStep, err = s.executePluginOperation(ctx, step, execCtx)
-		case workflow.StepTypeCallWorkflow:
-			nextStep, err = s.executeCallWorkflowStep(ctx, wf, step, execCtx)
-		case workflow.StepTypeAgent:
-			nextStep, err = s.executeAgentStep(ctx, wf, step, execCtx)
-		default:
-			nextStep, err = s.executeCustomStepType(ctx, wf, step, execCtx)
-		}
-
+		nextStep, err = s.dispatchStep(ctx, wf, step, execCtx)
 		if err != nil {
 			s.emitEvent(ctx, workflow.EventStepFailed, map[string]string{
 				"workflow_id": execCtx.WorkflowID,
@@ -2353,6 +2355,19 @@ func (s *ExecutionService) executeAgentStep(
 		opts["system_prompt"] = composedPrompt
 	}
 
+	// F099: Start MCP tool proxy if configured for this step. Injects the temp config
+	// path into opts so the provider's MCP injector can reference it; cleanup runs after
+	// provider.Execute / executeResumableAgentCall returns.
+	proxyCleanup, proxyErr := s.startToolProxy(stepCtx, step, opts, resolvedProvider, provider)
+	if proxyErr != nil {
+		return "", fmt.Errorf("step %s: %w", step.Name, proxyErr)
+	}
+	defer func() {
+		if cleanupErr := proxyCleanup(); cleanupErr != nil {
+			s.logger.Warn("tool proxy cleanup failed", "step", step.Name, "error", cleanupErr)
+		}
+	}()
+
 	// Record step state
 	state := workflow.StepState{
 		Name:        step.Name,
@@ -2551,7 +2566,7 @@ func (s *ExecutionService) buildResumableState(
 	if prior.SessionID == "" && len(prior.Turns) == 0 {
 		return nil, fmt.Errorf("continue_from: step %q has no session ID or conversation history to resume", cfg.ContinueFrom)
 	}
-	if resolvedProvider == "openai_compatible" && len(prior.Turns) == 0 {
+	if resolvedProvider == openAICompatibleProviderName && len(prior.Turns) == 0 {
 		return nil, fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", cfg.ContinueFrom, resolvedProvider)
 	}
 
@@ -2666,9 +2681,7 @@ func (s *ExecutionService) executeConversationStep(
 // This keeps F065 post-processing (top-level) decoupled from F082 display intent (options).
 func cloneAndInjectOutputFormat(opts map[string]any, format workflow.OutputFormat) map[string]any {
 	cloned := make(map[string]any, len(opts)+2)
-	for k, v := range opts {
-		cloned[k] = v
-	}
+	maps.Copy(cloned, opts)
 	if _, userSet := cloned["output_format"]; userSet {
 		return cloned
 	}

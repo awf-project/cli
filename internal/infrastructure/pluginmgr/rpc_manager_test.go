@@ -1051,12 +1051,10 @@ func TestRPCPluginManager_ConcurrentGet(t *testing.T) {
 	manager.mu.Unlock()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_, _ = manager.Get("concurrent-test")
-		}()
+		})
 	}
 	wg.Wait()
 	// Test passes if no race condition detected
@@ -1067,7 +1065,7 @@ func TestRPCPluginManager_ConcurrentList(t *testing.T) {
 
 	// Insert test plugins
 	manager.mu.Lock()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		name := "plugin-" + string(rune('a'+i))
 		manager.plugins[name] = &pluginmodel.PluginInfo{
 			Manifest: &pluginmodel.Manifest{Name: name},
@@ -1076,12 +1074,10 @@ func TestRPCPluginManager_ConcurrentList(t *testing.T) {
 	manager.mu.Unlock()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_ = manager.List()
-		}()
+		})
 	}
 	wg.Wait()
 	// Test passes if no race condition detected
@@ -1098,16 +1094,13 @@ func TestRPCPluginManager_ConcurrentGetAndList(t *testing.T) {
 	manager.mu.Unlock()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			_, _ = manager.Get("test")
-		}()
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			_ = manager.List()
-		}()
+		})
 	}
 	wg.Wait()
 	// Test passes if no race condition detected
@@ -1566,30 +1559,26 @@ func TestRPCPluginManager_connectionsMutexProtection(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Multiple goroutines writing to connections (simulating Init)
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for i := range 5 {
+		wg.Go(func() {
 			manager.mu.Lock()
 			defer manager.mu.Unlock()
 
 			// Simulate storing a connection
-			name := "plugin-" + string(rune('a'+idx)) //nolint:gosec // controlled test input: idx is bounded by loop range
+			name := "plugin-" + string(rune('a'+i)) //nolint:gosec // controlled test input: i is bounded by loop range
 			manager.connections[name] = &pluginConnection{}
-		}(i)
+		})
 	}
 
 	// Multiple goroutines reading from connections (simulating Execute/GetOperation)
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			manager.mu.RLock()
 			defer manager.mu.RUnlock()
 
 			// Simulate reading from connections
 			_ = len(manager.connections)
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -2057,14 +2046,12 @@ func TestRPCPluginManager_Execute_ConcurrentCalls(t *testing.T) {
 
 	// Run concurrent Execute calls to verify no race conditions
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			result, err := manager.Execute(ctx, "op", nil)
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -2148,6 +2135,54 @@ func TestRPCPluginManager_Execute_ResultConversion(t *testing.T) {
 			assert.Equal(t, tt.want.Outputs, result.Outputs)
 		})
 	}
+}
+
+// TestRPCPluginManager_Execute_UnprefixedSkipsNonOperationProviders is a regression
+// test for the production bug where a plugin that does not implement OperationProvider
+// returns a structured gRPC success response (err==nil) with Success=false and the
+// well-known error string "plugin does not implement operations". The fallback loop
+// must treat this as "wrong plugin, keep searching" rather than returning it as the
+// final result — which would surface as a false-success containing an error string.
+func TestRPCPluginManager_Execute_UnprefixedSkipsNonOperationProviders(t *testing.T) {
+	manager := NewRPCPluginManager(nil)
+	manager.plugins = make(map[string]*pluginmodel.PluginInfo)
+	manager.connections = make(map[string]*pluginConnection)
+
+	// "events-only" plugin does not implement OperationProvider; its gRPC Execute
+	// mirrors pkg/plugin/sdk/grpc_plugin.go operationServiceServer.Execute behavior:
+	// returns (resp, nil) with resp.Success=false and the well-known marker string.
+	eventsOnlyClient := &mockOperationServiceClient{
+		execResp: &pluginv1.ExecuteResponse{
+			Success: false,
+			Error:   operationsNotImplementedMarker,
+		},
+	}
+
+	// "real-provider" plugin does implement OperationProvider and returns a real result.
+	realProviderClient := &mockOperationServiceClient{
+		execResp: &pluginv1.ExecuteResponse{
+			Success: true,
+			Output:  "got it",
+		},
+	}
+
+	manager.plugins["events-only"] = &pluginmodel.PluginInfo{Status: pluginmodel.StatusRunning}
+	manager.plugins["real-provider"] = &pluginmodel.PluginInfo{Status: pluginmodel.StatusRunning}
+
+	manager.connections["events-only"] = &pluginConnection{operation: eventsOnlyClient}
+	manager.connections["real-provider"] = &pluginConnection{operation: realProviderClient}
+
+	ctx := context.Background()
+	// Unprefixed call — triggers the fallback loop across all plugins.
+	result, err := manager.Execute(ctx, "do_thing", nil)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	// The result MUST come from "real-provider", not from "events-only".
+	// If the fallback returned the events-only response, Success would be false
+	// and Error would be the operationsNotImplementedMarker string.
+	assert.True(t, result.Success, "fallback must skip non-operation-provider responses and return the real result")
+	assert.Empty(t, result.Error, "result must not contain the non-operation-provider error marker")
 }
 
 // --- validatorClients Tests ---

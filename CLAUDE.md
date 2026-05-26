@@ -217,7 +217,6 @@ func TestWorkflowValidation(t *testing.T) {
 
 ## Architecture Rules
 
-- Application layer must persist source metadata (SetSourceData) after successful infrastructure installation; omitting state blocks downstream operations like updates
 - Use dual import aliases (e.g., infrastructurePlugin + registry) when consuming refactored packages; explicitly requalify all symbol references to prevent ambiguity
 - Keep thin wrapper functions in original location for backward compatibility; delegate completely to extracted packages to maintain single source of truth
 - Verify pkg/ package extractions are complete by confirming orphaned imports are removed and make lint passes with zero violations
@@ -240,12 +239,10 @@ func TestWorkflowValidation(t *testing.T) {
 - Server owns background task coordination (WaitGroup); pass by pointer to handlers and coordinate shutdown: httpSrv.Shutdown() then sseWG.Wait()
 - Always update `.go-arch-lint.yml` when adding new infrastructure components; register the package and document its dependency rules in the commit message
 - When implementing infrastructure adapters that follow established patterns (e.g., FilesystemAgentRoleRepository mirrors FilesystemSkillRepository), reuse shared utilities (skills.StripFrontmatter) to maintain single source of truth
+- Provide doc.go for new packages in pkg/ and infrastructure/ subdirectories; document architecture assumptions, error codes, protocol behavior, and implementation patterns (aim for 100+ lines)
 
 ## Common Pitfalls
 
-- Always provide graceful fallback to stateless mode when optional session ID extraction fails; never fail the entire operation due to extraction errors
-- When migrating API JSON field names, parse both old and new keys with new key preferred; use dual-key parsing for backwards compatibility without validation errors
-- Leverage Go's map[string]any behavior to silently ignore unsupported provider options; avoids validation errors while maintaining clear intent
 - Avoid variable shadowing; never redeclare outer-scope variables with := in inner blocks
 - Use index-based loops or pointer ranges when iterating large structs (>128 bytes); avoid per-iteration copying
 - Limit function return values to 5; return a struct for 6+ outputs to maintain readability
@@ -284,11 +281,12 @@ func TestWorkflowValidation(t *testing.T) {
 - Never use standard YAML unmarshaling for skill metadata; implement frontmatter parsing (YAML header between --- delimiters) to preserve metadata
 - Never skip testing XDG directory fallback paths; code will fail on systems without XDG_DATA_HOME and XDG_CONFIG_HOME variables set
 - Major feature implementations require supporting infrastructure changes (ExecutionContext getters, helper modifications); document rationale in commit message and update validation plan if discovered
+- Prepend MCP-only instructions to system prompts in all MCP provider injectors before applying mutations; verify implementation across Codex, Opencode, and other MCP providers
+- Accumulate streaming tool_call deltas by index when assembling tool calls from chunked responses; track name and arguments separately, then validate and return errors for invalid JSON instead of empty slices
+- Always test tool handlers and CLI command construction with shell metacharacters, empty inputs, and special characters; verify proper escaping in all output parsing and command formatting
 
 ## Test Conventions
 
-- Use _Integration suffix for tests requiring live agent execution or system dependencies; keep unit tests suffix-less in domain/application/infrastructure packages
-- Separate provider output format validation tests into dedicated *_extract_test.go files; verify extraction patterns before session resume integration tests
 - Document provider output format assumptions (JSON wrapper field names, text patterns) in code comments; validate assumptions with assertion-based tests before production
 - Update all YAML fixtures when removing option support from code; synchronize fixtures with validation rule changes to prevent accidental bypass of removed validations
 - Add //nolint:gosec to test code with controlled inputs when GOSEC flags false positives
@@ -307,6 +305,8 @@ func TestWorkflowValidation(t *testing.T) {
 - Always write unit tests for CLI helper functions; parseInputFlags, resolvePromptInput, categorizeError must have >80% coverage before commit
 - HTTP servers require unit tests for the server struct itself: route registration, API initialization, graceful shutdown, not just individual handlers
 - Organize interface layer test fixtures in tests/fixtures/<interface-type>/ with descriptive names (e.g., api-simple-success.yaml, api-failing.yaml)
+- Write tests validating streaming tool call assembly across all scenarios: single chunk, multiple chunks, parallel calls, out-of-order indices, and malformed JSON arguments
+- Always write dedicated unit tests for tool handlers (bash, glob, grep, read, write, edit); test option parsing, argument escaping, and error conditions independent of integration tests
 
 ## Review Standards
 

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -62,13 +63,6 @@ func (e *ExecCLIExecutor) Run(ctx context.Context, name string, stdoutW, stderrW
 
 	stdoutBytes := stdoutBuf.Bytes()
 	stderrBytes := stderrBuf.Bytes()
-
-	if stdoutBytes == nil {
-		stdoutBytes = []byte{}
-	}
-	if stderrBytes == nil {
-		stderrBytes = []byte{}
-	}
 
 	if ctx.Err() != nil {
 		// Context cancelled or timed out: kill orphaned descendants that cmd.Cancel may have missed
@@ -150,5 +144,62 @@ func findChildPIDs(parentPID int) []int {
 	return children
 }
 
+// osProcessAdapter wraps *exec.Cmd to implement ports.CLIProcess.
+// Wait is idempotent: whichever goroutine wins the sync.Once race drives cmd.Wait
+// and closes doneCh; all other callers return immediately after once.Do.
+type osProcessAdapter struct {
+	cmd     *exec.Cmd
+	once    sync.Once
+	waitErr error
+	doneCh  chan struct{}
+}
+
+func (a *osProcessAdapter) Signal(sig os.Signal) error {
+	if a.cmd.Process == nil {
+		return nil
+	}
+	return a.cmd.Process.Signal(sig)
+}
+
+func (a *osProcessAdapter) Wait() error {
+	a.once.Do(func() {
+		a.waitErr = a.cmd.Wait()
+		close(a.doneCh)
+	})
+	return a.waitErr
+}
+
+func (a *osProcessAdapter) Done() <-chan struct{} {
+	return a.doneCh
+}
+
+// Start launches a binary without blocking.
+// A background goroutine drives cmd.Wait so that Done() is closed when the process exits.
+func (e *ExecCLIExecutor) Start(ctx context.Context, name string, args ...string) (ports.CLIProcess, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	adapter := &osProcessAdapter{
+		cmd:    cmd,
+		doneCh: make(chan struct{}),
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("CLI start failed for '%s': %w", name, err)
+	}
+
+	go func() {
+		adapter.once.Do(func() {
+			adapter.waitErr = cmd.Wait()
+			close(adapter.doneCh)
+		})
+	}()
+
+	return adapter, nil
+}
+
 // Compile-time interface verification
-var _ ports.CLIExecutor = (*ExecCLIExecutor)(nil)
+var (
+	_ ports.CLIExecutor = (*ExecCLIExecutor)(nil)
+	_ ports.CLIProcess  = (*osProcessAdapter)(nil)
+)

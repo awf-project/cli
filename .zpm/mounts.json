@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "mounts": [
+    {
+      "name": "default",
+      "path": ".zpm/kb/default",
+      "scope": "project",
+      "mode": "rw"
+    }
+  ]
+}

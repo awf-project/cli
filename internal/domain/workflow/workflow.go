@@ -153,10 +153,18 @@ func (w *Workflow) Validate(validator ExpressionCompiler, checker StepTypeChecke
 		}
 	}
 
-	// Validate each step
+	// Validate each step, accumulating all step-level errors before returning.
+	// This surfaces all structural issues (e.g. multiple USER.MCP_PROXY.* violations
+	// across different steps) in a single validation pass instead of stopping at the
+	// first failing step.
+	var stepErrs []error
+
 	for name, step := range w.Steps {
 		if err := step.Validate(validator, checker); err != nil {
-			return fmt.Errorf("step '%s': %w", name, err)
+			// Wrap with step context so the caller knows which step failed.
+			// Continue to the next step so all validation errors are collected.
+			stepErrs = append(stepErrs, fmt.Errorf("step '%s': %w", name, err))
+			continue
 		}
 
 		// Non-terminal steps must have some way to transition
@@ -263,6 +271,12 @@ func (w *Workflow) Validate(validator ExpressionCompiler, checker StepTypeChecke
 				return fmt.Errorf("step '%s': continue_from references unknown step '%s'", name, step.Agent.Conversation.ContinueFrom)
 			}
 		}
+	}
+
+	// Return all accumulated step validation errors together so the caller
+	// sees every failing step in a single error, not just the first one.
+	if len(stepErrs) > 0 {
+		return errors.Join(stepErrs...)
 	}
 
 	return nil

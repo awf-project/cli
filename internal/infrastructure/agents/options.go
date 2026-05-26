@@ -13,6 +13,12 @@ func WithClaudeExecutor(executor ports.CLIExecutor) ClaudeProviderOption {
 	}
 }
 
+func WithClaudeLogger(l ports.Logger) ClaudeProviderOption {
+	return func(p *ClaudeProvider) {
+		p.logger = l
+	}
+}
+
 func WithClaudeTokenizer(tok ports.Tokenizer) ClaudeProviderOption {
 	return func(p *ClaudeProvider) {
 		p.tokenizer = tok
@@ -27,9 +33,27 @@ func WithGeminiExecutor(executor ports.CLIExecutor) GeminiProviderOption {
 	}
 }
 
+func WithGeminiLogger(l ports.Logger) GeminiProviderOption {
+	return func(p *GeminiProvider) {
+		p.logger = l
+	}
+}
+
 func WithGeminiTokenizer(tok ports.Tokenizer) GeminiProviderOption {
 	return func(p *GeminiProvider) {
 		p.tokenizer = tok
+	}
+}
+
+func WithGeminiDenyAllPolicy(policyPath string) GeminiProviderOption {
+	return func(p *GeminiProvider) {
+		p.denyAllPolicyPath = policyPath
+	}
+}
+
+func WithGeminiCommandExecutor(executor ports.CommandExecutor) GeminiProviderOption {
+	return func(p *GeminiProvider) {
+		p.cmdExecutor = executor
 	}
 }
 

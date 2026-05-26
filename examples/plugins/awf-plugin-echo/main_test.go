@@ -185,6 +185,48 @@ func TestEchoPlugin_Context_Cancellation(t *testing.T) {
 	}
 }
 
+// TestEchoPlugin_ImplementsOperationSchemaProvider verifies the compile-time interface check.
+func TestEchoPlugin_ImplementsOperationSchemaProvider(t *testing.T) {
+	var _ sdk.OperationSchemaProvider = (*EchoPlugin)(nil)
+}
+
+// TestEchoPlugin_GetOperationSchema_EchoReturnsFullMeta asserts that GetOperationSchema("echo")
+// returns the documented metadata with non-empty description, two inputs, and two outputs.
+// This locks the demonstration contract for MCP hosts and AI agents.
+func TestEchoPlugin_GetOperationSchema_EchoReturnsFullMeta(t *testing.T) {
+	plugin := &EchoPlugin{}
+
+	meta, ok := plugin.GetOperationSchema("echo")
+
+	require.True(t, ok)
+	assert.NotEmpty(t, meta.Description)
+
+	require.Len(t, meta.Inputs, 2)
+	assert.Equal(t, "text", meta.Inputs[0].Name)
+	assert.Equal(t, sdk.InputTypeString, meta.Inputs[0].Type)
+	assert.True(t, meta.Inputs[0].Required, "text input must be required")
+	assert.Equal(t, "prefix", meta.Inputs[1].Name)
+	assert.Equal(t, sdk.InputTypeString, meta.Inputs[1].Type)
+	assert.False(t, meta.Inputs[1].Required, "prefix input must be optional")
+
+	require.Len(t, meta.Outputs, 2)
+	assert.Equal(t, "text", meta.Outputs[0].Name)
+	assert.Equal(t, "prefix", meta.Outputs[1].Name)
+}
+
+// TestEchoPlugin_GetOperationSchema_UnknownNameReturnsFalse asserts that an unknown
+// operation name returns (zero, false) — protocol contract for OperationSchemaProvider.
+func TestEchoPlugin_GetOperationSchema_UnknownNameReturnsFalse(t *testing.T) {
+	plugin := &EchoPlugin{}
+
+	meta, ok := plugin.GetOperationSchema("does-not-exist")
+
+	assert.False(t, ok)
+	assert.Empty(t, meta.Description)
+	assert.Empty(t, meta.Inputs)
+	assert.Empty(t, meta.Outputs)
+}
+
 // BenchmarkEchoPlugin_HandleOperation_SimpleText measures performance of echo operation
 // with simple text input to establish baseline for NFR-001 (< 10ms latency).
 func BenchmarkEchoPlugin_HandleOperation_SimpleText(b *testing.B) {

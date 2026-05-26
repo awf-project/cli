@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -111,9 +112,7 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 	operationInputs := y.OperationInputs
 	if stepType == workflow.StepTypeOperation && len(operationInputs) == 0 && len(y.CallInputs) > 0 {
 		operationInputs = make(map[string]any, len(y.CallInputs))
-		for k, v := range y.CallInputs {
-			operationInputs[k] = v
-		}
+		maps.Copy(operationInputs, y.CallInputs)
 	}
 
 	// Handle polymorphic OnFailure: string (step name) or inline error object
@@ -173,6 +172,13 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		return nil, NewParseError(filePath, "states."+name+".skills", err.Error())
 	}
 	step.Skills = skillRefs
+
+	// Parse MCP proxy configuration
+	mcpProxy, err := mapMCPProxy(y.MCPProxy)
+	if err != nil {
+		return nil, NewParseError(filePath, "states."+name+".mcp_proxy", err.Error())
+	}
+	step.MCPProxy = mcpProxy
 
 	return step, nil
 }
@@ -487,6 +493,43 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 		OutputFormat: workflow.OutputFormat(y.OutputFormat),
 		// Timeout is handled separately via step.Timeout
 	}
+}
+
+// mapMCPProxy converts yamlMCPProxy to domain MCPProxyConfig.
+// Applies intercept_builtins=true default when the pointer is nil and enable=true.
+// Returns nil when the input is nil (no mcp_proxy block in YAML).
+func mapMCPProxy(y *yamlMCPProxy) (*workflow.MCPProxyConfig, error) {
+	if y == nil {
+		return nil, nil
+	}
+
+	// Determine InterceptBuiltins value.
+	// Default: true when Enable=true and the field was absent (nil pointer).
+	// When Enable=false or when an explicit value was provided, use it as-is.
+	interceptBuiltins := false
+	if y.InterceptBuiltins != nil {
+		interceptBuiltins = *y.InterceptBuiltins
+	} else if y.Enable {
+		interceptBuiltins = true
+	}
+
+	// Map plugin_tools slice.
+	var pluginTools []workflow.PluginToolExpose
+	if len(y.PluginTools) > 0 {
+		pluginTools = make([]workflow.PluginToolExpose, len(y.PluginTools))
+		for i, pt := range y.PluginTools {
+			pluginTools[i] = workflow.PluginToolExpose{
+				Plugin: pt.Plugin,
+				Expose: pt.Expose,
+			}
+		}
+	}
+
+	return &workflow.MCPProxyConfig{
+		Enable:            y.Enable,
+		InterceptBuiltins: interceptBuiltins,
+		PluginTools:       pluginTools,
+	}, nil
 }
 
 // mapConversationConfig converts yamlConversationConfig to domain ConversationConfig.

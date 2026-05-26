@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 
+	"github.com/awf-project/cli/internal/application/tools"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
@@ -15,6 +16,8 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/notify"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	infraskills "github.com/awf-project/cli/internal/infrastructure/skills"
+	infratools "github.com/awf-project/cli/internal/infrastructure/tools"
+	"github.com/awf-project/cli/internal/infrastructure/tools/builtins"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -89,20 +92,21 @@ type OutputWriterPair struct {
 type SetupOption func(*setupConfig)
 
 type setupConfig struct {
-	notifyConfig    NotifyConfig
-	pluginChecker   PluginStateChecker
-	pluginProviders PluginProviders
-	tracer          ports.Tracer
-	auditWriter     ports.AuditTrailWriter
-	packName        string
-	packResolver    PackWorkflowLoader
-	outputWriters   *OutputWriterPair
-	userInputReader ports.UserInputReader
-	historyStore    ports.HistoryStore
-	templatePaths   []string
-	pluginService   *PluginService
-	eventPublisher  ports.EventPublisher
-	agentRoleRepo   ports.AgentRoleRepository
+	notifyConfig     NotifyConfig
+	pluginChecker    PluginStateChecker
+	pluginProviders  PluginProviders
+	tracer           ports.Tracer
+	auditWriter      ports.AuditTrailWriter
+	packName         string
+	packResolver     PackWorkflowLoader
+	outputWriters    *OutputWriterPair
+	userInputReader  ports.UserInputReader
+	historyStore     ports.HistoryStore
+	templatePaths    []string
+	pluginService    *PluginService
+	eventPublisher   ports.EventPublisher
+	agentRoleRepo    ports.AgentRoleRepository
+	toolProxyCLIExec ports.CLIExecutor
 }
 
 // WithNotifyConfig configures notification backend defaults.
@@ -175,6 +179,16 @@ func WithEventPublisher(p ports.EventPublisher) SetupOption {
 // WithAgentRoleRepository injects an agent role repository for F098 role resolution.
 func WithAgentRoleRepository(repo ports.AgentRoleRepository) SetupOption {
 	return func(c *setupConfig) { c.agentRoleRepo = repo }
+}
+
+// WithToolProxy injects the CLIExecutor used to construct the MCP ToolProxyService (F099).
+// The ProviderFactory is built internally so it can capture the composite OperationProvider
+// constructed during Build (required to expose plugin tools alongside built-ins).
+// When cliExec is nil, the proxy is not wired and existing flows are unaffected.
+func WithToolProxy(cliExec ports.CLIExecutor) SetupOption {
+	return func(c *setupConfig) {
+		c.toolProxyCLIExec = cliExec
+	}
 }
 
 // ExecutionSetup centralizes ExecutionService wiring.
@@ -258,16 +272,36 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		execSvc.SetAWFPaths(xdg.AWFPaths())
 	}
 
-	// Wire agent registry and conversation manager when at least one agent is available.
+	// Build the composite operation provider early so the F099 tool-proxy factory can
+	// capture it. The same provider is later passed to SetOperationProvider below.
+	compositeProvider := s.buildProviders(cfg)
+
+	// Wire agent registry, tool proxy, and conversation manager when at least one agent is available.
+	// Order is mandatory per Architecture Rules: SetAgentRegistry → SetToolProxyService → SetConversationManager.
 	agentRegistry := agents.NewAgentRegistry()
-	if err := agentRegistry.RegisterDefaults(); err == nil {
+	if err := agentRegistry.RegisterDefaults(s.shellExecutor); err == nil {
 		execSvc.SetAgentRegistry(agentRegistry)
+
+		// Wire F099 MCP tool proxy when CLIExecutor is provided. The factory is built here
+		// so it can close over compositeProvider and expose plugin tools alongside builtins.
+		// proxySvc is also handed to ConversationManager below so multi-turn conversations
+		// start the same proxy.
+		var proxySvc *tools.ProxyService
+		if cfg.toolProxyCLIExec != nil {
+			proxyFactory := buildToolProxyFactory(s.shellExecutor, compositeProvider)
+			proxySvc = tools.NewProxyService(cfg.toolProxyCLIExec, cfg.tracer, s.logger, proxyFactory)
+			execSvc.SetToolProxyService(proxySvc)
+		}
+
 		convMgr := NewConversationManager(s.logger, resolver, agentRegistry)
 		if cfg.userInputReader != nil {
 			convMgr.SetUserInputReader(cfg.userInputReader)
 		}
 		if cfg.agentRoleRepo != nil {
 			convMgr.SetAgentRoleRepository(cfg.agentRoleRepo)
+		}
+		if proxySvc != nil {
+			convMgr.SetToolProxyService(proxySvc)
 		}
 		execSvc.SetConversationManager(convMgr)
 	}
@@ -294,7 +328,6 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		execSvc.SetAgentRoleRepository(cfg.agentRoleRepo)
 	}
 
-	compositeProvider := s.buildProviders(cfg)
 	execSvc.SetOperationProvider(compositeProvider)
 
 	if cfg.pluginProviders.Validators != nil {
@@ -376,6 +409,41 @@ func (s *ExecutionSetup) buildProviders(cfg *setupConfig) ports.OperationProvide
 	}
 
 	return &compositeOperationProvider{providers: providers}
+}
+
+// buildToolProxyFactory returns the F099 MCP tool ProviderFactory used by ProxyService.
+//
+// Builds a BuiltinToolProvider when cfg.InterceptBuiltins is true, then iterates
+// cfg.PluginTools and constructs one PluginToolAdapter per spec, sourced from
+// the shared OperationProvider. The factory closes over operationProvider so the
+// same composite provider that powers the agent runtime is exposed to MCP clients.
+//
+// Returns wrapped USER.MCP_PROXY.UNKNOWN_OPERATION / USER.MCP_PROXY.UNKNOWN_PLUGIN
+// when a referenced operation cannot be resolved (the adapter wraps these via
+// ErrUnknownOperation / ErrUnsupportedSchema).
+func buildToolProxyFactory(shellExec ports.CommandExecutor, operationProvider ports.OperationProvider) tools.ProviderFactory {
+	return func(cfg tools.ProxyConfig) ([]ports.ToolProvider, error) {
+		var providers []ports.ToolProvider
+
+		if cfg.InterceptBuiltins {
+			providers = append(providers, builtins.NewProvider(builtins.WithExecutor(shellExec)))
+		}
+
+		if len(cfg.PluginTools) > 0 {
+			if operationProvider == nil {
+				return nil, fmt.Errorf("tool proxy: plugin_tools requested but no operation provider is configured")
+			}
+			for _, spec := range cfg.PluginTools {
+				adapter, err := infratools.NewPluginToolAdapter(spec.Plugin, operationProvider, spec.Expose)
+				if err != nil {
+					return nil, fmt.Errorf("tool proxy: plugin %q: %w", spec.Plugin, err)
+				}
+				providers = append(providers, adapter)
+			}
+		}
+
+		return providers, nil
+	}
 }
 
 // MergeInputs returns configInputs merged with cliInputs. CLI wins on conflict.

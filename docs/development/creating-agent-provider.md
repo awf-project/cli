@@ -131,6 +131,11 @@ type cliProviderHooks struct {
     extractTextContent    func(output string) string       // optional
     validateOptions       func(options map[string]any) error // optional
     parseDisplayEvents    DisplayEventParser                 // optional
+    extractTokenUsage     func(rawOutput string) *tokenUsage // optional
+    mcpInjector           func(ctx context.Context, args []string, cfg *workflow.MCPProxyConfig,
+                              mcpConfigPath string, options map[string]any) (
+                              newArgs []string, newOptions map[string]any,
+                              cleanup func() error, err error) // optional
 }
 ```
 
@@ -142,6 +147,8 @@ type cliProviderHooks struct {
 | `extractTextContent` | no | Extract human-readable text from structured output (e.g., JSON wrapper). Falls back to raw output if nil. |
 | `validateOptions` | no | Validate provider-specific options before execution. Return error to reject. |
 | `parseDisplayEvents` | no | Parse a single NDJSON line into `[]DisplayEvent` for real-time terminal display. |
+| `extractTokenUsage` | no | Parse exact input/output/total token counts from a structured CLI event (e.g. Gemini `result.stats`, Claude `usage`). When set, the base layer uses these counts instead of estimating via the tokenizer and clears `TokensEstimated`. |
+| `mcpInjector` | no | Provider-specific MCP proxy injection: appends MCP flags to args, optionally mutates options (e.g. prefixes `system_prompt` in coexistence mode), and returns a cleanup that runs after the CLI exits. See [MCP Proxy Integration](#mcp-proxy-integration). |
 
 ### What baseCLIProvider Does For You
 
@@ -389,6 +396,41 @@ func (p *MyProviderProvider) parseMyProviderDisplayEvents(line []byte) []Display
 | `ID` | no | Tool call ID (empty if provider doesn't emit one) |
 | `Delta` | no | `true` for streaming deltas (partial text chunks) |
 | `Type` | no | Raw event type from provider output (for debugging) |
+
+#### extractTokenUsage
+
+Parse exact token counts from a structured CLI event so the base layer can skip its estimator.
+
+```go
+type tokenUsage struct {
+    InputTokens  int
+    OutputTokens int
+    TotalTokens  int
+    CostUSD      float64
+}
+
+func (p *MyProviderProvider) extractMyProviderTokenUsage(rawOutput string) *tokenUsage {
+    evt := findFirstNDJSONEvent(rawOutput, "result")
+    if evt == nil {
+        return nil
+    }
+    stats, ok := evt["stats"].(map[string]any)
+    if !ok {
+        return nil
+    }
+    return &tokenUsage{
+        InputTokens:  intFromMap(stats, "input_tokens"),
+        OutputTokens: intFromMap(stats, "output_tokens"),
+        TotalTokens:  intFromMap(stats, "total_tokens"),
+    }
+}
+```
+
+**Available helper:** `intFromMap(m, key)` — extracts an `int` from `map[string]any` regardless of whether the source value is `int`, `int64`, `float64`, or a numeric string.
+
+**When to set this hook.** Only when the CLI emits exact token counts in its structured output. If the hook is omitted (or returns `nil`), the base layer falls back to estimating via `Tokenizer.CountTokens` and sets `result.TokensEstimated = true`. Returning a non-nil `*tokenUsage` overrides the estimate and clears `TokensEstimated`.
+
+Reference implementations: `extractClaudeTokenUsage`, `extractGeminiTokenUsage`, `extractCodexTokenUsage`, `extractOpenCodeTokenUsage`.
 
 ### 6. Implement the AgentProvider interface methods
 
@@ -709,15 +751,17 @@ if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && ski
 | Gemini | `--approval-mode=yolo` |
 | Codex | `--dangerously-bypass-approvals-and-sandbox` |
 | Copilot | `--allow-all` |
-| OpenCode | Not supported (logged at debug level, silently ignored) |
+| OpenCode | `--dangerously-skip-permissions` |
 
-If your CLI has no equivalent, log a debug message and ignore:
+If your CLI has no equivalent, log at debug level and ignore the option:
 
 ```go
 if skip, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skip {
     p.logger.Debug("dangerously_skip_permissions is not supported by myprovider and will be ignored")
 }
 ```
+
+Before assuming "not supported", run `your-cli run --help` against the installed binary — CLI vendors occasionally add the flag in a minor release without changing the help summary.
 
 ### Handle `system_prompt`
 
@@ -828,6 +872,246 @@ Two mechanisms exist for extracting human-readable text from structured output:
 
 Most providers use `extractDisplayTextFromEvents` in their `Execute()` post-processing. Only set `extractTextContent` if your provider needs a different extraction strategy for `executeConversation`.
 
+## MCP Proxy Integration
+
+The `mcp_proxy:` workflow block lets users route an agent's tool calls through an AWF-managed local MCP server, exposing built-in `Read`/`Write`/`Edit`/`Bash`/`Glob`/`Grep` tools and/or AWF gRPC plugins as MCP tools. See [docs/user-guide/mcp-proxy.md](../user-guide/mcp-proxy.md) for the user-facing contract and [ADR 017](../ADR/017-mcp-proxy-stdio-subprocess-for-tool-interception.md) for the protocol/topology rationale.
+
+To support `mcp_proxy:` in your provider, implement the `mcpInjector` hook. It is the only extension point — the base layer handles spawning `awf mcp-serve` and tearing it down. Providers that omit the hook get a clean "MCP proxy not supported" error at validation time; you can also ship the provider with no MCP support initially and add the hook later.
+
+### The mcpInjector hook
+
+```go
+mcpInjector func(
+    ctx           context.Context,
+    args          []string,
+    cfg           *workflow.MCPProxyConfig,
+    mcpConfigPath string,
+    options       map[string]any,
+) (
+    newArgs    []string,
+    newOptions map[string]any,
+    cleanup    func() error,
+    err        error,
+)
+```
+
+**Inputs:**
+
+| Parameter | Purpose |
+|-----------|---------|
+| `ctx` | Parent context of the agent execution. Use it for any sub-process spawned during injection (e.g., `gemini mcp add`) so cancellation propagates. Do NOT pass it to the returned cleanup closure — cleanup must run after parent cancellation; use `context.Background()` inside the closure. |
+| `args` | The CLI argv built by `buildExecuteArgs` / `buildConversationArgs`. Never mutate this slice; always copy it into `newArgs`. |
+| `cfg` | The `mcp_proxy:` block from the workflow YAML. **Always nil-check first** — when nil, return `(args, options, noopMCPCleanup, nil)`. |
+| `mcpConfigPath` | Path to a tmp JSON file that the spawned `awf mcp-serve` reads to learn which built-ins to expose and which plugin operations to route. Owned by `ToolProxyService`; do NOT delete or modify it. |
+| `options` | The workflow options map. Clone before mutating (see "Coexistence mode" below). |
+
+**Outputs:**
+
+| Return | Purpose |
+|--------|---------|
+| `newArgs` | A new slice (never the input slice) with provider-specific MCP flags appended. |
+| `newOptions` | Either the original `options` or a clone with mutations. The base layer replaces its local map with this value. |
+| `cleanup` | Invoked AFTER the agent process exits. Must be idempotent (`sync.Once`) and use `context.Background()` for any teardown subprocess. Return `noopMCPCleanup` when there is nothing to undo. |
+| `err` | Non-nil aborts the agent execution before spawning the CLI. Wrap with `%w`. |
+
+The base layer calls `mcpInjector` only when `cfg != nil && cfg.Enable && hooks.mcpInjector != nil`. Both `execute()` and `executeConversation()` invoke it on the same args — there is no separate hook for conversation.
+
+### Four integration patterns
+
+Four distinct strategies exist in the codebase, dictated by what each CLI supports. Pick the one matching your CLI's MCP API surface.
+
+#### Pattern A: Wrapper config file (Claude)
+
+Use when the CLI accepts a flag like `--mcp-config <path>` pointing to a config file in a CLI-native shape (different from AWF's internal `mcpConfigPath` shape). Write a small wrapper file mapping a server name to `awf mcp-serve --config=<internal>`, pass the wrapper path to the CLI flag, and clean up the wrapper file after the CLI exits.
+
+```go
+func claudeMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig,
+    mcpConfigPath string, options map[string]any) (
+    newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+
+    if cfg == nil {
+        return args, options, noopMCPCleanup, nil
+    }
+    wrapperPath, wrapperCleanup, werr := writeClaudeMCPWrapper(mcpConfigPath)
+    if werr != nil {
+        return nil, options, noopMCPCleanup, werr
+    }
+    newArgs = make([]string, len(args), len(args)+4)
+    copy(newArgs, args)
+    newArgs = append(newArgs, "--mcp-config", wrapperPath)
+    if cfg.InterceptBuiltins {
+        newArgs = append(newArgs, "--tools", "", "--strict-mcp-config")
+    }
+    return newArgs, options, wrapperCleanup, nil
+}
+```
+
+**Cleanup:** removes the wrapper file (the internal config at `mcpConfigPath` is owned by `ToolProxyService`).
+
+#### Pattern B: Persistent subcommand registration (Gemini)
+
+Use when the CLI exposes a CRUD subcommand (`<cli> mcp add <name> <cmd>` / `<cli> mcp remove <name>`) that writes to the CLI's own settings file. Each injector call registers a uniquely-named server, the cleanup unregisters that same name.
+
+```go
+func (p *GeminiProvider) geminiMCPInjector(ctx context.Context, args []string, cfg *workflow.MCPProxyConfig,
+    mcpConfigPath string, options map[string]any) (
+    newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+
+    if cfg == nil {
+        return args, options, noopMCPCleanup, nil
+    }
+    name := mcpProxyNamePrefix + randShortID(8)
+    serveCmd := mcpServeCommand(mcpConfigPath)
+    addProgram := "gemini mcp add " + name + " " + strings.Join(serveCmd, " ")
+
+    addCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+    defer cancel()
+    if _, err := p.cmdExecutor.Execute(addCtx, &ports.Command{Program: addProgram}); err != nil {
+        return nil, options, noopMCPCleanup, fmt.Errorf("gemini mcp add: %w", err)
+    }
+
+    newArgs = make([]string, len(args), len(args)+2)
+    copy(newArgs, args)
+    if cfg.InterceptBuiltins {
+        newArgs = append(newArgs, "--allowed-mcp-server-names", name)
+    }
+
+    var once sync.Once
+    var removeErr error
+    return newArgs, options, func() error {
+        once.Do(func() {
+            _, removeErr = p.cmdExecutor.Execute(context.Background(), &ports.Command{
+                Program: "gemini mcp remove " + name,
+            })
+        })
+        return removeErr
+    }, nil
+}
+```
+
+**Uniqueness invariant:** `mcpProxyNamePrefix + randShortID(8)` guarantees concurrent AWF processes don't collide on a single shared server name. The cleanup closure captures `name`, so it removes only its own registration.
+
+#### Pattern C: Workspace config file with flock (OpenCode)
+
+Use when the CLI has neither a per-invocation `--mcp-config` flag nor a scriptable `mcp add` command, but reads `./opencode.json` (or equivalent) from the working directory at startup. Write our server entry into the workspace config, take an `LOCK_EX` flock on a sidecar file so concurrent AWF processes serialize their read-modify-write cycles, and delete the file in cleanup when we created it from scratch.
+
+```go
+func (p *OpenCodeProvider) opencodeMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig,
+    mcpConfigPath string, options map[string]any) (
+    newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+
+    if cfg == nil {
+        return args, options, noopMCPCleanup, nil
+    }
+    workspaceDir, wdErr := os.Getwd()
+    if wdErr != nil {
+        return nil, options, noopMCPCleanup, fmt.Errorf("opencode mcp: getwd: %w", wdErr)
+    }
+    name := mcpProxyNamePrefix + randShortID(8)
+    addCleanup, addErr := addOpenCodeMCPServer(workspaceDir, name, mcpServeCommand(mcpConfigPath))
+    if addErr != nil {
+        return nil, options, noopMCPCleanup, addErr
+    }
+    newArgs = make([]string, len(args))
+    copy(newArgs, args)
+    return newArgs, options, addCleanup, nil
+}
+```
+
+**Implementation details** are factored into `addOpenCodeMCPServer` (`opencode_workspace_config.go`):
+- Lock target lives in `os.TempDir()` keyed by `sha256(workspaceDir)[:8]` so the workspace stays free of sidecar files.
+- Atomic write: marshal in memory → write to `*.tmp` → `os.Rename` over the final path.
+- Cleanup is idempotent via `sync.Once`, removes only the named entry, and deletes the workspace file when we created it from scratch (even if the CLI itself later annotated the file with `$schema` or similar).
+
+#### Pattern D: Inline `-c key=value` config flags (Codex)
+
+Use when the CLI exposes an inline config-injection flag (`-c <key>=<value>`) that maps to the CLI's internal config schema. No external file is needed; the MCP server config is encoded directly in the argv. Cleanup is a no-op.
+
+```go
+func (p *CodexProvider) codexMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig,
+    mcpConfigPath string, options map[string]any) (
+    newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+
+    if cfg == nil {
+        return args, options, noopMCPCleanup, nil
+    }
+    exe := resolvedExecutable()
+    commandArg := fmt.Sprintf("mcp_servers.awf-proxy.command=%q", exe)
+    argsArg := fmt.Sprintf(`mcp_servers.awf-proxy.args=["mcp-serve", "--config=%s"]`, mcpConfigPath)
+
+    newArgs = make([]string, len(args), len(args)+6)
+    copy(newArgs, args)
+    newArgs = append(newArgs, "-c", commandArg, "-c", argsArg)
+    return newArgs, options, noopMCPCleanup, nil
+}
+```
+
+### HTTP providers
+
+`OpenAICompatibleProvider` intentionally **does not** implement `mcpInjector`. MCP tools are delivered in-process via `ports.ToolRouter` and injected as `tools[]` in the Chat Completions request payload. See [Non-CLI Provider (HTTP API)](#non-cli-provider-http-api) for details. The absence of an `mcpInjector` on the HTTP provider is the documented path, not a missing implementation.
+
+### Coexistence mode
+
+Codex and OpenCode CLIs cannot fully disable their native built-in tools — they have no `--tools ""` equivalent. When users request `intercept_builtins: true` on these providers, the injector runs in **coexistence mode**:
+
+1. Emit a startup `WARN` log so operators see that strict isolation is impossible:
+   ```go
+   p.logger.Warn("mcp_proxy on provider=opencode runs in coexistence mode; built-in tools are not blocked")
+   ```
+2. Prefix the user's `system_prompt` (or set it if empty) to steer the model toward MCP:
+   ```go
+   newOpts := make(map[string]any, len(options)+1)
+   for k, v := range options {
+       newOpts[k] = v
+   }
+   const mcpOnlyPrefix = "Use only MCP tools, never built-in tools. "
+   existing, _ := getStringOption(newOpts, "system_prompt")
+   newOpts["system_prompt"] = mcpOnlyPrefix + existing
+   return newArgs, newOpts, cleanupFn, nil
+   ```
+3. Document the limitation in your provider's row of [docs/user-guide/mcp-proxy.md](../user-guide/mcp-proxy.md) "Supported Providers" table.
+
+Apply this pattern only when `cfg.InterceptBuiltins == true`. For `intercept_builtins: false` (additive mode), no system-prompt mutation is needed — both native and MCP tools are intentionally exposed.
+
+### Common helpers
+
+Defined in the `agents` package; reuse instead of reinventing:
+
+| Helper | Purpose |
+|--------|---------|
+| `mcpProxyNamePrefix` | Constant `"awf-proxy-"`. Use as the namespace prefix for any persistent CLI registration so the purge routine can find orphans from crashed prior runs. |
+| `randShortID(n int) string` | Crypto-random hex (length `2*n`). Use `randShortID(8)` to generate a 16-char suffix unique enough to prevent concurrent-run collisions. |
+| `mcpServeCommand(configPath string) []string` | Returns `[<resolved-awf-bin>, "mcp-serve", "--config=" + configPath]` — the exact argv to invoke the local MCP server. |
+| `resolvedExecutable() string` | Symlink-resolved absolute path to the current AWF binary, cached after first call. Use whenever you must capture a stable path for the MCP server child process. |
+| `noopMCPCleanup() error { return nil }` | Default cleanup for nil-config or no-side-effect injectors. |
+
+### Wiring the hook
+
+Plug the injector into `cliProviderHooks` in `newBase()`:
+
+```go
+func (p *MyProviderProvider) newBase() *baseCLIProvider {
+    return newBaseCLIProvider("myprovider", "myprovider-cli", p.executor, p.logger, cliProviderHooks{
+        buildExecuteArgs:      p.buildExecuteArgs,
+        buildConversationArgs: p.buildConversationArgs,
+        extractSessionID:      p.extractSessionID,
+        // ...
+        mcpInjector: p.myproviderMCPInjector,
+    })
+}
+```
+
+### Tests to write
+
+- **Nil-config nil-effect.** `cfg == nil` returns the input args unchanged, an unchanged options map, `noopMCPCleanup`, and no error. No side effects (no sub-process spawn, no file write).
+- **Happy path with `InterceptBuiltins=false`.** Injector produces correct args and a working cleanup. For Pattern B/C, assert that the registered name matches `mcpProxyNameRE` (`^awf-proxy-[0-9a-f]{16}$`).
+- **`InterceptBuiltins=true` behavior.** Strict-mode flags / coexistence warning / system_prompt mutation as applicable.
+- **Cleanup idempotency.** Second call returns nil and performs no additional side effects (verify via mock executor call count or file inode timestamp).
+- **Cleanup name consistency** (Pattern B/C). The name passed to "remove" equals the name passed to "add", proving each run owns exactly one registration and never touches another.
+- **Concurrency** (Pattern C). N goroutines each adding a uniquely-named entry → all entries present; N cleanups → file/state restored to pre-test condition.
+
+Reference test files: `claude_provider_mcp_test.go`, `gemini_provider_mcp_test.go`, `codex_provider_mcp_test.go`, `opencode_provider_mcp_test.go`, `opencode_workspace_config_test.go`.
+
 ## Existing Providers Reference
 
 | Provider | Binary | Name | Session Event | Session Field | Resume Flag | System Prompt |
@@ -838,6 +1122,17 @@ Most providers use `extractDisplayTextFromEvents` in their `Execute()` post-proc
 | Copilot | `copilot` | `github_copilot` | `result` | `sessionId` (camelCase) | `--resume=ID` | Inlined in first turn |
 | OpenCode | `opencode` | `opencode` | `step_start` | `sessionID` | `-s ID` / `-c` (fallback) | Inlined in first turn |
 | OpenAI-Compatible | HTTP API | `openai_compatible` | API response | N/A | Messages array | `system` role message |
+
+### MCP proxy support per provider
+
+| Provider | mcpInjector | Pattern | Strict isolation? |
+|----------|-------------|---------|-------------------|
+| Claude | `claudeMCPInjector` | Wrapper file + `--mcp-config` (Pattern A) | Yes (`--tools "" --strict-mcp-config`) |
+| Gemini | `geminiMCPInjector` | `gemini mcp add` subcommand (Pattern B) | Yes (`--allowed-mcp-server-names` + `--policy`) |
+| Codex | `codexMCPInjector` | Inline `-c mcp_servers.*` (Pattern D) | Coexistence only (`-s read-only` best-effort) |
+| Copilot | _not implemented_ | — | — |
+| OpenCode | `opencodeMCPInjector` | Workspace `./opencode.json` (Pattern C) | Coexistence only |
+| OpenAI-Compatible | _intentional no-op_ | In-process `ToolRouter` + HTTP `tools[]` | Yes |
 
 ## Non-CLI Provider (HTTP API)
 
@@ -989,6 +1284,23 @@ Use `OpenAICompatibleProvider` as your reference implementation.
 - [ ] NUL bytes sanitized before `json.Unmarshal`
 - [ ] Unknown/malformed events return `nil` (never error)
 
+### Token usage (if CLI emits exact counts)
+- [ ] `extractTokenUsage` returns `*tokenUsage` from the CLI's structured token-stats event
+- [ ] Returns `nil` when the event is absent so the base layer falls back to estimation
+- [ ] No `//nolint:errcheck` needed — exact counts mean `TokensEstimated` is cleared automatically
+
+### MCP proxy (if supported)
+- [ ] `mcpInjector` wired in `cliProviderHooks` via `newBase()`
+- [ ] Nil-config short-circuit: `cfg == nil` returns `(args, options, noopMCPCleanup, nil)` with no side effects
+- [ ] `newArgs` is always a fresh slice (input `args` never mutated)
+- [ ] Unique server name via `mcpProxyNamePrefix + randShortID(8)` for any persistent registration (Patterns B/C)
+- [ ] Cleanup closure is idempotent (`sync.Once`) and uses `context.Background()` so it survives parent cancellation
+- [ ] Cleanup removes only this run's registration — never touches entries from concurrent AWF processes
+- [ ] When `cfg.InterceptBuiltins == true` and the CLI cannot disable native tools: emit a coexistence `WARN` log AND prefix `system_prompt` with `"Use only MCP tools, never built-in tools. "` (cloned options map)
+- [ ] When `cfg.InterceptBuiltins == true` and the CLI CAN disable natives: append the appropriate strict-mode flag (`--strict-mcp-config`, `--allowed-mcp-server-names`, etc.)
+- [ ] Provider row added to "Supported Providers" table in `docs/user-guide/mcp-proxy.md`
+- [ ] Provider row added to "MCP proxy support per provider" table in this document
+
 ### Tests
 - [ ] Option injection tests (`TestWithXxxTokenizer`, `TestWithXxxExecutor`)
 - [ ] `buildExecuteArgs` table-driven tests (basic, with model, with permissions)
@@ -996,9 +1308,19 @@ Use `OpenAICompatibleProvider` as your reference implementation.
 - [ ] `extractSessionID` tests (valid, missing event, empty output)
 - [ ] `parseDisplayEvents` tests (text, tool, unknown, invalid JSON)
 - [ ] `validateOptions` tests (nil, valid, invalid model, unknown option)
+- [ ] `extractTokenUsage` tests (valid event, missing event, malformed stats) — if hook is set
+- [ ] `mcpInjector` tests — if hook is set:
+  - [ ] Nil-config short-circuit (no side effects)
+  - [ ] Happy path with `InterceptBuiltins=false`
+  - [ ] `InterceptBuiltins=true` flags / coexistence WARN / system_prompt mutation
+  - [ ] Cleanup idempotency (second call is no-op)
+  - [ ] Cleanup name consistency (Pattern B/C: remove uses same name as add)
+  - [ ] Concurrent safety with `errgroup` (Pattern C: N parallel adds + N parallel cleanups)
+- [ ] End-to-end workflow: from a clean state (no leftover config / registration), `awf run test-mcp-proxy-<provider>-plugin-tools` must complete with status `success` AND leave no orphan files / registrations behind
 
 ### Final verification
 - [ ] `make build` passes
 - [ ] `make lint` passes with zero violations
 - [ ] `make test` passes
 - [ ] `grep -rn "dangerously_skip_permissions" your_provider.go` returns at least one match
+- [ ] `grep -rn "mcpInjector" your_provider.go` returns a match if MCP is supported, OR a comment in the file explaining why it is intentionally omitted (HTTP path / unsupported CLI)

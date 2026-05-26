@@ -1670,8 +1670,149 @@ states:
     type: terminal
 ```
 
+## MCP Proxy - Tool Interception and Control
+
+The MCP Proxy feature lets you **intercept and audit** all tool calls made by AI agents, and **extend** agents with custom operations from gRPC plugins.
+
+### Overview
+
+When `mcp_proxy.enable: true` is set on an agent step:
+
+1. AWF spawns a local MCP (Model Context Protocol) server
+2. Agent tool calls are routed through this server instead of the provider's native tools
+3. Every tool call is logged and traced via OpenTelemetry (if configured)
+4. Custom plugin operations can be exposed as tools the agent can invoke
+
+**Key benefits:**
+- **Observability** — Audit logs and OTel spans for every `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep` call
+- **Extension** — Add custom tools from gRPC plugins without modifying the agent
+- **Control** — Full control over what tools the agent has access to (Claude, Gemini, OpenAI Compatible only)
+
+### Basic Usage
+
+Enable MCP proxy with the built-in tools:
+
+```yaml
+states:
+  initial: analyze
+
+  analyze:
+    type: agent
+    provider: claude
+    prompt: "Analyze this code for security issues: {{.inputs.code}}"
+    mcp_proxy:
+      enable: true
+    options:
+      model: claude-sonnet-4-20250514
+    timeout: 120
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+The agent sees 6 built-in tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`. Each call is logged and traced.
+
+### Exposing Plugin Operations as Tools
+
+Add custom operations from installed plugins:
+
+```yaml
+states:
+  initial: deploy
+
+  deploy:
+    type: agent
+    provider: claude
+    prompt: "Deploy the new release: {{.inputs.config}}"
+    mcp_proxy:
+      enable: true
+      plugin_tools:
+        - plugin: kubernetes
+          expose: [kubectl_apply, kubectl_get, kubectl_delete]
+    options:
+      model: claude-sonnet-4-20250514
+    timeout: 300
+    on_success: verify
+
+  verify:
+    type: agent
+    provider: claude
+    prompt: "Verify the deployment was successful"
+    options:
+      model: claude-sonnet-4-20250514
+    timeout: 120
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+The agent now sees:
+- Built-in tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`
+- Plugin tools: `kubernetes_kubectl_apply`, `kubernetes_kubectl_get`, `kubernetes_kubectl_delete`
+
+Tool names are prefixed with the plugin name and operation name separated by underscore (e.g., `<plugin>_<operation>`).
+
+### Additive Mode - Keep Native Tools
+
+If you want to keep the agent's native tools and only add plugin tools (without MCP proxy auditing of native tools):
+
+```yaml
+states:
+  initial: deploy
+
+  deploy:
+    type: agent
+    provider: claude
+    prompt: "Deploy the new release"
+    mcp_proxy:
+      enable: true
+      intercept_builtins: false
+      plugin_tools:
+        - plugin: kubernetes
+          expose: [kubectl_apply, kubectl_get]
+    options:
+      model: claude-sonnet-4-20250514
+    timeout: 300
+    on_success: done
+
+  done:
+    type: terminal
+```
+
+The agent sees:
+- Native tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep` (not logged/traced)
+- Plugin tools: `kubernetes_kubectl_apply`, `kubernetes_kubectl_get` (logged/traced)
+
+### Error Handling
+
+The `awf validate` command checks MCP proxy configuration and reports errors:
+
+```bash
+awf validate my-workflow
+# Error [USER.MCP_PROXY.UNKNOWN_PLUGIN]: plugin 'nonexistent' not found
+# Error [USER.MCP_PROXY.UNKNOWN_OPERATION]: 'kubernetes' does not expose 'kubectl_scale'
+```
+
+See [Error Codes Reference](../reference/error-codes.md#user-mcp_proxy--mcp-proxy-configuration-errors) for all error codes.
+
+### Supported Providers
+
+| Provider | Full Isolation | Notes |
+|----------|---|---|
+| `claude` | ✅ Yes | Fully supports MCP-only mode |
+| `gemini` | ✅ Yes | Fully supports MCP-only mode |
+| `openai_compatible` | ✅ Yes | HTTP-based, full control via `tools[]` |
+| `codex` | ⚠️ Coexistence | Native tools remain accessible; proxy runs alongside |
+| `opencode` | ⚠️ Coexistence | Native tools remain accessible; proxy runs alongside |
+
+**Note:** For `codex` and `opencode`, a startup warning is logged if `intercept_builtins: true`. These providers don't support disabling native tools, so the MCP proxy augments rather than replaces them.
+
 ## See Also
 
 - [Workflow Syntax Reference](workflow-syntax.md#agent-state) - Complete agent step options
+- [Workflow Syntax Reference — MCP Proxy](workflow-syntax.md#mcp-proxy-tool-interception-and-extension) - Full MCP proxy YAML options
+- [Error Codes Reference](../reference/error-codes.md#user-mcp_proxy-errors) - MCP proxy error codes
 - [Template Variables](../reference/interpolation.md) - Available interpolation variables
 - [Examples](examples.md) - More workflow examples

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/awf-project/cli/internal/application/tools"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -37,6 +38,7 @@ type ConversationManager struct {
 	agentRegistry   ports.AgentRegistry
 	userInputReader ports.UserInputReader
 	agentRoleRepo   ports.AgentRoleRepository
+	toolProxy       *tools.ProxyService
 }
 
 func NewConversationManager(
@@ -61,6 +63,13 @@ func (m *ConversationManager) SetUserInputReader(r ports.UserInputReader) {
 // system prompt injection. When nil, steps that reference a role will return an error.
 func (m *ConversationManager) SetAgentRoleRepository(repo ports.AgentRoleRepository) {
 	m.agentRoleRepo = repo
+}
+
+// SetToolProxyService wires the optional F099 MCP tool proxy. When set and the step's
+// MCPProxy is enabled, the proxy is started before the turn loop and torn down after.
+// The temp config path is injected into options so provider injectors can reference it.
+func (m *ConversationManager) SetToolProxyService(svc *tools.ProxyService) {
+	m.toolProxy = svc
 }
 
 // validateConversationInputs validates step and agent config inputs.
@@ -100,8 +109,8 @@ func (m *ConversationManager) initializeConversationState(
 		if prior.SessionID == "" && len(prior.Turns) == 0 {
 			return nil, "", fmt.Errorf("continue_from: step %q has no session ID or conversation history to resume", config.ContinueFrom)
 		}
-		// openai_compatible uses Turns for session resume, not SessionID
-		if resolvedProvider == "openai_compatible" && len(prior.Turns) == 0 {
+		// openAICompatibleProviderName uses Turns for session resume, not SessionID
+		if resolvedProvider == openAICompatibleProviderName && len(prior.Turns) == 0 {
 			return nil, "", fmt.Errorf("continue_from: step %q has no conversation turns for HTTP-based provider %q", config.ContinueFrom, resolvedProvider)
 		}
 		// Clone prior state for the new step
@@ -210,6 +219,18 @@ func (m *ConversationManager) ExecuteConversation(
 		}
 		options["system_prompt"] = composedPrompt
 	}
+
+	// F099: Start MCP tool proxy for the conversation if configured. The proxy lives for
+	// the full lifetime of the multi-turn loop; cleanup runs after the loop exits.
+	proxyCleanup, proxyErr := startConversationToolProxy(ctx, m.toolProxy, m.logger, step, options, resolvedProvider, provider)
+	if proxyErr != nil {
+		return nil, fmt.Errorf("step %s: %w", step.Name, proxyErr)
+	}
+	defer func() {
+		if cleanupErr := proxyCleanup(); cleanupErr != nil {
+			m.logger.Warn("tool proxy cleanup failed", "step", step.Name, "error", cleanupErr)
+		}
+	}()
 
 	if m.userInputReader == nil {
 		return nil, errors.New("conversation mode requires a UserInputReader; none configured")

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"os"
 	"os/exec"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -52,6 +54,7 @@ func (p *OpenCodeProvider) newBase() *baseCLIProvider {
 		validateOptions:       validateOpenCodeOptions,
 		parseDisplayEvents:    p.parseOpencodeDisplayEvents,
 		extractTokenUsage:     p.extractOpenCodeTokenUsage,
+		mcpInjector:           p.opencodeMCPInjector,
 	})
 	if p.tokenizer != nil {
 		b.tokenizer = p.tokenizer
@@ -111,8 +114,7 @@ func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]an
 	}
 
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		// OpenCode has no equivalent flag; log at debug level so operators are aware the option was present but ignored.
-		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
+		args = append(args, "--dangerously-skip-permissions")
 	}
 
 	args = applyOpenCodeCLIOptions(args, options)
@@ -140,7 +142,7 @@ func (p *OpenCodeProvider) buildConversationArgs(state *workflow.ConversationSta
 	}
 
 	if skipPerms, ok := getBoolOption(options, "dangerously_skip_permissions"); ok && skipPerms {
-		p.logger.Debug("dangerously_skip_permissions is not supported by OpenCode and will be ignored")
+		args = append(args, "--dangerously-skip-permissions")
 	}
 
 	switch {
@@ -250,6 +252,56 @@ func (p *OpenCodeProvider) extractOpenCodeTokenUsage(rawOutput string) *tokenUsa
 		TotalTokens:  intFromMap(tokens, "total"),
 		CostUSD:      cost,
 	}
+}
+
+func (p *OpenCodeProvider) opencodeMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+	if cfg == nil {
+		return args, options, noopMCPCleanup, nil
+	}
+
+	// Generate a unique registration name to prevent collisions when multiple AWF
+	// processes run concurrently. Each invocation of this injector owns exactly
+	// one registration keyed by this name; the cleanup closure captures name so
+	// it removes only its own registration, never another run's.
+	name := mcpProxyNamePrefix + randShortID(8)
+
+	// opencode 1.15.3 `opencode mcp add` is a TUI-only command — not scriptable.
+	// The only reliable per-invocation mechanism is writing to ./opencode.json in
+	// the workspace directory (opencode checks workspace config at startup and
+	// gives it precedence over user-global config). We write only to opencode.json
+	// (not opencode.jsonc) to avoid clobbering hand-edited user files with comments.
+	workspaceDir, err := os.Getwd()
+	if err != nil {
+		return nil, options, noopMCPCleanup, fmt.Errorf("opencode mcp config: get working directory: %w", err)
+	}
+
+	serveCmd := mcpServeCommand(mcpConfigPath)
+	removeCleanup, err := addOpenCodeMCPServer(workspaceDir, name, serveCmd)
+	if err != nil {
+		return nil, options, noopMCPCleanup, fmt.Errorf("opencode mcp config: %w", err)
+	}
+
+	// Clone options so we don't mutate the caller's map.
+	newOpts := make(map[string]any, len(options)+1)
+	maps.Copy(newOpts, options)
+
+	if cfg.InterceptBuiltins {
+		p.logger.Warn("mcp_proxy on provider=opencode runs in coexistence mode; built-in tools are not blocked")
+
+		// Prepend MCP-only instruction to system_prompt (coexistence mitigation — T011 AC).
+		// This guides the model to prefer MCP tools when intercept_builtins=true.
+		const mcpOnlyPrefix = "Use only MCP tools, never built-in tools. "
+		existing, _ := getStringOption(newOpts, "system_prompt")
+		newOpts["system_prompt"] = mcpOnlyPrefix + existing
+	}
+
+	// OpenCode receives MCP server configuration via the workspace opencode.json
+	// written above. Do NOT append --mcp-config here: OpenCode's --mcp-config flag
+	// expects its own native format, not the AWF internal proxy config.
+	newArgs = make([]string, len(args))
+	copy(newArgs, args)
+
+	return newArgs, newOpts, removeCleanup, nil
 }
 
 func (p *OpenCodeProvider) parseOpencodeDisplayEvents(line []byte) []DisplayEvent {

@@ -69,9 +69,22 @@ Examples:
 	var formatStr string
 	pf.StringVarP(&formatStr, "format", "f", "text", "Output format (text, json, table, quiet)")
 
-	// Parse format flag before each command
+	// Parse format flag before each command.
+	// mcp-serve is exempt: it communicates exclusively via JSON-RPC on stdio and
+	// must never call os.Exit(1) for an irrelevant --format flag. All other commands
+	// go through the normal format validation path.
 	originalPreRun := cmd.PersistentPreRun
 	cmd.PersistentPreRun = func(c *cobra.Command, args []string) {
+		if c.Annotations[annotationSkipFormatValidation] == "true" {
+			// Skip --format validation for commands that communicate via a structured
+			// protocol (e.g. mcp-serve uses JSON-RPC on stdio). The annotation is set
+			// on the command at construction time; using an annotation is more robust
+			// than matching c.Name() because it survives command renames.
+			if originalPreRun != nil {
+				originalPreRun(c, args)
+			}
+			return
+		}
 		format, err := ui.ParseOutputFormat(formatStr)
 		if err != nil {
 			c.PrintErrf("Error: %s\n", err)
@@ -100,6 +113,7 @@ Examples:
 	cmd.AddCommand(newUpgradeCommand(cfg))
 	cmd.AddCommand(tui.NewCommand())
 	cmd.AddCommand(NewServeCommand())
+	cmd.AddCommand(newMCPServeCommand(Deps{}))
 
 	return cmd
 }

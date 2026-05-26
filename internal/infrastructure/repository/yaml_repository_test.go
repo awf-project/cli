@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -546,6 +547,87 @@ func TestYAMLRepository_Load_LoopWithArithmeticMaxIterations(t *testing.T) {
 	if retryLoop.Loop.MaxIterations != 0 {
 		t.Errorf("Loop.MaxIterations = %d, want 0 (expression mode)", retryLoop.Loop.MaxIterations)
 	}
+}
+
+// TestYAMLRepository_Load_MCPProxyEmptyProxy_PreservesDomainCode is a regression
+// test for bug #2/#3: when MCPProxyConfig.Validate returns a USER.MCP_PROXY.*
+// error, the load pipeline must propagate it as-is instead of wrapping it inside
+// a WORKFLOW.PARSE.YAML_SYNTAX StructuredError.
+func TestYAMLRepository_Load_MCPProxyEmptyProxy_PreservesDomainCode(t *testing.T) {
+	const mcpFixturesPath = "../../../tests/fixtures/mcp_proxy"
+	repo := NewYAMLRepository(mcpFixturesPath)
+
+	// Use a fixture with enable:true and intercept_builtins:false and no plugin_tools
+	// so the EMPTY_PROXY validation fires.
+	_, err := repo.Load(context.Background(), "mcp-proxy-empty-proxy-enabled-test")
+	if err == nil {
+		t.Fatal("Load() error = nil, want USER.MCP_PROXY.EMPTY_PROXY error")
+	}
+
+	// The error must be (or wrap) a StructuredError with the USER.MCP_PROXY.EMPTY_PROXY
+	// code — NOT WORKFLOW.PARSE.YAML_SYNTAX.
+	var structErr *domerrors.StructuredError
+	if !errors.As(err, &structErr) {
+		t.Fatalf("error type = %T (%v), want *domerrors.StructuredError", err, err)
+	}
+	if structErr.Code == domerrors.ErrorCodeWorkflowParseYAMLSyntax {
+		t.Errorf("error code = %v, must NOT be WORKFLOW.PARSE.YAML_SYNTAX; YAML syntax hints would fire spuriously", structErr.Code)
+	}
+	if structErr.Code != domerrors.ErrorCodeUserMCPProxyEmptyProxy {
+		t.Errorf("error code = %v, want %v", structErr.Code, domerrors.ErrorCodeUserMCPProxyEmptyProxy)
+	}
+}
+
+// TestYAMLRepository_Load_MCPProxyMultiError_ReturnsAllErrors is a regression
+// test for bug #4: when multiple steps fail MCP proxy validation, all errors
+// must be reachable in the returned error (via errors.As on a joined chain),
+// not just the first one.
+func TestYAMLRepository_Load_MCPProxyMultiError_ReturnsAllErrors(t *testing.T) {
+	const mcpFixturesPath = "../../../tests/fixtures/mcp_proxy"
+	repo := NewYAMLRepository(mcpFixturesPath)
+
+	_, err := repo.Load(context.Background(), "mcp-proxy-multi-error-test")
+	if err == nil {
+		t.Fatal("Load() error = nil, want USER.MCP_PROXY.* errors")
+	}
+
+	// Walk the full error tree to collect all StructuredErrors.
+	collected := collectAllStructuredErrors(err)
+	if len(collected) < 2 {
+		t.Errorf("expected at least 2 StructuredErrors (EMPTY_PROXY + NAME_COLLISION), got %d: %v", len(collected), err)
+	}
+
+	codes := make(map[domerrors.ErrorCode]bool, len(collected))
+	for _, se := range collected {
+		codes[se.Code] = true
+	}
+	if !codes[domerrors.ErrorCodeUserMCPProxyEmptyProxy] {
+		t.Errorf("USER.MCP_PROXY.EMPTY_PROXY not found in errors; codes seen: %v", codes)
+	}
+	if !codes[domerrors.ErrorCodeUserMCPProxyNameCollision] {
+		t.Errorf("USER.MCP_PROXY.NAME_COLLISION not found in errors; codes seen: %v", codes)
+	}
+}
+
+// collectAllStructuredErrors walks err (including errors.Join multi-errors) and
+// returns every *domerrors.StructuredError found anywhere in the tree.
+func collectAllStructuredErrors(err error) []*domerrors.StructuredError {
+	if err == nil {
+		return nil
+	}
+	switch v := err.(type) {
+	case *domerrors.StructuredError:
+		return []*domerrors.StructuredError{v}
+	case interface{ Unwrap() []error }:
+		var result []*domerrors.StructuredError
+		for _, sub := range v.Unwrap() {
+			result = append(result, collectAllStructuredErrors(sub)...)
+		}
+		return result
+	case interface{ Unwrap() error }:
+		return collectAllStructuredErrors(v.Unwrap())
+	}
+	return nil
 }
 
 func TestMain(m *testing.M) {

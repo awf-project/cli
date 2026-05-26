@@ -14,6 +14,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
+	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
@@ -97,6 +98,12 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 
 	// Create service
 	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
+
+	// Inject an OperationProvider so that mcp_proxy.plugin_tools checks run.
+	// A CompositeOperationProvider with no sub-providers returns empty results,
+	// which causes UNKNOWN_PLUGIN errors for any plugin reference — the correct
+	// behavior when no plugins are installed in the current environment.
+	svc.SetPluginOperationProvider(infrastructurePlugin.NewCompositeOperationProvider())
 
 	// Load workflow first to check existence
 	wf, err := svc.GetWorkflow(ctx, workflowName)
@@ -289,7 +296,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 }
 
 // runValidateDir validates all .yaml workflow files in a directory.
-func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, skipPlugins bool, validatorTimeout time.Duration) error {
+func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, _ bool, _ time.Duration) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("read directory %s: %w", dir, err)

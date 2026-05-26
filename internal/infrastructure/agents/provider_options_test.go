@@ -506,6 +506,26 @@ func TestWithGeminiTokenizer(t *testing.T) {
 	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
 }
 
+// TestWithClaudeLogger verifies that WithClaudeLogger injects the logger into the
+// ClaudeProvider and that the provider's base receives it (non-nil logger field).
+func TestWithClaudeLogger(t *testing.T) {
+	l := mocks.NewMockLogger()
+	provider := NewClaudeProviderWithOptions(WithClaudeLogger(l))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Logger(l), provider.logger,
+		"WithClaudeLogger must set the logger field on ClaudeProvider")
+}
+
+// TestWithGeminiLogger verifies that WithGeminiLogger injects the logger into the
+// GeminiProvider and that the provider's logger field is set correctly.
+func TestWithGeminiLogger(t *testing.T) {
+	l := mocks.NewMockLogger()
+	provider := NewGeminiProviderWithOptions(WithGeminiLogger(l))
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Logger(l), provider.logger,
+		"WithGeminiLogger must set the logger field on GeminiProvider")
+}
+
 func TestClaudeProvider_Execute_UsesInjectedTokenizer(t *testing.T) {
 	const expectedTokens = 99
 	tok := countingTokenizer{count: expectedTokens}

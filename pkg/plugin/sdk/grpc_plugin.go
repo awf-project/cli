@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
@@ -64,6 +65,8 @@ type operationServiceServer struct {
 }
 
 // ListOperations returns the list of operations supported by the plugin.
+// When the plugin also implements OperationSchemaProvider, each schema is
+// enriched with Description, Inputs, and Outputs; otherwise only Name is set.
 func (s *operationServiceServer) ListOperations(ctx context.Context, req *pluginv1.ListOperationsRequest) (*pluginv1.ListOperationsResponse, error) {
 	provider, ok := s.impl.(OperationProvider)
 	if !ok {
@@ -72,12 +75,13 @@ func (s *operationServiceServer) ListOperations(ctx context.Context, req *plugin
 		}, nil
 	}
 
+	// Optional: rich schema provider — nil when not implemented.
+	// Type assertion second value is bool, not error; errcheck false-positive.
+	schemaProvider, _ := s.impl.(OperationSchemaProvider) //nolint:errcheck // type assertion ok-form, not an error return
 	opNames := provider.Operations()
 	ops := make([]*pluginv1.OperationSchema, len(opNames))
 	for i, name := range opNames {
-		ops[i] = &pluginv1.OperationSchema{
-			Name: name,
-		}
+		ops[i] = buildOperationSchema(name, schemaProvider)
 	}
 	return &pluginv1.ListOperationsResponse{
 		Operations: ops,
@@ -85,6 +89,8 @@ func (s *operationServiceServer) ListOperations(ctx context.Context, req *plugin
 }
 
 // GetOperation returns information about a specific operation.
+// When the plugin also implements OperationSchemaProvider, the returned schema
+// is enriched with Description, Inputs, and Outputs.
 func (s *operationServiceServer) GetOperation(ctx context.Context, req *pluginv1.GetOperationRequest) (*pluginv1.GetOperationResponse, error) {
 	provider, ok := s.impl.(OperationProvider)
 	if !ok {
@@ -95,18 +101,63 @@ func (s *operationServiceServer) GetOperation(ctx context.Context, req *pluginv1
 		}, nil
 	}
 
-	ops := provider.Operations()
-	for _, opName := range ops {
-		if opName == req.Name {
-			return &pluginv1.GetOperationResponse{
-				Operation: &pluginv1.OperationSchema{
-					Name: req.Name,
-				},
-			}, nil
-		}
+	// Optional: rich schema provider — nil when not implemented.
+	// Type assertion second value is bool, not error; errcheck false-positive.
+	schemaProvider, _ := s.impl.(OperationSchemaProvider) //nolint:errcheck // type assertion ok-form, not an error return
+	if slices.Contains(provider.Operations(), req.Name) {
+		return &pluginv1.GetOperationResponse{
+			Operation: buildOperationSchema(req.Name, schemaProvider),
+		}, nil
 	}
 
 	return nil, fmt.Errorf("operation %q not found", req.Name)
+}
+
+// buildOperationSchema constructs a proto OperationSchema for the given name.
+// If schemaProvider is non-nil and returns metadata for the name, the schema is
+// enriched with Description, Inputs, and Outputs; otherwise only Name is set.
+func buildOperationSchema(name string, sp OperationSchemaProvider) *pluginv1.OperationSchema {
+	schema := &pluginv1.OperationSchema{Name: name}
+	if sp == nil {
+		return schema
+	}
+	meta, ok := sp.GetOperationSchema(name)
+	if !ok {
+		return schema
+	}
+	schema.Description = meta.Description
+	schema.Inputs = metaInputsToProto(meta.Inputs)
+	schema.Outputs = metaOutputsToProto(meta.Outputs)
+	return schema
+}
+
+// metaInputsToProto converts []InputMeta to the repeated InputSchema proto type.
+func metaInputsToProto(inputs []InputMeta) []*pluginv1.InputSchema {
+	result := make([]*pluginv1.InputSchema, len(inputs))
+	for i, m := range inputs {
+		result[i] = &pluginv1.InputSchema{
+			Name:        m.Name,
+			Type:        m.Type,
+			Required:    m.Required,
+			Default:     m.Default,
+			Description: m.Description,
+			Validation:  m.Validation,
+		}
+	}
+	return result
+}
+
+// metaOutputsToProto converts []OutputMeta to the repeated OutputSchema proto type.
+func metaOutputsToProto(outputs []OutputMeta) []*pluginv1.OutputSchema {
+	result := make([]*pluginv1.OutputSchema, len(outputs))
+	for i, m := range outputs {
+		result[i] = &pluginv1.OutputSchema{
+			Name:        m.Name,
+			Type:        m.Type,
+			Description: m.Description,
+		}
+	}
+	return result
 }
 
 // Execute executes an operation on the plugin.
@@ -202,6 +253,6 @@ func (b *GRPCPluginBridge) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Serve
 
 // GRPCClient is required by the go-plugin GRPCPlugin interface but is never
 // called on the plugin side. The host uses its own client implementation.
-func (b *GRPCPluginBridge) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, _ *grpc.ClientConn) (interface{}, error) {
+func (b *GRPCPluginBridge) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, _ *grpc.ClientConn) (any, error) {
 	return nil, fmt.Errorf("GRPCClient called on plugin side — this is a host-only method")
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/pkg/retry"
 )
 
@@ -118,6 +119,7 @@ type Step struct {
 	Agent           *AgentConfig         // for agent type: AI agent configuration
 	Skills          []SkillReference     // for agent type: skills to inject into the agent context
 	Config          map[string]any       // C069: plugin-provided step type configuration
+	MCPProxy        *MCPProxyConfig      `yaml:"mcp_proxy,omitempty"`
 }
 
 // Validate checks if the step configuration is valid.
@@ -205,6 +207,29 @@ func (s *Step) Validate(validator ExpressionCompiler, checker StepTypeChecker) e
 	if s.Retry != nil {
 		if err := s.Retry.Validate(); err != nil {
 			return fmt.Errorf("retry config: %w", err)
+		}
+	}
+
+	// Validate MCP proxy configuration if present.
+	// MCP proxy validation applies to all step types — proxy semantics are not
+	// agent-exclusive. Future step types (e.g. parallel orchestrators, composite
+	// steps) may also benefit from MCP tool interception.
+	// Convert each ValidationError to a *domerrors.StructuredError preserving the
+	// domain code (USER.MCP_PROXY.*), then join them so the load pipeline surfaces
+	// all of them without losing the original code behind a WORKFLOW.PARSE.YAML_SYNTAX
+	// wrapper.
+	if s.MCPProxy != nil {
+		if mcpErrs := s.MCPProxy.Validate(); len(mcpErrs) > 0 {
+			joined := make([]error, 0, len(mcpErrs))
+			for _, ve := range mcpErrs {
+				joined = append(joined, domerrors.NewUserError(
+					domerrors.ErrorCode(ve.Code),
+					ve.Message,
+					map[string]any{"step": s.Name},
+					nil,
+				))
+			}
+			return errors.Join(joined...)
 		}
 	}
 

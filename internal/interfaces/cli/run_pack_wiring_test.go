@@ -273,8 +273,7 @@ func TestWorkflowResolution_FullPackPath(t *testing.T) {
 
 	// Create manifest
 	manifest := &workflowpkg.Manifest{
-		Name:      "complete-pack",
-		Workflows: []string{"complete-workflow"},
+		Name: "complete-pack",
 	}
 	manifestData := fmt.Sprintf("name: %s\nworkflows:\n  - complete-workflow\n", manifest.Name)
 	require.NoError(t, os.WriteFile(

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -383,12 +382,19 @@ func (w *OutputWriter) WriteValidationTable(result *ValidationResultTable) error
 
 // WriteError outputs an error in the appropriate format.
 // Detects StructuredError and uses formatters for enhanced error output.
+// When err wraps multiple errors via errors.Join, each nested StructuredError
+// is rendered individually so the user sees all validation failures at once.
 func (w *OutputWriter) WriteError(err error, code int) error {
-	// Check if error is a StructuredError
-	var structuredErr *domerrors.StructuredError
-	if errors.As(err, &structuredErr) {
-		// Use structured error handling
-		return w.writeStructuredError(structuredErr, code)
+	// Walk the error chain to collect all StructuredErrors.
+	// errors.Join produces an error whose Unwrap() returns []error; errors.As
+	// only surfaces the first match, so we must collect all of them manually.
+	if structured := collectStructuredErrors(err); len(structured) > 0 {
+		for _, se := range structured {
+			if renderErr := w.writeStructuredError(se, code); renderErr != nil {
+				return renderErr
+			}
+		}
+		return nil
 	}
 
 	// Fallback: legacy error handling for plain errors
@@ -402,6 +408,72 @@ func (w *OutputWriter) WriteError(err error, code int) error {
 	// Text format: write to errOut
 	_, _ = fmt.Fprintf(w.errOut, "Error: %s\n", err.Error())
 	return nil
+}
+
+// collectStructuredErrors recursively walks err (including errors.Join multi-errors)
+// and returns all *domerrors.StructuredError instances found in the tree.
+// Returns nil if no StructuredErrors are found anywhere in the chain.
+//
+// The implementation checks two unwrapping shapes:
+//   - Unwrap() []error  — errors.Join multi-error (recurse into each child)
+//   - Unwrap() error    — single-wrapped error (fmt.Errorf %w, etc.)
+//
+// Interface assertions on the concrete Unwrap shape are intentional here:
+// we must distinguish multi-error from single-error unwrapping, which
+// errors.As cannot do (it always finds only the first match).
+func collectStructuredErrors(err error) []*domerrors.StructuredError {
+	if err == nil {
+		return nil
+	}
+
+	// Fast path: this node is directly a StructuredError.
+	// errors.As is used (not type assertion) so the linter is satisfied.
+	var se *domerrors.StructuredError
+	if isDirectStructuredError(err, &se) {
+		return []*domerrors.StructuredError{se}
+	}
+
+	// Multi-error (errors.Join): recurse into each child independently.
+	// Interface assertion on Unwrap()[]error is the only way to detect this
+	// shape; the errorlint warning does not apply because we are not trying
+	// to unwrap a wrapped *StructuredError — we are traversing the tree.
+	//
+	//nolint:errorlint // controlled tree traversal; not a wrapped-error check
+	if multi, ok := err.(interface{ Unwrap() []error }); ok {
+		var result []*domerrors.StructuredError
+		for _, sub := range multi.Unwrap() {
+			result = append(result, collectStructuredErrors(sub)...)
+		}
+		return result
+	}
+
+	// Single-wrapped error (fmt.Errorf %w).
+	//
+	//nolint:errorlint // controlled tree traversal; not a wrapped-error check
+	if single, ok := err.(interface{ Unwrap() error }); ok {
+		return collectStructuredErrors(single.Unwrap())
+	}
+
+	return nil
+}
+
+// isDirectStructuredError returns true and sets target when err is itself a
+// *domerrors.StructuredError without walking through any wrapping layer.
+// Using errors.As here satisfies the errorlint linter while still allowing us
+// to detect the direct-node case before checking Unwrap shapes.
+func isDirectStructuredError(err error, target **domerrors.StructuredError) bool {
+	if err == nil {
+		return false
+	}
+	// Cast directly — if the value is itself a *StructuredError, return it.
+	// We intentionally do NOT call errors.As here because that would recurse
+	// into wrapped errors, defeating the purpose of this function.
+	//nolint:errorlint // deliberate direct cast: we only want the top node
+	if se, ok := err.(*domerrors.StructuredError); ok {
+		*target = se
+		return true
+	}
+	return false
 }
 
 // writeStructuredError handles formatting of StructuredError instances.

@@ -8,7 +8,15 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 )
+
+// desktopNotifyTimeout bounds the wall-clock duration of the platform notify
+// command. notify-send (Linux) blocks waiting on the D-Bus daemon and osascript
+// (macOS) can stall in environments without a logged-in user. The notification
+// is best-effort — exceeding this budget is treated as a failure rather than
+// blocking the workflow indefinitely.
+const desktopNotifyTimeout = 5 * time.Second
 
 //nolint:unused // Used in integration tests and will be registered in provider.Execute() during GREEN phase
 var desktopBackendCounter uint64
@@ -76,13 +84,17 @@ func (d *desktopBackend) Send(ctx context.Context, payload NotificationPayload) 
 		title = "AWF Workflow"
 	}
 
+	// Bound subprocess wall-clock — notify-send can hang on missing D-Bus.
+	notifyCtx, cancel := context.WithTimeout(ctx, desktopNotifyTimeout)
+	defer cancel()
+
 	// Detect platform and build command
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
-		cmd = d.buildLinuxCommand(ctx, title, payload.Message, payload.Priority)
+		cmd = d.buildLinuxCommand(notifyCtx, title, payload.Message, payload.Priority)
 	case "darwin":
-		cmd = d.buildDarwinCommand(ctx, title, payload.Message)
+		cmd = d.buildDarwinCommand(notifyCtx, title, payload.Message)
 	default:
 		return &BackendResult{
 			Backend:    "desktop",
@@ -104,8 +116,9 @@ func (d *desktopBackend) Send(ctx context.Context, payload NotificationPayload) 
 	}
 
 	if err != nil {
-		// Check if context was cancelled during execution
-		if ctxErr := ctx.Err(); ctxErr != nil {
+		// Check if context was cancelled during execution (parent cancel or
+		// the protective desktopNotifyTimeout deadline firing).
+		if ctxErr := notifyCtx.Err(); ctxErr != nil {
 			return &BackendResult{
 				Backend:    "desktop",
 				StatusCode: 1,

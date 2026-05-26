@@ -242,7 +242,10 @@ func TestValidationResult_ToError_SubWorkflowCodes(t *testing.T) {
 
 		err := result.ToError()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "2 errors")
+		// errors.Join concatenates error messages with "\n"; verify both messages
+		// are present so callers can inspect the full set of validation failures.
+		assert.Contains(t, err.Error(), "cycle detected")
+		assert.Contains(t, err.Error(), "missing workflow")
 	})
 
 	t.Run("no errors only warnings", func(t *testing.T) {

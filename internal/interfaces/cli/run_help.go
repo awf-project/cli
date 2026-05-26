@@ -65,7 +65,7 @@ func formatAnyToString(value any) string {
 
 // formatInputsTable renders the input parameters as a formatted table.
 // Uses tabwriter for aligned columns in 80-column terminals.
-func formatInputsTable(inputs []ui.InputInfo, out io.Writer, noColor bool) error {
+func formatInputsTable(inputs []ui.InputInfo, out io.Writer, _ bool) error {
 	if len(inputs) == 0 {
 		_, _ = fmt.Fprintln(out, "No input parameters")
 		return nil

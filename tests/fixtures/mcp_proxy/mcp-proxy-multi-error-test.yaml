@@ -1,0 +1,29 @@
+name: mcp-proxy-multi-error-test
+version: "1.0.0"
+author: test
+states:
+  initial: bad_empty_proxy
+  bad_empty_proxy:
+    type: agent
+    provider: claude
+    prompt: "Test prompt"
+    on_success: bad_name_collision
+    mcp_proxy:
+      enable: true
+      intercept_builtins: false
+  bad_name_collision:
+    type: agent
+    provider: claude
+    prompt: "Test prompt"
+    on_success: done
+    mcp_proxy:
+      enable: true
+      plugin_tools:
+        - plugin: echo
+          expose: [echo]
+        - plugin: echo
+          expose: [echo]
+  done:
+    type: terminal
+    status: success
+    message: "Done"
