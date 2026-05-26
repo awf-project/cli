@@ -249,10 +249,7 @@ func TestHistoryInfo_Struct(t *testing.T) {
 		WorkflowName: "test-workflow",
 		Status:       "success",
 		ExitCode:     0,
-		StartedAt:    "2025-12-11T10:00:00Z",
-		CompletedAt:  "2025-12-11T10:05:00Z",
 		DurationMs:   300000,
-		ErrorMessage: "",
 	}
 
 	assert.Equal(t, "test-id", info.ID)

@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -61,6 +63,7 @@ func (p *ClaudeProvider) newBase() *baseCLIProvider {
 		validateOptions:       validateClaudeOptions,
 		parseDisplayEvents:    p.parseClaudeDisplayEvents,
 		extractTokenUsage:     p.extractClaudeTokenUsage,
+		mcpInjector:           claudeMCPInjector,
 	})
 	if p.tokenizer != nil {
 		b.tokenizer = p.tokenizer
@@ -187,6 +190,100 @@ func (p *ClaudeProvider) buildConversationArgs(state *workflow.ConversationState
 	return args, nil
 }
 
+// claudeMCPInjector appends Claude-specific MCP flags to args.
+//
+// Claude CLI's --mcp-config flag expects a file in the standard
+// claude_desktop_config.json shape (a top-level "mcpServers" record mapping
+// server names to {command, args}). AWF's internal proxy config — read by
+// `awf mcp-serve` — has a different shape and is not what Claude wants.
+//
+// This injector therefore writes a small wrapper config file that maps the
+// server name "awf-proxy" to the spawn command `awf mcp-serve --config=<internal>`,
+// and passes the WRAPPER path (not the internal path) to --mcp-config. The
+// returned cleanup removes the wrapper file after Execute returns.
+//
+// intercept_builtins=true: --mcp-config <wrapper> --tools "" --strict-mcp-config
+// intercept_builtins=false: --mcp-config <wrapper> only
+// Returns a new slice and the input options unchanged (Claude does not mutate system_prompt).
+func claudeMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+	if cfg == nil {
+		return args, options, noopMCPCleanup, nil
+	}
+
+	wrapperPath, wrapperCleanup, werr := writeClaudeMCPWrapper(mcpConfigPath)
+	if werr != nil {
+		return nil, options, noopMCPCleanup, werr
+	}
+
+	newArgs = make([]string, len(args), len(args)+4)
+	copy(newArgs, args)
+	newArgs = append(newArgs, "--mcp-config", wrapperPath)
+	if cfg.InterceptBuiltins {
+		newArgs = append(newArgs, "--tools", "", "--strict-mcp-config")
+	}
+	return newArgs, options, wrapperCleanup, nil
+}
+
+// claudeMCPWrapperServer is one entry under "mcpServers" in the Claude wrapper config.
+type claudeMCPWrapperServer struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+// claudeMCPWrapperConfig is the shape Claude CLI expects for --mcp-config.
+type claudeMCPWrapperConfig struct {
+	MCPServers map[string]claudeMCPWrapperServer `json:"mcpServers"`
+}
+
+// writeClaudeMCPWrapper writes a Claude-compatible MCP config that maps the
+// "awf-proxy" server name to "<awf-bin> mcp-serve --config=<internalConfigPath>",
+// returns the wrapper file path and an idempotent cleanup that removes the file.
+// The internal config path itself is owned by ProxyService and removed by its own
+// cleanup; this function manages ONLY the wrapper file.
+func writeClaudeMCPWrapper(internalConfigPath string) (path string, cleanup func() error, err error) {
+	cmd := mcpServeCommand(internalConfigPath)
+	if len(cmd) == 0 {
+		return "", noopMCPCleanup, fmt.Errorf("claude mcp wrapper: empty mcp-serve command")
+	}
+
+	wrapper := claudeMCPWrapperConfig{
+		MCPServers: map[string]claudeMCPWrapperServer{
+			"awf-proxy": {Command: cmd[0], Args: cmd[1:]},
+		},
+	}
+	data, err := json.Marshal(wrapper)
+	if err != nil {
+		return "", noopMCPCleanup, fmt.Errorf("marshal claude mcp wrapper: %w", err)
+	}
+
+	f, createErr := os.CreateTemp("", "awf-claude-mcp-*.json")
+	if createErr != nil {
+		return "", noopMCPCleanup, fmt.Errorf("create claude mcp wrapper: %w", createErr)
+	}
+	tmpPath := f.Name()
+	if _, writeErr := f.Write(data); writeErr != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return "", noopMCPCleanup, fmt.Errorf("write claude mcp wrapper: %w", writeErr)
+	}
+	if closeErr := f.Close(); closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return "", noopMCPCleanup, fmt.Errorf("close claude mcp wrapper: %w", closeErr)
+	}
+
+	var once sync.Once
+	cleanup = func() error {
+		var rerr error
+		once.Do(func() {
+			if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+				rerr = removeErr
+			}
+		})
+		return rerr
+	}
+	return tmpPath, cleanup, nil
+}
+
 func validateClaudeOptions(options map[string]any) error {
 	if options == nil {
 		return nil
@@ -215,7 +312,7 @@ func (p *ClaudeProvider) extractResultEvent(output string) map[string]any {
 		return nil
 	}
 	var found map[string]any
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

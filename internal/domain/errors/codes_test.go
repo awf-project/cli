@@ -974,3 +974,31 @@ func TestErrorCode_Taxonomy_Subcategories(t *testing.T) {
 		})
 	}
 }
+
+// TestErrorCodeConstants_MCPProxy verifies all MCP_PROXY error codes exist with correct values.
+// Relocated from internal/domain/ports/tool_provider_test.go (Mi11 cleanup).
+func TestErrorCodeConstants_MCPProxy(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     errors.ErrorCode
+		expected string
+	}{
+		{"UnknownKey", errors.ErrorCodeUserMCPProxyUnknownKey, "USER.MCP_PROXY.UNKNOWN_KEY"},
+		{"UnknownPlugin", errors.ErrorCodeUserMCPProxyUnknownPlugin, "USER.MCP_PROXY.UNKNOWN_PLUGIN"},
+		{"UnknownOperation", errors.ErrorCodeUserMCPProxyUnknownOperation, "USER.MCP_PROXY.UNKNOWN_OPERATION"},
+		{"NameCollision", errors.ErrorCodeUserMCPProxyNameCollision, "USER.MCP_PROXY.NAME_COLLISION"},
+		{"EmptyProxy", errors.ErrorCodeUserMCPProxyEmptyProxy, "USER.MCP_PROXY.EMPTY_PROXY"},
+		{"UnsupportedProvider", errors.ErrorCodeUserMCPProxyUnsupportedProvider, "USER.MCP_PROXY.UNSUPPORTED_PROVIDER"},
+		{"InfiniteLoopGuard", errors.ErrorCodeUserMCPProxyInfiniteLoopGuard, "USER.MCP_PROXY.INFINITE_LOOP_GUARD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(tt.code), "error code value must match")
+			assert.Equal(t, "USER", tt.code.Category(), "all MCP_PROXY codes must be USER category")
+			assert.Equal(t, "MCP_PROXY", tt.code.Subcategory(), "all MCP_PROXY codes must have MCP_PROXY subcategory")
+			assert.Equal(t, 1, tt.code.ExitCode(), "all MCP_PROXY codes must map to exit code 1")
+			assert.True(t, tt.code.IsValid(), "all MCP_PROXY codes must be valid")
+		})
+	}
+}

@@ -5,13 +5,42 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/logger"
 )
+
+var (
+	execPathOnce sync.Once
+	execPath     string
+)
+
+func resolvedExecutable() string {
+	execPathOnce.Do(func() {
+		exe, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+			return
+		}
+		resolved, err := filepath.EvalSymlinks(exe)
+		if err != nil {
+			execPath = exe
+			return
+		}
+		execPath = resolved
+	})
+	return execPath
+}
+
+func mcpServeCommand(configPath string) []string {
+	return []string{resolvedExecutable(), "mcp-serve", "--config=" + configPath}
+}
 
 type fallbackTokenizer struct{}
 
@@ -33,8 +62,11 @@ type tokenUsage struct {
 	CostUSD      float64
 }
 
+// noopMCPCleanup is a no-op cleanup for providers that have no MCP side-effects.
+func noopMCPCleanup() error { return nil }
+
 // cliProviderHooks captures provider-specific behavior as function values.
-// Optional hooks (extractTextContent, validateOptions, parseDisplayEvents, extractTokenUsage) may be nil.
+// Optional hooks (extractTextContent, validateOptions, parseDisplayEvents, extractTokenUsage, mcpInjector) may be nil.
 type cliProviderHooks struct {
 	buildExecuteArgs      func(prompt string, options map[string]any) ([]string, error)
 	buildConversationArgs func(state *workflow.ConversationState, prompt string, options map[string]any) ([]string, error)
@@ -43,6 +75,22 @@ type cliProviderHooks struct {
 	validateOptions       func(options map[string]any) error
 	parseDisplayEvents    DisplayEventParser
 	extractTokenUsage     func(rawOutput string) *tokenUsage
+	// mcpInjector appends provider-specific MCP flags to args and optionally mutates
+	// options (e.g. prepending a system_prompt for Codex/OpenCode coexistence mode).
+	// ctx is the parent context of the agent execution; injectors that spawn sub-processes
+	// (e.g. gemini mcp add, opencode mcp add) should derive a timeout from ctx rather than
+	// context.Background() so that a cancelled parent propagates cancellation correctly.
+	// For cleanup closures that must run after parent cancellation (mcp remove), use
+	// context.Background() inside the closure directly.
+	// Returns:
+	//   - newArgs:    the augmented args slice (never mutates the input slice)
+	//   - newOptions: merged options map; callers replace their local options map with this
+	//   - cleanup:    invoked AFTER the agent process exits (e.g. opencode mcp remove)
+	//   - err:        non-nil aborts provider execution before spawning the CLI
+	//
+	// Providers without side-effects return (newArgs, options, noopMCPCleanup, nil).
+	// Called only when cfg != nil && cfg.Enable && hooks.mcpInjector != nil.
+	mcpInjector func(ctx context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error)
 }
 
 // baseCLIProvider encapsulates the shared Execute and ExecuteConversation
@@ -71,11 +119,15 @@ func newBaseCLIProvider(name, binary string, executor ports.CLIExecutor, log por
 }
 
 // combineOutput merges stdout and stderr bytes into a single string.
+// When one side is empty, conversion is done directly without extra allocation.
 func combineOutput(stdoutBytes, stderrBytes []byte) string {
-	output := make([]byte, 0, len(stdoutBytes)+len(stderrBytes))
-	output = append(output, stdoutBytes...)
-	output = append(output, stderrBytes...)
-	return string(output)
+	if len(stderrBytes) == 0 {
+		return string(stdoutBytes)
+	}
+	if len(stdoutBytes) == 0 {
+		return string(stderrBytes)
+	}
+	return string(stdoutBytes) + string(stderrBytes)
 }
 
 func wantsRawDisplay(options map[string]any) bool {
@@ -114,6 +166,25 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 	if err != nil {
 		return nil, "", err
 	}
+
+	mcpCleanup := func() error { return nil }
+	if b.hooks.mcpInjector != nil {
+		if cfg, ok := options[workflow.MCPProxyConfigKey].(*workflow.MCPProxyConfig); ok && cfg != nil && cfg.Enable {
+			path, _ := getStringOption(options, workflow.MCPProxyConfigPathKey)
+			newArgs, newOpts, cleanup, injErr := b.hooks.mcpInjector(ctx, args, cfg, path, options)
+			if injErr != nil {
+				return nil, "", fmt.Errorf("%s mcp injector: %w", b.name, injErr)
+			}
+			args = newArgs
+			options = newOpts
+			mcpCleanup = cleanup
+		}
+	}
+	defer func() {
+		if cleanupErr := mcpCleanup(); cleanupErr != nil {
+			b.logger.Warn("mcp cleanup failed", "error", cleanupErr)
+		}
+	}()
 
 	rawDisplay := wantsRawDisplay(options)
 	wrappedStdout, filter := b.applyStreamFilter(stdout, rawDisplay)
@@ -195,6 +266,29 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 	if err != nil {
 		return nil, "", err
 	}
+
+	// F099: apply MCP injector when configured — mirrors the same pattern in execute().
+	// The injector is invoked after buildConversationArgs so all provider-specific flags
+	// are already in args before MCP flags are appended. newOptions may include a mutated
+	// system_prompt for Codex/OpenCode coexistence mode.
+	mcpCleanup := func() error { return nil }
+	if b.hooks.mcpInjector != nil {
+		if cfg, ok := options[workflow.MCPProxyConfigKey].(*workflow.MCPProxyConfig); ok && cfg != nil && cfg.Enable {
+			path, _ := getStringOption(options, workflow.MCPProxyConfigPathKey)
+			newArgs, newOpts, cleanup, injErr := b.hooks.mcpInjector(ctx, args, cfg, path, options)
+			if injErr != nil {
+				return nil, "", fmt.Errorf("%s mcp injector: %w", b.name, injErr)
+			}
+			args = newArgs
+			options = newOpts
+			mcpCleanup = cleanup
+		}
+	}
+	defer func() {
+		if cleanupErr := mcpCleanup(); cleanupErr != nil {
+			b.logger.Warn("mcp cleanup failed", "error", cleanupErr)
+		}
+	}()
 
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
 	if addErr := workingState.AddTurn(userTurn); addErr != nil {

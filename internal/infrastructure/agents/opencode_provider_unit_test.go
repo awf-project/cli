@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -795,32 +796,32 @@ func TestOpenCodeProvider_ExecuteConversation_FormatAndModelFlags(t *testing.T) 
 	}
 }
 
-// T013: Verify debug log is emitted when dangerously_skip_permissions is present (FR-009)
-func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_DebugLog(t *testing.T) {
+// T013: Verify --dangerously-skip-permissions is passed to OpenCode CLI when set (FR-009)
+func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_Flag(t *testing.T) {
 	tests := []struct {
-		name    string
-		options map[string]any
-		hasFlag bool
+		name     string
+		options  map[string]any
+		wantFlag bool
 	}{
 		{
-			name:    "dangerously_skip_permissions true",
-			options: map[string]any{"dangerously_skip_permissions": true},
-			hasFlag: true,
+			name:     "dangerously_skip_permissions true",
+			options:  map[string]any{"dangerously_skip_permissions": true},
+			wantFlag: true,
 		},
 		{
-			name:    "dangerously_skip_permissions false",
-			options: map[string]any{"dangerously_skip_permissions": false},
-			hasFlag: false,
+			name:     "dangerously_skip_permissions false",
+			options:  map[string]any{"dangerously_skip_permissions": false},
+			wantFlag: false,
 		},
 		{
-			name:    "no dangerously_skip_permissions",
-			options: nil,
-			hasFlag: false,
+			name:     "no dangerously_skip_permissions",
+			options:  nil,
+			wantFlag: false,
 		},
 		{
-			name:    "with other options but no dangerously_skip_permissions",
-			options: map[string]any{"model": "gpt-4o", "framework": "react"},
-			hasFlag: false,
+			name:     "with other options but no dangerously_skip_permissions",
+			options:  map[string]any{"model": "gpt-4o", "framework": "react"},
+			wantFlag: false,
 		},
 	}
 
@@ -828,83 +829,35 @@ func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_DebugLog(t *testing
 		t.Run(tt.name, func(t *testing.T) {
 			mockExec := mocks.NewMockCLIExecutor()
 			mockExec.SetOutput([]byte(`{"status":"ok"}`), nil)
-			mockLogger := mocks.NewMockLogger()
 
 			provider := NewOpenCodeProviderWithOptions(
 				WithOpenCodeExecutor(mockExec),
-				WithOpenCodeLogger(mockLogger),
 			)
 
 			_, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.NoError(t, err)
 
-			debugMessages := mockLogger.GetMessagesByLevel("DEBUG")
+			calls := mockExec.GetCalls()
+			require.Len(t, calls, 1)
 
-			if tt.hasFlag {
-				require.Greater(t, len(debugMessages), 0, "expected at least one debug message when dangerously_skip_permissions is present")
-				foundMsg := false
-				for _, msg := range debugMessages {
-					if strings.Contains(msg.Msg, "dangerously_skip_permissions") && strings.Contains(msg.Msg, "OpenCode") {
-						foundMsg = true
-						break
-					}
-				}
-				assert.True(t, foundMsg, "expected debug message mentioning dangerously_skip_permissions and OpenCode")
+			hasFlag := slices.Contains(calls[0].Args, "--dangerously-skip-permissions")
+
+			if tt.wantFlag {
+				assert.True(t, hasFlag, "expected --dangerously-skip-permissions to be present in CLI args")
 			} else {
-				// When flag is not present, should not have any dangerously_skip_permissions debug messages
-				for _, msg := range debugMessages {
-					assert.NotContains(t, msg.Msg, "dangerously_skip_permissions", "should not log dangerously_skip_permissions when not provided")
-				}
+				assert.False(t, hasFlag, "expected --dangerously-skip-permissions to be absent when not enabled")
 			}
 		})
 	}
 }
 
-// T013: Verify debug log content when dangerously_skip_permissions is present (FR-009)
-func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_LogContent(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"result":"code"}`), nil)
-	mockLogger := mocks.NewMockLogger()
-
-	provider := NewOpenCodeProviderWithOptions(
-		WithOpenCodeExecutor(mockExec),
-		WithOpenCodeLogger(mockLogger),
-	)
-
-	options := map[string]any{
-		"dangerously_skip_permissions": true,
-	}
-
-	_, err := provider.Execute(context.Background(), "Generate code", options, nil, nil)
-	require.NoError(t, err)
-
-	messages := mockLogger.GetMessages()
-	require.Greater(t, len(messages), 0, "expected at least one log message")
-
-	// Find the debug message about dangerously_skip_permissions
-	var debugMsg *mocks.LogMessage
-	for i := range messages {
-		if messages[i].Level == "DEBUG" && strings.Contains(messages[i].Msg, "dangerously_skip_permissions") {
-			debugMsg = &messages[i]
-			break
-		}
-	}
-
-	require.NotNil(t, debugMsg, "expected a DEBUG level message about dangerously_skip_permissions")
-	assert.Contains(t, debugMsg.Msg, "not supported", "message should indicate the option is not supported")
-	assert.Contains(t, debugMsg.Msg, "ignored", "message should indicate the option will be ignored")
-	assert.Contains(t, debugMsg.Msg, "OpenCode", "message should mention OpenCode")
-}
-
-// T013: Verify ExecuteConversation also emits debug log for dangerously_skip_permissions (FR-009)
-func TestOpenCodeProvider_ExecuteConversation_DangerouslySkipPermissions_DebugLog(t *testing.T) {
+// T013: Verify --dangerously-skip-permissions is also wired in ExecuteConversation (FR-009)
+func TestOpenCodeProvider_ExecuteConversation_DangerouslySkipPermissions_Flag(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte(`{"status":"ok","session_id":"opencode-123"}`), nil)
-	mockLogger := mocks.NewMockLogger()
 
 	provider := NewOpenCodeProviderWithOptions(
 		WithOpenCodeExecutor(mockExec),
-		WithOpenCodeLogger(mockLogger),
 	)
 
 	state := &workflow.ConversationState{
@@ -919,55 +872,20 @@ func TestOpenCodeProvider_ExecuteConversation_DangerouslySkipPermissions_DebugLo
 	_, err := provider.ExecuteConversation(context.Background(), state, "Generate code", options, nil, nil)
 	require.NoError(t, err)
 
-	debugMessages := mockLogger.GetMessagesByLevel("DEBUG")
-	require.Greater(t, len(debugMessages), 0, "expected at least one debug message in ExecuteConversation")
-
-	foundMsg := false
-	for _, msg := range debugMessages {
-		if strings.Contains(msg.Msg, "dangerously_skip_permissions") && strings.Contains(msg.Msg, "OpenCode") {
-			foundMsg = true
-			break
-		}
-	}
-	assert.True(t, foundMsg, "expected debug message about dangerously_skip_permissions in ExecuteConversation")
-}
-
-// T013: Verify no dangerously_skip_permissions flag is passed to OpenCode CLI (FR-009)
-func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_NoFlag(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte(`{"status":"ok"}`), nil)
-
-	provider := NewOpenCodeProviderWithOptions(
-		WithOpenCodeExecutor(mockExec),
-	)
-
-	options := map[string]any{
-		"dangerously_skip_permissions": true,
-	}
-
-	_, err := provider.Execute(context.Background(), "test", options, nil, nil)
-	require.NoError(t, err)
-
 	calls := mockExec.GetCalls()
 	require.Len(t, calls, 1)
 
-	for _, arg := range calls[0].Args {
-		assert.NotEqual(t, "--dangerously-skip-permissions", arg, "should not pass dangerously_skip_permissions flag to CLI")
-		assert.NotEqual(t, "--dangerously_skip_permissions", arg, "should not pass dangerously_skip_permissions flag to CLI")
-		assert.NotEqual(t, "--yolo", arg, "should not pass --yolo flag (Codex specific)")
-		assert.NotEqual(t, "--approval-mode", arg, "should not pass --approval-mode flag (Gemini specific)")
-	}
+	assert.Contains(t, calls[0].Args, "--dangerously-skip-permissions",
+		"ExecuteConversation must pass --dangerously-skip-permissions when option is true")
 }
 
-// T013: Verify dangerously_skip_permissions with other options still logs debug (FR-009)
+// T013: Verify dangerously_skip_permissions with other options all land in CLI args (FR-009)
 func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_WithOtherOptions(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte(`{"status":"ok"}`), nil)
-	mockLogger := mocks.NewMockLogger()
 
 	provider := NewOpenCodeProviderWithOptions(
 		WithOpenCodeExecutor(mockExec),
-		WithOpenCodeLogger(mockLogger),
 	)
 
 	options := map[string]any{
@@ -980,21 +898,10 @@ func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_WithOtherOptions(t 
 	_, err := provider.Execute(context.Background(), "test", options, nil, nil)
 	require.NoError(t, err)
 
-	debugMessages := mockLogger.GetMessagesByLevel("DEBUG")
-	require.Greater(t, len(debugMessages), 0, "expected debug message even with other options present")
-
-	var found bool
-	for _, msg := range debugMessages {
-		if strings.Contains(msg.Msg, "dangerously_skip_permissions") {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "expected debug message about dangerously_skip_permissions")
-
-	// Verify other options are still passed to CLI
 	calls := mockExec.GetCalls()
 	require.Len(t, calls, 1)
+
+	assert.Contains(t, calls[0].Args, "--dangerously-skip-permissions")
 	assert.Contains(t, calls[0].Args, "--model")
 	assert.Contains(t, calls[0].Args, "gpt-4o")
 	assert.Contains(t, calls[0].Args, "--framework")

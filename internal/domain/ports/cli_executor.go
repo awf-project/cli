@@ -3,7 +3,19 @@ package ports
 import (
 	"context"
 	"io"
+	"os"
 )
+
+// CLIProcess is an asynchronous subprocess handle returned by CLIExecutor.Start.
+// Signal and Wait are safe to call concurrently; Wait is idempotent.
+//
+// On Windows, Signal(os.Interrupt) is best-effort; callers must treat the 5-second
+// deadline as mandatory and fall back to Signal(os.Kill) unconditionally.
+type CLIProcess interface {
+	Signal(sig os.Signal) error
+	Wait() error
+	Done() <-chan struct{}
+}
 
 // CLIExecutor defines the contract for executing external CLI binaries.
 // Unlike CommandExecutor (shell execution via detected shell), this executes
@@ -28,4 +40,8 @@ type CLIExecutor interface {
 	// - Non-zero exit code: error != nil (error should contain exit code info)
 	// - Context cancelled/timeout: error will be context.Canceled or context.DeadlineExceeded
 	Run(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error)
+
+	// Start launches a binary without blocking and returns a CLIProcess handle
+	// for signal, wait, and done-notification lifecycle control.
+	Start(ctx context.Context, name string, args ...string) (CLIProcess, error)
 }

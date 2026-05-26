@@ -25,6 +25,7 @@ commonComponents:
   - pkg-httpx
   - pkg-output
   - pkg-registry
+  - pkg-mcpserver
 
 vendors:
   go-stdlib:
@@ -205,6 +206,9 @@ components:
   pkg-validation:
     in: ../pkg/validation
 
+  pkg-mcpserver:
+    in: ../pkg/mcpserver
+
   # PROTOBUF
   proto-plugin:
     in: ../proto/plugin/v1
@@ -212,6 +216,9 @@ components:
   # APPLICATION LAYER
   application:
     in: application
+
+  application-tools:
+    in: application/tools
 
   # INFRASTRUCTURE LAYER
   infra-agents:
@@ -271,6 +278,12 @@ components:
   infra-otel:
     in: infrastructure/otel
 
+  infra-tools:
+    in: infrastructure/tools
+
+  infra-tools-builtins:
+    in: infrastructure/tools/builtins
+
   infra-roles:
     in: infrastructure/roles
 
@@ -306,6 +319,8 @@ components:
 deps:
   # DOMAIN — only stdlib (+ pkg via commonComponents)
   domain-workflow:
+    mayDependOn:
+      - domain-errors
     canUse:
       - go-stdlib
       - go-sync
@@ -344,6 +359,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - application-tools
       - infra-agents
       - infra-expression
       - infra-github
@@ -352,11 +368,21 @@ deps:
       - infra-repository
       - infra-roles
       - infra-skills
+      - infra-tools
+      - infra-tools-builtins
       - infra-xdg
     canUse:
       - go-stdlib
       - go-sync
       - uuid
+
+  application-tools:
+    mayDependOn:
+      - domain-ports
+      - domain-errors
+      - domain-plugin
+    canUse:
+      - go-stdlib
 
   # INFRASTRUCTURE — domain + vendors
   infra-agents:
@@ -564,10 +590,31 @@ deps:
     canUse:
       - go-stdlib
 
+  pkg-mcpserver:
+    canUse:
+      - go-stdlib
+
+  infra-tools:
+    mayDependOn:
+      - domain-ports
+      - domain-plugin
+      - domain-errors
+    canUse:
+      - go-stdlib
+
+  infra-tools-builtins:
+    mayDependOn:
+      - domain-ports
+      - domain-plugin
+      - domain-errors
+    canUse:
+      - go-stdlib
+
   # INTERFACES — wiring layer (app + infra + domain)
   interfaces-cli:
     mayDependOn:
       - application
+      - application-tools
       - domain-workflow
       - domain-ports
       - domain-errors
@@ -592,6 +639,8 @@ deps:
       - infra-skills
       - infra-store
       - infra-tokenizer
+      - infra-tools
+      - infra-tools-builtins
       - infra-updater
       - infra-workflowpkg
       - infra-xdg

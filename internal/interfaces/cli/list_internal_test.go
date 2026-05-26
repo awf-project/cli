@@ -369,15 +369,15 @@ func TestCollectPromptsFromPaths(t *testing.T) {
 		globalPrompts := make(map[string]string)
 
 		// Create 50 local prompts
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			localPrompts[filepath.Join("dir", "local-"+string(rune('a'+i%26))+".md")] = "local content"
 		}
 		// Create 50 global prompts (some overlap)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			globalPrompts[filepath.Join("dir", "global-"+string(rune('a'+i%26))+".md")] = "global content"
 		}
 		// Add overlapping prompts
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			name := filepath.Join("shared", "common-"+string(rune('0'+i))+".md")
 			localPrompts[name] = "local version"
 			globalPrompts[name] = "global version"
@@ -593,7 +593,6 @@ func TestRunListPrompts_MultiPath(t *testing.T) {
 		// Would verify SOURCE column in output
 		// Source field was added to PromptInfo in T003
 		info := ui.PromptInfo{
-			Name:   "test.md",
 			Source: "local",
 		}
 		assert.Equal(t, "local", info.Source)

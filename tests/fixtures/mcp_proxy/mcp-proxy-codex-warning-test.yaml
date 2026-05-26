@@ -1,0 +1,16 @@
+name: mcp-proxy-codex-warning-test
+version: "1.0.0"
+author: test
+states:
+  initial: start
+  start:
+    type: agent
+    provider: codex
+    prompt: "Test prompt"
+    on_success: end
+    mcp_proxy:
+      enable: true
+  end:
+    type: terminal
+    status: success
+    message: "Done"

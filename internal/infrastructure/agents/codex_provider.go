@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os/exec"
 	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/logger"
+	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // CodexProvider implements AgentProvider for Codex CLI.
@@ -53,6 +55,7 @@ func (p *CodexProvider) newBase() *baseCLIProvider {
 		validateOptions:       validateCodexOptions,
 		parseDisplayEvents:    p.parseCodexDisplayEvents,
 		extractTokenUsage:     p.extractCodexTokenUsage,
+		mcpInjector:           p.codexMCPInjector,
 	})
 	if p.tokenizer != nil {
 		b.tokenizer = p.tokenizer
@@ -199,6 +202,48 @@ func isValidCodexModel(model string) bool {
 	}
 	// o-series: "o" followed by a digit (e.g., o1, o3, o4-mini); rejects "ollama", "oracle"
 	return len(model) >= 2 && model[0] == 'o' && model[1] >= '0' && model[1] <= '9'
+}
+
+func (p *CodexProvider) codexMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+	if cfg == nil {
+		return args, options, noopMCPCleanup, nil
+	}
+
+	exe := resolvedExecutable()
+	// interpolation.ShellEscape produces a POSIX-safe single-quoted string, matching the
+	// quoting strategy used by Gemini's MCP injector (see gemini_provider.go).
+	// %q (Go syntax double-quoting) is not POSIX-shell-safe: backslash escapes
+	// differ and the result breaks on shells other than bash in --norc mode.
+	commandArg := "mcp_servers.awf-proxy.command=" + interpolation.ShellEscape(exe)
+	argsJSON, marshalErr := json.Marshal([]string{"mcp-serve", "--config=" + mcpConfigPath})
+	if marshalErr != nil {
+		return nil, options, noopMCPCleanup, fmt.Errorf("marshal codex mcp args: %w", marshalErr)
+	}
+	argsArg := fmt.Sprintf(`mcp_servers.awf-proxy.args=%s`, argsJSON)
+
+	newArgs = make([]string, len(args), len(args)+6)
+	copy(newArgs, args)
+	newArgs = append(newArgs, "-c", commandArg, "-c", argsArg)
+
+	// Clone options so we don't mutate the caller's map.
+	newOpts := make(map[string]any, len(options)+1)
+	maps.Copy(newOpts, options)
+
+	if cfg.InterceptBuiltins {
+		// -s read-only: restrict Codex to read-only sandbox mode as best-effort
+		// mitigation when intercept_builtins=true (coexistence mode, not full enforcement).
+		newArgs = append(newArgs, "-s", "read-only")
+		p.logger.Warn("mcp_proxy on provider=codex runs in coexistence mode; built-in tools are not blocked")
+
+		// Prepend MCP-only instruction to system_prompt (coexistence mitigation — T011 AC).
+		// This guides the model to prefer MCP tools when intercept_builtins=true but
+		// native tool blocking is unavailable (Codex has no --tools="" equivalent).
+		const mcpOnlyPrefix = "Use only MCP tools, never built-in tools. "
+		existing, _ := getStringOption(newOpts, "system_prompt")
+		newOpts["system_prompt"] = mcpOnlyPrefix + existing
+	}
+
+	return newArgs, newOpts, noopMCPCleanup, nil
 }
 
 // parseCodexDisplayEvents parses a single NDJSON line from Codex CLI output into

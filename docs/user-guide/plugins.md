@@ -592,6 +592,8 @@ step_name:
 - `operation` - Plugin operation in format `plugin_name.operation_name`
 - `inputs` - Operation-specific parameters (supports variable interpolation)
 
+> **Two ways to invoke an operation.** Beyond the deterministic `operation:` step shown above, plugin operations can also be exposed to AI agents at runtime through the [MCP proxy](mcp-proxy.md). With `mcp_proxy.plugin_tools`, the agent receives the operation as a callable MCP tool named `<plugin>_<operation>` (single underscore, snake_case) and decides when to invoke it. Plugin authors who want their operation to be agent-callable should review the schema constraints in [Exposing Operations as MCP Tools](#exposing-operations-as-mcp-tools).
+
 ### Plugin Configuration
 
 Configure plugins via environment variables or config file:
@@ -968,6 +970,129 @@ AWF prevents event loops by limiting propagation depth to 3 levels. If Plugin A 
 
 ---
 
+### Exposing Operations as MCP Tools
+
+AWF's [MCP proxy](mcp-proxy.md) (`mcp_proxy.plugin_tools` in a workflow step) re-exposes a plugin's operations as MCP tools, letting an AI agent invoke them directly during execution. Your plugin doesn't have to opt in or implement a new interface — every operation registered via `Operations()` is automatically eligible — **provided its schema satisfies the constraints below.**
+
+#### Schema constraints
+
+The MCP tool schema is derived from your operation's `OperationSchema` via the `MapOperationSchema` translator. Only scalar input types are allowed:
+
+| `OperationSchema.Inputs[].Type` | Eligible? | Notes |
+|---------------------------------|-----------|-------|
+| `string` | ✅ | Translates to `{"type": "string"}` |
+| `integer` | ✅ | Translates to `{"type": "integer"}` |
+| `boolean` | ✅ | Translates to `{"type": "boolean"}` |
+| `array` | ❌ | Rejected with `USER.MCP_PROXY.UNSUPPORTED_SCHEMA` at step startup |
+| `object` | ❌ | Rejected with `USER.MCP_PROXY.UNSUPPORTED_SCHEMA` at step startup |
+
+If an operation needs structured input (a list of items, a nested config), it can still be invoked as a workflow `operation:` step — but it cannot be exposed to agents via the MCP proxy until the schema is refactored to scalar fields or split into multiple smaller operations.
+
+Two `Validation` values are forwarded to the JSON Schema `format` field, which most MCP-aware models honor: `"url"` → `"uri"`, `"email"` → `"email"`. Other `Validation` values are accepted by AWF but not propagated to the MCP tool schema.
+
+#### Tool name
+
+The exposed tool name is `<plugin>_<operation>` (single underscore separator, snake_case) — for example, `awf-plugin-time.time` becomes the MCP tool `awf-plugin-time_time`. Pick operation names that read well in this form: `create_issue`, `kubectl_apply`, `query_db`. Dots in operation names are forbidden because the Claude MCP client rejects them; AWF validates this at workflow load time.
+
+#### Description seen by the agent
+
+The agent sees a description composed from two fields of your `OperationSchema`:
+
+```
+<Description>. Returns a JSON object with fields: <Outputs joined by ", ">.
+```
+
+Concretely:
+
+| Schema field | Agent-visible result |
+|--------------|----------------------|
+| `Description: "Returns the current UTC time."` + `Outputs: ["unix", "iso8601", "rfc3339"]` | `Returns the current UTC time. Returns a JSON object with fields: unix, iso8601, rfc3339.` |
+| `Description: ""` + `Outputs: ["unix"]` | `Operation 'time' from plugin 'awf-plugin-time'. Returns a JSON object with fields: unix.` |
+| `Description: "Fetches an issue."` + `Outputs: []` | `Fetches an issue.` |
+
+**Practical takeaway** for plugin authors who want good agent-tool ergonomics:
+- Always populate `Description` with a single sentence stating what the operation does.
+- Populate `Outputs` with the field names the agent will read from the result (e.g. `["url", "title", "body"]` for `github.get_issue`). Models perform much better at multi-step reasoning when they know the output shape up front.
+
+#### Minimal MCP-ready operation
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+
+    "github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type TimePlugin struct {
+    sdk.BasePlugin
+}
+
+func (p *TimePlugin) Operations() []string {
+    return []string{"time"}
+}
+
+func (p *TimePlugin) OperationSchema(name string) *sdk.OperationSchema {
+    if name != "time" {
+        return nil
+    }
+    return &sdk.OperationSchema{
+        Description: "Returns the current UTC time as Unix epoch seconds and ISO-8601.",
+        Inputs:      map[string]sdk.InputSpec{}, // no inputs
+        Outputs:     []string{"unix", "iso8601"},
+    }
+}
+
+func (p *TimePlugin) HandleOperation(_ context.Context, _ string, _ map[string]any) (*sdk.OperationResult, error) {
+    now := time.Now().UTC()
+    return sdk.NewSuccessResult("", map[string]any{
+        "unix":    now.Unix(),
+        "iso8601": now.Format(time.RFC3339),
+    }), nil
+}
+
+func main() {
+    sdk.Serve(&TimePlugin{
+        BasePlugin: sdk.BasePlugin{PluginName: "awf-plugin-time", PluginVersion: "1.0.0"},
+    })
+}
+```
+
+Users then expose it to an agent like so:
+
+```yaml
+agent_with_time:
+  type: agent
+  provider: claude
+  prompt: "Use the awf-plugin-time_time tool to read the current UTC time, then ..."
+  mcp_proxy:
+    enable: true
+    intercept_builtins: false
+    plugin_tools:
+      - plugin: awf-plugin-time
+        expose:
+          - time
+  options:
+    dangerously_skip_permissions: true
+```
+
+#### Validation at workflow load
+
+When a workflow references `plugin_tools: [{plugin: P, expose: [op]}]`, AWF emits these errors at `awf validate` / `awf run` time, before the agent ever starts:
+
+| Error code | Cause |
+|------------|-------|
+| `USER.MCP_PROXY.UNKNOWN_PLUGIN` | Plugin `P` is not installed or not enabled |
+| `USER.MCP_PROXY.UNKNOWN_OPERATION` | Operation `op` is not in `P.Operations()` |
+| `USER.MCP_PROXY.UNSUPPORTED_SCHEMA` | One of `op`'s `Inputs` uses `array` or `object` |
+| `USER.MCP_PROXY.NAME_COLLISION` | Two `expose:` entries (across plugins or with a built-in tool) resolve to the same MCP tool name |
+
+Test these paths in your plugin's CI by running a workflow that exposes each operation under `plugin_tools` against a Claude or Gemini provider. The repo includes reference workflows at `.awf/workflows/test-mcp-proxy-{claude,gemini,opencode}-plugin-tools.yaml` that you can adapt for your plugin.
+
+---
+
 ### Echo Plugin Example
 
 The `examples/plugins/awf-plugin-echo/` directory contains a complete working plugin that echoes its input text. Use it as a starting point:
@@ -1114,6 +1239,7 @@ Update AWF or use a compatible plugin version.
 ## See Also
 
 - [Plugin Events](plugin-events.md) - Event subscriptions, inter-plugin communication, and pattern matching
+- [MCP Proxy](mcp-proxy.md) - Exposing plugin operations as MCP tools for AI agents
 - [Commands](commands.md) - CLI command reference
 - [Workflow Syntax](workflow-syntax.md) - Operation usage in workflows
 - [Architecture](../development/architecture.md) - Plugin system internals

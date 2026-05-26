@@ -16,6 +16,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support
 - **External Script Files** - Load commands from external script files with shebang-based interpreter dispatch, template interpolation, path resolution, and local override support
 - **Conversation Mode** - Multi-turn conversations with native session resume for CLI providers (`claude`, `codex`, `gemini`, `opencode`, `github_copilot`), automatic context window management for HTTP providers, mid-conversation context injection via `inject_context` field, and token tracking across all turns
+- **MCP Proxy** - Intercept and audit AI agent tool calls via Model Context Protocol (MCP); re-expose the 6 built-in tools (`Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`) with full observability (OTel spans, structured logs); expose custom gRPC plugin operations as MCP tools; optional full interception or additive mode per step
 - **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
 - **Loop Constructs** - For-each and while loops with full context access

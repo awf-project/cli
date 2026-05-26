@@ -184,6 +184,12 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 	}
 	resolver := interpolation.NewTemplateResolver()
 
+	// Purge orphan MCP registrations left by crashed prior runs before any
+	// workflow logic runs. Failures are non-fatal and logged at debug level.
+	if purgeErr := agents.PurgeOrphanMCPRegistrations(ctx, shellExecutor, logger); purgeErr != nil {
+		logger.Debug("orphan MCP purge returned unexpected error", "error", purgeErr)
+	}
+
 	// Load project config from .awf/config.yaml
 	projectCfg, err := loadProjectConfig(logger)
 	if err != nil {
@@ -214,7 +220,7 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 
 	// Setup agent registry for F039 agent step execution
 	agentRegistry := agents.NewAgentRegistry()
-	if err := agentRegistry.RegisterDefaults(); err != nil {
+	if err := agentRegistry.RegisterDefaults(shellExecutor); err != nil {
 		return fmt.Errorf("failed to register agent providers: %w", err)
 	}
 	execSvc.SetAgentRegistry(agentRegistry)

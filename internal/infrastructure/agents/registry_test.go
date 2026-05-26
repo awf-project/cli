@@ -194,7 +194,7 @@ func TestAgentRegistry_Has_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			exists := registry.Has("test")
@@ -216,7 +216,7 @@ func TestAgentRegistry_Has_ConcurrentWithRegister(t *testing.T) {
 	// Goroutine 1: Register providers
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			_ = registry.Register(&mockProvider{name: fmt.Sprintf("provider%d", i)})
 		}
 	}()
@@ -224,7 +224,7 @@ func TestAgentRegistry_Has_ConcurrentWithRegister(t *testing.T) {
 	// Goroutine 2: Check existence
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			_ = registry.Has(fmt.Sprintf("provider%d", i))
 		}
 	}()
@@ -232,7 +232,7 @@ func TestAgentRegistry_Has_ConcurrentWithRegister(t *testing.T) {
 	wg.Wait()
 
 	// Verify all providers are registered
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		assert.True(t, registry.Has(fmt.Sprintf("provider%d", i)))
 	}
 }
@@ -263,7 +263,7 @@ func TestAgentRegistry_List_Multiple(t *testing.T) {
 func TestAgentRegistry_RegisterDefaults(t *testing.T) {
 	registry := NewAgentRegistry()
 
-	err := registry.RegisterDefaults()
+	err := registry.RegisterDefaults(nil)
 
 	assert.NoError(t, err)
 
@@ -280,7 +280,7 @@ func TestAgentRegistry_RegisterDefaults(t *testing.T) {
 
 func TestAgentRegistry_RegisterDefaults_EachProviderRetrievable(t *testing.T) {
 	registry := NewAgentRegistry()
-	_ = registry.RegisterDefaults()
+	_ = registry.RegisterDefaults(nil)
 
 	tests := []string{"claude", "codex", "gemini", "github_copilot", "openai_compatible", "opencode"}
 
@@ -298,7 +298,7 @@ func TestAgentRegistry_RegisterDefaults_EachProviderRetrievable(t *testing.T) {
 func TestAgentRegistry_RegisterDefaults_OpenAICompatibleRegistered(t *testing.T) {
 	registry := NewAgentRegistry()
 
-	err := registry.RegisterDefaults()
+	err := registry.RegisterDefaults(nil)
 
 	require.NoError(t, err)
 	assert.True(t, registry.Has("openai_compatible"))
@@ -312,10 +312,10 @@ func TestAgentRegistry_RegisterDefaults_OpenAICompatibleRegistered(t *testing.T)
 func TestAgentRegistry_RegisterDefaults_Twice(t *testing.T) {
 	registry := NewAgentRegistry()
 
-	err1 := registry.RegisterDefaults()
+	err1 := registry.RegisterDefaults(nil)
 	assert.NoError(t, err1)
 
-	err2 := registry.RegisterDefaults()
+	err2 := registry.RegisterDefaults(nil)
 	assert.Error(t, err2, "Should fail when registering defaults twice")
 	assert.Contains(t, err2.Error(), "already registered")
 }
@@ -325,7 +325,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentRegister(t *testing.T) {
 	done := make(chan bool)
 
 	// Register providers concurrently
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(idx int) {
 			provider := &mockProvider{name: "provider"}
 			_ = registry.Register(provider)
@@ -334,7 +334,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentRegister(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
@@ -349,7 +349,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentGetAndRegister(t *testing.T) {
 	done := make(chan bool)
 
 	// Mix of reads and writes
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		go func(idx int) {
 			if idx%2 == 0 {
 				// Read
@@ -363,7 +363,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentGetAndRegister(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 
@@ -380,7 +380,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentList(t *testing.T) {
 	done := make(chan bool)
 
 	// Concurrent list calls
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			list := registry.List()
 			assert.Len(t, list, 2)
@@ -389,7 +389,7 @@ func TestAgentRegistry_ThreadSafety_ConcurrentList(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }
@@ -438,7 +438,7 @@ func TestAgentRegistry_RegisterDefaults_PartialFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Call RegisterDefaults - should fail for claude but register others
-	err = registry.RegisterDefaults()
+	err = registry.RegisterDefaults(nil)
 
 	// Should return error mentioning the already-registered provider
 	assert.Error(t, err)
@@ -472,7 +472,7 @@ func TestAgentRegistry_RegisterDefaults_MultiplePreRegistered(t *testing.T) {
 	_ = registry.Register(NewClaudeProvider())
 	_ = registry.Register(NewGeminiProvider())
 
-	err := registry.RegisterDefaults()
+	err := registry.RegisterDefaults(nil)
 
 	// Should return aggregated error for both failures
 	assert.Error(t, err)
@@ -495,11 +495,11 @@ func TestAgentRegistry_RegisterDefaults_AllPreRegistered(t *testing.T) {
 	registry := NewAgentRegistry()
 
 	// Register all defaults manually
-	err1 := registry.RegisterDefaults()
+	err1 := registry.RegisterDefaults(nil)
 	require.NoError(t, err1)
 
 	// Try to register defaults again
-	err2 := registry.RegisterDefaults()
+	err2 := registry.RegisterDefaults(nil)
 
 	// Should fail with aggregated error for all 6 providers
 	assert.Error(t, err2)

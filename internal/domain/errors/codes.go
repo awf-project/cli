@@ -118,6 +118,30 @@ const (
 	ErrorCodeUserUpgradeAlreadyLatest ErrorCode = "USER.UPGRADE.ALREADY_LATEST"
 )
 
+// Error code constants for USER.MCP_PROXY category (exit code 1).
+const (
+	// ErrorCodeUserMCPProxyUnknownKey indicates the MCP proxy configuration contains an unrecognized key.
+	ErrorCodeUserMCPProxyUnknownKey ErrorCode = "USER.MCP_PROXY.UNKNOWN_KEY"
+
+	// ErrorCodeUserMCPProxyUnknownPlugin indicates a plugin referenced by mcp_proxy.plugin_tools is not installed or enabled.
+	ErrorCodeUserMCPProxyUnknownPlugin ErrorCode = "USER.MCP_PROXY.UNKNOWN_PLUGIN"
+
+	// ErrorCodeUserMCPProxyUnknownOperation indicates an exposed operation name is not provided by the referenced plugin.
+	ErrorCodeUserMCPProxyUnknownOperation ErrorCode = "USER.MCP_PROXY.UNKNOWN_OPERATION"
+
+	// ErrorCodeUserMCPProxyNameCollision indicates two exposed tools resolve to the same MCP tool name.
+	ErrorCodeUserMCPProxyNameCollision ErrorCode = "USER.MCP_PROXY.NAME_COLLISION"
+
+	// ErrorCodeUserMCPProxyEmptyProxy indicates mcp_proxy is enabled but exposes neither built-ins nor plugin tools.
+	ErrorCodeUserMCPProxyEmptyProxy ErrorCode = "USER.MCP_PROXY.EMPTY_PROXY"
+
+	// ErrorCodeUserMCPProxyUnsupportedProvider indicates the active agent provider does not support MCP tool interception.
+	ErrorCodeUserMCPProxyUnsupportedProvider ErrorCode = "USER.MCP_PROXY.UNSUPPORTED_PROVIDER"
+
+	// ErrorCodeUserMCPProxyInfiniteLoopGuard indicates the tool-call loop ended with finish_reason="tool_calls" but no tool calls were emitted.
+	ErrorCodeUserMCPProxyInfiniteLoopGuard ErrorCode = "USER.MCP_PROXY.INFINITE_LOOP_GUARD"
+)
+
 // Error code constants for SYSTEM.UPGRADE category (exit code 4).
 const (
 	// ErrorCodeSystemUpgradeChecksumMismatch indicates SHA256 checksum verification failed.

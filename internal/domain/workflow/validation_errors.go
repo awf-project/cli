@@ -1,6 +1,9 @@
 package workflow
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ValidationLevel indicates the severity of a validation issue.
 type ValidationLevel string
@@ -11,6 +14,17 @@ const (
 )
 
 // ValidationCode identifies specific validation issues.
+//
+// Relationship to errors.ErrorCode: ValidationCode and errors.ErrorCode are
+// intentionally separate types. ValidationCode covers static graph-validation
+// issues (cycle, missing state, template reference) that are discovered at
+// parse time and reported through ValidationResult. errors.ErrorCode covers
+// runtime structured errors that drive exit-code mapping and machine-readable
+// output. Some runtime codes (e.g. ErrorCodeUserMCPProxyEmptyProxy) are
+// "borrowed" into validation by explicit conversion when the same condition
+// must be reported in both contexts. The explicit conversion makes the
+// cross-layer usage visible at the call site and avoids creating a circular
+// import between domain/workflow and domain/errors.
 type ValidationCode string
 
 const (
@@ -125,10 +139,11 @@ func (r *ValidationResult) ToError() error {
 	if len(r.Errors) == 1 {
 		return r.Errors[0]
 	}
-	// Aggregate multiple errors
+	// Aggregate multiple errors preserving each individual error's detail so
+	// callers can inspect them via errors.Is / errors.As over the joined chain.
 	errs := make([]error, len(r.Errors))
 	for i, e := range r.Errors {
 		errs[i] = e
 	}
-	return fmt.Errorf("validation failed with %d errors", len(r.Errors))
+	return errors.Join(errs...)
 }

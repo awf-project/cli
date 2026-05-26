@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/httpx"
@@ -20,29 +21,64 @@ var _ ports.AgentProvider = (*OpenAICompatibleProvider)(nil)
 
 // OpenAICompatibleProvider implements AgentProvider via the Chat Completions HTTP API.
 // Compatible with OpenAI, Ollama, vLLM, Groq, and any OpenAI-compatible backend.
+//
+// MCP proxy integration — divergence from CLI providers:
+//
+// The CLI providers (Claude, Codex, Gemini, Opencode) wire MCP through a
+// `mcpInjector` hook on baseCLIProvider, which appends provider-specific
+// flags to the subprocess invocation (e.g. `--mcp-config <path>`). That path
+// does not apply here: this provider speaks the Chat Completions HTTP API
+// directly and has no child process to inject flags into.
+//
+// Instead, MCP integration is HTTP-native and lives entirely in this file:
+//
+//   - SetToolRouter installs an application/tools.Router implementation;
+//   - buildToolList reads the MCPProxyConfig from options and advertises
+//     tools (respecting cfg.InterceptBuiltins) in the `tools` request field;
+//   - dispatchToolCall routes the model's tool_calls back through the
+//     Router and feeds tool results into the next turn.
+//
+// This is the documented HTTP-native MCP path; the absence of an
+// mcpInjector here is intentional, not a missing implementation.
 type OpenAICompatibleProvider struct {
 	httpClient *httpx.Client
+	toolRouter ports.ToolRouter
 }
 
 // maxResponseBodyBytes limits response reading to prevent memory exhaustion.
 const maxResponseBodyBytes = 10 * 1024 * 1024 // 10MB
 
+// chatToolCall represents a tool call in an assistant message.
+type chatToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string         `json:"role"`
+	Content    string         `json:"content"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	ToolCalls  []chatToolCall `json:"tool_calls,omitempty"`
 }
 
 type chatCompletionsRequest struct {
-	Model               string        `json:"model"`
-	Messages            []chatMessage `json:"messages"`
-	Temperature         *float64      `json:"temperature,omitempty"`
-	MaxCompletionTokens *int          `json:"max_completion_tokens,omitempty"`
-	TopP                *float64      `json:"top_p,omitempty"`
+	Model               string           `json:"model"`
+	Messages            []chatMessage    `json:"messages"`
+	Temperature         *float64         `json:"temperature,omitempty"`
+	MaxCompletionTokens *int             `json:"max_completion_tokens,omitempty"`
+	TopP                *float64         `json:"top_p,omitempty"`
+	Tools               []ToolDefinition `json:"tools,omitempty"`
+	ToolChoice          string           `json:"tool_choice,omitempty"`
 }
 
 type chatChoice struct {
 	Message      chatMessage `json:"message"`
 	FinishReason string      `json:"finish_reason"`
+	Index        int         `json:"index"`
 }
 
 type chatUsage struct {
@@ -76,6 +112,10 @@ func NewOpenAICompatibleProvider(opts ...OpenAICompatibleProviderOption) *OpenAI
 	return p
 }
 
+func (p *OpenAICompatibleProvider) SetToolRouter(r ports.ToolRouter) {
+	p.toolRouter = r
+}
+
 func (p *OpenAICompatibleProvider) Name() string {
 	return "openai_compatible"
 }
@@ -83,6 +123,10 @@ func (p *OpenAICompatibleProvider) Name() string {
 func (p *OpenAICompatibleProvider) Validate() error {
 	return nil
 }
+
+// maxToolCallIterations is the hard cap on multi-turn tool-call loops.
+// Prevents runaway loops even when the model continually returns valid tool_calls.
+const maxToolCallIterations = 25
 
 func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, options map[string]any, stdout, _ io.Writer) (*workflow.AgentResult, error) {
 	if strings.TrimSpace(prompt) == "" {
@@ -98,29 +142,263 @@ func (p *OpenAICompatibleProvider) Execute(ctx context.Context, prompt string, o
 		{Role: "user", Content: prompt},
 	}
 
-	result := workflow.NewAgentResult("openai_compatible")
-
-	resp, err := p.callChatCompletions(ctx, &opts, messages)
-	if err != nil {
-		return nil, err
+	// When a system prompt is configured, prepend it.
+	if opts.systemPrompt != "" {
+		messages = append([]chatMessage{{Role: "system", Content: opts.systemPrompt}}, messages...)
 	}
 
-	result.Output = resp.Choices[0].Message.Content
-	result.Tokens = resp.Usage.TotalTokens
+	result := workflow.NewAgentResult("openai_compatible")
+
+	// Resolve MCP proxy config from options if present; nil cfg is safe (buildToolList skips proxy tools).
+	cfg, _ := options[workflow.MCPProxyConfigKey].(*workflow.MCPProxyConfig) //nolint:errcheck // comma-ok type assertion; false ok means key absent or wrong type, cfg=nil is the correct fallback
+
+	// Build tool list when MCP proxy is enabled.
+	tools, toolChoice, toolErr := p.buildToolList(ctx, cfg)
+	if toolErr != nil {
+		return nil, toolErr
+	}
+
+	loopResult, loopErr := p.runToolCallLoop(ctx, &opts, messages, tools, toolChoice, stdout)
+	if loopErr != nil {
+		return nil, loopErr
+	}
+
+	result.Output = loopResult.output
+	result.Tokens = loopResult.totalTokens
 	result.TokensEstimated = false
 	result.CompletedAt = time.Now()
 
-	p.writeDisplayOutput(stdout, result.Output)
-
 	if outputFormat, ok := options["output_format"]; ok && outputFormat == "json" {
-		parsed, err := p.parseJSONResponse(result.Output)
-		if err != nil {
-			return nil, err
+		parsed, parseErr := p.parseJSONResponse(loopResult.output)
+		if parseErr != nil {
+			return nil, parseErr
 		}
 		result.Response = parsed
 	}
-
 	return result, nil
+}
+
+// toolCallLoopResult holds the outcome of a runToolCallLoop execution.
+type toolCallLoopResult struct {
+	output       string
+	totalTokens  int
+	inputTokens  int // prompt tokens from the final (stop) response
+	outputTokens int // completion tokens from the final (stop) response
+}
+
+// runToolCallLoop executes the multi-turn POST → tool_calls → POST loop until
+// finish_reason is "stop" (or equivalent), or the hard cap of maxToolCallIterations
+// is reached. It returns the final assistant text output and accumulated token counts.
+//
+// Both Execute and ExecuteConversation delegate their tool-call handling here so the
+// loop semantics are always identical regardless of entry point.
+func (p *OpenAICompatibleProvider) runToolCallLoop(
+	ctx context.Context,
+	opts *parsedOptions,
+	messages []chatMessage,
+	tools []ToolDefinition,
+	toolChoice string,
+	stdout io.Writer,
+) (toolCallLoopResult, error) {
+	var res toolCallLoopResult
+
+	// Multi-turn loop: POST → handle tool_calls → POST again, up to maxToolCallIterations.
+	for iter := range maxToolCallIterations {
+		resp, callErr := p.callChatCompletionsWithTools(ctx, opts, messages, tools, toolChoice)
+		if callErr != nil {
+			return res, callErr
+		}
+
+		if len(resp.Choices) == 0 {
+			return res, fmt.Errorf("openai_compatible: API returned no choices")
+		}
+
+		choice := resp.Choices[0]
+		res.totalTokens += resp.Usage.TotalTokens
+
+		switch choice.FinishReason {
+		case "stop", "":
+			// Normal completion — return the assistant content.
+			res.output = choice.Message.Content
+			res.inputTokens = resp.Usage.PromptTokens
+			res.outputTokens = resp.Usage.CompletionTokens
+			p.writeDisplayOutput(stdout, res.output)
+			return res, nil
+
+		case "tool_calls":
+			// Infinite-loop guard: finish_reason is tool_calls but no tool calls emitted.
+			if len(choice.Message.ToolCalls) == 0 {
+				return res, domerrors.NewUserError(
+					domerrors.ErrorCodeUserMCPProxyInfiniteLoopGuard,
+					"openai_compatible: finish_reason=tool_calls but no tool_calls in response (infinite loop guard)",
+					map[string]any{"iteration": iter},
+					nil,
+				)
+			}
+
+			// Append the assistant turn (with tool_calls) to the message history.
+			messages = append(messages, choice.Message)
+
+			// Dispatch each tool call and append the tool result message.
+			for _, tc := range choice.Message.ToolCalls {
+				toolResult, callToolErr := p.dispatchToolCall(ctx, tc)
+				messages = append(messages, chatMessage{
+					Role:       "tool",
+					Content:    toolResult,
+					ToolCallID: tc.ID,
+				})
+				if callToolErr != nil {
+					// Log but continue — tool error is conveyed via content.
+					_ = callToolErr //nolint:errcheck // tool error is surfaced to the model via the tool result message
+				}
+			}
+			// Loop: POST with updated history.
+
+		case "length":
+			// Context-length truncation — return what we have with a note.
+			res.output = choice.Message.Content
+			res.inputTokens = resp.Usage.PromptTokens
+			res.outputTokens = resp.Usage.CompletionTokens
+			p.writeDisplayOutput(stdout, res.output)
+			return res, nil
+
+		default:
+			// Unknown finish_reason — treat as completion.
+			res.output = choice.Message.Content
+			res.inputTokens = resp.Usage.PromptTokens
+			res.outputTokens = resp.Usage.CompletionTokens
+			p.writeDisplayOutput(stdout, res.output)
+			return res, nil
+		}
+	}
+
+	// Hard cap reached — 25 iterations with tool_calls each time.
+	return res, domerrors.NewUserError(
+		domerrors.ErrorCodeUserMCPProxyInfiniteLoopGuard,
+		fmt.Sprintf("openai_compatible: tool-call loop exceeded %d iterations (hard cap)", maxToolCallIterations),
+		map[string]any{"iterations": maxToolCallIterations},
+		nil,
+	)
+}
+
+// buildToolList constructs the Tools slice and ToolChoice value for a chat completions request
+// based on the active MCPProxyConfig. Returns empty slice and empty choice when proxy is disabled.
+func (p *OpenAICompatibleProvider) buildToolList(ctx context.Context, cfg *workflow.MCPProxyConfig) ([]ToolDefinition, string, error) {
+	if cfg == nil || !cfg.Enable || p.toolRouter == nil {
+		return nil, "", nil
+	}
+
+	portTools, err := p.toolRouter.ListTools(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("openai_compatible: list tools: %w", err)
+	}
+
+	var tools []ToolDefinition
+	for _, t := range portTools {
+		// When intercept_builtins=false, only expose plugin-sourced tools (source != "builtin").
+		if !cfg.InterceptBuiltins && t.Source == "builtin" {
+			continue
+		}
+		td := ToolDefinition{
+			Type: "function",
+			Function: toolFunctionSchema{
+				Name:        t.Name,
+				Description: t.Description,
+			},
+		}
+		if t.InputSchema != nil {
+			td.Function.Parameters = t.InputSchema
+		}
+		tools = append(tools, td)
+	}
+
+	if len(tools) == 0 {
+		return nil, "", nil
+	}
+	return tools, "auto", nil
+}
+
+// dispatchToolCall invokes the ToolRouter for a single tool call and returns the result content.
+// On error, returns an error message string so the model can see the failure.
+// Tool names and sources are logged; arguments are not (may contain secrets per NFR-002).
+func (p *OpenAICompatibleProvider) dispatchToolCall(ctx context.Context, tc chatToolCall) (string, error) {
+	if p.toolRouter == nil {
+		return "error: no tool router configured", fmt.Errorf("no tool router")
+	}
+
+	var args map[string]any
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+		return fmt.Sprintf("error: invalid tool arguments for %s", tc.Function.Name), err
+	}
+
+	result, err := p.toolRouter.CallTool(ctx, tc.Function.Name, args)
+	if err != nil {
+		return fmt.Sprintf("error calling tool %s: %s", tc.Function.Name, err.Error()), err
+	}
+
+	// Assemble tool result content.
+	var parts []string
+	for _, c := range result.Content {
+		if c.Text != "" {
+			parts = append(parts, c.Text)
+		}
+	}
+	if result.IsError {
+		return "error: " + strings.Join(parts, "\n"), nil
+	}
+	return strings.Join(parts, "\n"), nil
+}
+
+// callChatCompletionsWithTools posts a chat completions request with optional tools.
+func (p *OpenAICompatibleProvider) callChatCompletionsWithTools(ctx context.Context, opts *parsedOptions, messages []chatMessage, tools []ToolDefinition, toolChoice string) (*chatCompletionsResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("openai_compatible: %w", err)
+	}
+
+	endpoint := opts.baseURL + "/chat/completions"
+
+	reqBody := chatCompletionsRequest{
+		Model:               opts.model,
+		Messages:            messages,
+		Temperature:         opts.temperature,
+		MaxCompletionTokens: opts.maxCompletionTokens,
+		TopP:                opts.topP,
+		Tools:               tools,
+		ToolChoice:          toolChoice,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("openai_compatible: failed to serialize request: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	if opts.apiKey != "" {
+		// API key sent as Bearer token; never included in error messages (NFR-002).
+		headers["Authorization"] = "Bearer " + opts.apiKey
+	}
+
+	httpResp, err := p.httpClient.Post(ctx, endpoint, headers, string(bodyBytes), maxResponseBodyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("openai_compatible: %w", err)
+	}
+
+	if err := mapHTTPError(httpResp); err != nil {
+		return nil, err
+	}
+
+	var resp chatCompletionsResponse
+	if err := json.Unmarshal([]byte(httpResp.Body), &resp); err != nil {
+		return nil, fmt.Errorf("openai_compatible: failed to parse response: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("openai_compatible: API returned no choices")
+	}
+
+	return &resp, nil
 }
 
 func (p *OpenAICompatibleProvider) parseJSONResponse(output string) (map[string]any, error) {
@@ -171,34 +449,40 @@ func (p *OpenAICompatibleProvider) ExecuteConversation(ctx context.Context, stat
 	result := workflow.NewConversationResult("openai_compatible")
 	result.StartedAt = time.Now()
 
-	resp, err := p.callChatCompletions(ctx, &opts, messages)
-	if err != nil {
-		return nil, err
+	// Resolve MCP proxy config from options if present; nil cfg is safe (buildToolList skips proxy tools).
+	cfg, _ := options[workflow.MCPProxyConfigKey].(*workflow.MCPProxyConfig) //nolint:errcheck // comma-ok type assertion; false ok means key absent or wrong type, cfg=nil is the correct fallback
+	tools, toolChoice, toolErr := p.buildToolList(ctx, cfg)
+	if toolErr != nil {
+		return nil, toolErr
 	}
 
-	assistantContent := resp.Choices[0].Message.Content
+	// Use the shared tool-call loop so MCP tool_calls are dispatched in conversation
+	// mode just as they are in Execute. Without this, MCP is silently inactive when
+	// the model returns finish_reason=tool_calls during a conversation turn.
+	loopResult, loopErr := p.runToolCallLoop(ctx, &opts, messages, tools, toolChoice, stdout)
+	if loopErr != nil {
+		return nil, loopErr
+	}
 
 	userTurn := workflow.NewTurn(workflow.TurnRoleUser, prompt)
-	userTurn.Tokens = resp.Usage.PromptTokens
+	userTurn.Tokens = loopResult.inputTokens
 	if err := newState.AddTurn(userTurn); err != nil {
 		return nil, fmt.Errorf("openai_compatible: %w", err)
 	}
 
-	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, assistantContent)
-	assistantTurn.Tokens = resp.Usage.CompletionTokens
+	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, loopResult.output)
+	assistantTurn.Tokens = loopResult.outputTokens
 	if err := newState.AddTurn(assistantTurn); err != nil {
 		return nil, fmt.Errorf("openai_compatible: %w", err)
 	}
 
-	result.Output = assistantContent
+	result.Output = loopResult.output
 	result.State = newState
-	result.TokensInput = resp.Usage.PromptTokens
-	result.TokensOutput = resp.Usage.CompletionTokens
-	result.TokensTotal = resp.Usage.TotalTokens
+	result.TokensInput = loopResult.inputTokens
+	result.TokensOutput = loopResult.outputTokens
+	result.TokensTotal = loopResult.totalTokens
 	result.TokensEstimated = false
 	result.CompletedAt = time.Now()
-
-	p.writeDisplayOutput(stdout, result.Output)
 
 	return result, nil
 }
@@ -328,55 +612,6 @@ func parseTopPOption(options map[string]any) (*float64, error) {
 		return nil, fmt.Errorf("openai_compatible: top_p must be between 0 and 1, got %v", v)
 	}
 	return &v, nil
-}
-
-func (p *OpenAICompatibleProvider) callChatCompletions(ctx context.Context, opts *parsedOptions, messages []chatMessage) (*chatCompletionsResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("openai_compatible: %w", err)
-	}
-
-	endpoint := opts.baseURL + "/chat/completions"
-
-	reqBody := chatCompletionsRequest{
-		Model:               opts.model,
-		Messages:            messages,
-		Temperature:         opts.temperature,
-		MaxCompletionTokens: opts.maxCompletionTokens,
-		TopP:                opts.topP,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("openai_compatible: failed to serialize request: %w", err)
-	}
-
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
-	if opts.apiKey != "" {
-		// API key sent as Bearer token; never included in error messages (NFR-002).
-		headers["Authorization"] = "Bearer " + opts.apiKey
-	}
-
-	httpResp, err := p.httpClient.Post(ctx, endpoint, headers, string(bodyBytes), maxResponseBodyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("openai_compatible: %w", err)
-	}
-
-	if err := mapHTTPError(httpResp); err != nil {
-		return nil, err
-	}
-
-	var resp chatCompletionsResponse
-	if err := json.Unmarshal([]byte(httpResp.Body), &resp); err != nil {
-		return nil, fmt.Errorf("openai_compatible: failed to parse response: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("openai_compatible: API returned no choices")
-	}
-
-	return &resp, nil
 }
 
 func mapHTTPError(resp *httpx.Response) error {

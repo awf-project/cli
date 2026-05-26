@@ -124,6 +124,108 @@ awf run deploy --input env=invalid
 
 ---
 
+### USER.MCP_PROXY — MCP Proxy Configuration Errors
+
+Configuration errors related to the `mcp_proxy:` block in agent steps.
+
+##### USER.MCP_PROXY.UNKNOWN_KEY
+
+**Description:** The `mcp_proxy:` block contains an unrecognized configuration key.
+
+**Resolution:** Check the `mcp_proxy:` schema. Valid keys are `enable`, `intercept_builtins`, and `plugin_tools`. Remove or correct the typo.
+
+**Example:**
+```bash
+awf validate my-workflow
+# Error [USER.MCP_PROXY.UNKNOWN_KEY]: unknown key 'mcp_proxy.intercept_tools' (did you mean 'intercept_builtins'?)
+```
+
+**Related codes:** `WORKFLOW.PARSE.UNKNOWN_FIELD`
+
+---
+
+#### USER.MCP_PROXY.UNKNOWN_PLUGIN
+
+**Description:** A `plugin_tools[].plugin` references a plugin name that is not declared in `.awf/plugins.yaml`.
+
+**Resolution:** Verify the plugin name matches an installed plugin. Use `awf plugin list` to see available plugins.
+
+**Example:**
+```bash
+awf validate my-workflow
+# Error [USER.MCP_PROXY.UNKNOWN_PLUGIN]: plugin 'nonexistent-plugin' not found in .awf/plugins.yaml
+```
+
+**Related codes:** `USER.MCP_PROXY.UNKNOWN_OPERATION`
+
+---
+
+#### USER.MCP_PROXY.UNKNOWN_OPERATION
+
+**Description:** A `plugin_tools[].expose[]` references an operation the plugin does not provide.
+
+**Resolution:** Check the plugin's documentation or use `awf plugin info <plugin>` to see available operations.
+
+**Example:**
+```bash
+awf validate my-workflow
+# Error [USER.MCP_PROXY.UNKNOWN_OPERATION]: plugin 'kubernetes' does not expose operation 'kubectl_delete'
+```
+
+**Related codes:** `USER.MCP_PROXY.UNKNOWN_PLUGIN`
+
+---
+
+#### USER.MCP_PROXY.NAME_COLLISION
+
+**Description:** Two or more tools would have the same name after applying namespacing (`<plugin>_<op>`). This is detected at step startup (not runtime) and prevents ambiguity.
+
+**Resolution:** Rename one of the conflicting operations or plugins to avoid the collision.
+
+**Example:**
+```bash
+awf run my-workflow
+# Error [USER.MCP_PROXY.NAME_COLLISION]: tool 'kubernetes_apply' is provided by both 'kubernetes' plugin and another source
+```
+
+**Related codes:** `WORKFLOW.VALIDATION.INVALID_REFERENCE`
+
+---
+
+#### USER.MCP_PROXY.EMPTY_PROXY
+
+**Description:** The `mcp_proxy:` block is enabled but configured to have no effect: `enable: true` + `intercept_builtins: false` + no `plugin_tools` declared.
+
+**Resolution:** Either (1) set `intercept_builtins: true` to re-expose built-in tools, (2) add `plugin_tools`, or (3) remove the `mcp_proxy:` block entirely if not needed.
+
+**Example:**
+```bash
+awf validate my-workflow
+# Error [USER.MCP_PROXY.EMPTY_PROXY]: mcp_proxy is enabled but has no effect (no built-ins, no plugin tools)
+```
+
+**Related codes:** None
+
+---
+
+#### USER.MCP_PROXY.UNSUPPORTED_PROVIDER (Warning)
+
+**Description:** A step using `provider: codex` or `provider: opencode` with `mcp_proxy.enable: true` and full interception (`intercept_builtins: true`) will run in "coexistence mode": the proxy is injected alongside the native tools, but the native tools cannot be fully disabled on these providers.
+
+**Resolution:** This is a documented limitation. If you require guaranteed MCP-only isolation, use `provider: claude` or `provider: openai_compatible` instead. Alternatively, set `intercept_builtins: false` to explicitly accept coexistence mode (only plugin tools are proxied).
+
+**Example:**
+```bash
+awf run my-workflow
+# WARN [USER.MCP_PROXY.UNSUPPORTED_PROVIDER]: mcp_proxy on provider=codex runs in coexistence mode.
+#      Built-in tools cannot be disabled and may bypass the proxy.
+#      Use 'claude' or 'openai-compatible' for guaranteed MCP-only isolation.
+```
+
+**Related codes:** None
+
+---
+
 ## WORKFLOW Category (Exit Code 2)
 
 Workflow definition parsing and validation errors.

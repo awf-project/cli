@@ -99,6 +99,17 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 				err,
 			)
 		}
+
+		// If the validation error already carries a StructuredError (e.g.
+		// USER.MCP_PROXY.*), propagate it unchanged so the original domain
+		// code reaches the formatter and YAMLSyntaxHintGenerator does not
+		// fire spurious YAML-shape hints.  errors.As walks the full chain
+		// including errors.Join multi-errors.
+		var structErr *domerrors.StructuredError
+		if errors.As(err, &structErr) {
+			return nil, err
+		}
+
 		return nil, NewParseError(filePath, "", err.Error()).ToStructuredError()
 	}
 

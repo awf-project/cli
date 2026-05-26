@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -680,6 +681,190 @@ func TestRun_SetsProcessGroup_EdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExecCLIExecutor_Start_HappyPath verifies Start spawns a process successfully
+func TestExecCLIExecutor_Start_HappyPath(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "echo", "hello")
+
+	require.NoError(t, err, "Start should succeed for valid command")
+	require.NotNil(t, proc, "CLIProcess should not be nil")
+	require.NotNil(t, proc.Done(), "Done channel should not be nil")
+
+	// Wait for process to exit
+	err = proc.Wait()
+	require.NoError(t, err, "Wait should succeed for echo command")
+
+	// Done should be closed after process exits
+	select {
+	case <-proc.Done():
+		// Expected: Done is closed
+	case <-time.After(1 * time.Second):
+		t.Error("Done channel should be closed after process exits")
+	}
+}
+
+// TestExecCLIExecutor_Start_ReturnsValidCLIProcess verifies interface compliance
+func TestExecCLIExecutor_Start_ReturnsValidCLIProcess(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "true")
+
+	require.NoError(t, err)
+	require.NotNil(t, proc)
+
+	// Verify interface methods are callable
+	_ = proc.Signal(os.Interrupt)
+	_ = proc.Wait()
+	_ = proc.Done()
+}
+
+// TestExecCLIExecutor_Start_ProcessWithArguments spawns process with multiple args
+func TestExecCLIExecutor_Start_ProcessWithArguments(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "sh", "-c", "echo test123")
+
+	require.NoError(t, err)
+	require.NotNil(t, proc)
+
+	err = proc.Wait()
+	require.NoError(t, err)
+}
+
+// TestExecCLIExecutor_Start_BinaryNotFound returns error for missing binary
+func TestExecCLIExecutor_Start_BinaryNotFound(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "nonexistent_binary_12345")
+
+	require.Error(t, err, "Start should error for non-existent binary")
+	assert.Nil(t, proc, "CLIProcess should be nil on error")
+}
+
+// TestExecCLIExecutor_Start_NoArguments works with no arguments
+func TestExecCLIExecutor_Start_NoArguments(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "true")
+
+	require.NoError(t, err)
+	require.NotNil(t, proc)
+
+	err = proc.Wait()
+	require.NoError(t, err)
+}
+
+// TestExecCLIExecutor_Start_WaitIdempotent verifies Wait can be called multiple times
+func TestExecCLIExecutor_Start_WaitIdempotent(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "true")
+	require.NoError(t, err)
+
+	// Call Wait multiple times - all should succeed
+	err1 := proc.Wait()
+	err2 := proc.Wait()
+	err3 := proc.Wait()
+
+	assert.NoError(t, err1, "First Wait should succeed")
+	assert.NoError(t, err2, "Second Wait should succeed (idempotent)")
+	assert.NoError(t, err3, "Third Wait should succeed (idempotent)")
+}
+
+// TestExecCLIExecutor_Start_SignalOnRunningProcess calls Signal on active process
+func TestExecCLIExecutor_Start_SignalOnRunningProcess(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "sleep", "10")
+	require.NoError(t, err)
+	require.NotNil(t, proc)
+
+	// Send interrupt signal
+	err = proc.Signal(os.Interrupt)
+	// Signal may or may not error depending on process state
+	_ = err
+
+	// Wait should eventually return
+	_ = proc.Wait()
+}
+
+// TestExecCLIExecutor_Start_DoneClosed verifies Done channel is closed after process exit
+func TestExecCLIExecutor_Start_DoneClosed(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "echo", "test")
+	require.NoError(t, err)
+
+	// Block on Done channel
+	select {
+	case <-proc.Done():
+		// Expected: channel is closed
+	case <-time.After(2 * time.Second):
+		t.Error("Done channel should close after process exits")
+	}
+}
+
+// TestExecCLIExecutor_Start_ProcessExit verifies Wait receives exit code
+func TestExecCLIExecutor_Start_ProcessExit(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "sh", "-c", "exit 42")
+	require.NoError(t, err)
+
+	// Wait returns error for non-zero exit
+	err = proc.Wait()
+	assert.Error(t, err, "Wait should error for non-zero exit code")
+}
+
+// TestExecCLIExecutor_Start_ProcessWithLongRunningCommand starts process with timeout
+func TestExecCLIExecutor_Start_ProcessWithLongRunningCommand(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	proc, err := executor.Start(ctx, "sleep", "10")
+	require.NoError(t, err, "Start should succeed even with short timeout")
+
+	// Context timeout should affect the process
+	err = proc.Wait()
+	// May get context.DeadlineExceeded or other error
+	_ = err
+}
+
+// TestExecCLIExecutor_Start_MultipleProcessesSequentially starts multiple processes
+func TestExecCLIExecutor_Start_MultipleProcessesSequentially(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		proc, err := executor.Start(ctx, "true")
+		require.NoError(t, err)
+		require.NotNil(t, proc)
+		require.NoError(t, proc.Wait())
+	}
+}
+
+// TestExecCLIExecutor_Start_ProcessWithEmptyBinaryName returns error
+func TestExecCLIExecutor_Start_ProcessWithEmptyBinaryName(t *testing.T) {
+	executor := NewExecCLIExecutor()
+	ctx := context.Background()
+
+	proc, err := executor.Start(ctx, "")
+
+	assert.Error(t, err, "Start should error for empty binary name")
+	assert.Nil(t, proc, "CLIProcess should be nil on error")
 }
 
 // TestRun_SetsProcessGroup_ErrorHandling tests error scenarios with process groups

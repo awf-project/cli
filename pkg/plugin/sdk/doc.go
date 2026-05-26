@@ -33,6 +33,20 @@
 //   - Operations: List of operation names
 //   - HandleOperation: Execute named operation with inputs
 //
+// ## OperationSchemaProvider (sdk.go) — OPTIONAL
+//
+// OperationSchemaProvider enriches the gRPC wire schema with human-readable
+// documentation. It is an opt-in interface; plugins that do NOT implement it
+// continue to work without changes (name-only schemas, backwards-compatible).
+//
+// When implemented alongside OperationProvider, the gRPC bridge calls
+// GetOperationSchema(name) for each declared operation and propagates
+// Description, Inputs, and Outputs into the proto OperationSchema message.
+// Hosts (e.g. the AWF MCP proxy) then surface these fields to AI agents,
+// enabling proper tool selection instead of falling back to raw shell commands.
+//
+// See examples/plugins/awf-plugin-echo for a complete demonstration.
+//
 // # Base Types
 //
 // ## BasePlugin (sdk.go)
@@ -88,6 +102,13 @@
 //   - Description: Human-readable description
 //   - Inputs: Map of input parameter schemas
 //   - Outputs: List of output field names
+//
+// ## OperationMeta / InputMeta / OutputMeta (sdk.go)
+//
+// These types are used by OperationSchemaProvider to declare rich metadata:
+//   - OperationMeta: Description, Inputs []InputMeta, Outputs []OutputMeta
+//   - InputMeta: Name, Type, Required, Default, Description, Validation
+//   - OutputMeta: Name, Type, Description
 //
 // ## Schema Helpers (sdk.go)
 //

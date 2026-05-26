@@ -53,6 +53,55 @@ type OperationProvider interface {
 	HandleOperation(ctx context.Context, name string, inputs map[string]any) (*OperationResult, error)
 }
 
+// OperationSchemaProvider is an OPTIONAL interface a plugin may implement in
+// addition to OperationProvider. When implemented, the gRPC server bridge uses
+// GetOperationSchema(name) to populate the wire-level OperationSchema's
+// Description, Inputs, and Outputs fields. Plugins that do NOT implement it
+// continue to expose name-only schemas (unchanged behavior — full backwards
+// compatibility is preserved).
+//
+// Hosts (e.g. the AWF MCP proxy) propagate these fields downstream so that AI
+// agents see a documented tool surface rather than an opaque handle. See the
+// echo plugin in examples/plugins/awf-plugin-echo for a complete demonstration.
+//
+// Returning (OperationMeta{}, false) for an unknown name is correct; the bridge
+// leaves the description and schema empty in that case.
+type OperationSchemaProvider interface {
+	GetOperationSchema(name string) (OperationMeta, bool)
+}
+
+// OperationMeta is the SDK-side representation of the optional fields in an
+// operation schema. It is the counterpart of pluginv1.OperationSchema's
+// Description, Inputs, and Outputs fields.
+//
+// Hosts must treat an empty Description, empty Inputs slice, and empty Outputs
+// slice as "not declared" rather than "explicitly empty", because a plugin that
+// does not implement OperationSchemaProvider will always produce zero values.
+type OperationMeta struct {
+	Description string
+	Inputs      []InputMeta
+	Outputs     []OutputMeta
+}
+
+// InputMeta describes a single input parameter for an operation.
+// Type must be one of the InputType* constants (string, integer, boolean,
+// array, object). Default is serialized as a string per the proto contract.
+type InputMeta struct {
+	Name        string
+	Type        string // InputTypeString | InputTypeInteger | InputTypeBoolean | InputTypeArray | InputTypeObject
+	Required    bool
+	Default     string // serialized as string per proto contract
+	Description string
+	Validation  string // "url" | "email" | ""
+}
+
+// OutputMeta describes a single output field produced by an operation.
+type OutputMeta struct {
+	Name        string
+	Type        string // optional — same values as InputMeta.Type, or ""
+	Description string
+}
+
 // BasePlugin provides a minimal implementation for embedding in plugins.
 type BasePlugin struct {
 	PluginName    string

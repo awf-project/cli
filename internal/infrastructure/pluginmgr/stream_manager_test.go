@@ -90,12 +90,6 @@ func (m *streamTestDeliverer) getCallCount() int {
 	return m.callCount
 }
 
-func (m *streamTestDeliverer) getLastEvent() *pluginmodel.DomainEvent {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.lastEvent
-}
-
 type noopLogger struct{}
 
 func (n *noopLogger) Debug(msg string, fields ...any)             {}
@@ -334,7 +328,7 @@ func TestClose(t *testing.T) {
 func TestClose_GoroutineCleanup(t *testing.T) {
 	sm := NewStreamManager(&noopLogger{})
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		client := &mockStreamEventsClient{}
 		sm.RegisterStream(("plugin-" + string(rune(i))), client)
 	}
@@ -397,10 +391,8 @@ func TestStreamDeliverer_ConcurrentSends(t *testing.T) {
 	var seqNums []uint64
 	var seqMu sync.Mutex
 
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			_, _ = deliverer.DeliverEvent(ctx, event)
 
 			msg := client.getLastMessage()
@@ -409,7 +401,7 @@ func TestStreamDeliverer_ConcurrentSends(t *testing.T) {
 				seqNums = append(seqNums, msg.SequenceNumber)
 				seqMu.Unlock()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
