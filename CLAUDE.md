@@ -312,3 +312,69 @@ func TestWorkflowValidation(t *testing.T) {
 
 - Never mark implementation complete without confirming `make build`, `make lint`, and `make test` pass with zero violations
 - Always verify all validation expert reports generate successfully; missing sections (Conformance, Coverage, Cleanup) indicate incomplete validation
+
+## ZPM Project Memory
+
+This project uses ZPM memory segments as its knowledge base. **Query ZPM before starting work. Update ZPM as you learn.**
+
+### Segments
+
+| Segment | Purpose | Mount |
+|---------|---------|-------|
+| `default` | Project knowledge: ADRs, decisions, observations, conventions, architecture facts | auto |
+| `feedback` | Learned rules from past implementations/reviews — queryable by file pattern | auto |
+| `pr_<branch>` | PR tracking: TODOs, stubs, mocks, blocking issues, completion gate | per-implementation |
+
+### Read before acting
+
+```bash
+# What decisions exist about this area?
+zpm query-logic --goal "decision(Id, What, Why)" --memory default
+# What feedback rules apply to files I'm touching?
+zpm query-logic --goal "rule(Id, Cat, Desc, Prio, Src)" --memory feedback
+# What rules apply specifically to a file/directory?
+zpm query-logic --goal "applicable(RuleId, 'src/path/file.ext')" --memory feedback
+# What ADRs are active?
+zpm query-logic --goal "current_decision(Id, Decision)" --memory default
+# Any architecture violations?
+zpm query-logic --goal "integrity_violation(Kind, File)" --memory default
+```
+
+### Write as you work
+
+```bash
+# Observation: discovered something non-obvious
+zpm remember-fact --fact "observation(id, Category, 'Description', 'YYYY-MM-DD')" --memory default
+# Categories: pattern | convention | quirk | dependency | performance
+
+# Decision: made an architectural choice
+zpm remember-fact --fact "decision(id, 'What', 'Why', 'Trade-off')" --memory default
+
+# Feedback rule: a mistake teaches a reusable lesson
+zpm remember-fact --fact "rule(rule_id, Category, 'Imperative rule', Priority, Source)" --memory feedback
+zpm remember-fact --fact "trigger(rule_id, 'pattern', Scope)" --memory feedback
+# Categories: architecture | pitfall | test | review | style
+# Priority: high | medium | low — Scope: file | directory | project
+```
+
+### What NOT to store
+
+- File contents, git status, directory listings — ephemeral
+- Anything already in code comments or documentation
+- Duplicate of an existing fact — query first
+
+### Architecture Rules
+
+Query: `zpm query-logic --goal "rule(Id, architecture, Desc, Prio, Src)" --memory feedback`
+
+### Test Conventions
+
+Query: `zpm query-logic --goal "rule(Id, test, Desc, Prio, Src)" --memory feedback`
+
+### Common Pitfalls
+
+Query: `zpm query-logic --goal "rule(Id, pitfall, Desc, Prio, Src)" --memory feedback`
+
+### Review Standards
+
+Query: `zpm query-logic --goal "rule(Id, review, Desc, Prio, Src)" --memory feedback`

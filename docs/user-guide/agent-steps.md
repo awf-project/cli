@@ -660,7 +660,7 @@ Create a role directory with an `AGENTS.md` file:
 
 **Directory structure:**
 ```
-.awf/agents/
+.awf/roles/
 ├── go-senior/
 │   └── AGENTS.md          # Agent persona (frontmatter optional)
 ├── security-reviewer/
@@ -669,7 +669,7 @@ Create a role directory with an `AGENTS.md` file:
     └── AGENTS.md
 ```
 
-**File:** `.awf/agents/go-senior/AGENTS.md`
+**File:** `.awf/roles/go-senior/AGENTS.md`
 ```markdown
 ---
 name: go-senior
@@ -736,11 +736,11 @@ security_review:
 
 AWF searches for roles in the following directories, in priority order:
 
-1. **`AWF_AGENTS_PATH` environment variable** (if set, exclusive — overrides all others)
-2. **`.awf/agents/`** (project-level, AWF-specific)
-3. **`.agents/`** (project-level, cross-client compatibility)
-4. **`$XDG_CONFIG_HOME/awf/agents/`** (global user, AWF-specific — defaults to `~/.config/awf/agents/`)
-5. **`~/.agents/`** (global user, cross-client)
+1. **`AWF_ROLES_PATH` environment variable** (if set, exclusive — overrides all others)
+2. **`.awf/roles/`** (project-level, AWF-specific)
+3. **`.agents/roles/`** (project-level, cross-client compatibility)
+4. **`$XDG_CONFIG_HOME/awf/roles/`** (global user, AWF-specific — defaults to `~/.config/awf/roles/`)
+5. **`~/.agents/roles/`** (global user, cross-client)
 
 This enables shared global personas while allowing project-specific overrides.
 
@@ -748,8 +748,39 @@ This enables shared global personas while allowing project-specific overrides.
 
 ```bash
 # Use only roles from custom directory
-AWF_AGENTS_PATH=/shared/agents awf run workflow
+AWF_ROLES_PATH=/shared/roles awf run workflow
 ```
+
+### Role Resolution: By-Name vs Explicit Path
+
+The `role:` field accepts two forms that behave differently:
+
+**By-name** (recommended for overrides):
+
+```yaml
+role: go-senior   # discovers .awf/roles/go-senior/, then .agents/roles/go-senior/, etc.
+```
+
+Discovery scans the 4 standard directories in priority order, starting local (`.awf/roles/`) and falling back to global (`~/.agents/roles/`). Resolution is **independent of the workflow file's location** — moving the workflow file does not affect which role is found.
+
+**Explicit path** (relative or absolute):
+
+```yaml
+role: ./custom-roles/senior   # resolved relative to the workflow file's directory
+role: /shared/roles/senior    # absolute path, resolved as-is
+role: ~/shared-roles/senior   # home-relative, expanded at runtime
+```
+
+Path references are resolved **relative to the workflow file's directory**. Moving the workflow file changes where AWF looks.
+
+**When to use each:**
+
+| Form | Use when |
+|------|----------|
+| By-name | Overriding global personas per-project — place role in `.awf/roles/` and reference by name from any workflow in the project |
+| Explicit path | Roles that are tightly coupled to a specific workflow or stored outside the standard directories |
+
+Prefer by-name for shared roles: a role placed in `.awf/roles/` is found by all workflows in the project regardless of their location in the directory tree.
 
 ### Role Content Format
 
@@ -800,15 +831,15 @@ Reference roles by explicit path instead of discovery:
 review:
   type: agent
   provider: claude
-  role: ./custom-agents/senior-go
+  role: ./custom-roles/senior-go
   prompt: "Review: {{.inputs.code}}"
   on_success: done
 ```
 
 Paths can be:
-- **Relative** to the workflow directory: `role: ./custom-agents/senior-go`
-- **Absolute**: `role: /home/user/agents/senior-go`
-- **Home-relative**: `role: ~/shared-agents/senior-go`
+- **Relative** to the workflow directory: `role: ./custom-roles/senior-go`
+- **Absolute**: `role: /home/user/roles/senior-go`
+- **Home-relative**: `role: ~/shared-roles/senior-go`
 
 ### Dynamic Role Selection
 
@@ -854,7 +885,7 @@ Validation reports:
 |-------|-------|----------|
 | `AgentRoleNotFoundError` | Referenced role not found in discovery paths | Check role directory name matches YAML declaration; verify `AGENTS.md` exists |
 | Empty role content | `AGENTS.md` is 0 bytes or contains only frontmatter | Add Markdown body to `AGENTS.md` |
-| Role not in expected location | Wrong discovery directory | Move role to one of the 5 standard directories or use explicit path reference |
+| Role not in expected location | Wrong discovery directory | Move role to one of the 4 standard directories or use explicit path reference |
 | Large role file warning | `AGENTS.md` exceeds 500KB | Consider splitting into multiple smaller roles or removing verbose content |
 | Combined prompt too large | `role + system_prompt` over 10KB | Reduce role/prompt size or split into separate steps |
 

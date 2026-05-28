@@ -389,7 +389,7 @@ func TestResourceEnumeration_Exactly4LevelsBoundary(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		path = filepath.Join(path, fmt.Sprintf("level%d", i))
 		require.NoError(t, os.MkdirAll(path, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(path, fmt.Sprintf("file%d.txt", i)), []byte(fmt.Sprintf("content%d", i)), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(path, fmt.Sprintf("file%d.txt", i)), fmt.Appendf(nil, "content%d", i), 0o644))
 	}
 
 	repo := NewFilesystemSkillRepository(&mockLogger{})
@@ -413,7 +413,7 @@ func TestResourceEnumeration_Exceeds5LevelExcluded(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		path = filepath.Join(path, fmt.Sprintf("level%d", i))
 		require.NoError(t, os.MkdirAll(path, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(path, fmt.Sprintf("file%d.txt", i)), []byte(fmt.Sprintf("content%d", i)), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(path, fmt.Sprintf("file%d.txt", i)), fmt.Appendf(nil, "content%d", i), 0o644))
 	}
 
 	repo := NewFilesystemSkillRepository(&mockLogger{})
@@ -618,6 +618,32 @@ func TestLoadSkillFromDir_UnreadableSKILLMD(t *testing.T) {
 	// Must be a read error, not a SkillNotFoundError (the file exists, it just can't be read)
 	var notFound *workflow.SkillNotFoundError
 	assert.False(t, errors.As(err, &notFound), "read failure should not be misreported as SkillNotFoundError")
+}
+
+// TestLoad_NameValidation verifies that skill names containing path separators
+// or double-dot sequences are rejected to prevent path traversal. The validation
+// mirrors the roles repository (infra-roles) which rejects both / and \ explicitly.
+func TestLoad_NameValidation(t *testing.T) {
+	repo := NewFilesystemSkillRepository(&mockLogger{})
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"forward slash", "foo/bar"},
+		{"backslash", `foo\bar`},
+		{"dot-dot", "../escape"},
+		{"nested dot-dot", "foo/../bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			skill, err := repo.Load(context.Background(), tt.input)
+			assert.Error(t, err, "name %q should be rejected", tt.input)
+			assert.Nil(t, skill)
+			assert.ErrorContains(t, err, "invalid")
+		})
+	}
 }
 
 func TestEnumerateResources_InaccessibleSubdir(t *testing.T) {

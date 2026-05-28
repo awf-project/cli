@@ -6,6 +6,12 @@
       "path": ".zpm/kb/default",
       "scope": "project",
       "mode": "rw"
+    },
+    {
+      "name": "feedback",
+      "path": ".zpm/kb/feedback",
+      "scope": "project",
+      "mode": "rw"
     }
   ]
 }

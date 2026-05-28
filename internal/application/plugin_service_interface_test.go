@@ -73,8 +73,12 @@ func TestPluginService_OptionA_CompositeInterfaceAcceptsNarrower(t *testing.T) {
 		mockPluginConfig: config,
 	}
 
-	// Should satisfy the interface
-	var _ ports.PluginStateStore = composite
+	// Should satisfy the interface and delegate to embedded narrower mocks.
+	// Exercising the embedded methods proves the composite wraps both
+	// implementations rather than just satisfying the interface at compile time.
+	var stateStore ports.PluginStateStore = composite
+	assert.Empty(t, stateStore.ListDisabled(), "delegates to embedded mockPluginStore")
+	assert.True(t, stateStore.IsEnabled("any-plugin"), "delegates to embedded mockPluginConfig (defaults to true for unknown plugins)")
 }
 
 // Option B Tests: Alternative Implementation (Separate Interfaces)

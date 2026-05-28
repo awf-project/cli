@@ -15,6 +15,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
+	"github.com/awf-project/cli/internal/testutil"
 )
 
 // mockLogger captures Warn calls for testing
@@ -43,8 +44,7 @@ func TestNewFilesystemAgentRoleRepository(t *testing.T) {
 func TestLoad_PriorityOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Setup: Create agents in different search paths
-	localDir := filepath.Join(tmpDir, ".awf", "agents", "go-senior")
+	localDir := filepath.Join(tmpDir, ".awf", "roles", "go-senior")
 	require.NoError(t, os.MkdirAll(localDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localDir, "AGENTS.md"),
@@ -52,7 +52,7 @@ func TestLoad_PriorityOrder(t *testing.T) {
 		0o644,
 	))
 
-	crossClientDir := filepath.Join(tmpDir, ".agents", "go-senior")
+	crossClientDir := filepath.Join(tmpDir, ".agents", "roles", "go-senior")
 	require.NoError(t, os.MkdirAll(crossClientDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(crossClientDir, "AGENTS.md"),
@@ -61,10 +61,7 @@ func TestLoad_PriorityOrder(t *testing.T) {
 	))
 
 	t.Run("returns first match in priority order", func(t *testing.T) {
-		origDir, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(origDir)
-		require.NoError(t, os.Chdir(tmpDir))
+		testutil.ChdirIsolated(t, tmpDir)
 
 		logger := &mockLogger{}
 		repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -80,13 +77,9 @@ func TestLoad_PriorityOrder(t *testing.T) {
 	})
 
 	t.Run("skips missing paths and continues search", func(t *testing.T) {
-		origDir, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(origDir)
-		require.NoError(t, os.Chdir(tmpDir))
+		testutil.ChdirIsolated(t, tmpDir)
 
-		// Remove local agent, should find cross-client
-		require.NoError(t, os.RemoveAll(filepath.Join(tmpDir, ".awf", "agents", "go-senior")))
+		require.NoError(t, os.RemoveAll(filepath.Join(tmpDir, ".awf", "roles", "go-senior")))
 
 		logger := &mockLogger{}
 		repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -99,7 +92,7 @@ func TestLoad_PriorityOrder(t *testing.T) {
 	})
 }
 
-func TestLoad_AWFAgentsPathOverride(t *testing.T) {
+func TestLoad_AWFRolesPathOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	overridePath := filepath.Join(tmpDir, "override")
 
@@ -111,7 +104,7 @@ func TestLoad_AWFAgentsPathOverride(t *testing.T) {
 		0o644,
 	))
 
-	localAgentDir := filepath.Join(tmpDir, ".awf", "agents", "custom-role")
+	localAgentDir := filepath.Join(tmpDir, ".awf", "roles", "custom-role")
 	require.NoError(t, os.MkdirAll(localAgentDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(localAgentDir, "AGENTS.md"),
@@ -119,13 +112,10 @@ func TestLoad_AWFAgentsPathOverride(t *testing.T) {
 		0o644,
 	))
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
-	t.Run("AWF_AGENTS_PATH exclusive search when set", func(t *testing.T) {
-		t.Setenv("AWF_AGENTS_PATH", overridePath)
+	t.Run("AWF_ROLES_PATH exclusive search when set", func(t *testing.T) {
+		t.Setenv("AWF_ROLES_PATH", overridePath)
 
 		logger := &mockLogger{}
 		repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -136,8 +126,8 @@ func TestLoad_AWFAgentsPathOverride(t *testing.T) {
 		assert.Contains(t, role.Content, "Override agent role")
 	})
 
-	t.Run("default search when AWF_AGENTS_PATH empty", func(t *testing.T) {
-		t.Setenv("AWF_AGENTS_PATH", "")
+	t.Run("default search when AWF_ROLES_PATH empty", func(t *testing.T) {
+		t.Setenv("AWF_ROLES_PATH", "")
 
 		logger := &mockLogger{}
 		repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -147,6 +137,80 @@ func TestLoad_AWFAgentsPathOverride(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, role.Content, "Local agent role")
 	})
+
+	t.Run("AWF_AGENTS_PATH ignored when AWF_ROLES_PATH unset", func(t *testing.T) {
+		t.Setenv("AWF_ROLES_PATH", "")
+		t.Setenv("AWF_AGENTS_PATH", overridePath)
+
+		logger := &mockLogger{}
+		repo := roles.NewFilesystemAgentRoleRepository(logger)
+
+		// Should use default roles/ chain, not the agents override
+		role, err := repo.Load(context.Background(), "custom-role")
+
+		require.NoError(t, err)
+		assert.Contains(t, role.Content, "Local agent role")
+	})
+}
+
+func TestLoad_OldAgentsPathNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Role exists at old agents/ location only — must NOT be found
+	oldAgentDir := filepath.Join(tmpDir, ".agents", "legacy-role")
+	require.NoError(t, os.MkdirAll(oldAgentDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(oldAgentDir, "AGENTS.md"),
+		[]byte("---\n---\nOld agents path content"),
+		0o644,
+	))
+
+	testutil.ChdirIsolated(t, tmpDir)
+
+	t.Setenv("AWF_ROLES_PATH", "")
+
+	logger := &mockLogger{}
+	repo := roles.NewFilesystemAgentRoleRepository(logger)
+
+	role, err := repo.Load(context.Background(), "legacy-role")
+
+	require.Error(t, err)
+	assert.Nil(t, role)
+
+	var notFoundErr *workflow.AgentRoleNotFoundError
+	require.ErrorAs(t, err, &notFoundErr)
+	assert.Equal(t, "legacy-role", notFoundErr.Name)
+}
+
+func TestLoad_SkillsRoleNoCollision(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Role named "skills" under the roles/ namespace
+	skillsRoleDir := filepath.Join(tmpDir, ".agents", "roles", "skills")
+	require.NoError(t, os.MkdirAll(skillsRoleDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(skillsRoleDir, "AGENTS.md"),
+		[]byte("---\n---\nSkills agent role content"),
+		0o644,
+	))
+
+	// A skills/ container at the old .agents/ level — must not interfere
+	skillsContainerDir := filepath.Join(tmpDir, ".agents", "skills")
+	require.NoError(t, os.MkdirAll(skillsContainerDir, 0o755))
+
+	testutil.ChdirIsolated(t, tmpDir)
+
+	t.Setenv("AWF_ROLES_PATH", "")
+
+	logger := &mockLogger{}
+	repo := roles.NewFilesystemAgentRoleRepository(logger)
+
+	role, err := repo.Load(context.Background(), "skills")
+
+	require.NoError(t, err)
+	assert.NotNil(t, role)
+	assert.Equal(t, "skills", role.Name)
+	assert.Contains(t, role.Content, "Skills agent role content")
 }
 
 func TestLoad_PathTraversalRejection(t *testing.T) {
@@ -173,7 +237,6 @@ func TestLoad_PathTraversalRejection(t *testing.T) {
 				assert.Nil(t, role)
 				assert.ErrorContains(t, err, "invalid")
 			} else if tt.input == "go-senior" {
-				// Valid name but not found, should return AgentRoleNotFoundError
 				assert.Error(t, err)
 				assert.Nil(t, role)
 				var notFoundErr *workflow.AgentRoleNotFoundError
@@ -186,10 +249,7 @@ func TestLoad_PathTraversalRejection(t *testing.T) {
 func TestLoad_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
 	logger := &mockLogger{}
 	repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -209,7 +269,7 @@ func TestLoad_MissingFile(t *testing.T) {
 func TestLoad_FrontmatterStripping(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	agentDir := filepath.Join(tmpDir, ".awf", "agents", "test-role")
+	agentDir := filepath.Join(tmpDir, ".awf", "roles", "test-role")
 	require.NoError(t, os.MkdirAll(agentDir, 0o755))
 
 	content := `---
@@ -227,10 +287,7 @@ This is the actual content after frontmatter.`
 		0o644,
 	))
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
 	logger := &mockLogger{}
 	repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -247,10 +304,9 @@ This is the actual content after frontmatter.`
 func TestLoad_LargeFileWarning(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	agentDir := filepath.Join(tmpDir, ".awf", "agents", "large-role")
+	agentDir := filepath.Join(tmpDir, ".awf", "roles", "large-role")
 	require.NoError(t, os.MkdirAll(agentDir, 0o755))
 
-	// Create a file > 500KB
 	largeContent := strings.Repeat("x", 501*1024)
 	require.NoError(t, os.WriteFile(
 		filepath.Join(agentDir, "AGENTS.md"),
@@ -258,10 +314,7 @@ func TestLoad_LargeFileWarning(t *testing.T) {
 		0o644,
 	))
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
 	logger := &mockLogger{}
 	repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -271,16 +324,16 @@ func TestLoad_LargeFileWarning(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, role)
 	assert.NotEmpty(t, logger.warnings)
-	assert.True(t, strings.Contains(logger.warnings[0], "500KB") || strings.Contains(logger.warnings[0], "exceeds"))
+	wantThreshold := fmt.Sprintf("exceeds %dKB", workflow.AgentRoleSizeWarnBytes/1024)
+	assert.Contains(t, logger.warnings[0], wantThreshold)
 }
 
 func TestLoad_PerformanceSub100KB(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	agentDir := filepath.Join(tmpDir, ".awf", "agents", "perf-role")
+	agentDir := filepath.Join(tmpDir, ".awf", "roles", "perf-role")
 	require.NoError(t, os.MkdirAll(agentDir, 0o755))
 
-	// Create a file ~100KB
 	content := strings.Repeat("y", 100*1024)
 	require.NoError(t, os.WriteFile(
 		filepath.Join(agentDir, "AGENTS.md"),
@@ -288,10 +341,7 @@ func TestLoad_PerformanceSub100KB(t *testing.T) {
 		0o644,
 	))
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
 	logger := &mockLogger{}
 	repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -370,30 +420,30 @@ func TestLoadFromPath_Missing(t *testing.T) {
 func TestSearchPaths_LocalToGlobal(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create agents at different priority levels
+	// F100 removed the "crossglobal" case ($HOME/.agents/<role>) in favor of the
+	// roles/-namespaced path $HOME/.agents/roles/<role>. Old flat paths directly
+	// under ~/.agents/ are no longer searched; users must migrate to the roles/ sub-
+	// namespace. The four active search positions are: .awf/roles (local, highest
+	// priority), .agents/roles (cross-client local), $XDG_CONFIG_HOME/awf/roles
+	// (AWF-native global), and ~/.agents/roles (cross-client global).
 	paths := map[string]string{
-		"local":       filepath.Join(tmpDir, ".awf", "agents", "priority-role"),
-		"cross":       filepath.Join(tmpDir, ".agents", "priority-role"),
-		"global":      filepath.Join(tmpDir, ".config", "awf", "agents", "priority-role"),
-		"crossglobal": filepath.Join(tmpDir, ".agents", "priority-role"),
+		"local":  filepath.Join(tmpDir, ".awf", "roles", "priority-role"),
+		"cross":  filepath.Join(tmpDir, ".agents", "roles", "priority-role"),
+		"global": filepath.Join(tmpDir, ".config", "awf", "roles", "priority-role"),
 	}
 
 	for _, p := range paths {
 		require.NoError(t, os.MkdirAll(p, 0o755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(p, "AGENTS.md"),
-			[]byte(fmt.Sprintf("---\n---\nContent from %s", p)),
+			fmt.Appendf(nil, "---\n---\nContent from %s", p),
 			0o644,
 		))
 	}
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
-	// Unset AWF_AGENTS_PATH to use default search
-	t.Setenv("AWF_AGENTS_PATH", "")
+	t.Setenv("AWF_ROLES_PATH", "")
 
 	logger := &mockLogger{}
 	repo := roles.NewFilesystemAgentRoleRepository(logger)
@@ -402,14 +452,13 @@ func TestSearchPaths_LocalToGlobal(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, role)
-	// Should find local first (highest priority)
 	assert.Contains(t, role.SourcePath, ".awf")
 }
 
 func TestLoad_NilLogger(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	agentDir := filepath.Join(tmpDir, ".awf", "agents", "safe-role")
+	agentDir := filepath.Join(tmpDir, ".awf", "roles", "safe-role")
 	require.NoError(t, os.MkdirAll(agentDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(agentDir, "AGENTS.md"),
@@ -417,12 +466,8 @@ func TestLoad_NilLogger(t *testing.T) {
 		0o644,
 	))
 
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(tmpDir))
+	testutil.ChdirIsolated(t, tmpDir)
 
-	// Should not panic with nil logger
 	repo := roles.NewFilesystemAgentRoleRepository(nil)
 
 	role, err := repo.Load(context.Background(), "safe-role")
