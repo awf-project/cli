@@ -57,3 +57,7 @@ site/node_modules/
 examples/plugins/*/awf-plugin-*
 !examples/plugins/*/awf-plugin-*.go
 !examples/plugins/*/awf-plugin-*_test.go
+
+# Added by awf project-onboard
+.awf/storage/states/
+.awf/storage/logs/

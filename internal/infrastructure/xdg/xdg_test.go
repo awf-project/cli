@@ -33,7 +33,6 @@ func TestConfigHome(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore env
 			if tt.envValue != "" {
 				t.Setenv("XDG_CONFIG_HOME", tt.envValue)
 			} else {
@@ -534,6 +533,7 @@ func TestAWFPaths(t *testing.T) {
 		"workflows_dir": AWFWorkflowsDir(),
 		"plugins_dir":   AWFPluginsDir(),
 		"skills_dir":    AWFSkillsDir(),
+		"roles_dir":     AWFRolesDir(),
 	}
 	for key, want := range expected {
 		got, ok := paths[key]
@@ -557,6 +557,7 @@ func TestAWFPaths_HasExactKeys(t *testing.T) {
 		"workflows_dir",
 		"plugins_dir",
 		"skills_dir",
+		"roles_dir",
 	}
 	assert.Len(t, paths, len(expectedKeys), "AWFPaths() should have exactly %d keys", len(expectedKeys))
 	for _, key := range expectedKeys {

@@ -69,9 +69,9 @@ func TestLoopResult_AllSucceeded(t *testing.T) {
 
 func TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError(t *testing.T) {
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
-		stepName string,
-		intCtx *interpolation.Context,
+		_ context.Context,
+		_ string,
+		_ *interpolation.Context,
 	) (string, error) {
 		// Return a transition to another step
 		return "target_step", nil
@@ -87,9 +87,9 @@ func TestStepExecutorFunc_TypeSignature_ReturnsNextStepAndError(t *testing.T) {
 
 func TestStepExecutorFunc_NoTransition_ReturnsEmptyString(t *testing.T) {
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
-		stepName string,
-		intCtx *interpolation.Context,
+		_ context.Context,
+		_ string,
+		_ *interpolation.Context,
 	) (string, error) {
 		// No transition - return empty nextStep
 		return "", nil
@@ -106,9 +106,9 @@ func TestStepExecutorFunc_NoTransition_ReturnsEmptyString(t *testing.T) {
 func TestStepExecutorFunc_ErrorWithoutTransition(t *testing.T) {
 	expectedErr := errors.New("step execution failed")
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
-		stepName string,
-		intCtx *interpolation.Context,
+		_ context.Context,
+		_ string,
+		_ *interpolation.Context,
 	) (string, error) {
 		// Error case - return empty nextStep with error
 		return "", expectedErr
@@ -126,9 +126,9 @@ func TestStepExecutorFunc_ErrorWithoutTransition(t *testing.T) {
 func TestStepExecutorFunc_ErrorWithTransition(t *testing.T) {
 	expectedErr := errors.New("step failed but has on_failure transition")
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
-		stepName string,
-		intCtx *interpolation.Context,
+		_ context.Context,
+		_ string,
+		_ *interpolation.Context,
 	) (string, error) {
 		// On-failure transition case
 		return "error_handler_step", expectedErr
@@ -149,8 +149,8 @@ func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
 
 	var stepExecutor application.StepExecutorFunc = func(
 		ctx context.Context,
-		stepName string,
-		intCtx *interpolation.Context,
+		_ string,
+		_ *interpolation.Context,
 	) (string, error) {
 		// Check context
 		if ctx.Err() != nil {
@@ -169,8 +169,8 @@ func TestStepExecutorFunc_ContextCancellation(t *testing.T) {
 
 func TestStepExecutorFunc_NilInterpolationContext(t *testing.T) {
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
-		stepName string,
+		_ context.Context,
+		_ string,
 		intCtx *interpolation.Context,
 	) (string, error) {
 		// Verify nil is handled (executor should validate)
@@ -190,9 +190,9 @@ func TestStepExecutorFunc_NilInterpolationContext(t *testing.T) {
 
 func TestStepExecutorFunc_EmptyStepName(t *testing.T) {
 	var stepExecutor application.StepExecutorFunc = func(
-		ctx context.Context,
+		_ context.Context,
 		stepName string,
-		intCtx *interpolation.Context,
+		_ *interpolation.Context,
 	) (string, error) {
 		if stepName == "" {
 			return "", errors.New("step name cannot be empty")

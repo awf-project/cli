@@ -5,21 +5,31 @@ import (
 	"path/filepath"
 )
 
-// ConfigHome returns XDG_CONFIG_HOME or defaults to ~/.config
+// ConfigHome returns XDG_CONFIG_HOME or defaults to ~/.config.
+// Returns "" if XDG_CONFIG_HOME is not set and the user home directory
+// cannot be determined, rather than producing a parasitic path such as "/.config".
 func ConfigHome() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
 		return dir
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return filepath.Join(home, ".config")
 }
 
-// DataHome returns XDG_DATA_HOME or defaults to ~/.local/share
+// DataHome returns XDG_DATA_HOME or defaults to ~/.local/share.
+// Returns "" if XDG_DATA_HOME is not set and the user home directory
+// cannot be determined, rather than producing a parasitic path such as "/.local/share".
 func DataHome() string {
 	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
 		return dir
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return filepath.Join(home, ".local", "share")
 }
 
@@ -93,14 +103,14 @@ func LocalSkillsDir() string {
 	return ".awf/skills"
 }
 
-// AWFAgentsDir returns the global agents directory ($XDG_CONFIG_HOME/awf/agents)
-func AWFAgentsDir() string {
-	return filepath.Join(AWFConfigDir(), "agents")
+// AWFRolesDir returns the global roles directory ($XDG_CONFIG_HOME/awf/roles)
+func AWFRolesDir() string {
+	return filepath.Join(AWFConfigDir(), "roles")
 }
 
-// LocalAgentsDir returns the local project agents directory
-func LocalAgentsDir() string {
-	return ".awf/agents"
+// LocalRolesDir returns the local project roles directory
+func LocalRolesDir() string {
+	return ".awf/roles"
 }
 
 // AWFPluginsDir returns the global plugins directory ($XDG_DATA_HOME/awf/plugins)
@@ -124,7 +134,7 @@ func LocalWorkflowPacksDir() string {
 }
 
 // AWFPaths returns all AWF XDG directory paths as a map for template interpolation.
-// Keys: prompts_dir, scripts_dir, config_dir, data_dir, workflows_dir, plugins_dir, skills_dir.
+// Keys: prompts_dir, scripts_dir, config_dir, data_dir, workflows_dir, plugins_dir, skills_dir, roles_dir.
 func AWFPaths() map[string]string {
 	return map[string]string{
 		"prompts_dir":   AWFPromptsDir(),
@@ -134,6 +144,7 @@ func AWFPaths() map[string]string {
 		"workflows_dir": AWFWorkflowsDir(),
 		"plugins_dir":   AWFPluginsDir(),
 		"skills_dir":    AWFSkillsDir(),
+		"roles_dir":     AWFRolesDir(),
 	}
 }
 

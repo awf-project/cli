@@ -13,6 +13,12 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 )
 
+// skillSizeWarnBytes is the SKILL.md size (in bytes) above which a
+// context-window warning is emitted. Intentionally separate from
+// workflow.AgentRoleSizeWarnBytes to allow independent evolution of the two
+// thresholds without coupling the skills and roles domains.
+const skillSizeWarnBytes = 500 * 1024
+
 type FilesystemSkillRepository struct {
 	searchPaths []string
 	logger      ports.Logger
@@ -24,13 +30,18 @@ func NewFilesystemSkillRepository(logger ports.Logger) *FilesystemSkillRepositor
 	if envPath := os.Getenv("AWF_SKILLS_PATH"); envPath != "" {
 		paths = filepath.SplitList(envPath)
 	} else {
-		paths = []string{
+		candidates := []string{
 			xdg.LocalSkillsDir(),
 			".agents/skills",
 			".claude/skills",
 			xdg.AWFSkillsDir(),
 			crossClientGlobalSkillsDir(),
 			claudeGlobalSkillsDir(),
+		}
+		for _, p := range candidates {
+			if p != "" {
+				paths = append(paths, p)
+			}
 		}
 	}
 
@@ -41,7 +52,9 @@ func NewFilesystemSkillRepository(logger ports.Logger) *FilesystemSkillRepositor
 }
 
 func (r *FilesystemSkillRepository) Load(_ context.Context, name string) (*workflow.Skill, error) {
-	if strings.ContainsRune(name, filepath.Separator) || strings.Contains(name, "..") {
+	// Reject both / and \ regardless of OS, and double-dot sequences, to prevent
+	// path traversal. Using ContainsAny mirrors the roles repository for consistency.
+	if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
 		return nil, fmt.Errorf("invalid skill name %q: must not contain path separators or '..'", name)
 	}
 
@@ -78,8 +91,11 @@ func (r *FilesystemSkillRepository) loadSkillFromDir(dirPath string) (*workflow.
 		return nil, fmt.Errorf("reading SKILL.md in %s: %w", dirPath, err)
 	}
 
-	if r.logger != nil && len(data) > 500*1024 {
-		r.logger.Warn("SKILL.md exceeds 500KB, may impact context window", "path", skillFile, "size", len(data))
+	if r.logger != nil && len(data) > skillSizeWarnBytes {
+		r.logger.Warn(
+			fmt.Sprintf("SKILL.md exceeds %dKB, may impact context window", skillSizeWarnBytes/1024),
+			"path", skillFile, "size", len(data),
+		)
 	}
 
 	content := StripFrontmatter(string(data))
@@ -139,11 +155,17 @@ func (r *FilesystemSkillRepository) enumerateResources(dirPath string) ([]string
 }
 
 func crossClientGlobalSkillsDir() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return filepath.Join(home, ".agents", "skills")
 }
 
 func claudeGlobalSkillsDir() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return filepath.Join(home, ".claude", "skills")
 }

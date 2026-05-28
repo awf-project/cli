@@ -460,7 +460,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation); in `mode: conversation` this serves as the first user message |
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`; not supported in `mode: conversation`) |
 | `system_prompt` | string | No | System message preserved for the whole session |
-| `role` | string | No | Role reference — name-based (e.g., `go-senior`) or path-based (e.g., `./custom-agents/senior`); loaded from AGENTS.md file and injected as system prompt; see [Agent Roles](agent-steps.md#agent-roles) |
+| `role` | string | No | Role reference — name-based (e.g., `go-senior`) or path-based (e.g., `./custom-roles/senior`); loaded from AGENTS.md file and injected as system prompt; see [Agent Roles](agent-steps.md#agent-roles) |
 | `output_format` | string | No | Post-processing format: `json` (strip fences + validate JSON) or `text` (strip fences only) |
 | `conversation` | object | No | Session tracking sub-struct. Presence opts the step into session tracking (marker flag); contents: see [Session Tracking](#session-tracking) |
 | `skills` | array | No | Skill references for agent context injection — name-based (e.g., `go-conventions`) or path-based (e.g., `path: ./custom/audit`); see [Agent Skills](agent-steps.md#agent-skills) |

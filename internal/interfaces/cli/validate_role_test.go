@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
+	"github.com/awf-project/cli/internal/testutil"
 )
 
 func TestValidateRoleRefs_NoRolesReturnsNoWarnings(t *testing.T) {
@@ -34,7 +36,7 @@ func TestValidateRoleRefs_NoRolesReturnsNoWarnings(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)
@@ -43,8 +45,11 @@ func TestValidateRoleRefs_NoRolesReturnsNoWarnings(t *testing.T) {
 func TestValidateRoleRefs_ValidNameBasedRole(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create role directory with AGENTS.md
-	roleDir := filepath.Join(tmpDir, ".awf", "agents", "go-senior")
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
+
+	// Create role directory with AGENTS.md in roles/ namespace
+	roleDir := filepath.Join(tmpDir, ".awf", "roles", "go-senior")
 	require.NoError(t, os.MkdirAll(roleDir, 0o755))
 	agentsMD := filepath.Join(roleDir, "AGENTS.md")
 	require.NoError(t, os.WriteFile(agentsMD, []byte("You are a senior Go engineer."), 0o644))
@@ -72,7 +77,7 @@ func TestValidateRoleRefs_ValidNameBasedRole(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)
@@ -80,6 +85,9 @@ func TestValidateRoleRefs_ValidNameBasedRole(t *testing.T) {
 
 func TestValidateRoleRefs_ValidPathBasedRole(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
 
 	// Create role directory with AGENTS.md
 	roleDir := filepath.Join(tmpDir, "my-role")
@@ -105,7 +113,7 @@ func TestValidateRoleRefs_ValidPathBasedRole(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)
@@ -114,7 +122,12 @@ func TestValidateRoleRefs_ValidPathBasedRole(t *testing.T) {
 func TestValidateRoleRefs_MissingRoleDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	// Chdir to tmpDir so relative paths (.awf/roles, .agents/roles) resolve deterministically
+	testutil.ChdirIsolated(t, tmpDir)
+
+	// Set both AWF_CONFIG_HOME and HOME for deterministic path resolution
 	t.Setenv("AWF_CONFIG_HOME", filepath.Join(tmpDir, ".awf"))
+	t.Setenv("HOME", tmpDir)
 	repo := roles.NewFilesystemAgentRoleRepository(nil)
 
 	wf := &workflow.Workflow{
@@ -133,21 +146,36 @@ func TestValidateRoleRefs_MissingRoleDirectory(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	require.Error(t, err)
 	assert.Nil(t, warnings)
 	var validErr workflow.ValidationError
 	assert.True(t, errors.As(err, &validErr), "error must be ValidationError, got: %T", err)
 	assert.Equal(t, workflow.ErrRoleNotFound, validErr.Code)
+
+	// The user-facing message must contain the role name but NOT expose internal
+	// filesystem search paths. Search paths are implementation details that change
+	// across environments and would pollute machine-readable output (JSON/quiet format).
 	assert.Contains(t, err.Error(), "missing-role")
+	assert.NotContains(t, err.Error(), ".awf/roles/missing-role")
+	assert.NotContains(t, err.Error(), ".agents/roles/missing-role")
+	assert.NotContains(t, err.Error(), filepath.Join(tmpDir, ".awf", "roles"))
+	assert.NotContains(t, err.Error(), filepath.Join(tmpDir, ".agents", "roles"))
+
+	// Verify no old agents/ root paths appear in the message
+	assert.NotContains(t, err.Error(), ".awf/agents")
+	assert.NotContains(t, err.Error(), ".agents/missing-role")
 }
 
 func TestValidateRoleRefs_MissingAgentsMD(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create role directory but without AGENTS.md
-	roleDir := filepath.Join(tmpDir, ".awf", "agents", "incomplete-role")
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
+
+	// Create role directory in roles/ namespace but without AGENTS.md
+	roleDir := filepath.Join(tmpDir, ".awf", "roles", "incomplete-role")
 	require.NoError(t, os.MkdirAll(roleDir, 0o755))
 
 	configHome := filepath.Join(tmpDir, ".awf")
@@ -170,7 +198,7 @@ func TestValidateRoleRefs_MissingAgentsMD(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	require.Error(t, err)
 	assert.Nil(t, warnings)
@@ -182,6 +210,9 @@ func TestValidateRoleRefs_MissingAgentsMD(t *testing.T) {
 
 func TestValidateRoleRefs_EmptyAgentsMDBody(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
 
 	// Create role with empty AGENTS.md
 	roleDir := filepath.Join(tmpDir, "empty-role")
@@ -207,7 +238,7 @@ func TestValidateRoleRefs_EmptyAgentsMDBody(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, warnings)
@@ -218,6 +249,9 @@ func TestValidateRoleRefs_EmptyAgentsMDBody(t *testing.T) {
 
 func TestValidateRoleRefs_AgentsMDExceedsSizeLimit(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
 
 	// Create role with AGENTS.md > 500KB
 	roleDir := filepath.Join(tmpDir, "large-role")
@@ -245,7 +279,7 @@ func TestValidateRoleRefs_AgentsMDExceedsSizeLimit(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, warnings)
@@ -256,6 +290,9 @@ func TestValidateRoleRefs_AgentsMDExceedsSizeLimit(t *testing.T) {
 
 func TestValidateRoleRefs_CombinedRoleAndSystemPromptExceeds10KB(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
 
 	// Create role with content that combined with system_prompt exceeds 10KB
 	roleDir := filepath.Join(tmpDir, "combined-role")
@@ -283,7 +320,7 @@ func TestValidateRoleRefs_CombinedRoleAndSystemPromptExceeds10KB(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, warnings)
@@ -312,7 +349,7 @@ func TestValidateRoleRefs_PathTraversalAttempt(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	require.Error(t, err)
 	assert.Nil(t, warnings)
@@ -323,6 +360,9 @@ func TestValidateRoleRefs_PathTraversalAttempt(t *testing.T) {
 
 func TestValidateRoleRefs_MultipleStepsMultipleRoles(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Chdir to tmpDir for deterministic relative path resolution
+	testutil.ChdirIsolated(t, tmpDir)
 
 	// Create two role directories
 	role1Dir := filepath.Join(tmpDir, "role1")
@@ -359,7 +399,7 @@ func TestValidateRoleRefs_MultipleStepsMultipleRoles(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)
@@ -383,7 +423,7 @@ func TestValidateRoleRefs_StepWithoutAgentConfig(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)
@@ -409,7 +449,7 @@ func TestValidateRoleRefs_AgentStepWithEmptyRole(t *testing.T) {
 		SourceDir: tmpDir,
 	}
 
-	warnings, err := validateRoleRefs(wf, repo)
+	warnings, err := validateRoleRefs(context.Background(), wf, repo)
 
 	assert.NoError(t, err)
 	assert.Empty(t, warnings)

@@ -21,14 +21,19 @@ type FilesystemAgentRoleRepository struct {
 func NewFilesystemAgentRoleRepository(logger ports.Logger) *FilesystemAgentRoleRepository {
 	var paths []string
 
-	if envPath := os.Getenv("AWF_AGENTS_PATH"); envPath != "" {
+	if envPath := os.Getenv("AWF_ROLES_PATH"); envPath != "" {
 		paths = filepath.SplitList(envPath)
 	} else {
+		// Two namespaces are searched, mirroring the skills repository:
+		//  - AWF-native:   .awf/roles (local), $XDG_CONFIG_HOME/awf/roles (global)
+		//  - cross-client: .agents/roles (local), ~/.agents/roles (global)
+		// The cross-client paths let roles authored for other agent tooling be
+		// reused without duplication.
 		candidates := []string{
-			xdg.LocalAgentsDir(),
-			".agents",
-			xdg.AWFAgentsDir(),
-			crossClientGlobalAgentsDir(),
+			xdg.LocalRolesDir(),
+			".agents/roles",
+			xdg.AWFRolesDir(),
+			crossClientGlobalRolesDir(),
 		}
 		for _, p := range candidates {
 			if p != "" {
@@ -75,7 +80,7 @@ func (r *FilesystemAgentRoleRepository) LoadFromPath(_ context.Context, absolute
 	}
 
 	if _, err := os.Stat(agentsFile); err != nil {
-		return nil, &workflow.AgentRoleNotFoundError{Name: filepath.Base(cleanPath), SearchPaths: []string{cleanPath}}
+		return nil, &workflow.AgentRoleNotFoundError{Name: filepath.Base(cleanPath), SearchPaths: []string{cleanPath}, IsPathRef: true}
 	}
 
 	return r.loadAgentsMD(dirPath)
@@ -89,8 +94,11 @@ func (r *FilesystemAgentRoleRepository) loadAgentsMD(dirPath string) (*workflow.
 		return nil, fmt.Errorf("reading AGENTS.md in %s: %w", dirPath, err)
 	}
 
-	if r.logger != nil && len(data) > 500*1024 {
-		r.logger.Warn("AGENTS.md exceeds 500KB, may impact context window", "path", agentsFile, "size", len(data))
+	if r.logger != nil && len(data) > workflow.AgentRoleSizeWarnBytes {
+		r.logger.Warn(
+			fmt.Sprintf("AGENTS.md exceeds %dKB, may impact context window", workflow.AgentRoleSizeWarnBytes/1024),
+			"path", agentsFile, "size", len(data),
+		)
 	}
 
 	content := skills.StripFrontmatter(string(data))
@@ -101,16 +109,17 @@ func (r *FilesystemAgentRoleRepository) loadAgentsMD(dirPath string) (*workflow.
 	}
 
 	return &workflow.AgentRole{
-		Name:       filepath.Base(dirPath),
-		Content:    content,
-		SourcePath: absPath,
+		Name:         filepath.Base(dirPath),
+		Content:      content,
+		SourcePath:   absPath,
+		RawSizeBytes: int64(len(data)),
 	}, nil
 }
 
-func crossClientGlobalAgentsDir() string {
+func crossClientGlobalRolesDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".agents")
+	return filepath.Join(home, ".agents", "roles")
 }

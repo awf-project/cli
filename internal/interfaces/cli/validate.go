@@ -22,6 +22,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// agentRoleCombinedPromptWarnBytes is the combined size (role content +
+// inline system_prompt, in bytes) above which a non-blocking validation warning
+// is emitted. This threshold is a CLI-layer concern: it guards against oversized
+// system prompt payloads before execution, not a domain invariant.
+const agentRoleCombinedPromptWarnBytes = 10 * 1024
+
 func newValidateCommand(cfg *Config) *cobra.Command {
 	var skipPlugins bool
 	var validatorTimeout time.Duration
@@ -73,10 +79,8 @@ Examples:
 func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugins bool, validatorTimeout time.Duration) error {
 	ctx := context.Background()
 
-	// Create output writer
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Detect pack/workflow namespace syntax
 	packName, baseName := parseWorkflowNamespace(workflowName)
 	var repo *repository.CompositeRepository
 	if packName != "" {
@@ -93,10 +97,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		repo = NewWorkflowRepository()
 	}
 
-	// Create validator
 	validator := expression.NewExprValidator()
-
-	// Create service
 	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
 
 	// Inject an OperationProvider so that mcp_proxy.plugin_tools checks run.
@@ -105,26 +106,21 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 	// behavior when no plugins are installed in the current environment.
 	svc.SetPluginOperationProvider(infrastructurePlugin.NewCompositeOperationProvider())
 
-	// Load workflow first to check existence
 	wf, err := svc.GetWorkflow(ctx, workflowName)
 	if err != nil {
 		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
-	// Validate workflow structure
 	validationErr := svc.ValidateWorkflow(ctx, workflowName)
 
-	// If workflow structure is valid, validate template interpolation references
 	if validationErr == nil {
 		templateAnalyzer := analyzer.NewInterpolationAnalyzer()
 		templateValidator := workflow.NewTemplateValidator(wf, templateAnalyzer)
 		result := templateValidator.Validate()
 		if result != nil && result.HasErrors() {
-			// Format all errors for display
 			if len(result.Errors) == 1 {
 				validationErr = result.Errors[0]
 			} else {
-				// Create a multi-line error with all validation errors
 				var sb strings.Builder
 				fmt.Fprintf(&sb, "validation failed with %d errors:", len(result.Errors))
 				for _, err := range result.Errors {
@@ -135,7 +131,6 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		}
 	}
 
-	// If workflow is valid, also validate template references
 	if validationErr == nil {
 		templatePaths := []string{
 			".awf/templates",
@@ -162,7 +157,7 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 	var roleWarnings []string
 	if validationErr == nil {
 		roleRepo := roles.NewFilesystemAgentRoleRepository(nil)
-		roleWarnings, validationErr = validateRoleRefs(wf, roleRepo)
+		roleWarnings, validationErr = validateRoleRefs(ctx, wf, roleRepo)
 	}
 
 	// Collect disabled plugin warnings (non-blocking, skipped on quiet format or when --skip-plugins)
@@ -205,7 +200,6 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		if validationErr != nil {
 			result.Errors = []string{validationErr.Error()}
 		}
-		// Build inputs info
 		for _, inp := range wf.Inputs {
 			defaultVal := ""
 			if inp.Default != nil {
@@ -218,7 +212,6 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 				Default:  defaultVal,
 			})
 		}
-		// Build steps info
 		for _, step := range wf.Steps {
 			next := step.OnSuccess
 			if next == "" {
@@ -254,10 +247,8 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		return writeErrorAndExit(writer, validationErr, ExitWorkflow)
 	}
 
-	// Show success
 	formatter.Success(fmt.Sprintf("Workflow '%s' is valid", workflowName))
 
-	// Print disabled plugin warnings
 	for _, warning := range pluginWarnings {
 		fmt.Fprintf(cmd.ErrOrStderr(), "\n  warning: %s", warning)
 		fmt.Fprintf(cmd.ErrOrStderr(), "\n  Hint: Run 'awf plugin enable <name>' to re-enable")
@@ -266,7 +257,6 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		fmt.Fprintln(cmd.ErrOrStderr())
 	}
 
-	// Verbose output
 	if cfg.Verbose {
 		formatter.Println()
 		formatter.Printf("Name:        %s\n", wf.Name)
@@ -416,8 +406,7 @@ func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
 	return warnings, nil
 }
 
-func validateRoleRefs(wf *workflow.Workflow, repo ports.AgentRoleRepository) ([]string, error) {
-	ctx := context.Background()
+func validateRoleRefs(ctx context.Context, wf *workflow.Workflow, repo ports.AgentRoleRepository) ([]string, error) {
 	var warnings []string
 
 	for _, step := range wf.Steps {
@@ -427,7 +416,15 @@ func validateRoleRefs(wf *workflow.Workflow, repo ports.AgentRoleRepository) ([]
 
 		role := step.Agent.Role
 
-		// Defense in depth: reject path-traversal even though domain + infra also reject it.
+		// Defense in depth: block path-traversal sequences, mirroring the
+		// infrastructure Load guard. application.isRolePathRef routes refs
+		// containing '/' or '\' (or starting with '.', '~') to LoadFromPath;
+		// pure name-refs are routed to Load, which also rejects '/' and '\'.
+		// Since path-refs may legitimately contain separators, we only block
+		// '..' here (which is invalid in both name-refs and path-refs).
+		// Name-refs containing '/' or '\' are already unreachable: isRolePathRef
+		// classifies them as path-refs and LoadFromPath handles them safely via
+		// filepath.Clean — no additional guard is needed at this layer.
 		if strings.Contains(role, "..") {
 			return nil, workflow.ValidationError{
 				Level:   workflow.ValidationLevelError,
@@ -440,48 +437,57 @@ func validateRoleRefs(wf *workflow.Workflow, repo ports.AgentRoleRepository) ([]
 		agentRole, err := application.ResolveAgentRole(ctx, repo, role, wf.SourceDir)
 		if err != nil {
 			var notFound *workflow.AgentRoleNotFoundError
-			if errors.As(err, &notFound) {
-				if roleDirExistsWithoutAgentsMD(notFound) {
-					return nil, workflow.ValidationError{
-						Level:   workflow.ValidationLevelError,
-						Code:    workflow.ErrRoleMissingAgentsMD,
-						Message: fmt.Sprintf("role %q has no AGENTS.md", notFound.Name),
-						Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
-					}
-				}
+			if errors.As(err, &notFound) && roleDirExistsWithoutAgentsMD(notFound) {
 				return nil, workflow.ValidationError{
 					Level:   workflow.ValidationLevelError,
-					Code:    workflow.ErrRoleNotFound,
-					Message: err.Error(),
+					Code:    workflow.ErrRoleMissingAgentsMD,
+					Message: fmt.Sprintf("role %q has no AGENTS.md", notFound.Name),
 					Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
 				}
+			}
+			// Use a user-oriented message that identifies the role by name without
+			// exposing internal filesystem search paths, which are environment-specific
+			// and would pollute machine-readable output (JSON/quiet format). The full
+			// path list is available in the underlying AgentRoleNotFoundError for
+			// callers that need it.
+			roleName := role
+			if notFound != nil {
+				roleName = notFound.Name
 			}
 			return nil, workflow.ValidationError{
 				Level:   workflow.ValidationLevelError,
 				Code:    workflow.ErrRoleNotFound,
-				Message: err.Error(),
+				Message: fmt.Sprintf("resolve role %q: not found", roleName),
 				Path:    fmt.Sprintf("states.%s.agent.role", step.Name),
 			}
 		}
 
-		if agentRole.Content == "" {
-			warnings = append(warnings, fmt.Sprintf("[%s] role %q has empty AGENTS.md body", workflow.ErrRoleEmptyContent, agentRole.Name))
-		} else {
-			var rawSize int64
-			if agentRole.SourcePath != "" {
-				if info, statErr := os.Stat(agentRole.SourcePath); statErr == nil {
-					rawSize = info.Size()
-				}
-			}
-			if rawSize > 500*1024 {
-				warnings = append(warnings, fmt.Sprintf("role %q: AGENTS.md exceeds 500KB size threshold", agentRole.Name))
-			} else if len(agentRole.Content)+len(step.Agent.SystemPrompt) > 10*1024 {
-				warnings = append(warnings, fmt.Sprintf("role %q: combined role content and system_prompt exceeds 10KB threshold", agentRole.Name))
-			}
-		}
+		warnings = append(warnings, roleContentWarnings(agentRole, step.Agent.SystemPrompt)...)
 	}
 
 	return warnings, nil
+}
+
+// roleContentWarnings returns non-blocking warnings about a resolved role's
+// AGENTS.md content: empty body, oversized file, or an oversized combined
+// role+system_prompt payload. It returns nil when the content is within limits.
+//
+// The checks are evaluated in priority order and the first match wins, so at
+// most one warning is emitted per role. Order matters: a file whose body is
+// empty after frontmatter stripping reports "empty body" even if the raw file
+// exceeds the size threshold. RawSizeBytes is captured at load time, so no
+// filesystem access is needed here.
+func roleContentWarnings(role *workflow.AgentRole, systemPrompt string) []string {
+	if role.Content == "" {
+		return []string{fmt.Sprintf("role %q has empty AGENTS.md body", role.Name)}
+	}
+	if role.RawSizeBytes > workflow.AgentRoleSizeWarnBytes {
+		return []string{fmt.Sprintf("role %q: AGENTS.md exceeds %dKB size threshold", role.Name, workflow.AgentRoleSizeWarnBytes/1024)}
+	}
+	if len(role.Content)+len(systemPrompt) > agentRoleCombinedPromptWarnBytes {
+		return []string{fmt.Sprintf("role %q: combined role content and system_prompt exceeds %dKB threshold", role.Name, agentRoleCombinedPromptWarnBytes/1024)}
+	}
+	return nil
 }
 
 func skillDirExists(name string, searchPaths []string) bool {
@@ -494,11 +500,14 @@ func skillDirExists(name string, searchPaths []string) bool {
 }
 
 // roleDirExistsWithoutAgentsMD checks whether the role directory exists but
-// is missing an AGENTS.md file. For path-based refs (single search path that
-// equals the role path itself), it checks the path directly rather than
-// joining name into the path (which would double-nest).
+// is missing an AGENTS.md file. For path-based refs (IsPathRef=true), the
+// single search path equals the role directory itself, so it is checked
+// directly. For name-based refs, the name is joined into each search path.
 func roleDirExistsWithoutAgentsMD(notFound *workflow.AgentRoleNotFoundError) bool {
-	if len(notFound.SearchPaths) == 1 {
+	if notFound.IsPathRef {
+		if len(notFound.SearchPaths) == 0 {
+			return false
+		}
 		dir := notFound.SearchPaths[0]
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			return true
