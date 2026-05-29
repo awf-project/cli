@@ -118,7 +118,7 @@ func postRunWorkflow(t *testing.T, ts *httptest.Server, name string, inputs map[
 	require.NoError(t, err)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
-		ts.URL+"/api/workflows/"+name+"/run", bytes.NewReader(bodyBytes))
+		ts.URL+"/api/workflows/local/"+name+"/run", bytes.NewReader(bodyBytes))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 

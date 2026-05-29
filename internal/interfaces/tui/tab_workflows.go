@@ -29,12 +29,12 @@ type workflowItem struct {
 	entry workflow.WorkflowEntry
 }
 
-func (i workflowItem) Title() string {
+func (i workflowItem) Title() string { //nolint:gocritic // value receiver required by list.Item interface; size increase from WorkflowEntry domain expansion
 	return i.entry.Name
 }
 
-func (i workflowItem) Description() string {
-	parts := []string{}
+func (i workflowItem) Description() string { //nolint:gocritic // value receiver required by list.Item interface; size increase from WorkflowEntry domain expansion
+	var parts []string
 	if i.entry.Description != "" {
 		parts = append(parts, i.entry.Description)
 	}
@@ -53,7 +53,7 @@ func (i workflowItem) Description() string {
 	return strings.Join(parts, " · ")
 }
 
-func (i workflowItem) FilterValue() string {
+func (i workflowItem) FilterValue() string { //nolint:gocritic // value receiver required by list.Item interface; size increase from WorkflowEntry domain expansion
 	return i.entry.Name + " " + i.entry.Description + " " + i.entry.Source
 }
 
@@ -239,11 +239,7 @@ func (t WorkflowsTab) updateInputForm(msg tea.Msg) (WorkflowsTab, tea.Cmd) {
 
 	switch keyMsg.String() {
 	case "esc":
-		t.view = workflowsListView
-		t.inputTarget = nil
-		t.inputFields = nil
-		t.inputNames = nil
-		t.inputRequired = nil
+		t = t.resetInputForm()
 		return t, nil
 
 	case "tab", "down":
@@ -291,11 +287,7 @@ func (t WorkflowsTab) submitInputForm() (WorkflowsTab, tea.Cmd) {
 	}
 
 	wf := t.inputTarget
-	t.view = workflowsListView
-	t.inputTarget = nil
-	t.inputFields = nil
-	t.inputNames = nil
-	t.inputRequired = nil
+	t = t.resetInputForm()
 
 	return t, func() tea.Msg {
 		return LaunchWorkflowMsg{Workflow: wf, Inputs: inputs}
@@ -311,9 +303,24 @@ func (t WorkflowsTab) handleValidate() (bool, WorkflowsTab, tea.Cmd) {
 	if t.bridge != nil && t.ctx != nil {
 		t.validating = true
 		tick := t.spinner.Tick
-		return true, t, tea.Batch(t.bridge.ValidateWorkflow(t.ctx, item.wf.Name), func() tea.Msg { return tick() })
+		return true, t, tea.Batch(t.bridge.ValidateWorkflow(t.ctx, item.entry.Name), func() tea.Msg { return tick() })
 	}
 	return true, t, nil
+}
+
+// resetInputForm clears all input form state and returns the tab to the list
+// view. Called from both the Escape branch of updateInputForm (cancel) and
+// from submitInputForm (after capturing the target workflow) so the two paths
+// reset the same five fields identically.
+//
+//nolint:gocritic // Bubbletea convention: value receivers
+func (t WorkflowsTab) resetInputForm() WorkflowsTab {
+	t.view = workflowsListView
+	t.inputTarget = nil
+	t.inputFields = nil
+	t.inputNames = nil
+	t.inputRequired = nil
+	return t
 }
 
 func (t WorkflowsTab) selectedWorkflowItem() (workflowItem, bool) { //nolint:gocritic // read-only

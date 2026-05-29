@@ -114,6 +114,25 @@ func (m *MockWorkflowRepository) List(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+// ListWithSource returns all workflow names together with their discovery source.
+// All entries report SourceLocal since the mock does not distinguish origins.
+// Thread-safe for concurrent access.
+func (m *MockWorkflowRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+
+	infos := make([]ports.WorkflowInfo, 0, len(m.workflows))
+	for name := range m.workflows {
+		infos = append(infos, ports.WorkflowInfo{Name: name, Source: ports.SourceLocal})
+	}
+
+	return infos, nil
+}
+
 // Exists checks if a workflow with the given name exists.
 // Thread-safe for concurrent access.
 func (m *MockWorkflowRepository) Exists(ctx context.Context, name string) (bool, error) {

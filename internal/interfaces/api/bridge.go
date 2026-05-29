@@ -144,7 +144,11 @@ func (b *Bridge) ListExecutions() []*ActiveExecution {
 // TrackResumedExecution wraps a synchronously-resumed ExecutionContext in an
 // ActiveExecution, assigns it a new UUID, stores it in activeExecutions, and
 // returns the assigned ID. Because resume is synchronous the execution is
-// already complete; no background context or cancel is needed.
+// already complete when this returns; the entry is kept intentionally so that
+// subsequent GET /api/executions/{id} (and DELETE / SSE endpoints) can serve
+// the terminal state to clients querying the just-resumed execution. Without
+// this persistence the /resume handler would return an ID that immediately
+// 404s on read. Eviction/TTL of completed entries is a separate concern.
 func (b *Bridge) TrackResumedExecution(execCtx *workflow.ExecutionContext) string {
 	id := uuid.NewString()
 	closed := make(chan error)

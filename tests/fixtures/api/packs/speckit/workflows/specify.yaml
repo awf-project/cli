@@ -1,0 +1,16 @@
+name: specify
+description: Minimal specify workflow for integration testing
+version: "1.0.0"
+author: test
+
+states:
+  initial: run
+  run:
+    type: step
+    command: echo "specify"
+    on_success: done
+    on_failure: failed
+  done:
+    type: terminal
+  failed:
+    type: terminal

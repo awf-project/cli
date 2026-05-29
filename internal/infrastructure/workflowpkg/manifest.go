@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/pkg/registry"
 	"gopkg.in/yaml.v3"
 )
@@ -48,6 +49,15 @@ func (m *Manifest) Validate(packDir string) error {
 		return fmt.Errorf("manifest: invalid pack name %q (must match ^[a-z][a-z0-9-]*$)", m.Name)
 	}
 
+	if m.Name == "local" || m.Name == "global" || m.Name == "env" {
+		return domerrors.NewUserError(
+			domerrors.ErrorCodeUserInputValidationFailed,
+			fmt.Sprintf("pack name %q is reserved as a scope sentinel; rename the pack", m.Name),
+			map[string]any{"pack_name": m.Name, "reserved_tokens": []string{"local", "global", "env"}},
+			nil,
+		)
+	}
+
 	if _, err := registry.ParseVersion(m.Version); err != nil {
 		return fmt.Errorf("manifest: invalid version %q: %w", m.Version, err)
 	}
@@ -66,6 +76,9 @@ func (m *Manifest) Validate(packDir string) error {
 	}
 
 	for _, workflow := range m.Workflows {
+		if !nameRegex.MatchString(workflow) {
+			return fmt.Errorf("manifest: invalid workflow name %q (must match ^[a-z][a-z0-9-]*$)", workflow)
+		}
 		workflowFile := filepath.Join(workflowsDir, workflow+".yaml")
 		if _, err := os.Stat(workflowFile); err != nil {
 			return fmt.Errorf("manifest: workflow file %q not found", workflow+".yaml")

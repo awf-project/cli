@@ -43,6 +43,12 @@ func (a *PackDiscovererAdapter) DiscoverWorkflows(ctx context.Context) ([]workfl
 			continue
 		}
 		for _, p := range packs {
+			// Defense-in-depth: skip pack names that fail the name regex even if
+			// the loader's Validate already rejects them. This prevents path
+			// traversal through a crafted pack name reaching filepath.Join.
+			if !nameRegex.MatchString(p.Name) {
+				continue
+			}
 			if _, seen := packMap[p.Name]; !seen {
 				packMap[p.Name] = filepath.Join(dir, p.Name)
 			}
@@ -67,9 +73,17 @@ func (a *PackDiscovererAdapter) DiscoverWorkflows(ctx context.Context) ([]workfl
 		}
 
 		for _, wfName := range manifest.Workflows {
+			// Defense-in-depth: skip workflow names that fail the name regex.
+			// Manifest.Validate already enforces this, but the second ParseManifest
+			// call (without Validate) in this path makes a defensive check necessary.
+			if !nameRegex.MatchString(wfName) {
+				continue
+			}
 			entries = append(entries, workflow.WorkflowEntry{
 				Name:        packName + "/" + wfName,
 				Source:      "pack",
+				Scope:       packName,
+				Workflow:    wfName,
 				Version:     manifest.Version,
 				Description: loadWorkflowDescription(packDir, wfName),
 			})
@@ -99,6 +113,13 @@ func (a *PackDiscovererAdapter) LoadWorkflow(ctx context.Context, packName, work
 // loadWorkflowDescription reads the description field from a workflow YAML file.
 // Returns an empty string if the file cannot be read or does not contain a description.
 func loadWorkflowDescription(packDir, workflowName string) string {
+	// Defense-in-depth: reject workflow names that would escape the workflows/
+	// subdirectory. nameRegex already enforces this at the call site, but guard
+	// here too since loadWorkflowDescription is a package-internal helper that
+	// could be called directly.
+	if !nameRegex.MatchString(workflowName) {
+		return ""
+	}
 	data, err := readFileLimited(filepath.Join(packDir, "workflows", workflowName+".yaml"), 1<<20)
 	if err != nil {
 		return ""

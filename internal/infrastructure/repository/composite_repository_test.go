@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 func TestCompositeRepository_Load(t *testing.T) {
@@ -189,15 +190,15 @@ states:
 		require.NoError(t, err)
 
 		// Build map for easy lookup
-		infoMap := make(map[string]WorkflowInfo)
+		infoMap := make(map[string]ports.WorkflowInfo)
 		for _, info := range infos {
 			infoMap[info.Name] = info
 		}
 
-		assert.Equal(t, SourceLocal, infoMap["local-wf"].Source)
-		assert.Equal(t, SourceGlobal, infoMap["global-wf"].Source)
+		assert.Equal(t, ports.SourceLocal, infoMap["local-wf"].Source)
+		assert.Equal(t, ports.SourceGlobal, infoMap["global-wf"].Source)
 		// shared-wf should show as local (higher priority)
-		assert.Equal(t, SourceLocal, infoMap["shared-wf"].Source)
+		assert.Equal(t, ports.SourceLocal, infoMap["shared-wf"].Source)
 	})
 }
 

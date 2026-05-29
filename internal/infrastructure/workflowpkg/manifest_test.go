@@ -1,10 +1,12 @@
 package workflowpkg_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -278,4 +280,185 @@ func TestValidate_EmptyWorkflowsList(t *testing.T) {
 	err := manifest.Validate(packDir)
 
 	assert.Error(t, err)
+}
+
+// TestValidate_InvalidWorkflowName tests that workflow names with path traversal
+// or invalid characters are rejected to prevent path traversal attacks.
+func TestValidate_InvalidWorkflowName(t *testing.T) {
+	tests := []struct {
+		name         string
+		workflowName string
+	}{
+		{name: "path traversal", workflowName: "../../etc/passwd"},
+		{name: "absolute path", workflowName: "/etc/passwd"},
+		{name: "starts with digit", workflowName: "1workflow"},
+		{name: "contains uppercase", workflowName: "MyWorkflow"},
+		{name: "contains underscore", workflowName: "my_workflow"},
+		{name: "contains slash", workflowName: "pack/workflow"},
+		{name: "empty name", workflowName: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packDir := t.TempDir()
+			workflowsDir := filepath.Join(packDir, "workflows")
+			require.NoError(t, os.Mkdir(workflowsDir, 0o755))
+
+			manifest := &workflowpkg.Manifest{
+				Name:        "valid",
+				Version:     "1.0.0",
+				Description: "Test",
+				Author:      "test",
+				AWFVersion:  ">=0.1.0",
+				Workflows:   []string{tt.workflowName},
+			}
+
+			err := manifest.Validate(packDir)
+
+			assert.Error(t, err, "expected validation to fail for workflow name %q", tt.workflowName)
+			assert.Contains(t, err.Error(), "invalid workflow name", "error should mention invalid workflow name")
+		})
+	}
+}
+
+// TestValidate_ValidWorkflowNames tests that well-formed kebab-case names are accepted.
+func TestValidate_ValidWorkflowNames(t *testing.T) {
+	tests := []struct {
+		name         string
+		workflowName string
+	}{
+		{name: "simple lowercase", workflowName: "specify"},
+		{name: "kebab-case", workflowName: "run-tests"},
+		{name: "with digits", workflowName: "deploy-v2"},
+		{name: "single letter", workflowName: "a"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packDir := t.TempDir()
+			workflowsDir := filepath.Join(packDir, "workflows")
+			require.NoError(t, os.Mkdir(workflowsDir, 0o755))
+			require.NoError(t, os.WriteFile(
+				filepath.Join(workflowsDir, tt.workflowName+".yaml"),
+				[]byte("test"),
+				0o644,
+			))
+
+			manifest := &workflowpkg.Manifest{
+				Name:        "valid",
+				Version:     "1.0.0",
+				Description: "Test",
+				Author:      "test",
+				AWFVersion:  ">=0.1.0",
+				Workflows:   []string{tt.workflowName},
+			}
+
+			err := manifest.Validate(packDir)
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidate_ReservedScope(t *testing.T) {
+	tests := []struct {
+		name          string
+		packName      string
+		wantErr       bool
+		wantCode      domerrors.ErrorCode
+		wantPackName  string
+		wantFormatErr bool
+	}{
+		{
+			name:         "local is reserved",
+			packName:     "local",
+			wantErr:      true,
+			wantCode:     domerrors.ErrorCodeUserInputValidationFailed,
+			wantPackName: "local",
+		},
+		{
+			name:         "global is reserved",
+			packName:     "global",
+			wantErr:      true,
+			wantCode:     domerrors.ErrorCodeUserInputValidationFailed,
+			wantPackName: "global",
+		},
+		{
+			name:         "env is reserved",
+			packName:     "env",
+			wantErr:      true,
+			wantCode:     domerrors.ErrorCodeUserInputValidationFailed,
+			wantPackName: "env",
+		},
+		{
+			name:     "localpack is not reserved",
+			packName: "localpack",
+			wantErr:  false,
+		},
+		{
+			name:     "globalpack is not reserved",
+			packName: "globalpack",
+			wantErr:  false,
+		},
+		{
+			name:     "envpack is not reserved",
+			packName: "envpack",
+			wantErr:  false,
+		},
+		{
+			name:     "run is not reserved",
+			packName: "run",
+			wantErr:  false,
+		},
+		{
+			name:     "validate is not reserved",
+			packName: "validate",
+			wantErr:  false,
+		},
+		{
+			name:          "invalid format fails with format error not reserved error",
+			packName:      "!!!",
+			wantErr:       true,
+			wantFormatErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packDir := t.TempDir()
+			workflowsDir := filepath.Join(packDir, "workflows")
+			require.NoError(t, os.Mkdir(workflowsDir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "test.yaml"), []byte("test"), 0o644))
+
+			manifest := &workflowpkg.Manifest{
+				Name:        tt.packName,
+				Version:     "1.0.0",
+				Description: "Test",
+				Author:      "test",
+				AWFVersion:  ">=0.1.0",
+				Workflows:   []string{"test"},
+			}
+
+			err := manifest.Validate(packDir)
+
+			if !tt.wantErr {
+				assert.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+
+			if tt.wantFormatErr {
+				var structErr *domerrors.StructuredError
+				assert.False(t, errors.As(err, &structErr), "format error must not be a StructuredError")
+				return
+			}
+
+			var structErr *domerrors.StructuredError
+			require.True(t, errors.As(err, &structErr), "expected *StructuredError")
+			assert.Equal(t, tt.wantCode, structErr.Code)
+			assert.Equal(t, tt.wantPackName, structErr.Details["pack_name"])
+			assert.Equal(t, []string{"local", "global", "env"}, structErr.Details["reserved_tokens"])
+		})
+	}
 }

@@ -15,6 +15,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// sourceForName returns SourceLocal for all mock workflows; used by ListWithSource
+// implementations in test mocks where source metadata is not relevant.
+func sourceForName(_ string) ports.WorkflowSource {
+	return ports.SourceLocal
+}
+
 // Mock implementations
 type mockRepository struct {
 	workflows map[string]*workflow.Workflow
@@ -43,6 +49,18 @@ func (m *mockRepository) List(ctx context.Context) ([]string, error) {
 		names = append(names, name)
 	}
 	return names, nil
+}
+
+func (m *mockRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowInfo, error) {
+	names, err := m.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	infos := make([]ports.WorkflowInfo, 0, len(names))
+	for _, name := range names {
+		infos = append(infos, ports.WorkflowInfo{Name: name, Source: sourceForName(name)})
+	}
+	return infos, nil
 }
 
 func (m *mockRepository) Exists(ctx context.Context, name string) (bool, error) {
@@ -327,6 +345,14 @@ func (m *mockRepo) List(_ context.Context) ([]string, error) {
 	return m.names, nil
 }
 
+func (m *mockRepo) ListWithSource(_ context.Context) ([]ports.WorkflowInfo, error) {
+	infos := make([]ports.WorkflowInfo, 0, len(m.names))
+	for _, name := range m.names {
+		infos = append(infos, ports.WorkflowInfo{Name: name, Source: sourceForName(name)})
+	}
+	return infos, nil
+}
+
 func (m *mockRepo) Exists(_ context.Context, name string) (bool, error) {
 	_, ok := m.workflows[name]
 	return ok, nil
@@ -409,4 +435,174 @@ func TestWorkflowServiceListAllWorkflows_PackErrorDoesNotBlock(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Len(t, entries, 1, "pack errors should not block regular workflow listing")
+}
+
+// TestWorkflowServiceListAllWorkflows_LocalEntryScopeAndWorkflowFields validates T012 Acceptance Criteria:
+// - AC2: ListAllWorkflows populates every local entry with Scope="local", Workflow=<plain workflow name>
+// - AC5: A local entry whose Name contains a slash is NOT split — Scope stays "local" and Workflow stays equal to Name
+// - AC6: service_test.go covers happy-path table case asserting Scope, Workflow, Source populated for at least one local entry
+func TestWorkflowServiceListAllWorkflows_LocalEntryScopeAndWorkflowFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		workflow string
+		wantName string
+	}{
+		{
+			name:     "simple local workflow",
+			workflow: "my-workflow",
+			wantName: "my-workflow",
+		},
+		{
+			name:     "local workflow with slash in name",
+			workflow: "nested/workflow",
+			wantName: "nested/workflow",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockRepo{
+				workflows: map[string]*workflow.Workflow{
+					tt.workflow: {Name: tt.workflow, Description: "Test"},
+				},
+				names: []string{tt.workflow},
+			}
+			svc := application.NewWorkflowService(repo, nil, nil, nil, &noopValidator{})
+
+			entries, err := svc.ListAllWorkflows(context.Background())
+
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+			entry := entries[0]
+			assert.Equal(t, tt.wantName, entry.Name)
+			assert.Equal(t, "local", entry.Scope, "local entry should have Scope=local")
+			assert.Equal(t, tt.wantName, entry.Workflow, "local entry Workflow should match Name")
+			assert.Equal(t, "local", entry.Source, "local entry should have Source=local")
+		})
+	}
+}
+
+// TestWorkflowServiceListAllWorkflows_MixedLocalAndPackEntries validates T012 Acceptance Criteria:
+// - AC1-2: Local entries expose Scope="local", Workflow=plain name, Source="local"
+// - AC3: Pack entries expose Scope=packName, Workflow=wfName, Name=packName/wfName, Source="pack"
+// - AC6: Comprehensive coverage of both local and pack sources in a single result set
+func TestWorkflowServiceListAllWorkflows_MixedLocalAndPackEntries(t *testing.T) {
+	repo := &mockRepo{
+		workflows: map[string]*workflow.Workflow{
+			"local-wf": {Name: "local-wf", Description: "Local workflow"},
+		},
+		names: []string{"local-wf"},
+	}
+	packs := &mockPackDiscoverer{
+		entries: []workflow.WorkflowEntry{
+			{Name: "acme/deploy", Source: "pack", Scope: "acme", Workflow: "deploy", Version: "1.0"},
+		},
+	}
+	svc := application.NewWorkflowService(repo, nil, nil, nil, &noopValidator{})
+	svc.SetPackDiscoverer(packs)
+
+	entries, err := svc.ListAllWorkflows(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+
+	localEntry := entries[0]
+	assert.Equal(t, "local-wf", localEntry.Name)
+	assert.Equal(t, "local", localEntry.Scope)
+	assert.Equal(t, "local-wf", localEntry.Workflow)
+	assert.Equal(t, "local", localEntry.Source)
+
+	packEntry := entries[1]
+	assert.Equal(t, "acme/deploy", packEntry.Name)
+	assert.Equal(t, "acme", packEntry.Scope)
+	assert.Equal(t, "deploy", packEntry.Workflow)
+	assert.Equal(t, "pack", packEntry.Source)
+}
+
+// mockRepoWithSources allows tests to specify an explicit source per workflow,
+// so the service source-mapping logic can be exercised with non-local origins.
+type mockRepoWithSources struct {
+	workflows map[string]*workflow.Workflow
+	infos     []ports.WorkflowInfo
+}
+
+func (m *mockRepoWithSources) Load(_ context.Context, name string) (*workflow.Workflow, error) {
+	if wf, ok := m.workflows[name]; ok {
+		return wf, nil
+	}
+	return nil, fmt.Errorf("workflow not found: %s", name)
+}
+
+func (m *mockRepoWithSources) List(_ context.Context) ([]string, error) {
+	names := make([]string, 0, len(m.infos))
+	for _, info := range m.infos {
+		names = append(names, info.Name)
+	}
+	return names, nil
+}
+
+func (m *mockRepoWithSources) ListWithSource(_ context.Context) ([]ports.WorkflowInfo, error) {
+	return m.infos, nil
+}
+
+func (m *mockRepoWithSources) Exists(_ context.Context, name string) (bool, error) {
+	_, ok := m.workflows[name]
+	return ok, nil
+}
+
+// TestWorkflowServiceListAllWorkflows_SourcePropagation validates that
+// ListAllWorkflows correctly propagates the Source returned by ListWithSource
+// into both WorkflowEntry.Source and WorkflowEntry.Scope.
+// This is the regression test for the bug where global/env workflows were
+// reported with Source="local" and Scope="local" regardless of their real origin.
+func TestWorkflowServiceListAllWorkflows_SourcePropagation(t *testing.T) {
+	tests := []struct {
+		name       string
+		source     ports.WorkflowSource
+		wantSource string
+		wantScope  string
+	}{
+		{
+			name:       "local workflow keeps local source",
+			source:     ports.SourceLocal,
+			wantSource: "local",
+			wantScope:  "local",
+		},
+		{
+			name:       "global workflow reports global source and scope",
+			source:     ports.SourceGlobal,
+			wantSource: "global",
+			wantScope:  "global",
+		},
+		{
+			name:       "env workflow reports env source and scope",
+			source:     ports.SourceEnv,
+			wantSource: "env",
+			wantScope:  "env",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockRepoWithSources{
+				workflows: map[string]*workflow.Workflow{
+					"my-workflow": {Name: "my-workflow", Description: "Test"},
+				},
+				infos: []ports.WorkflowInfo{
+					{Name: "my-workflow", Source: tt.source},
+				},
+			}
+			svc := application.NewWorkflowService(repo, nil, nil, nil, &noopValidator{})
+
+			entries, err := svc.ListAllWorkflows(context.Background())
+
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+			entry := entries[0]
+			assert.Equal(t, "my-workflow", entry.Name)
+			assert.Equal(t, tt.wantSource, entry.Source, "Source must match discovery origin")
+			assert.Equal(t, tt.wantScope, entry.Scope, "Scope must match discovery origin for non-pack entries")
+			assert.Equal(t, "my-workflow", entry.Workflow)
+		})
+	}
 }
