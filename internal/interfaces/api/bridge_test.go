@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,11 +16,13 @@ import (
 // --- mock implementations of Bridge interfaces ---
 
 type mockWorkflowLister struct {
-	entries  []workflow.WorkflowEntry
-	wfs      map[string]*workflow.Workflow
-	listErr  error
-	getErr   error
-	validErr error
+	entries          []workflow.WorkflowEntry
+	wfs              map[string]*workflow.Workflow
+	listErr          error
+	getErr           error
+	validErr         error
+	lastGetName      string
+	lastValidateName string
 }
 
 func newMockWorkflowLister(names ...string) *mockWorkflowLister {
@@ -28,7 +31,17 @@ func newMockWorkflowLister(names ...string) *mockWorkflowLister {
 		wfs:     make(map[string]*workflow.Workflow, len(names)),
 	}
 	for _, name := range names {
-		m.entries = append(m.entries, workflow.WorkflowEntry{Name: name, Source: "local"})
+		scope, wfName, _ := strings.Cut(name, "/")
+		if !strings.Contains(name, "/") {
+			scope = "local"
+			wfName = name
+		}
+		m.entries = append(m.entries, workflow.WorkflowEntry{
+			Name:     name,
+			Source:   "local",
+			Scope:    scope,
+			Workflow: wfName,
+		})
 		m.wfs[name] = &workflow.Workflow{
 			Name:  name,
 			Steps: map[string]*workflow.Step{"step-1": {Name: "step-1"}},
@@ -45,6 +58,7 @@ func (m *mockWorkflowLister) ListAllWorkflows(_ context.Context) ([]workflow.Wor
 }
 
 func (m *mockWorkflowLister) GetWorkflow(_ context.Context, name string) (*workflow.Workflow, error) {
+	m.lastGetName = name
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -55,7 +69,8 @@ func (m *mockWorkflowLister) GetWorkflow(_ context.Context, name string) (*workf
 	return wf, nil
 }
 
-func (m *mockWorkflowLister) ValidateWorkflow(_ context.Context, _ string) error {
+func (m *mockWorkflowLister) ValidateWorkflow(_ context.Context, name string) error {
+	m.lastValidateName = name
 	return m.validErr
 }
 
@@ -232,6 +247,25 @@ func TestBridge_GetExecution_LiveSnapshot(t *testing.T) {
 	require.NotNil(t, exec)
 	assert.Equal(t, id, exec.ExecutionID)
 	assert.Equal(t, "wf-1", exec.WorkflowName)
+}
+
+func TestBridge_TrackResumedExecution_PersistsEntryForSubsequentQueries(t *testing.T) {
+	// Resumed executions are intentionally persisted so the /resume handler can
+	// return an ID that subsequent GET /api/executions/{id} (and the SSE/DELETE
+	// endpoints) can serve. Eviction/TTL of completed entries is out of scope
+	// here; this test guards against accidental immediate-cleanup regressions.
+	bridge := NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), newMockHistoryProvider())
+	execCtx := workflow.NewExecutionContext("resumed-001", "my-workflow")
+
+	id := bridge.TrackResumedExecution(execCtx)
+	require.NotEmpty(t, id, "must return a non-empty execution ID")
+
+	stored, ok := bridge.GetExecution(id)
+	require.True(t, ok, "entry must be queryable immediately after TrackResumedExecution")
+	require.NotNil(t, stored)
+	assert.Equal(t, id, stored.ExecutionID)
+	assert.Equal(t, "my-workflow", stored.WorkflowName)
+	assert.Same(t, execCtx, stored.ExecutionContext)
 }
 
 func TestBridge_ListExecutions_ReturnsActiveAndCompleted(t *testing.T) {

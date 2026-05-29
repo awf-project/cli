@@ -53,7 +53,7 @@ func TestAPI_GetWorkflow_Integration(t *testing.T) {
 	ts, _, _ := newTestServer(t, apiFixtureDir(t))
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		ts.URL+"/api/workflows/api-simple-success", nil)
+		ts.URL+"/api/workflows/local/api-simple-success", nil)
 	require.NoError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -79,7 +79,7 @@ func TestAPI_GetWorkflow_NotFound_Integration(t *testing.T) {
 	ts, _, _ := newTestServer(t, apiFixtureDir(t))
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		ts.URL+"/api/workflows/nonexistent-workflow", nil)
+		ts.URL+"/api/workflows/local/nonexistent-workflow", nil)
 	require.NoError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -213,7 +213,7 @@ func TestAPI_RunWorkflow_InvalidInputs_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
-		ts.URL+"/api/workflows/api-simple-success/run", bytes.NewReader(bodyBytes))
+		ts.URL+"/api/workflows/local/api-simple-success/run", bytes.NewReader(bodyBytes))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 

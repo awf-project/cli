@@ -10,8 +10,14 @@ import (
 
 // --- Workflow list ---
 
+// WorkflowSummary is the listing DTO for GET /api/workflows entries.
+// Scope and Workflow are the two components of the canonical URL grammar
+// `/api/workflows/{scope}/{name}`; Name is the display identifier
+// (`scope/workflow` for pack entries, plain name for local/global).
 type WorkflowSummary struct {
 	Name        string `json:"name" doc:"Workflow name." example:"deploy-prod"`
+	Scope       string `json:"scope" doc:"Workflow scope (\"local\" or vendor pack name)." example:"local"`
+	Workflow    string `json:"workflow" doc:"Workflow name without scope prefix." example:"deploy-prod"`
 	Version     string `json:"version" doc:"Workflow version." example:"1.0.0"`
 	Description string `json:"description" doc:"Short description." example:"Deploy to production"`
 }
@@ -29,7 +35,8 @@ type ListWorkflowsOutput struct {
 // --- Workflow get ---
 
 type GetWorkflowInput struct {
-	Name string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
+	Scope string `path:"scope" doc:"Workflow scope (\"local\" or vendor pack name)." example:"local" required:"true"`
+	Name  string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
 }
 
 type GetWorkflowOutput struct {
@@ -41,7 +48,8 @@ type GetWorkflowOutput struct {
 // --- Workflow validate ---
 
 type ValidateWorkflowInput struct {
-	Name string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
+	Scope string `path:"scope" doc:"Workflow scope (\"local\" or vendor pack name)." example:"local" required:"true"`
+	Name  string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
 }
 
 type validateWorkflowBody struct {
@@ -57,8 +65,9 @@ type ValidateWorkflowOutput struct {
 // --- Workflow run ---
 
 type RunWorkflowInput struct {
-	Name string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
-	Body struct {
+	Scope string `path:"scope" doc:"Workflow scope (\"local\" or vendor pack name)." example:"local" required:"true"`
+	Name  string `path:"name" doc:"Workflow name." example:"deploy-prod" required:"true"`
+	Body  struct {
 		Inputs map[string]any `json:"inputs" doc:"Key/value inputs passed to the workflow."`
 	}
 }

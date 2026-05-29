@@ -177,6 +177,28 @@ awf list
 
 Pack workflows appear with `pack/workflow` namespace prefix and `pack` source label. The `awf list` and `awf workflow list` commands show the same packs and versions.
 
+## Reserved Pack Names
+
+⚠️ **Pack names must not use the reserved scope tokens:** `local` or `global`.
+
+These tokens are reserved by the HTTP API for URL routing:
+- `local` identifies non-pack workflows in URLs like `GET /api/workflows/local/{name}`
+- `global` is reserved for future use (global workflow directory feature)
+
+If you attempt to install or list a pack named `local` or `global`, AWF will reject it with a validation error:
+
+```
+Error: failed to load pack "local": pack name is reserved — use a different name
+```
+
+**Examples of allowed pack names:**
+- ✅ `speckit` — simple alphanumeric name
+- ✅ `my-workflows` — hyphens allowed (snake_case style)
+- ✅ `localpack` — `local` as a prefix is fine, only the exact match is reserved
+- ✅ `global-lib` — `global` as a prefix is fine
+
+This protection applies at the pack loader level, so it's enforced uniformly across CLI commands, HTTP API, and any future interfaces.
+
 ## Manifest Format
 
 Pack authors create a `manifest.yaml` at the pack root:

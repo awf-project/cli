@@ -18,16 +18,17 @@ func NewExecutionHandlers(b *Bridge) *ExecutionHandlers {
 }
 
 func (h *ExecutionHandlers) Run(ctx context.Context, in *RunWorkflowInput) (*RunWorkflowOutput, error) {
-	wf, err := h.b.workflows.GetWorkflow(ctx, in.Name)
+	id := recomposeIdentifier(in.Scope, in.Name)
+	wf, err := h.b.workflows.GetWorkflow(ctx, id)
 	if err != nil {
-		return nil, huma.Error404NotFound(fmt.Sprintf("workflow not found: %s", in.Name))
+		return nil, huma.Error404NotFound(fmt.Sprintf("workflow not found: %s", id))
 	}
-	id, _, err := h.b.StartExecution(ctx, wf, in.Body.Inputs)
+	execID, _, err := h.b.StartExecution(ctx, wf, in.Body.Inputs)
 	if err != nil {
 		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("failed to start execution: %s", err))
 	}
 	out := &RunWorkflowOutput{}
-	out.Body.Body = runWorkflowBody{ExecutionID: id, Status: "accepted"}
+	out.Body.Body = runWorkflowBody{ExecutionID: execID, Status: "accepted"}
 	return out, nil
 }
 
@@ -89,7 +90,7 @@ func activeExecutionToBody(ae *ActiveExecution) executionBody {
 func RegisterExecutionRoutes(api huma.API, h *ExecutionHandlers) {
 	huma.Register(api, huma.Operation{
 		Method:        "POST",
-		Path:          "/api/workflows/{name}/run",
+		Path:          "/api/workflows/{scope}/{name}/run",
 		OperationID:   "run-workflow",
 		Tags:          []string{"Executions"},
 		DefaultStatus: 202,

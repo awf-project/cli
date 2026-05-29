@@ -33,6 +33,15 @@ func (m *mockRepository) List(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+func (m *mockRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowInfo, error) {
+	names, _ := m.List(ctx)
+	infos := make([]ports.WorkflowInfo, 0, len(names))
+	for _, name := range names {
+		infos = append(infos, ports.WorkflowInfo{Name: name, Source: ports.SourceLocal})
+	}
+	return infos, nil
+}
+
 func (m *mockRepository) Exists(ctx context.Context, name string) (bool, error) {
 	_, ok := m.workflows[name]
 	return ok, nil

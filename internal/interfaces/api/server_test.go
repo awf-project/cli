@@ -45,9 +45,9 @@ func TestServer_RegistersAllRoutes(t *testing.T) {
 		// are excluded by using a known execution ID for execution-scoped routes.
 	}{
 		{"GET", "/api/workflows"},
-		{"GET", "/api/workflows/wf-1"},
-		{"POST", "/api/workflows/wf-1/validate"},
-		{"POST", "/api/workflows/wf-1/run"},
+		{"GET", "/api/workflows/local/wf-1"},
+		{"POST", "/api/workflows/local/wf-1/validate"},
+		{"POST", "/api/workflows/local/wf-1/run"},
 		{"GET", "/api/executions"},
 		{"GET", "/api/executions/" + knownID},
 		{"DELETE", "/api/executions/" + knownID},
@@ -103,8 +103,9 @@ func TestServer_OpenAPISpec_ValidatesAgainst31(t *testing.T) {
 
 	expectedPaths := []string{
 		"/api/workflows",
-		"/api/workflows/{name}",
-		"/api/workflows/{name}/run",
+		"/api/workflows/{scope}/{name}",
+		"/api/workflows/{scope}/{name}/run",
+		"/api/workflows/{scope}/{name}/validate",
 		"/api/executions",
 		"/api/executions/{id}",
 		"/api/history",

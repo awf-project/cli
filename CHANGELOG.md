@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **F101**: HTTP API workflow routes restructured around a `(scope, name)` two-segment URL grammar to support pack-workflow execution. New routes: `GET /api/workflows/{scope}/{name}`, `POST /api/workflows/{scope}/{name}/run`, `POST /api/workflows/{scope}/{name}/validate`. The `scope` sentinel `local` addresses non-pack workflows (e.g. `/api/workflows/local/deploy-prod/run`); the vendor (pack) name serves as scope for pack workflows (e.g. `/api/workflows/speckit/specify/run`). `WorkflowSummary` gains additive `scope` and `workflow` fields alongside the canonical `name` so clients can build operation URLs directly without splitting on `/`. **Breaking** (F097 not yet released): the previous single-segment routes `/api/workflows/{name}[/run|/validate]` are removed; clients targeting F097 routes must migrate. OpenAPI 3.1 document at `/openapi.json` reflects the new path parameters automatically. SSE event streaming at `/api/executions/{id}/events` is unaffected (keyed by execution UUID).
+- **F101**: Pack loader (`internal/infrastructure/workflowpkg/`) now rejects manifests whose `name` matches the reserved scope tokens `local` or `global` with a structured `USER.INPUT.VALIDATION_FAILED` error containing `pack_name` and `reserved_tokens` in the details map. Enforcement is single-source at the manifest validator and applies on install, on discovery listing, and on any future pack-aware code path. Names that merely contain or prefix-share with reserved tokens (`localpack`, `globalpack`, `run`, `validate`) remain valid.
+
+### Fixed
+
+- **F101**: Pack workflows are now executable over the HTTP API. F097 advertised pack workflows in `GET /api/workflows` but the single-segment `{name}` placeholder in chi could not match canonical identifiers containing `/` (e.g. `speckit/specify`), so every action endpoint returned `404 Not Found`. The new `(scope, name)` grammar resolves pack identifiers natively and restores parity between `GET /api/workflows` listing and the read/run/validate operations.
+- **F101**: TUI `Workflows` tab no longer panics when a user triggers validation on a pack-sourced workflow. Pack entries carry `Name == "packName/workflowName"` while the resolved workflow value object only knows the bare name, so the internal `wfMap` lookup missed and `handleValidate` dereferenced a nil pointer. The validate handler now forwards the fully-qualified entry name (already accepted by the validation service) — same approach used by the existing nil guard in `handleLaunch`.
+- **F101**: Workflow pack manifests with traversal-style names are now rejected. `Manifest.Validate` previously applied `^[a-z][a-z0-9-]*$` only to the pack name; entries in the `workflows:` list reached `filepath.Join` unchecked, so a manifest declaring `workflows: ["../../etc/passwd"]` could escape `workflowsDir` to whatever file happened to exist at the resolved path. The same regex is now enforced on every workflow name during validation. The pack discoverer adds defense-in-depth, silently skipping packs and workflow entries whose names fail the regex even when validation is bypassed.
+
 ### Breaking Changes
 
 - **F100**: Dedicated `roles/` namespace for agent roles — the environment variable for overriding role search paths is renamed from `AWF_AGENTS_PATH` to `AWF_ROLES_PATH`. All role discovery now happens exclusively under `roles/`-namespaced directories. Migration guide for users upgrading from F098:

@@ -549,6 +549,7 @@ deps:
   infra-workflowpkg:
     mayDependOn:
       - domain-workflow
+      - domain-errors
       - infra-repository
       - pkg-registry
       - pkg-httpx

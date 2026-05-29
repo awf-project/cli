@@ -38,19 +38,29 @@ func (m *mockWorkflowResumer) Resume(
 	return m.execCtx, nil
 }
 
-// --- Tests ---
-
-func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testing.T) {
-	// Blocking channel prevents cleanup goroutine from removing the entry before assertions.
+// newBlockingExecutionHandlerAPI wires a full execution-handler test stack with a
+// blocking runner. The runner's Done channel stays open until test cleanup, which
+// prevents Bridge's cleanup goroutine in StartExecution from removing tracked
+// executions before assertions run. Returns the api (for HTTP calls), the bridge
+// (for GetExecution/ListExecutions assertions), and the lister (so callers can
+// mutate getErr / entries fields before issuing requests).
+func newBlockingExecutionHandlerAPI(t *testing.T, workflowNames ...string) (humatest.TestAPI, *Bridge, *mockWorkflowLister) {
+	t.Helper()
 	block := make(chan error)
 	t.Cleanup(func() { close(block) })
-
-	lister := newMockWorkflowLister("deploy-prod")
+	lister := newMockWorkflowLister(workflowNames...)
 	runner := newMockWorkflowRunnerWithDone(block)
 	bridge := NewBridge(lister, runner, newMockHistoryProvider())
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterExecutionRoutes(api, handler)
+	return api, bridge, lister
+}
+
+// --- Tests ---
+
+func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testing.T) {
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "deploy-prod")
 
 	// Verify the response is built and returned BEFORE the async work completes.
 	// FR-006 deadline: 100ms from request receipt.
@@ -66,15 +76,13 @@ func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testin
 		Inputs: map[string]any{"env": "prod"},
 	}
 
-	resp := api.Post("/api/workflows/deploy-prod/run", input)
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
 	elapsed := time.Since(startTime)
 
 	timeout.Stop()
 
-	// Assert HTTP 202 Accepted (async).
 	require.Equal(t, 202, resp.Code, "Run must return 202 Accepted for async execution")
 
-	// Assert the execution ID is returned and non-empty.
 	var result struct {
 		Body struct {
 			ExecutionID string `json:"execution_id"`
@@ -88,7 +96,6 @@ func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testin
 	assert.Equal(t, "accepted", result.Body.Status, "status must be 'accepted'")
 	assert.Less(t, elapsed, 100*time.Millisecond, "handler must return within FR-006 deadline")
 
-	// Verify the execution is tracked in the Bridge.
 	stored, ok := bridge.GetExecution(result.Body.ExecutionID)
 	assert.True(t, ok, "execution must be stored in Bridge")
 	require.NotNil(t, stored)
@@ -110,7 +117,7 @@ func TestExecutionHandler_Run_UnknownWorkflow_Returns404(t *testing.T) {
 		Inputs: map[string]any{},
 	}
 
-	resp := api.Post("/api/workflows/nonexistent/run", input)
+	resp := api.Post("/api/workflows/local/nonexistent/run", input)
 
 	assert.Equal(t, 404, resp.Code, "Run with unknown workflow must return 404 Not Found")
 }
@@ -162,15 +169,7 @@ func TestExecutionHandler_List_HappyPath(t *testing.T) {
 }
 
 func TestExecutionHandler_Get_HappyPath(t *testing.T) {
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	lister := newMockWorkflowLister("test-workflow")
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
 
 	// Start an execution to get a valid ID.
 	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
@@ -207,16 +206,7 @@ func TestExecutionHandler_Get_NotFound_Returns404(t *testing.T) {
 }
 
 func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
-	// Blocking channel prevents cleanup goroutine from removing the entry.
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	lister := newMockWorkflowLister("test-workflow")
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
 
 	// Start an execution.
 	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
@@ -241,16 +231,7 @@ func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
 }
 
 func TestExecutionHandler_Cancel_Idempotent_TwoDELETEsBothReturn204(t *testing.T) {
-	// Blocking channel prevents cleanup goroutine from removing the entry during test.
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	lister := newMockWorkflowLister("test-workflow")
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
 
 	// Start an execution.
 	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
@@ -288,22 +269,88 @@ func TestExecutionHandler_Cancel_UnknownID_Returns204(t *testing.T) {
 	assert.Equal(t, 204, resp.Code, "Cancel with unknown ID must return 204 (idempotent)")
 }
 
+func TestExecutionHandler_Run_PackScope_Returns202_CanonicalNamePassed(t *testing.T) {
+	api, _, lister := newBlockingExecutionHandlerAPI(t, "speckit/specify")
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{
+		Inputs: map[string]any{},
+	}
+
+	resp := api.Post("/api/workflows/speckit/specify/run", input)
+	require.Equal(t, 202, resp.Code)
+
+	var result struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+			Status      string `json:"status"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, result.Body.ExecutionID)
+	assert.Equal(t, "accepted", result.Body.Status)
+	assert.Equal(t, "speckit/specify", lister.lastGetName, "mock must receive canonical name for pack scope")
+}
+
+func TestExecutionHandler_Run_LocalScope_Returns202_NameOnlyPassed(t *testing.T) {
+	api, _, lister := newBlockingExecutionHandlerAPI(t, "deploy-prod")
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{
+		Inputs: map[string]any{},
+	}
+
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
+	require.Equal(t, 202, resp.Code)
+
+	var result struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+			Status      string `json:"status"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, result.Body.ExecutionID)
+	assert.Equal(t, "accepted", result.Body.Status)
+	assert.Equal(t, "deploy-prod", lister.lastGetName, "mock must receive name only for local scope")
+}
+
+func TestExecutionHandler_Run_UnknownScope_Returns404(t *testing.T) {
+	// This test asserts the 404 response when the workflow lookup fails, so no
+	// execution is ever started or tracked. We intentionally bypass
+	// newBlockingExecutionHandlerAPI (which wires a blocking runner to keep
+	// executions observable) and use the plain non-blocking mock runner.
+	lister := newMockWorkflowLister()
+	runner := newMockWorkflowRunner()
+	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	handler := NewExecutionHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{
+		Inputs: map[string]any{},
+	}
+
+	resp := api.Post("/api/workflows/unknown/foo/run", input)
+
+	assert.Equal(t, 404, resp.Code, "Run with unknown scope must return 404 Not Found")
+}
+
 func TestExecutionHandler_Resume_FailedExecution_RestartsFromFailedStep(t *testing.T) {
 	// Setup: execution stored in Bridge, resumer mocked.
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	lister := newMockWorkflowLister("test-workflow")
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
 
 	// Wire the resumer.
 	resumer := newMockWorkflowResumer()
 	bridge.SetResumer(resumer)
-
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
 
 	// Start an execution (represents the failed run).
 	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}

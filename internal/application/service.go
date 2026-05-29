@@ -58,22 +58,28 @@ func (s *WorkflowService) SetPluginOperationProvider(p ports.OperationProvider) 
 
 // LastValidationWarnings returns the structured ValidationError warnings from the most
 // recent ValidateWorkflow call. Warnings do not fail validation but are surfaced here
-// for callers that want to display or log them (e.g. UNSUPPORTED_PROVIDER — T009 AC-6).
+// for callers that want to display or log them (e.g. UNSUPPORTED_PROVIDER).
 // The slice is replaced on each ValidateWorkflow invocation; nil means no warnings.
 func (s *WorkflowService) LastValidationWarnings() []workflow.ValidationError {
 	return s.lastValidationWarnings
 }
 
 func (s *WorkflowService) ListAllWorkflows(ctx context.Context) ([]workflow.WorkflowEntry, error) {
-	names, err := s.repo.List(ctx)
+	infos, err := s.repo.ListWithSource(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list workflows: %w", err)
 	}
 
-	entries := make([]workflow.WorkflowEntry, 0, len(names))
-	for _, name := range names {
-		entry := workflow.WorkflowEntry{Name: name}
-		if wf, loadErr := s.repo.Load(ctx, name); loadErr == nil {
+	entries := make([]workflow.WorkflowEntry, 0, len(infos))
+	for _, info := range infos {
+		src := string(info.Source)
+		entry := workflow.WorkflowEntry{
+			Name:     info.Name,
+			Source:   src,
+			Scope:    src,
+			Workflow: info.Name,
+		}
+		if wf, loadErr := s.repo.Load(ctx, info.Name); loadErr == nil {
 			entry.Version = wf.Version
 			entry.Description = wf.Description
 		}
@@ -115,9 +121,9 @@ func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workfl
 }
 
 func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) error {
-	wf, err := s.repo.Load(ctx, name)
+	wf, err := s.GetWorkflow(ctx, name)
 	if err != nil {
-		return fmt.Errorf("load workflow %s: %w", name, err)
+		return err
 	}
 	if err := wf.Validate(s.validator.Compile, nil); err != nil {
 		var stateRefErr *workflow.StateReferenceError
@@ -152,6 +158,20 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	return s.validateMCPProxy(wf)
 }
 
+// promptFileError constructs an ErrorCodeUserInputMissingFile structured error
+// with consistent metadata for prompt-file validation failures.
+func promptFileError(msg, resolvedPath, stepName string, cause error) error {
+	return domerrors.NewStructuredError(
+		domerrors.ErrorCodeUserInputMissingFile,
+		msg,
+		map[string]any{
+			"path": resolvedPath,
+			"step": stepName,
+		},
+		cause,
+	)
+}
+
 func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
 	for _, step := range wf.Steps {
 		if step.Type != workflow.StepTypeAgent || step.Agent == nil {
@@ -175,49 +195,29 @@ func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return domerrors.NewStructuredError(
-					domerrors.ErrorCodeUserInputMissingFile,
+				return promptFileError(
 					fmt.Sprintf("prompt_file not found: %s", step.Agent.PromptFile),
-					map[string]any{
-						"path": path,
-						"step": step.Name,
-					},
-					err,
+					path, step.Name, err,
 				)
 			}
-			return domerrors.NewStructuredError(
-				domerrors.ErrorCodeUserInputMissingFile,
+			return promptFileError(
 				fmt.Sprintf("prompt_file cannot be accessed: %s", step.Agent.PromptFile),
-				map[string]any{
-					"path": path,
-					"step": step.Name,
-				},
-				err,
+				path, step.Name, err,
 			)
 		}
 
 		if info.IsDir() {
-			return domerrors.NewStructuredError(
-				domerrors.ErrorCodeUserInputMissingFile,
+			return promptFileError(
 				fmt.Sprintf("prompt_file is a directory, not a file: %s", step.Agent.PromptFile),
-				map[string]any{
-					"path": path,
-					"step": step.Name,
-				},
-				nil,
+				path, step.Name, nil,
 			)
 		}
 
 		f, err := os.Open(path)
 		if err != nil {
-			return domerrors.NewStructuredError(
-				domerrors.ErrorCodeUserInputMissingFile,
+			return promptFileError(
 				fmt.Sprintf("prompt_file cannot be read: %s", step.Agent.PromptFile),
-				map[string]any{
-					"path": path,
-					"step": step.Name,
-				},
-				err,
+				path, step.Name, err,
 			)
 		}
 		_ = f.Close()
@@ -254,7 +254,7 @@ func (s *WorkflowService) validateWithPluginProvider(ctx context.Context, wf *wo
 // It iterates all steps with mcp_proxy enabled and:
 //   - Emits a WARN log (non-fatal) when the agent provider is codex or opencode.
 //   - Accumulates a structured ValidationError{Level:Warning} for UNSUPPORTED_PROVIDER
-//     so callers can surface it via LastValidationWarnings() — T009 AC-6.
+//     so callers can surface it via LastValidationWarnings().
 //   - Validates plugin_tools[] entries against the injected OperationProvider.
 //
 // When opProvider is nil, plugin-level checks are skipped silently.
@@ -305,7 +305,7 @@ func (s *WorkflowService) buildKnownPluginSet() map[string]bool {
 // warnIfUnsupportedProvider emits a WARN log when the step's agent provider operates
 // the MCP proxy in coexistence mode (codex, copilot, opencode) and mcp_proxy is enabled.
 // This is non-fatal (warning-only). It also returns a structured ValidationError at warning
-// level for the accumulator so callers can surface it via structured output (T009 AC-6).
+// level for the accumulator so callers can surface it via structured output.
 func (s *WorkflowService) warnIfUnsupportedProvider(step *workflow.Step) *workflow.ValidationError {
 	if step.Agent == nil || s.logger == nil {
 		return nil

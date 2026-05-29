@@ -1,16 +1,37 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
+
+// trackingWorkflowLister is a minimal WorkflowLister that records the name passed
+// to ValidateWorkflow so tests can assert the correct identifier is forwarded.
+type trackingWorkflowLister struct {
+	validatedName string
+}
+
+func (l *trackingWorkflowLister) ListAllWorkflows(_ context.Context) ([]workflow.WorkflowEntry, error) {
+	return nil, nil
+}
+
+func (l *trackingWorkflowLister) GetWorkflow(_ context.Context, _ string) (*workflow.Workflow, error) {
+	return nil, nil
+}
+
+func (l *trackingWorkflowLister) ValidateWorkflow(_ context.Context, name string) error {
+	l.validatedName = name
+	return nil
+}
 
 // --- workflowItem ---
 
@@ -481,4 +502,79 @@ func TestWorkflowItem_ImplementsListDefaultItem(t *testing.T) {
 	entry := workflow.WorkflowEntry{Name: "check", Source: "local"}
 	item := workflowItem{entry: entry}
 	var _ list.DefaultItem = item
+}
+
+// --- FIX #1: handleValidate nil-pointer guard for pack workflows ---
+
+// TestWorkflowsTab_handleValidate_PackWorkflow_NoPanic verifies that calling
+// handleValidate on a pack-sourced workflow entry (where wf == nil because the
+// wfMap lookup misses on the fully-qualified "packName/workflowName" key) does
+// not panic and forwards the fully-qualified entry name to ValidateWorkflow.
+func TestWorkflowsTab_handleValidate_PackWorkflow_NoPanic(t *testing.T) {
+	tab := newWorkflowsTab()
+
+	// Pack entries have Name == "packName/workflowName"; the bare workflow
+	// struct only carries the plain name, so setWorkflows wfMap lookup misses
+	// and item.wf ends up nil for this entry.
+	entries := []workflow.WorkflowEntry{
+		{Name: "speckit/specify", Source: "pack", Scope: "speckit", Workflow: "specify"},
+	}
+	wfs := []*workflow.Workflow{
+		{Name: "specify"},
+	}
+	tab.setWorkflows(entries, wfs)
+	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	lister := &trackingWorkflowLister{}
+	bridge := NewBridge(lister, nil, nil)
+	tab.bridge = bridge
+	tab.ctx = context.Background()
+
+	var handled bool
+	var cmd tea.Cmd
+	require.NotPanics(t, func() {
+		handled, tab, cmd = tab.handleValidate()
+	})
+
+	assert.True(t, handled)
+	assert.True(t, tab.validating, "tab must enter validating state when bridge is set")
+	require.NotNil(t, cmd, "handleValidate must return a non-nil command when bridge is set")
+
+	// handleValidate composes its work via tea.Batch, whose returned Cmd yields a
+	// tea.BatchMsg containing the sub-Cmds — sub-Cmds are not executed until the
+	// Bubbletea runtime drains the batch. Drain manually so the validation Cmd
+	// runs and the lister records the name it received.
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "handleValidate must return a tea.BatchMsg, got %T", msg)
+	for _, sub := range batch {
+		// Sub-Cmds may themselves return BatchMsgs in deeper batching; the
+		// validation Cmd from Bridge.ValidateWorkflow returns a single Msg
+		// directly, so a flat iteration suffices here.
+		_ = sub()
+	}
+
+	assert.Equal(t, "speckit/specify", lister.validatedName,
+		"ValidateWorkflow must receive the fully-qualified entry name, not the bare workflow name")
+}
+
+// --- FIX #2: resetInputForm clears all form state ---
+
+// TestWorkflowsTab_resetInputForm_ClearsAllFields verifies that resetInputForm
+// resets the view back to the list and nils all four input form fields.
+func TestWorkflowsTab_resetInputForm_ClearsAllFields(t *testing.T) {
+	tab := newWorkflowsTab()
+	tab.view = workflowsInputView
+	tab.inputTarget = &workflow.Workflow{Name: "x"}
+	tab.inputFields = make([]textinput.Model, 1)
+	tab.inputNames = []string{"param"}
+	tab.inputRequired = []bool{true}
+
+	tab = tab.resetInputForm()
+
+	assert.Equal(t, workflowsListView, tab.view, "view must be reset to workflowsListView")
+	assert.Nil(t, tab.inputTarget, "inputTarget must be nil after reset")
+	assert.Nil(t, tab.inputFields, "inputFields must be nil after reset")
+	assert.Nil(t, tab.inputNames, "inputNames must be nil after reset")
+	assert.Nil(t, tab.inputRequired, "inputRequired must be nil after reset")
 }

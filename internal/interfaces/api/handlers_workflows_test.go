@@ -12,6 +12,19 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
+// newWorkflowHandlerAPI wires a Bridge + WorkflowHandlers + humatest API
+// around the given mock lister and returns the API for assertions. Bridge is
+// constructed with nil runner/history because workflow-handler tests never
+// exercise execution or history paths.
+func newWorkflowHandlerAPI(t *testing.T, lister WorkflowLister) humatest.TestAPI {
+	t.Helper()
+	bridge := NewBridge(lister, nil, nil)
+	handler := NewWorkflowHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterWorkflowRoutes(api, handler)
+	return api
+}
+
 func TestWorkflowHandler_List_HappyPath(t *testing.T) {
 	mock := newMockWorkflowLister("deploy-prod", "test-service")
 	mock.entries[0].Version = "1.0.0"
@@ -19,10 +32,7 @@ func TestWorkflowHandler_List_HappyPath(t *testing.T) {
 	mock.entries[1].Version = "2.0.0"
 	mock.entries[1].Description = "Run tests"
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
 	resp := api.Get("/api/workflows")
 	require.Equal(t, 200, resp.Code)
@@ -39,18 +49,17 @@ func TestWorkflowHandler_List_HappyPath(t *testing.T) {
 	assert.Equal(t, "deploy-prod", result.Body.Workflows[0].Name)
 	assert.Equal(t, "1.0.0", result.Body.Workflows[0].Version)
 	assert.Equal(t, "Deploy to production", result.Body.Workflows[0].Description)
+	assert.Equal(t, "local", result.Body.Workflows[0].Scope)
+	assert.Equal(t, "deploy-prod", result.Body.Workflows[0].Workflow)
 }
 
 func TestWorkflowHandler_Get_NotFound_Returns404(t *testing.T) {
 	mock := newMockWorkflowLister()
 	mock.getErr = errors.New("workflow not found")
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
-	resp := api.Get("/api/workflows/nonexistent")
+	resp := api.Get("/api/workflows/local/nonexistent")
 	assert.Equal(t, 404, resp.Code)
 }
 
@@ -58,10 +67,7 @@ func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
 	mock := newMockWorkflowLister("bad-workflow")
 	mock.validErr = errors.New("invalid step reference")
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
 	validateInput := struct {
 		Body struct {
@@ -69,7 +75,7 @@ func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
 		} `json:"body"`
 	}{}
 
-	resp := api.Post("/api/workflows/bad-workflow/validate", validateInput)
+	resp := api.Post("/api/workflows/local/bad-workflow/validate", validateInput)
 	require.Equal(t, 200, resp.Code)
 
 	var result struct {
@@ -86,10 +92,7 @@ func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
 func TestWorkflowHandler_List_EmptyList(t *testing.T) {
 	mock := newMockWorkflowLister()
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
 	resp := api.Get("/api/workflows")
 	require.Equal(t, 200, resp.Code)
@@ -108,12 +111,9 @@ func TestWorkflowHandler_List_EmptyList(t *testing.T) {
 func TestWorkflowHandler_Get_FoundWorkflow_ReturnsWorkflow(t *testing.T) {
 	mock := newMockWorkflowLister("test-workflow")
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
-	resp := api.Get("/api/workflows/test-workflow")
+	resp := api.Get("/api/workflows/local/test-workflow")
 	require.Equal(t, 200, resp.Code)
 
 	var result struct {
@@ -130,10 +130,7 @@ func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T)
 	mock := newMockWorkflowLister("valid-workflow")
 	// validErr defaults to nil, which means validation passed
 
-	bridge := NewBridge(mock, nil, nil)
-	handler := NewWorkflowHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterWorkflowRoutes(api, handler)
+	api := newWorkflowHandlerAPI(t, mock)
 
 	validateInput := struct {
 		Body struct {
@@ -141,7 +138,7 @@ func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T)
 		} `json:"body"`
 	}{}
 
-	resp := api.Post("/api/workflows/valid-workflow/validate", validateInput)
+	resp := api.Post("/api/workflows/local/valid-workflow/validate", validateInput)
 	require.Equal(t, 200, resp.Code)
 
 	var result struct {
@@ -153,4 +150,84 @@ func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T)
 	require.NoError(t, err)
 
 	assert.Empty(t, result.Body.Errors)
+}
+
+func TestWorkflowHandler_Get_LocalScope_PassesNameOnly(t *testing.T) {
+	mock := newMockWorkflowLister("deploy-prod")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows/local/deploy-prod")
+	require.Equal(t, 200, resp.Code)
+	assert.Equal(t, "deploy-prod", mock.lastGetName)
+}
+
+func TestWorkflowHandler_Get_PackScope_PassesScopeSlashName(t *testing.T) {
+	mock := newMockWorkflowLister("speckit/specify")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows/speckit/specify")
+	require.Equal(t, 200, resp.Code)
+	assert.Equal(t, "speckit/specify", mock.lastGetName)
+}
+
+func TestWorkflowHandler_Get_UnknownWorkflow_Returns404(t *testing.T) {
+	mock := newMockWorkflowLister()
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows/unknown/foo")
+	assert.Equal(t, 404, resp.Code)
+}
+
+func TestWorkflowHandler_Validate_PackScope_ReturnsEmptyErrors(t *testing.T) {
+	mock := newMockWorkflowLister("speckit/specify")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	validateInput := struct {
+		Body struct {
+			Inputs map[string]any `json:"inputs"`
+		} `json:"body"`
+	}{}
+
+	resp := api.Post("/api/workflows/speckit/specify/validate", validateInput)
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Errors []string `json:"errors"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Empty(t, result.Body.Errors)
+	assert.Equal(t, "speckit/specify", mock.lastValidateName)
+}
+
+func TestWorkflowHandler_List_PopulatesScopeAndWorkflow(t *testing.T) {
+	mock := newMockWorkflowLister("local-deploy", "speckit/specify")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows")
+	require.Equal(t, 200, resp.Code)
+
+	var result struct {
+		Body struct {
+			Workflows []WorkflowSummary `json:"workflows"`
+		} `json:"body"`
+	}
+	err := json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	require.Len(t, result.Body.Workflows, 2)
+
+	assert.Equal(t, "local", result.Body.Workflows[0].Scope)
+	assert.Equal(t, "local-deploy", result.Body.Workflows[0].Workflow)
+
+	assert.Equal(t, "speckit", result.Body.Workflows[1].Scope)
+	assert.Equal(t, "specify", result.Body.Workflows[1].Workflow)
 }

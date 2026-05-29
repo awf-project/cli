@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -89,10 +90,12 @@ func (r *CompositeRepository) List(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// ListWithSource returns workflow info including source for each workflow
-func (r *CompositeRepository) ListWithSource(ctx context.Context) ([]WorkflowInfo, error) {
+// ListWithSource returns workflow info including source for each workflow.
+// It implements ports.WorkflowRepository. The returned Source values map the
+// internal Source iota to ports.WorkflowSource strings ("env", "local", "global").
+func (r *CompositeRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowInfo, error) {
 	seen := make(map[string]bool)
-	var infos []WorkflowInfo
+	var infos []ports.WorkflowInfo
 
 	for _, sp := range r.paths {
 		if !r.pathExists(sp.Path) {
@@ -106,9 +109,9 @@ func (r *CompositeRepository) ListWithSource(ctx context.Context) ([]WorkflowInf
 		for _, name := range repoNames {
 			if !seen[name] {
 				seen[name] = true
-				infos = append(infos, WorkflowInfo{
+				infos = append(infos, ports.WorkflowInfo{
 					Name:   name,
-					Source: sp.Source,
+					Source: ports.WorkflowSource(sp.Source.String()),
 					Path:   filepath.Join(sp.Path, name+".yaml"),
 				})
 			}

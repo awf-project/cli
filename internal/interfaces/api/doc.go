@@ -12,9 +12,9 @@
 // The api package provides a REST API surface for AWF with the following
 // capabilities:
 //
-//   - Workflow discovery and validation (GET /api/workflows, GET /api/workflows/{name},
-//     POST /api/workflows/{name}/validate)
-//   - Asynchronous workflow execution (POST /api/workflows/{name}/run)
+//   - Workflow discovery and validation (GET /api/workflows, GET /api/workflows/{scope}/{name},
+//     POST /api/workflows/{scope}/{name}/validate)
+//   - Asynchronous workflow execution (POST /api/workflows/{scope}/{name}/run)
 //   - Execution lifecycle management (GET/DELETE /api/executions/{id},
 //     POST /api/executions/{id}/resume)
 //   - Real-time event streaming via Server-Sent Events (GET /api/executions/{id}/events)
@@ -141,7 +141,7 @@
 //
 // ## Async executions
 //
-// RunWorkflow (POST /api/workflows/{name}/run) starts workflow execution in a
+// RunWorkflow (POST /api/workflows/{scope}/{name}/run) starts workflow execution in a
 // background goroutine managed by Bridge.StartExecution. The client receives
 // 202 Accepted with an execution ID immediately. Subsequent calls to
 // GET /api/executions/{id} or the SSE stream observe the running state.

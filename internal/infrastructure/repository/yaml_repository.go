@@ -11,17 +11,29 @@ import (
 	"gopkg.in/yaml.v3"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
 )
 
 // YAMLRepository implements WorkflowRepository for YAML files.
+// When used standalone (outside a CompositeRepository) it reports all workflows
+// as SourceLocal — the caller may override this via WithSource if the repository
+// is known to represent a different discovery origin.
 type YAMLRepository struct {
-	basePath string
+	basePath      string
+	defaultSource Source
 }
 
 func NewYAMLRepository(basePath string) *YAMLRepository {
-	return &YAMLRepository{basePath: basePath}
+	return &YAMLRepository{basePath: basePath, defaultSource: SourceLocal}
+}
+
+// WithSource returns a shallow copy of the repository configured to report the
+// given Source in ListWithSource results. This is used by CompositeRepository
+// to avoid creating separate YAMLRepository types per source.
+func (r *YAMLRepository) WithSource(s Source) *YAMLRepository {
+	return &YAMLRepository{basePath: r.basePath, defaultSource: s}
 }
 
 // Load reads and parses a workflow from a YAML file.
@@ -131,6 +143,25 @@ func (r *YAMLRepository) List(ctx context.Context) ([]string, error) {
 		names = append(names, name)
 	}
 	return names, nil
+}
+
+// ListWithSource returns all workflow names together with their discovery source.
+// Every entry carries the source configured on this repository (defaultSource),
+// which is SourceLocal unless overridden via WithSource.
+func (r *YAMLRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowInfo, error) {
+	names, err := r.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	infos := make([]ports.WorkflowInfo, 0, len(names))
+	for _, name := range names {
+		infos = append(infos, ports.WorkflowInfo{
+			Name:   name,
+			Source: ports.WorkflowSource(r.defaultSource.String()),
+			Path:   filepath.Join(r.basePath, name+".yaml"),
+		})
+	}
+	return infos, nil
 }
 
 // Exists checks if a workflow file exists.

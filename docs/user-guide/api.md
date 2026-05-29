@@ -44,6 +44,12 @@ Once running:
 
 ## Endpoints
 
+Workflows are identified by a `(scope, name)` tuple in the URL path:
+- **Local workflows**: `scope = "local"`, e.g., `GET /api/workflows/local/deploy-prod`
+- **Pack workflows**: `scope = "<pack-name>"`, e.g., `GET /api/workflows/speckit/specify`
+
+This two-segment grammar replaces the prior single-segment `{name}` placeholder, enabling support for pack workflows which previously resolved with URL mismatches. The tokens `local` and `global` are **reserved scope sentinels** — pack manifests cannot use them as `name`. See [Workflow Packs — Reserved Pack Names](workflow-packs.md#reserved-pack-names).
+
 ### Workflow Discovery & Validation
 
 #### List workflows
@@ -59,32 +65,79 @@ GET /api/workflows
     "workflows": [
       {
         "name": "code-review",
+        "scope": "local",
+        "workflow": "code-review",
         "version": "1.0.0",
         "description": "Review code for bugs and security issues"
       },
       {
-        "name": "deploy-app",
-        "version": "2.1.0",
-        "description": "Deploy application to production"
+        "name": "speckit/specify",
+        "scope": "speckit",
+        "workflow": "specify",
+        "version": "1.0.0",
+        "description": "Specification-driven workflow"
       }
     ]
   }
 }
 ```
 
-#### Get workflow details
+**Fields:**
+- `name` — Canonical workflow identifier (`scope/workflow` for packs, plain name for local)
+- `scope` — Scope token (`local` for non-pack, pack name for pack workflows)
+- `workflow` — Local part of the workflow name (without scope prefix)
+- `version` — Semantic version
+- `description` — Brief description
+
+Clients build operation URLs from the `scope` and `workflow` fields: `GET /api/workflows/{scope}/{workflow}`.
+
+#### Get workflow details (local)
 
 ```http
-GET /api/workflows/{name}
+GET /api/workflows/local/{name}
+```
+
+**Example:**
+```bash
+curl http://localhost:2511/api/workflows/local/deploy-prod
 ```
 
 **Response (200 OK):**
 ```json
 {
   "body": {
-    "name": "code-review",
+    "name": "deploy-prod",
     "version": "1.0.0",
-    "description": "Review code for bugs and security issues",
+    "description": "Deploy application to production",
+    "states": {
+      "initial": "build",
+      "build": {
+        "type": "step",
+        "command": "go build ./cmd/app"
+      }
+    }
+  }
+}
+```
+
+#### Get workflow details (pack)
+
+```http
+GET /api/workflows/{pack}/{name}
+```
+
+**Example:**
+```bash
+curl http://localhost:2511/api/workflows/speckit/specify
+```
+
+**Response (200 OK):**
+```json
+{
+  "body": {
+    "name": "specify",
+    "version": "1.0.0",
+    "description": "Specification-driven workflow",
     "states": {
       "initial": "read",
       "read": {
@@ -101,14 +154,21 @@ GET /api/workflows/{name}
 {
   "status": 404,
   "title": "Not Found",
-  "detail": "workflow not found: nonexistent"
+  "detail": "workflow not found"
 }
 ```
 
-#### Validate workflow
+Returned uniformly for: unknown scopes, unknown workflows within a known scope, and unknown packs.
+
+#### Validate workflow (local)
 
 ```http
-POST /api/workflows/{name}/validate
+POST /api/workflows/local/{name}/validate
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:2511/api/workflows/local/deploy-prod/validate
 ```
 
 **Response (200 OK — valid workflow):**
@@ -118,6 +178,17 @@ POST /api/workflows/{name}/validate
     "errors": []
   }
 }
+```
+
+#### Validate workflow (pack)
+
+```http
+POST /api/workflows/{pack}/{name}/validate
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:2511/api/workflows/speckit/specify/validate
 ```
 
 **Response (200 OK — invalid workflow):**
@@ -133,10 +204,10 @@ POST /api/workflows/{name}/validate
 
 ### Workflow Execution
 
-#### Run workflow (async)
+#### Run workflow (local)
 
 ```http
-POST /api/workflows/{name}/run
+POST /api/workflows/local/{name}/run
 Content-Type: application/json
 
 {
@@ -145,6 +216,13 @@ Content-Type: application/json
     "model": "claude-opus-4-20250805"
   }
 }
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:2511/api/workflows/local/code-review/run \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"file": "main.go"}}'
 ```
 
 **Response (202 Accepted):**
@@ -159,14 +237,49 @@ Content-Type: application/json
 
 The workflow begins execution asynchronously. Use the `execution_id` to monitor progress via the events endpoint or polling.
 
+#### Run workflow (pack)
+
+```http
+POST /api/workflows/{pack}/{name}/run
+Content-Type: application/json
+
+{
+  "inputs": {
+    "feature": "F101"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:2511/api/workflows/speckit/specify/run \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"feature": "F101"}}'
+```
+
+**Response (202 Accepted):**
+```json
+{
+  "body": {
+    "execution_id": "661f9600-e39c-52e5-c827-557766552000",
+    "status": "accepted"
+  }
+}
+```
+
 **Error (404 Not Found):**
 ```json
 {
   "status": 404,
   "title": "Not Found",
-  "detail": "workflow not found: nonexistent"
+  "detail": "workflow not found"
 }
 ```
+
+Returned when:
+- The scope (pack name or `local`) does not exist
+- The workflow name does not exist in that scope
+- The pack is not installed
 
 **Error (422 Unprocessable Entity):**
 ```json
@@ -403,9 +516,10 @@ open http://localhost:2511/docs
 
 ### cURL
 
+**Run a local workflow:**
 ```bash
-# Run a workflow
-RESULT=$(curl -s -X POST http://localhost:2511/api/workflows/code-review/run \
+# Run a local workflow
+RESULT=$(curl -s -X POST http://localhost:2511/api/workflows/local/code-review/run \
   -H "Content-Type: application/json" \
   -d '{"inputs": {"file": "main.go"}}')
 
@@ -418,11 +532,25 @@ curl -N http://localhost:2511/api/executions/$EXEC_ID/events
 curl http://localhost:2511/api/executions/$EXEC_ID
 ```
 
+**Run a pack workflow:**
+```bash
+# Run a pack workflow
+RESULT=$(curl -s -X POST http://localhost:2511/api/workflows/speckit/specify/run \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"feature": "F101"}}')
+
+EXEC_ID=$(echo $RESULT | jq -r '.body.execution_id')
+
+# Stream events
+curl -N http://localhost:2511/api/executions/$EXEC_ID/events
+```
+
 ### JavaScript/TypeScript
 
+**Run a local workflow:**
 ```typescript
 // Start execution
-const response = await fetch('http://localhost:2511/api/workflows/code-review/run', {
+const response = await fetch('http://localhost:2511/api/workflows/local/code-review/run', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ inputs: { file: 'main.go' } })
@@ -446,15 +574,29 @@ eventSource.addEventListener('workflow.completed', (event) => {
 });
 ```
 
+**Run a pack workflow:**
+```typescript
+// Start pack workflow execution
+const response = await fetch('http://localhost:2511/api/workflows/speckit/specify/run', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ inputs: { feature: 'F101' } })
+});
+
+const { body } = await response.json();
+const executionId = body.execution_id;
+```
+
 ### Python
 
+**Run a local workflow:**
 ```python
 import requests
 import json
 
 # Start execution
 response = requests.post(
-    'http://localhost:2511/api/workflows/code-review/run',
+    'http://localhost:2511/api/workflows/local/code-review/run',
     json={'inputs': {'file': 'main.go'}}
 )
 
@@ -470,6 +612,19 @@ for line in response.iter_lines():
     if line.startswith(b'event: '):
         event_type = line.decode().split(': ', 1)[1]
         print(f'Event: {event_type}')
+```
+
+**Run a pack workflow:**
+```python
+import requests
+
+# Start pack workflow execution
+response = requests.post(
+    'http://localhost:2511/api/workflows/speckit/specify/run',
+    json={'inputs': {'feature': 'F101'}}
+)
+
+execution_id = response.json()['body']['execution_id']
 ```
 
 ## Error Handling
@@ -526,6 +681,7 @@ kill -TERM $(pgrep -f "awf serve")  # or Ctrl+C in foreground
 
 ### Full workflow execution flow
 
+**Local workflow example:**
 ```bash
 # 1. Start server
 awf serve --port 8080 &
@@ -534,10 +690,10 @@ awf serve --port 8080 &
 curl http://localhost:8080/api/workflows
 
 # 3. Validate a workflow before running
-curl -X POST http://localhost:8080/api/workflows/code-review/validate
+curl -X POST http://localhost:8080/api/workflows/local/code-review/validate
 
 # 4. Start a workflow execution
-RESPONSE=$(curl -s -X POST http://localhost:8080/api/workflows/code-review/run \
+RESPONSE=$(curl -s -X POST http://localhost:8080/api/workflows/local/code-review/run \
   -H "Content-Type: application/json" \
   -d '{"inputs": {"file": "src/main.go"}}')
 
@@ -557,6 +713,23 @@ curl "http://localhost:8080/api/history?workflow=code-review&limit=10"
 curl http://localhost:8080/api/history/stats?workflow=code-review
 ```
 
+**Pack workflow example:**
+```bash
+# 1. Start server with pack installed
+awf workflow install myorg/awf-workflow-speckit
+awf serve --port 8080 &
+
+# 2. Run a pack workflow
+RESPONSE=$(curl -s -X POST http://localhost:8080/api/workflows/speckit/specify/run \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"feature": "F101"}}')
+
+EXEC_ID=$(echo $RESPONSE | jq -r '.body.execution_id')
+
+# 3. Monitor the execution
+curl -N http://localhost:8080/api/executions/$EXEC_ID/events
+```
+
 ### Integrate with CI/CD (GitHub Actions)
 
 ```yaml
@@ -571,7 +744,8 @@ jobs:
 
       - name: Run AWF code review via API
         run: |
-          RESPONSE=$(curl -s -X POST http://awf-server:2511/api/workflows/code-review/run \
+          # Run a local workflow via the API
+          RESPONSE=$(curl -s -X POST http://awf-server:2511/api/workflows/local/code-review/run \
             -H "Content-Type: application/json" \
             -d '{"inputs": {"file": "src/main.go"}}')
 

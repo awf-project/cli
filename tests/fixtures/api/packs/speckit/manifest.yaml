@@ -1,0 +1,8 @@
+name: speckit
+version: "1.0.0"
+description: Specification kit workflow pack for integration testing
+author: test
+license: MIT
+awf_version: ">=0.5.0"
+workflows:
+  - specify
