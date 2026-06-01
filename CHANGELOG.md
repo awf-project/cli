@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-01
+
 ### Changed
 
 - **F101**: HTTP API workflow routes restructured around a `(scope, name)` two-segment URL grammar to support pack-workflow execution. New routes: `GET /api/workflows/{scope}/{name}`, `POST /api/workflows/{scope}/{name}/run`, `POST /api/workflows/{scope}/{name}/validate`. The `scope` sentinel `local` addresses non-pack workflows (e.g. `/api/workflows/local/deploy-prod/run`); the vendor (pack) name serves as scope for pack workflows (e.g. `/api/workflows/speckit/specify/run`). `WorkflowSummary` gains additive `scope` and `workflow` fields alongside the canonical `name` so clients can build operation URLs directly without splitting on `/`. **Breaking** (F097 not yet released): the previous single-segment routes `/api/workflows/{name}[/run|/validate]` are removed; clients targeting F097 routes must migrate. OpenAPI 3.1 document at `/openapi.json` reflects the new path parameters automatically. SSE event streaming at `/api/executions/{id}/events` is unaffected (keyed by execution UUID).
